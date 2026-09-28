@@ -12,6 +12,7 @@ import { merge } from '@/utils/merge';
 // Mock userService
 vi.mock('@/services/user', () => ({
   userService: {
+    updateToolChannels: vi.fn(),
     updateToolIntervention: vi.fn(),
     updateUserSettings: vi.fn(),
     resetUserSettings: vi.fn(),
@@ -157,6 +158,41 @@ describe('SettingsAction', () => {
       expect(payload.market).toEqual(expect.objectContaining({ accessToken: 'tok-1' }));
     });
 
+    it('should resend a failed change when the same change is retried', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const change = {
+        tool: { searchProviders: ['searxng', 'tavily'] },
+      } as PartialDeep<UserSettings>;
+
+      vi.mocked(userService.updateUserSettings).mockRejectedValueOnce(new Error('network error'));
+
+      await act(async () => {
+        await expect(result.current.setSettings(change)).rejects.toThrow('network error');
+      });
+
+      // The optimistic value is still in local state, so the retry diffs as
+      // "no change" — it must still reach the server instead of resolving silently.
+      vi.mocked(userService.updateUserSettings).mockClear();
+      await act(async () => {
+        await result.current.setSettings(change);
+      });
+
+      expect(userService.updateUserSettings).toHaveBeenCalledTimes(1);
+      expect(userService.updateUserSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          tool: expect.objectContaining({ searchProviders: ['searxng', 'tavily'] }),
+        }),
+        expect.any(AbortSignal),
+      );
+
+      // Once persisted, an identical call is a no-op again.
+      vi.mocked(userService.updateUserSettings).mockClear();
+      await act(async () => {
+        await result.current.setSettings(change);
+      });
+      expect(userService.updateUserSettings).not.toHaveBeenCalled();
+    });
+
     it('should keep legacy scalar system agent fields unchanged', async () => {
       const { result } = renderHook(() => useUserStore());
       const settingsWithLegacySystemAgent = {
@@ -197,6 +233,86 @@ describe('SettingsAction', () => {
 
       // Optimistic local update
       expect(result.current.settings.tool?.humanIntervention?.approvalMode).toBe('auto-run');
+    });
+  });
+
+  describe('updateToolChannels', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should write through the server-side patch endpoint instead of setSettings', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.updateToolChannels({ searchProviders: ['exa', 'searxng'] });
+      });
+
+      expect(userService.updateToolChannels).toHaveBeenCalledWith({
+        searchProviders: ['exa', 'searxng'],
+      });
+      // A whole-settings diff write would replace the full `tool` column with
+      // this tab's possibly-stale snapshot
+      expect(userService.updateUserSettings).not.toHaveBeenCalled();
+      expect(result.current.settings.tool?.searchProviders).toEqual(['exa', 'searxng']);
+    });
+
+    it('should send rapid successive writes one at a time, in call order', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const resolvers: Array<() => void> = [];
+      vi.mocked(userService.updateToolChannels).mockImplementation(
+        () => new Promise((resolve) => resolvers.push(() => resolve(undefined as any))),
+      );
+
+      let first!: Promise<void>;
+      let second!: Promise<void>;
+      act(() => {
+        first = result.current.updateToolChannels({ searchProviders: ['exa'] });
+        second = result.current.updateToolChannels({ searchProviders: ['searxng'] });
+      });
+
+      // The second request is not sent until the first has committed
+      await vi.waitFor(() => expect(userService.updateToolChannels).toHaveBeenCalledTimes(1));
+      expect(userService.updateToolChannels).toHaveBeenLastCalledWith({
+        searchProviders: ['exa'],
+      });
+
+      await act(async () => {
+        resolvers[0]();
+        await first;
+      });
+      await vi.waitFor(() => expect(userService.updateToolChannels).toHaveBeenCalledTimes(2));
+      expect(userService.updateToolChannels).toHaveBeenLastCalledWith({
+        searchProviders: ['searxng'],
+      });
+
+      await act(async () => {
+        resolvers[1]();
+        await second;
+      });
+      expect(result.current.settings.tool?.searchProviders).toEqual(['searxng']);
+    });
+
+    it('should still send a later write after an earlier one fails', async () => {
+      const { result } = renderHook(() => useUserStore());
+      vi.mocked(userService.updateToolChannels)
+        .mockRejectedValueOnce(new Error('network error'))
+        .mockResolvedValueOnce(undefined as any);
+
+      let first!: Promise<void>;
+      let second!: Promise<void>;
+      act(() => {
+        first = result.current.updateToolChannels({ crawlerImpls: ['jina'] });
+        second = result.current.updateToolChannels({ crawlerImpls: ['naive'] });
+      });
+
+      await expect(first).rejects.toThrow('network error');
+      await act(async () => {
+        await second;
+      });
+      expect(userService.updateToolChannels).toHaveBeenLastCalledWith({
+        crawlerImpls: ['naive'],
+      });
     });
   });
 

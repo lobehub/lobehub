@@ -49,6 +49,7 @@
       ]
     }
   ],
+  "ignoreCommand": "node scripts/vercelIgnoredBuildStep.js",
   "installCommand": "npx pnpm@12.4.1 install",
   "rewrites": [
     {

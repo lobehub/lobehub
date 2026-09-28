@@ -247,6 +247,33 @@ export const signWorkspaceDeviceToken = async (workspaceId: string): Promise<str
 };
 
 /**
+ * Sign the one-shot token that opens a tunnel link.
+ *
+ * The device gateway verifies the signature and reads `sub` (plus an optional
+ * `workspace_id`) to decide whether the caller owns the tunnel. The token is
+ * only the *entry ticket*: the gateway immediately exchanges it for a session
+ * cookie scoped to that tunnel hostname, so it is minted at click time and
+ * expires quickly. A tunnel link is not a public share link — opening it from
+ * elsewhere requires an authenticated LobeHub session to mint a fresh token.
+ */
+export const signTunnelAccessToken = async (params: {
+  userId: string;
+  workspaceId?: string;
+}): Promise<string> => {
+  const { key, kid } = await getSigningKey();
+
+  return new SignJWT({
+    purpose: 'tunnel-access',
+    ...(params.workspaceId ? { workspace_id: params.workspaceId } : {}),
+  })
+    .setProtectedHeader({ alg: 'RS256', kid })
+    .setSubject(params.userId)
+    .setIssuedAt()
+    .setExpirationTime('10m')
+    .sign(key);
+};
+
+/**
  * Long-lived operation token for an agent run dispatched to a WORKSPACE device.
  * Mirrors {@link signOperationJwt} but carries `workspace_id` so the device's
  * gateway callbacks resolve to the workspace principal.

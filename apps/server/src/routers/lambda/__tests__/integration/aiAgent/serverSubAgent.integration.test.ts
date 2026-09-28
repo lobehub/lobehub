@@ -11,6 +11,7 @@
  *      sub-agent's answer and resumes the parent.
  *   5. The parent op runs one more LLM step and reaches `done`.
  */
+import { stripSubAgentReference } from '@lobechat/builtin-tool-lobe-agent';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { agentOperations, agents, messages } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
@@ -247,11 +248,14 @@ describe('Server callSubAgent suspend/resume', () => {
       .where(eq(agentOperations.parentOperationId, createResult.operationId));
     expect(childOps.length).toBeGreaterThanOrEqual(1);
 
-    // The placeholder tool message was backfilled with the sub-agent's answer
+    // The placeholder tool message was backfilled with the sub-agent's answer,
+    // followed by the hidden reference the parent uses to continue that sub-agent
     const allMessages = await serverDB.select().from(messages).where(eq(messages.userId, userId));
     const subAgentToolMessage = allMessages.find(
-      (m) => m.role === 'tool' && m.content === SUB_AGENT_ANSWER,
+      (m) =>
+        m.role === 'tool' && !!m.content && stripSubAgentReference(m.content) === SUB_AGENT_ANSWER,
     );
     expect(subAgentToolMessage).toBeDefined();
+    expect(subAgentToolMessage!.content).toMatch(/<sub_agent id="[^"]+" \/>$/);
   });
 });

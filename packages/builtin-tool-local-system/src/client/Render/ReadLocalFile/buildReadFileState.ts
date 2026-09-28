@@ -62,3 +62,29 @@ export const buildReadFileState = ({
     path: filePath,
   };
 };
+
+/**
+ * 1-based number of the first line in the read content, used to seed the
+ * preview's line-number gutter.
+ *
+ * Mirrors `ComputerRuntime`: a reported `loc` is a 0-based, end-exclusive
+ * slice (see local-file-shell `readLocalFile`), so it wins; otherwise the
+ * cloud sandbox's 1-based `startLine` arg lands in `pluginState.startLine`,
+ * and OpenCode / Pi take a 1-based `offset` arg.
+ */
+export const getFirstLineNumber = ({
+  args,
+  pluginState,
+}: Pick<BuildReadFileStateInput, 'args' | 'pluginState'>): number => {
+  const loc = pluginState?.loc;
+  if (loc) return Math.max(loc[0], 0) + 1;
+  if (pluginState?.startLine !== undefined) return Math.max(pluginState.startLine, 1);
+  if (args?.offset !== undefined) return Math.max(args.offset, 1);
+  return 1;
+};
+
+/**
+ * Drop only the file's final line terminator: it ends the last line rather
+ * than starting a new one, while any blank lines before it are real content.
+ */
+export const stripFinalLineTerminator = (content: string): string => content.replace(/\r?\n$/, '');

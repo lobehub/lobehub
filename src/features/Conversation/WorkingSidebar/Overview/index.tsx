@@ -27,6 +27,7 @@ import {
   getPullRequestState,
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
+import { TopicBackgroundActivity } from '@/features/BackgroundActivity/TopicSection';
 import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
@@ -42,11 +43,14 @@ import {
   useFetchGitWorktrees,
   useReviewPatches,
 } from '@/store/device';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import ProgressSection from '../ProgressSection';
 import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from './overviewData';
 import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
+import PortSwitcher from './PortSwitcher';
 import { sectionStyles } from './sectionStyles';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -92,6 +96,7 @@ const Overview = memo<OverviewProps>(
     const { t: tDevice } = useTranslation('device');
     const { t: tCommon } = useTranslation('common');
     const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+    const tunnelsEnabled = useUserStore(labPreferSelectors.enableDeviceTunnel);
     const topicId = useChatStore((s) => s.activeTopicId);
     const threadId = useChatStore((s) => s.activeThreadId);
     const works = useChatStore((s) =>
@@ -405,10 +410,21 @@ const Overview = memo<OverviewProps>(
               repoType={repoType}
               onClick={() => onOpenTab('files')}
             />
-            <Flexbox className={sectionStyles.section}>{workspaceSection}</Flexbox>
+            <Flexbox className={sectionStyles.section}>
+              {workspaceSection}
+              {/* Outside the git rows: a dev server runs in plain folders too. */}
+              {tunnelsEnabled && deviceId && (
+                <PortSwitcher
+                  active={active}
+                  deviceId={deviceId}
+                  workingDirectory={workingDirectory}
+                />
+              )}
+            </Flexbox>
           </>
         )}
 
+        <TopicBackgroundActivity topicId={topicId} />
         {environmentAvailable && !workingDirectory && (
           <Empty
             className={cx(sectionStyles.section, styles.emptyWorkspace)}

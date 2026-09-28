@@ -2,12 +2,12 @@
 
 import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
 import { Center } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import type { CSSProperties, JSXElementConstructor } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 
 import AsyncError from '@/components/AsyncError';
 import { isHtmlFile } from '@/components/HtmlPreview';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { type FileListItem } from '@/types/files';
 
 import { isPdfFile } from './fileType';
@@ -163,7 +163,7 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
 
     return (
       <Center height={'100%'} width={'100%'}>
-        <NeuralNetworkLoading size={36} />
+        <Spin size="large" />
       </Center>
     );
   }
@@ -187,7 +187,7 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
   // Microsoft Office documents - check before code files to avoid false matches
   // (e.g., 'doc' contains 'c' which would match CODE_EXTENSIONS)
   if (matchesFileType(fileType, name, MSDOC_EXTENSIONS, MSDOC_MIME_TYPES)) {
-    return <MSDocViewer fileId={id} url={url} />;
+    return <MSDocViewer fileId={id} fileName={name} fileType={fileType} url={url} />;
   }
 
   // HTML files should render as a sandboxed preview before the broader code-file fallback.

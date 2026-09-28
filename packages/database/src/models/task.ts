@@ -112,6 +112,25 @@ const snapshotAutomation = (row: {
   };
 };
 
+// Foreign-key id columns a caller may clear or leave unset. LLM tool calls often
+// fill optional ids with "" — that must mean "unset", never reach the FK as ''.
+const TASK_NULLABLE_REF_KEYS = ['assigneeAgentId', 'assigneeUserId', 'parentTaskId'] as const;
+
+const normalizeTaskRefs = <
+  T extends Partial<Record<(typeof TASK_NULLABLE_REF_KEYS)[number], unknown>>,
+>(
+  data: T,
+): T => {
+  const normalized = { ...data };
+  for (const key of TASK_NULLABLE_REF_KEYS) {
+    const value = normalized[key];
+    if (typeof value === 'string' && !value.trim()) {
+      (normalized as Record<string, unknown>)[key] = null;
+    }
+  }
+  return normalized;
+};
+
 export const isTaskIdentifierUniqueViolation = (error: unknown): boolean => {
   const message = error instanceof Error ? error.message : String(error);
   const code =
@@ -337,7 +356,7 @@ export class TaskModel {
     },
     options: { maxRetries?: number } = {},
   ): Promise<TaskItem> {
-    const { identifierPrefix = 'T', ...rest } = data;
+    const { identifierPrefix = 'T', ...rest } = normalizeTaskRefs(data);
 
     // Retry loop to handle concurrent creates (parallel tool calls)
     const maxRetries = options.maxRetries ?? 5;
@@ -458,7 +477,7 @@ export class TaskModel {
 
     const updated = await this.db
       .update(tasks)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...normalizeTaskRefs(data), updatedAt: new Date() })
       .where(and(eq(tasks.id, id), this.ownership()))
       .returning();
     return updated[0] || null;
@@ -640,6 +659,35 @@ export class TaskModel {
       LIMIT 1
     `);
     return result.rows.length > 0;
+  }
+
+  /**
+   * Row-lock the task for the rest of the enclosing transaction. Serializes a
+   * run recording its topic against a delete deciding there is nothing left to
+   * interrupt. Returns false when the task no longer exists.
+   */
+  async lockForUpdate(id: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.id, id), this.ownership()))
+      .for('update');
+
+    return rows.length > 0;
+  }
+
+  /**
+   * Delete a task only while it still has `status`. Lets a delete that
+   * inspected the task's runs lose cleanly to a run that started meanwhile,
+   * instead of removing the row out from under it.
+   */
+  async deleteIfStatus(id: string, status: string): Promise<boolean> {
+    const deleted = await this.db
+      .delete(tasks)
+      .where(and(eq(tasks.id, id), eq(tasks.status, status), this.ownership()))
+      .returning({ id: tasks.id });
+
+    return deleted.length > 0;
   }
 
   /** See {@link delete}: bulk task deletion likewise leaves Work artifacts intact. */
@@ -1494,6 +1542,37 @@ export class TaskModel {
           notInArray(tasks.status, ['canceled', 'completed', 'failed', 'paused', 'running']),
         ),
       );
+  }
+
+  /**
+   * Atomically move `context.scheduler.lastDispatchedOccurrenceAt` from
+   * `expected` to `next`. Returns false when another writer changed it first.
+   *
+   * The schedule dispatcher reserves a cron occurrence this way before
+   * publishing its execution, so a later tick inside the grace window (or an
+   * overlapping dispatcher run) cannot publish the same occurrence again while
+   * the first delivery is still queued.
+   */
+  static async swapDispatchedScheduleOccurrence(
+    db: LobeChatDatabase,
+    taskId: string,
+    expected: string | null,
+    next: string | null,
+  ): Promise<boolean> {
+    const current = sql`coalesce(${tasks.context}, '{}'::jsonb)`;
+    const rows = await db
+      .update(tasks)
+      .set({
+        context: sql`${current} || jsonb_build_object('scheduler', coalesce(${current} -> 'scheduler', '{}'::jsonb) || jsonb_build_object('lastDispatchedOccurrenceAt', ${next}::text))`,
+      })
+      .where(
+        and(
+          eq(tasks.id, taskId),
+          sql`coalesce(${current} -> 'scheduler' ->> 'lastDispatchedOccurrenceAt', '') = ${expected ?? ''}`,
+        ),
+      )
+      .returning({ id: tasks.id });
+    return rows.length > 0;
   }
 
   // Find stuck tasks (running but heartbeat timed out)

@@ -89,6 +89,13 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   enableReasoningEffort?: boolean;
   /**
+   * Whether stale tool results (overwritten file reads, outdated browser
+   * snapshots, old command output) are replaced with short placeholders in the
+   * model context to save tokens.
+   * Treat undefined as `true` — trimming is the default.
+   */
+  enableStaleToolResultTrim?: boolean;
+  /**
    * Whether to enable streaming output
    */
   enableStreaming?: boolean;
@@ -103,6 +110,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
   grok4_6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+  grok4_7ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Number of historical messages
@@ -259,6 +267,7 @@ export const AgentChatConfigSchema = z
     enableReasoning: z.boolean().optional(),
     enableReasoningEffort: z.boolean().optional(),
     enableStreaming: z.boolean().optional(),
+    enableStaleToolResultTrim: z.boolean().optional(),
     gpt5ReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
     gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
@@ -271,6 +280,7 @@ export const AgentChatConfigSchema = z
     grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
     grok4_6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    grok4_7ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
     kimiK3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
     ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),

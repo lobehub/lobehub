@@ -77,11 +77,9 @@ const captureEmittedSql = async (
     logQuery: (sql: string, params: unknown[]) => captured.push({ params, sql }),
   };
   const client = (serverDB as unknown as { $client: { waitReady?: unknown } }).$client;
-  const db = (
-    'waitReady' in (client ?? {})
-      ? pgliteDrizzle({ client: client as any, logger, schema })
-      : nodeDrizzle(client as any, { logger, schema })
-  ) as unknown as LobeChatDatabase;
+  const db = ('waitReady' in (client ?? {})
+    ? pgliteDrizzle({ client: client as any, logger, schema })
+    : nodeDrizzle(client as any, { logger, schema })) as unknown as LobeChatDatabase;
   await run(db);
   return captured;
 };
@@ -227,6 +225,35 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
     expect(asOther).toEqual([]);
   });
 
+  it('sees a share visitor topic only when the model opts in', async () => {
+    // A visitor topic carries the visitor's id in `senderId`; the default
+    // `ownership()` predicate hides its rows from the creator-scoped model, so
+    // the completion-time Work scan for a share run must construct the model
+    // with `includeShareVisitor: true` or it registers nothing.
+    await serverDB.insert(users).values({ id: 'plugins-for-op-visitor' });
+    await serverDB
+      .insert(topics)
+      .values({ id: 'topic-visitor', senderId: 'plugins-for-op-visitor', userId });
+    await seedToolCall({ createdAt: T1, id: 'visitor-row', topicId: 'topic-visitor' });
+    const params = {
+      completedAt: T3,
+      operationId: 'op-1',
+      startedAt: T0,
+      threadId: null,
+      topicId: 'topic-visitor',
+    };
+
+    await expect(messageModel.listMessagePluginsForOperation(params)).resolves.toEqual([]);
+
+    const optedIn = new MessageModel(serverDB, userId, undefined, undefined, {
+      includeShareVisitor: true,
+    });
+    const rows = await optedIn.listMessagePluginsForOperation(params);
+    expect(rows.map((r) => r.id)).toEqual(['visitor-row']);
+
+    await serverDB.delete(users).where(eq(users.id, 'plugins-for-op-visitor'));
+  });
+
   // Query-plan regression — the accurate guard. It reproduces the actual
   // degradation (a full scan of the user's whole plugin history) on a seeded skew
   // and asserts NO branch ever walks more than a handful of the user's plugin
@@ -268,8 +295,18 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
           userId,
         })),
       );
-      await seedToolCall({ createdAt: T1, id: 'in-window', threadId: 'thread1', topicId: 'topic1' });
-      await seedToolCall({ createdAt: T2, id: 'in-window-2', threadId: 'thread1', topicId: 'topic1' });
+      await seedToolCall({
+        createdAt: T1,
+        id: 'in-window',
+        threadId: 'thread1',
+        topicId: 'topic1',
+      });
+      await seedToolCall({
+        createdAt: T2,
+        id: 'in-window-2',
+        threadId: 'thread1',
+        topicId: 'topic1',
+      });
       await seedToolCall({
         createdAt: new Date('2027-01-01T00:00:00.000Z'),
         id: 'hetero',

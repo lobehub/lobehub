@@ -24,6 +24,7 @@ import {
   resolveDiscoveryPool,
   resolveInvocationToolIds,
 } from '@lobechat/mecha';
+import { FILE_INLINE_MAX_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import type {
   ChatTopicBotContext,
   FrozenCredentialFacts,
@@ -45,6 +46,7 @@ import { AiProviderModel } from '@/database/models/aiProvider';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import type { MessageModel } from '@/database/models/message';
 import type { PluginModel } from '@/database/models/plugin';
@@ -142,7 +144,7 @@ export interface ToolDiscoveryInput {
   /**
    * Mime types of the raw bot/IM uploads. The stage only ever looked at the
    * mime type, and keeping the request JSON-safe is what lets a deferred init
-   * carry it on the operation state (LOBE-13745).
+   * carry it on the operation state.
    */
   externalFileTypes?: string[];
   functionTools?: InternalExecAgentParams['functionTools'];
@@ -506,6 +508,31 @@ export const discoverTools = async (
     return fileRecords.map((file) => file.fileType || '');
   }
 
+  /**
+   * Whether this turn sends any file as a truncated preview (see `previewLongFileContent`):
+   * an enabled agent file, or a parsed attachment of this turn or topic, over the inline limit.
+   * Enables the attachments tool in the modes whose rules include it (agent / chat). The preview
+   * only names `readAttachment` when the final tool set carries it (see `MessagesEngine`), so
+   * custom / exclusive tool turns and share visitors fall back to a plain preview.
+   */
+  async function readHasOversizedFiles(): Promise<boolean> {
+    const hasOversizedAgentFile = agentConfig.files?.some(
+      (file: { content?: string | null; enabled?: boolean | null; originalCharCount?: number }) =>
+        file.enabled === true &&
+        isOversizedFileContent(file.content?.length ?? 0, file.originalCharCount),
+    );
+    if (hasOversizedAgentFile) return true;
+    if (!topicId && !attachedFileIds?.length) return false;
+
+    return traceDiscoveryStage('oversized_files', () =>
+      new DocumentModel(deps.db, deps.userId, deps.workspaceId).hasFileDocumentsOverChars({
+        fileIds: attachedFileIds,
+        minChars: FILE_INLINE_MAX_CHARS,
+        topicId,
+      }),
+    );
+  }
+
   // Every other read this send needs, started together. They hit different
   // backends — Postgres rows, the Market's live skill discovery, the device
   // gateway — and none of them feeds another, so the user waits for the slowest
@@ -524,6 +551,7 @@ export const discoverTools = async (
           ).catch(() => false), // non-critical
         ),
         attachedFileTypes: started(readAttachedFileTypes()),
+        oversizedFiles: started(readHasOversizedFiles().catch(() => false)), // non-critical
         composioManifests: started(
           traceDiscoveryStage('composio', () =>
             deps.composioService.getComposioManifests(resolvedAgentId),
@@ -686,8 +714,14 @@ export const discoverTools = async (
     // Filter out plugin entries that are now handled by real MCP connectors.
     // `let` because community-MCP plugins may be patched with connector
     // permissions below (their connector row has no endpoint, so they stay here).
+    // Composio connections also leave a plugin row behind (customParams.composio),
+    // but they are executable only through `getComposioManifests`, which gates
+    // on an ACTIVE connection and tags the tool source as `composio`. Letting a
+    // PENDING/EXPIRED row through here exposes the full tool schema with no
+    // Composio source, so every call falls to the builtin executor and fails
+    // as "not implemented".
     let pluginsWithoutConnectors = installedPlugins.filter(
-      (p) => !connectorIdentifierSet.has(p.identifier),
+      (p) => !connectorIdentifierSet.has(p.identifier) && !p.customParams?.composio,
     );
     log('execAgent: got %d connector manifests', connectorManifests.length);
 
@@ -777,6 +811,7 @@ export const discoverTools = async (
       false;
 
     hasAgentDocuments = await toolReads.agentDocuments;
+    const hasOversizedFiles = await toolReads.oversizedFiles;
 
     log('execAgent: isBotConversation=%s', isBotConversation);
 
@@ -1050,6 +1085,7 @@ export const discoverTools = async (
       executionPlan,
       globalMemoryEnabled,
       hasEnabledKnowledgeBases,
+      hasOversizedFiles,
       isBotConversation,
       isGroupSupervisor,
       modelAbilities,

@@ -38,8 +38,10 @@ export class CoalescingBatchIngester {
   constructor(
     sink: IngestSink,
     private readonly snapshotFlushMs = 200,
+    /** Forwarded to {@link BatchIngester}: the stream is unrecoverable. */
+    onFatal?: (error: Error) => void,
   ) {
-    this.batcher = new BatchIngester(sink);
+    this.batcher = new BatchIngester(sink, undefined, onFatal);
   }
 
   push(event: AgentStreamEvent): void {

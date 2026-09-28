@@ -14,6 +14,7 @@ import { resolveNextScreen, resolvePreviousScreen } from './flow';
 import OnboardingContainer from './Layout';
 import { resolveInitialScreen } from './resolveInitialScreen';
 import DataModeStep from './steps/DataModeStep';
+import KeepAwakeStep from './steps/KeepAwakeStep';
 import LoginStep from './steps/LoginStep';
 import PermissionsStep from './steps/PermissionsStep';
 import WelcomeStep from './steps/WelcomeStep';
@@ -197,12 +198,15 @@ const DesktopOnboardingPage = memo(() => {
         return <WelcomeStep onNext={goToNextStep} />;
       }
       case DesktopOnboardingScreen.Permissions: {
-        // macOS-only screen; fallback to DataMode if platform doesn't support.
+        // macOS-only screen; fallback to the next step if platform doesn't support.
         if (!isMac) {
-          setCurrentScreen(DesktopOnboardingScreen.DataMode);
+          setCurrentScreen(DesktopOnboardingScreen.KeepAwake);
           return null;
         }
         return <PermissionsStep onBack={goToPreviousStep} onNext={goToNextStep} />;
+      }
+      case DesktopOnboardingScreen.KeepAwake: {
+        return <KeepAwakeStep onBack={goToPreviousStep} onNext={goToNextStep} />;
       }
       case DesktopOnboardingScreen.DataMode: {
         return <DataModeStep onBack={goToPreviousStep} onNext={goToNextStep} />;

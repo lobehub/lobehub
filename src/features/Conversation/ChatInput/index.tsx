@@ -29,6 +29,7 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
+import { useUnexpiredInterventions } from '../hooks/useDeadlineClock';
 import InterventionBar from '../InterventionBar';
 import {
   dataSelectors,
@@ -36,21 +37,28 @@ import {
   useConversationStore,
   useConversationStoreApi,
 } from '../store';
+import { isSamePendingInterventionList } from '../store/slices/data/pendingInterventions';
 import TodoProgress from '../TodoProgress';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
 import { sendVoiceMessage } from './sendVoiceMessage';
+import { transcribeVoiceMessage } from './transcribeVoiceMessage';
 import {
   getContextWindowMessages,
   getConversationChatInputUiState,
+  getConversationSendButtonProps,
   toChatInputMessages,
 } from './utils';
 import GoalArmedChip from './VerifyTray/GoalArmedChip';
 import { useGoalArmStore } from './VerifyTray/goalArmStore';
 import GoalTray from './VerifyTray/GoalTray';
-import { canSendVoiceMessage, useCanSendVoiceMessage } from './voiceMessageCapability';
+import {
+  canSendVoiceMessage,
+  isVoiceMessageTranscribed,
+  useCanSendVoiceMessage,
+} from './voiceMessageCapability';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
@@ -262,15 +270,13 @@ const ChatInput = memo<ChatInputProps>(
     // Pending interventions — use custom equality to prevent infinite re-render loop.
     // The selector creates new array/object refs each call; without equality check,
     // any store update → new ref → re-render → Intervention's store writes → loop.
-    const pendingInterventions = useConversationStore(
+    const selectedInterventions = useConversationStore(
       dataSelectors.pendingInterventions,
-      (a, b) => {
-        if (a.length !== b.length) return false;
-        return a.every(
-          (item, i) => item.toolCallId === b[i].toolCallId && item.requestArgs === b[i].requestArgs,
-        );
-      },
+      isSamePendingInterventionList,
     );
+    // The selector only re-runs on store changes; drop a card the moment its
+    // producer stops waiting even when nothing in the store moves.
+    const pendingInterventions = useUnexpiredInterventions(selectedInterventions);
     const hasPendingInterventions = pendingInterventions.length > 0;
 
     // Send message error from ConversationStore
@@ -307,11 +313,13 @@ const ChatInput = memo<ChatInputProps>(
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
-    const { placeholderVariant, showSendMenu, showStopButton } = getConversationChatInputUiState({
-      disableFollowUpVariant,
-      isInputEmpty,
-      isInputLoading,
-    });
+    const { placeholderVariant, showSendMenu, showSendWhileGenerating, showStopButton } =
+      getConversationChatInputUiState({
+        disableFollowUpVariant,
+        disableQueue,
+        isInputEmpty,
+        isInputLoading,
+      });
     // Input stays enabled during agent execution — messages are queued.
     // When disableQueue is set (e.g. onboarding), block sending while loading.
     // disableSend hard-blocks regardless of content (host surface is read-only).
@@ -326,10 +334,10 @@ const ChatInput = memo<ChatInputProps>(
     const customDisabled = customSendButtonProps?.disabled;
     const resolveSendBlocked = useCallback(() => {
       if (disableSend) return true;
-      if (customDisabled !== undefined) return customDisabled;
 
       const fileStore = useFileStore.getState();
       if (fileChatSelectors.isUploadingFiles(fileStore)) return true;
+      if (customDisabled !== undefined) return customDisabled;
 
       const { context: liveContext, editor } = storeApi.getState();
       if (
@@ -417,10 +425,11 @@ const ChatInput = memo<ChatInputProps>(
     );
 
     const sendButtonProps: SendButtonProps = {
-      disabled,
-      generating: showStopButton,
-      onStop: stopGenerating,
-      ...customSendButtonProps,
+      ...getConversationSendButtonProps(
+        { disabled, generating: showStopButton, onStop: stopGenerating, showSendWhileGenerating },
+        customSendButtonProps,
+        isUploadingFiles,
+      ),
       ...(shouldUsePlainSendButton
         ? { shape: customSendButtonProps?.shape ?? 'round' }
         : undefined),
@@ -442,6 +451,12 @@ const ChatInput = memo<ChatInputProps>(
                 context: targetContext,
                 optimisticUserMessageId: messageId,
                 signal,
+                ...(isVoiceMessageTranscribed(targetContext)
+                  ? {
+                      transcribe: (uploaded, transcribeSignal) =>
+                        transcribeVoiceMessage(uploaded.id, transcribeSignal),
+                    }
+                  : {}),
               }),
           }),
         );

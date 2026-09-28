@@ -7,6 +7,7 @@ import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtim
 import {
   type ChatToolPayload,
   type LobeAgentConfig,
+  type WorkAccessScope,
   type WorkRegistrationIntent,
 } from '@lobechat/types';
 import debug from 'debug';
@@ -23,6 +24,7 @@ import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archi
 import { buildWorkVersionCumulativeUsage } from '@/utils/workCumulativeUsage';
 
 import { type RuntimeExecutorContext } from './context';
+import { resolveRunActiveDeviceId } from './executors/resolveRunActiveDeviceId';
 
 export const log = debug('lobe-server:agent-runtime:streaming-executors');
 export const timing = debug('lobe-server:agent-runtime:timing');
@@ -56,6 +58,7 @@ export const archiveRuntimeToolResult = async (
   result: ToolExecutionResultResponse,
   {
     agentId,
+    canReadArchive,
     identifier,
     limit,
     serverDB,
@@ -65,6 +68,7 @@ export const archiveRuntimeToolResult = async (
     workspaceId,
   }: {
     agentId?: string | null;
+    canReadArchive?: boolean;
     identifier?: string;
     limit?: number;
     serverDB: LobeChatDatabase;
@@ -76,6 +80,7 @@ export const archiveRuntimeToolResult = async (
 ): Promise<ToolExecutionResultResponse> => {
   const archive = await archiveToolResultIfNeeded({
     agentId,
+    canReadArchive,
     content: result.content,
     identifier,
     limit,
@@ -107,6 +112,7 @@ export const archiveRuntimeToolResult = async (
  * sidebar refresh gap is tracked as a follow-up.
  */
 export const registerWorkFromIntent = async ({
+  accessScope,
   agentId,
   intent,
   rootOperationId,
@@ -121,6 +127,11 @@ export const registerWorkFromIntent = async ({
   userId,
   workspaceId,
 }: {
+  /**
+   * Agent Share boundary the Work is registered under (see
+   * `resolveRunWorkAccessScope`); omitted = ordinary creator scope.
+   */
+  accessScope?: WorkAccessScope;
   agentId?: string | null;
   intent: WorkRegistrationIntent;
   rootOperationId?: string;
@@ -142,7 +153,7 @@ export const registerWorkFromIntent = async ({
   const cumulative = buildWorkVersionCumulativeUsage({ cost: state.cost, usage: state.usage });
 
   try {
-    const workModel = new WorkModel(serverDB, userId, workspaceId);
+    const workModel = new WorkModel(serverDB, userId, workspaceId, accessScope);
 
     await dispatchWorkRegistrationIntent(
       intent,
@@ -211,6 +222,13 @@ export const buildServerVirtualSubAgentRunner = (
   state: AgentState,
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
+  /**
+   * The row this tool call already owns — set when the call went through human
+   * approval, whose intervention row is then executed in place. The sub-agent
+   * must report into that row: a second placeholder left the approved row empty
+   * forever, so the parent's barrier never cleared and it was never resumed.
+   */
+  existingToolMessageId?: string,
 ): ServerSubAgentRunner | undefined => {
   // Share-visitor runs never get a sub-agent runner: the child run spawned
   // here does not thread the parent's shareGate, so it would execute with the
@@ -230,9 +248,17 @@ export const buildServerVirtualSubAgentRunner = (
   // keeps the topic-pinned model only in `modelRuntimeConfig` while the
   // world config retains the agent default.
   const parentEffectiveModel = state.modelRuntimeConfig ?? parentAgentConfig;
+  // The device the parent run executes on. The child re-resolves its own
+  // execution plan, and without this it falls back to the agent-level
+  // `boundDeviceId` — whichever machine last picked "this device" — so with two
+  // desktops online the parent and the child land on different machines. An
+  // anonymous `callSubAgent` clone requests this device outright; a named
+  // `callAgent` target only takes it as its `local` device, keeping its own
+  // execution target.
+  const parentDeviceId = resolveRunActiveDeviceId(state);
 
   return {
-    run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
+    run: async ({ agentId: targetAgentId, description, instruction, subAgentId, timeout }) => {
       // This runner serves two tools, and only one of them may swap the model:
       //   - `callSubAgent` names no agent, so the child is an anonymous clone of
       //     the parent — it takes the parent's `agencyConfig.subagent` override,
@@ -252,21 +278,31 @@ export const buildServerVirtualSubAgentRunner = (
         ? undefined
         : getSubAgentChatConfigOverride(parentAgentConfig?.agencyConfig?.subagent);
 
-      // 1. Create the pending placeholder tool message (mirrors the normal
+      // 1. Create (or, after approval, reuse) the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
       //    and renders a loading state until the bridge backfills it.
-      const placeholder = await ctx.messageModel.create({
-        agentId,
-        content: '',
-        groupId: state.origin?.groupId ?? undefined,
-        parentId: parentMessageId,
-        plugin: chatToolPayload as any,
-        pluginState: { status: 'pending' },
-        role: 'tool',
-        threadId: state.origin?.threadId,
-        tool_call_id: chatToolPayload.id,
-        topicId,
-      });
+      const pendingState = subAgentId
+        ? { status: 'pending', threadId: subAgentId }
+        : { status: 'pending' };
+      if (existingToolMessageId) {
+        await ctx.messageModel.updatePluginState(existingToolMessageId, pendingState);
+      }
+      const placeholder = existingToolMessageId
+        ? { id: existingToolMessageId }
+        : await ctx.messageModel.create({
+            agentId,
+            content: '',
+            groupId: state.origin?.groupId ?? undefined,
+            parentId: parentMessageId,
+            plugin: chatToolPayload as any,
+            // A continued sub-agent already has its thread, so the card can link to
+            // it while the new turn is still running.
+            pluginState: pendingState,
+            role: 'tool',
+            threadId: state.origin?.threadId,
+            tool_call_id: chatToolPayload.id,
+            topicId,
+          });
 
       // 2. Fork the virtual child op anchored to the placeholder. The virtual
       //    entry marks the child as `isSubAgent` and registers the completion
@@ -274,12 +310,15 @@ export const buildServerVirtualSubAgentRunner = (
       const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
         chatConfig: subAgentChatConfig,
+        deviceId: targetAgentId ? undefined : parentDeviceId,
         groupId: state.origin?.groupId ?? undefined,
         instruction,
+        localDeviceId: parentDeviceId,
         model: subAgentModel?.model,
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,
         provider: subAgentModel?.provider,
+        threadId: subAgentId,
         timeout,
         title: description,
         topicId,
@@ -291,6 +330,16 @@ export const buildServerVirtualSubAgentRunner = (
       //    `started: false` (with the underlying reason) so callSubAgent surfaces
       //    an inline tool error instead.
       if (!result?.success) {
+        // A reused approval row is the call's own result slot: the runtime writes
+        // this failure into it, so it must not be deleted.
+        if (existingToolMessageId) {
+          return {
+            error: result?.error,
+            started: false,
+            subOperationId: result?.operationId,
+            threadId: '',
+          };
+        }
         try {
           // Runtime placeholder cleanup — also valid inside an agent-share
           // visitor topic, hence the explicit opt-in.

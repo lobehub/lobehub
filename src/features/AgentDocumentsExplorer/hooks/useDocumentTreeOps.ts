@@ -1,3 +1,4 @@
+import { FileSource } from '@lobechat/types';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { nanoid } from 'nanoid';
 import { useCallback, useMemo, useRef } from 'react';
@@ -7,6 +8,7 @@ import type { KeyedMutator } from 'swr';
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { useSingleton } from '@/hooks/useSingleton';
 import { agentDocumentService } from '@/services/agentDocument';
+import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
 
 import type { AgentDocumentItem } from '../types';
@@ -271,16 +273,26 @@ export const useDocumentTreeOps = ({
             file,
             onStatusUpdate: dispatchDockFileList,
             skipCheckFileType: true,
+            source: FileSource.AgentDocument,
             uploadId,
           });
 
           if (!result?.id) continue;
 
-          await agentDocumentService.importFile({
-            agentId,
-            fileId: result.id,
-            parentId: parentDocumentId,
-          });
+          try {
+            await agentDocumentService.importFile({
+              agentId,
+              fileId: result.id,
+              parentId: parentDocumentId,
+            });
+          } catch (error) {
+            // Also covers transport/auth failures before import reaches the server.
+            // A committed import is protected by the server's reference checks.
+            await fileService.removeUnreferencedFile(result.id).catch((cleanupError) => {
+              console.error('Failed to reclaim an unbound agent upload', cleanupError);
+            });
+            throw error;
+          }
           await mutate();
         } catch (error) {
           toast.error(

@@ -1,4 +1,5 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
+import { FileSource } from '@lobechat/types';
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +8,7 @@ import { useDocumentTreeOps } from './useDocumentTreeOps';
 
 const toastError = vi.hoisted(() => vi.fn());
 const importFileMock = vi.hoisted(() => vi.fn());
+const removeUnreferencedFileMock = vi.hoisted(() => vi.fn());
 const uploadWithProgressMock = vi.hoisted(() => vi.fn());
 const dispatchDockFileListMock = vi.hoisted(() => vi.fn());
 
@@ -29,6 +31,10 @@ vi.mock('@/store/file', () => ({
       uploadWithProgress: uploadWithProgressMock,
     }),
   },
+}));
+
+vi.mock('@/services/file', () => ({
+  fileService: { removeUnreferencedFile: removeUnreferencedFileMock },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -62,6 +68,7 @@ describe('useDocumentTreeOps.uploadFiles', () => {
   beforeEach(() => {
     toastError.mockReset();
     importFileMock.mockReset();
+    removeUnreferencedFileMock.mockReset().mockResolvedValue(undefined);
     uploadWithProgressMock.mockReset();
     dispatchDockFileListMock.mockReset();
     mutate.mockReset();
@@ -81,8 +88,9 @@ describe('useDocumentTreeOps.uploadFiles', () => {
     expect(dispatchDockFileListMock).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'addFiles' }),
     );
+    /** @example The upload carries the source used for shared visibility and library exclusion. */
     expect(uploadWithProgressMock).toHaveBeenCalledWith(
-      expect.objectContaining({ skipCheckFileType: true }),
+      expect.objectContaining({ skipCheckFileType: true, source: FileSource.AgentDocument }),
     );
     expect(importFileMock).toHaveBeenCalledWith({
       agentId: 'agent-1',
@@ -141,6 +149,19 @@ describe('useDocumentTreeOps.uploadFiles', () => {
     expect(toastError).toHaveBeenCalled();
     expect(importFileMock).toHaveBeenCalledTimes(2);
     expect(mutate).toHaveBeenCalledTimes(1);
+    /** @example Only the failed import's upload is reclaimed. */
+    expect(removeUnreferencedFileMock.mock.calls).toEqual([['file-1']]);
+  });
+
+  /** @example A failed list refresh after import must not delete the imported file. */
+  it('keeps a successfully imported file when refreshing the tree fails', async () => {
+    mutate.mockRejectedValueOnce(new Error('refresh failed'));
+    const { result } = renderHook(() =>
+      useDocumentTreeOps({ agentId: 'agent-1', data: [], mutate }),
+    );
+    await result.current.uploadFiles(null, [new File(['a'], 'a.md')]);
+    /** @example The committed document retains its file despite the refresh error. */
+    expect(removeUnreferencedFileMock).not.toHaveBeenCalled();
   });
 
   it('ignores blacklisted system files', async () => {

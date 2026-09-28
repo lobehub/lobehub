@@ -658,6 +658,33 @@ describe('file operations', () => {
       expect(result).toEqual([]);
     });
 
+    it('should refuse to overwrite an existing target file', async () => {
+      const src = path.join(tmpDir, 'src.txt');
+      const dst = path.join(tmpDir, 'dst.txt');
+      await writeFile(src, 'incoming');
+      await writeFile(dst, 'keep me');
+
+      const result = await moveLocalFiles({ items: [{ newPath: dst, oldPath: src }] });
+
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toContain('already exists');
+      expect(fs.readFileSync(dst, 'utf8')).toBe('keep me');
+      expect(fs.readFileSync(src, 'utf8')).toBe('incoming');
+    });
+
+    it('should refuse to move onto an existing directory', async () => {
+      const src = path.join(tmpDir, 'src-dir');
+      const dst = path.join(tmpDir, 'dst-dir');
+      await mkdir(src);
+      await mkdir(dst);
+
+      const result = await moveLocalFiles({ items: [{ newPath: dst, oldPath: src }] });
+
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toContain('already exists');
+      expect(fs.existsSync(src)).toBe(true);
+    });
+
     it('should create target directory if missing', async () => {
       const src = path.join(tmpDir, 'src.txt');
       const dst = path.join(tmpDir, 'new', 'dir', 'dst.txt');
@@ -706,6 +733,31 @@ describe('file operations', () => {
 
       const result = await renameLocalFile({ newName: 'same.txt', path: filePath });
       expect(result.success).toBe(true);
+    });
+
+    it('should refuse to overwrite an existing sibling', async () => {
+      const filePath = path.join(tmpDir, 'old.txt');
+      const taken = path.join(tmpDir, 'taken.txt');
+      await writeFile(filePath, 'incoming');
+      await writeFile(taken, 'keep me');
+
+      const result = await renameLocalFile({ newName: 'taken.txt', path: filePath });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('already exists');
+      expect(fs.readFileSync(taken, 'utf8')).toBe('keep me');
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('incoming');
+    });
+
+    it('should allow a case-only rename', async () => {
+      const filePath = path.join(tmpDir, 'readme.md');
+      await writeFile(filePath, 'content');
+
+      const result = await renameLocalFile({ newName: 'README.md', path: filePath });
+
+      expect(result.success).toBe(true);
+      expect(fs.readdirSync(tmpDir)).toContain('README.md');
+      expect(fs.readdirSync(tmpDir)).not.toContain('readme.md');
     });
 
     it('should return error for non-existent file', async () => {

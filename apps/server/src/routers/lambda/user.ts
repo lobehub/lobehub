@@ -939,6 +939,36 @@ export const userRouter = router({
       return ctx.userModel.mergeToolInterventionSetting(input);
     }),
 
+  updateToolChannels: userProcedure
+    .input(
+      z
+        .object({
+          crawlerImpls: z.array(z.string().trim().min(1).max(64)).max(32).optional(),
+          searchProviders: z.array(z.string().trim().min(1).max(64)).max(32).optional(),
+        })
+        .strict(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // `tool` is a member-scope workspace setting — same RBAC gate as updateSettings
+      if (ctx.workspaceId) {
+        const rbac = new RbacModel(ctx.serverDB, ctx.userId);
+        const allowed = await rbac.hasAnyPermission([...WORKSPACE_CONTENT_PERMISSIONS], {
+          workspaceId: ctx.workspaceId,
+        });
+
+        if (!allowed) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You do not have permission to perform this action.',
+          });
+        }
+      }
+
+      // Patch only the channel keys atomically — a whole-column `tool` write
+      // built from a stale tab snapshot would revert other tool settings.
+      return ctx.userModel.replaceToolChannelsSetting(input);
+    }),
+
   updateUninstalledBuiltinTools: userProcedure
     .input(
       z

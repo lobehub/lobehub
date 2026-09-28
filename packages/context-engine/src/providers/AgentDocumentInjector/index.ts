@@ -17,6 +17,7 @@ export {
   formatDocument,
   getDocumentsForPositions,
   sortByPriority,
+  withRunStartedAt,
 } from './shared';
 export type { AgentDocumentSystemAppendInjectorConfig } from './SystemAppendInjector';
 export { AgentDocumentSystemAppendInjector } from './SystemAppendInjector';

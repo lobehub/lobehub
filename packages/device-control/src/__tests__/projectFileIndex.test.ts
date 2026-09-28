@@ -87,6 +87,28 @@ describe('defaultGetProjectFileIndex', () => {
     );
   });
 
+  it('keeps empty untracked folders visible as expandable directories', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-index-empty-dir-'));
+    cleanup.push(dir);
+    execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: dir });
+    await mkdir(path.join(dir, 'src', 'utils'), { recursive: true });
+    await mkdir(path.join(dir, 'drafts', 'deeper'), { recursive: true });
+    await mkdir(path.join(dir, 'notes'), { recursive: true });
+    await writeFile(path.join(dir, 'src', 'app.ts'), 'export {};\n');
+    await writeFile(path.join(dir, 'notes', 'today.md'), '# today\n');
+
+    const result = await defaultGetProjectFileIndex({ scope: dir });
+    const byPath = new Map(result.entries.map((entry) => [entry.relativePath, entry]));
+
+    expect(byPath.get('src/utils/')).toMatchObject({ collapsed: true, isDirectory: true });
+    expect(byPath.get('src/utils/')?.gitIgnored).toBeUndefined();
+    expect(byPath.get('drafts/')).toMatchObject({ collapsed: true, isDirectory: true });
+    // Folders that hold files are listed through those files, not collapsed.
+    expect(byPath.get('notes/')?.collapsed).toBeUndefined();
+    expect(byPath.get('src/')?.collapsed).toBeUndefined();
+    expect(byPath.has('notes/today.md')).toBe(true);
+  });
+
   it('flags a collapsed ignored directory so its children can be fetched on expand', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'dc-index-collapsed-'));
     cleanup.push(dir);

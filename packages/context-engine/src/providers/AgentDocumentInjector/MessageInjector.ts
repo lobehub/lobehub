@@ -3,7 +3,7 @@ import debug from 'debug';
 import { BaseProcessor } from '../../base/BaseProcessor';
 import type { PipelineContext, ProcessorOptions } from '../../types';
 import type { AgentContextDocument, AgentDocumentFilterContext } from './shared';
-import { combineDocuments, getDocumentsForPositions } from './shared';
+import { combineDocuments, getDocumentsForPositions, withRunStartedAt } from './shared';
 
 const log = debug('context-engine:provider:AgentDocumentMessageInjector');
 
@@ -47,7 +47,10 @@ export class AgentDocumentMessageInjector extends BaseProcessor {
     if (afterFirstUserDocs.length > 0) {
       const firstUserIndex = clonedContext.messages.findIndex((m) => m.role === 'user');
       if (firstUserIndex !== -1) {
-        const content = combineDocuments(afterFirstUserDocs, this.config);
+        const content = combineDocuments(
+          afterFirstUserDocs,
+          withRunStartedAt(this.config, clonedContext.messages),
+        );
         const now = Date.now();
         clonedContext.messages.splice(firstUserIndex + 1, 0, {
           content,
@@ -62,7 +65,10 @@ export class AgentDocumentMessageInjector extends BaseProcessor {
 
     // Inject at context end
     if (contextEndDocs.length > 0) {
-      const content = combineDocuments(contextEndDocs, this.config);
+      const content = combineDocuments(
+        contextEndDocs,
+        withRunStartedAt(this.config, clonedContext.messages),
+      );
       const now = Date.now();
       clonedContext.messages.push({
         content,

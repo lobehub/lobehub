@@ -1141,6 +1141,109 @@ describe('tool executors', () => {
     });
   });
 
+  describe('serialized batch calls', () => {
+    // Several editFile calls to one path in a batch reached the device at once;
+    // each read the same snapshot and the last write dropped the others while
+    // every call reported success. Calls naming the same resource through
+    // `serializeBy` queue in emission order; other paths stay concurrent.
+    const manifestMap = {
+      'lobe-local-system': {
+        api: [
+          { name: 'editFile', serializeBy: 'file_path' },
+          { name: 'writeFile', serializeBy: 'path' },
+          { name: 'readFile' },
+        ],
+        identifier: 'lobe-local-system',
+      },
+    };
+
+    const fileCall = (id: string, apiName: string, args: Record<string, unknown>) => ({
+      apiName,
+      arguments: JSON.stringify(args),
+      id,
+      identifier: 'lobe-local-system',
+      type: 'builtin' as const,
+    });
+
+    const trackingRunner = (delays: Record<string, number>, timeline: string[]) =>
+      vi.fn().mockImplementation(async (tool: { id: string }) => {
+        timeline.push(`start:${tool.id}`);
+        await new Promise((resolve) => setTimeout(resolve, delays[tool.id] ?? 0));
+        timeline.push(`end:${tool.id}`);
+        return {
+          attempts: 1,
+          result: { content: `done ${tool.id}`, executionTime: 1, state: {}, success: true },
+        };
+      });
+
+    beforeEach(() => {
+      host.transports.messages.createToolMessage = vi
+        .fn()
+        .mockImplementation(async ({ tool_call_id }: { tool_call_id: string }) => ({
+          id: `tool-msg-${tool_call_id}`,
+        }));
+    });
+
+    it('runs edits and writes to one path one after another, in emission order', async () => {
+      const timeline: string[] = [];
+      host.transports.tools!.run = trackingRunner(
+        { 'edit-1': 30, 'edit-2': 10, 'write-1': 0 },
+        timeline,
+      );
+
+      const result = await callToolsBatch(host)(
+        {
+          payload: {
+            parentMessageId: 'assistant-msg-1',
+            toolsCalling: [
+              fileCall('edit-1', 'editFile', { file_path: '/repo/a.ts', old_string: 'x' }),
+              fileCall('edit-2', 'editFile', { file_path: '/repo/a.ts', old_string: 'y' }),
+              fileCall('write-1', 'writeFile', { content: 'z', path: '/repo/a.ts' }),
+            ],
+          },
+          type: 'call_tools_batch',
+        },
+        createState({ toolManifestMap: manifestMap }),
+      );
+
+      expect(timeline).toEqual([
+        'start:edit-1',
+        'end:edit-1',
+        'start:edit-2',
+        'end:edit-2',
+        'start:write-1',
+        'end:write-1',
+      ]);
+      expect((result.nextContext?.payload as any).toolResults).toHaveLength(3);
+    });
+
+    it('keeps edits to different paths and unmarked reads concurrent', async () => {
+      const timeline: string[] = [];
+      host.transports.tools!.run = trackingRunner(
+        { 'edit-a': 30, 'edit-b': 0, 'read-a': 0 },
+        timeline,
+      );
+
+      await callToolsBatch(host)(
+        {
+          payload: {
+            parentMessageId: 'assistant-msg-1',
+            toolsCalling: [
+              fileCall('edit-a', 'editFile', { file_path: '/repo/a.ts', old_string: 'x' }),
+              fileCall('edit-b', 'editFile', { file_path: '/repo/b.ts', old_string: 'x' }),
+              fileCall('read-a', 'readFile', { path: '/repo/a.ts' }),
+            ],
+          },
+          type: 'call_tools_batch',
+        },
+        createState({ toolManifestMap: manifestMap }),
+      );
+
+      // All three start before the slow edit to a.ts finishes.
+      expect(timeline.slice(0, 3).sort()).toEqual(['start:edit-a', 'start:edit-b', 'start:read-a']);
+    });
+  });
+
   describe('ordered batch calls', () => {
     // A model that posts a long report as several `sendMessage` calls emits
     // them in reading order, but `Promise.all` handed every call to the

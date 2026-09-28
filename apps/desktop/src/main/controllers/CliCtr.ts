@@ -18,14 +18,27 @@ function normalizeServerUrl(url: string): string {
 export default class CliCtr extends ControllerModule {
   static override readonly groupName = 'cli';
 
-  @IpcMethod()
-  async runCliCommand(args: string): Promise<{ exitCode: number; stderr: string; stdout: string }> {
-    const execAsync = promisify(exec);
-    const wrapperDir = getCliWrapperDir();
-    const cmd = process.platform === 'win32' ? 'lobehub.cmd' : 'lobehub';
-    const wrapperPath = path.join(wrapperDir, cmd);
+  /**
+   * Environment for running the embedded CLI: the caller's own variables, the
+   * wrapper directory first on `PATH` (so `lh` / `lobe` / `lobehub` resolve to
+   * the bundled CLI rather than whatever else is installed), and — when the
+   * app is signed in — the credentials the CLI authenticates with.
+   *
+   * Returned as overrides layered on top of `process.env` by the runner.
+   */
+  async buildCliEnv(baseEnv: Record<string, string> = {}): Promise<Record<string, string>> {
+    const env: Record<string, string> = { ...baseEnv };
 
-    const env = { ...process.env };
+    // Windows spells it `Path`, and a second, differently-cased key next to it
+    // would leave which one the child sees up to chance — reuse the existing key.
+    const pathKey =
+      Object.keys(baseEnv).find((key) => key.toUpperCase() === 'PATH') ??
+      Object.keys(process.env).find((key) => key.toUpperCase() === 'PATH') ??
+      'PATH';
+    const currentPath = baseEnv[pathKey] ?? process.env[pathKey];
+    env[pathKey] = currentPath
+      ? `${getCliWrapperDir()}${path.delimiter}${currentPath}`
+      : getCliWrapperDir();
 
     const remoteCtr = this.app.getController(RemoteServerConfigCtr);
     if (remoteCtr) {
@@ -40,6 +53,23 @@ export default class CliCtr extends ControllerModule {
         logger.debug('Injected LOBEHUB_JWT / LOBEHUB_SERVER for CLI command');
       }
     }
+
+    return env;
+  }
+
+  /**
+   * Quick CLI invocation for the settings page's "test CLI" box. Agent
+   * `runCommand` calls do not come through here — they run in the regular
+   * command runner (see `ShellCommandCtr.handleRunCommand`).
+   */
+  @IpcMethod()
+  async runCliCommand(args: string): Promise<{ exitCode: number; stderr: string; stdout: string }> {
+    const execAsync = promisify(exec);
+    const wrapperDir = getCliWrapperDir();
+    const cmd = process.platform === 'win32' ? 'lobehub.cmd' : 'lobehub';
+    const wrapperPath = path.join(wrapperDir, cmd);
+
+    const env = { ...process.env, ...(await this.buildCliEnv()) };
 
     try {
       const { stdout, stderr } = await execAsync(`"${wrapperPath}" ${args}`, {

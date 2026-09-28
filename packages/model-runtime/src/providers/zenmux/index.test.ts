@@ -16,7 +16,6 @@ vi.spyOn(console, 'debug').mockImplementation(() => {});
 describe('ZenMux Runtime', () => {
   let mockFetch: Mock;
   let mockProcessMultiProviderModelList: Mock;
-  let mockDetectModelProvider: Mock;
 
   beforeEach(() => {
     // Setup fetch mock
@@ -25,7 +24,6 @@ describe('ZenMux Runtime', () => {
 
     // Setup utility function mocks
     mockProcessMultiProviderModelList = vi.mocked(modelParseModule.processMultiProviderModelList);
-    mockDetectModelProvider = vi.mocked(modelParseModule.detectModelProvider);
 
     // Clear environment variables
     delete process.env.DEBUG_ZENMUX_CHAT_COMPLETION;
@@ -52,29 +50,8 @@ describe('ZenMux Runtime', () => {
 
   describe('LobeZenMuxAI - custom features', () => {
     describe('Params Export', () => {
-      it('should export params object', () => {
-        expect(params).toBeDefined();
-        expect(params.id).toBe('zenmux');
-      });
-
-      it('should have routers configuration', () => {
-        expect(params.routers).toBeDefined();
-        expect(typeof params.routers).toBe('function');
-      });
-
-      it('should have models function', () => {
-        expect(params.models).toBeDefined();
-        expect(typeof params.models).toBe('function');
-      });
-
       it('should have correct provider ID', () => {
         expect(params.id).toBe(ModelProvider.ZenMux);
-      });
-
-      it('should have chatCompletion handlePayload function', () => {
-        expect(params.chatCompletion).toBeDefined();
-        expect(params.chatCompletion?.handlePayload).toBeDefined();
-        expect(typeof params.chatCompletion?.handlePayload).toBe('function');
       });
     });
 

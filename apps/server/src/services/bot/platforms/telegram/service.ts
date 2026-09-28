@@ -38,6 +38,8 @@ import type {
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
+import type { AttachmentSendResult } from '../attachmentDelivery';
+import { attachmentDeliveryState, warnAttachmentFailures } from '../attachmentDelivery';
 import type { TelegramApi } from './api';
 import { sendTelegramAttachments } from './sendAttachments';
 
@@ -52,29 +54,40 @@ export class TelegramMessageService implements MessageRuntimeService {
     // separate text-only sendMessage. If every attachment fails to
     // materialize, fall back to the original text-only path so the reply
     // still reaches the user.
+    let attachments: AttachmentSendResult | undefined;
     if (params.attachments?.length) {
-      const delivered = await sendTelegramAttachments(
+      attachments = await sendTelegramAttachments(
         this.api,
         params.channelId,
         params.attachments,
         params.content,
       );
-      if (delivered > 0) {
-        return { channelId: params.channelId, platform: 'telegram' };
+      warnAttachmentFailures('bot-platform:telegram:sendMessage', attachments.failures);
+      if (attachments.delivered > 0) {
+        return {
+          channelId: params.channelId,
+          platform: 'telegram',
+          ...attachmentDeliveryState(attachments),
+        };
       }
     }
 
     if (!params.content?.trim()) {
       // No text and no successful attachments — nothing to send. Return a
-      // soft state instead of throwing so the caller doesn't see a crash
-      // for a no-op.
-      return { channelId: params.channelId, platform: 'telegram' };
+      // soft state instead of throwing; the attachment outcome it carries is
+      // what tells the runtime that nothing reached the user.
+      return {
+        channelId: params.channelId,
+        platform: 'telegram',
+        ...attachmentDeliveryState(attachments),
+      };
     }
     const result = await this.api.sendMessage(params.channelId, params.content);
     return {
       channelId: params.channelId,
       messageId: String(result.message_id),
       platform: 'telegram',
+      ...attachmentDeliveryState(attachments),
     };
   };
 

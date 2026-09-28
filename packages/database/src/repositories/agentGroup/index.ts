@@ -3,6 +3,7 @@ import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobe
 import { cleanObject } from '@lobechat/utils';
 import { and, asc, count, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
+import { AGENT_SHARED_TRANSFER_BLOCKED } from '../../models/agent';
 import {
   AGENT_COPY_IN_PROGRESS,
   AgentCopyJobModel,
@@ -32,6 +33,7 @@ import type {
 import {
   agentLabelAssignments,
   agents,
+  agentShares,
   chatGroups,
   chatGroupsAgents,
   messages,
@@ -1122,6 +1124,18 @@ export class AgentGroupRepository {
           .where(inArray(agents.id, agentIds))
           .orderBy(asc(agents.id))
           .for('update');
+      }
+
+      // A share row keeps the agent bound to its current owner and workspace,
+      // including when the share is paused. Check only owned members: referenced
+      // standalone agents remain with their owner and do not move with the group.
+      if (ownedAgentIds.length > 0) {
+        const [existingShare] = await trx
+          .select({ id: agentShares.id })
+          .from(agentShares)
+          .where(inArray(agentShares.agentId, ownedAgentIds))
+          .limit(1);
+        if (existingShare) throw new Error(AGENT_SHARED_TRANSFER_BLOCKED);
       }
 
       // `memberRows` is read RAW — the partition above must see every member,

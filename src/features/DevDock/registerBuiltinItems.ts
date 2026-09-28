@@ -178,6 +178,13 @@ export const registerBuiltinDevDockItems = () => {
   if (isDesktop) {
     items.push(
       {
+        icon: Cpu,
+        id: 'background-processes',
+        label: 'Background Processes',
+        type: 'panel',
+        load: () => import('@/features/BackgroundActivity'),
+      },
+      {
         defaultPinned: true,
         icon: Gpu,
         id: 'gpu-process',

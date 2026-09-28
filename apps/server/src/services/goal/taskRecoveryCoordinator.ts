@@ -6,7 +6,11 @@ import { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
-import { resolveTaskAttemptBudget, resolveTaskMaxSteps } from './recoveryPolicy';
+import {
+  isDeviceUnavailableFailure,
+  resolveTaskAttemptBudget,
+  resolveTaskMaxSteps,
+} from './recoveryPolicy';
 import { statusAuthoredByActor } from './supervisor/policy';
 import { claimGoalTask } from './taskClaim';
 
@@ -30,6 +34,8 @@ export type TaskRecoveryOutcome =
  * and drop the operation id of the one it had.
  */
 export interface TaskRecoveryResult {
+  /** Present only on `spawn-failed` when the retry could not reach its device. */
+  deviceUnavailable?: boolean;
   /** Present only on `started`. The drill-down link into `agent_operations`. */
   operationId?: string;
   outcome: TaskRecoveryOutcome;
@@ -115,13 +121,19 @@ export class TaskRecoveryCoordinator {
       return { operationId: run.operationId, outcome: 'started' };
     } catch (error) {
       log('task %s recovery spawn failed (non-fatal): %O', task.identifier, error);
+      // A retry that could not reach its device keeps that reason, so the next
+      // advance waits for the device instead of retrying into the same failure.
+      const message = error instanceof Error ? error.message : String(error);
+      const deviceUnavailable = isDeviceUnavailableFailure(message);
       // We own the claim, so nothing else will put the task back.
       await taskModel
-        .updateStatusIfCurrent(task.id, 'running', 'paused', { error: current.error })
+        .updateStatusIfCurrent(task.id, 'running', 'paused', {
+          error: deviceUnavailable ? message : current.error,
+        })
         .catch((releaseError) => {
           log('task %s failed to release the recovery claim: %O', task.identifier, releaseError);
         });
-      return { outcome: 'spawn-failed' };
+      return { deviceUnavailable, outcome: 'spawn-failed' };
     }
   };
 }

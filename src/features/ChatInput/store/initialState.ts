@@ -19,6 +19,12 @@ export interface SendButtonProps {
   generating: boolean;
   onStop: (params: { editor: IEditor }) => void;
   shape?: 'round' | 'default';
+  /**
+   * While `generating`, render a Send button beside Stop so a follow-up can be
+   * sent without hiding the running indicator. Only hosts whose `onSend`
+   * accepts sends during generation (e.g. by queueing) should enable this.
+   */
+  showSendWhileGenerating?: boolean;
   size?: number;
 }
 

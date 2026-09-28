@@ -24,7 +24,11 @@ export default defineConfig(async (env) => {
       copyPublicDir: false,
       emptyOutDir: true,
       lib: {
-        entry: path.resolve(__dirname, 'src/preload/index.ts'),
+        entry: {
+          connectorOAuth: path.resolve(__dirname, 'src/preload/connectorOAuth.ts'),
+          index: path.resolve(__dirname, 'src/preload/index.ts'),
+        },
+        fileName: (_format, entryName) => `${entryName}.js`,
         formats: ['cjs'],
       },
       minify: !isDev,

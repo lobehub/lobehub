@@ -499,6 +499,7 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
               },
               enabled: true,
               id: 'kimi-k2.6',
+              maxOutput: 65_536,
               type: 'chat',
             },
             { abilities: { reasoning: true }, enabled: true, id: 'no-tools-model', type: 'chat' },
@@ -510,13 +511,14 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
     await expect(
       resolveServerDefaultHeterogeneousModel('claude-code', 'kimi-k2.6'),
     ).resolves.toEqual({
+      maxOutput: 65_536,
       model: 'kimi-k2.6',
       provider: 'lobehub',
       supportsAdaptiveThinking: false,
     });
     await expect(
       resolveServerDefaultHeterogeneousModel('kimi-code', 'kimi-k2.6'),
-    ).resolves.toMatchObject({ model: 'kimi-k2.6', provider: 'lobehub' });
+    ).resolves.toMatchObject({ maxOutput: 65_536, model: 'kimi-k2.6', provider: 'lobehub' });
     await expect(resolveServerDefaultHeterogeneousModel('pi', 'kimi-k2.6')).resolves.toMatchObject({
       model: 'kimi-k2.6',
       provider: 'lobehub',

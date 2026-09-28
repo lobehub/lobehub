@@ -191,6 +191,9 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         required: ['path', 'content'],
         type: 'object',
       },
+      // Queues with editFile on the same path: parallel read-modify-writes of
+      // one file would otherwise drop all but the last edit.
+      serializeBy: 'path',
     },
     {
       defaultTimeoutMs: 30_000,
@@ -227,6 +230,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         required: ['file_path', 'old_string', 'new_string'],
         type: 'object',
       },
+      serializeBy: 'file_path',
     },
     {
       defaultTimeoutMs: 60_000,

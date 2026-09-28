@@ -55,6 +55,8 @@ const TASK_DETAIL_DIRECT_TOPIC_LIMIT = 100;
  */
 const TASK_DETAIL_ACTIVITY_LIMIT = 200;
 const TASK_DETAIL_DESCENDANT_TOPIC_LIMIT = 300;
+/** How long after a run starts a task may have no recorded operation yet. */
+const TASK_RUN_STARTING_GRACE_MS = 2 * 60 * 1000;
 
 type DirectTaskTopicActivityRow = Awaited<ReturnType<TaskTopicModel['findWithHandoff']>>[number];
 type DescendantTaskTopicActivityRow = Awaited<
@@ -344,6 +346,81 @@ export class TaskService {
 
     await this.taskTopicModel.remove(target.taskId, topicId);
     await this.topicModel.delete(topicId);
+  }
+
+  /**
+   * Delete a task: interrupt its still-running topics first, then remove the
+   * row. Deleting without the interrupt leaves the run executing against a
+   * task that no longer exists — its task tools answer "Task not found" and
+   * every document it produces fails the `task_documents` foreign key.
+   *
+   * `keepOperationId` spares the caller's own run (an agent deleting the task
+   * it is executing), which would otherwise interrupt itself mid-tool-call.
+   */
+  async deleteTask(
+    idOrIdentifier: string,
+    options: { keepOperationId?: string } = {},
+  ): Promise<TaskItem> {
+    const task = await this.resolveOrThrow(idOrIdentifier);
+
+    const runningTopics = await this.taskTopicModel.findRunningByTaskIds([task.id]);
+
+    // The runner marks the task `running` before it dispatches the agent and
+    // records the topic / operation only after dispatch returns. A delete in
+    // that window finds nothing to interrupt and would orphan the run it is
+    // about to start. Past the grace window a missing operation means the
+    // start died, and deletion goes ahead.
+    const startedAt = task.startedAt ? new Date(task.startedAt).getTime() : 0;
+    const isStarting =
+      task.status === 'running' &&
+      Date.now() - startedAt < TASK_RUN_STARTING_GRACE_MS &&
+      (runningTopics.length === 0 || runningTopics.some((topic) => !topic.operationId));
+    if (isStarting) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'This task is still starting its run. Try deleting it again in a moment.',
+      });
+    }
+
+    const toInterrupt = runningTopics.filter(
+      (topic) => topic.operationId && topic.operationId !== options.keepOperationId,
+    );
+    if (toInterrupt.length > 0) {
+      const aiAgentService = new AiAgentService(this.db, this.userId, {
+        workspaceId: this.workspaceId,
+      });
+      for (const topic of toInterrupt) {
+        await this.interruptTaskOperation(aiAgentService, topic.operationId!);
+      }
+    }
+
+    // Decide and delete under the task's row lock — the same lock a run takes
+    // to record its topic. A run that recorded one after the checks above is
+    // seen here and wins; a run that records later finds the task gone and
+    // stops its own execution. Compare-and-delete on the status as well, so a
+    // run that moved the task on in the meantime is never deleted under.
+    const handled = new Set(runningTopics.map((topic) => topic.operationId));
+    const outcome = await this.db.transaction(async (tx) => {
+      const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
+      if (!(await taskModel.lockForUpdate(task.id))) return 'gone' as const;
+      const nowRunning = await new TaskTopicModel(
+        tx,
+        this.userId,
+        this.workspaceId,
+      ).findRunningByTaskIds([task.id]);
+      if (nowRunning.some((topic) => !handled.has(topic.operationId))) return 'conflict' as const;
+      return (await taskModel.deleteIfStatus(task.id, task.status))
+        ? ('deleted' as const)
+        : ('conflict' as const);
+    });
+    if (outcome === 'conflict') {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message:
+          'The task changed while it was being deleted (it may have just started). Try again.',
+      });
+    }
+    return task;
   }
 
   /**

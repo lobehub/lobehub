@@ -21,6 +21,12 @@ import {
   MemoryIdentifier,
   memoryReadOnlySystemPrompt,
 } from '@lobechat/builtin-tool-memory';
+import {
+  agentShareSystemPrompt as skillsAgentShareSystemPrompt,
+  SkillsApiName,
+  SkillsIdentifier,
+  SkillsManifest,
+} from '@lobechat/builtin-tool-skills';
 import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
 import {
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
@@ -35,6 +41,7 @@ import {
   applyShareGateToAgentConfig,
   applyShareGateToToolSet,
   filterPluginsByShareGate,
+  filterSkillsByShareGate,
   getShareGrantActivatedPluginIds,
   isShareBlockedBuiltinDispatch,
   isShareBlockedDataToolCall,
@@ -143,6 +150,31 @@ describe('filterPluginsByShareGate', () => {
   });
 });
 
+describe('filterSkillsByShareGate', () => {
+  it('keeps only the skills the creator named', () => {
+    const gate = buildGate({ skillGrants: ['pdf-report', 'brand-voice'] });
+
+    expect(filterSkillsByShareGate(['pdf-report', 'internal-audit', 'brand-voice'], gate)).toEqual([
+      'pdf-report',
+      'brand-voice',
+    ]);
+  });
+
+  it('cannot turn an ordinary tool grant into a skill grant', () => {
+    // `toolGrants` is never read as a skill list. Tool and skill ids share one
+    // namespace, so a tool grant that happens to name a real skill id must not
+    // widen the skill pool either.
+    const gate = buildGate({ toolGrants: [{ identifier: 'pdf-report' }] });
+
+    expect(filterSkillsByShareGate(['pdf-report'], gate)).toEqual([]);
+  });
+
+  it('exposes no skills when the share grants nothing at all', () => {
+    expect(filterSkillsByShareGate(['pdf-report'], buildGate())).toEqual([]);
+    expect(filterSkillsByShareGate(['pdf-report'], buildGate({ skillGrants: [] }))).toEqual([]);
+  });
+});
+
 describe('getShareGrantActivatedPluginIds', () => {
   it('activates Agent Documents only after the owner grants it for this Share', () => {
     expect(getShareGrantActivatedPluginIds(buildGate())).toEqual([]);
@@ -197,6 +229,18 @@ describe('AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS', () => {
   it('allowlists lobe-cloud-sandbox now that visitor runs get a credential-free sandbox session', () => {
     expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has('lobe-cloud-sandbox')).toBe(true);
   });
+
+  it('allowlists video generation but still requires the owner grant to dispatch it', () => {
+    expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has('lobe-video-generation')).toBe(true);
+    expect(isShareBlockedBuiltinDispatch({}, 'lobe-video-generation', 'generateVideo')).toBe(true);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { toolGrants: [{ identifier: 'lobe-video-generation' }] },
+        'lobe-video-generation',
+        'generateVideo',
+      ),
+    ).toBe(false);
+  });
 });
 
 /**
@@ -209,6 +253,10 @@ describe('AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS', () => {
   const maximalPermissions = {
     allowReadMemory: true,
     knowledgeBaseIds: ['kb1'],
+    // `lobe-skills` has its own opt-in — the skill list, not `toolGrants` — so
+    // "maximal" has to name a skill or the tool reads as unconditionally
+    // blocked and lands in this set by accident.
+    skillGrants: ['pdf-report'],
     toolGrants: [{ identifier: AgentDocumentsIdentifier }],
   };
 
@@ -566,6 +614,75 @@ describe('applyShareGateToToolSet', () => {
     expect(Object.keys(listDocumentsTool!.function.parameters.properties)).toEqual([]);
   });
 
+  // `lobe-skills` is an always-on builtin, so it reaches the tool set without
+  // ever appearing in the owner's `toolGrants`. Its opt-in is the SKILL list:
+  // the gate derives a synthetic tool grant from `skillGrants`, then narrows it
+  // to the two read APIs. Regression for the bug where the tool was simply
+  // absent from the allowlist and every skill-driven shared agent broke.
+  const buildSkillsToolSet = () => {
+    const toolSet = buildToolSet([
+      {
+        apis: Object.values(SkillsApiName).map((name) => ({ name })),
+        identifier: SkillsIdentifier,
+      },
+    ]);
+    toolSet.manifestMap[SkillsIdentifier] = SkillsManifest;
+    toolSet.tools = generateToolsFromManifest(SkillsManifest);
+    return toolSet;
+  };
+
+  it('keeps lobe-skills with only its read APIs once the owner grants any skill', () => {
+    const toolSet = buildSkillsToolSet();
+
+    applyShareGateToToolSet(toolSet, buildGate({ skillGrants: ['pdf-report'] }));
+
+    const manifest = toolSet.manifestMap[SkillsIdentifier];
+    expect(manifest.api.map((api) => api.name).sort()).toEqual(
+      [SkillsApiName.activateSkill, SkillsApiName.readReference].sort(),
+    );
+    // The rewritten role must replace the full one: the original documents a
+    // runCommand/execScript decision tree for APIs that are no longer callable.
+    expect(manifest.systemRole).toBe(skillsAgentShareSystemPrompt);
+    expect(manifest.systemRole).not.toContain('execScript');
+    expect(toolSet.enabledToolIds).toContain(SkillsIdentifier);
+    expect(toolSet.tools!.map((tool: any) => tool.function.name).sort()).toEqual(
+      [
+        toolName(SkillsIdentifier, SkillsApiName.activateSkill),
+        toolName(SkillsIdentifier, SkillsApiName.readReference),
+      ].sort(),
+    );
+  });
+
+  it('drops lobe-skills entirely when the owner revoked every skill', () => {
+    const toolSet = buildSkillsToolSet();
+
+    applyShareGateToToolSet(toolSet, buildGate({ skillGrants: [] }));
+
+    expect(toolSet.manifestMap[SkillsIdentifier]).toBeUndefined();
+    expect(toolSet.enabledToolIds).toEqual([]);
+    expect(toolSet.tools).toEqual([]);
+  });
+
+  it('drops lobe-skills on a share that grants nothing at all', () => {
+    const toolSet = buildSkillsToolSet();
+
+    applyShareGateToToolSet(toolSet, buildGate());
+
+    expect(toolSet.manifestMap[SkillsIdentifier]).toBeUndefined();
+    expect(toolSet.enabledToolIds).toEqual([]);
+  });
+
+  it('does not let an ordinary tool grant turn lobe-skills on', () => {
+    // The skill list is the only opt-in. Granting some unrelated tool says
+    // nothing about skills, so the Skills tool stays out of the visitor's set.
+    const toolSet = buildSkillsToolSet();
+
+    applyShareGateToToolSet(toolSet, buildGate({ toolGrants: [{ identifier: 'web-search' }] }));
+
+    expect(toolSet.manifestMap[SkillsIdentifier]).toBeUndefined();
+    expect(toolSet.enabledToolIds).toEqual([]);
+  });
+
   it('preserves the restricted Agent Documents schema for a per-API grant', () => {
     const toolSet = buildToolSet([
       {
@@ -917,6 +1034,34 @@ describe('isShareBlockedBuiltinDispatch', () => {
         AgentDocumentsApiName.updateLoadRule,
       ),
     ).toBe(true);
+  });
+
+  it('allows the two Skills read APIs but blocks the exec-class and export ones', () => {
+    const enabled = { skillGrants: ['pdf-report'] };
+
+    for (const apiName of [SkillsApiName.activateSkill, SkillsApiName.readReference]) {
+      expect(isShareBlockedBuiltinDispatch(enabled, SkillsIdentifier, apiName)).toBe(false);
+    }
+    // runCommand/execScript run arbitrary code on the creator's account and
+    // exportFile writes to the creator's file store — all three are phase-2
+    // work, gated here rather than merely omitted from the assembled manifest.
+    for (const apiName of [
+      SkillsApiName.runCommand,
+      SkillsApiName.execScript,
+      SkillsApiName.exportFile,
+    ]) {
+      expect(isShareBlockedBuiltinDispatch(enabled, SkillsIdentifier, apiName)).toBe(true);
+    }
+  });
+
+  it('blocks every Skills API when the owner revoked or never granted a skill', () => {
+    // A tool grant is included on purpose: `toolGrants` never authorizes a
+    // skill, so it cannot unblock these APIs either.
+    for (const permissions of [{}, { skillGrants: [] }, { toolGrants: [{ identifier: 'x' }] }]) {
+      expect(
+        isShareBlockedBuiltinDispatch(permissions, SkillsIdentifier, SkillsApiName.activateSkill),
+      ).toBe(true);
+    }
   });
 
   it('ignores non-builtin identifiers entirely', () => {

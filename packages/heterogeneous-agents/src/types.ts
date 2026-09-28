@@ -302,6 +302,10 @@ export interface ToolCallPayload {
 export interface UsageData {
   /** Estimated session or turn cost in USD, if the CLI reports it. */
   cost?: number;
+  /** Provider-native subscription credits consumed (e.g. Qoder), when the CLI
+   * bills in credits instead of reporting token counts. Not USD — keep it
+   * separate from `cost` so spend math never mixes units. */
+  credits?: number;
   /** Input tokens served from the prompt cache (cache reads). */
   inputCachedTokens?: number;
   /** Input tokens that missed the prompt cache (fresh prompt bytes). */
@@ -381,11 +385,28 @@ export interface HeterogeneousTerminalErrorData {
  * Adapters maintain internal state (e.g., pending tool calls) to correctly
  * emit lifecycle events like tool_start / tool_end.
  */
+/**
+ * Options for {@link AgentEventAdapter.collectPostRunUsage}. `env` is the
+ * child process environment, so home-resolution honors relocations like
+ * `KIMI_CODE_HOME` that only exist in the spawn env.
+ */
+export interface PostRunUsageOptions {
+  env?: Record<string, string | undefined>;
+}
+
 export interface AgentEventAdapter {
   /**
    * Convert a single raw event into zero or more HeterogeneousAgentEvents.
    */
   adapt: (raw: any) => HeterogeneousAgentEvent[];
+
+  /**
+   * Optional post-exit hook for agents whose token usage never appears on
+   * stdout (e.g. Kimi Code logs usage only to the session's wire.jsonl).
+   * Called after stdout drained and the child process exited. Must be
+   * best-effort: usage collection failures resolve to `[]`, never throw.
+   */
+  collectPostRunUsage?: (options?: PostRunUsageOptions) => Promise<HeterogeneousAgentEvent[]>;
 
   /**
    * Flush any buffered events (call at end of stream).

@@ -22,6 +22,7 @@ export interface AIProviderState {
   aiProviderRuntimeConfig: Record<string, AiProviderRuntimeConfig>;
   enabledAiModels?: EnabledAiModel[];
   enabledAiProviders?: EnabledProvider[];
+  enabledAsrModelList?: EnabledProviderWithModels[];
   // used for select
   enabledChatModelList?: EnabledProviderWithModels[];
   enabledEmbeddingModelList?: EnabledProviderWithModels[];

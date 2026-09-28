@@ -53,11 +53,19 @@ export async function finalizeAbandoned(c: Context): Promise<Response> {
     // being swallowed behind a 200: a 200 here would falsely report the parent
     // as handled while it stays parked forever.
     if (result.subAgentResume) {
-      const { parentOperationId, streamOwnerUserId, threadId, toolMessageId, userId, workspaceId } =
-        result.subAgentResume;
+      const {
+        errorMessage,
+        parentOperationId,
+        streamOwnerUserId,
+        threadId,
+        toolMessageId,
+        userId,
+        workspaceId,
+      } = result.subAgentResume;
       // Child reached a terminal failure (watchdog kill) → the bridge backfills
       // the parent's tool slot with an error note rather than a stub answer.
       const bridgeBody = {
+        errorMessage,
         operationId,
         parentOperationId,
         reason: 'error',

@@ -31,10 +31,16 @@ interface RpcMessage {
 }
 
 const createAcpProcess = ({
+  configOptions,
+  configOptionsByModel,
+  configUpdateOnPrompt,
   initializeResult,
   loadError,
   permissionRequest = false,
 }: {
+  configOptions?: Record<string, unknown>[];
+  configOptionsByModel?: Record<string, Record<string, unknown>[]>;
+  configUpdateOnPrompt?: Record<string, unknown>[];
   initializeResult?: Record<string, unknown>;
   loadError?: { code: number; data?: unknown; message: string };
   permissionRequest?: boolean;
@@ -85,7 +91,7 @@ const createAcpProcess = ({
               send({
                 id: message.id,
                 result: {
-                  configOptions: [
+                  configOptions: configOptions ?? [
                     {
                       category: 'model',
                       currentValue: currentModel,
@@ -105,18 +111,25 @@ const createAcpProcess = ({
             }
             case 'session/load': {
               send(
-                loadError ? { error: loadError, id: message.id } : { id: message.id, result: {} },
+                loadError
+                  ? { error: loadError, id: message.id }
+                  : { id: message.id, result: { configOptions } },
               );
               return;
             }
             case 'session/set_config_option': {
               const params = message.params as { configId?: string; value?: string } | undefined;
+              if (params?.configId === 'model' && params.value) {
+                configOptions = configOptionsByModel?.[params.value] ?? configOptions;
+              }
+              const config = configOptions?.find(({ id }) => id === params?.configId);
+              if (config) config.currentValue = params?.value;
               if (params?.configId === 'mode' && params.value) currentMode = params.value;
               if (params?.configId === 'model' && params.value) currentModel = params.value;
               send({
                 id: message.id,
                 result: {
-                  configOptions: [
+                  configOptions: configOptions ?? [
                     {
                       category: 'mode',
                       currentValue: currentMode,
@@ -136,6 +149,17 @@ const createAcpProcess = ({
             }
             case 'session/prompt': {
               promptRequest = message;
+              if (configUpdateOnPrompt) {
+                send({
+                  method: 'session/update',
+                  params: {
+                    update: {
+                      configOptions: configUpdateOnPrompt,
+                      sessionUpdate: 'config_option_update',
+                    },
+                  },
+                });
+              }
               send({
                 method: 'session/update',
                 params: {
@@ -614,5 +638,118 @@ describe('DevinAcpSession', () => {
       value: 'bypass',
     });
     expect(options.onModel).toHaveBeenCalledWith('glm-5-2');
+  });
+
+  it.each([
+    ['swe-2-high', 'max', 'swe-2-max', undefined, []],
+    ['claude-opus-5-5-medium', 'max', 'claude-opus-5-5-max', undefined, []],
+    ['swe-2-high', 'max', 'swe-2-high', undefined, [['thought_level', 'high']]],
+    ['swe-2-high', 'high', 'swe-2-max', 'saved-session', [['thought_level', 'max']]],
+    [
+      'swe-2-high',
+      'high',
+      'claude-opus-5-5-max',
+      'saved-session',
+      [
+        ['model', 'claude-opus-5-5-medium'],
+        ['thought_level', 'max'],
+      ],
+    ],
+  ] as const)(
+    'preserves the requested variant %s/%s → %s (resume: %s)',
+    async (currentModel, thoughtLevel, initialModel, resumeSessionId, expectedChanges) => {
+      // Devin 3000.11.3 advertises a family representative in `model` even
+      // when --model has already selected a different thinking variant.
+      const fake = createAcpProcess({
+        configOptions: [
+          {
+            currentValue: currentModel,
+            id: 'model',
+            options: [
+              { name: 'SWE-2', value: 'swe-2-high' },
+              { name: 'Claude Opus 5.5', value: 'claude-opus-5-5-medium' },
+            ],
+            type: 'select',
+          },
+          {
+            currentValue: thoughtLevel,
+            id: 'thought_level',
+            options: ['medium', 'high', 'max'].map((value) => ({ name: value, value })),
+            type: 'select',
+          },
+        ],
+      });
+      spawnMock.mockReturnValue(fake.child);
+      vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const options = createSessionOptions({ initialModel, resumeSessionId });
+
+      await new DevinAcpSession(options).run();
+
+      expect(
+        fake.requests
+          .filter(({ method }) => method === 'session/set_config_option')
+          .map(({ params }) => [params?.configId, params?.value]),
+      ).toEqual(expectedChanges);
+      expect(options.onModel).toHaveBeenLastCalledWith(initialModel);
+      expect(fake.requests.at(-1)?.method).toBe('session/prompt');
+    },
+  );
+
+  it('validates thinking against the new family and tracks later config updates', async () => {
+    const modelConfig = {
+      currentValue: 'swe-2-high',
+      id: 'model',
+      options: [{ value: 'swe-2-high' }, { value: 'claude-opus-5-5-medium' }],
+    };
+    const targetConfig = [
+      { ...modelConfig, currentValue: 'claude-opus-5-5-medium' },
+      { currentValue: 'medium', id: 'thought_level', options: [{ value: 'low' }] },
+    ];
+    const fake = createAcpProcess({
+      configOptions: [
+        modelConfig,
+        { currentValue: 'high', id: 'thought_level', options: [{ value: 'high' }] },
+      ],
+      configOptionsByModel: { 'claude-opus-5-5-medium': targetConfig },
+      configUpdateOnPrompt: [
+        { ...modelConfig, currentValue: 'claude-opus-5-5-medium' },
+        { currentValue: 'max', id: 'thought_level', options: [{ value: 'max' }] },
+      ],
+    });
+    spawnMock.mockReturnValue(fake.child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const options = createSessionOptions({ initialModel: 'claude-opus-5-5-low' });
+
+    await new DevinAcpSession(options).run();
+
+    expect(options.onModel).toHaveBeenNthCalledWith(1, 'claude-opus-5-5-low');
+    expect(options.onModel).toHaveBeenLastCalledWith('claude-opus-5-5-max');
+    expect(targetConfig[1].currentValue).toBe('low');
+  });
+
+  it.each([
+    ['unknown-max', [{ value: 'max' }]],
+    ['swe-2-max', [{ value: 'medium' }]],
+    ['swe-2-max', undefined],
+    ['fusion-opus-max-sidekick-swe-2-high', [{ value: 'max' }]],
+  ])('rejects unavailable variants without sending a prompt: %s', async (initialModel, levels) => {
+    const fake = createAcpProcess({
+      configOptions: [
+        {
+          currentValue: 'swe-2-high',
+          id: 'model',
+          options: [{ value: 'swe-2-high' }, { value: 'fusion-opus-medium-sidekick-swe-2-high' }],
+        },
+        ...(levels ? [{ currentValue: 'high', id: 'thought_level', options: levels }] : []),
+      ],
+    });
+    spawnMock.mockReturnValue(fake.child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    await expect(new DevinAcpSession(createSessionOptions({ initialModel })).run()).rejects.toThrow(
+      /Devin ACP (model|thinking level) is unavailable/,
+    );
+
+    expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(false);
   });
 });

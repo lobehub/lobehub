@@ -52,9 +52,9 @@ describe('formatFileContent', () => {
       totalLines: 2545,
     });
     expect(result).toMatchInlineSnapshot(`
-      "(lines 1-1000 of 2545)
-      1 line 1
-      2 line 2"
+      "1 line 1
+      2 line 2
+      [Showing lines 1-1000 of 2545 lines. Lines 1001-2545 were left out.]"
     `);
   });
 
@@ -108,7 +108,7 @@ describe('formatFileContent', () => {
       lineRange: [0, 2],
       totalLines: 3,
     });
-    expect(result).toBe('(lines 1-2 of 3)\n1 a\n2 ');
+    expect(result).toBe('1 a\n2 \n[Showing lines 1-2 of 3 lines. Lines 3-3 were left out.]');
   });
 
   it('should cap the output after adding line numbers', () => {

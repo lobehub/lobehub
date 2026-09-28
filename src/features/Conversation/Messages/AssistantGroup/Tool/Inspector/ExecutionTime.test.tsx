@@ -81,7 +81,7 @@ describe('ExecutionTime', () => {
     expect(screen.getByText('0ms')).toBeTruthy();
   });
 
-  it('formats elapsed times longer than a minute as Xmin Ys', () => {
+  it('formats elapsed times longer than a minute as Xm Ys', () => {
     vi.useFakeTimers();
     vi.setSystemTime(10_000);
 
@@ -93,7 +93,7 @@ describe('ExecutionTime', () => {
       vi.advanceTimersByTime(83_000);
     });
 
-    expect(screen.getByText('1min23s')).toBeTruthy();
+    expect(screen.getByText('1m 23s')).toBeTruthy();
 
     rerender(<ExecutionTime isExecuting startTime={10_000} timerKey="tool-minutes" />);
 
@@ -101,7 +101,7 @@ describe('ExecutionTime', () => {
       vi.advanceTimersByTime(60_000);
     });
 
-    expect(screen.getByText('2min23s')).toBeTruthy();
+    expect(screen.getByText('2m 23s')).toBeTruthy();
   });
 
   it('clears the cached start time when execution stops', () => {

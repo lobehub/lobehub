@@ -130,6 +130,8 @@ const electronIpcRemoveListenerRestrictedSyntax = {
 export default eslint(
   {
     ignores: [
+      // Generated skill release; maintained in lobehub/acceptance.
+      '.agents/skills/acceptance/**',
       // dependencies
       'node_modules',
       // ci

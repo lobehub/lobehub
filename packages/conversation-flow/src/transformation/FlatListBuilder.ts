@@ -1141,11 +1141,14 @@ export class FlatListBuilder {
 
     const aggregated = this.messageTransformer.aggregateMetadata(children);
 
-    // Collect all non-usage/performance metadata from all children
+    // Finish reasons belong to their own response block; moving one to the first block can
+    // display a terminal notice beside an earlier tool step.
     const groupMetadata: Record<string, any> = {};
     children.forEach((child) => {
       if ((child as any).metadata) {
-        Object.assign(groupMetadata, (child as any).metadata);
+        Object.entries((child as any).metadata).forEach(([key, value]) => {
+          if (key !== 'finishType') groupMetadata[key] = value;
+        });
       }
     });
 
@@ -1157,9 +1160,11 @@ export class FlatListBuilder {
       }
       Object.assign((children[0] as any).metadata, groupMetadata);
 
-      // Remove metadata from subsequent children (keep only in first child)
+      // Keep each child's finish reason while collecting shared metadata on the first child.
       for (let i = 1; i < children.length; i++) {
-        delete (children[i] as any).metadata;
+        const finishType = (children[i] as any).metadata?.finishType;
+        if (finishType === undefined) delete (children[i] as any).metadata;
+        else (children[i] as any).metadata = { finishType };
       }
     }
 
@@ -1173,6 +1178,18 @@ export class FlatListBuilder {
       content: '',
       role: role as any,
     };
+
+    // Heterogeneous agents (e.g. kimi-code) may only learn model/provider at
+    // run end, stamped on the LAST step's assistant row — the group spreads
+    // the FIRST row, so backfill from the last chain assistant carrying one.
+    if (!result.model) {
+      const withModel = assistantChain.findLast((assistant) => !!assistant.model);
+      if (withModel) result.model = withModel.model;
+    }
+    if (!result.provider) {
+      const withProvider = assistantChain.findLast((assistant) => !!assistant.provider);
+      if (withProvider) result.provider = withProvider.provider;
+    }
 
     // Remove fields that should not be in assistantGroup/supervisor
     delete result.imageList;

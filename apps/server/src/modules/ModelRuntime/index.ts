@@ -651,6 +651,7 @@ export const resolveServerDefaultHeterogeneousModel = async (
 
   return {
     ...toServerModelSelection(ModelProvider.LobeHub, modelConfig),
+    ...(modelConfig.maxOutput !== undefined && { maxOutput: modelConfig.maxOutput }),
     supportsAdaptiveThinking:
       modelConfig.settings?.extendParams?.includes('enableAdaptiveThinking') === true,
   };
