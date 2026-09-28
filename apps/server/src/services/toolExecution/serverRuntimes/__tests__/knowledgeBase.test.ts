@@ -57,7 +57,7 @@ describe('knowledgeBaseRuntime searchKnowledgeBase scope', () => {
 
     expect(mocks.semanticSearchForChat).not.toHaveBeenCalled();
     expect(result.success).toBe(true);
-    expect(result.content).toContain('No knowledge base is attached to this agent');
+    expect(result.content).toContain('No enabled knowledge base is in this agent');
     expect(result.content).not.toContain('No relevant files found');
   });
 

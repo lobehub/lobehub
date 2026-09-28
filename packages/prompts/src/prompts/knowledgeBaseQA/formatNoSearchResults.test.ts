@@ -37,4 +37,15 @@ describe('promptNoKnowledgeBaseInScope', () => {
     expect(prompt).toContain('Otherwise, tell the user nothing was searched');
     expect(prompt).not.toMatch(/<suggestion>Call /);
   });
+
+  it('covers attached-but-disabled libraries instead of claiming none is attached', () => {
+    // The scope resolver drops disabled libraries (`k.enabled`), so an empty scope can mean
+    // "attached but turned off"; the remedy must include enabling it.
+    const prompt = promptNoKnowledgeBaseInScope('Project Falcon ships');
+
+    expect(prompt).toContain('No enabled knowledge base is in this agent');
+    expect(prompt).toContain('the attached ones are turned off');
+    expect(prompt).toContain('or turn on the one already attached');
+    expect(prompt).not.toContain('No knowledge base is attached to this agent');
+  });
 });

@@ -19,7 +19,7 @@ describe('KnowledgeBaseExecutionRuntime.searchKnowledgeBase', () => {
     const result = await runtime.searchKnowledgeBase({ query: 'quarterly revenue forecast' });
 
     expect(result.success).toBe(true);
-    expect(result.content).toContain('No knowledge base is attached to this agent');
+    expect(result.content).toContain('No enabled knowledge base is in this agent');
     expect(result.content).toContain('readKnowledge');
     expect(result.content).not.toContain('No relevant files found');
     // The card and chip read this to say "no library attached" instead of "No results".
@@ -35,7 +35,7 @@ describe('KnowledgeBaseExecutionRuntime.searchKnowledgeBase', () => {
     );
 
     expect(ragService.semanticSearchForChat).not.toHaveBeenCalled();
-    expect(result.content).toContain('No knowledge base is attached to this agent');
+    expect(result.content).toContain('No enabled knowledge base is in this agent');
     expect(result.state).toMatchObject({ scope: 'none' });
   });
 
@@ -48,7 +48,7 @@ describe('KnowledgeBaseExecutionRuntime.searchKnowledgeBase', () => {
     );
 
     expect(result.content).toContain('No relevant files found');
-    expect(result.content).not.toContain('No knowledge base is attached');
+    expect(result.content).not.toContain('No enabled knowledge base');
     expect(result.state).not.toHaveProperty('scope');
   });
 });
