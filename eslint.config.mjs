@@ -87,7 +87,10 @@ const shellRouterRestrictedPaths = [
 // Node-only until listed there, and the package's runtimeBoundary test keeps
 // the listed entries free of Node code.
 const heteroBrowserEntries = JSON.parse(
-  readFileSync(new URL('packages/heterogeneous-agents/browser-entries.json', import.meta.url), 'utf8'),
+  readFileSync(
+    new URL('packages/heterogeneous-agents/browser-entries.json', import.meta.url),
+    'utf8',
+  ),
 );
 const heteroBrowserSubpaths = heteroBrowserEntries
   .filter((entry) => entry !== '.')
