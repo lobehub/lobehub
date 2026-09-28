@@ -475,9 +475,15 @@ export interface GoalGraphWorkVersionDisplay {
    * route resolves {@link resourceId}.
    */
   agentDocumentId?: string;
+  /** File-store identity of a `file` Work — what acceptance evidence cites it by. */
+  fileId?: string;
+  /** Size in bytes of a `file` Work, when it was persisted. */
+  fileSize?: number;
   /** Durable download target of a `file` Work, which keeps it out of `url`. */
   fileUrl?: string;
   identifier: string | null;
+  /** MIME type of a `file` Work, when it was persisted. */
+  mimeType?: string;
   /** Canonical resource identity — the document id an in-app link addresses. */
   resourceId: string | null;
   status: string | null;

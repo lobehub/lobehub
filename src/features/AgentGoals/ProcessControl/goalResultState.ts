@@ -125,6 +125,7 @@ export interface EvidenceLike {
   content?: string | null;
   description?: string | null;
   documentId?: string | null;
+  fileId?: string | null;
   fileName?: string | null;
   fileUrl?: string | null;
   id: string;

@@ -14,6 +14,7 @@ import type { GoalGraphView } from './goalGraphViewModel';
 import { GoalDecisionsMade, GoalUnfinished, useContinueFromResult } from './GoalResultFollowUps';
 import GoalResultHeader from './GoalResultHeader';
 import { findFinalAcceptanceView } from './goalResultState';
+import ResultDeliverables from './ResultDeliverables';
 import ResultTrail from './ResultTrail';
 import { useGoalResultData } from './useGoalResultData';
 
@@ -22,6 +23,7 @@ import { useGoalResultData } from './useGoalResultData';
  *
  * Layered for a reviewer who reads top-down: the first screen says where the
  * result stands, what was asked, how big the run was, and carries the sign-off.
+ * Every deliverable follows in one place, with a reader to page through them.
  * Then each acceptance criterion against what the latest acceptance round
  * found, the decisions the owner made along the way, and what is still open.
  * The document the work wrote follows, read like a page rather than a card,
@@ -64,6 +66,12 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
     <Flexbox gap={8}>
       <Flexbox gap={32}>
         <GoalResultHeader data={data} graph={graph} onContinue={continueFromResult} />
+        <ResultDeliverables
+          graph={graph}
+          loading={data.isLoading}
+          outcomes={data.outcomes}
+          primaryResourceId={deliverable?.documentId}
+        />
         <GoalCriteriaResults loading={data.isLoading} outcomes={data.outcomes} />
         <GoalDecisionsMade graph={graph} />
         <GoalUnfinished graph={graph} outcomes={data.outcomes} onContinue={continueFromResult} />

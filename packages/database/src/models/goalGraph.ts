@@ -218,6 +218,9 @@ export class GoalGraphModel {
         workId: row.workId,
         ...(row.metadata?.agentDocumentId ? { agentDocumentId: row.metadata.agentDocumentId } : {}),
         ...(row.metadata?.fileUrl ? { fileUrl: row.metadata.fileUrl } : {}),
+        ...(row.metadata?.fileId ? { fileId: row.metadata.fileId } : {}),
+        ...(typeof row.metadata?.fileSize === 'number' ? { fileSize: row.metadata.fileSize } : {}),
+        ...(row.metadata?.mimeType ? { mimeType: row.metadata.mimeType } : {}),
       });
     }
     return display;
