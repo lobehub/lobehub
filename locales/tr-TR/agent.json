@@ -315,7 +315,7 @@
   "channel.wechatUserIdHint": "Yetkilendirme akışı tarafından döndürülen WeChat hesap tanımlayıcısı.",
   "share.entry": "Bu Ajanı Paylaş",
   "share.settings.limits.desc": "Her ziyaretçi çalıştırması hesabınıza faturalandırılır, bu nedenle bu sınırlar, paylaşılan bir bağlantının faturanızın kabarmasını önler. Her zaman geçerlidir — sayıları değiştirebilirsiniz, ancak kapatamazsınız.",
-  "share.settings.limits.maxFileStorage": "Dosya depolama limiti (MB)",
+  "share.settings.limits.maxFileStorage": "Dosya depolama limiti",
   "share.settings.limits.maxFileStorageHint": "Ziyaretçilerin eklediği dosyalar hesabınızda depolanır. Yüklemeler bu toplam değere ulaştığında durur; ekleri kapatmak için 0 olarak ayarlayın.",
   "share.settings.limits.maxFileStorageWorkspaceHint": "Ziyaretçilerin eklediği dosyalar Çalışma Alanında saklanır. Yüklemeler bu toplam değere ulaştığında durur; ekleri kapatmak için 0 olarak ayarlayın.",
   "share.settings.limits.maxTopicsPerVisitor": "Ziyaretçi başına konuşma",

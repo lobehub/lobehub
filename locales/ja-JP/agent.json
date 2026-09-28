@@ -315,7 +315,7 @@
   "channel.wechatUserIdHint": "認証フローによって返されるWeChatアカウント識別子。",
   "share.entry": "このエージェントを共有",
   "share.settings.limits.desc": "訪問者の実行はすべてあなたのアカウントに請求されます。そのため、これらの制限は共有リンクが請求を増やしすぎるのを防ぎます。これらは常に適用されます — 数値を変更することはできますが、オフにすることはできません。",
-  "share.settings.limits.maxFileStorage": "ファイルストレージ制限 (MB)",
+  "share.settings.limits.maxFileStorage": "ファイルストレージ制限",
   "share.settings.limits.maxFileStorageHint": "訪問者が添付するファイルはあなたのアカウントに保存されます。アップロードはこの合計に達すると停止します。添付ファイルを無効にするには0を設定してください。",
   "share.settings.limits.maxFileStorageWorkspaceHint": "訪問者が添付するファイルはワークスペースに保存されます。アップロードはこの合計に達すると停止します。0に設定すると添付ファイルを無効にします。",
   "share.settings.limits.maxTopicsPerVisitor": "訪問者ごとの会話数",

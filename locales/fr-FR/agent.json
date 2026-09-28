@@ -315,7 +315,7 @@
   "channel.wechatUserIdHint": "Identifiant du compte WeChat renvoyé par le processus d'autorisation.",
   "share.entry": "Partager cet Agent",
   "share.settings.limits.desc": "Chaque exécution par un visiteur est facturée sur votre compte, donc ces limites empêchent un lien partagé de générer des coûts excessifs. Elles s'appliquent toujours — vous pouvez modifier les chiffres, mais pas les désactiver.",
-  "share.settings.limits.maxFileStorage": "Limite de stockage de fichiers (Mo)",
+  "share.settings.limits.maxFileStorage": "Limite de stockage de fichiers",
   "share.settings.limits.maxFileStorageHint": "Les fichiers que les visiteurs joignent sont stockés sur votre compte. Les téléchargements s'arrêtent une fois ce total atteint ; définissez 0 pour désactiver les pièces jointes.",
   "share.settings.limits.maxFileStorageWorkspaceHint": "Les fichiers attachés par les visiteurs sont stockés dans l'espace de travail. Les téléchargements s'arrêtent une fois cette limite atteinte ; définissez 0 pour désactiver les pièces jointes.",
   "share.settings.limits.maxTopicsPerVisitor": "Conversations par visiteur",

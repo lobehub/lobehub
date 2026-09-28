@@ -315,7 +315,7 @@
   "channel.wechatUserIdHint": "Identyfikator konta WeChat zwrócony przez proces autoryzacji.",
   "share.entry": "Udostępnij tego Agenta",
   "share.settings.limits.desc": "Każde uruchomienie przez odwiedzającego jest rozliczane na Twoim koncie, więc te limity zapobiegają nadmiernym kosztom. Zawsze obowiązują — możesz zmienić liczby, ale nie możesz ich wyłączyć.",
-  "share.settings.limits.maxFileStorage": "Limit przechowywania plików (MB)",
+  "share.settings.limits.maxFileStorage": "Limit przechowywania plików",
   "share.settings.limits.maxFileStorageHint": "Pliki dołączane przez odwiedzających są przechowywane na Twoim koncie. Przesyłanie zostaje zatrzymane po osiągnięciu tego limitu; ustaw 0, aby wyłączyć załączniki.",
   "share.settings.limits.maxFileStorageWorkspaceHint": "Pliki załączone przez odwiedzających są przechowywane w obszarze roboczym. Przesyłanie zostaje zatrzymane po osiągnięciu tego limitu; ustaw 0, aby wyłączyć załączniki.",
   "share.settings.limits.maxTopicsPerVisitor": "Rozmowy na odwiedzającego",

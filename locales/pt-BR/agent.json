@@ -315,7 +315,7 @@
   "channel.wechatUserIdHint": "Identificador da conta do WeChat retornado pelo fluxo de autorização.",
   "share.entry": "Compartilhar este Agente",
   "share.settings.limits.desc": "Cada execução de visitante é cobrada na sua conta, então esses limites são o que impedem que um link compartilhado aumente sua conta. Eles sempre se aplicam — você pode alterar os números, mas não desativá-los.",
-  "share.settings.limits.maxFileStorage": "Limite de armazenamento de arquivos (MB)",
+  "share.settings.limits.maxFileStorage": "Limite de armazenamento de arquivos",
   "share.settings.limits.maxFileStorageHint": "Os arquivos anexados pelos visitantes são armazenados na sua conta. Os uploads param quando atingem esse total; defina 0 para desativar anexos.",
   "share.settings.limits.maxFileStorageWorkspaceHint": "Os arquivos anexados pelos visitantes são armazenados no Espaço de Trabalho. Os uploads param quando atingem esse total; defina 0 para desativar anexos.",
   "share.settings.limits.maxTopicsPerVisitor": "Conversas por visitante",

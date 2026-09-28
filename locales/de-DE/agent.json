@@ -315,7 +315,7 @@
   "channel.wechatUserIdHint": "WeChat-Konto-Kennung, die durch den Autorisierungsprozess zurückgegeben wurde.",
   "share.entry": "Diesen Agenten teilen",
   "share.settings.limits.desc": "Jeder Besuch wird Ihrem Konto in Rechnung gestellt, daher verhindern diese Begrenzungen, dass ein freigegebener Link Ihre Kosten in die Höhe treibt. Sie gelten immer – Sie können die Zahlen ändern, aber nicht deaktivieren.",
-  "share.settings.limits.maxFileStorage": "Dateispeicherlimit (MB)",
+  "share.settings.limits.maxFileStorage": "Dateispeicherlimit",
   "share.settings.limits.maxFileStorageHint": "Dateien, die Besucher anhängen, werden in Ihrem Konto gespeichert. Uploads stoppen, sobald sie dieses Gesamtlimit erreichen; setzen Sie 0, um Anhänge zu deaktivieren.",
   "share.settings.limits.maxFileStorageWorkspaceHint": "Dateien, die Besucher anhängen, werden im Arbeitsbereich gespeichert. Uploads stoppen, sobald sie dieses Gesamtvolumen erreichen; setzen Sie 0, um Anhänge zu deaktivieren.",
   "share.settings.limits.maxTopicsPerVisitor": "Gespräche pro Besucher",

@@ -315,7 +315,7 @@
   "channel.wechatUserIdHint": "معرّف حساب WeChat الذي يتم إرجاعه من خلال عملية التفويض.",
   "share.entry": "شارك هذا الوكيل",
   "share.settings.limits.desc": "كل تشغيل للزائر يتم احتسابه على حسابك، لذا فإن هذه الحدود هي ما يمنع رابط المشاركة من زيادة فاتورتك. تنطبق دائمًا — يمكنك تغيير الأرقام، ولكن لا يمكنك إيقافها.",
-  "share.settings.limits.maxFileStorage": "حد تخزين الملفات (ميغابايت)",
+  "share.settings.limits.maxFileStorage": "حد تخزين الملفات",
   "share.settings.limits.maxFileStorageHint": "يتم تخزين الملفات التي يرفقها الزوار في حسابك. تتوقف التحميلات بمجرد الوصول إلى هذا الحد؛ قم بتعيين 0 لإيقاف المرفقات.",
   "share.settings.limits.maxFileStorageWorkspaceHint": "يتم تخزين الملفات التي يرفقها الزوار في مساحة العمل. تتوقف التحميلات بمجرد الوصول إلى هذا الإجمالي؛ قم بتعيين 0 لإيقاف المرفقات.",
   "share.settings.limits.maxTopicsPerVisitor": "المحادثات لكل زائر",
