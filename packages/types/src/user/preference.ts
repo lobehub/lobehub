@@ -232,7 +232,8 @@ export const UserLabSchema = z.object({
   enableGoals: z.boolean().optional(),
   /**
    * @deprecated Renamed to `enableGoals`. Still read as its fallback so users
-   * who opted in under the old name keep the lab on.
+   * who opted in under the old name keep the lab on, and written alongside it so
+   * older clients that only know this key stay in sync.
    */
   enableTopicAcceptance: z.boolean().optional(),
   /**
