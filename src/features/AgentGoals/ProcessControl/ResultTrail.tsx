@@ -29,6 +29,7 @@ import {
   type ResultTrailStep,
   type StoryChapterView,
 } from './goalResultState';
+import { type MainlineEmphasis, nodeEmphasis, resolveMainline } from './Graph/mainline';
 import { KIND_COLOR, KIND_ICON } from './shared';
 
 /**
@@ -131,6 +132,19 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorBgContainer};
+  `,
+  /** Same colour as the mainline on the exploration map, so the two read as one path. */
+  stageMainline: css`
+    border-color: ${cssVar.colorPrimary};
+    color: ${cssVar.colorPrimary};
+  `,
+  mainlineTag: css`
+    flex: none;
+    font-size: 12px;
+    color: ${cssVar.colorPrimary};
+  `,
+  stepMuted: css`
+    opacity: 0.55;
   `,
   detour: css`
     cursor: pointer;
@@ -328,18 +342,23 @@ const StepTime = ({ view }: { view: GoalNodeView }) => {
 /** One stage of the section: the rail, its number, a header and what it holds. */
 const Stage = ({
   children,
+  emphasis,
   header,
   index,
   last,
 }: {
   children?: ReactNode;
+  /** How the stage reads against the report's mainline, as on the exploration map. */
+  emphasis?: MainlineEmphasis;
   header: ReactNode;
   index: number;
   last: boolean;
 }) => (
-  <Flexbox horizontal gap={12}>
+  <Flexbox horizontal className={cx(emphasis === 'muted' && styles.stepMuted)} gap={12}>
     <div className={cx(styles.rail, last && styles.railLast)}>
-      <span className={styles.stageNumber}>{index + 1}</span>
+      <span className={cx(styles.stageNumber, emphasis === 'mainline' && styles.stageMainline)}>
+        {index + 1}
+      </span>
     </div>
     <Flexbox flex={1} gap={10} paddingBlock={'2px 24px'} style={{ minWidth: 0 }}>
       <Flexbox horizontal align={'center'} gap={8} style={{ minHeight: 24 }}>
@@ -352,6 +371,7 @@ const Stage = ({
 
 const TrailStep = ({
   documentId,
+  emphasis,
   index,
   last,
   onOpenArtifact,
@@ -359,6 +379,7 @@ const TrailStep = ({
   step,
 }: {
   documentId?: string;
+  emphasis: MainlineEmphasis;
   index: number;
   last: boolean;
   onOpenArtifact: (artifact: GoalArtifactView) => void;
@@ -376,6 +397,7 @@ const TrailStep = ({
 
   return (
     <Stage
+      emphasis={emphasis}
       index={index}
       last={last}
       header={
@@ -395,6 +417,9 @@ const TrailStep = ({
             <Text style={{ flex: 1, minWidth: 0 }} type={'secondary'} weight={600}>
               {title}
             </Text>
+          )}
+          {emphasis === 'mainline' && (
+            <span className={styles.mainlineTag}>{t('goalProcess.graph.legend.mainline')}</span>
           )}
           {view && <StepTime view={view} />}
         </>
@@ -603,6 +628,8 @@ const ResultTrail = ({ documentId, graph, onSelect }: ResultTrailProps) => {
 
   const steps = buildResultTrail(graph);
   if (steps.length === 0) return null;
+  // The steps the report's mainline runs through wear the same mark as on the map.
+  const mainline = resolveMainline(graph);
 
   return (
     <Flexbox gap={16}>
@@ -611,6 +638,7 @@ const ResultTrail = ({ documentId, graph, onSelect }: ResultTrailProps) => {
         {steps.map((step, index) => (
           <TrailStep
             documentId={documentId}
+            emphasis={step.view ? nodeEmphasis(mainline, step.view.node) : undefined}
             index={index}
             key={step.key}
             last={index === steps.length - 1}

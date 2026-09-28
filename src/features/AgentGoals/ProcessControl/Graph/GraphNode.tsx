@@ -32,6 +32,8 @@ export interface GraphNodeData extends Record<string, unknown> {
   highlighted?: boolean;
   isGate: boolean;
   kind?: GoalGraphNodeKind;
+  /** On the path the wrap-up report marked as the one that led to the result. */
+  mainline?: boolean;
   memberCount?: number;
   running: boolean;
   selected: boolean;
@@ -85,8 +87,8 @@ const styles = createStaticStyles(({ css }) => ({
     border-style: dashed;
   `,
   highlighted: css`
-    border-style: dashed;
     border-color: ${cssVar.colorWarning};
+    border-style: dashed;
     box-shadow: 0 0 0 3px ${cssVar.colorWarningBg};
   `,
   ghostBar: css`
@@ -171,6 +173,11 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 11px;
     font-variant-numeric: tabular-nums;
     color: ${cssVar.colorTextTertiary};
+  `,
+  /* A ring, not a fill: the kind tint and the state chip must stay readable. */
+  mainline: css`
+    border-color: ${cssVar.colorPrimary};
+    box-shadow: 0 0 0 1px ${cssVar.colorPrimary};
   `,
   selected: css`
     border-color: ${cssVar.colorPrimaryBorder};
@@ -271,7 +278,7 @@ RunningClock.displayName = 'GoalGraphRunningClock';
 const GraphNodeView = memo<NodeProps>(({ data }) => {
   const { t } = useTranslation('chat');
   const nodeData = data as GraphNodeData;
-  const { dim, highlighted, isGate, running, selected, stale, subtitle, view } = nodeData;
+  const { dim, highlighted, isGate, mainline, running, selected, stale, subtitle, view } = nodeData;
   const { node } = view;
   const chip = useStateChip(nodeData);
   const kind = nodeData.kind ?? node.kind;
@@ -290,6 +297,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
         type={'target'}
       />
       <div
+        data-mainline={mainline || undefined}
         className={cx(
           styles.card,
           isGate && styles.gate,
@@ -297,6 +305,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
           dim && styles.dim,
           highlighted && styles.highlighted,
           selected && styles.selected,
+          mainline && styles.mainline,
         )}
       >
         {/* Status reads first: its own top row, left-aligned, with the running

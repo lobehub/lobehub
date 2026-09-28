@@ -641,6 +641,8 @@
   "goalProcess.graph.exitFullscreen": "退出全屏",
   "goalProcess.graph.fullscreen": "全屏",
   "goalProcess.graph.legend.hide": "在图中隐藏这类节点",
+  "goalProcess.graph.legend.mainline": "主线",
+  "goalProcess.graph.legend.mainlineHint": "收尾报告标记的、真正通向结果的路径",
   "goalProcess.graph.legend.show": "在图中显示这类节点",
   "goalProcess.graph.title": "探索图",
   "goalProcess.graph.view.all": "全图",

@@ -168,6 +168,11 @@ export interface GoalReportSkeleton {
   deliverable?: { title: string | null; type: string; workId: string; workVersionId: string };
   detours: GoalReportSkeletonDetour[];
   graphCursor?: string;
+  /** Candidate mainline mark: the resolved root question, main-path nodes and their findings, and the edges among them. */
+  mainline: {
+    edges: { id: string; kind: GoalEdgeKind; source: string; target: string }[];
+    nodeIds: string[];
+  };
   mainPath: GoalReportSkeletonNode[];
 }
 
@@ -290,6 +295,24 @@ export const buildGoalReportSkeleton = (source: GoalGraphSnapshot): GoalReportSk
       };
     });
 
+  const mainlineIds = new Set([
+    ...graph.nodes
+      .filter((node) => node.kind === 'problem' && node.status === 'resolved')
+      .map((node) => node.id),
+    ...mainNodes.map((node) => node.id),
+  ]);
+  const mainline = {
+    edges: graph.edges
+      .filter((edge) => mainlineIds.has(edge.sourceNodeId) && mainlineIds.has(edge.targetNodeId))
+      .map((edge) => ({
+        id: edge.id,
+        kind: edge.kind,
+        source: edge.sourceNodeId,
+        target: edge.targetNodeId,
+      })),
+    nodeIds: graph.nodes.filter((node) => mainlineIds.has(node.id)).map((node) => node.id),
+  };
+
   const gateNodeIds = new Set(
     graph.edges
       .filter((edge) => edge.kind === 'leads_to' && edge.sourceNodeId === acceptance?.id)
@@ -330,6 +353,7 @@ export const buildGoalReportSkeleton = (source: GoalGraphSnapshot): GoalReportSk
     detours,
     graphCursor: newestEvent?.id,
     mainPath,
+    mainline,
   };
 };
 
@@ -384,6 +408,13 @@ export const buildGoalReportInstruction = (
           )
         : ['- none']),
     ].join('\n'),
+    [
+      'Candidate mainline (nodes and the edges among them; the exploration map highlights exactly what you mark):',
+      `- nodeIds: ${skeleton.mainline.nodeIds.join(', ') || 'none'}`,
+      ...skeleton.mainline.edges.map(
+        (edge) => `- edge ${edge.id}: ${edge.source} -[${edge.kind}]-> ${edge.target}`,
+      ),
+    ].join('\n'),
     `Graph cursor: ${skeleton.graphCursor ?? 'none'}`,
     [
       'What to do:',
@@ -392,8 +423,9 @@ export const buildGoalReportInstruction = (
       '3. Decide which detours are worth telling. For each one attach it to the chapter it forked from, with kind (dead_end | superseded | retry), the reason it was abandoned and the lesson it taught. Leave out detours that teach nothing.',
       '4. Write nextSteps: what remains or should come next, each with a reason.',
       '5. Write a one-sentence headline, and set deliverableWorkId when there is a final deliverable.',
-      '6. Do NOT restate acceptance verdicts or user decisions as data; the page reads those from their own records. Narrate around them.',
-      `7. Call ${submitToolName} once with goalId, the metadata (headline, deliverableWorkId, chapters, nextSteps, graphCursor) and content: the full written report in markdown, built from that same metadata. If it rejects a reference, fix it and call again.`,
+      '6. Mark the mainline: the path that actually led to the result. mainline.nodeIds are the resolved tasks on the correct path (plus, when useful, the resolved root problem and the findings that carried the answer forward); mainline.edgeIds are the edges of this Goal that connect two of those nodes. Detour nodes are never on the mainline. The chapters must tell exactly this path: every chapter nodeId is a mainline node, and every mainline task appears in a chapter.',
+      '7. Do NOT restate acceptance verdicts or user decisions as data; the page reads those from their own records. Narrate around them.',
+      `8. Call ${submitToolName} once with goalId, the metadata (headline, deliverableWorkId, chapters, mainline, nextSteps, graphCursor) and content: the full written report in markdown, built from that same metadata. If it rejects a reference, fix it and call again.`,
     ].join('\n'),
   ]
     .filter(Boolean)
@@ -462,6 +494,8 @@ export const validateGoalReport = (
     }
   });
 
+  errors.push(...validateMainline(graph, metadata));
+
   if (metadata.deliverableWorkId && !workIds.has(metadata.deliverableWorkId))
     errors.push(
       `deliverableWorkId: ${metadata.deliverableWorkId} is not a Work linked to this Goal`,
@@ -469,6 +503,76 @@ export const validateGoalReport = (
 
   if (options.eventIds && !options.eventIds.has(metadata.graphCursor))
     errors.push(`graphCursor: ${metadata.graphCursor} is not an event of this Goal`);
+
+  return errors;
+};
+
+const MAINLINE_KINDS = new Set(['problem', 'task', 'experiment', 'finding']);
+/** Mainline nodes a chapter must tell; the root question and findings ride along without one. */
+const CHAPTERED_KINDS = new Set(['task', 'experiment']);
+
+/**
+ * The mainline must be a real path through this Goal: resolved nodes only, edges
+ * of this Goal whose both ends are on it, and the same path the chapters tell —
+ * so the highlighted map and the storyline can never disagree.
+ */
+const validateMainline = (graph: GoalGraphSnapshot, metadata: GoalReportMetadata): string[] => {
+  const { mainline } = metadata;
+  if (!mainline)
+    return ['mainline: required — mark the nodes and edges of the path that led to the result'];
+
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const edgeById = new Map(graph.edges.map((edge) => [edge.id, edge]));
+  const onMainline = new Set(mainline.nodeIds);
+  const errors: string[] = [];
+
+  for (const id of mainline.nodeIds) {
+    const node = byId.get(id);
+    if (!node) errors.push(`mainline.nodeIds: ${id} is not a node of this Goal`);
+    else if (!MAINLINE_KINDS.has(node.kind))
+      errors.push(
+        `mainline.nodeIds: ${id} is a ${node.kind}; only problem, task, experiment and finding nodes can be on the mainline`,
+      );
+    else if (node.status !== 'resolved')
+      errors.push(`mainline.nodeIds: ${id} is ${node.status}; mainline nodes must be resolved`);
+  }
+
+  for (const id of mainline.edgeIds) {
+    const edge = edgeById.get(id);
+    if (!edge) {
+      errors.push(`mainline.edgeIds: ${id} is not an edge of this Goal`);
+      continue;
+    }
+    const outside = [edge.sourceNodeId, edge.targetNodeId].filter((end) => !onMainline.has(end));
+    if (outside.length > 0)
+      errors.push(
+        `mainline.edgeIds: ${id} connects ${outside.join(', ')}, which is not a mainline node`,
+      );
+  }
+
+  const chaptered = new Set<string>();
+  metadata.chapters.forEach((chapter, index) => {
+    for (const id of chapter.nodeIds) {
+      chaptered.add(id);
+      if (byId.has(id) && !onMainline.has(id))
+        errors.push(`chapters[${index}].nodeIds: ${id} is not on the mainline`);
+    }
+    chapter.detours.forEach((detour, detourIndex) => {
+      for (const id of detour.nodeIds) {
+        if (onMainline.has(id))
+          errors.push(
+            `chapters[${index}].detours[${detourIndex}].nodeIds: ${id} is on the mainline; a detour cannot be`,
+          );
+      }
+    });
+  });
+
+  for (const id of mainline.nodeIds) {
+    const node = byId.get(id);
+    // An invalid mainline node was already reported above; asking to tell it too is noise.
+    if (node?.status === 'resolved' && CHAPTERED_KINDS.has(node.kind) && !chaptered.has(id))
+      errors.push(`mainline.nodeIds: ${id} is on the mainline but no chapter tells it`);
+  }
 
   return errors;
 };
