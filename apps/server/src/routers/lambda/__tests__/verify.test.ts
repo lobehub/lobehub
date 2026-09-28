@@ -638,6 +638,27 @@ describe('verifyRouter', () => {
         }),
       );
     });
+
+    it('rejects a check item that is not in the run plan instead of minting a required row', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({
+        id: 'run-1',
+        plan: [{ id: 'item-1', index: 0, required: true, title: 'gateway matrix' }],
+      });
+
+      await expect(
+        createCaller().submitCheckEvidence({
+          checkItemId: 'pglite-classification',
+          evidence: [{ content: 'grep output', type: 'text' }],
+          verdict: 'passed',
+          verifyRunId: 'run-1',
+        }),
+      ).rejects.toThrow(
+        'Check item "pglite-classification" is not in this verification run\'s plan. Use one of: item-1 (gateway matrix)',
+      );
+
+      expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+      expect(modelMocks.createEvidence).not.toHaveBeenCalled();
+    });
   });
 
   describe('uploadEvidence', () => {

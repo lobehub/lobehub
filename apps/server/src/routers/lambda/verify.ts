@@ -1033,9 +1033,20 @@ export const verifyRouter = router({
       // no verdict so an existing row keeps its status (and a new row falls to the
       // DB default 'pending') instead of being reset to 'running'. drizzle omits
       // undefined fields from both the insert and the conflict-update.
-      const planItem = (run.plan as VerifyCheckItem[] | null)?.find(
-        (i) => i.id === input.checkItemId,
-      );
+      const plan = (run.plan as VerifyCheckItem[] | null) ?? [];
+      const planItem = plan.find((i) => i.id === input.checkItemId);
+      // A planned run owns its checklist. An unknown id used to be upserted as a
+      // new row that fell to the column default `required: true`, minting a
+      // phantom required check no later round ever plans or re-answers — and the
+      // Goal review then judged its stale evidence forever. Name the valid ids
+      // so the caller can resubmit under the right one.
+      if (plan.length > 0 && !planItem)
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Check item "${input.checkItemId}" is not in this verification run's plan. Use one of: ${plan
+            .map((item) => `${item.id} (${item.title})`)
+            .join('; ')}`,
+        });
 
       const checkResult = await ctx.resultModel.upsertByCheckItem({
         checkItemId: input.checkItemId,

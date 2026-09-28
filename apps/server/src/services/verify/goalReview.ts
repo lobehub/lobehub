@@ -62,7 +62,7 @@ export const reviewGoalDelivery = async (
     // draft, or one a CLI-driven verification was appended past — and its
     // result-less items would otherwise each read as missing evidence and turn a
     // passing delivery into a rejection.
-    const checks = buildAcceptanceCheckUnion(
+    const required = buildAcceptanceCheckUnion(
       runs
         .filter((round) => !isDraftVerifyRun(round))
         .map((round) => ({
@@ -70,6 +70,14 @@ export const reviewGoalDelivery = async (
           run: round,
         })),
     ).filter((check) => check.required);
+    // A result filed under an id no round ever planned surfaces as its own row,
+    // required by default. No later round plans it, so the builder is never
+    // asked to re-answer it and it is never flagged as carried forward — its
+    // stale evidence was re-judged on every attempt until the budget ran out.
+    // The planned checklist is the contract; only a plan-less Acceptance is
+    // judged on its results alone.
+    const planned = required.filter((check) => check.planItem);
+    const checks = planned.length ? planned : required;
     if (!checks.length) throw new Error(REVIEW_BLOCKERS.noRequiredChecks);
 
     const evidenceModel = new VerifyEvidenceModel(db, userId, workspaceId);

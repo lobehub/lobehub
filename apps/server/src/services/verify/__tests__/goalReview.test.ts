@@ -185,6 +185,30 @@ describe('Goal automatic Acceptance review', () => {
     });
   });
 
+  it('ignores a result filed under an id that no round ever planned', async () => {
+    mocks.rounds.mockResolvedValue({
+      runs: [
+        { id: 'r1', roundIndex: 1, plan: [check] },
+        { id: 'r2', roundIndex: 2, plan: [check] },
+      ],
+      results: [
+        { ...result, id: 'orphan', checkItemId: 'pglite-classification', verifyRunId: 'r1' },
+        { ...result, id: 'result2', verifyRunId: 'r2' },
+      ],
+    });
+    mocks.predict.mockImplementation(async ({ checkResultId }: { checkResultId: string }) =>
+      checkResultId === 'orphan'
+        ? { id: 'p-orphan', status: 'judged', action: 'reject', comment: 'Stale evidence.' }
+        : { id: 'p1', status: 'judged', action: 'accept' },
+    );
+
+    expect(await reviewGoalDelivery(db, 'u1', 't1', 'op1')).toMatchObject({
+      status: 'passed',
+      predictionIds: ['p1'],
+    });
+    expect(mocks.predict).toHaveBeenCalledTimes(1);
+  });
+
   it('sends missing evidence back and does not mistake skipped review for approval', async () => {
     mocks.predict.mockResolvedValue({ id: 'p1', status: 'skipped', statusReason: 'no evidence' });
     expect(await reviewGoalDelivery(db, 'u1', 't1', 'op1')).toMatchObject({ status: 'rejected' });
