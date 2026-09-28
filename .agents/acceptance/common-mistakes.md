@@ -30,7 +30,6 @@ the next free number of that prefix.
 - **L-E6** When the Task requires a durable document, create and pin the real artifact; evidence explains a verdict, it is not the deliverable.
 - **L-E9** Check the acceptance's status before ingest; new scoped work on an accepted acceptance goes to a new subject.
 - **L-E10** After any Agent assignment or Task edit, verify the persisted provider/model and the first completed message's metadata before judging quality.
-- **L-E11** Reconcile the evidence count in `result.json` against the ingest JSON; any `[WARN] evidence upload failed` is a failed publish — republish a fresh round.
 - **L-E13** Uncommitted work on a branch that owns a PR: decide provenance explicitly (open the real PR, or say in `report.md` there is none) and re-read `branch`/`commit` at publish time.
 - **L-E14** After an insertion affordance, continue the user's action in the same case and assert node order in persisted `editor_data`; send the payload through the same entry point.
 - **L-E15** A conversation-branch regression is verified by sending the next message through the real composer: DB row, parent on the active spine, render before and after cold reload.
@@ -66,6 +65,7 @@ the next free number of that prefix.
 - **L-S22** A per-account cap that a round consumes (artifact deployments) is cleared for the account the surface actually authenticates as, and re-cleared between rounds.
 - **L-S23** A hand-built `node_modules` symlink farm runs unit tests but cannot start the dev server; clone a working checkout's `node_modules` instead of a fresh install, which this lockfile-less repo resolves against a moving registry.
 - **L-S24** Read the dev server's URL from its own log, and treat "ready" as any status but `000` — `/` answers `302` to `/signin` when signed out.
+- **L-S25** `dev:static` 的 Electron 重启会清空 `dist/renderer`（renderer Vite dev server 启动即删 outDir）；`start`/`restart` 后必须重建 renderer 再驱动，否则页面只有 Internal Server Error。
 
 ## Entries
 
@@ -154,20 +154,6 @@ fallback.
 **Rule:** after every assignment or Task edit, verify the persisted
 provider/model and the first completed assistant message metadata; attach the
 runtime identity to the round.
-
-### L-E11 — Declaring an ingest done without reconciling its evidence count
-
-`since 2026-07-31` · `holds-while: ingest exits 0 after "[WARN] evidence upload failed, skipping <file>"`
-
-**Trap:** the success JSON shows an `acceptanceId` and a round index, the WARN
-above it is read as noise. One skipped half of a `comparison` pair renders alone
-— a lone `before` reads as "the fix never landed".
-
-**Rule:** count evidence items in `result.json` against the ingest JSON's
-`evidence` field; any WARN is a failed publish. Do not retro-attach with
-`acceptance run evidence upload` (no `comparison` metadata → unpaired). Publish
-a fresh round with the complete set and say in `report.md` that it republishes
-the same observations.
 
 ### L-E13 — Publishing uncommitted work onto the branch's unrelated PR
 
@@ -606,3 +592,16 @@ a separate Vite port in the Debug Proxy line); and the app answers `/` with
 **Rule:** take both URLs from the log, never from memory or a default. Probe with
 PROJECT.md's predicate as written — any code but `000` — and confirm health by
 following the redirect, not by demanding `200` at the root.
+
+### L-S25 — dev:static 重启后 dist/renderer 被清空
+
+`since 2026-09-20` · `holds-while: dev.mjs 的 renderer Vite dev server 在启动时删除 renderer outDir`
+
+**Trap:** `DESKTOP_RENDERER_STATIC=1 electron-dev.sh start|restart` 后立刻驱动页面，
+只看到 `Internal Server Error`（静态 handler 报 `ENOENT dist/renderer/apps/desktop/index.html`）。
+dev.mjs 每次启动都会拉起 renderer Vite dev server，而后者启动即清空
+`apps/desktop/dist/renderer`；静态产物是在启动序列里被删的，与是否使用静态模式无关。
+
+**Rule:** 每次 `start`/`restart` 之后、驱动之前，先 `cd apps/desktop && pnpm build:renderer`
+（约 25s）并确认 `dist/renderer/apps/desktop/index.html` 存在。同一个 dev.mjs 生命周期内
+的后续重启不会再次清空；改用 `restart` 而不是 `start` 时也按同一规则处理。

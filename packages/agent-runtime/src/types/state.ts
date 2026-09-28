@@ -29,6 +29,7 @@ import type {
   UserInterventionConfig,
 } from '@lobechat/types';
 
+import type { AgentInstructionRequestHumanApprove } from './instruction';
 import type { Cost, CostLimit, Usage } from './usage';
 
 /**
@@ -84,6 +85,10 @@ export interface AgentRunOrigin {
   /** Default assignee for tasks the run creates. */
   defaultTaskAssigneeAgentId?: string;
   documentId?: string;
+  /** Agent a builder run configures; the run itself is owned by the builtin builder. */
+  editingAgentId?: string;
+  /** Group a group-builder run configures. */
+  editingGroupId?: string;
   groupId?: string;
   // --- Run tree ---
   lineage?: AgentRunLineage;
@@ -297,6 +302,13 @@ export interface AgentState {
   costLimit?: CostLimit;
   // --- Metadata ---
   createdAt: string;
+  /**
+   * Approval request the same LLM turn emitted after a tool that parked the
+   * operation (`waiting_for_async_tool`). The step loop stops at the park, so
+   * the request is held here and issued by the step that resumes the
+   * operation — before the LLM runs again — instead of being dropped.
+   */
+  deferredHumanApproval?: AgentInstructionRequestHumanApprove;
   /** @deprecated Use `world.enableExpertise`. */
   enableExpertise?: boolean;
   error?: any;

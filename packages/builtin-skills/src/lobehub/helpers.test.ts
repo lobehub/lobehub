@@ -5,6 +5,19 @@ import { readSkillVersion } from './helpers';
 const skill = (frontmatter: string) => `---\n${frontmatter}\n---\n\n# Body\n`;
 
 describe('readSkillVersion', () => {
+  it('reads metadata.version from an independently distributed Agent Skill', () => {
+    expect(readSkillVersion(skill('name: acceptance\nmetadata:\n  version: "0.5.0"'))).toBe(
+      '0.5.0',
+    );
+    expect(readSkillVersion(skill('version: 0.4.3\nmetadata: {version: "0.5.0"}'))).toBe('0.5.0');
+  });
+
+  it('does not confuse a description with nested metadata or accept invalid YAML', () => {
+    expect(
+      readSkillVersion(skill('description: |\n  metadata:\n    version: "9.0.0"')),
+    ).toBeUndefined();
+    expect(readSkillVersion(skill('metadata: [invalid'))).toBeUndefined();
+  });
   it('reads the version declared in the frontmatter', () => {
     expect(readSkillVersion(skill('name: acceptance\nversion: 1.2.3'))).toBe('1.2.3');
   });

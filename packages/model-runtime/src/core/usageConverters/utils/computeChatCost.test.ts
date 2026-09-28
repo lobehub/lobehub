@@ -715,6 +715,41 @@ describe('computeChatPricing', () => {
       expect(totalCredits).toBe(232);
     });
 
+    it('bills Gemini Omni video output separately from input and text output', () => {
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'videoGeneration', rate: 17.5, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      };
+
+      // A real conversational edit: the source video is billed as input.
+      const usage: ModelTokensUsage = {
+        inputTextTokens: 43,
+        inputVideoTokens: 58_511,
+        outputReasoningTokens: 383,
+        outputTextTokens: 1025,
+        outputVideoTokens: 57_920,
+        totalInputTokens: 58_554,
+        totalOutputTokens: 59_328,
+        totalTokens: 117_882,
+      };
+
+      const result = computeChatCost(pricing, usage);
+
+      expect(result?.issues).toHaveLength(0);
+      const breakdown = result!.breakdown;
+      expect(breakdown.find((item) => item.unit.name === 'textInput')?.quantity).toBe(43);
+      expect(breakdown.find((item) => item.unit.name === 'videoInput')?.quantity).toBe(58_511);
+      expect(breakdown.find((item) => item.unit.name === 'textOutput')?.quantity).toBe(1408);
+      expect(breakdown.find((item) => item.unit.name === 'videoGeneration')?.quantity).toBe(57_920);
+      expect(breakdown.find((item) => item.unit.name === 'imageInput')).toBeUndefined();
+      expect(result?.totalCost).toBe(1.114104);
+    });
+
     it('splits cache reads by modality when dedicated modality cache units exist', () => {
       const pricing: Pricing = {
         units: [

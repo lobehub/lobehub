@@ -270,6 +270,145 @@ describe('ToolMessageReorder', () => {
     ]);
   });
 
+  describe('provider-reused tool_call ids across steps', () => {
+    // Kimi (via zeabur / nvidia / moonshot) numbers tool calls per response, so
+    // every step of a run calls `…runCommand:0`; OpenRouter DeepSeek does the
+    // same with `call_0`. Each step's call and result are distinct.
+    const RUN_COMMAND = 'lobe-local-system____runCommand';
+    const REUSED_ID = `${RUN_COMMAND}:0`;
+
+    const step = (n: number, result?: string) => [
+      {
+        id: `a${n}`,
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            function: { arguments: `{"command":"echo ${n}"}`, name: RUN_COMMAND },
+            id: REUSED_ID,
+            type: 'function',
+          },
+        ],
+      },
+      ...(result === undefined
+        ? []
+        : [{ id: `t${n}`, role: 'tool', content: result, tool_call_id: REUSED_ID }]),
+    ];
+
+    const toolResults = (messages: any[]) =>
+      messages.filter((m) => m.role === 'tool').map((m) => m.content);
+
+    it('should deliver every step its own real result instead of a synthetic tool_result_missing', async () => {
+      const proc = new ToolMessageReorder();
+      const ctx = createContext([
+        { id: 'u1', role: 'user', content: 'run three commands' },
+        ...step(1, 'Command completed successfully.\n\nStdout: ok-1'),
+        ...step(2, 'Command completed successfully.\n\nStdout: ok-2'),
+        ...step(3, 'Command completed successfully.\n\nStdout: ok-3'),
+      ]);
+
+      const result = await proc.process(ctx);
+
+      expect(toolResults(result.messages)).toEqual([
+        'Command completed successfully.\n\nStdout: ok-1',
+        'Command completed successfully.\n\nStdout: ok-2',
+        'Command completed successfully.\n\nStdout: ok-3',
+      ]);
+      expect(result.messages.map((m) => m.id)).toEqual(['u1', 'a1', 't1', 'a2', 't2', 'a3', 't3']);
+      expect(result.metadata.toolMessageReorder?.removedInvalidTools).toBe(0);
+    });
+
+    it('should give each reused id a unique, stable id in the request so strict providers accept it', async () => {
+      const proc = new ToolMessageReorder();
+      const ctx = createContext([...step(1, 'ok-1'), ...step(2, 'ok-2'), ...step(3, 'ok-3')]);
+
+      const { messages } = await proc.process(ctx);
+
+      const callIds = messages.filter((m) => m.role === 'assistant').map((m) => m.tool_calls[0].id);
+      expect(callIds).toEqual([REUSED_ID, `${REUSED_ID}_2`, `${REUSED_ID}_3`]);
+      // Each result follows the call it answers, under the same id.
+      expect(messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id)).toEqual(callIds);
+      // The stored rows are not mutated.
+      expect(ctx.messages[2].tool_calls[0].id).toBe(REUSED_ID);
+      expect(ctx.messages[3].tool_call_id).toBe(REUSED_ID);
+    });
+
+    it('should only mark the step whose result is really lost as tool_result_missing', async () => {
+      const proc = new ToolMessageReorder();
+      const ctx = createContext([...step(1, 'ok-1'), ...step(2), ...step(3, 'ok-3')]);
+
+      const { messages } = await proc.process(ctx);
+
+      expect(toolResults(messages)).toEqual([
+        'ok-1',
+        syntheticToolFailureContent('tool_result_missing', RUN_COMMAND),
+        'ok-3',
+      ]);
+    });
+
+    it('should drop a duplicate result instead of handing it to a later call with the same id', async () => {
+      const proc = new ToolMessageReorder();
+      const [a1, t1] = step(1, 'ok-1');
+      const ctx = createContext([
+        a1,
+        t1,
+        { id: 't1-dup', role: 'tool', content: 'ok-1-dup', tool_call_id: REUSED_ID },
+        ...step(2, 'ok-2'),
+      ]);
+
+      const result = await proc.process(ctx);
+
+      expect(toolResults(result.messages)).toEqual(['ok-1', 'ok-2']);
+      expect(result.metadata.toolMessageReorder?.removedInvalidTools).toBe(1);
+    });
+
+    it('should follow parentId when displaced results share a reused id', async () => {
+      const proc = new ToolMessageReorder();
+      const [a1] = step(1);
+      const [a2] = step(2);
+      const ctx = createContext([
+        a1,
+        a2,
+        { id: 't1', parentId: 'a1', role: 'tool', content: 'ok-1', tool_call_id: REUSED_ID },
+        { id: 't2', parentId: 'a2', role: 'tool', content: 'ok-2', tool_call_id: REUSED_ID },
+      ]);
+
+      const result = await proc.process(ctx);
+
+      expect(result.messages.map((m) => m.id)).toEqual(['a1', 't1', 'a2', 't2']);
+      expect(toolResults(result.messages)).toEqual(['ok-1', 'ok-2']);
+      expect(result.metadata.toolMessageReorder?.removedInvalidTools).toBe(0);
+    });
+
+    it('should not append a reused id suffix that collides with a real id', async () => {
+      const proc = new ToolMessageReorder();
+      const ctx = createContext([
+        ...step(1, 'ok-1'),
+        {
+          id: 'a-real',
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            {
+              function: { arguments: '{}', name: RUN_COMMAND },
+              id: `${REUSED_ID}_2`,
+              type: 'function',
+            },
+          ],
+        },
+        { id: 't-real', role: 'tool', content: 'ok-real', tool_call_id: `${REUSED_ID}_2` },
+        ...step(2, 'ok-2'),
+      ]);
+
+      const { messages } = await proc.process(ctx);
+
+      const callIds = messages.filter((m) => m.role === 'assistant').map((m) => m.tool_calls[0].id);
+      expect(new Set(callIds).size).toBe(3);
+      expect(toolResults(messages)).toEqual(['ok-1', 'ok-real', 'ok-2']);
+      expect(messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id)).toEqual(callIds);
+    });
+  });
+
   it('should prefer a real error tool result over a synthetic fallback', async () => {
     const proc = new ToolMessageReorder();
     const ctx = createContext([

@@ -414,6 +414,34 @@ export class AgentOperationModel {
   }
 
   /**
+   * Whether this operation is still running AND owns the given topic.
+   *
+   * The row — not `topic.metadata.runningOperation` — is the authority on
+   * liveness: the marker is a best-effort rendering pointer that any client can
+   * clear (a transport-level completion settles it while the producer keeps
+   * going), whereas the row only leaves `running` through a terminal path.
+   * Pairing it with `topicId` is what makes the answer safe to act on: it proves
+   * the caller is about to write to the topic this operation actually belongs
+   * to, not one it was handed.
+   */
+  async isRunningOnTopic(operationId: string, topicId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: agentOperations.id })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          eq(agentOperations.topicId, topicId),
+          this.ownership(),
+        ),
+      )
+      .limit(1);
+
+    return Boolean(row);
+  }
+
+  /**
    * Atomically retire an operation whose liveness lease has expired. A concurrent
    * heartbeat wins by moving updatedAt past staleBefore, preventing false recovery.
    */
@@ -443,6 +471,96 @@ export class AgentOperationModel {
           eq(agentOperations.id, operationId),
           eq(agentOperations.status, 'running'),
           sql`${agentOperations.updatedAt} < ${staleBefore}`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
+  }
+
+  /**
+   * Atomically claim the next redrive attempt for an operation whose liveness
+   * lease has expired, so a stale step can be re-queued instead of stranding.
+   *
+   * The claim is the concurrency control for the whole reaper: the same
+   * predicate that selects a candidate also consumes it, so two overlapping
+   * sweeps (or two instances of one sweep) can never both re-queue the same
+   * step. Three guards ride in the WHERE clause rather than in the caller:
+   * - `status = 'running'` — a terminal op is nobody's business anymore.
+   * - `updatedAt < staleBefore` — a heartbeat that landed between the SELECT
+   *   and this UPDATE means the step is alive after all, and wins the race.
+   * - attempt budget — a step that dies deterministically (poison payload,
+   *   OOM) must stop costing LLM calls; when this predicate fails the caller
+   *   falls back to abandoning the op with a user-visible error.
+   *
+   * Writing `metadata` also bumps `updatedAt` via `$onUpdate`, which re-arms
+   * the lease: the redriven step gets a fresh stall window before the next
+   * sweep can look at it again, and no extra bookkeeping is needed to keep
+   * ticks from piling redrives onto an operation that is busy recovering.
+   *
+   * @returns the 1-based attempt number just claimed, or `null` when this
+   *   operation is not (or no longer) eligible.
+   */
+  async claimStaleRedrive(
+    operationId: string,
+    staleBefore: Date,
+    maxAttempts: number,
+  ): Promise<number | null> {
+    // `jsonb_build_object` and the bare comparison below both take `any`, so
+    // every parameter feeding them needs an explicit cast — Postgres cannot
+    // infer a placeholder's type from an `any` argument (42P18).
+    const attempts = sql`coalesce((${agentOperations.metadata} #>> '{staleRedrive,attempts}')::int, 0)`;
+
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || jsonb_build_object('staleRedrive', jsonb_build_object('attempts', ${attempts} + 1, 'lastAttemptAt', ${new Date().toISOString()}::text))`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          sql`${agentOperations.updatedAt} < ${staleBefore}`,
+          sql`${attempts} < ${maxAttempts}::int`,
+          this.ownership(),
+        ),
+      )
+      .returning({ metadata: agentOperations.metadata });
+
+    if (!row) return null;
+
+    const claimed = (row.metadata as { staleRedrive?: { attempts?: number } } | null)?.staleRedrive
+      ?.attempts;
+
+    return typeof claimed === 'number' ? claimed : null;
+  }
+
+  /**
+   * Give back an attempt claimed by {@link claimStaleRedrive} when the redrive
+   * it was claimed for never actually went out.
+   *
+   * The budget exists to bound LLM spend on a step that dies deterministically,
+   * so a delivery that failed to publish must not consume it — otherwise a
+   * brief queue outage walks an otherwise healthy operation to its attempt
+   * limit and retires it without a single recovery ever having been attempted.
+   *
+   * The claimed attempt number is checked in SQL so this can only ever undo
+   * *its own* increment: a concurrent sweep that claimed the next attempt in
+   * between moves the counter past `attempt` and this becomes a no-op.
+   * `updatedAt` is deliberately left where the claim moved it, so the release
+   * shortens no stall window — the next sweep still waits out a full lease.
+   */
+  async releaseStaleRedrive(operationId: string, attempt: number): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`jsonb_set(coalesce(${agentOperations.metadata}, '{}'::jsonb), '{staleRedrive,attempts}', to_jsonb(${attempt - 1}::int))`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          sql`(${agentOperations.metadata} #>> '{staleRedrive,attempts}')::int = ${attempt}::int`,
           this.ownership(),
         ),
       )

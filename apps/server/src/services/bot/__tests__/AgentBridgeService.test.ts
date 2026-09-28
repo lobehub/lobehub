@@ -236,6 +236,78 @@ describe('AgentBridgeService', () => {
     expect(mockExecAgent.mock.calls[0][0].toolModeOverride).toBeUndefined();
   });
 
+  describe('reactionMode', () => {
+    function createReactionClient() {
+      const replaceReaction = vi.fn().mockResolvedValue(undefined);
+      const client = createClient();
+      client.getMessenger = vi.fn().mockReturnValue({ replaceReaction, triggerTyping: vi.fn() });
+      return { client, replaceReaction };
+    }
+
+    it('applies ACK then thinking by default (minimal) without a mode in opts', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const { client, replaceReaction } = createReactionClient();
+
+      await service.handleMention(createThread(), createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(replaceReaction.mock.calls).toEqual([
+        [MESSAGE_ID, null, '👀'],
+        [MESSAGE_ID, '👀', '🤔'],
+      ]);
+    });
+
+    it('applies the same two transitions under full mode', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const { client, replaceReaction } = createReactionClient();
+
+      await service.handleMention(createThread(), createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+        reactionMode: 'full',
+      });
+
+      expect(replaceReaction.mock.calls).toEqual([
+        [MESSAGE_ID, null, '👀'],
+        [MESSAGE_ID, '👀', '🤔'],
+      ]);
+    });
+
+    it('never touches reactions under none on the mention path', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const { client, replaceReaction } = createReactionClient();
+
+      await service.handleMention(createThread(), createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+        reactionMode: 'none',
+      });
+
+      expect(replaceReaction).not.toHaveBeenCalled();
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+    });
+
+    it('never touches reactions under none on the subscribed-message path', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const { client, replaceReaction } = createReactionClient();
+
+      await service.handleSubscribedMessage(createThread({ topicId: 'topic-1' }), createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+        reactionMode: 'none',
+      });
+
+      expect(replaceReaction).not.toHaveBeenCalled();
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('current-conversation injection', () => {
     it('injects the platform + channelId the message tool needs into botPlatformContext', async () => {
       const service = new AgentBridgeService(FAKE_DB, USER_ID);
@@ -423,6 +495,51 @@ describe('AgentBridgeService', () => {
         client: createClient(),
       });
 
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+      expect(mockExecAgent.mock.calls[0][0].appContext?.topicId).toBe('topic-1');
+    });
+
+    it('resets the cached topicId when the topic has been idle past the threshold', async () => {
+      mockTopicFindById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'topic-1',
+        updatedAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
+      });
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client: createClient(),
+      });
+
+      expect(thread.setState).toHaveBeenCalledWith(expect.objectContaining({ topicId: undefined }));
+      expect(mockExecAgent.mock.calls[0][0].appContext?.topicId).toBeUndefined();
+    });
+
+    it('continues an idle topic when the platform thread never expires (Discord guild thread)', async () => {
+      // A reply in a Discord thread 8h after the last turn used to fork a
+      // new topic with no working directory, losing the whole conversation.
+      mockTopicFindById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'topic-1',
+        updatedAt: new Date(Date.now() - 8 * 60 * 60 * 1000),
+      });
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+      const client = { ...createClient(), shouldExpireIdleTopic: vi.fn().mockReturnValue(false) };
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(client.shouldExpireIdleTopic).toHaveBeenCalledWith(thread.id);
+      expect(thread.setState).not.toHaveBeenCalledWith(
+        expect.objectContaining({ topicId: undefined }),
+      );
       expect(mockExecAgent).toHaveBeenCalledTimes(1);
       expect(mockExecAgent.mock.calls[0][0].appContext?.topicId).toBe('topic-1');
     });

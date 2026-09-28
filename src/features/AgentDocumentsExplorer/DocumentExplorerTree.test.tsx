@@ -43,15 +43,17 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
     items,
   }: {
     children: ReactNode;
-    items: { key: string; label: string; onClick: () => void }[];
+    items: { key?: string; label?: string; onClick?: () => void; type?: string }[];
   }) => (
     <div>
       {children}
-      {items.map((item) => (
-        <button data-testid={`create-menu-${item.key}`} key={item.key} onClick={item.onClick}>
-          {item.label}
-        </button>
-      ))}
+      {items
+        .filter((item) => item.type !== 'divider' && item.key)
+        .map((item) => (
+          <button data-testid={`create-menu-${item.key}`} key={item.key} onClick={item.onClick}>
+            {item.label}
+          </button>
+        ))}
     </div>
   ),
 }));
@@ -233,6 +235,28 @@ describe('DocumentExplorerTree', () => {
     expect(screen.getByTestId('create-menu-new-folder')).toHaveTextContent(
       'workingPanel.resources.tree.newFolder',
     );
+    expect(screen.getByTestId('create-menu-upload-file')).toHaveTextContent(
+      'workingPanel.resources.tree.uploadFile',
+    );
+  });
+
+  it('offers upload on a folder context menu', () => {
+    const data = [
+      createDocument({
+        documentId: 'folder-doc',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
+        filename: 'Notes',
+        id: 'folder-row',
+        isFolder: true,
+        title: 'Notes',
+      }),
+    ];
+
+    render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={vi.fn()} />, {
+      wrapper: MemoryRouter,
+    });
+
+    expect(screen.getByTestId('tree-menu-folder-row-upload-file')).toBeInTheDocument();
   });
 
   it('renders managed skill bundle as a folder with SKILL.md underneath', () => {

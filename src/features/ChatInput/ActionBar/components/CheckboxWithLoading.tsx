@@ -1,6 +1,5 @@
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui/base-ui';
-import { Loader2 } from 'lucide-react';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Checkbox, Spin } from '@lobehub/ui/base-ui';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo, useState } from 'react';
 
@@ -95,7 +94,7 @@ const CheckboxItem = memo<CheckboxItemProps>(
         </span>
         {loading ? (
           <Center width={18}>
-            <Icon spin icon={Loader2} />
+            <Spin size="small" />
           </Center>
         ) : (
           <Checkbox

@@ -5,8 +5,10 @@ import {
 } from '@lobechat/const';
 import {
   type SharedAgentData,
+  type SharedAgentDeliveryStats,
   type SharedAgentUploadAbility,
   type SharedTopicData,
+  type UIChatMessage,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -14,7 +16,9 @@ import type { ModelAbilities } from 'model-bank';
 import { z } from 'zod';
 
 import { AgentShareModel } from '@/database/models/agentShare';
+import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
 import { AiModelModel } from '@/database/models/aiModel';
+import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
 import type { LobeChatDatabase } from '@/database/type';
@@ -22,8 +26,10 @@ import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { AgentService } from '@/server/services/agent';
+import { getCachedDeliveryStats } from '@/server/services/agentShare/deliveryStatsCache';
 
 import { assertAgentShareVisitorEnabled } from './_helpers/agentShareFeatureGate';
+import { sharedTopicText } from './_helpers/sharedTopicText';
 
 const log = debug('lobe-server:router:share');
 
@@ -47,21 +53,27 @@ const log = debug('lobe-server:router:share');
  */
 const resolveVisitorUploadAbility = async (
   db: LobeChatDatabase,
-  share: { agentModel: string | null; agentProvider: string | null; ownerId: string },
+  share: {
+    agentModel: string | null;
+    agentProvider: string | null;
+    ownerId: string;
+    workspaceId: string | null;
+  },
 ): Promise<SharedAgentUploadAbility> => {
   try {
     const { loadModels } = await import('@/business/client/model-bank/loadModels');
     const [builtinModels, { model, provider }] = await Promise.all([
       loadModels(),
-      new AgentService(db, share.ownerId).resolveModelSelection({
+      new AgentService(db, share.ownerId, share.workspaceId ?? undefined).resolveModelSelection({
         model: share.agentModel,
         provider: share.agentProvider,
       }),
     ]);
-    const ownerModel = await new AiModelModel(db, share.ownerId).findByIdAndProvider(
-      model,
-      provider,
-    );
+    const ownerModel = await new AiModelModel(
+      db,
+      share.ownerId,
+      share.workspaceId ?? undefined,
+    ).findByIdAndProvider(model, provider);
     const abilities = resolveModelMediaCapabilities({
       builtinModels,
       model,
@@ -87,6 +99,46 @@ const resolveVisitorUploadAbility = async (
 };
 
 export const shareRouter = router({
+  getSharedTopicText: publicProcedure
+    .use(serverDatabase)
+    .input(z.object({ shareId: z.string().trim().min(1) }))
+    .query(async ({ input, ctx }) => {
+      const share = await TopicShareModel.findByShareIdWithAccessCheck(
+        ctx.serverDB,
+        input.shareId,
+        ctx.userId ?? undefined,
+      );
+      const model = new MessageModel(ctx.serverDB, share.ownerId, share.workspaceId ?? undefined);
+      const messages: UIChatMessage[] = [];
+      let offset = 0;
+      while (true) {
+        const { items, total } = await model.queryTopicTranscript({
+          limit: 1000,
+          offset,
+          topicId: share.topicId,
+        });
+        messages.push(
+          ...items
+            .filter((item) => !item.threadId)
+            .map(
+              (item) =>
+                ({
+                  ...item,
+                  agentId: item.agentId ?? undefined,
+                  content: item.content ?? '',
+                  createdAt: item.createdAt.getTime(),
+                  updatedAt: item.createdAt.getTime(),
+                  parentId: item.parentId ?? undefined,
+                  tools: item.tools ?? undefined,
+                }) as UIChatMessage,
+            ),
+        );
+        offset += items.length;
+        if (offset >= total || items.length === 0) break;
+      }
+
+      return { text: sharedTopicText(messages), title: share.title };
+    }),
   /**
    * Resolve the visitor-facing metadata for an agent share, by its custom
    * slug or its raw share id, after enforcing signed-in access.
@@ -132,11 +184,35 @@ export const shareRouter = router({
       // them. Best-effort — analytics must never turn a valid share page into
       // an error.
       let stats = { conversations: 0, visitors: 0 };
-      const [uploadAbility] = await Promise.all([
+      const profileModel = new AgentShareProfileModel(ctx.serverDB, share.ownerId);
+      let deliveryStats: SharedAgentDeliveryStats = {
+        averageOperationDurationSeconds: null,
+        averageWorkCost: null,
+        lastDeliveredAt: null,
+        workCount: 0,
+      };
+      const [uploadAbility, featuredWorks] = await Promise.all([
         resolveVisitorUploadAbility(ctx.serverDB, share),
+        profileModel.listFeaturedWorks(share.agentId, share.shareConfig.featuredWorkIds ?? []),
         (async () => {
           try {
-            const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
+            deliveryStats = await getCachedDeliveryStats(
+              ctx.serverDB,
+              share.ownerId,
+              share.agentId,
+              () => profileModel.getStats(share.agentId),
+            );
+          } catch (error) {
+            log('failed to count share deliveries for %s: %O', share.shareId, error);
+          }
+        })(),
+        (async () => {
+          try {
+            const topicModel = new TopicModel(
+              ctx.serverDB,
+              share.ownerId,
+              share.workspaceId ?? undefined,
+            );
             const counts = await topicModel.countShareVisitors({ agentId: share.agentId });
             stats = { conversations: counts.topicCount, visitors: counts.visitorCount };
           } catch (error) {
@@ -156,14 +232,17 @@ export const shareRouter = router({
           tags: share.agentTags ?? [],
           title: share.agentTitle,
         },
+        billingScope: share.workspaceId ? 'workspace' : 'personal',
         creator: {
           avatar: share.ownerAvatar ?? null,
           name: share.ownerFullName ?? share.ownerUsername ?? null,
         },
+        demoCases: share.shareConfig.demoCases ?? [],
+        featuredWorks,
         isOwner,
         shareId: share.shareId,
         slug: share.shareConfig.slug ?? null,
-        stats: { ...stats, views: share.userViewCount },
+        stats: { ...stats, ...deliveryStats, views: share.userViewCount },
         terms: {
           allowCreatorViewSessions: share.shareConfig.allowCreatorViewSessions ?? false,
           maxFileStorage: share.shareConfig.maxFileStorage ?? AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,

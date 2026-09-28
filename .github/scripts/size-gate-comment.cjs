@@ -9,9 +9,49 @@
  * `identifier` keeps one comment per gate: the web (e2e) and desktop (asar)
  * workflows run independently on the same PR and must not overwrite each other.
  *
+ * A passing gate folds the whole report into a collapsed `<details>` so a green PR shows
+ * one summary line instead of a multi-table block — one per gate, not per check. A failing
+ * gate stays inline: nobody should have to expand a fold to find the offending entry.
+ *
  * A failing gate also submits a REQUEST_CHANGES review from github-actions so the
  * job itself can stay green; a passing run dismisses that review again.
  */
+const FOOTER = `---
+*Baseline: latest \`canary\` build (workflow artifact). Thresholds configurable via \`SIZE_GATE_PERCENT\` / \`SIZE_GATE_FLOOR_BYTES\` / \`SIZE_GATE_JS_CHUNK_PERCENT\`.*`;
+
+/**
+ * Summary line for the folded state. Built from the report's own `### ` headings, so the
+ * line can only claim checks the report actually contains; the per-check metrics stay in
+ * those headings, one click away.
+ */
+const summarize = ({ report, title }) => {
+  const headings = report
+    .split('\n')
+    .filter((line) => line.startsWith('### '))
+    .map((line) => line.slice(4).trim());
+  const skipped = headings.filter((heading) => heading.startsWith('⚠️')).length;
+  const passed = headings.filter((heading) => heading.startsWith('✅')).length;
+  const icon = skipped > 0 ? '⚠️' : '✅';
+
+  // No headings means the report never got produced (an earlier step failed, or the run
+  // was cancelled). That is not a pass, and folding the only explanation away would hide it.
+  if (headings.length === 0) return `⚠️ Bundle Size Gate — ${title} — expand for the details`;
+
+  const detail =
+    skipped > 0
+      ? `${passed} of ${headings.length} checks passed — expand for why`
+      : `${headings.length} ${headings.length === 1 ? 'check' : 'checks'} passed — expand for the tables`;
+
+  return `${icon} Bundle Size Gate — ${title} · ${detail}`;
+};
+
+/** A passing gate folds into one line; a failing gate is rendered expanded, never folded. */
+const buildCommentBody = ({ failed, report, title }) => {
+  if (failed) return `### ❌ Bundle Size Gate — ${title}\n\n${report}\n\n${FOOTER}`;
+
+  return `<details>\n<summary>${summarize({ report, title })}</summary>\n\n${report}\n\n${FOOTER}\n\n</details>`;
+};
+
 const sizeGateComment = async ({
   github,
   context,
@@ -27,12 +67,7 @@ const sizeGateComment = async ({
   const commentIdentifier = `<!-- SIZE-GATE-COMMENT-${identifier} -->`;
 
   const body = `${commentIdentifier}
-### ${failed ? '❌' : '✅'} Bundle Size Gate — ${title}
-
-${report}
-
----
-*Baseline: latest \`canary\` build (workflow artifact). Thresholds configurable via \`SIZE_GATE_PERCENT\` / \`SIZE_GATE_FLOOR_BYTES\` / \`SIZE_GATE_JS_CHUNK_PERCENT\`.*`;
+${buildCommentBody({ failed, report, title })}`;
 
   const { data: comments } = await github.rest.issues.listComments({
     issue_number: number,
@@ -118,3 +153,5 @@ The size gate failed on the latest build. See the [report](${reportUrl}) for the
 };
 
 module.exports = sizeGateComment;
+module.exports.buildCommentBody = buildCommentBody;
+module.exports.summarize = summarize;

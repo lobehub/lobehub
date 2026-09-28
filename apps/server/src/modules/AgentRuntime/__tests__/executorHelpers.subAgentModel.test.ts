@@ -83,6 +83,52 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
 // Fail-close regression for share-visitor runs: the child run spawned by
 // either runner does not inherit the parent's shareGate, so for a run with
 // `ctx.agentShareVisitor` set, no runner may be built at all.
+describe('buildServerVirtualSubAgentRunner continuing an earlier sub-agent', () => {
+  it('reuses the sub-agent thread and links the new placeholder to it', async () => {
+    const execVirtualSubAgent = vi
+      .fn()
+      .mockResolvedValue({ operationId: 'child-op-2', success: true, threadId: 'thread-1' });
+    const create = vi.fn().mockResolvedValue({ id: 'placeholder-2' });
+    const runner = buildServerVirtualSubAgentRunner(
+      {
+        execVirtualSubAgent,
+        messageModel: { create },
+        operationId: 'parent-op',
+        topicId: 'topic-1',
+      } as unknown as RuntimeExecutorContext,
+      {
+        operationId: 'parent-op',
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      } as AgentState,
+      { id: 'tool-call-2' } as ChatToolPayload,
+      'parent-message-2',
+    );
+
+    const result = await runner!.run({
+      description: 'Hand over',
+      instruction: 'Summarize your findings',
+      subAgentId: 'thread-1',
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ pluginState: { status: 'pending', threadId: 'thread-1' } }),
+    );
+    expect(execVirtualSubAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agent-1',
+        parentMessageId: 'placeholder-2',
+        parentOperationId: 'parent-op',
+        threadId: 'thread-1',
+      }),
+    );
+    expect(result).toMatchObject({
+      started: true,
+      threadId: 'thread-1',
+      toolMessageId: 'placeholder-2',
+    });
+  });
+});
+
 describe('runner builders fail closed for share-visitor runs', () => {
   const shareCtx = {
     agentShareVisitor: {

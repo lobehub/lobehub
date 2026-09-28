@@ -2,6 +2,7 @@ import type { ChatToolPayload } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BuiltinToolsExecutor } from '../builtin';
+import { hasServerRuntime } from '../serverRuntimes';
 import type { ToolExecutionContext } from '../types';
 
 const mocks = vi.hoisted(() => ({
@@ -14,6 +15,8 @@ vi.mock('../serverRuntimes', () => ({
   hasServerRuntime: vi.fn().mockReturnValue(true),
   getServerRuntime: vi.fn(async () => ({
     createDocument: mocks.apiHandler,
+    getCommandOutput: mocks.apiHandler,
+    runCommand: mocks.apiHandler,
     searchUserMemory: mocks.apiHandler,
   })),
 }));
@@ -47,6 +50,25 @@ vi.mock('@lobechat/builtin-tools', () => ({
     {
       identifier: 'lobe-notebook',
       manifest: { api: [{ name: 'createDocument' }, { name: 'listDocuments' }] },
+    },
+    {
+      identifier: 'lobe-local-system',
+      manifest: {
+        api: [
+          {
+            name: 'runCommand',
+            parameters: {
+              properties: { command: { type: 'string' }, description: { type: 'string' } },
+              required: ['description', 'command'],
+              type: 'object',
+            },
+          },
+          {
+            name: 'getCommandOutput',
+            parameters: { properties: { shell_id: { type: 'string' } }, type: 'object' },
+          },
+        ],
+      },
     },
     {
       identifier: 'lobe-user-memory',
@@ -191,6 +213,80 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
 
     expect(mockApiHandler).toHaveBeenCalledWith({}, context);
     expect(result.success).toBe(true);
+  });
+
+  describe('empty arguments string', () => {
+    const buildRunCommandPayload = (argsStr: string): ChatToolPayload => ({
+      apiName: 'runCommand',
+      arguments: argsStr,
+      id: 't-run',
+      identifier: 'lobe-local-system',
+      type: 'builtin' as any,
+    });
+
+    // A tool call whose argument deltas never arrived (e.g. an OpenAI-compatible
+    // proxy that drops them) accumulates to `arguments: ""`. Silently passing
+    // `{}` made the device reply "command is required", which misled the model
+    // into blaming the platform instead of resending the call.
+    it('returns EMPTY_ARGUMENTS without invoking an API that declares required params', async () => {
+      const result = await executor.execute(buildRunCommandPayload(''), context);
+
+      expect(mockApiHandler).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('EMPTY_ARGUMENTS');
+      expect(result.content).toMatch(/empty arguments string/);
+      expect(result.content).toMatch(/command/);
+    });
+
+    it('treats a whitespace-only arguments string as empty', async () => {
+      const result = await executor.execute(buildRunCommandPayload('   '), context);
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('EMPTY_ARGUMENTS');
+      expect(mockApiHandler).not.toHaveBeenCalled();
+    });
+
+    it('prefers the manifest from the execution context when present', async () => {
+      const result = await executor.execute(
+        { ...buildRunCommandPayload(''), apiName: 'createDocument', identifier: 'lobe-notebook' },
+        {
+          ...context,
+          toolManifestMap: {
+            'lobe-notebook': {
+              api: [
+                {
+                  description: '',
+                  name: 'createDocument',
+                  parameters: {
+                    properties: { title: { type: 'string' } },
+                    required: ['title'],
+                    type: 'object',
+                  },
+                },
+              ],
+              identifier: 'lobe-notebook',
+              meta: {},
+              type: 'builtin',
+            } as any,
+          },
+        },
+      );
+
+      expect(mockApiHandler).not.toHaveBeenCalled();
+      expect(result.error?.code).toBe('EMPTY_ARGUMENTS');
+    });
+
+    it('still dispatches with {} for an API without required params', async () => {
+      mockApiHandler.mockResolvedValueOnce({ content: 'ok', success: true });
+
+      const result = await executor.execute(
+        { ...buildRunCommandPayload(''), apiName: 'getCommandOutput' },
+        context,
+      );
+
+      expect(mockApiHandler).toHaveBeenCalledWith({}, context);
+      expect(result.success).toBe(true);
+    });
   });
 
   it('returns a recoverable UNKNOWN_API error for a hallucinated apiName', async () => {
@@ -586,5 +682,51 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
       },
     });
     expect(write.error?.code).toBe('SHARE_GATE_BLOCKED');
+  });
+});
+
+describe('BuiltinToolsExecutor Composio app without an active connection', () => {
+  const executor = new BuiltinToolsExecutor({} as any, 'user-1');
+
+  // Only an ACTIVE Composio connection is routed with `source: 'composio'`. A
+  // stale activation (or a resumed run whose toolset predates a status change)
+  // lands here without that source — the model must learn the app is not
+  // connected, not that the tool "is not implemented".
+  it('returns COMPOSIO_NOT_CONNECTED instead of throwing "not implemented"', async () => {
+    vi.mocked(hasServerRuntime).mockReturnValueOnce(false);
+
+    const result = await executor.execute(
+      {
+        apiName: 'GMAIL_FETCH_EMAILS',
+        arguments: '{"query":"newer_than:3d"}',
+        id: 'call-gmail',
+        identifier: 'gmail',
+        type: 'default' as any,
+      },
+      context,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('COMPOSIO_NOT_CONNECTED');
+    expect(result.content).toContain('Gmail is not connected');
+    expect(result.content).toContain('Settings → Connectors');
+    expect(result.content).not.toMatch(/not implemented/);
+  });
+
+  it('still reports an unknown non-Composio builtin as not implemented', async () => {
+    vi.mocked(hasServerRuntime).mockReturnValueOnce(false);
+
+    await expect(
+      executor.execute(
+        {
+          apiName: 'doThing',
+          arguments: '{}',
+          id: 'call-x',
+          identifier: 'lobe-missing-tool',
+          type: 'default' as any,
+        },
+        context,
+      ),
+    ).rejects.toThrow('Builtin tool "lobe-missing-tool" is not implemented');
   });
 });

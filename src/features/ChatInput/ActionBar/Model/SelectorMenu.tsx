@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ModelIcon } from '@/components/LobeIcons';
 import { ModelSwitchSubmenuPopup } from '@/features/ModelSwitchPanel';
+import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
 import type { SelectorSubmenuItem } from '../../components/buildSelectorSubmenu';
 import { buildSelectorSubmenu } from '../../components/buildSelectorSubmenu';
@@ -74,7 +75,9 @@ interface SelectorMenuProps {
   children: ReactNode;
   displayName: string;
   effort: ReasoningEffortControl;
+  enabledList?: EnabledProviderWithModels[];
   model: string;
+  modelNotice?: ReactNode;
   onModelChange: (params: { model: string; provider: string }) => Promise<void>;
   openOnHover?: boolean;
   placement?: DropdownPlacement;
@@ -93,7 +96,9 @@ const SelectorMenu = memo<SelectorMenuProps>(
     children,
     displayName,
     effort,
+    enabledList,
     model,
+    modelNotice,
     onModelChange,
     openOnHover = false,
     placement = 'topLeft',
@@ -177,8 +182,13 @@ const SelectorMenu = memo<SelectorMenuProps>(
                     </DropdownMenuItemContent>
                   </DropdownMenuSubmenuTrigger>
                   <ModelSwitchSubmenuPopup
+                    enabledList={enabledList}
                     model={model}
+                    notice={modelNotice}
                     provider={provider}
+                    activeSecondaryText={
+                      effortValue ? t(`reasoningEffort.levels.${effortValue}`) : undefined
+                    }
                     onModelChange={onModelChange}
                     onOpenChange={handleModelPanelOpenChange}
                   />

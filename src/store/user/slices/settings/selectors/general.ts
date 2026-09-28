@@ -40,8 +40,11 @@ const currentTimezone = (s: UserStore): string | undefined =>
 const enableAutoScrollOnStreaming = (s: UserStore) =>
   generalConfig(s).enableAutoScrollOnStreaming ?? true;
 const enableMessageLinkIcon = (s: UserStore) => generalConfig(s).enableMessageLinkIcon ?? true;
+/** The setting is a boolean: either the live tool list is open or it is a
+ *  summary row. "Open" means the full list — the height-capped middle level
+ *  just hid part of what the user asked to see. */
 const workflowStreamingExpandLevel = (s: UserStore) =>
-  generalConfig(s).expandWorkflowWhileStreaming ? 'semi' : 'collapsed';
+  generalConfig(s).expandWorkflowWhileStreaming ? 'full' : 'collapsed';
 
 export const userGeneralSettingsSelectors = {
   animationMode,

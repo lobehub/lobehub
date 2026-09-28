@@ -69,3 +69,6 @@ packages/sdk/src/generated/
 
 # generated files (regenerate with `codex app-server generate-ts`)
 packages/heterogeneous-agents/src/codex/protocol/generated.ts
+
+# Generated from lobehub/acceptance releases; preserve the upstream bytes.
+.agents/skills/acceptance/**

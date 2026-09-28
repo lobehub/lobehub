@@ -59,4 +59,28 @@ describe('uploadFileBuffer', () => {
       pathname: expect.stringMatching(/^files\//),
     });
   });
+
+  it('names the socket-level cause when the storage PUT fails at the network layer', async () => {
+    const networkError = Object.assign(new TypeError('fetch failed'), {
+      cause: Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }),
+    });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(networkError));
+    const abortS3Upload = vi.fn().mockResolvedValue({ success: true });
+    const client = {
+      file: { checkFileHash: { mutate: vi.fn().mockResolvedValue({ isExist: false }) } },
+      upload: {
+        abortS3Upload: { mutate: abortS3Upload },
+        createS3PreSignedUrl: { mutate: vi.fn().mockResolvedValue('https://s3/presigned') },
+      },
+    } as unknown as Parameters<typeof uploadFileBuffer>[0];
+
+    await expect(
+      uploadFileBuffer(client, {
+        buffer: Buffer.from('file'),
+        fileName: 'shot.png',
+        fileType: 'image/png',
+      }),
+    ).rejects.toThrow('Upload to storage failed: fetch failed (ECONNRESET)');
+    expect(abortS3Upload).toHaveBeenCalled();
+  });
 });

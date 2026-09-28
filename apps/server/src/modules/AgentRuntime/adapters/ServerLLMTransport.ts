@@ -312,7 +312,7 @@ export class ServerLLMTransport implements LLMTransport {
 
   private async runAttemptWithRuntime(
     input: LLMAttemptInput,
-    modelRuntime: Pick<ModelRuntime, 'chat'>,
+    modelRuntime: Pick<ModelRuntime, 'chat' | 'handleChatStreamError'>,
   ): Promise<LLMAttemptExecution> {
     const resolved = input.context.resolvedTools;
     if (!resolved) throw new Error('Resolved tools are required for a server LLM attempt');

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { FilePathDisplay, getFilePathDisplayInfo } from '../../components/FilePathDisplay';
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
+import { formatReadLineRange } from './formatLineRange';
 
 interface ReadFileArgs {
   endLine?: number;
@@ -45,19 +46,10 @@ export const createReadLocalFileInspector = (
           ? `${imageTranslationKey}${isArgumentsStreaming || isLoading ? '.loading' : ''}`
           : translationKey;
 
-      const lineRange = useMemo(() => {
-        const source = args || partialArgs;
-        const start = source?.startLine ?? source?.loc?.[0] ?? source?.offset;
-        const end =
-          source?.endLine ??
-          source?.loc?.[1] ??
-          (start !== undefined && source?.limit !== undefined
-            ? start + Math.max(source.limit - 1, 0)
-            : undefined);
-        if (start !== undefined && end !== undefined) return `L${start}-L${end}`;
-        if (start !== undefined) return `L${start}`;
-        return undefined;
-      }, [args, partialArgs]);
+      const lineRange = useMemo(
+        () => formatReadLineRange(args || partialArgs),
+        [args, partialArgs],
+      );
 
       if (isArgumentsStreaming) {
         if (!filePath)

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as verifyServices from '@/server/services/verify';
 
@@ -23,6 +23,7 @@ vi.mock('@/server/services/workRegistration', () => ({ registerWorksForOperation
  * handed to the host as post-response work instead.
  */
 describe('CompletionLifecycle — verify gate scheduling', () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     after.mockReset();
   });
@@ -51,5 +52,49 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     await after.mock.calls[0][0]();
     expect(runVerify).toHaveBeenCalledTimes(1);
     expect(runVerify.mock.calls[0][2]).toMatchObject({ operationId: 'op-1' });
+  });
+  it.each(['error', 'interrupted'])(
+    'does not wait for unfinished plan generation on %s',
+    async (reason) => {
+      const lifecycle = new CompletionLifecycle({} as any, 'user-1');
+      vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+      const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+      vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      (lifecycle as any).verifyPlanInstantiations.set('top-level-op', pending);
+      let completed = false;
+      const completion = lifecycle
+        .dispatchHooks('top-level-op', { host: { hooks: [] }, origin: {}, status: reason }, reason)
+        .then(() => {
+          completed = true;
+        });
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(completed).toBe(true);
+        expect(dispatch).toHaveBeenCalled();
+      } finally {
+        release();
+        await completion;
+      }
+    },
+  );
+
+  it.each(['error', 'interrupted'])('settles an aborted repair on %s', async (reason) => {
+    const lifecycle = new CompletionLifecycle({} as any, 'user-1');
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+    const settle = vi.spyOn(verifyServices, 'settleFailedRepair').mockResolvedValue(false);
+
+    await lifecycle.dispatchHooks(
+      'repair-op',
+      { host: { hooks: [] }, origin: {}, status: 'error' },
+      reason,
+    );
+    await Promise.all(after.mock.calls.map(([callback]) => callback()));
+    expect(settle).toHaveBeenCalledWith(expect.anything(), 'user-1', 'repair-op', undefined);
   });
 });

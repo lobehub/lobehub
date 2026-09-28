@@ -5,6 +5,7 @@ import {
   GOAL_EXPLORE_JSON_SCHEMA,
   GOAL_EXPLORE_PROMPT_VERSION,
 } from '@lobechat/prompts';
+import { RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
 
 import type { LobeChatDatabase } from '@/database/type';
@@ -63,6 +64,7 @@ export class GoalExplorationPlanner {
         thinking: { type: 'disabled' },
       },
       {
+        metadata: { trigger: RequestTrigger.Goal },
         tracing: {
           scenario: TRACING_SCENARIOS.GoalExplore,
           promptVersion: GOAL_EXPLORE_PROMPT_VERSION,

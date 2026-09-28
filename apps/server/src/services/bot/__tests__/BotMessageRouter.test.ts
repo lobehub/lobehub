@@ -277,6 +277,8 @@ vi.mock('../platforms', async () => ({
     if (platform === 'feishu' || platform === 'qq' || platform === 'wechat') return 'zh-CN';
     return 'en-US';
   },
+  normalizeBotReactionMode: (value: unknown) =>
+    value === 'full' || value === 'none' ? value : 'minimal',
   normalizeBotReplyLocale: (raw: string | undefined | null): string | undefined => {
     if (!raw) return undefined;
     const parts = raw.replaceAll('_', '-').split('-');

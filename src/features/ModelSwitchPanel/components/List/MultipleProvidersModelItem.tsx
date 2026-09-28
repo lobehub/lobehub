@@ -18,15 +18,18 @@ import { Check } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
+import { ProviderItemRender } from '@/components/ModelSelect';
 
 import { styles } from '../../styles';
 import { type ModelWithProviders } from '../../types';
 import { menuKey } from '../../utils';
 import ModelDetailPanel from '../ModelDetailPanel';
+import { ModelRowRender } from './ModelRowRender';
 
 interface MultipleProvidersModelItemProps {
   activeKey: string;
+  /** Muted text shown after the name when this model is the active one */
+  activeSecondaryText?: string;
   data: ModelWithProviders;
   defaultProviderId?: string;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
@@ -36,12 +39,12 @@ interface MultipleProvidersModelItemProps {
   onModelChange: (modelId: string, providerId: string) => void;
   onRestrictedModelClick?: () => void;
   proLabel?: string;
-  showInfoTag?: boolean;
 }
 
 export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
   ({
     activeKey,
+    activeSecondaryText,
     data,
     isModelRestricted,
     newLabel,
@@ -50,7 +53,6 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     onClose,
     onRestrictedModelClick,
     proLabel,
-    showInfoTag,
   }) => {
     const { t } = useTranslation('components');
     const [submenuOpen, setSubmenuOpen] = useState(false);
@@ -99,12 +101,13 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
             void selectModel(defaultProvider.id);
           }}
         >
-          <ModelItemRender
-            {...data.model}
-            {...data.model.abilities}
-            newBadgeLabel={newLabel}
+          <ModelRowRender
+            activeEffortLabel={activeSecondaryText}
+            isActive={isActive}
+            model={data.model}
+            newLabel={newLabel}
             proBadgeLabel={defaultProviderRestricted ? proLabel : undefined}
-            showInfoTag={showInfoTag}
+            provider={(activeProvider ?? defaultProvider)?.id ?? ''}
           />
         </DropdownMenuSubmenuTrigger>
         <DropdownMenuPortal>

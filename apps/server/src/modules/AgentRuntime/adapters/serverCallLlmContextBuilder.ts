@@ -4,6 +4,7 @@ import {
   selectEnableExpertise,
   selectExpertise,
 } from '@lobechat/agent-runtime';
+import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { gatherContextFacts } from '@lobechat/mecha';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
@@ -19,6 +20,7 @@ import {
   resolveServerConnectorFeatures,
 } from '@/server/modules/Mecha/ContextEngineering/providers';
 import { resolveKnowledgeFileContents } from '@/server/services/file/resolveKnowledgeFileContents';
+import { resolveBuilderGroupId } from '@/server/services/toolExecution/serverRuntimes/groupAgentBuilderTarget';
 
 import type { RuntimeExecutorContext } from '../context';
 import {
@@ -85,6 +87,19 @@ export const buildServerCallLlmContext = async ({
 
   const agentId = state.origin?.agentId;
   const topicId = ctx.topicId ?? state.origin?.topicId;
+  // `<current_group_context>` must describe the group the builder tools will
+  // write to — after a `createGroup` that is the new group, not the pinned one.
+  const editingGroupId =
+    ctx.serverDB && ctx.userId && resolved.enabledToolIds.includes(GroupAgentBuilderIdentifier)
+      ? await resolveBuilderGroupId({
+          db: ctx.serverDB,
+          editingGroupId: state.origin?.editingGroupId,
+          threadId: state.origin?.threadId,
+          topicId,
+          userId: ctx.userId,
+          workspaceId: state.origin?.workspaceId ?? ctx.workspaceId,
+        })
+      : state.origin?.editingGroupId;
   // Which facts this turn needs is decided by the shared rules; the server
   // only answers the lookups they ask for.
   const facts = await gatherContextFacts(
@@ -98,8 +113,8 @@ export const buildServerCallLlmContext = async ({
       },
       agentId,
       disabledPluginIds: state.world?.disabledPluginIds,
-      editingAgentId: state.metadata?.editingAgentId as string | undefined,
-      editingGroupId: state.metadata?.editingGroupId as string | undefined,
+      editingAgentId: state.origin?.editingAgentId,
+      editingGroupId,
       enabledToolIds: resolved.enabledToolIds,
       executionTarget,
       features: resolveServerConnectorFeatures(),
@@ -135,6 +150,7 @@ export const buildServerCallLlmContext = async ({
     discordContext: state.world?.channel?.discord,
     enableExpertise: selectEnableExpertise(state),
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
+    enableStaleToolResultTrim: agentConfig.chatConfig?.enableStaleToolResultTrim ?? undefined,
     evalContext: state.world?.eval,
     expertise: selectExpertise(state),
     forceFinish: state.forceFinish,
@@ -186,53 +202,54 @@ export const buildServerCallLlmContext = async ({
     ...(facts.step.onboardingContext && { onboardingContext: facts.step.onboardingContext }),
   };
 
-  const processedMessages = await agentRuntimeTracer.startActiveSpan(
-    CONTEXT_ENGINEERING_SPAN_NAME,
-    {
-      attributes: buildContextEngineeringAttributes({
-        hasImages: (messagesForContext as Array<{ content?: unknown }>).some(
-          (message) =>
-            Array.isArray(message.content) &&
-            (message.content as Array<{ type?: string }>).some(
-              (part) => part?.type === 'image_url',
-            ),
-        ),
-        historyCompressed:
-          Array.isArray(messagesForContext) &&
-          messagesForContext.some(
-            (message: { role?: string }) => message?.role === 'compressedGroup',
+  const { messages: processedMessages, metadata: ceMetadata } =
+    await agentRuntimeTracer.startActiveSpan(
+      CONTEXT_ENGINEERING_SPAN_NAME,
+      {
+        attributes: buildContextEngineeringAttributes({
+          hasImages: (messagesForContext as Array<{ content?: unknown }>).some(
+            (message) =>
+              Array.isArray(message.content) &&
+              (message.content as Array<{ type?: string }>).some(
+                (part) => part?.type === 'image_url',
+              ),
           ),
-        knowledgeCount:
-          (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) +
-          (contextEngineInput.knowledge?.fileContents?.length ?? 0),
-        knowledgeInjected:
-          (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) > 0 ||
-          (contextEngineInput.knowledge?.fileContents?.length ?? 0) > 0,
-        memoryInjected: Boolean(contextEngineInput.userMemory?.memories),
-        messageCount: messagesForContext.length,
-        operationId,
-        stepIndex,
-        systemRoleLength: contextEngineInput.systemRole?.length,
-        toolCount: contextEngineInput.toolsConfig?.tools?.length ?? 0,
-      }),
-    },
-    async (ceSpan) => {
-      try {
-        const result = await serverMessagesEngine(contextEngineInput);
-        ceSpan.setAttribute('lobehub.context.message_count', result.length);
-        return result;
-      } catch (error) {
-        ceSpan.recordException(error as Error);
-        ceSpan.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      } finally {
-        ceSpan.end();
-      }
-    },
-  );
+          historyCompressed:
+            Array.isArray(messagesForContext) &&
+            messagesForContext.some(
+              (message: { role?: string }) => message?.role === 'compressedGroup',
+            ),
+          knowledgeCount:
+            (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) +
+            (contextEngineInput.knowledge?.fileContents?.length ?? 0),
+          knowledgeInjected:
+            (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) > 0 ||
+            (contextEngineInput.knowledge?.fileContents?.length ?? 0) > 0,
+          memoryInjected: Boolean(contextEngineInput.userMemory?.memories),
+          messageCount: messagesForContext.length,
+          operationId,
+          stepIndex,
+          systemRoleLength: contextEngineInput.systemRole?.length,
+          toolCount: contextEngineInput.toolsConfig?.tools?.length ?? 0,
+        }),
+      },
+      async (ceSpan) => {
+        try {
+          const result = await serverMessagesEngine(contextEngineInput);
+          ceSpan.setAttribute('lobehub.context.message_count', result.messages.length);
+          return result;
+        } catch (error) {
+          ceSpan.recordException(error as Error);
+          ceSpan.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
+        } finally {
+          ceSpan.end();
+        }
+      },
+    );
 
   const {
     messages: _inputMsgs,
@@ -242,6 +259,7 @@ export const buildServerCallLlmContext = async ({
   ctx.tracingContextEngine?.(
     { ...contextEngineInputLite, toolCount: _toolsConfig?.tools?.length ?? 0 },
     processedMessages,
+    ceMetadata,
   );
 
   return {

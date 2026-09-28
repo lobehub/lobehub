@@ -16,6 +16,7 @@ import type {
   ExpertiseRevisionEvidence,
   VerifyCheckDecisionDetail,
 } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { and, desc, eq, gt, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -251,7 +252,7 @@ export class ExpertiseConsolidationService {
         schema: EXPERTISE_CONSOLIDATION_JSON_SCHEMA,
       },
       {
-        metadata: { trigger: 'expertise_consolidation' },
+        metadata: { trigger: RequestTrigger.Expertise },
         tracing: {
           promptVersion: EXPERTISE_CONSOLIDATION_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.ExpertiseConsolidation,

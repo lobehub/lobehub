@@ -1,9 +1,9 @@
 'use client';
 
 import { type BuiltinInspectorProps } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Check, LoaderCircle, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -60,7 +60,7 @@ export const ExecScriptInspector = memo<BuiltinInspectorProps<ExecScriptParams, 
           </span>
           {description && <span className={highlightTextStyles.primary}>{description}</span>}
           {isLoading ? null : isStillRunning ? (
-            <Icon spin className={styles.statusIcon} icon={LoaderCircle} size={14} />
+            <Spin className={styles.statusIcon} size="small" />
           ) : pluginState?.success !== undefined ? (
             isSuccess ? (
               <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />

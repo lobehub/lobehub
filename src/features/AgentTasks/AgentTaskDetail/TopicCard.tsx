@@ -1,4 +1,5 @@
 import type { TaskDetailActivity } from '@lobechat/types';
+import { formatDuration } from '@lobechat/utils';
 import {
   Block,
   type DropdownItem,
@@ -40,15 +41,6 @@ import RunVerifyDetail from './RunVerifyDetail';
 import RunVerifyTag from './RunVerifyTag';
 import { shouldShowRunFollowUp } from './shouldShowRunFollowUp';
 import TopicStatusIcon from './TopicStatusIcon';
-
-const formatDuration = (ms: number): string => {
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
-};
 
 // The run's last message (`content`) is the raw assistant output — markdown, and
 // often long. Render it as rich text, but keep it a bounded preview in the feed:

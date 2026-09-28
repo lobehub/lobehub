@@ -1,9 +1,10 @@
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { LOADING_FLAT } from '@lobechat/const';
+import { ABANDONED_OPERATION_ERROR_PREFIX } from '@lobechat/const/goal';
 import type { ChatMessageError } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import debug from 'debug';
-import { and, desc, eq, gte, lte, or } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, isNull, lte, ne, or, sql } from 'drizzle-orm';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
@@ -16,6 +17,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
 import { CompletionLifecycle } from './CompletionLifecycle';
+import type { SerializedHook } from './hooks/types';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
 import { createDefaultSnapshotStore } from './snapshotStore';
 
@@ -33,6 +35,12 @@ interface AbandonOperationOptions {
  * `waiting_for_async_tool` forever (the orphaned-parent bug).
  */
 export interface AbandonedSubAgentResume {
+  /**
+   * Why the child was abandoned. The bridge otherwise reloads the child's
+   * coordinator state, which never received this error, and hands the parent a
+   * bare "Sub-agent did not complete (error)." with no cause.
+   */
+  errorMessage: string;
   parentOperationId: string;
   /**
    * When true, the parent op is a shared-agent visitor run (its metadata
@@ -42,7 +50,7 @@ export interface AbandonedSubAgentResume {
    */
   streamOwnerUserId?: string;
   threadId: string;
-  /** The parent's placeholder `role: 'tool'` message to backfill (= thread.sourceMessageId). */
+  /** The parent's placeholder `role: 'tool'` message this run reports to. */
   toolMessageId: string;
   userId: string;
   workspaceId?: string;
@@ -96,7 +104,17 @@ export class AbandonOperationService {
     this.traceRecorder = new OperationTraceRecorder(this.snapshotStore);
   }
 
-  async finalizeAbandoned(operationId: string, reason: string): Promise<FinalizeAbandonedResult> {
+  /**
+   * @param options.settledAsAbandoned Set when the caller already retired the
+   * durable row with its own compare-and-set (`settleStaleRunning`) and only
+   * wants the side effects. The lifecycle then persists onto that status rather
+   * than racing it, so `onComplete` / `onError` still fire.
+   */
+  async finalizeAbandoned(
+    operationId: string,
+    reason: string,
+    options?: { settledAsAbandoned?: boolean },
+  ): Promise<FinalizeAbandonedResult> {
     const result: FinalizeAbandonedResult = {
       assistantMessageUpdated: false,
       finalized: false,
@@ -121,7 +139,7 @@ export class AbandonOperationService {
       state.status === 'running' ||
       state.status === 'waiting_for_human' ||
       state.status === 'waiting_for_async_tool';
-    const message = `Operation abandoned: ${reason}`;
+    const message = `${ABANDONED_OPERATION_ERROR_PREFIX} ${reason}`;
     const error: ChatMessageError = {
       body: { message },
       message,
@@ -161,19 +179,53 @@ export class AbandonOperationService {
     // path must opt in when this flag is present.
     const includeShareVisitor = Boolean(metadata.streamOwnerUserId);
 
-    if (origin.userId && metadata.assistantMessageId) {
+    if (origin.userId) {
+      const messageModel = new MessageModel(this.db, origin.userId, origin.workspaceId, undefined, {
+        includeShareVisitor,
+      });
+
       try {
-        const messageModel = new MessageModel(
-          this.db,
-          origin.userId,
-          origin.workspaceId,
-          undefined,
-          { includeShareVisitor },
-        );
-        await messageModel.update(metadata.assistantMessageId, { error });
-        result.assistantMessageUpdated = true;
+        if (metadata.assistantMessageId) {
+          // The dying step got as far as creating its placeholder, so the
+          // failure belongs on exactly that row.
+          await messageModel.update(metadata.assistantMessageId, { error });
+          result.assistantMessageUpdated = true;
+        } else if (origin.topicId && !(await this.topicMovedOn(operationId, origin))) {
+          // No placeholder: the step was killed before its first token, which
+          // is the usual shape when the host is recycled mid-LLM-call. The
+          // turn would otherwise carry no error anywhere, and the client keys
+          // its failure banner and retry action off `message.error` — that
+          // silence is exactly why an abandoned turn renders as frozen rather
+          // than failed.
+          //
+          // A fresh assistant row rather than marking the conversation tail:
+          // the tail here is either the user's own turn, whose renderer reads
+          // `error` for nothing but the double-click-to-edit guard and so
+          // would show the user nothing at all, or a *previous* assistant turn
+          // that genuinely succeeded and must not be relabelled as failed.
+          await messageModel.create({
+            agentId: origin.agentId,
+            content: '',
+            error,
+            parentId: await this.resolveTailMessageId(
+              {
+                threadId: origin.threadId,
+                topicId: origin.topicId,
+                userId: origin.userId,
+                workspaceId: origin.workspaceId,
+              },
+              includeShareVisitor,
+            ),
+            model: state.modelRuntimeConfig?.model,
+            provider: state.modelRuntimeConfig?.provider,
+            role: 'assistant',
+            threadId: origin.threadId ?? null,
+            topicId: origin.topicId,
+          });
+          result.assistantMessageUpdated = true;
+        }
       } catch (e) {
-        log('[%s] assistant message update failed (non-fatal): %O', operationId, e);
+        log('[%s] assistant failure row write failed (non-fatal): %O', operationId, e);
       }
     }
 
@@ -193,10 +245,37 @@ export class AbandonOperationService {
         await new CompletionLifecycle(this.db, origin.userId, origin.workspaceId, {
           includeShareVisitor,
         }).dispatchHooks(operationId, finalState, 'error', {
+          settledAsAbandoned: options?.settledAsAbandoned,
           skipErrorMessageWrite: result.assistantMessageUpdated,
         });
       } catch (e) {
         log('[%s] abandoned op lifecycle dispatch failed (non-fatal): %O', operationId, e);
+      }
+    }
+
+    // Safety net for the durable row. `dispatchHooks` owns the rich terminal
+    // write (step count, usage, cost, traceS3Key) via `persistCompletion`, but
+    // it only runs behind the guard above: a sub-agent, a missing
+    // `origin.userId`, or a state whose `status` is not one of
+    // running/waiting_* (e.g. a step boundary persisted as `idle`) all skip it
+    // silently, and a throw inside it is swallowed as non-fatal. Any of those
+    // used to leave the operation `running` forever — nothing else retires a
+    // non-Goal op, so it stayed live on the dashboard and blocked its own
+    // recovery. `settleRunning` is idempotent and only matches rows still in
+    // `running`, so it cannot overwrite the richer outcome when the dispatch
+    // did happen.
+    if (origin.userId) {
+      try {
+        const settled = await new AgentOperationModel(
+          this.db,
+          origin.userId,
+          origin.workspaceId,
+        ).settleRunning(operationId, 'error');
+        if (settled) {
+          log('[%s] durable row settled by abandon safety net', operationId);
+        }
+      } catch (e) {
+        log('[%s] abandon safety-net settle failed (non-fatal): %O', operationId, e);
       }
     }
 
@@ -205,8 +284,11 @@ export class AbandonOperationService {
     // otherwise wait on this slot forever. We surface the ids the caller needs
     // to backfill the placeholder tool message and CAS-resume the parent.
     // parentOperationId + threadId live on the (persistent) operation row;
-    // toolMessageId is the thread's sourceMessageId (the parent's placeholder),
-    // set when the sub-agent was dispatched. When this is set, the coordinator
+    // toolMessageId is this run's own placeholder (`lineage.progressAnchor`),
+    // falling back to the thread's sourceMessageId. The fallback alone is not
+    // enough: a continued sub-agent (`callSubAgent({ subAgentId })`) reuses its
+    // thread, whose sourceMessageId is the FIRST run's placeholder, while the
+    // parent now waits on a new one. When this is set, the coordinator
     // cleanup below is SKIPPED so the durable resume can still resolve userId.
     //
     // Isolated group members ALSO run with `isSubAgent: true` and an isolation
@@ -229,12 +311,18 @@ export class AbandonOperationService {
         const parentOperationId = opRow?.parentOperationId ?? undefined;
         const threadId = opRow?.threadId ?? origin.threadId ?? undefined;
         if (parentOperationId && threadId) {
-          const thread = await new ThreadModel(this.db, origin.userId, origin.workspaceId).findById(
-            threadId,
-          );
-          const toolMessageId = thread?.sourceMessageId ?? undefined;
+          const anchoredToolMessageId =
+            origin.lineage?.progressAnchor?.parentOperationId === parentOperationId
+              ? origin.lineage.progressAnchor.toolMessageId
+              : undefined;
+          const toolMessageId =
+            anchoredToolMessageId ??
+            (await new ThreadModel(this.db, origin.userId, origin.workspaceId).findById(threadId))
+              ?.sourceMessageId ??
+            undefined;
           if (toolMessageId) {
             result.subAgentResume = {
+              errorMessage: message,
               parentOperationId,
               // Forward the visitor-run marker so an inline resume (local mode)
               // constructs its services with `includeShareVisitor: true`; the
@@ -285,7 +373,7 @@ export class AbandonOperationService {
 
     result.abandoned = true;
 
-    const message = `Operation abandoned: ${reason}`;
+    const message = `${ABANDONED_OPERATION_ERROR_PREFIX} ${reason}`;
     const error: ChatMessageError = {
       body: { message },
       message,
@@ -312,27 +400,140 @@ export class AbandonOperationService {
       log('[%s] no-state abandon: recordCompletion failed (non-fatal): %O', operationId, e);
     }
 
-    const assistantMessageId = await this.resolveAssistantMessageIdForOperation(op, operationId);
-    if (!assistantMessageId) return;
+    const settled = await this.settleOperationTopic(op, operationId);
+    if (settled.assistantMessageId) {
+      try {
+        // No-state cleanup path: this is a system-side finalize keyed on ids
+        // read from the persisted `agentOperations` row (no user input), and the
+        // op may belong to a shared-agent visitor conversation whose rows the
+        // default MessageModel gate would hide. Opt in unconditionally so the
+        // placeholder can still be marked errored when the coordinator state has
+        // already evaporated.
+        const messageModel = new MessageModel(
+          this.db,
+          op.userId,
+          op.workspaceId ?? undefined,
+          undefined,
+          { includeShareVisitor: true },
+        );
+        await messageModel.update(settled.assistantMessageId, { content: '', error });
+        result.assistantMessageUpdated = true;
+      } catch (e) {
+        log(
+          '[%s] no-state abandon: assistant message update failed (non-fatal): %O',
+          operationId,
+          e,
+        );
+      }
+    }
+
+    // Heterogeneous and device runs never have coordinator state, so this is
+    // the only terminal they get when the process dies silently. Their hooks
+    // (task lifecycle, bot callbacks) must still hear about it — otherwise the
+    // Task keeps a `running` topic forever and a Goal waits on it indefinitely.
+    // A newer operation owning the topic means this callback cannot prove which
+    // run the hooks belong to, the same rule `heteroFinish` applies.
+    if (settled.ownershipUnproven) return;
+    const serializedHooks = settled.hooks ?? readDurableHooks(op.metadata);
+    if (!serializedHooks?.length) return;
 
     try {
-      // No-state cleanup path: this is a system-side finalize keyed on ids
-      // read from the persisted `agentOperations` row (no user input), and the
-      // op may belong to a shared-agent visitor conversation whose rows the
-      // default MessageModel gate would hide. Opt in unconditionally so the
-      // placeholder can still be marked errored when the coordinator state has
-      // already evaporated.
-      const messageModel = new MessageModel(
-        this.db,
-        op.userId,
-        op.workspaceId ?? undefined,
-        undefined,
-        { includeShareVisitor: true },
+      await new CompletionLifecycle(this.db, op.userId, op.workspaceId ?? undefined, {
+        includeShareVisitor: true,
+      }).completeOperation(
+        {
+          agentId: op.agentId ?? undefined,
+          assistantMessageId: settled.assistantMessageId,
+          error,
+          operationId,
+          orchestrationRole: settled.orchestrationRole,
+          serializedHooks,
+          startedAt: op.startedAt ?? undefined,
+          topicId: op.topicId ?? undefined,
+          userId: op.userId,
+        },
+        'error',
+        { skipErrorMessageWrite: true },
       );
-      await messageModel.update(assistantMessageId, { content: '', error });
-      result.assistantMessageUpdated = true;
     } catch (e) {
-      log('[%s] no-state abandon: assistant message update failed (non-fatal): %O', operationId, e);
+      log('[%s] no-state abandon: lifecycle dispatch failed (non-fatal): %O', operationId, e);
+    }
+  }
+
+  /**
+   * Anchor for an abandonment error when the dying step never created its own
+   * assistant placeholder: the latest main-chain message of the run.
+   *
+   * Reuses the same spine query the runtime itself uses to pick a turn's
+   * continuation point, so the error lands on the node the client is actually
+   * rendering as the tail rather than on a tool child or a stale fork.
+   */
+  private async resolveTailMessageId(
+    params: { threadId?: string | null; topicId: string; userId: string; workspaceId?: string },
+    includeShareVisitor: boolean,
+  ): Promise<string | undefined> {
+    try {
+      const messageModel = new MessageModel(this.db, params.userId, params.workspaceId, undefined, {
+        includeShareVisitor,
+      });
+      return await messageModel.getLatestSpineMessageId({
+        threadId: params.threadId ?? null,
+        topicId: params.topicId,
+      });
+    } catch (e) {
+      log('[%s] tail message lookup failed (non-fatal): %O', params.topicId, e);
+      return undefined;
+    }
+  }
+
+  /**
+   * Whether a newer run has started on this conversation since the abandoned
+   * one, which means the spine tail now belongs to that run, not to this one.
+   *
+   * The fallback failure row is anchored to the tail, so writing it after the
+   * user has moved on would graft this run's error under the newer turn — and
+   * an interactive start overwrites `runningOperation` rather than waiting, so
+   * the topic marker alone cannot tell (a newer run that already finished has
+   * cleared it too). The durable operation rows can: any top-level operation
+   * on the same topic/thread created after this one. The abandoned run's own
+   * sub-agent children are excluded, since they extend its turn.
+   *
+   * Fails closed: on a lookup error the row is not written, because a missing
+   * error bubble is recoverable (the durable row still settles) and a failure
+   * grafted onto the active branch is not.
+   */
+  private async topicMovedOn(
+    operationId: string,
+    origin: { threadId?: string; topicId?: string; userId?: string },
+  ): Promise<boolean> {
+    if (!origin.topicId || !origin.userId) return true;
+    try {
+      const newer = await (this.db as any).query?.agentOperations?.findFirst({
+        columns: { id: true },
+        where: and(
+          eq(agentOperations.topicId, origin.topicId),
+          eq(agentOperations.userId, origin.userId),
+          origin.threadId
+            ? eq(agentOperations.threadId, origin.threadId)
+            : isNull(agentOperations.threadId),
+          ne(agentOperations.id, operationId),
+          or(
+            isNull(agentOperations.parentOperationId),
+            ne(agentOperations.parentOperationId, operationId),
+          ),
+          // Own alias on purpose: the relational query aliases the outer table,
+          // and interpolated columns in the subquery would resolve against that
+          // alias and compare each row with itself.
+          gt(
+            agentOperations.createdAt,
+            sql`(select self.created_at from agent_operations self where self.id = ${operationId})`,
+          ),
+        ),
+      });
+      return Boolean(newer);
+    } catch (e) {
+      log('[%s] newer-run lookup failed, not writing a fallback row: %O', operationId, e);
+      return true;
     }
   }
 
@@ -347,10 +548,10 @@ export class AbandonOperationService {
     }
   }
 
-  private async resolveAssistantMessageIdForOperation(
+  private async settleOperationTopic(
     op: typeof agentOperations.$inferSelect,
     operationId: string,
-  ): Promise<string | undefined> {
+  ): Promise<SettledOperationTopic> {
     let topicModel: TopicModel | undefined;
 
     if (op.topicId) {
@@ -363,13 +564,31 @@ export class AbandonOperationService {
           includeShareVisitor: true,
         });
         const settled = await topicModel.settleRunningOperation(op.topicId, operationId);
-        if (settled.status !== 'settled') return undefined;
-        if (settled.assistantMessageId) return settled.assistantMessageId;
+        if (settled.status === 'conflict') return { ownershipUnproven: true };
+        if (settled.status !== 'settled') return {};
+        const topicHooks = {
+          hooks: settled.hooks as SerializedHook[] | undefined,
+          orchestrationRole: settled.orchestrationRole,
+        };
+        if (settled.assistantMessageId) {
+          return { ...topicHooks, assistantMessageId: settled.assistantMessageId };
+        }
+        return { ...topicHooks, ...(await this.findPlaceholderMessage(op, operationId)) };
       } catch (e) {
         log('[%s] no-state abandon: topic lookup failed (non-fatal): %O', operationId, e);
+        // A failed settle cannot rule out a newer operation on the topic, and
+        // firing this run's task hook would then pause the replacement's Task.
+        return { ...(await this.findPlaceholderMessage(op, operationId)), ownershipUnproven: true };
       }
     }
 
+    return this.findPlaceholderMessage(op, operationId);
+  }
+
+  private async findPlaceholderMessage(
+    op: typeof agentOperations.$inferSelect,
+    operationId: string,
+  ): Promise<{ assistantMessageId?: string }> {
     try {
       const startedAt = op.startedAt ? new Date(op.startedAt) : undefined;
       const lowerBound = startedAt ? new Date(startedAt.getTime() - 5000) : undefined;
@@ -388,10 +607,27 @@ export class AbandonOperationService {
         ),
       });
 
-      return assistant?.id;
+      return { assistantMessageId: assistant?.id };
     } catch (e) {
       log('[%s] no-state abandon: assistant lookup failed (non-fatal): %O', operationId, e);
-      return undefined;
+      return {};
     }
   }
 }
+
+interface SettledOperationTopic {
+  assistantMessageId?: string;
+  hooks?: SerializedHook[];
+  orchestrationRole?: 'member' | 'supervisor';
+  /**
+   * The topic could not prove this run still owns it — a newer operation holds
+   * it, or the settle itself failed — so this run's hooks must not fire.
+   */
+  ownershipUnproven?: boolean;
+}
+
+/** Queue-mode dispatch serializes the run's hooks onto the operation row. */
+const readDurableHooks = (metadata: unknown): SerializedHook[] | undefined => {
+  const hooks = (metadata as { _hooks?: unknown } | null | undefined)?._hooks;
+  return Array.isArray(hooks) ? (hooks as SerializedHook[]) : undefined;
+};

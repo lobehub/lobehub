@@ -78,6 +78,7 @@ export class UsageRecordService {
       const totalOutputTokens = usage?.totalOutputTokens ?? metadata?.totalOutputTokens ?? 0;
       return {
         createdAt: spend.createdAt,
+        credits: usage?.credits ?? 0,
         id: spend.id,
         metadata: spend.metadata,
         model: spend.model,

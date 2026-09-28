@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { createKimiCodeQuotaReader } from '@/services/kimiCodeQuota';
 
+import QuotaAccountSwitcher from './QuotaAccountSwitcher';
 import type { QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
 
@@ -149,6 +150,9 @@ const KimiCodeQuotaMenu = memo<KimiCodeQuotaMenuProps>(({ deviceId, env }) => {
       sourceKey={sourceKey}
       title={t('heteroAgent.kimiCodeQuota.title')}
       tooltip={t('heteroAgent.kimiCodeQuota.tooltip')}
+      renderHeader={(quota) => (
+        <QuotaAccountSwitcher placement="top" provider="kimi-code" snapshot={quota} />
+      )}
     />
   );
 });

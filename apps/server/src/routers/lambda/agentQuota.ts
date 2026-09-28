@@ -336,9 +336,18 @@ export const agentQuotaRouter = router({
     .query(async ({ ctx, input }) => ctx.quotaService.resolveAccountLoads(input.accountIds)),
 
   selectAccountForAgent: quotaProcedure
-    .input(z.object({ agentId: z.string(), modelScope: z.string().optional() }))
+    .input(
+      z.object({
+        agentId: z.string(),
+        modelScope: z.string().optional(),
+        provider: z.string().optional(),
+      }),
+    )
     .query(async ({ ctx, input }) =>
-      ctx.quotaService.selectForAgent(input.agentId, { modelScope: input.modelScope }),
+      ctx.quotaService.selectForAgent(input.agentId, {
+        modelScope: input.modelScope,
+        provider: input.provider,
+      }),
     ),
 });
 

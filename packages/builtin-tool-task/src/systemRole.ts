@@ -16,7 +16,7 @@ export const systemPrompt = `You have access to Task management tools. Use them 
 
 Schedule fields (setTaskSchedule):
 - **automationMode**: 'schedule' (cron-based) or 'heartbeat' (fixed interval). Pass null to disable automation
-- **schedulePattern + scheduleTimezone**: cron expression (e.g. "0 9 * * *") and IANA timezone (e.g. "Asia/Shanghai"); used by schedule mode
+- **schedulePattern + scheduleTimezone**: standard 5-field cron expression (e.g. "0 9 * * *", "30 9 * * 1-5", "0 10 27 9 *") and IANA timezone (e.g. "Asia/Shanghai"); used by schedule mode. The result lists the next run times — confirm they match what the user asked for
 - **heartbeatInterval**: seconds between ticks; used by heartbeat mode (recommend ≥600s). Pass 0 to clear
 - **maxExecutions**: cap on total scheduled runs; null means unlimited
 

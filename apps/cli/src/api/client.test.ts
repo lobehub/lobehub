@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as RefreshModule from '../auth/refresh';
+
 const mockCreateTRPCClient = vi.hoisted(() => vi.fn(() => ({ marker: 'client' })));
 const mockHttpLink = vi.hoisted(() => vi.fn((opts: unknown) => opts));
 
@@ -8,7 +10,8 @@ vi.mock('@trpc/client', () => ({
   httpLink: mockHttpLink,
 }));
 
-vi.mock('../auth/refresh', () => ({
+vi.mock('../auth/refresh', async (importOriginal) => ({
+  ...(await importOriginal<typeof RefreshModule>()),
   getValidToken: vi.fn(),
 }));
 
