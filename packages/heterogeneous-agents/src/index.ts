@@ -75,10 +75,6 @@ export {
   HETERO_ERROR_SPECS,
   isUserSideHeteroError,
 } from './errors';
-export {
-  classifyHeteroProcessFailure,
-  isHeteroStatusGuideErrorData,
-} from './errors/processFailure';
 export { getHeterogeneousTypeLabel, HETEROGENEOUS_TYPE_LABELS } from './labels';
 export type {
   CreateAssistantIntent,
