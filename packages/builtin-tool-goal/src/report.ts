@@ -35,7 +35,7 @@ export const GoalReportManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Submit the Goal wrap-up report. The storyline (headline, chapters with their main-path nodes, findings and Work versions, detours with reason and lesson, next steps) is stored as structured metadata and `content` as the full markdown report; each call appends a new report version. Every id must belong to this Goal: chapter nodeIds must be resolved, detour nodeIds must be rejected, retired or superseded (revises / contradicts). A rejected call lists every invalid reference — fix them and call again.',
+        'Submit the Goal wrap-up report. The storyline (headline, chapters with their main-path nodes, findings and Work versions, detours with reason and lesson, next steps) is stored as structured metadata and `content` as the full markdown report; each call appends a new report version. The mainline marks the nodes and edges of the path that led to the result; chapters tell exactly that path. Every id must belong to this Goal: chapter and mainline nodeIds must be resolved, mainline edges must join two mainline nodes, detour nodeIds must be rejected, retired or superseded (revises / contradicts). A rejected call lists every invalid reference — fix them and call again.',
       name: GoalReportApiName.submitGoalReport,
       parameters: {
         additionalProperties: false,
@@ -81,6 +81,14 @@ export const GoalReportManifest: BuiltinToolManifest = {
             type: 'string',
           },
           headline: { description: 'One sentence: what the Goal delivered.', type: 'string' },
+          mainline: {
+            additionalProperties: false,
+            description:
+              'The path that led to the result, highlighted on the exploration map. nodeIds: the resolved tasks on it (optionally the resolved root problem and the findings that carried the answer); edgeIds: edges of this Goal whose both ends are mainline nodes. Chapters must tell exactly these tasks.',
+            properties: { edgeIds: ids, nodeIds: ids },
+            required: ['nodeIds', 'edgeIds'],
+            type: 'object',
+          },
           nextSteps: {
             items: {
               additionalProperties: false,
@@ -95,7 +103,7 @@ export const GoalReportManifest: BuiltinToolManifest = {
             type: 'array',
           },
         },
-        required: ['goalId', 'headline', 'chapters', 'nextSteps', 'content'],
+        required: ['goalId', 'headline', 'chapters', 'mainline', 'nextSteps', 'content'],
         type: 'object',
       },
     },

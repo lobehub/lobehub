@@ -238,13 +238,14 @@ describe('GoalReportStore.submit', () => {
       ],
       graphCursor: graph.events[0].id,
       headline: 'Delivered a verified report',
+      mainline: { edgeIds: [], nodeIds: [buildNode.id] },
       nextSteps: [{ reason: 'Nothing blocks it', title: 'Ship' }],
     };
     return { buildNode, goalId, metadata, reportNode, service, topicId: topic.topicId! };
   };
 
   it('rejects references that do not belong to the Goal and stores nothing', async () => {
-    const { goalId, metadata, service, topicId } = await setup();
+    const { goalId, metadata, reportNode, service, topicId } = await setup();
     const reports = new GoalReportStore(serverDB, userId);
 
     await expect(
@@ -260,6 +261,29 @@ describe('GoalReportStore.submit', () => {
         { topicId },
       ),
     ).rejects.toThrow('chapters[0].nodeIds: gnode_elsewhere is not a node of this Goal');
+
+    // The wrap-up node is hidden from the story, so it can never be on the mainline.
+    await expect(
+      reports.submit(
+        goalId,
+        {
+          content: '# Report',
+          metadata: {
+            ...metadata,
+            mainline: { edgeIds: ['gedge_elsewhere'], nodeIds: [reportNode.id] },
+          },
+        },
+        { topicId },
+      ),
+    ).rejects.toThrow('mainline.edgeIds: gedge_elsewhere is not an edge of this Goal');
+
+    await expect(
+      reports.submit(
+        goalId,
+        { content: '# Report', metadata: { ...metadata, mainline: undefined } },
+        { topicId },
+      ),
+    ).rejects.toThrow('mainline: required');
 
     await expect(
       reports.submit(goalId, { content: '# Report', metadata }, { topicId: 'tpc_other' }),
@@ -301,6 +325,7 @@ describe('GoalReportStore.submit', () => {
     expect(rows.map((row) => row.content)).toEqual(['# Report v1\n\nBuilt it.', '# Report v2']);
     expect(rows[0].metadata).toEqual({ goalReport: metadata });
     expect(rows[1].metadata?.goalReport?.headline).toBe('Second pass');
+    expect(rows[1].metadata?.goalReport?.mainline).toEqual(metadata.mainline);
 
     const graph = await service.graph(goalId);
     expect(graph.report).toMatchObject({

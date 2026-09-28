@@ -40,6 +40,7 @@ import ExplorationEdge from './ExplorationEdge';
 import { explorationMap } from './explorationMap';
 import GraphNodeView, { GhostNodeView, type GraphNodeData } from './GraphNode';
 import { hideKinds, layoutGraph, NODE_WIDTH } from './layout';
+import { edgeEmphasis, nodeEmphasis, resolveMainline } from './mainline';
 import { type MeasuredSizes, mergeMeasuredSizes } from './measuredSizes';
 import { revealCenter } from './revealNode';
 import { useExplorationNavigation } from './useExplorationNavigation';
@@ -80,9 +81,24 @@ const styles = createStaticStyles(({ css }) => ({
       stroke-dasharray: 5 4;
     }
 
+    /* The wrap-up report's mainline: the path reads as one bold line, and
+       everything off it steps back. Selection still lights a muted edge. */
+    .react-flow__edge.goal-mainline .react-flow__edge-path {
+      stroke: ${cssVar.colorPrimary};
+      stroke-width: 2.5;
+    }
+
+    .react-flow__edge.goal-muted:not(.goal-hot) {
+      opacity: 0.3;
+    }
+
     .react-flow__edge.goal-hot .react-flow__edge-path {
       stroke: ${cssVar.colorPrimary};
       stroke-width: 1.75;
+    }
+
+    .react-flow__edge.goal-mainline.goal-hot .react-flow__edge-path {
+      stroke-width: 2.5;
     }
 
     .react-flow__edge-textbg {
@@ -121,6 +137,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   /* A hidden kind stays in the legend as a dimmed toggle — the way back must
      be exactly where the way in was. */
+  /** Not a kind filter: it names the bold line and ring the mainline is drawn with. */
+  legendMainline: css`
+    cursor: default;
+    color: ${cssVar.colorText};
+  `,
+  legendMainlineSwatch: css`
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+    background: ${cssVar.colorPrimary};
+  `,
   legendOff: css`
     opacity: 0.35;
 
@@ -418,6 +445,18 @@ const Canvas = memo<
       [ghosts],
     );
 
+    const mainline = useMemo(() => resolveMainline(graph), [graph]);
+    const emphasisById = useMemo(() => {
+      const result = new Map<string, ReturnType<typeof nodeEmphasis>>();
+      if (!mainline) return result;
+      const shape = { nodes: graph.nodes.map((view) => view.node), edges: graph.edges };
+      for (const node of baseNodes) {
+        const members = node.kind === 'experiment' ? experimentMembers(shape, node.id, false) : [];
+        result.set(node.id, nodeEmphasis(mainline, node, members));
+      }
+      return result;
+    }, [mainline, graph, baseNodes]);
+
     const flowNodes: FlowNode[] = useMemo(
       () =>
         baseNodes
@@ -426,10 +465,15 @@ const Canvas = memo<
             const item = graph.byId[node.id];
             const box = positions[item.node.id];
             const isGate = item.node.kind === 'decision' && item.node.status === 'waiting';
+            const emphasis = emphasisById.get(item.node.id);
             const data: GraphNodeData = {
               // Not started and still blocked — it is context, not the story.
-              dim: item.node.status === 'proposed' && item.blockers.length > 0,
+              // Once the report marked a mainline, everything off it is context too.
+              dim:
+                emphasis === 'muted' ||
+                (item.node.status === 'proposed' && item.blockers.length > 0),
               isGate,
+              mainline: emphasis === 'mainline',
               memberCount: experimentMembers(
                 { nodes: graph.nodes.map((view) => view.node), edges: graph.edges },
                 item.node.id,
@@ -493,6 +537,7 @@ const Canvas = memo<
         hasExperiments,
         map.parents,
         measuredSizes,
+        emphasisById,
       ],
     );
 
@@ -503,6 +548,8 @@ const Canvas = memo<
         type: MarkerType.ArrowClosed,
         width: 12,
       };
+      const mainlineMarker = { ...marker, color: cssVar.colorPrimary };
+      const isMainlineCard = (id: string) => emphasisById.get(id) === 'mainline';
       const lanes = new Map<string, number>();
       const direct = (hasExperiments ? map.edges : graph.edges)
         .filter((edge) => visibleIds.has(edge.sourceNodeId) && visibleIds.has(edge.targetNodeId))
@@ -512,11 +559,13 @@ const Canvas = memo<
           const lane = lanes.get(pair) ?? 0;
           lanes.set(pair, lane + 1);
           const hot = selectedId === edge.sourceNodeId || selectedId === edge.targetNodeId;
+          const emphasis = edgeEmphasis(mainline, edge, isMainlineCard);
           return {
             className: cx(
               (edge.kind === 'depends_on' || ('projected' in edge && edge.projected === true)) &&
                 'goal-dep',
               hot && 'goal-hot',
+              emphasis && `goal-${emphasis}`,
             ),
             id: edge.id,
             label:
@@ -526,7 +575,7 @@ const Canvas = memo<
                   })
                 : edgeLabel(edge.kind),
             labelShowBg: true,
-            markerEnd: marker,
+            markerEnd: emphasis === 'mainline' ? mainlineMarker : marker,
             source,
             target,
             type: hasExperiments ? 'exploration' : 'default',
@@ -538,17 +587,30 @@ const Canvas = memo<
       // hidden hop may not have.
       const bridged = bridges.map((bridge) => {
         const hot = selectedId === bridge.sourceNodeId || selectedId === bridge.targetNodeId;
+        const id = `bridge:${bridge.sourceNodeId}:${bridge.targetNodeId}`;
+        const emphasis = edgeEmphasis(mainline, { ...bridge, bridge: true, id }, isMainlineCard);
         return {
-          className: cx('goal-dep', hot && 'goal-hot'),
-          id: `bridge:${bridge.sourceNodeId}:${bridge.targetNodeId}`,
-          markerEnd: marker,
+          className: cx('goal-dep', hot && 'goal-hot', emphasis && `goal-${emphasis}`),
+          id,
+          markerEnd: emphasis === 'mainline' ? mainlineMarker : marker,
           source: bridge.sourceNodeId,
           target: bridge.targetNodeId,
           type: 'default',
         } satisfies FlowEdge;
       });
       return [...direct, ...bridged];
-    }, [graph, visibleIds, bridges, selectedId, edgeLabel, hasExperiments, map.edges, t]);
+    }, [
+      graph,
+      visibleIds,
+      bridges,
+      selectedId,
+      edgeLabel,
+      hasExperiments,
+      map.edges,
+      t,
+      mainline,
+      emphasisById,
+    ]);
 
     const ghostFlowEdges: FlowEdge[] = useMemo(
       () =>
@@ -799,8 +861,21 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       {!fullscreen && toggle}
     </>
   );
+  const hasMainline = !!resolveMainline(props.graph);
   const legend = (
     <Flexbox horizontal align={'center'} className={styles.legend} gap={10}>
+      {hasMainline && (
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={styles.legendMainline}
+          gap={4}
+          title={t('goalProcess.graph.legend.mainlineHint')}
+        >
+          <span className={styles.legendMainlineSwatch} />
+          <span>{t('goalProcess.graph.legend.mainline')}</span>
+        </Flexbox>
+      )}
       {(
         [
           'problem',

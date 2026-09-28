@@ -2180,6 +2180,9 @@ export default {
   'goalProcess.tabs.process': 'Execution',
   'goalProcess.tabs.result': 'Delivery',
   'goalProcess.graph.legend.hide': 'Hide this kind on the map',
+  'goalProcess.graph.legend.mainline': 'Mainline',
+  'goalProcess.graph.legend.mainlineHint':
+    'The path the wrap-up report marked as the one that led to the result',
   'goalProcess.graph.legend.show': 'Show this kind on the map',
   'goalProcess.edge.investigates': 'investigates',
   'goalProcess.edge.produces': 'produces',

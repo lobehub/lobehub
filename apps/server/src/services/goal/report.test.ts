@@ -341,6 +341,14 @@ describe('buildGoalReportSkeleton', () => {
     ]);
     expect(skeleton.deliverable).toMatchObject({ workId: 'work_doc', workVersionId: 'wv_doc' });
     expect(skeleton.graphCursor).toBe('evt_new');
+    // The candidate mainline stops at the path: detours and the wrap-up node stay off it.
+    expect(skeleton.mainline.nodeIds).toEqual(['problem', 't1', 'f1', 't2', 'f2', 'acc']);
+    expect(skeleton.mainline.edges.map((item) => item.id)).toEqual([
+      't2-depends_on-t1',
+      'acc-depends_on-t2',
+      't1-produces-f1',
+      't2-produces-f2',
+    ]);
   });
 
   it('asks for chapters, detour reasons and lessons, next steps and a submission', () => {
@@ -356,6 +364,10 @@ describe('buildGoalReportSkeleton', () => {
     expect(text).toContain('Call lobe-goal-report.submitGoalReport once');
     expect(text).toContain('reason it was abandoned and the lesson');
     expect(text).not.toContain('report [task');
+    expect(text).toContain('Candidate mainline');
+    expect(text).toContain('- edge t2-depends_on-t1: t2 -[depends_on]-> t1');
+    expect(text).toContain('Mark the mainline');
+    expect(text).toContain('headline, deliverableWorkId, chapters, mainline, nextSteps');
   });
 
   describe('validateGoalReport', () => {
@@ -372,10 +384,22 @@ describe('buildGoalReportSkeleton', () => {
           title: 'C1',
           workVersionIds: ['wv_doc'],
         },
+        {
+          detours: [],
+          findingIds: [],
+          narrative: 'N',
+          nodeIds: ['acc'],
+          title: 'C2',
+          workVersionIds: [],
+        },
       ],
       deliverableWorkId: 'work_doc',
       graphCursor: 'evt_new',
       headline: 'H',
+      mainline: {
+        edgeIds: ['t2-depends_on-t1', 'acc-depends_on-t2', 't2-produces-f2'],
+        nodeIds: ['problem', 't1', 't2', 'f2', 'acc'],
+      },
       nextSteps: [{ nodeIds: ['t2'], reason: 'R', title: 'Next' }],
     };
 
@@ -416,9 +440,79 @@ describe('buildGoalReportSkeleton', () => {
         'chapters[0].workVersionIds: wv_other is not a Work version linked to this Goal',
         'chapters[0].detours[0].nodeIds: t2 is resolved and not superseded by revises/contradicts',
         'nextSteps[0].nodeIds: n_other is not a node of this Goal',
+        'chapters[0].nodeIds: t0 is not on the mainline',
+        'chapters[0].detours[0].nodeIds: t2 is on the mainline; a detour cannot be',
+        'mainline.nodeIds: t1 is on the mainline but no chapter tells it',
+        'mainline.nodeIds: t2 is on the mainline but no chapter tells it',
+        'mainline.nodeIds: acc is on the mainline but no chapter tells it',
         'deliverableWorkId: work_other is not a Work linked to this Goal',
         'graphCursor: evt_other is not an event of this Goal',
       ]);
+    });
+
+    describe('mainline', () => {
+      const check = (mainline: GoalReportMetadata['mainline']) =>
+        validateGoalReport(snapshot, { ...valid, mainline });
+
+      it('is required on a new submission', () => {
+        expect(check(undefined)).toEqual([
+          'mainline: required — mark the nodes and edges of the path that led to the result',
+        ]);
+      });
+
+      it('keeps only resolved nodes of this Goal, of a kind that can carry the story', () => {
+        expect(
+          check({
+            edgeIds: [],
+            nodeIds: ['t1', 't2', 'acc', 't0', 'n_other', 'report', 'gate_node'],
+          }),
+        ).toEqual([
+          'mainline.nodeIds: t0 is retired; mainline nodes must be resolved',
+          'mainline.nodeIds: n_other is not a node of this Goal',
+          'mainline.nodeIds: report is not a node of this Goal',
+          'mainline.nodeIds: gate_node is not a node of this Goal',
+          'chapters[0].detours[1].nodeIds: t0 is on the mainline; a detour cannot be',
+        ]);
+
+        const withDecision = graph({
+          ...snapshot,
+          nodes: [...snapshot.nodes, node('d1', { kind: 'decision', status: 'resolved' })],
+        });
+        expect(
+          validateGoalReport(withDecision, {
+            ...valid,
+            mainline: { edgeIds: [], nodeIds: ['t1', 't2', 'acc', 'd1'] },
+          }),
+        ).toEqual([
+          'mainline.nodeIds: d1 is a decision; only problem, task, experiment and finding nodes can be on the mainline',
+        ]);
+      });
+
+      it('keeps only edges of this Goal whose both ends are on the mainline', () => {
+        expect(
+          check({
+            edgeIds: ['t2-depends_on-t1', 't0-depends_on-t1', 't2-revises-t1b', 'e_other'],
+            nodeIds: ['t1', 't2', 'acc'],
+          }),
+        ).toEqual([
+          'mainline.edgeIds: t0-depends_on-t1 connects t0, which is not a mainline node',
+          'mainline.edgeIds: t2-revises-t1b connects t1b, which is not a mainline node',
+          'mainline.edgeIds: e_other is not an edge of this Goal',
+        ]);
+      });
+
+      it('must be the same path the chapters tell', () => {
+        expect(
+          validateGoalReport(snapshot, {
+            ...valid,
+            chapters: [valid.chapters[0]],
+            mainline: { edgeIds: [], nodeIds: ['t2', 'acc'] },
+          }),
+        ).toEqual([
+          'chapters[0].nodeIds: t1 is not on the mainline',
+          'mainline.nodeIds: acc is on the mainline but no chapter tells it',
+        ]);
+      });
     });
   });
 });

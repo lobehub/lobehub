@@ -45,6 +45,20 @@ export const GoalReportNextStepSchema = z
   .strict();
 export type GoalReportNextStep = z.infer<typeof GoalReportNextStepSchema>;
 
+/**
+ * The path that actually carried the Goal to its result, marked by the wrap-up
+ * agent: the resolved nodes on it and the edges between them. It lives on the
+ * report version rather than on `goal_nodes`, so a rewritten storyline replaces
+ * it whole and no stale mark outlives the story that drew it.
+ */
+export const GoalReportMainlineSchema = z
+  .object({
+    edgeIds: idList.default([]),
+    nodeIds: idList.min(1),
+  })
+  .strict();
+export type GoalReportMainline = z.infer<typeof GoalReportMainlineSchema>;
+
 export const GoalReportMetadataSchema = z
   .object({
     chapters: z.array(GoalReportChapterSchema).min(1).max(30),
@@ -52,6 +66,8 @@ export const GoalReportMetadataSchema = z
     /** The newest `goal_events.id` the report was written against. */
     graphCursor: z.string().trim().min(1),
     headline: z.string().trim().min(1).max(500),
+    /** Optional only so versions written before it existed still parse; a new submission must carry it. */
+    mainline: GoalReportMainlineSchema.optional(),
     nextSteps: z.array(GoalReportNextStepSchema).max(20).default([]),
   })
   .strict();
