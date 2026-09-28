@@ -191,6 +191,9 @@ export class TrashModel {
           this.ownership(),
           isNull(trashItems.rootId),
           params.resourceType ? eq(trashItems.resourceType, params.resourceType) : undefined,
+          params.deletedByUserId
+            ? eq(trashItems.deletedByUserId, params.deletedByUserId)
+            : undefined,
           cursor
             ? or(
                 lt(trashItems.deletedAt, cursor.deletedAt),
@@ -210,11 +213,19 @@ export class TrashModel {
     };
   };
 
-  countByType = async (): Promise<TrashCountByType> => {
+  countByType = async (options?: { deletedByUserId?: string }): Promise<TrashCountByType> => {
     const rows = await this.db
       .select({ resourceType: trashItems.resourceType, total: count() })
       .from(trashItems)
-      .where(and(this.ownership(), isNull(trashItems.rootId)))
+      .where(
+        and(
+          this.ownership(),
+          isNull(trashItems.rootId),
+          options?.deletedByUserId
+            ? eq(trashItems.deletedByUserId, options.deletedByUserId)
+            : undefined,
+        ),
+      )
       .groupBy(trashItems.resourceType);
 
     return Object.fromEntries(rows.map((row) => [row.resourceType, row.total]));

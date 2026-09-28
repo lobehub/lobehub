@@ -135,6 +135,25 @@ describe('TrashModel', () => {
       expect(seenByTeammate.items.map((i) => i.resourceId)).toEqual(['tpc_ws']);
       expect((await model.list()).items.map((i) => i.resourceId)).toEqual(['tpc_personal']);
     });
+
+    it('narrows list and counts to one actor with deletedByUserId', async () => {
+      const wsModel = new TrashModel(serverDB, userId, workspaceId);
+      const wsOther = new TrashModel(serverDB, otherUserId, workspaceId);
+      await wsModel.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { resourceId: 'msg_owner', resourceType: 'message', title: 'private excerpt' },
+      });
+      await wsOther.register({
+        deletedAt: at('2026-08-02T00:00:00Z'),
+        root: { resourceId: 'tpc_member', resourceType: 'topic', title: 'member topic' },
+      });
+
+      const own = await wsOther.list({ deletedByUserId: otherUserId });
+      expect(own.items.map((i) => i.resourceId)).toEqual(['tpc_member']);
+      expect(await wsOther.countByType({ deletedByUserId: otherUserId })).toEqual({ topic: 1 });
+      // without the filter the workspace scope still sees both
+      expect(await wsOther.countByType()).toEqual({ message: 1, topic: 1 });
+    });
   });
 
   describe('removeByIds', () => {

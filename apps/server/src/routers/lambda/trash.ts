@@ -22,23 +22,26 @@ const trashProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 const resourceTypeSchema = z.enum(TRASH_RESOURCE_TYPES);
 
 /**
- * Recycle bin. Listing is scoped like the content it indexes (own rows in
- * personal mode, the whole workspace in team mode). Restore / purge apply the
+ * Recycle bin. Personal mode lists the caller's own rows; in a workspace the
+ * owner sees every root while a non-owner member sees only the roots they
+ * trashed themselves — a root's title can be a content excerpt of a resource
+ * that member cannot view. Restore / purge apply the
  * same row-level rule as delete did: the member who trashed a row (or any
  * workspace owner) may bring it back or drop it for good.
  */
 export const trashRouter = router({
-  countByType: trashProcedure.query(async ({ ctx }) => ctx.trashService.countByType()),
+  countByType: trashProcedure.query(async ({ ctx }) =>
+    ctx.trashService.countByType({ deletedByUserId: actorFilter(ctx) }),
+  ),
 
   emptyTrash: trashProcedure
     .input(z.object({ resourceType: resourceTypeSchema.optional() }).optional())
     .mutation(async ({ input, ctx }) => {
-      // Non-owner workspace members may only empty what they trashed
-      // themselves; owners sweep the whole bin. The actor filter is pushed
-      // into the query rather than applied to a page of results, so a member
-      // with more items than one page still empties all of them.
+      // The actor filter is pushed into the query rather than applied to a
+      // page of results, so a member with more items than one page still
+      // empties all of them.
       return ctx.trashService.emptyTrash({
-        deletedByUserId: isWorkspaceNonOwner(ctx) ? ctx.userId : undefined,
+        deletedByUserId: actorFilter(ctx),
         resourceType: input?.resourceType,
       });
     }),
@@ -56,6 +59,7 @@ export const trashRouter = router({
     .query(async ({ input, ctx }) =>
       ctx.trashService.list({
         cursor: input?.cursor,
+        deletedByUserId: actorFilter(ctx),
         limit: input?.limit,
         resourceType: input?.resourceType,
       }),
@@ -75,6 +79,10 @@ export const trashRouter = router({
       return ctx.trashService.restore(input.ids);
     }),
 });
+
+/** Workspace non-owners only see and sweep the roots they trashed themselves; owners get the whole bin. */
+const actorFilter = (ctx: Parameters<typeof isWorkspaceNonOwner>[0] & { userId: string }) =>
+  isWorkspaceNonOwner(ctx) ? ctx.userId : undefined;
 
 /** Every requested registry row must be manageable by the caller (creator or workspace owner). */
 const assertItemsManageable = async (

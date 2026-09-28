@@ -190,7 +190,8 @@ export class TrashService {
 
   list = (params?: TrashListParams): Promise<TrashListResult> => this.trashModel.list(params);
 
-  countByType = (): Promise<TrashCountByType> => this.trashModel.countByType();
+  countByType = (options?: { deletedByUserId?: string }): Promise<TrashCountByType> =>
+    this.trashModel.countByType(options);
 
   findByIds = async (ids: string[]): Promise<TrashItem[]> =>
     (await this.trashModel.findByIds(ids)).map(this.toItem);
