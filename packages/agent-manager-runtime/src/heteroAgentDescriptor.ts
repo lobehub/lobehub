@@ -83,6 +83,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     displayName: 'Factory Droid',
     kind: 'cli',
   },
+  'devin': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Devin — Cognition’s autonomous local coding agent with filesystem and shell access that completes software-engineering tasks through its own tools and models.',
+    displayName: 'Devin',
+    kind: 'cli',
+  },
   'grok-build': {
     capabilities: CODING_CAPABILITIES,
     description:

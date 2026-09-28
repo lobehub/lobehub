@@ -1,19 +1,14 @@
 'use client';
 
-import { isDesktop } from '@lobechat/const';
 import { Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import CloudRepoSwitcher from './CloudRepoSwitcher';
 import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
+import { useWorkspaceSurface } from './useWorkspaceSurface';
 import WorkingDirectorySection from './WorkingDirectorySection';
 
 interface WorkspaceControlsProps {
@@ -40,41 +35,22 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
   ({ agentId, alwaysShowWorkspace = false }) => {
     const { t } = useTranslation('setting');
     const { canConfigureResource, canUseResource } = useChatInputResourceAccess();
-    const runtimeMode = useAgentStore(chatConfigByIdSelectors.getRuntimeModeById(agentId));
-    const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-    // Effective config = shared row + this member's device override,
-    // so `isDeviceMode` routes the working-directory section by the device THIS
-    // member's run actually targets.
-    const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
-    const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
-    const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-      clientExecutionAvailable: isDesktop,
-      deviceRoutingAvailable,
-      isHetero: isHeterogeneous,
-      workspaceScoped,
-    });
-    const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
+    // Resolved from the effective (override-merged) execution target so the
+    // surface follows the device THIS member's run actually targets.
+    const surface = useWorkspaceSurface(agentId, alwaysShowWorkspace);
 
     const renderWorkspace = () => {
-      // Remote device runs get the device-scoped picker, regardless of runtimeMode
-      // (HeteroDeviceSwitcher sets runtimeMode to 'none' when a device is selected).
-      if (isDeviceMode) return <WorkingDirectorySection agentId={agentId} />;
-
-      // Web has no local filesystem — cloud / heterogeneous agents browse the repo
-      // through the cloud repo switcher instead.
-      if (!isDesktop) {
-        return isHeterogeneous || alwaysShowWorkspace ? (
-          <CloudRepoSwitcher agentId={agentId} />
-        ) : null;
+      switch (surface) {
+        case 'workingDirectory': {
+          return <WorkingDirectorySection agentId={agentId} />;
+        }
+        case 'cloudRepo': {
+          return <CloudRepoSwitcher agentId={agentId} />;
+        }
+        default: {
+          return null;
+        }
       }
-
-      // Desktop: local working directory + git branch / diff / PR. Shown when the
-      // run is local, or always for heterogeneous agents (they always have a cwd).
-      if (alwaysShowWorkspace || runtimeMode === 'local') {
-        return <WorkingDirectorySection agentId={agentId} />;
-      }
-
-      return null;
     };
 
     // The directory picker and git controls write shared agent config / run

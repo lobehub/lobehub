@@ -1,3 +1,8 @@
+export const acceptanceContentLayout = {
+  maxWidth: 920,
+  paddingInline: 24,
+} as const;
+
 export const acceptanceFocusedLayout = {
   contentPaddingBlock: '32px 24px',
   headerGap: 8,

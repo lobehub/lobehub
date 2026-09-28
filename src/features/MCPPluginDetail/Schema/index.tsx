@@ -19,7 +19,7 @@ const Schema = memo(() => {
   const [resourcesMode, setResourcesMode] = useState<ModeType>(ModeType.Docs);
 
   return (
-    <Flexbox gap={64}>
+    <Flexbox gap={40}>
       <Block
         count={toolsCount || 0}
         desc={t('mcp.details.schema.tools.desc')}

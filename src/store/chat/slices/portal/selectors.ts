@@ -68,6 +68,14 @@ const getViewData = <T extends PortalViewType>(
   return null;
 };
 
+const getStackViewData = <T extends PortalViewType>(
+  s: ChatStoreState,
+  type: T,
+): Extract<PortalViewData, { type: T }> | null => {
+  const view = s.portalStack.findLast((item) => item.type === type);
+  return (view as Extract<PortalViewData, { type: T }> | undefined) ?? null;
+};
+
 const agentDetailId = (s: ChatStoreState): string | undefined => {
   const view = getViewData(s, PortalViewType.AgentDetail);
   return view?.agentId;
@@ -245,11 +253,18 @@ const messageDetailId = (s: ChatStoreState): string | undefined => {
 
 // Task Detail selectors
 const taskDetailId = (s: ChatStoreState): string | undefined => {
-  const view = getViewData(s, PortalViewType.TaskDetail);
+  const view = getStackViewData(s, PortalViewType.TaskDetail);
+  return view?.taskId;
+};
+
+const taskResultId = (s: ChatStoreState): string | undefined => {
+  const view = getStackViewData(s, PortalViewType.TaskResult);
   return view?.taskId;
 };
 
 // Goal detail drill-down selectors
+const goalPortalId = (s: ChatStoreState): string | undefined =>
+  getViewData(s, PortalViewType.Goal)?.goalId;
 const goalNodeView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNode);
 const goalMetricView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalMetric);
 
@@ -336,6 +351,7 @@ export const chatPortalSelectors = {
   // Goal drill-down data
   goalMetricView,
   goalNodeView,
+  goalPortalId,
 
   // Local file data
   activeLocalFileId,
@@ -353,6 +369,7 @@ export const chatPortalSelectors = {
 
   // Task detail data
   taskDetailId,
+  taskResultId,
 
   // Topic chat data
   portalTopicId,

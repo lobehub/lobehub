@@ -62,6 +62,30 @@ const createOutput = (overrides: Partial<LLMAttemptOutput> = {}): LLMAttemptOutp
 });
 
 describe('callLlmFinalizer', () => {
+  it('retains the final assistant id independently of the rehydrated message shape', async () => {
+    const state = AgentRuntime.createInitialState({
+      messages: [{ id: 'group-1', role: 'assistantGroup', children: [] }],
+      origin: { sourceMessageId: 'user-1' },
+      operationId: 'operation-1',
+    });
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'final-assistant',
+      events: [],
+      host: createHost(),
+      model: 'gpt-4',
+      output: createOutput(),
+      provider: 'openai',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(result.newState.origin).toMatchObject({ sourceMessageId: 'user-1' });
+    expect(result.newState.metadata).toMatchObject({ workAssistantMessageId: 'final-assistant' });
+    // This key belongs to error recovery; a completed tool turn must not
+    // redirect a subsequent LLM failure to the previous assistant message.
+    expect(result.newState.metadata).not.toHaveProperty('assistantMessageId');
+  });
+
   it('blocks the limit-th consecutive identical tool call before it can execute', async () => {
     const messages = createMessageTransport();
     const stream = createStreamSink();
@@ -136,6 +160,27 @@ describe('callLlmFinalizer', () => {
         type: 'stream_end',
       }),
     );
+    // The turn finalizes with no tool calls, so the run ends in `status: 'done'`
+    // like any other. This marker is the only thing that says it was cut short.
+    expect(result.newState.toolCallRepeatGuard?.stoppedByRepeatLimit).toBe(true);
+  });
+
+  it('keeps the repeat-limit marker on later turns that call no tools', async () => {
+    const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });
+    state.toolCallRepeatGuard = { counts: {}, stoppedByRepeatLimit: true };
+
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-6',
+      events: [],
+      host: createHost(),
+      model: 'glm',
+      output: createOutput({ content: 'done' }),
+      provider: 'lobehub',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(result.newState.toolCallRepeatGuard?.stoppedByRepeatLimit).toBe(true);
   });
 
   it('preserves user cancellation when an aborted stream emits the limit-th repeated tool call', async () => {
@@ -197,7 +242,7 @@ describe('callLlmFinalizer', () => {
     const host = createHost(messages, stream);
     const state = AgentRuntime.createInitialState({
       messages: [{ content: 'Question', role: 'user' }],
-      metadata: { topicId: 'topic-1' },
+      origin: { topicId: 'topic-1' },
       operationId: 'operation-1',
     });
     const usage = {
@@ -397,7 +442,7 @@ describe('callLlmFinalizer', () => {
         },
         { content: 'created', id: 'tool-1', role: 'tool' },
       ],
-      metadata: { sourceMessageId: 'user-1' },
+      origin: { sourceMessageId: 'user-1' },
       operationId: 'operation-1',
     });
 
@@ -433,7 +478,7 @@ describe('callLlmFinalizer', () => {
       shouldReplayAssistantReasoning: false,
       state: AgentRuntime.createInitialState({
         messages: [{ content: 'Hi', id: 'user-2', role: 'user' }],
-        metadata: { sourceMessageId: 'user-2' },
+        origin: { sourceMessageId: 'user-2' },
         operationId: 'operation-1',
       }),
     });

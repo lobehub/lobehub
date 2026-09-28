@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { act, render, renderHook, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useMenu } from './useMenu';
 
@@ -115,6 +115,32 @@ const isActionItem = (
 } => !!item && typeof item === 'object' && 'key' in item;
 
 describe('Conversation header action menu', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(document, 'execCommand');
+  });
+
+  it('copies the displayed topic ID without the Clipboard API', async () => {
+    useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue(undefined as never);
+    let copiedText: string | undefined;
+    const copy = vi.fn(() => {
+      copiedText = (document.activeElement as HTMLTextAreaElement).value;
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: copy });
+    const { result } = renderHook(() => useMenu());
+    const item = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'copySessionId');
+    if (!isActionItem(item)) throw new Error('Expected copy action');
+
+    await item.onClick?.();
+
+    expect(copy).toHaveBeenCalledWith('copy');
+    expect(copiedText).toBe('topic-1');
+    expect(document.querySelector('textarea')).toBeNull();
+  });
   it('includes the desktop popup-window action for the active topic', () => {
     useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
 

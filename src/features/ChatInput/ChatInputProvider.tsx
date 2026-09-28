@@ -7,7 +7,6 @@ import { createStore, Provider } from './store';
 import { DEFAULT_CHAT_INPUT_FEATURE } from './store/initialState';
 import type { StoreUpdaterProps } from './StoreUpdater';
 import StoreUpdater from './StoreUpdater';
-import { useEditorRootLifecycle } from './useEditorRootLifecycle';
 
 interface ChatInputProviderProps extends StoreUpdaterProps {
   children: ReactNode;
@@ -36,10 +35,10 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     slashPlacement,
     getMessages,
     resolveSendBlocked,
+    topicId,
   }) => {
     const editor = useEditor();
     const slashMenuRef = useRef<HTMLDivElement>(null);
-    useEditorRootLifecycle(editor);
 
     return (
       <Provider
@@ -61,6 +60,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
             sendMenu,
             slashMenuRef,
             slashPlacement,
+            topicId,
           })
         }
       >
@@ -82,6 +82,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
           sendButtonProps={sendButtonProps}
           sendMenu={sendMenu}
           slashPlacement={slashPlacement}
+          topicId={topicId}
           onMarkdownContentChange={onMarkdownContentChange}
           onSend={onSend}
           onVoiceMessageSend={onVoiceMessageSend}

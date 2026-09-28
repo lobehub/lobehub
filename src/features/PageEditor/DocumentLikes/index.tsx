@@ -1,9 +1,8 @@
 'use client';
 
 import type { DocumentLikeSummary } from '@lobechat/types';
-import { useAnalytics } from '@lobehub/analytics/react';
-import { Flexbox, Skeleton } from '@lobehub/ui';
-import { Avatar, Text, toast, Tooltip } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar, Skeleton, Text, toast, Tooltip } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ThumbsUp } from 'lucide-react';
 import { memo, useCallback, useRef } from 'react';
@@ -120,7 +119,6 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   const { t } = useTranslation('file');
   const workspaceId = useActiveWorkspaceId();
   const user = useUserStore(userProfileSelectors.userProfile);
-  const { analytics } = useAnalytics();
   const { data, error, isLoading, mutate } = useDocumentLikeSummary(workspaceId, documentId);
   // Last user-intended liked state; null when the UI matches the server.
   const targetRef = useRef<boolean | null>(null);
@@ -141,32 +139,11 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
         summary = sent
           ? await documentLikeService.like(documentId)
           : await documentLikeService.unlike(documentId);
-        // Bounded dimensions only — no document id, which would create an
-        // unbounded high-cardinality analytics field.
-        analytics?.track({
-          name: 'document_like_toggle',
-          properties: {
-            action: sent ? 'like' : 'unlike',
-            outcome: 'success',
-            spm: 'page_editor.likes.toggle',
-          },
-        });
       }
       targetRef.current = null;
       if (summary) await mutate(summary, { revalidate: false });
     } catch (toggleError) {
       console.error('Failed to toggle document like', toggleError);
-      // Attribute the failure to the request that actually failed (`sent`),
-      // not the latest queued intent, which may already point the other way.
-      if (sent !== undefined)
-        analytics?.track({
-          name: 'document_like_toggle',
-          properties: {
-            action: sent ? 'like' : 'unlike',
-            outcome: 'failure',
-            spm: 'page_editor.likes.toggle',
-          },
-        });
       targetRef.current = null;
       toast.error(t('pageEditor.likes.failed'));
       // Recover the truth from the server rather than guessing a rollback
@@ -178,7 +155,7 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
     } finally {
       inFlightRef.current = false;
     }
-  }, [analytics, documentId, mutate, t]);
+  }, [documentId, mutate, t]);
 
   const toggle = useCallback(() => {
     if (!data) return;
@@ -230,8 +207,8 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   if (isLoading && !data)
     return (
       <Flexbox data-document-likes align={'center'} className={styles.section} gap={16}>
-        <Skeleton.Avatar active shape={'circle'} size={BUTTON_SIZE} />
-        <Skeleton.Button active style={{ height: 20, width: 200 }} />
+        <Skeleton.Avatar shape={'circle'} size={BUTTON_SIZE} />
+        <Skeleton height={20} width={200} />
       </Flexbox>
     );
 

@@ -8,6 +8,8 @@ import { isDesktop } from '@/const/version';
 import { selectActiveTabUrl } from '@/features/Electron/shell/activeTabUrl';
 import { useElectronStore } from '@/store/electron';
 
+import { readableRoutePath } from './routePathDisplay';
+
 const styles = createStaticStyles(({ css }) => ({
   path: css`
     overflow: hidden;
@@ -29,7 +31,7 @@ const RoutePathWidget = memo(() => {
 
   // The DevDock renders inside the root router, which Electron freezes at the boot
   // url; the page actually on screen belongs to the active tab's per-tab router.
-  const path = (isDesktop && activeTabUrl) || pathname;
+  const path = readableRoutePath((isDesktop && activeTabUrl) || pathname);
 
   return (
     <span className={styles.path} title={path}>

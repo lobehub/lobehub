@@ -41,7 +41,9 @@ const {
     show: vi.fn(),
     unmaximize: vi.fn(),
     webContents: {
+      ipc: { once: vi.fn() },
       openDevTools: vi.fn(),
+      reloadIgnoringCache: vi.fn(),
       send: vi.fn(),
       session: {
         webRequest: {
@@ -66,7 +68,9 @@ const {
       setActivationPolicy: vi.fn(),
       setBadgeCount: vi.fn(),
     },
-    MockBrowserWindow: vi.fn().mockImplementation(() => mockBrowserWindow),
+    MockBrowserWindow: vi.fn(function () {
+      return mockBrowserWindow;
+    }),
     mockBrowserWindow,
     mockEnv: {
       externalNavigationHosts: '',
@@ -324,6 +328,46 @@ describe('Browser', () => {
   });
 
   describe('retrieveOrInitialize', () => {
+    const firstFrameSignals = () => ({
+      loadingScreenPainted: mockBrowserWindow.webContents.ipc.once.mock.calls.findLast(
+        ([channel]: [string]) => channel === 'desktop:loading-screen-painted',
+      )?.[1],
+      readyToShow: mockBrowserWindow.once.mock.calls.findLast(
+        ([event]: [string]) => event === 'ready-to-show',
+      )?.[1],
+    });
+
+    it('should show the window once the preload reports the loading screen painted', () => {
+      new Browser({ ...defaultOptions, showOnInit: true }, mockApp);
+      expect(mockBrowserWindow.show).not.toHaveBeenCalled();
+
+      const { loadingScreenPainted, readyToShow } = firstFrameSignals();
+      loadingScreenPainted();
+      expect(mockBrowserWindow.show).toHaveBeenCalledTimes(1);
+
+      readyToShow();
+      expect(mockBrowserWindow.show).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fall back to ready-to-show when the paint report never arrives', () => {
+      new Browser({ ...defaultOptions, showOnInit: true }, mockApp);
+
+      const { loadingScreenPainted, readyToShow } = firstFrameSignals();
+      readyToShow();
+      expect(mockBrowserWindow.show).toHaveBeenCalledTimes(1);
+
+      loadingScreenPainted();
+      expect(mockBrowserWindow.show).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not show the window when showOnInit is unset', () => {
+      const { loadingScreenPainted, readyToShow } = firstFrameSignals();
+      loadingScreenPainted();
+      readyToShow();
+
+      expect(mockBrowserWindow.show).not.toHaveBeenCalled();
+    });
+
     it('should restore window size from store', () => {
       mockStoreManagerGet.mockImplementation((key: string) => {
         if (key === 'windowSize_test-window') {
@@ -898,6 +942,20 @@ describe('Browser', () => {
       willPreventUnloadHandler(mockEvent);
 
       expect(mockEvent.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('should bypass beforeunload once for a renderer OTA reload', () => {
+      const reloadEvent = { preventDefault: vi.fn() };
+      const laterEvent = { preventDefault: vi.fn() };
+      mockBrowserWindow.webContents.reloadIgnoringCache.mockImplementationOnce(() => {
+        willPreventUnloadHandler(reloadEvent);
+      });
+
+      browser.reloadIgnoringCache(true);
+      willPreventUnloadHandler(laterEvent);
+
+      expect(reloadEvent.preventDefault).toHaveBeenCalledOnce();
+      expect(laterEvent.preventDefault).not.toHaveBeenCalled();
     });
   });
 

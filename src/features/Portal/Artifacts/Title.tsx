@@ -1,9 +1,9 @@
 import { ArtifactType } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Tabs, Text } from '@lobehub/ui/base-ui';
+import { Tabs, Text } from '@lobehub/ui/base-ui';
 import { ConfigProvider } from 'antd';
 import { cx } from 'antd-style';
-import { ArrowLeft, CodeIcon, EyeIcon } from 'lucide-react';
+import { CodeIcon, EyeIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import ArtifactDeploymentActions from '@/business/client/features/ArtifactDeploymentActions';
@@ -23,7 +23,6 @@ const Title = () => {
     artifactType,
     artifactTitle,
     isArtifactTagClosed,
-    closeArtifact,
   ] = useChatStore((s) => {
     const messageId = chatPortalSelectors.artifactMessageId(s) || '';
     const identifier = chatPortalSelectors.artifactIdentifier(s);
@@ -36,7 +35,6 @@ const Title = () => {
       chatPortalSelectors.artifactType(s),
       chatPortalSelectors.artifactTitle(s),
       chatPortalSelectors.isArtifactTagClosed(messageId, identifier)(s),
-      s.closeArtifact,
     ];
   });
 
@@ -45,12 +43,10 @@ const Title = () => {
 
   return (
     <Flexbox horizontal align={'center'} flex={1} gap={12} justify={'space-between'} width={'100%'}>
-      <Flexbox horizontal align={'center'} gap={4}>
-        <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeArtifact()} />
-        <Text className={cx(oneLineEllipsis)} type={'secondary'}>
-          {artifactTitle}
-        </Text>
-      </Flexbox>
+      {/* Back and close live in the shared portal header — no second arrow here. */}
+      <Text className={cx(oneLineEllipsis)} type={'secondary'}>
+        {artifactTitle}
+      </Text>
       <ConfigProvider
         theme={{
           token: {

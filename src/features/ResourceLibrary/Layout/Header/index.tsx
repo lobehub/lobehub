@@ -31,10 +31,14 @@ const Header = memo(() => {
         content area shows. The Explorer toolbar carries the same actions, but
         it is covered as soon as a page or file is opened, which left no way
         to add or find anything without backing out of the document first.
+
+        This "+" sits beside the library name, so it creates at the library's
+        root rather than in whatever folder the URL happens to be in; each
+        folder row carries its own "+" for creating inside that folder.
       */}
       <Flexbox horizontal align={'center'} gap={8} paddingBlock={'0 8px'} paddingInline={8}>
         <LibrarySearchBar />
-        <AddButton iconOnly />
+        <AddButton iconOnly rootLevel />
       </Flexbox>
     </>
   );

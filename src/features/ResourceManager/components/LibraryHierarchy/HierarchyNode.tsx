@@ -1,15 +1,17 @@
 'use client';
 
-import { CaretDownFilled, LoadingOutlined } from '@ant-design/icons';
+import { CaretDownFilled } from '@ant-design/icons';
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { Block, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, toast } from '@lobehub/ui/base-ui';
+import { Block, Center, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Spin, toast } from '@lobehub/ui/base-ui';
 import { Input } from 'antd';
 import { cx } from 'antd-style';
-import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
+import { FileText, FolderIcon, FolderOpenIcon, LockIcon } from 'lucide-react';
 import * as m from 'motion/react-m';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import FileIcon from '@/components/FileIcon';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import {
@@ -26,7 +28,8 @@ import { useTreeStore } from '@/store/tree';
 import { useFileItemClick } from '../Explorer/hooks/useFileItemClick';
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
 import FolderAddButton from './FolderAddButton';
-import { isHierarchyNodeActive } from './selection';
+import HierarchyNodeMenuButton from './HierarchyNodeMenuButton';
+import { isHierarchyNodeActive, resolveDeletedFolderRedirect } from './selection';
 import { styles } from './styles';
 
 interface HierarchyNodeProps {
@@ -57,6 +60,12 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     ]);
 
     const renameItem = useTreeStore((s) => s.renameItem);
+
+    const { t } = useTranslation('chat');
+    // Personal mode has no second audience, so `visibility` carries no meaning
+    // there and every node would wear a lock for nothing.
+    const activeWorkspaceId = useActiveWorkspaceId();
+    const isPrivate = Boolean(activeWorkspaceId) && item.visibility === 'private';
 
     const [isRenaming, setIsRenaming] = useState(false);
     const [renamingValue, setRenamingValue] = useState(item.name);
@@ -135,13 +144,58 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       setRenamingValue(item.name);
     }, [item.name]);
 
+    /**
+     * Where the explorer sits right now, as of the last commit. The delete is
+     * async, so `handleDeleted` can run long after the context menu captured
+     * its closure — by then the user may have opened another folder or another
+     * library, and the captured values would send them back to a folder they
+     * have already left.
+     */
+    const live = useRef({ isMounted: true, libraryId, selectedKey });
+    useEffect(() => {
+      live.current.libraryId = libraryId;
+      live.current.selectedKey = selectedKey;
+    });
+    useEffect(
+      () => () => {
+        live.current.isMounted = false;
+      },
+      [],
+    );
+
+    /**
+     * Deleting a folder the explorer is sitting inside — the folder itself, or
+     * any ancestor of where it is parked — would leave it on a route that no
+     * longer resolves: an empty list under a breadcrumb naming a folder that
+     * was just removed. Step out to the deleted row's own parent instead.
+     *
+     * Runs before the tree purge, so the subtree is still walkable here. An
+     * unmounted row means the user navigated away mid-delete, which is reason
+     * enough to leave them alone.
+     */
+    const handleDeleted = useCallback(() => {
+      if (!live.current.isMounted) return;
+
+      const redirect = resolveDeletedFolderRedirect({
+        children: useTreeStore.getState().children,
+        item,
+        libraryId: live.current.libraryId,
+        parentKey,
+        selectedKey: live.current.selectedKey,
+      });
+
+      if (redirect) navigate(redirect);
+    }, [item, parentKey, navigate]);
+
     const { menuItems } = useFileItemDropdown({
       fileId: item.fileId,
       fileType: item.fileType,
       filename: item.name,
       id: item.id,
       libraryId,
+      onDeleted: handleDeleted,
       onRenameStart: item.isFolder ? handleRenameStart : undefined,
+      parentId: parentKey,
       size: item.size,
       sourceType: item.sourceType,
       url: item.url,
@@ -268,7 +322,9 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             {flat ? (
               <div style={{ width: 20 }} />
             ) : isLoading ? (
-              <ActionIcon spin icon={LoadingOutlined as any} size={'small'} style={{ width: 20 }} />
+              <Center flex={'none'} width={20}>
+                <Spin size={'small'} />
+              </Center>
             ) : (
               <m.div
                 animate={{ rotate: isExpanded ? 0 : -90 }}
@@ -327,7 +383,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
                 </span>
               )}
             </Flexbox>
-            {!flat && <FolderAddButton folderId={item.id} />}
+            <Flexbox horizontal align={'center'}>
+              {!flat && <FolderAddButton folderId={item.id} />}
+              <HierarchyNodeMenuButton menuItems={menuItems} />
+            </Flexbox>
           </Block>
         </Flexbox>
       );
@@ -368,7 +427,11 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             gap={8}
             style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
           >
-            {isPage ? (
+            {isPrivate ? (
+              <Tooltip title={t('resources.visibility.privateTooltip', { ns: 'chat' })}>
+                <Icon icon={LockIcon} size={18} />
+              </Tooltip>
+            ) : isPage ? (
               emoji ? (
                 <span style={{ fontSize: 18 }}>{emoji}</span>
               ) : (
@@ -388,6 +451,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
               {item.name}
             </span>
           </Flexbox>
+          <HierarchyNodeMenuButton menuItems={menuItems} />
         </Block>
       </Flexbox>
     );

@@ -15,7 +15,8 @@ import {
   shinyTextStyles,
 } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspector, BuiltinInspectorProps, BuiltinRenderProps } from '@lobechat/types';
-import { CodeDiff, Highlighter, Markdown, Skeleton } from '@lobehub/ui';
+import { CodeDiff, Highlighter, Markdown } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import path from 'path-browserify-esm';
 import { memo, useMemo } from 'react';
@@ -184,7 +185,7 @@ const ReadRender = memo<BuiltinRenderProps<KimiFileArgs>>(({ args, content }) =>
 ReadRender.displayName = 'KimiCodeReadRender';
 
 const WriteRender = memo<BuiltinRenderProps<KimiFileArgs>>(({ args }) => {
-  if (!args) return <Skeleton active />;
+  if (!args) return <Skeleton.Text rows={4} />;
   if (!args.content) return null;
 
   const extension = path
@@ -214,7 +215,7 @@ const WriteRender = memo<BuiltinRenderProps<KimiFileArgs>>(({ args }) => {
 WriteRender.displayName = 'KimiCodeWriteRender';
 
 const EditRender = memo<BuiltinRenderProps<KimiEditArgs>>(({ args }) => {
-  if (!args) return <Skeleton active />;
+  if (!args) return <Skeleton.Text rows={4} />;
 
   const filePath = args.path ?? '';
   return (

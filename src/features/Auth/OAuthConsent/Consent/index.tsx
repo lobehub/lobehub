@@ -49,6 +49,7 @@ const ConsentClient = memo<ClientProps>(({ uid, clientId, scopes, clientMetadata
         logoUrl={clientMetadata.logo}
       />
       <AuthCard
+        centered
         subtitle={t('consent.description', { clientName: clientDisplayName })}
         title={t('consent.title', { clientName: clientDisplayName })}
         footer={

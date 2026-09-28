@@ -1,7 +1,16 @@
 'use client';
 
-import { AccordionItem, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  accordionStyles,
+  AccordionTrigger,
+  ActionIcon,
+  Text,
+} from '@lobehub/ui/base-ui';
+import { cx } from 'antd-style';
 import { ArrowUpDown, Loader2Icon, UserPlus } from 'lucide-react';
 import { type MouseEvent } from 'react';
 import { memo, useState } from 'react';
@@ -52,51 +61,57 @@ const Members = memo<MembersProps>(({ itemKey }) => {
   };
 
   return (
-    <AccordionItem
-      itemKey={itemKey}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
-      action={
-        <>
-          {isRevalidating && <ActionIcon loading icon={Loader2Icon} size={'small'} />}
-          {memberCount > 1 && (
+    <AccordionItem value={itemKey}>
+      <AccordionHeader>
+        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+            {`${t('groupSidebar.tabs.members')} ${membersCount}`}
+          </Text>
+        </AccordionTrigger>
+        <div
+          className={cx(
+            'accordion-action',
+            accordionStyles.action,
+            accordionStyles.actionBorderless,
+          )}
+        >
+          <Flexbox horizontal align="center" gap={4}>
+            {isRevalidating && <ActionIcon loading icon={Loader2Icon} size={'small'} />}
+            {memberCount > 1 && (
+              <ActionIcon
+                disabled={!canEdit}
+                icon={ArrowUpDown}
+                size={'small'}
+                title={canEdit ? t('groupSidebar.members.sortMember') : reason}
+                onClick={handleSortMember}
+              />
+            )}
             <ActionIcon
               disabled={!canEdit}
-              icon={ArrowUpDown}
+              icon={UserPlus}
               size={'small'}
-              title={canEdit ? t('groupSidebar.members.sortMember') : reason}
-              onClick={handleSortMember}
+              title={canEdit ? t('groupSidebar.members.addMember') : reason}
+              onClick={handleAddMember}
             />
-          )}
-          <ActionIcon
-            disabled={!canEdit}
-            icon={UserPlus}
-            size={'small'}
-            title={canEdit ? t('groupSidebar.members.addMember') : reason}
-            onClick={handleAddMember}
+          </Flexbox>
+        </div>
+      </AccordionHeader>
+      <AccordionPanel contentStyle={{ padding: 0 }}>
+        <Flexbox gap={1} paddingBlock={1}>
+          <GroupMember
+            addModalOpen={addModalOpen}
+            groupId={activeGroupId}
+            onAddModalOpenChange={setAddModalOpen}
           />
-        </>
-      }
-      title={
-        <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-          {`${t('groupSidebar.tabs.members')} ${membersCount}`}
-        </Text>
-      }
-    >
-      <Flexbox gap={1} paddingBlock={1}>
-        <GroupMember
-          addModalOpen={addModalOpen}
-          groupId={activeGroupId}
-          onAddModalOpenChange={setAddModalOpen}
-        />
-      </Flexbox>
-      {activeGroupId && (
-        <SortMembersModal
-          groupId={activeGroupId}
-          open={sortModalOpen}
-          onCancel={() => setSortModalOpen(false)}
-        />
-      )}
+        </Flexbox>
+        {activeGroupId && (
+          <SortMembersModal
+            groupId={activeGroupId}
+            open={sortModalOpen}
+            onCancel={() => setSortModalOpen(false)}
+          />
+        )}
+      </AccordionPanel>
     </AccordionItem>
   );
 });

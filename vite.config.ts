@@ -119,6 +119,7 @@ export default defineConfig({
         isAuth ? 'index.auth.html' : isMobile ? 'index.mobile.html' : 'index.html',
       ),
       output: createSharedRolldownOutput({ strictExecutionOrder: true }),
+      preserveEntrySignatures: 'allow-extension',
     },
   },
   define: {

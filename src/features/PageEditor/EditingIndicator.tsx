@@ -1,9 +1,9 @@
 'use client';
 
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Spin, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Loader2Icon, PencilIcon } from 'lucide-react';
+import { PencilIcon } from 'lucide-react';
 import { type CSSProperties, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -51,7 +51,7 @@ const EditingIndicator = memo(() => {
 
     return (
       <Flexbox horizontal align={'center'} gap={4} style={{ color: cssVar.colorTextTertiary }}>
-        <Icon spin icon={Loader2Icon} size={14} />
+        <Spin size="small" />
         <Text ellipsis style={labelStyle}>
           {t('pageEditor.editMode.checking')}
         </Text>

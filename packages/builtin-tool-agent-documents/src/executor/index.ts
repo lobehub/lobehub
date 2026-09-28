@@ -21,14 +21,21 @@ import {
 } from '../types';
 
 // APIs that change the document set the client list renders (membership or
-// visible title). Content-only edits (replaceDocumentContent / modifyNodes) and
-// read-only calls are excluded — they don't alter the list. Used by
-// `onAfterCall` to decide when to refresh the client-side documents list.
+// visible title). Read-only calls are excluded — they don't alter the list.
 const LIST_MUTATING_APIS = new Set<string>([
   AgentDocumentsApiName.createDocument,
   AgentDocumentsApiName.removeDocument,
   AgentDocumentsApiName.renameDocument,
   AgentDocumentsApiName.copyDocument,
+]);
+
+// APIs that write the body or metadata of an existing `documents` row, so an
+// editor holding that row must revalidate. Create / copy produce rows nobody
+// has open yet and remove must not revalidate a deleted id.
+const DOCUMENT_WRITING_APIS = new Set<string>([
+  AgentDocumentsApiName.replaceDocumentContent,
+  AgentDocumentsApiName.modifyNodes,
+  AgentDocumentsApiName.renameDocument,
 ]);
 
 export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsApiName> {
@@ -47,8 +54,16 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
   // server-runtime path never touches the client store otherwise, so a created
   // doc wouldn't appear until a manual refresh.
   onAfterCall = async ({ apiName, result }: ToolAfterCallContext): Promise<void> => {
-    if (!LIST_MUTATING_APIS.has(apiName) || !result.success) return;
-    await this.runtime.notifyMutated();
+    if (!result.success) return;
+
+    const state = result.state as { documentId?: unknown } | undefined;
+    const documentId =
+      DOCUMENT_WRITING_APIS.has(apiName) && typeof state?.documentId === 'string'
+        ? state.documentId
+        : undefined;
+
+    if (!documentId && !LIST_MUTATING_APIS.has(apiName)) return;
+    await this.runtime.notifyMutated({ documentId });
   };
 
   listDocuments = async (

@@ -165,6 +165,7 @@ export type ToolInterventionPresentation = {
 const ASK_USER_QUESTION_IDENTIFIERS = new Set([
   'claude-code',
   'cursor',
+  'devin',
   'droid',
   'lobe-agent',
   'lobe-user-interaction',
@@ -174,6 +175,7 @@ const ASK_USER_QUESTION_IDENTIFIERS = new Set([
 const HETEROGENEOUS_CUSTOM_INTERACTION_IDENTIFIERS = new Set([
   'claude-code',
   'cursor',
+  'devin',
   'droid',
   'qoder',
 ]);
@@ -190,7 +192,7 @@ export const classifyToolInterventionPresentation = (
     return { interactionKind: 'custom', surface: 'form' };
   }
 
-  // Claude Code / Cursor ACP / Droid ACP / Qoder expose provider-specific intervention
+  // Claude Code / Cursor ACP / Devin ACP / Droid ACP / Qoder expose provider-specific intervention
   // forms (permission, plan, bespoke prompts). They are intentionally kept
   // non-binary even when a newly added API name is not yet known to Web.
   if (HETEROGENEOUS_CUSTOM_INTERACTION_IDENTIFIERS.has(identifier)) {

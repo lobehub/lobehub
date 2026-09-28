@@ -84,7 +84,8 @@ export function isNewerVersion(latest: string, current: string): boolean {
   return semver.gt(latestParsed, currentParsed);
 }
 
-async function fetchLatestVersion(name: string, tag: string): Promise<string> {
+/** Published version behind an npm dist-tag. Also used by `lh doctor`. */
+export async function fetchLatestVersion(name: string, tag: string): Promise<string> {
   const url = `https://registry.npmjs.org/${name}/${encodeURIComponent(tag)}`;
   const res = await fetch(url, { headers: { accept: 'application/json' } });
 

@@ -2,13 +2,12 @@
 
 import { type TaskDetail } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, keyframes } from 'antd-style';
 import { Footprints, Timer, Wrench } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useChatStore } from '@/store/chat';
 
 import { MAX_PROGRESS, PROGRESS_INCREMENT, PROGRESS_INTERVAL } from './constants';
@@ -207,7 +206,7 @@ const ProcessingState = memo<ProcessingStateProps>(
           {currentActivity && (
             <div className={styles.activityRow}>
               <Flexbox horizontal align={'center'} gap={4}>
-                <NeuralNetworkLoading size={14} />
+                <Spin size="small" variant="network" />
                 <Text as={'span'} fontSize={12} type={'secondary'}>
                   {renderActivityText()}
                 </Text>
@@ -290,7 +289,7 @@ const ProcessingState = memo<ProcessingStateProps>(
         {/* Current Activity */}
         {currentActivity && (
           <Flexbox horizontal align="center" gap={8}>
-            <NeuralNetworkLoading size={14} />
+            <Spin size="small" variant="network" />
             <Text
               ellipsis
               as={'span'}

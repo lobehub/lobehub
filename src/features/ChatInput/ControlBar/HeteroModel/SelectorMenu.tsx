@@ -73,7 +73,12 @@ const SelectorMenu = memo<SelectorMenuProps>(
     return (
       <DropdownMenuRoot>
         <DropdownMenuTrigger nativeButton={false}>
-          <Trigger ariaLabel={view.ariaLabel} fast={view.isFastSpeed} text={view.triggerText} />
+          <Trigger
+            ariaLabel={view.ariaLabel}
+            fast={view.isFastSpeed}
+            secondaryText={view.triggerLabel.secondaryText}
+            text={view.triggerLabel.text}
+          />
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           {/* The trigger label changes width as selections change, and it sits in the

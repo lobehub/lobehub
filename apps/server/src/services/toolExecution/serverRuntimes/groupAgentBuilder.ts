@@ -11,7 +11,8 @@
  *
  * The edited group rides on `ctx.editingGroupId` (see `ExecAgentAppContext`),
  * NOT `ctx.groupId`: the builder conversation is owned by the builtin builder
- * agent and must not be stamped as a group-chat turn.
+ * agent and must not be stamped as a group-chat turn. A group created in the
+ * conversation with `createGroup` takes over from it (`resolveBuilderGroupId`).
  *
  * Member creation mirrors `routers/lambda/agentGroup.ts` exactly — virtual
  * agents, roster insert, and workspace access-level inheritance — so an agent
@@ -44,7 +45,10 @@ import type {
   UpdateGroupPromptState,
   UpdateGroupState,
 } from '@lobechat/builtin-tool-group-agent-builder';
-import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
+import {
+  AWAITING_CREATE_GROUP_RESULT,
+  GroupAgentBuilderIdentifier,
+} from '@lobechat/builtin-tool-group-agent-builder';
 import { formatAgentProfile } from '@lobechat/prompts';
 
 import { AgentModel } from '@/database/models/agent';
@@ -53,11 +57,13 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import type { ChatGroupConfig } from '@/database/types/chatGroup';
+import { getResourceConfigAccess } from '@/server/routers/lambda/_helpers/resourceConfigGuard';
 import { AgentGroupService } from '@/server/services/agentGroup';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
 import { agentBuilderRuntime } from './agentBuilder';
+import { isAwaitingSiblingCreateGroup, resolveBuilderGroupId } from './groupAgentBuilderTarget';
 import { type ServerRuntimeRegistration } from './types';
 
 const handleError = (error: unknown, message: string): ToolExecutionResult => {
@@ -90,10 +96,42 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
     const agentGroupRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
     const agentGroupService = new AgentGroupService(serverDB, userId, workspaceId);
 
-    // The edited group is carried by `editingGroupId`; `groupId` is kept as a
-    // fallback for callers that legitimately run inside a group chat turn.
-    const resolveGroupId = (ctx: ToolExecutionContext, override?: string) =>
-      override ?? ctx.editingGroupId ?? ctx.groupId ?? undefined;
+    // An explicit `groupId` argument wins. Otherwise the group this conversation
+    // is working on — a group made here with `createGroup`, else the pinned
+    // `editingGroupId`; `groupId` is kept as a fallback for callers that
+    // legitimately run inside a group chat turn.
+    const resolveGroupId = async (ctx: ToolExecutionContext, override?: string) =>
+      override ??
+      (await resolveBuilderGroupId({
+        db: serverDB,
+        editingGroupId: ctx.editingGroupId,
+        threadId: ctx.threadId,
+        topicId: ctx.topicId,
+        userId,
+        workspaceId,
+      })) ??
+      ctx.groupId ??
+      undefined;
+
+    /**
+     * A call that leaves its target to the conversation must not run ahead of a
+     * `createGroup` issued in the same step — see `isAwaitingSiblingCreateGroup`.
+     * An explicit `groupId` names its target, so it is never held back.
+     */
+    const awaitingCreateGroup = async (
+      ctx: ToolExecutionContext,
+      override?: string,
+    ): Promise<ToolExecutionResult | undefined> => {
+      if (override) return undefined;
+      const awaiting = await isAwaitingSiblingCreateGroup({
+        assistantMessageId: ctx.assistantMessageId,
+        db: serverDB,
+        toolCallId: ctx.toolCallId,
+        userId,
+        workspaceId,
+      });
+      return awaiting ? { ...AWAITING_CREATE_GROUP_RESULT } : undefined;
+    };
 
     /**
      * Mutating a group's roster or config is a group edit — same ACL as the
@@ -138,6 +176,25 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
       );
     };
 
+    /**
+     * Prompts and tools are edit-level config (`resourceConfigGuard`). The model
+     * predicates admit any public workspace row, and the target group/agent id
+     * can come straight from the tool arguments, so every config read or member
+     * config write goes through the same guard as the `agent` / `agentGroup`
+     * routers. Outside a workspace the guard returns `full`.
+     */
+    const getConfigAccess = (resourceType: 'agent' | 'agentGroup', resourceId: string) =>
+      getResourceConfigAccess({ db: serverDB, userId, workspaceId }, resourceType, resourceId);
+
+    const configAccessDenied = (agentId: string): ToolExecutionResult => ({
+      content: `No permission to access the configuration of agent "${agentId}"`,
+      error: {
+        message: `No permission to access the configuration of agent "${agentId}"`,
+        type: 'Forbidden',
+      },
+      success: false,
+    });
+
     const findSupervisorAgentId = async (groupId: string) => {
       const roster = await chatGroupModel.getGroupAgentsWithMeta(groupId);
       return roster.find((member) => member.role === 'supervisor')?.agentId;
@@ -161,14 +218,24 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: GetAgentInfoParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx);
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
+        const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
         try {
+          // A group the caller cannot even view is reported as missing, the same
+          // way the `agentGroup` router hides it.
+          if ((await getConfigAccess('agentGroup', groupId)) === 'none') {
+            return groupNotFound(groupId);
+          }
+
           const roster = await chatGroupModel.getGroupAgentsWithMeta(groupId);
           const member = roster.find((item) => item.agentId === params.agentId);
+          const memberAccess = member ? await getConfigAccess('agent', params.agentId) : 'none';
 
-          if (!member) {
+          if (!member || memberAccess === 'none') {
             return {
               content: `Agent "${params.agentId}" not found in this group`,
               error: { message: `Agent "${params.agentId}" not found`, type: 'AgentNotFound' },
@@ -177,11 +244,13 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
           }
 
           const config = await agentModel.getAgentConfigById(params.agentId);
+          // View/use access gets the public profile only — the system prompt is
+          // edit-level config (`redactAgentConfig` keeps `model` but not `systemRole`).
           const agent = {
             description: member.description ?? undefined,
             id: params.agentId,
             model: config?.model ?? undefined,
-            systemRole: config?.systemRole ?? undefined,
+            systemRole: memberAccess === 'full' ? (config?.systemRole ?? undefined) : undefined,
             title: member.title ?? undefined,
           };
 
@@ -289,7 +358,7 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
           }
 
           return {
-            content: `Successfully created group "${params.title}" with ID: ${group.id}`,
+            content: `Successfully created group "${params.title}" with ID: ${group.id}. Later group and member tool calls in this conversation target it; pass groupId "${group.id}" to be explicit.`,
             state: {
               groupId: group.id,
               success: true,
@@ -307,7 +376,10 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: CreateAgentParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx);
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
+        const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
         try {
@@ -351,7 +423,10 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: BatchCreateAgentsParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx);
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
+        const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
         try {
@@ -403,7 +478,10 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: InviteAgentParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx);
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
+        const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
         try {
@@ -455,7 +533,10 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: RemoveAgentParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx);
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
+        const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
         try {
@@ -514,7 +595,10 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateAgentPromptParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx);
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
+        const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
         try {
@@ -527,6 +611,12 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
               error: { message: `Agent "${params.agentId}" not found`, type: 'AgentNotFound' },
               success: false,
             };
+          }
+
+          // Group edit alone is not enough: a linked standalone member keeps its
+          // own ACL, and its prompt is edit-level config.
+          if ((await getConfigAccess('agent', params.agentId)) !== 'full') {
+            return configAccessDenied(params.agentId);
           }
 
           const previous = await agentModel.getAgentConfigById(params.agentId);
@@ -560,7 +650,10 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateGroupParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx, params.groupId);
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
+        const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
         const { config, meta } = params;
@@ -643,7 +736,10 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateGroupPromptParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx, params.groupId);
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
+        const groupId = await resolveGroupId(ctx, params.groupId);
         if (!groupId) return noGroupContext();
 
         try {
@@ -687,7 +783,10 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateAgentConfigWithIdParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx);
+        const blocked = await awaitingCreateGroup(ctx);
+        if (blocked) return blocked;
+
+        const groupId = await resolveGroupId(ctx);
         const { agentId: paramAgentId, ...rest } = params;
 
         // A caller-supplied id has to be confirmed against this group's roster
@@ -731,7 +830,10 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: InstallPluginParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx);
+        const blocked = await awaitingCreateGroup(ctx);
+        if (blocked) return blocked;
+
+        const groupId = await resolveGroupId(ctx);
         const agentId = groupId ? await findSupervisorAgentId(groupId) : undefined;
 
         if (!agentId) {

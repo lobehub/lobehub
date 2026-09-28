@@ -15,7 +15,9 @@ const { getFileAccessUrl, uploadBase64 } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({ getFileAccessUrl, uploadBase64 })),
+  FileService: vi.fn().mockImplementation(function () {
+    return { getFileAccessUrl, uploadBase64 };
+  }),
 }));
 
 describe('ServerBlobStore', () => {
@@ -37,7 +39,7 @@ describe('ServerBlobStore', () => {
   });
 
   it('surfaces missing storage configuration only when blob IO is requested', async () => {
-    vi.mocked(FileService).mockImplementationOnce(() => {
+    vi.mocked(FileService).mockImplementationOnce(function () {
       throw new Error('S3 environment variables are not set completely');
     });
     const createStore = () => new ServerBlobStore({} as LobeChatDatabase, 'user-1');

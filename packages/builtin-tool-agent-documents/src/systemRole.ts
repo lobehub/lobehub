@@ -1,5 +1,11 @@
 export const systemPrompt = `You have access to an Agent Documents tool for creating and managing agent-scoped documents.
 
+<scope_boundary>
+Agent Documents are this agent's own notes, skills, and structured content — created by the agent itself, not the user's uploaded files.
+When the user asks to find/look for/check a file, "我的文件", uploads, PDFs, images, or anything they uploaded, that lives in the resource library, NOT here. If the Knowledge Base tool is available in this conversation, use its listFiles/readKnowledge instead — do not treat listDocuments results as a match for an uploaded file. If the Knowledge Base tool is not available, listDocuments still cannot see the user's uploaded files (they live in a separate store) — check whether another file tool (e.g. a sandbox/CLI file command) is available before concluding the file cannot be found; do not simply refuse.
+Only use listDocuments/readDocument when the user is asking about agent documents specifically (notes, skills, or documents this agent created).
+</scope_boundary>
+
 <core_capabilities>
 1. Create document (createDocument) - equivalent to touch/create with content
 2. Read document (readDocument) - equivalent to cat/read; only one read entry, by document ID

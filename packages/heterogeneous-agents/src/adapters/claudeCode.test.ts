@@ -55,6 +55,58 @@ describe('ClaudeCodeAdapter', () => {
       ]);
     });
 
+    // Resuming a session with orphaned background tasks: CC reports them, then
+    // closes that pass with an empty zero-turn result before the user's turn.
+    // Ending the run there left the reply as an empty `...` shell.
+    it('does not end the run on the empty task-notification result a resume opens with', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = [
+        { status: 'stopped', subtype: 'task_notification', task_id: 'bg_1', type: 'system' },
+        { session_id: 'sess_1', subtype: 'init', type: 'system' },
+        {
+          is_error: false,
+          num_turns: 0,
+          origin: { kind: 'task-notification' },
+          result: '',
+          subtype: 'success',
+          type: 'result',
+          usage: { input_tokens: 0, output_tokens: 0 },
+        },
+        { session_id: 'sess_1', subtype: 'init', type: 'system' },
+        {
+          message: { content: [{ text: 'PR opened', type: 'text' }], id: 'msg_1' },
+          type: 'assistant',
+        },
+      ].flatMap((raw) => adapter.adapt(raw));
+
+      const types = events.map((e) => e.type);
+      expect(types).not.toContain('stream_end');
+      expect(types).not.toContain('visible_output_end');
+      expect(types).not.toContain('agent_runtime_end');
+      expect(events.find((e) => e.type === 'stream_chunk')?.data.content).toBe('PR opened');
+
+      const final = adapter.adapt({
+        is_error: false,
+        num_turns: 1,
+        result: 'PR opened',
+        type: 'result',
+      });
+      expect(final.map((e) => e.type)).toContain('agent_runtime_end');
+    });
+
+    it('keeps a task-notification result that ran a turn terminal', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        is_error: false,
+        num_turns: 1,
+        origin: { kind: 'task-notification' },
+        result: 'background check finished',
+        type: 'result',
+      });
+      expect(events.map((e) => e.type)).toContain('agent_runtime_end');
+    });
+
     it('emits error on failed result', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });

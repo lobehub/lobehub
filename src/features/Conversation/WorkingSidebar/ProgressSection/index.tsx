@@ -123,7 +123,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const ProgressSection = memo(() => {
+const ProgressSection = memo<{ className?: string }>(({ className }) => {
   const { t } = useTranslation('chat');
   const [expanded, setExpanded] = useState(true);
   const context = useAgentContext();
@@ -158,7 +158,7 @@ const ProgressSection = memo(() => {
   const ringOffset = RING_CIRCUM * (1 - progress.completionPercent / 100);
 
   return (
-    <div data-testid="workspace-progress">
+    <div className={className} data-testid="workspace-progress">
       <Flexbox
         horizontal
         align="center"

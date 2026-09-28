@@ -423,7 +423,13 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                   style={{ paddingInline: 0 }}
                   type={'text'}
                   onClick={() =>
-                    navigate(taskDetailPath(result.identifier, result.assigneeAgentId ?? undefined))
+                    navigate(
+                      taskDetailPath(
+                        result.identifier,
+                        result.assigneeAgentId ?? undefined,
+                        result.name || draft.name,
+                      ),
+                    )
                   }
                 >
                   {t('taskIntent.openCreated')}

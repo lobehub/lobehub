@@ -27,7 +27,11 @@ export class LocalStorageQueryProjectionStorage<T> implements QueryProjectionSto
   #key = ({ queryKey, scope }: QueryProjectionKey) =>
     `${this.#namespace}:${encodeURIComponent(scope)}:${encodeURIComponent(queryKey)}`;
 
-  get = async (key: QueryProjectionKey): Promise<QueryProjection<T> | undefined> => {
+  get = async (key: QueryProjectionKey): Promise<QueryProjection<T> | undefined> =>
+    this.getSync(key);
+
+  /** Restore a local projection inside pre-paint initialization without yielding a frame. */
+  getSync = (key: QueryProjectionKey): QueryProjection<T> | undefined => {
     if (typeof window === 'undefined') return undefined;
 
     try {

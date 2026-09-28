@@ -19,6 +19,57 @@ const createRuntime = (overrides = {}) =>
   });
 
 describe('AgentDocumentsExecutionRuntime', () => {
+  // An agent with thousands of web-crawled docs used to get every row in one
+  // result (1.5M chars), overflowing the context window on the next call.
+  describe('listDocuments paging', () => {
+    const docs = Array.from({ length: 120 }, (_, i) => ({
+      documentId: `doc-${i}`,
+      filename: `page-${i}.md`,
+      id: `agent-doc-${i}`,
+      title: `Page ${i}`,
+    }));
+
+    it('returns the first page and tells the model how to fetch the next', async () => {
+      const runtime = createRuntime({ listDocuments: vi.fn().mockResolvedValue(docs) });
+
+      const result = await runtime.listDocuments({}, { agentId: 'agent-1' });
+
+      expect(result.state?.documents).toHaveLength(50);
+      expect(result.content).toContain('"id":"agent-doc-49"');
+      expect(result.content).not.toContain('"id":"agent-doc-50"');
+      expect(result.content).toContain(
+        'Showing documents 1-50 of 120. For the next page call listDocuments with {"limit":50,"offset":50,"scope":"agent","sourceType":"all"}.',
+      );
+    });
+
+    it('keeps the active filters in the next-page arguments', async () => {
+      const runtime = createRuntime({ listTopicDocuments: vi.fn().mockResolvedValue(docs) });
+
+      const result = await runtime.listDocuments(
+        { limit: 20, parentId: 'folder-1', scope: 'currentTopic', sourceType: 'web' },
+        { agentId: 'agent-1', topicId: 'topic-1' },
+      );
+
+      expect(result.content).toContain(
+        'For the next page call listDocuments with {"limit":20,"offset":20,"parentId":"folder-1","scope":"currentTopic","sourceType":"web"}.',
+      );
+    });
+
+    it('pages with offset/limit and omits the note on the last page', async () => {
+      const runtime = createRuntime({ listDocuments: vi.fn().mockResolvedValue(docs) });
+
+      const result = await runtime.listDocuments(
+        { limit: 1000, offset: 100 },
+        { agentId: 'agent-1' },
+      );
+
+      expect(result.state?.documents.map((d: { id: string }) => d.id)).toEqual(
+        docs.slice(100).map((d) => d.id),
+      );
+      expect(result.content).not.toContain('Showing documents');
+    });
+  });
+
   it('returns agentDocumentId and documentId when creating hinted documents', async () => {
     const createDocument = vi.fn().mockResolvedValue({
       documentId: 'backing-doc-1',
@@ -260,7 +311,9 @@ describe('AgentDocumentsExecutionRuntime', () => {
 
     // LLM-facing content is capped well below the raw 500k chars.
     expect(result.content.length).toBeLessThan(hugeXml.length);
-    expect(result.content).toContain('document truncated to fit the context window');
+    expect(result.content).toContain(
+      'Line 1 is 500000 characters long and was cut at 200000; the rest of that line cannot be paged.',
+    );
     // Inspector still receives the untruncated document via state.
     expect(result.state).toMatchObject({ content: hugeMarkdown, xml: hugeXml });
   });
@@ -300,6 +353,30 @@ describe('AgentDocumentsExecutionRuntime', () => {
     expect(result.content).not.toMatch(loneSurrogate);
     // JSON serialization (the actual failure surface) stays well-formed.
     expect(() => JSON.parse(JSON.stringify(result.content))).not.toThrow();
-    expect(result.content).toContain('document truncated to fit the context window');
+    expect(result.content).toContain('was cut at 199999');
+  });
+
+  it('pages a long document by line with the exact call for the next window', async () => {
+    const markdown = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n');
+    const readDocument = vi.fn().mockResolvedValue({
+      content: markdown,
+      id: 'agent-doc-1',
+      litexml: '',
+      title: 'Archive',
+    });
+    const runtime = createRuntime({ readDocument });
+
+    const result = await runtime.readDocument(
+      { format: 'markdown', id: 'agent-doc-1', limit: 3, offset: 4 },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.content).toBe(
+      'line 4\nline 5\nline 6\n[Showing lines 4-6 of 10 lines, 70 characters. To continue, call readDocument again with id="agent-doc-1", format="markdown" and offset=7.]',
+    );
+    // Paging arguments stay in the runtime; the service only receives the lookup.
+    expect(readDocument).toHaveBeenCalledWith(
+      expect.not.objectContaining({ limit: expect.anything() }),
+    );
   });
 });

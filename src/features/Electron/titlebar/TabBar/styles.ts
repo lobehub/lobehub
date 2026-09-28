@@ -238,6 +238,29 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
       }
     }
   `,
+  previewCard: css`
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 240px;
+  `,
+  previewImage: css`
+    display: block;
+
+    aspect-ratio: 16 / 10;
+    width: 100%;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 6px;
+
+    object-fit: cover;
+    object-position: top center;
+  `,
+  previewTitle: css`
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
   tabIcon: css`
     flex-shrink: 0;
     color: ${cssVar.colorTextSecondary};

@@ -1,10 +1,11 @@
 import { GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
-import { Flexbox, Icon, Skeleton, Tooltip } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
-import { AnimatePresence, m } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
+import * as m from 'motion/react-m';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -353,8 +354,8 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
         <Suspense
           fallback={
             <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>
-              <Skeleton.Button active size={'small'} style={{ height: 18, width: '100%' }} />
-              <Skeleton.Button active size={'small'} style={{ height: 18, width: '100%' }} />
+              <Skeleton height={18} width={'100%'} />
+              <Skeleton height={18} width={'100%'} />
             </Flexbox>
           }
         >

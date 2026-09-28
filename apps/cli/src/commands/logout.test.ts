@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { clearCredentials } from '../auth/credentials';
 import { stopDaemon } from '../daemon/manager';
+import { saveActiveWorkspace } from '../settings';
 import { log } from '../utils/logger';
 import { registerLogoutCommand } from './logout';
 
@@ -12,6 +13,10 @@ vi.mock('../auth/credentials', () => ({
 
 vi.mock('../daemon/manager', () => ({
   stopDaemon: vi.fn(),
+}));
+
+vi.mock('../settings', () => ({
+  saveActiveWorkspace: vi.fn(),
 }));
 
 describe('logout command', () => {
@@ -35,6 +40,16 @@ describe('logout command', () => {
 
     expect(clearCredentials).toHaveBeenCalled();
     expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Logged out'));
+  });
+
+  // The scope belongs to the account that set it; the next login may be someone
+  // else, and a leftover scope would claim a workspace they aren't a member of.
+  it('should clear the persisted workspace scope', async () => {
+    vi.mocked(clearCredentials).mockReturnValue(true);
+
+    await createProgram().parseAsync(['node', 'test', 'logout']);
+
+    expect(saveActiveWorkspace).toHaveBeenCalledWith(null);
   });
 
   it('should log already logged out when no credentials', async () => {

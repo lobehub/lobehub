@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
   embeddings: vi.fn(),
   initModelRuntimeFromDB: vi.fn(),
   initModelRuntimeWithUserPayload: vi.fn(),
-  normalizeUserMemorySearchQueries: vi.fn((queries?: string[]) => queries ?? []),
+  normalizeUserMemorySearchQueries: vi.fn(function (queries?: string[]) {
+    return queries ?? [];
+  }),
   recordUserMemoryLexicalSearchDecision: vi.fn(),
   searchMemory: vi.fn(),
   shouldRunUserMemoryLexicalSearch: vi.fn(),
@@ -17,9 +19,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/models/userMemory', () => ({
   normalizeUserMemorySearchQueries: mocks.normalizeUserMemorySearchQueries,
   shouldRunUserMemoryLexicalSearch: mocks.shouldRunUserMemoryLexicalSearch,
-  UserMemoryModel: vi.fn().mockImplementation(() => ({
-    searchMemory: mocks.searchMemory,
-  })),
+  UserMemoryModel: vi.fn().mockImplementation(function () {
+    return {
+      searchMemory: mocks.searchMemory,
+    };
+  }),
 }));
 
 vi.mock('@/database/schemas', () => ({
@@ -27,9 +31,11 @@ vi.mock('@/database/schemas', () => ({
 }));
 
 vi.mock('@/server/globalConfig', () => ({
-  getServerDefaultFilesConfig: vi.fn(() => ({
-    embeddingModel: { model: 'default-embedding-model', provider: 'default-provider' },
-  })),
+  getServerDefaultFilesConfig: vi.fn(function () {
+    return {
+      embeddingModel: { model: 'default-embedding-model', provider: 'default-provider' },
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
@@ -39,7 +45,9 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 
 vi.mock('@/server/services/agentSignal/procedure', () => ({
   emitToolOutcomeSafely: vi.fn(),
-  resolveToolOutcomeScope: vi.fn(() => ({ scope: 'user', scopeKey: 'user-1' })),
+  resolveToolOutcomeScope: vi.fn(function () {
+    return { scope: 'user', scopeKey: 'user-1' };
+  }),
 }));
 
 vi.mock('@/server/services/agentSignal/store/adapters/redis/policyStateStore', () => ({

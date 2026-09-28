@@ -2,25 +2,28 @@ import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
-import { builtinTools } from '@lobechat/builtin-tools';
-import type { AgentManagementContext } from '@lobechat/context-engine';
-import { buildExpertiseContextSnapshot, SkillEngine } from '@lobechat/context-engine';
+import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
+import { buildExpertiseContextSnapshot } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
+import { assembleSkillPool } from '@lobechat/mecha';
 import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
-import type { LobeAgentAgencyConfig, WorkingDirConfig, WorkspaceInitResult } from '@lobechat/types';
-import { getActivePluginIds, getWorkingDirEffectivePath } from '@lobechat/types';
+import type { LobeAgentAgencyConfig, WorkspaceInitResult } from '@lobechat/types';
+import {
+  buildGoalOverviewContext,
+  getActivePluginIds,
+  getWorkingDirEffectivePath,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
-import { AiModelModel } from '@/database/models/aiModel';
 import { DeviceModel } from '@/database/models/device';
 import { ExpertiseModel } from '@/database/models/expertise';
+import { GoalGraphModel } from '@/database/models/goalGraph';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { isDeviceCapablePlan } from '@/helpers/executionTarget';
-import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -28,7 +31,13 @@ import { FileService } from '@/server/services/file';
 
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
-import type { ExecRunContext, InternalExecAgentParams, ResolvedWorkspaceInit } from '../types';
+import { applyShareGateToToolSet, filterSkillsByShareGate } from '../shareGate';
+import type {
+  BindTopicWorkingDirectoryParams,
+  ExecRunContext,
+  InternalExecAgentParams,
+  ResolvedWorkspaceInit,
+} from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
 import type { ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
@@ -50,7 +59,13 @@ export interface HistoryLoaderInput {
  * cached so the run pays the query at most once.
  */
 export const createHistoryMessagesLoader = (
-  deps: { db: LobeChatDatabase; messageModel: MessageModel; userId: string; workspaceId?: string },
+  deps: {
+    db: LobeChatDatabase;
+    isShareVisitorRun: boolean;
+    messageModel: MessageModel;
+    userId: string;
+    workspaceId?: string;
+  },
   input: HistoryLoaderInput,
 ): (() => Promise<any[]>) => {
   const {
@@ -67,6 +82,17 @@ export const createHistoryMessagesLoader = (
   const postProcessUrl = (path: string | null, file: { id?: string | null }) =>
     fileService.getFileAccessUrl({ id: file.id, url: path });
   let historyMessagesCache: any[] | undefined;
+  // The run's own topic was resolved and authorized upstream (a share visitor
+  // run reaches here through `findVisitorTopicOrThrow`), and it executes under
+  // the CREATOR's identity — so an AUTHORIZED share run must opt out of
+  // `query()`'s creator-facing agent-share exclusion or the agent loses its
+  // history. A non-share run must NOT get this opt-out: `turnSetup`'s
+  // visitor-topic guard rejects a non-share run whose `appContext.topicId`
+  // resolves to a visitor topic, but this loader is cheap defense-in-depth in
+  // case that guard is ever bypassed or a future call site skips it — without
+  // it, a non-share run pointed at a leaked visitor topicId would still load
+  // the visitor's transcript into the owner's model context.
+  const historyQueryOptions = { allowShareVisitor: deps.isShareVisitorRun, postProcessUrl };
 
   return async () => {
     if (historyMessagesCache) return historyMessagesCache;
@@ -78,7 +104,7 @@ export const createHistoryMessagesLoader = (
           threadId: appContext?.threadId,
           topicId: appContext?.topicId ?? undefined,
         },
-        { postProcessUrl },
+        historyQueryOptions,
       );
       const idSet = new Set(existingMessageIds);
       historyMessagesCache = messages.filter((msg) => idSet.has(msg.id));
@@ -93,7 +119,7 @@ export const createHistoryMessagesLoader = (
           threadId: appContext?.threadId,
           topicId: appContext?.topicId,
         },
-        { postProcessUrl },
+        historyQueryOptions,
       );
       historyMessagesCache = messages.filter((msg) => !selfMessageIds.has(msg.id));
     } else {
@@ -141,11 +167,7 @@ export const createHistoryMessagesLoader = (
 export interface OperationPrepDeps {
   agentDocumentsService: AgentDocumentsService;
   agentModel: AgentModel;
-  bindTopicWorkingDirectory: (params: {
-    config?: WorkingDirConfig;
-    currentWorkingDirectory?: string;
-    topicId: string;
-  }) => Promise<void>;
+  bindTopicWorkingDirectory: (params: BindTopicWorkingDirectoryParams) => Promise<void>;
   db: LobeChatDatabase;
   topicModel: TopicModel;
   userId: string;
@@ -175,7 +197,13 @@ export interface OperationPrepResult {
   deviceSystemInfo: Record<string, string>;
   expertise?: Awaited<ReturnType<typeof buildExpertiseContextSnapshot>>;
   initialContext: AgentRuntimeContext;
-  operationSkillSet?: ReturnType<SkillEngine['generate']>;
+  operationSkillSet?: OperationSkillSet;
+  /**
+   * A project's root instruction files. Run context, not agent config — it
+   * travels on the operation like `expertise` does, and the context engine
+   * injects it.
+   */
+  projectInstructions?: ProjectInstructionFile[];
   userMemory?: ServerUserMemoryConfig;
 }
 
@@ -232,13 +260,20 @@ const resolveWorkspaceInit = async (
     const boundCwdConfig = resolveDeviceWorkingDirectoryConfig({
       deviceDefaultCwd: device.defaultCwd,
       deviceId: activeDeviceId,
+      devicePlatform: device.platform,
+      topicDeviceId: topic?.metadata?.boundDeviceId,
       topicWorkingDirectory,
       topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
       workingDirByDevice: agencyConfig?.workingDirByDevice,
     });
     const boundCwd = getWorkingDirEffectivePath(boundCwdConfig);
     if (!boundCwd) return { workspace: empty };
-    const resolved = { boundCwd, boundCwdConfig, topicWorkingDirectory };
+    const resolved = {
+      boundCwd,
+      boundCwdConfig,
+      topicDeviceId: topic?.metadata?.boundDeviceId,
+      topicWorkingDirectory,
+    };
 
     const workingDirs = device.workingDirs ?? [];
     const cached = workingDirs.find(
@@ -301,16 +336,18 @@ const resolveWorkspaceInit = async (
  * (bound cwd + project instructions), the OperationSkillSet, and the learned
  * expertise snapshot.
  *
- * Side effects, all order-preserving with the pre-extraction code: appends
- * project instructions to `ctx.agentConfig.systemRole`, writes the bound cwd
- * onto the returned `deviceSystemInfo`, pins the topic working directory, and
- * merges attachment warnings into `botPlatformContext`.
+ * Side effects, all order-preserving with the pre-extraction code: writes the
+ * bound cwd onto the returned `deviceSystemInfo`, pins the topic working
+ * directory, and merges attachment warnings into `botPlatformContext`. The
+ * project instructions come back on the result instead.
  */
 export const prepareOperation = async (
   deps: OperationPrepDeps,
   ctx: ExecRunContext,
   input: OperationPrepInput,
 ): Promise<OperationPrepResult> => {
+  /** Filled by the workspace branch below; returned as run context. */
+  let projectInstructions: ProjectInstructionFile[] | undefined;
   const {
     agentConfig,
     appContext,
@@ -320,6 +357,7 @@ export const prepareOperation = async (
     prompt,
     provider,
     resolvedAgentId,
+    shareGate,
     topicId,
     userMessageId,
   } = ctx;
@@ -365,14 +403,10 @@ export const prepareOperation = async (
   ): Promise<Record<string, string>> => {
     if (!deviceId) return {};
     try {
-      // Scope the gateway lookup to the principal that owns the connection:
-      // workspace devices need workspaceId; personal devices (including a
-      // workspace run routed to the caller's own machine) must not.
-      const systemInfo = await deviceGateway.queryDeviceSystemInfo(
-        deps.userId,
-        deviceId,
-        activeDeviceScope === 'workspace' ? deps.workspaceId : undefined,
-      );
+      // Tool discovery already asked this device for the same answer earlier
+      // in the send window, so the run's fact reader serves it from there
+      // (it also owns the personal / workspace scoping of the lookup).
+      const systemInfo = await ctx.runFacts.deviceSystemInfo(deviceId, activeDeviceScope);
       if (!systemInfo) return {};
       const device = onlineDevices.find((d) => d.deviceId === deviceId);
       log('execAgent: fetched device system info for %s', deviceId);
@@ -381,7 +415,9 @@ export const prepareOperation = async (
       // instead of the new PowerShell default.
       const defaultShell =
         systemInfo.defaultShell ?? (device?.platform === 'win32' ? 'cmd.exe' : '/bin/sh');
-      return {
+      // Optional folders the device could not resolve must stay absent so the
+      // template falls back to '(not reported)' instead of rendering undefined.
+      const reported = {
         arch: systemInfo.arch,
         defaultShell,
         desktopPath: systemInfo.desktopPath,
@@ -403,6 +439,9 @@ export const prepareOperation = async (
         // persisted device row in resolveWorkspaceInit and written onto
         // deviceSystemInfo.workingDirectory at the call site below.
       };
+      return Object.fromEntries(
+        Object.entries(reported).filter(([, value]) => value !== undefined),
+      ) as Record<string, string>;
     } catch (error) {
       log('execAgent: failed to fetch device system info: %O', error);
       return {};
@@ -411,156 +450,9 @@ export const prepareOperation = async (
 
   const deviceSystemInfo = await fetchDeviceSystemInfoForTemplate(activeDeviceId);
 
-  // 9.5. Build Agent Management context
-  // - availableAgents is injected whenever the user is in auto mode (so the supervisor
-  //   can decide to activate agent-management on its own) OR when the tool is explicitly enabled.
-  // - availableProviders / availablePlugins are only built when the tool is explicitly
-  //   enabled, since they're solely needed for createAgent / updateAgent.
-  const isAgentManagementEnabled = toolsResult.enabledToolIds?.includes('lobe-agent-management');
-  const isInAutoSkillMode = agentConfig.chatConfig?.skillActivateMode !== 'manual';
-  const shouldInjectAvailableAgents = isInAutoSkillMode || isAgentManagementEnabled;
-  let agentManagementContext: AgentManagementContext | undefined;
-
-  if (shouldInjectAvailableAgents) {
-    // Query user's most recently updated agents.
-    // Over-fetch by 2: +1 reserved for the current agent (filtered out below
-    // so the model has no exposure to its own id and cannot self-delegate)
-    // and +1 to detect overflow for the `hasMore` flag.
-    const AVAILABLE_AGENTS_LIMIT = 10;
-    const recentAgents = await deps.agentModel.queryAgents({
-      limit: AVAILABLE_AGENTS_LIMIT + 2,
-    });
-
-    // Exclude the current agent from `availableAgents` — the model is the current
-    // agent. Its persona/identity is already established by `systemRole`, so we
-    // don't re-inject it here, and removing self from the list ensures the model
-    // never sees its own id in the agent-management context (so it can't
-    // accidentally call itself via `callAgent`).
-    const otherAgents = recentAgents.filter((a) => a.id !== resolvedAgentId);
-    const hasMoreAgents = otherAgents.length > AVAILABLE_AGENTS_LIMIT;
-    const availableAgents = otherAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
-      description: a.description ?? undefined,
-      id: a.id,
-      title: a.title ?? 'Untitled',
-    }));
-
-    agentManagementContext = {
-      availableAgents,
-      availableAgentsHasMore: hasMoreAgents,
-      ...(resolvedAgentId && {
-        currentAgent: {
-          id: resolvedAgentId,
-          title: agentConfig.title ?? undefined,
-        },
-      }),
-    };
-  }
-
-  if (isAgentManagementEnabled) {
-    // Query user's enabled models from database
-    const aiModelModel = new AiModelModel(deps.db, deps.userId);
-    const allUserModels = await aiModelModel.getAllModels();
-
-    // Filter only enabled chat models and group by provider
-    const providerMap = new Map<
-      string,
-      {
-        id: string;
-        models: Array<{ abilities?: any; description?: string; id: string; name: string }>;
-        name: string;
-      }
-    >();
-
-    for (const userModel of allUserModels) {
-      // Only include enabled chat models
-      if (!userModel.enabled || userModel.type !== 'chat') continue;
-
-      // Get model info from builtin metadata for full metadata.
-      const modelInfo = builtinModels.find(
-        (m) => m.id === userModel.id && m.providerId === userModel.providerId,
-      );
-
-      if (!providerMap.has(userModel.providerId)) {
-        providerMap.set(userModel.providerId, {
-          id: userModel.providerId,
-          models: [],
-          name: userModel.providerId, // TODO: Map to friendly provider name
-        });
-      }
-
-      const modelProvider = providerMap.get(userModel.providerId)!;
-      modelProvider.models.push({
-        abilities: userModel.abilities || modelInfo?.abilities,
-        description: modelInfo?.description,
-        id: userModel.id,
-        name: userModel.displayName || modelInfo?.displayName || userModel.id,
-      });
-    }
-
-    // Build availablePlugins from all plugin sources
-    // Exclude only truly internal tools (agent-management itself, agent-builder, page-agent)
-    const INTERNAL_TOOLS = new Set([
-      'lobe-agent-management', // Don't show agent-management in its own context
-      'lobe-agent-builder', // Used for editing current agent, not for creating new agents
-      'lobe-group-agent-builder', // Used for editing current group, not for creating new agents
-      'lobe-page-agent', // Page-editor specific tool
-    ]);
-
-    const availablePlugins = [
-      // All builtin tools (including hidden ones like web-browsing, cloud-sandbox)
-      ...builtinTools
-        .filter((tool) => !INTERNAL_TOOLS.has(tool.identifier))
-        .map((tool) => ({
-          description: tool.manifest.meta?.description,
-          identifier: tool.identifier,
-          name: tool.manifest.meta?.title || tool.identifier,
-          type: 'builtin' as const,
-        })),
-      // Lobehub Skills
-      ...lobehubSkillManifests.map((manifest) => ({
-        description: manifest.meta?.description,
-        identifier: manifest.identifier,
-        name: manifest.meta?.title || manifest.identifier,
-        type: 'lobehub-skill' as const,
-      })),
-      // Composio tools
-      ...composioManifests.map((manifest) => ({
-        description: manifest.meta?.description,
-        identifier: manifest.identifier,
-        name: manifest.meta?.title || manifest.identifier,
-        type: 'composio' as const,
-      })),
-      // Custom connectors (user-added MCP servers)
-      ...connectorManifests.map((manifest) => ({
-        description: manifest.meta?.description,
-        identifier: manifest.identifier,
-        name: manifest.meta?.title || manifest.identifier,
-        type: 'custom' as const,
-      })),
-    ];
-
-    // Merge models / plugins into the (already-initialized) agentManagementContext.
-    // availableAgents was populated above by `shouldInjectAvailableAgents`, which is
-    // always true when isAgentManagementEnabled.
-    agentManagementContext = {
-      ...agentManagementContext!,
-      availablePlugins,
-      // Limit to first 5 providers to avoid context bloat
-      availableProviders: Array.from(providerMap.values()).slice(0, 5),
-    };
-
-    log(
-      'execAgent: built agentManagementContext with %d providers, %d plugins, %d agents',
-      agentManagementContext.availableProviders!.length,
-      agentManagementContext.availablePlugins!.length,
-      agentManagementContext.availableAgents?.length ?? 0,
-    );
-  } else if (agentManagementContext) {
-    log(
-      'execAgent: injected availableAgents only (auto mode, agent-management tool not enabled): %d agents',
-      agentManagementContext.availableAgents?.length ?? 0,
-    );
-  }
+  // 9.5. The agent-management context (available agents / providers / plugins)
+  // is gathered per step by the shared context rules (`@lobechat/mecha`),
+  // together with the @-mentioned agents persisted on `initialContext` below.
 
   await throwIfExecutionAborted('tool preparation');
 
@@ -643,6 +535,31 @@ export const prepareOperation = async (
         }).enabledToolIds
       : [];
 
+  // Final share-gate allowlist enforcement — run once here, after every
+  // manifest/default/dynamic-activation source (installed plugins, LobeHub
+  // Skills, Composio, real-MCP connectors, always-on builtin defaults) has
+  // been merged into `toolManifestMap` / `toolsResult.enabledToolIds` /
+  // `tools` / `activatableToolIds` by `toolDiscovery` and the historical
+  // re-activation pass above. `filterPluginsByShareGate` in `toolDiscovery`
+  // only trimmed the initial candidate id list — it does not stop
+  // `lobe-activator` from dynamically activating (and `ToolExecutionService`
+  // from executing, with the CREATOR's credentials) a creator-connected tool
+  // that was never in `shareConfig.toolGrants`. Mutates the discovery maps
+  // in place, so the `toolSet` handed to `createOperation` is the pruned one.
+  if (shareGate) {
+    applyShareGateToToolSet(
+      {
+        activatableToolIds,
+        enabledToolIds: toolsResult.enabledToolIds,
+        executorMap: discovery.toolExecutorMap,
+        manifestMap: discovery.toolManifestMap,
+        sourceMap: discovery.toolSourceMap,
+        tools,
+      },
+      shareGate,
+    );
+  }
+
   log('execAgent: prepared evalContext for executor');
 
   await throwIfExecutionAborted('operation preparation');
@@ -720,10 +637,31 @@ export const prepareOperation = async (
     };
   }
 
+  // Goal-page side conversation: mirror the client executor's injection so
+  // server-run agents also answer progress questions from the live graph.
+  if (appContext?.viewedGoal?.goalId) {
+    try {
+      const snapshot = await new GoalGraphModel(deps.db, deps.userId, deps.workspaceId).getGraph(
+        appContext.viewedGoal.goalId,
+      );
+      if (snapshot) {
+        initialContext = {
+          ...initialContext,
+          initialContext: {
+            ...initialContext.initialContext,
+            goalOverview: buildGoalOverviewContext(snapshot),
+          },
+        };
+      }
+    } catch (error) {
+      log('execAgent: failed to build goal overview context: %O', error);
+    }
+  }
+
   // Persist the @-mentioned agents into the runtime initialContext so the
   // context engine injects the delegation context on every step (survives the
-  // queue-mode dispatch). `callLlm` bridges this into `agentManagementContext`
-  // for the AgentManagementContextInjector — mirrors the client runtime.
+  // queue-mode dispatch). The shared context rules fold them into the
+  // agent-management context on every step — mirrors the client runtime.
   if (hasMentionedAgents) {
     initialContext = {
       ...initialContext,
@@ -752,7 +690,7 @@ export const prepareOperation = async (
   // the local-system tool's {{workingDirectory}} placeholder — the channel
   // the model uses to know where it is and reach for absolute paths — and,
   // downstream, the runCommand cwd / search scope (RuntimeExecutors reads
-  // state.metadata.deviceSystemInfo.workingDirectory). Resume-safe via the
+  // state.binding.device.systemInfo.workingDirectory). Resume-safe via the
   // existing deviceSystemInfo plumbing (computeDeviceContext).
   if (workspaceInit.boundCwd) {
     deviceSystemInfo.workingDirectory = workspaceInit.boundCwd;
@@ -765,7 +703,9 @@ export const prepareOperation = async (
   // the tool layer reads the topic's cwd on the same run.
   await deps.bindTopicWorkingDirectory({
     config: workspaceInit.boundCwdConfig,
+    currentDeviceId: workspaceInit.topicDeviceId,
     currentWorkingDirectory: workspaceInit.topicWorkingDirectory,
+    deviceId: activeDeviceId,
     topicId,
   });
 
@@ -851,20 +791,15 @@ export const prepareOperation = async (
       );
     }
 
-    // Inject the project-root agent instructions (AGENTS.md / CLAUDE.md) as
-    // trailing blocks on the system role — after the agent's persona and any
-    // page/task/additional instructions. `agentConfig` is read by
-    // `createOperation` below, so appending here still reaches the LLM.
+    // Collected for the context engine, which assembles the system message and
+    // injects these directly after the persona — where this code used to
+    // concatenate them. Returning them rather than stamping `agentConfig` keeps
+    // run context off the agent's configuration.
     if (workspaceInit.workspace.instructions.length) {
-      const block = workspaceInit.workspace.instructions
-        .map(
-          ({ content, source }) =>
-            `<project_instructions source="${source}">\n${content}\n</project_instructions>`,
-        )
-        .join('\n\n');
-      agentConfig.systemRole = agentConfig.systemRole
-        ? `${agentConfig.systemRole}\n\n${block}`
-        : block;
+      projectInstructions = workspaceInit.workspace.instructions.map(({ content, source }) => ({
+        content,
+        source,
+      }));
       log(
         'execAgent: injected %d project instruction file(s): %s',
         workspaceInit.workspace.instructions.length,
@@ -872,44 +807,58 @@ export const prepareOperation = async (
       );
     }
 
-    // Precedence on name collision: project > db > agent-skills > builtin.
-    // Agent-skills carry the `agent-skills:` prefix in their `name`, so they
-    // can only collide with each other — but we still dedupe by name to keep
-    // a single shape for the SkillEngine input.
+    // Precedence, name dedupe, the disabled drop, the share allowlist and the
+    // device-only builtin gate are the shared rules in `@lobechat/mecha`; this
+    // pipeline supplies the four sources and the run's facts.
     //
-    // Disabled skills are dropped here, not just rule-gated later: this
-    // `skills` array is the sole candidate pool SkillEngine/SkillResolver
-    // build `<available_skills>` from AND the pool `activateSkill` resolves
-    // against, so a disabled identifier absent here is neither listed nor
-    // activatable — mirrors the tool-manifest treatment above (installedPlugins/
-    // additionalManifests), which this array had never received.
-    const seenNames = new Set<string>();
-    const skills = [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].filter(
-      (skill) => {
-        if (disabledPluginIds.includes(skill.identifier)) return false;
-        if (seenNames.has(skill.name)) return false;
-        seenNames.add(skill.name);
-        return true;
+    // A shared run only sees skills its share configuration allows —
+    // `shareConfig.skillGrants`, the creator's explicit per-skill list, NOT the
+    // tool picker (`filterSkillsByShareGate`). The pool is the FIRST
+    // enforcement point, not the only one: `activateSkill` takes a
+    // model-supplied name, so the skill runtime re-checks the same grant at
+    // load time.
+    const shareAllowedSkillIds = shareGate
+      ? filterSkillsByShareGate(
+          [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].map(
+            (skill) => skill.identifier,
+          ),
+          shareGate,
+        )
+      : undefined;
+
+    // Whether a skill is PINNED is the agent's own configuration; the share
+    // only decides whether the visitor may reach it. `agentPlugins` has already
+    // been narrowed by the TOOL grants (`filterPluginsByShareGate` in
+    // `toolDiscovery`), which drops a skill the creator granted as a skill
+    // rather than as a tool — leaving it un-pinned for the visitor (no content
+    // injection) and, under `manual` mode, dropped from the pool entirely. Add
+    // back exactly the ids that are both genuinely pinned on the agent AND
+    // allowed by this share's skill grants; nothing else widens.
+    const shareEnabledSkillIds = shareAllowedSkillIds?.filter((id) => pinnedSkillIds.has(id)) ?? [];
+
+    // Device-only builtin skills are gated on the run's execution plan, not
+    // the compile-time `isDesktop` constant (always false on the server). Use
+    // the device-CAPABLE plan rather than `activeDeviceId`: a
+    // `device-unrouted` run lets the model pick a device mid-run, and this
+    // skill set is built once per operation, so gating on the routed device
+    // would hide the skill forever in those runs. Activation and loading
+    // apply the same plan gate via `ToolExecutionContext.deviceCapable`; only
+    // command execution is gated at the device tool layer.
+    operationSkillSet = assembleSkillPool(
+      {
+        agentSkills: agentSkillMetas,
+        builtin: builtinMetas,
+        db: dbMetas,
+        project: projectMetas,
+      },
+      {
+        canExecuteOnDevice: executionPlan ? isDeviceCapablePlan(executionPlan) : false,
+        disabledIds: disabledPluginIds,
+        enabledPluginIds: [...new Set([...(agentPlugins ?? []), ...shareEnabledSkillIds])],
+        shareAllowedIds: shareAllowedSkillIds,
+        skillActivateMode: agentConfig.chatConfig?.skillActivateMode,
       },
     );
-
-    // Device-only builtin skills (agent-browser) are gated on the run's
-    // execution plan, not the compile-time `isDesktop` constant (always false
-    // on the server). Gate the static `<available_skills>` listing on the
-    // device-CAPABLE plan rather than `activeDeviceId`: `device-unrouted`
-    // runs let the model pick a device mid-run, and this skill set is built
-    // once per operation — gating on `activeDeviceId` would hide the skill
-    // forever in those runs. Activation/loading apply the same plan gate via
-    // `ToolExecutionContext.deviceCapable`; only actual command execution is
-    // gated at the device tool layer.
-    const skillEngine = new SkillEngine({
-      enableChecker: (skill) =>
-        shouldEnableBuiltinSkill(skill.identifier, {
-          canExecuteOnDevice: executionPlan ? isDeviceCapablePlan(executionPlan) : false,
-        }),
-      skills,
-    });
-    operationSkillSet = skillEngine.generate(agentPlugins ?? []);
   } catch (error) {
     log('execAgent: failed to build operationSkillSet: %O', error);
   }
@@ -932,6 +881,7 @@ export const prepareOperation = async (
     expertise,
     initialContext,
     operationSkillSet,
+    projectInstructions,
     userMemory,
   };
 };

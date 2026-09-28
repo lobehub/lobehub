@@ -2,12 +2,36 @@ import type { AcceptanceStatus } from '@lobechat/types';
 
 import type { AcceptanceListItem } from '@/services/verify';
 
+import { acceptanceListPath } from '../Viewer/routes';
 import { type AcceptanceStatusAction, getAcceptanceStatusActions } from '../Viewer/statusActions';
 
 export type AcceptanceSelectAllState = 'all' | 'none' | 'partial';
 
 export const toggleAcceptanceSelection = (selected: string[], id: string): string[] =>
   selected.includes(id) ? selected.filter((entry) => entry !== id) : [...selected, id];
+
+/**
+ * Shift-click: every row between the anchor and the target in VISUAL order,
+ * collapsed groups included — the batch bar count shows what was swept. An
+ * anchor that has scrolled out of the visible order degrades to a single pick.
+ */
+export const rangeAcceptanceSelection = (
+  orderedIds: string[],
+  anchor: string | null,
+  target: string,
+  selected: string[],
+): string[] => {
+  const from = anchor ? orderedIds.indexOf(anchor) : -1;
+  const to = orderedIds.indexOf(target);
+  const range =
+    from === -1 || to === -1
+      ? [target]
+      : orderedIds.slice(Math.min(from, to), Math.max(from, to) + 1);
+
+  const merged = new Set(selected);
+  for (const id of range) merged.add(id);
+  return [...merged];
+};
 
 /**
  * The selection as the user can currently SEE it.
@@ -75,6 +99,24 @@ export const acceptanceBatchTargets = (
 };
 
 /**
+ * The subset of a selection a project move can actually change.
+ *
+ * A row already filed under the target project (or, for `null`, one that is in
+ * no project at all) has nowhere to move — leaving it out keeps the reported
+ * count honest, the same rule the status sweep applies.
+ */
+export const acceptanceProjectTargets = (
+  items: AcceptanceListItem[],
+  selected: string[],
+  projectId: string | null,
+): string[] => {
+  const selectedSet = new Set(selected);
+  return items
+    .filter((item) => selectedSet.has(item.id) && (item.project?.id ?? null) !== projectId)
+    .map((item) => item.id);
+};
+
+/**
  * The server caps one sweep at 200 ids, so a select-all after enough scrolling
  * would be rejected wholesale — accept, close and delete all failing before
  * anything changed. Split the work instead: a sweep is a background chore, and
@@ -92,3 +134,12 @@ export const chunkAcceptanceBatch = (ids: string[], size = ACCEPTANCE_BATCH_CHUN
   }
   return chunks;
 };
+
+export const acceptanceRedirectAfterDelete = (
+  openId: string | undefined,
+  targets: string[],
+  failedIds: string[],
+): string | undefined =>
+  openId && targets.includes(openId) && !failedIds.includes(openId)
+    ? acceptanceListPath()
+    : undefined;

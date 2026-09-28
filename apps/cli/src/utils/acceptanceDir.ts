@@ -13,6 +13,7 @@ import path from 'node:path';
  *     ├── acceptance.json            # which acceptance these rounds belong to
  *     └── <YYYYMMDD-HHMMSS>-<slug>/  # ONE immutable round
  *         ├── result.json
+ *         ├── proposal.md             # optional — posted into the discussion
  *         ├── report.md
  *         └── assets/
  * ```

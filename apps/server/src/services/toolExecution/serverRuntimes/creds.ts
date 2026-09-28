@@ -18,9 +18,25 @@ export class ServerCredsService implements ICredsService {
   private marketService: MarketService;
   private workspaceId?: string;
 
-  constructor(marketService: MarketService, workspaceId?: string) {
+  private isShareVisitor: boolean;
+
+  constructor(
+    marketService: MarketService,
+    workspaceId?: string,
+    /**
+     * Belt-and-braces guard: true for an Agent Share visitor's run
+     * (`context.agentShareVisitor` set). `lobe-creds` is already absent from
+     * `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`, so this runtime should never
+     * be constructed for a visitor in the first place — but `injectCreds`
+     * refuses again here too, so the guarantee that the creator's decrypted
+     * credentials never land in a sandbox a visitor controls doesn't rest on
+     * the allowlist alone.
+     */
+    isShareVisitor = false,
+  ) {
     this.marketService = marketService;
     this.workspaceId = workspaceId;
+    this.isShareVisitor = isShareVisitor;
   }
 
   /**
@@ -109,6 +125,16 @@ export class ServerCredsService implements ICredsService {
     unsupportedInSandbox?: string[];
   }> {
     log('injectCreds: keys=%O, topicId=%s', params.keys, params.topicId);
+
+    // Refuse before the Market call, not after: Market's inject endpoint
+    // writes the creator's REAL credentials into the sandbox's ~/.creds/env
+    // server-side as part of handling the request (see the comment below),
+    // so for a share visitor the only safe place to stop is here.
+    if (this.isShareVisitor) {
+      throw new Error(
+        'Credential injection into the sandbox is unavailable in shared conversations.',
+      );
+    }
 
     // Market's generic inject endpoint resolves organization credentials from
     // the workspaceId signed into this service's trusted-client token, and —
@@ -209,7 +235,11 @@ export const credsRuntime: ServerRuntimeRegistration = {
       userInfo: { userId: context.userId, workspaceId: context.workspaceId },
     });
 
-    const credsService = new ServerCredsService(marketService, context.workspaceId);
+    const credsService = new ServerCredsService(
+      marketService,
+      context.workspaceId,
+      Boolean(context.agentShareVisitor),
+    );
 
     return new CredsExecutionRuntime(credsService, {
       topicId: context.topicId,

@@ -1,7 +1,7 @@
 import type { Agent, GeneralAgentConfig } from '@lobechat/agent-runtime';
 import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
 import type { LobeAgentChatConfig, LobeAgentConfig } from '@lobechat/types';
-import { AgentGraphSchema } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types/agent/graph';
 import debug from 'debug';
 
 import type { AgentRuntimeServiceOptions } from '@/server/services/agentRuntime/AgentRuntimeService';

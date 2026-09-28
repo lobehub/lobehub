@@ -1,5 +1,6 @@
 import { memo } from 'react';
 
+import { useTopicDrawerArtifactPortal } from '@/features/AgentTasks/hooks/useTopicDrawerArtifactPortal';
 import { PortalContent } from '@/features/Portal/router';
 import RightPanel from '@/features/RightPanel';
 import { useChatStore } from '@/store/chat';
@@ -21,20 +22,25 @@ const AgentTaskManager = memo<AgentTaskManagerProps>(({ preferredAgentId, viewed
     systemStatusSelectors.showTaskAgentPanel(s),
     s.toggleTaskAgentPanel,
   ]);
-  const portalView = useChatStore(chatPortalSelectors.currentViewType);
-  const showAcceptance =
-    portalView === PortalViewType.Acceptance || portalView === PortalViewType.AcceptanceCheck;
+  const [portalView, showPortal] = useChatStore((s) => [
+    chatPortalSelectors.currentViewType(s),
+    chatPortalSelectors.showStandalonePortal(s),
+  ]);
+  const showArtifactInTopicDrawer = useTopicDrawerArtifactPortal();
+  const showPortalInTaskPanel = showPortal && !showArtifactInTopicDrawer;
 
   return (
     <RightPanel
       defaultWidth={420}
-      expand={expand}
+      expand={expand || showPortalInTaskPanel}
       maxWidth={720}
       minWidth={320}
       width={portalView === PortalViewType.AcceptanceCheck ? 640 : undefined}
       onExpandChange={(next) => toggleTaskAgentPanel(next)}
     >
-      {showAcceptance ? (
+      {/* Artifact cards in the run drawer keep that reading context. Other task
+          portals render here because Tasks routes have no desktop Portal host. */}
+      {showPortalInTaskPanel ? (
         <PortalContent />
       ) : (
         <TaskAgentProvider preferredAgentId={preferredAgentId} viewedTaskId={viewedTaskId}>

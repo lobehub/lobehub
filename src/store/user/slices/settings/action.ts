@@ -38,6 +38,12 @@ export class UserSettingsActionImpl {
    * payload or the aborted change would silently never persist.
    */
   readonly #pendingSettingKeys = new Set<string>();
+  /**
+   * Tail of the in-flight `updateToolChannels` writes. Each write waits for the
+   * previous one so rapid toggles/reorders land in call order — parallel
+   * requests could commit out of order and leave an older list in the DB.
+   */
+  #toolChannelsWrite: Promise<unknown> = Promise.resolve();
 
   constructor(set: Setter, get: () => UserStore, _api?: unknown) {
     void _api;
@@ -107,7 +113,11 @@ export class UserSettingsActionImpl {
 
     const nextSettings = merge(prevSetting, settings);
 
-    if (isEqual(prevSetting, nextSettings)) return;
+    // A failed write leaves its optimistic value in local state and its columns
+    // in `#pendingSettingKeys`. Retrying the same change then diffs as "no
+    // change", so only skip when nothing is still waiting to be persisted —
+    // otherwise a retry would resolve without a request and look saved.
+    if (isEqual(prevSetting, nextSettings) && this.#pendingSettingKeys.size === 0) return;
 
     const diffs = difference(nextSettings, defaultSettings);
     const isEmptyObjectDiff = (value: unknown): boolean =>
@@ -273,6 +283,34 @@ export class UserSettingsActionImpl {
 
     await userService.updateToolIntervention(config);
     await this.#get().refreshUserState();
+  };
+
+  updateToolChannels = async (channels: {
+    crawlerImpls?: string[];
+    searchProviders?: string[];
+  }): Promise<void> => {
+    // Optimistic local update, then a server-side patch of only these keys —
+    // setSettings would replace the whole `tool` column with this tab's
+    // snapshot and revert sibling keys changed elsewhere (see
+    // updateHumanIntervention). `merge` replaces arrays wholesale, so the new
+    // ordered lists are stored as-is.
+    this.#set(
+      { settings: merge(this.#get().settings, { tool: channels }) },
+      false,
+      'optimistic_updateToolChannels',
+    );
+
+    // A failed earlier write must not block later ones; its caller still
+    // receives the rejection through its own `write` promise.
+    const write = this.#toolChannelsWrite
+      .catch(() => {})
+      .then(() => userService.updateToolChannels(channels));
+    this.#toolChannelsWrite = write;
+
+    await write;
+    // Only the latest write refreshes: an intermediate refresh would pull a
+    // list that a queued write is about to replace.
+    if (this.#toolChannelsWrite === write) await this.#get().refreshUserState();
   };
 
   updateKeyVaults = async (keyVaults: Partial<UserKeyVaults>): Promise<void> => {

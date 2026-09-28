@@ -18,7 +18,7 @@ const Icon: IconType = memo(({ size = '1em', style, ...rest }) => {
       <path d="M3.5 8h-1a1 1 0 00-1 1v4a1 1 0 001 1h1a1 1 0 001-1V9a1 1 0 00-1-1zM8.5 5h-1a1 1 0 00-1 1v7a1 1 0 001 1h1a1 1 0 001-1V6a1 1 0 00-1-1z" />
       <path
         d="M13.5 2h-1a1 1 0 00-1 1v10a1 1 0 001 1h1a1 1 0 001-1V3a1 1 0 00-1-1z"
-        fill-opacity=".4"
+        fillOpacity={0.4}
       />
     </svg>
   );

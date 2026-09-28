@@ -1,7 +1,14 @@
 'use client';
 
-import { AccordionItem, Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+  Button,
+  Text,
+} from '@lobehub/ui/base-ui';
 import { Beaker, RotateCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -74,26 +81,26 @@ const ExperimentList = memo<ExperimentListProps>(({ activeKey, itemKey }) => {
   })();
 
   return (
-    <AccordionItem
-      itemKey={itemKey}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
-      title={
-        <Flexbox horizontal align="center" gap={4}>
-          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {t('sidebar.experiments')}
-          </Text>
-          {experimentList.length > 0 && (
-            <Text fontSize={12} type="secondary">
-              {experimentList.length}
+    <AccordionItem value={itemKey}>
+      <AccordionHeader style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        <AccordionTrigger>
+          <Flexbox horizontal align="center" gap={4}>
+            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+              {t('sidebar.experiments')}
             </Text>
-          )}
+            {experimentList.length > 0 && (
+              <Text fontSize={12} type="secondary">
+                {experimentList.length}
+              </Text>
+            )}
+          </Flexbox>
+        </AccordionTrigger>
+      </AccordionHeader>
+      <AccordionPanel>
+        <Flexbox gap={1} paddingBlock={1}>
+          {body}
         </Flexbox>
-      }
-    >
-      <Flexbox gap={1} paddingBlock={1}>
-        {body}
-      </Flexbox>
+      </AccordionPanel>
     </AccordionItem>
   );
 });

@@ -7,11 +7,13 @@ import type {
   GoalEventEntityType,
   GoalEventType,
   GoalGraphSnapshot,
+  GoalGraphWorkVersionDisplay,
   GoalNodeKind,
   GoalNodeStatus,
   GoalNodeWorkVersionRelation,
   GoalStatus,
 } from '@lobechat/types';
+import { experimentMembers, experimentOwner, experimentStatus } from '@lobechat/utils/goalGraph';
 import { and, asc, count, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
@@ -45,6 +47,8 @@ interface CreateNodeInput {
   description?: string;
   kind: GoalNodeKind;
   priority?: number;
+  questionId?: string;
+  scopeId?: string;
   status?: GoalNodeStatus;
   title: string;
 }
@@ -81,7 +85,8 @@ export class GoalGraphModel {
       .select()
       .from(goals)
       .where(and(eq(goals.id, goalId), this.ownership()))
-      .limit(1);
+      .limit(1)
+      .for('update');
     return goal;
   };
 
@@ -100,7 +105,12 @@ export class GoalGraphModel {
   };
 
   getGraph = async (goalId: string): Promise<GoalGraphSnapshot | undefined> => {
-    const goal = await this.ownedGoal(goalId);
+    // Ordinary graph refreshes must not queue behind a coordinator's write lock.
+    const [goal] = await this.db
+      .select()
+      .from(goals)
+      .where(and(eq(goals.id, goalId), this.ownership()))
+      .limit(1);
     if (!goal) return undefined;
 
     const [nodes, edges, decisions, events, linkedWorkVersions] = await Promise.all([
@@ -134,14 +144,83 @@ export class GoalGraphModel {
         .orderBy(asc(goalNodeWorkVersions.createdAt)),
     ]);
 
+    const linkDisplays = await this.hydrateWorkVersions(
+      linkedWorkVersions.map(({ link }) => link.workVersionId),
+    );
+
     return {
       decisions: decisions.map(({ goal_node_decisions }) => goal_node_decisions),
       edges,
       events,
       goal,
-      nodes,
-      workVersions: linkedWorkVersions.map(({ link }) => link),
+      nodes: nodes.map((node) => ({ ...node, status: experimentStatus({ nodes, edges }, node) })),
+      workVersions: linkedWorkVersions.map(({ link }) => ({
+        ...link,
+        // A link nothing came back for still counts; it just cannot be named.
+        work: linkDisplays.get(link.workVersionId),
+      })),
     };
+  };
+
+  /**
+   * Display snapshots for linked Work versions, keyed by version id.
+   *
+   * Read separately from the link rows, and gated by `workOwnership`: `goals`
+   * has no visibility column, so every member of a team workspace can read a
+   * workspace goal, while a Work is owner-scoped (external Works are always
+   * private, document/file Works follow their backing resource). Hydrating
+   * without the predicate handed another member the owner's private title,
+   * status, url and document binding.
+   *
+   * A second small query rather than a join on the graph read: `workOwnership`
+   * carries correlated EXISTS guards, and evaluating those inside the graph
+   * join cost that read ~2.5x — which the detail page pays every few seconds
+   * while it polls. Here they run once over a handful of linked versions, and a
+   * goal with no links skips the query entirely.
+   */
+  private hydrateWorkVersions = async (versionIds: string[]) => {
+    const display = new Map<string, GoalGraphWorkVersionDisplay>();
+    const ids = [...new Set(versionIds)];
+    if (ids.length === 0) return display;
+
+    const rows = await this.db
+      .select({
+        identifier: workVersions.identifier,
+        // Document and file Works keep their open target in the version
+        // metadata rather than the `url` column.
+        metadata: workVersions.metadata,
+        resourceId: works.resourceId,
+        status: workVersions.status,
+        title: workVersions.title,
+        type: works.type,
+        url: workVersions.url,
+        versionId: workVersions.id,
+        workId: works.id,
+      })
+      .from(workVersions)
+      .innerJoin(
+        works,
+        and(
+          eq(workVersions.workId, works.id),
+          workOwnership({ db: this.db, userId: this.userId, workspaceId: this.workspaceId }),
+        ),
+      )
+      .where(inArray(workVersions.id, ids));
+
+    for (const row of rows) {
+      display.set(row.versionId, {
+        identifier: row.identifier,
+        resourceId: row.resourceId,
+        status: row.status,
+        title: row.title,
+        type: row.type,
+        url: row.url,
+        workId: row.workId,
+        ...(row.metadata?.agentDocumentId ? { agentDocumentId: row.metadata.agentDocumentId } : {}),
+        ...(row.metadata?.fileUrl ? { fileUrl: row.metadata.fileUrl } : {}),
+      });
+    }
+    return display;
   };
 
   /**
@@ -265,10 +344,15 @@ export class GoalGraphModel {
   createNode = async (goalId: string, input: CreateNodeInput) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const { scopeId, questionId, ...values } = input;
+      if (input.kind === 'experiment' && !questionId)
+        throw new Error('An experiment must answer a question');
+      if (input.kind !== 'experiment' && questionId)
+        throw new Error('Only experiments can answer questions');
       const [node] = await tx
         .insert(goalNodes)
         .values({
-          ...input,
+          ...values,
           confidence: input.confidence?.toString(),
           createdByUserId: input.createdByAgentId ? undefined : this.userId,
           goalId,
@@ -281,6 +365,14 @@ export class GoalGraphModel {
         entityType: 'node',
         eventType: 'created',
       });
+      const model = new GoalGraphModel(
+        tx as unknown as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+        this.actor,
+      );
+      if (scopeId) await model.createEdge(goalId, scopeId, node.id, 'contains');
+      if (questionId) await model.createEdge(goalId, node.id, questionId, 'answers');
       return node;
     });
 
@@ -331,6 +423,51 @@ export class GoalGraphModel {
   ) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      if (kind === 'contains' || kind === 'answers') {
+        const nodes = await tx.select().from(goalNodes).where(eq(goalNodes.goalId, goalId));
+        const edges = await tx.select().from(goalEdges).where(eq(goalEdges.goalId, goalId));
+        const graph = { nodes, edges };
+        const source = nodes.find((node) => node.id === sourceNodeId);
+        const target = nodes.find((node) => node.id === targetNodeId);
+        if (!source || !target || source.id === target.id)
+          throw new Error('Invalid experiment relationship');
+        if (source.kind !== 'experiment')
+          throw new Error('Only an experiment can contain nodes or answer a question');
+        if (kind === 'contains') {
+          const owner = experimentOwner(graph, target.id);
+          if (owner && owner !== source.id)
+            throw new Error('A node can belong to only one experiment');
+          if (experimentMembers(graph, target.id).has(source.id))
+            throw new Error('Experiment containment cannot form a cycle');
+          const questionId = edges.find(
+            (edge) => edge.kind === 'answers' && edge.sourceNodeId === target.id,
+          )?.targetNodeId;
+          if (
+            edges.some(
+              (edge) =>
+                edge.kind === 'answers' &&
+                edge.targetNodeId === target.id &&
+                experimentOwner(graph, edge.sourceNodeId) !== source.id,
+            )
+          )
+            throw new Error('A question must share its answer scope');
+          if (questionId && experimentOwner(graph, questionId) !== source.id)
+            throw new Error('An answer must share its question scope');
+        } else {
+          if (target.kind !== 'problem') throw new Error('An experiment must answer a question');
+          if (experimentOwner(graph, source.id) !== experimentOwner(graph, target.id))
+            throw new Error('An answer must share its question scope');
+          if (
+            edges.some(
+              (edge) =>
+                edge.kind === 'answers' &&
+                edge.sourceNodeId === source.id &&
+                edge.targetNodeId !== target.id,
+            )
+          )
+            throw new Error('An experiment answers one question');
+        }
+      }
       const [edge] = await tx
         .insert(goalEdges)
         .values({ goalId, kind, sourceNodeId, targetNodeId })
@@ -526,6 +663,49 @@ export class GoalGraphModel {
         entityType: 'decision',
         eventType: 'resolved',
         reason: resolution,
+      });
+      return decision;
+    });
+
+  /**
+   * Cancel a still-pending decision whose question a later action made moot —
+   * nobody picked an option, so this is distinct from `resolveDecision`. The
+   * decision node retires with it; a canceled gate must not keep parking the
+   * goal on the pending-decision branch.
+   */
+  cancelDecision = async (goalId: string, decisionId: string, reason?: string) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [ownedDecision] = await tx
+        .select({ id: goalNodeDecisions.id })
+        .from(goalNodeDecisions)
+        .innerJoin(goalNodes, eq(goalNodeDecisions.nodeId, goalNodes.id))
+        .where(
+          and(
+            eq(goalNodeDecisions.id, decisionId),
+            eq(goalNodeDecisions.status, 'pending'),
+            eq(goalNodes.goalId, goalId),
+          ),
+        )
+        .limit(1);
+      if (!ownedDecision) return undefined;
+      const [decision] = await tx
+        .update(goalNodeDecisions)
+        .set({ canceledAt: new Date(), status: 'canceled', updatedAt: new Date() })
+        .where(
+          and(eq(goalNodeDecisions.id, ownedDecision.id), eq(goalNodeDecisions.status, 'pending')),
+        )
+        .returning();
+      if (!decision) return undefined;
+      await tx
+        .update(goalNodes)
+        .set({ status: 'retired', updatedAt: new Date() })
+        .where(eq(goalNodes.id, decision.nodeId));
+      await this.appendEvent(tx, goalId, {
+        entityId: decision.id,
+        entityType: 'decision',
+        eventType: 'retired',
+        reason,
       });
       return decision;
     });

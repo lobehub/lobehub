@@ -6,9 +6,11 @@ import {
   FOLLOW_UP_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
+import { notShareVisitorMessage } from '@/database/utils/shareVisitor';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
 import { RawResponseSchema } from './schema';
@@ -51,6 +53,11 @@ export class FollowUpActionService {
           eq(m.role, 'assistant'),
           isNotNull(m.content),
           ne(m.content, ''),
+          // `topicId` is client input and agent-share visitor topics carry the
+          // creator's userId, so without this a creator could feed a visitor
+          // topic id here and get the visitor's assistant reply summarized
+          // into chips — the same read the creator-facing routers deny.
+          notShareVisitorMessage(),
         ),
     });
 
@@ -73,6 +80,7 @@ export class FollowUpActionService {
           schema: FOLLOW_UP_JSON_SCHEMA,
         },
         {
+          metadata: { topicId, trigger: RequestTrigger.FollowUp },
           tracing: {
             promptVersion: FOLLOW_UP_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.FollowUp,

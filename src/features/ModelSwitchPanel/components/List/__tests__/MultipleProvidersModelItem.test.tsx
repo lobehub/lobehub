@@ -47,6 +47,9 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 
 vi.mock('@lobehub/icons', () => ({
   LobeHub: { Morden: () => <span /> },
+}));
+
+vi.mock('@/components/LobeIcons', () => ({
   ModelIcon: () => <span />,
   ProviderIcon: () => <span />,
 }));
@@ -99,12 +102,30 @@ describe('MultipleProvidersModelItem', () => {
     expect(screen.getByTestId('tooltip-ModelSelect.featureTag.audio')).toBeInTheDocument();
   });
 
+  it('keeps spread model card fields off the DOM', async () => {
+    const { ModelItemRender } = await vi.importActual<typeof ModelSelectModule>(
+      '@/components/ModelSelect',
+    );
+    const modelCardProps = {
+      id: 'deepseek-v3',
+      knowledgeCutoff: '2025-01',
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+    };
+
+    const { container } = render(<ModelItemRender {...modelCardProps} />);
+
+    for (const attr of ['reasoning', 'search', 'structuredoutput', 'knowledgecutoff']) {
+      expect(container.querySelector(`[${attr}]`)).toBeNull();
+    }
+  });
+
   it('renders model detail panel even when info tags are hidden', () => {
     render(
       <MultipleProvidersModelItem
         activeKey="lobehub/gpt-5.4"
         newLabel="new"
-        showInfoTag={false}
         data={{
           displayName: 'GPT-5.4',
           model: {
@@ -136,7 +157,6 @@ describe('MultipleProvidersModelItem', () => {
         activeKey="anthropic/claude-opus-4-7"
         newLabel="new"
         proLabel="pro"
-        showInfoTag={false}
         data={{
           displayName: 'Claude Opus 4.7',
           model: {

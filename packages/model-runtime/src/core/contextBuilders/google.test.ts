@@ -165,12 +165,7 @@ describe('google contextBuilders', () => {
         isValid: true,
       });
 
-      const imageToBase64Spy = vi
-        .spyOn(imageToBase64Module, 'imageUrlToBase64')
-        .mockResolvedValueOnce({
-          base64: 'mockBase64Data',
-          mimeType: 'image/png',
-        });
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
 
       const content: UserMessageContentPart = {
         image_url: { url: imageUrl },
@@ -286,12 +281,7 @@ describe('google contextBuilders', () => {
         reason: 'File too large: 120MB',
       });
 
-      const imageToBase64Spy = vi
-        .spyOn(imageToBase64Module, 'imageUrlToBase64')
-        .mockResolvedValueOnce({
-          base64: 'mockBase64Data',
-          mimeType: 'image/png',
-        });
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
 
       const content: UserMessageContentPart = {
         image_url: { url: imageUrl },
@@ -362,12 +352,7 @@ describe('google contextBuilders', () => {
         isValid: true,
       });
 
-      const imageToBase64Spy = vi
-        .spyOn(imageToBase64Module, 'imageUrlToBase64')
-        .mockResolvedValueOnce({
-          base64: 'mockVideoBase64Data',
-          mimeType: 'video/mp4',
-        });
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
 
       const content: UserMessageContentPart = {
         type: 'video_url',
@@ -474,12 +459,7 @@ describe('google contextBuilders', () => {
         isValid: true,
       });
 
-      const imageToBase64Spy = vi
-        .spyOn(imageToBase64Module, 'imageUrlToBase64')
-        .mockResolvedValueOnce({
-          base64: 'mockAudioBase64Data',
-          mimeType: 'audio/mpeg',
-        });
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
 
       const content: UserMessageContentPart = {
         audio_url: { url: audioUrl },
@@ -523,6 +503,31 @@ describe('google contextBuilders', () => {
           fileUri: audioUrl,
           mimeType: 'audio/wav',
         },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should send audio MIME when an inlined audio URL is sniffed as a video container', async () => {
+      const audioUrl = 'https://example.com/voice-message.m4a';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(false);
+      vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
+        base64: 'm4aBase64Data',
+        mimeType: 'video/mp4',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: audioUrl },
+        type: 'audio_url',
+      };
+
+      await expect(buildGooglePart(content, { model: 'gemini-3.5-flash-lite' })).resolves.toEqual({
+        inlineData: { data: 'm4aBase64Data', mimeType: 'audio/mp4' },
         thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
       });
     });

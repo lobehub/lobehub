@@ -1,12 +1,6 @@
 ---
 name: agent-testing-bot
-description: >
-  Bot-channel end-to-end verification for LobeHub — drives the real native chat
-  apps (Discord / Slack / Telegram / WeChat / Lark / QQ / iMessage) via osascript
-  or the iMessage bridge, on macOS. Extends the generic acceptance skill for
-  bot surfaces. Triggers on 'test bot', 'bot test', 'test in discord',
-  'test in telegram', 'test in slack', 'test in wechat', 'test in weixin',
-  'test in lark', 'test in feishu', 'test in qq'.
+description: 'Use for real bot-channel acceptance in Discord, Slack, Telegram, WeChat/Weixin, Lark/Feishu, QQ or iMessage on macOS. Extends acceptance with native chat apps.'
 ---
 
 # Agent Testing — Bot Channels (LobeHub project skill)
@@ -60,8 +54,9 @@ Every osascript platform script shares one interface:
 ```
 
 The script activates the app, navigates to the channel/contact, sends the
-message, waits, and screenshots the result window (via the generic skill's
-`../../acceptance/scripts/capture-app-window.sh`). iMessage is the exception: it
+message, waits, and screenshots the result window (via the project adapter's
+`../../acceptance/scripts/capture-app-window.sh`, which runs the installed
+acceptance skill's screen-recording preflight). iMessage is the exception: it
 uses a BlueBubbles bridge, not osascript — see [imessage/index.md](./imessage/index.md).
 
 ## osascript prerequisites
@@ -80,8 +75,11 @@ Screen Recording (TCC) permission is missing OR the display is asleep / locked /
 on a screensaver. Gate BEFORE any bot capture:
 
 ```bash
-./.agents/acceptance/scripts/check-screen-recording.sh # exit 0 = OS capture will work
+bash .agents/skills/acceptance/scripts/check-screen-recording.sh
 ```
+
+Only exit 0 confirms both permission and a measured non-black frame. Missing
+tools or an undetermined check must block capture, not count as a pass.
 
 Keep the display awake for the whole capture session (`caffeinate -dimsu &`, kill
 when done). Because this surface depends on OS capture and native macOS apps,

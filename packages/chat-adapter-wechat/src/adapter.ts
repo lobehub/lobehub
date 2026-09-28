@@ -21,6 +21,7 @@ import { getWechatTextSendCount, WechatApiClient, WechatUploadMediaType } from '
 import { WechatFormatConverter } from './format-converter';
 import type { MessageItem, WechatAdapterConfig, WechatRawMessage, WechatThreadId } from './types';
 import { MessageItemType, MessageState, MessageType } from './types';
+import { decodeWechatVoice } from './voice';
 
 /**
  * Extract text content from a WechatRawMessage's item_list.
@@ -122,8 +123,11 @@ export function extractMediaMetadata(msg: WechatRawMessage): Attachment[] {
       }
       case MessageItemType.VOICE: {
         if (!item.voice_item) break;
+        // Voice arrives as SILK but is decoded to WAV on download (see
+        // `decodeWechatVoice`), so advertise the shape consumers will get.
         attachments.push({
-          mimeType: 'audio/silk',
+          mimeType: 'audio/wav',
+          name: 'voice.wav',
           type: 'audio',
           url: '',
         } as Attachment);
@@ -190,9 +194,17 @@ export async function downloadMediaFromRawMessage(
         case MessageItemType.VOICE: {
           if (!hasCdnMedia(item) || !item.voice_item?.media) break;
           const voiceBuf = await api.downloadCdnMedia(item.voice_item.media);
+          // Raw SILK is unplayable in browsers and unsupported by audio-capable
+          // models; decode to WAV here so every downstream consumer gets a
+          // real audio file (a failed decode falls back to the raw bytes).
+          const voice = await decodeWechatVoice(voiceBuf, item.voice_item, (error) =>
+            warn(`[wechat] voice decode failed, keeping raw SILK bytes: ${String(error)}`),
+          );
           attachments.push({
-            buffer: voiceBuf,
-            mimeType: 'audio/silk',
+            buffer: voice.buffer,
+            mimeType: voice.mimeType,
+            name: voice.name,
+            size: voice.buffer.length,
             type: 'audio',
             url: '',
           } as Attachment);

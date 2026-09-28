@@ -28,7 +28,7 @@ export interface OpenCriterionEditModalProps {
   /** Create flow: the criterion only exists once it is saved. */
   isNew?: boolean;
   onDelete?: () => void;
-  onSubmit: (next: VerifyCriterionDraft) => void;
+  onSubmit: (next: VerifyCriterionDraft) => void | Promise<void>;
 }
 
 /** Imperatively open the shared criterion editor in a modal. */

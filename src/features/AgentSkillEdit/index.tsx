@@ -5,11 +5,12 @@ import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Alert, Button, Drawer, toast } from '@lobehub/ui/base-ui';
-import { Form as AForm, Popconfirm, Skeleton } from 'antd';
+import { Form as AForm, Popconfirm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
 import { usePermission } from '@/hooks/usePermission';
@@ -75,7 +76,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
 
   const skillDetail = data?.skillDetail;
-  const resourceTree = data?.resourceTree ?? [];
+  const resourceTree = useMemo(() => data?.resourceTree ?? [], [data?.resourceTree]);
   const contentMap = useMemo(() => buildContentMap(resourceTree), [resourceTree]);
 
   const initialValues: SkillEditFormValues = useMemo(
@@ -159,7 +160,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
       onClose={onClose}
     >
       {isLoading ? (
-        <Skeleton active paragraph={{ rows: 8 }} style={{ padding: 16 }} />
+        <ArticleSkeleton rows={8} style={{ padding: 16 }} />
       ) : (
         <Flexbox
           horizontal

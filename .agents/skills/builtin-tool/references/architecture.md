@@ -65,7 +65,7 @@ The split exists so:
 
 ## Why ExecutionRuntime is the Default Home for Logic
 
-**Old pattern (grandfathered):** business logic in `src/executor/` directly. Examples: `builtin-tool-task`, older tools. Works, but the executor mixes runtime logic with frontend service plumbing — hard to reuse on the server.
+**Old pattern (grandfathered):** business logic in `src/executor/` directly. Examples: `builtin-tool-calculator`, older tools. Works, but the executor mixes runtime logic with frontend service plumbing — hard to reuse on the server.
 
 **New pattern (preferred):** business logic in `src/ExecutionRuntime/`, frontend wiring in `src/client/executor/`. Examples: `builtin-tool-local-system`, `builtin-tool-web-browsing`, `builtin-tool-calculator`.
 
@@ -108,7 +108,7 @@ The `client/executor` instantiates it once with the real service:
 
 ```ts
 import { localFileService } from '@/services/electron/localFileService';
-import { LocalSystemExecutionRuntime } from '../../ExecutionRuntime';
+import { LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
 class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
   private runtime = new LocalSystemExecutionRuntime(localFileService);

@@ -15,9 +15,9 @@ export interface HomeGoalEntry {
   pendingDecisions: number;
   /** Key in the `chat` namespace — the same label the goal pages use. */
   statusKey: GoalStatusKey;
+  taskDone: number;
+  taskTotal: number;
   title: string;
-  workDone: number;
-  workTotal: number;
 }
 
 /**
@@ -43,9 +43,9 @@ const isOpenGoalStatus = (statusKey: string): statusKey is GoalStatusKey =>
 /** Actionable first: a delivered goal is blocked on the user, a running one isn't. */
 const BUCKET_ORDER: HomeGoalBucket[] = ['review', 'running'];
 
-/** The rail's goal rows, bucketed and ordered. */
-export const buildHomeGoalEntries = (goals: GoalListItem[]): HomeGoalEntry[] => {
-  const entries = goals.flatMap<HomeGoalEntry>((item) => {
+/** The rail's goal rows, bucketed and ordered. `undefined` (still loading) folds to none. */
+export const buildHomeGoalEntries = (goals?: GoalListItem[]): HomeGoalEntry[] => {
+  const entries = (goals ?? []).flatMap<HomeGoalEntry>((item) => {
     const statusKey = goalStatusKey(item.goal.status);
     if (!isOpenGoalStatus(statusKey)) return [];
 
@@ -57,8 +57,8 @@ export const buildHomeGoalEntries = (goals: GoalListItem[]): HomeGoalEntry[] => 
         pendingDecisions: item.pendingDecisions,
         statusKey,
         title: item.goal.title,
-        workDone: item.workDone,
-        workTotal: item.workTotal,
+        taskDone: item.taskDone,
+        taskTotal: item.taskTotal,
       },
     ];
   });

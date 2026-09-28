@@ -16,10 +16,10 @@ import { RbacModel } from '@/database/models/rbac';
 import { documentLikes, workspaceMembers } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { canViewDocumentContent } from '@/server/services/documentAccess';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import {
   assertCanPerformResourceAction,
-  canPerformResourceAction,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
 import { after } from '@/server/utils/scheduleAfterResponse';
@@ -121,14 +121,11 @@ const canRecipientViewDocument = async (
   const grantedPermissions = permissionsByUserId.get(params.recipientUserId);
   if (!grantedPermissions) return false;
 
-  return canPerformResourceAction({
-    action: 'view',
+  return canViewDocumentContent({
     db: ctx.serverDB,
-    effectiveAccessLevel: 'view',
     grantedPermissions,
     meta,
     resourceId: params.documentId,
-    resourceType: 'document',
     userId: params.recipientUserId,
     workspaceId: ctx.workspaceId,
   });

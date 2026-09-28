@@ -5,14 +5,21 @@ import type {
   OpenAIChatMessage,
   UserMessageContentPart,
 } from '@lobechat/model-runtime';
+import {
+  collectStatusCodes,
+  getErrorCodeSpec,
+  refineErrorCode,
+} from '@lobechat/model-runtime/errors';
 import type { CodexReasoningEffort } from '@lobechat/types';
 import {
+  AgentRuntimeErrorType,
   getCodexReasoningEffortLevels,
   isCodexServerDefaultCustomModel,
   RequestTrigger,
   SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS,
 } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 import type { ServerDefaultHeterogeneousAgentType } from '@/server/modules/ModelRuntime';
 import {
@@ -24,19 +31,31 @@ import type { BaseStreamEvent, ResponseUsage } from '../types/responses.type';
 
 export const SERVER_DEFAULT_MODEL_ALIAS = SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS;
 
-const textFromParts = (content: unknown): string => {
-  if (typeof content === 'string') return content;
+const textFromParts = (content: unknown, transformFirst = (text: string) => text): string => {
+  if (typeof content === 'string') return transformFirst(content);
   if (!Array.isArray(content)) return '';
+  let foundText = false;
   return content
-    .map((part) =>
-      isRecord(part) &&
-      typeof part.text === 'string' &&
-      ['text', 'input_text', 'output_text'].includes(String(part.type))
-        ? part.text
-        : '',
-    )
+    .map((part) => {
+      if (
+        !isRecord(part) ||
+        typeof part.text !== 'string' ||
+        !['text', 'input_text', 'output_text'].includes(String(part.type))
+      ) {
+        return '';
+      }
+      const text = foundText ? part.text : transformFirst(part.text);
+      if (part.text) foundText = true;
+      return text;
+    })
     .join('');
 };
+
+const stripLeadingAnthropicBillingHeader = (text: string) =>
+  text.replace(/^x-anthropic-billing-header:[^\r\n]*(?:\r?\n(?:\r?\n)?)?/, '');
+
+const unwrapLeadingSystemReminder = (text: string) =>
+  text.replace(/^<system-reminder>([\s\S]*?)<\/system-reminder>/, '$1');
 
 const imageParts = (content: unknown) => {
   if (!Array.isArray(content)) return [];
@@ -57,9 +76,12 @@ const imageParts = (content: unknown) => {
   });
 };
 
-const contentWithImages = (content: unknown): OpenAIChatMessage['content'] => {
+const contentWithImages = (
+  content: unknown,
+  transform = (text: string) => text,
+): OpenAIChatMessage['content'] => {
   const images = imageParts(content);
-  const text = textFromParts(content);
+  const text = transform(textFromParts(content));
   return images.length > 0 ? [...(text ? [{ text, type: 'text' as const }] : []), ...images] : text;
 };
 
@@ -95,10 +117,21 @@ const contentWithAnthropicThinking = (content: unknown): OpenAIChatMessage['cont
   ];
 };
 
-export const normalizeAnthropicRequest = (request: Record<string, unknown>, model: string) => {
+interface NormalizeAnthropicRequestOptions {
+  unwrapSystemReminders?: boolean;
+}
+
+export const normalizeAnthropicRequest = (
+  request: Record<string, unknown>,
+  model: string,
+  options?: NormalizeAnthropicRequestOptions,
+) => {
   const messages: OpenAIChatMessage[] = [];
-  const system = textFromParts(request.system);
+  const system = textFromParts(request.system, stripLeadingAnthropicBillingHeader);
   if (system) messages.push({ content: system, role: 'system' });
+  const transformUserText = options?.unwrapSystemReminders
+    ? unwrapLeadingSystemReminder
+    : undefined;
 
   for (const rawMessage of Array.isArray(request.messages) ? request.messages : []) {
     if (!isRecord(rawMessage) || !['assistant', 'user'].includes(String(rawMessage.role))) continue;
@@ -133,12 +166,15 @@ export const normalizeAnthropicRequest = (request: Record<string, unknown>, mode
       }
       const remaining = contentWithImages(
         (content as unknown[]).filter((part) => !isRecord(part) || part.type !== 'tool_result'),
+        transformUserText,
       );
       if (remaining.length) messages.push({ content: remaining, role: 'user' });
       continue;
     }
     const normalizedContent =
-      role === 'assistant' ? contentWithAnthropicThinking(content) : contentWithImages(content);
+      role === 'assistant'
+        ? contentWithAnthropicThinking(content)
+        : contentWithImages(content, transformUserText);
     const hasAnthropicThinking =
       Array.isArray(normalizedContent) &&
       normalizedContent.some(
@@ -267,7 +303,6 @@ export const normalizeResponsesRequest = (request: Record<string, unknown>, mode
       )
     : undefined;
   return {
-    apiMode: 'responses',
     max_tokens:
       typeof request.max_output_tokens === 'number' ? request.max_output_tokens : undefined,
     messages,
@@ -738,8 +773,23 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
         },
         transform(event, controller) {
           if (finalized) return;
-          if (event.type === 'text' && typeof event.data === 'string' && event.data) {
-            outputText += event.data;
+          const part =
+            (event.type === 'content_part' || event.type === 'reasoning_part') &&
+            isRecord(event.data) &&
+            event.data.partType === 'text'
+              ? event.data
+              : undefined;
+          const content =
+            event.type === 'text' || event.type === 'reasoning'
+              ? typeof event.data === 'string'
+                ? event.data
+                : undefined
+              : typeof part?.content === 'string'
+                ? part.content
+                : undefined;
+          const isReasoning = event.type === 'reasoning' || event.type === 'reasoning_part';
+          if (content && !isReasoning) {
+            outputText += content;
             if (textOutputIndex === undefined) {
               textOutputIndex = nextOutputIndex++;
               controller.enqueue(
@@ -768,14 +818,14 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
             controller.enqueue(
               responseSse('response.output_text.delta', {
                 content_index: 0,
-                delta: event.data,
+                delta: content,
                 item_id: `msg_${responseId}`,
                 output_index: textOutputIndex,
                 type: 'response.output_text.delta',
               }),
             );
-          } else if (event.type === 'reasoning' && typeof event.data === 'string' && event.data) {
-            reasoningText += event.data;
+          } else if (content && isReasoning) {
+            reasoningText += content;
             if (reasoningOutputIndex === undefined) {
               reasoningItemId = event.id || `rs_${responseId}`;
               reasoningOutputIndex = nextOutputIndex++;
@@ -794,7 +844,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model:
             }
             controller.enqueue(
               responseSse('response.reasoning_summary_text.delta', {
-                delta: event.data,
+                delta: content,
                 item_id: reasoningItemId,
                 output_index: reasoningOutputIndex,
                 summary_index: 0,
@@ -899,13 +949,18 @@ export const invokeServerDefaultModel = async (params: {
     params.agentType,
     params.model,
   );
-  const { deploymentName, supportsAdaptiveThinking } = resolvedModel;
+  const { deploymentName, maxOutput, supportsAdaptiveThinking } = resolvedModel;
   const model = deploymentName ?? resolvedModel.model;
   const runtime = await initModelRuntimeFromServerConfig({
     actorUserId: params.userId,
     workspaceId: params.workspaceId,
   });
   const normalizedPayload = { ...params.payload };
+  // Kimi can use its context window as the output budget for an unknown model.
+  // Bound that budget by the selected deployment model, including for older clients.
+  if (params.agentType === 'kimi-code' && maxOutput !== undefined && maxOutput > 0) {
+    normalizedPayload.max_tokens = Math.min(normalizedPayload.max_tokens ?? maxOutput, maxOutput);
+  }
   if (
     params.agentType === 'claude-code' &&
     normalizedPayload.thinking?.type === 'adaptive' &&
@@ -920,14 +975,24 @@ export const invokeServerDefaultModel = async (params: {
   )
     ? (requestedReasoningEffort as ChatStreamPayload['reasoning_effort'])
     : undefined;
-  const payload =
-    params.agentType === 'codex' && isCodexServerDefaultCustomModel(params.model)
+  const routedReasoningEffort =
+    normalizedPayload.reasoning_effort ??
+    (requestedReasoningEffort as ChatStreamPayload['reasoning_effort']);
+  // Responses describes the CLI-facing ingress, not necessarily the selected provider's API.
+  // Keep it upstream only for native Codex models; the deployment router owns every other choice.
+  let payload = {
+    ...chatCompletionsPayload,
+    ...(routedReasoningEffort ? { reasoning_effort: routedReasoningEffort } : {}),
+  };
+  if (params.agentType === 'codex') {
+    payload = isCodexServerDefaultCustomModel(params.model)
       ? {
           ...chatCompletionsPayload,
           apiMode: 'chatCompletion' as const,
           reasoning_effort: normalizedPayload.reasoning_effort ?? reasoningEffort,
         }
-      : normalizedPayload;
+      : { ...normalizedPayload, apiMode: 'responses' };
+  }
   const response = await runtime.chat(
     {
       ...payload,
@@ -951,18 +1016,9 @@ const readMessage = (value: unknown): string | undefined => {
  * Describe a failed relay in terms its caller can act on.
  *
  * `runtime.chat` rejects with a plain `{ error, errorType, provider }` object
- * rather than an `Error`, and Hono's default handler cannot serialise that: an
- * uncaught one leaves the client a **500 with an empty body**. That is how an
- * Ark rejection ("The parameter `type` specified in the request are not valid:
- * invalid value adaptive") reached Claude Code — as `API Error: 500 status code
- * (no body)`, retried for a minute and a half because nothing in the response
- * said it could never succeed.
- *
- * The upstream's own status is deliberately not forwarded: `handleOpenAIError`
- * keeps the provider's error body and drops the status whenever there is one,
- * so any status here would be invented. 502 says what is actually known — the
- * request reached us, and the hop past us failed — and the message carries the
- * provider's own words, which is the part that was missing.
+ * rather than an `Error`. Keep its readable body, but do not turn known terminal
+ * failures into retryable 502s. Unclassified failures still use 502 because some
+ * adapters discard the original upstream status.
  */
 export const describeRelayFailure = (error: unknown) => {
   const payload = isRecord(error) ? error : undefined;
@@ -973,6 +1029,38 @@ export const describeRelayFailure = (error: unknown) => {
     String(error);
   const provider = typeof payload?.provider === 'string' ? payload.provider : undefined;
   const errorType = payload?.errorType;
+  // Only provider wrappers use the SDK convention of a leading HTTP status.
+  const messageStatus =
+    errorType === AgentRuntimeErrorType.ProviderBizError ||
+    errorType === AgentRuntimeErrorType.UpstreamHttpError
+      ? Number(/^\s*([45]\d{2})\b/.exec(message)?.[1])
+      : undefined;
+  const httpStatus = [errorType, payload?.status, ...collectStatusCodes(error), messageStatus].find(
+    (value): value is number =>
+      typeof value === 'number' && Number.isInteger(value) && value >= 400 && value <= 599,
+  );
+  const refinedCode = refineErrorCode({
+    errorType: errorType === undefined ? undefined : String(errorType),
+    httpStatus,
+    message,
+    provider,
+  });
+  const spec = getErrorCodeSpec(refinedCode ?? String(errorType));
+  // Generic provider buckets defer to HTTP semantics; other categories keep their
+  // explicit retry policy even when marked as monitoring fallbacks.
+  const classified = spec && !(spec.isFallback && spec.category === 'provider');
+  const candidateStatus = httpStatus ?? (classified ? spec.httpStatus : 502);
+  // Runtime-only 470/471/472 codes are not public HTTP protocol statuses.
+  const status = (
+    [470, 471, 472].includes(candidateStatus)
+      ? classified && !spec.retryable
+        ? 400
+        : 502
+      : candidateStatus
+  ) as ContentfulStatusCode;
+  // Providers can reuse request-error phrases in transient responses. Let HTTP
+  // semantics win over those inferences, but retain explicit types and quota policy.
+  const inferredRequestError = refinedCode !== undefined && spec?.category === 'request';
 
   return {
     // Never empty. A blank message here would put the caller back where the
@@ -983,6 +1071,10 @@ export const describeRelayFailure = (error: unknown) => {
         .filter(Boolean)
         .join(' ')
         .trim() || 'Model runtime failed without a message',
-    status: 502 as const,
+    retryable:
+      classified && !inferredRequestError
+        ? spec.retryable
+        : status >= 500 || [408, 409, 429].includes(status),
+    status,
   };
 };

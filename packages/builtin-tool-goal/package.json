@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
-    "./client/executor": "./src/client/executor/index.ts"
+    "./client/executor": "./src/client/executor/index.ts",
+    "./supervisor": "./src/supervisor.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
@@ -15,6 +16,7 @@
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "react": "*"
+    "react": "*",
+    "react-i18next": "*"
   }
 }

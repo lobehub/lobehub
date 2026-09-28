@@ -12,7 +12,6 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import { useFolderPath } from '@/features/ResourceManager/hooks/useFolderPath';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useFileStore } from '@/store/file';
-import type { TreeItem } from '@/store/tree';
 import { useTreeStore } from '@/store/tree';
 
 import AddButton from '../Header/AddButton';
@@ -21,13 +20,7 @@ import { HierarchyNode } from './HierarchyNode';
 import SearchResults from './SearchResults';
 import { resolveHierarchySelectedKey } from './selection';
 import TreeSkeleton from './TreeSkeleton';
-
-interface VisibleNode {
-  item: TreeItem;
-  key: string;
-  level: number;
-  parentKey: string;
-}
+import { buildVisibleNodes } from './visibleNodes';
 
 const LibraryHierarchy = memo(() => {
   const { t } = useTranslation('file');
@@ -66,21 +59,7 @@ const LibraryHierarchy = memo(() => {
 
   const isLoading = status[''] === 'loading';
 
-  const visibleNodes = useMemo(() => {
-    const result: VisibleNode[] = [];
-
-    const walk = (parentKey: string, level: number) => {
-      for (const node of children[parentKey] ?? []) {
-        result.push({ item: node, key: node.id, level, parentKey });
-        if (node.isFolder && expanded[node.id]) {
-          walk(node.id, level + 1);
-        }
-      }
-    };
-
-    walk('', 0);
-    return result;
-  }, [children, expanded]);
+  const visibleNodes = useMemo(() => buildVisibleNodes(children, expanded), [children, expanded]);
 
   const selectedKey = resolveHierarchySelectedKey({ currentFolderSlug, currentViewItemId });
 

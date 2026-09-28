@@ -55,7 +55,7 @@ describe('message convenience actions', () => {
       });
     });
 
-    it('does not forward groupId to createMessage (canary-aligned context)', async () => {
+    it('preserves the group scope when creating a message', async () => {
       const store = createTestStore({ groupId: 'group-1', scope: 'group' });
       const createMessage = vi.fn().mockResolvedValue('message-1');
       store.setState({ createMessage });
@@ -64,9 +64,7 @@ describe('message convenience actions', () => {
         await store.getState().addAIMessage('assistant content');
       });
 
-      expect(createMessage).toHaveBeenCalledWith(
-        expect.not.objectContaining({ groupId: expect.anything() }),
-      );
+      expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({ groupId: 'group-1' }));
     });
 
     it('still allows an empty assistant placeholder', async () => {
@@ -173,7 +171,7 @@ describe('message convenience actions', () => {
       });
     });
 
-    it('does not forward groupId to createMessage (canary-aligned context)', async () => {
+    it('preserves the group scope when creating a message', async () => {
       const store = createTestStore({ groupId: 'group-1', scope: 'group' });
       const createMessage = vi.fn().mockResolvedValue('message-1');
       store.setState({ createMessage });
@@ -182,9 +180,7 @@ describe('message convenience actions', () => {
         await store.getState().addUserMessage({ message: 'user content' });
       });
 
-      expect(createMessage).toHaveBeenCalledWith(
-        expect.not.objectContaining({ groupId: expect.anything() }),
-      );
+      expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({ groupId: 'group-1' }));
     });
 
     it('clears the input after successful creation', async () => {

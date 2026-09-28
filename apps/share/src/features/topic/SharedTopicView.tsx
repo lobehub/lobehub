@@ -5,13 +5,17 @@ import { memo } from 'react';
 import { useParams } from 'react-router';
 import useSWR from 'swr';
 
-import ShareShell, { ShareHero } from '@/business/client/features/ShareShell';
+import { ShareHero } from '@/business/client/features/ShareShell';
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import { shareKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { clientOnly } from '../../shell/clientOnly';
+import ShareLayout from '../../shell/ShareLayout';
+import ExplainTopic from './ExplainTopic';
 import TopicAvatar from './TopicAvatar';
 import { buildTopicByline } from './topicByline';
 
@@ -21,6 +25,7 @@ const SharedTopicBody = clientOnly(() =>
 const SharedTopicAside = clientOnly(() => import('./SharedTopicAside.client'));
 
 const SharedTopicView = memo(() => {
+  const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
   const { id } = useParams<{ id: string }>();
 
   const { data, error, isLoading } = useSWR(
@@ -28,9 +33,6 @@ const SharedTopicView = memo(() => {
     () => lambdaClient.share.getSharedTopic.query({ shareId: id! }),
     { revalidateOnFocus: false },
   );
-
-  const marketIdentifier = data?.agentMeta?.marketIdentifier;
-  const openUrl = marketIdentifier ? `/community/agent/${marketIdentifier}` : '/community/agent';
 
   // Mirror WideScreenContainer's centered column so the pre-hydration document
   // matches the hydrated ChatList headerSlot layout instead of hugging the left.
@@ -51,17 +53,18 @@ const SharedTopicView = memo(() => {
   ) : null;
 
   return (
-    <ShareShell
+    <ShareLayout
+      actions={id && data?.visibility === 'link' ? <ExplainTopic shareId={id} /> : undefined}
       aside={<SharedTopicAside />}
+      contentWidth={wideScreen ? undefined : CONVERSATION_MIN_WIDTH}
       error={error}
       // The SSR document already carries the hero, and SWR revalidates on mount
       // with that data in cache — gating on `isLoading` alone would blank it.
       loading={isLoading && !data}
-      share={{ avatar: data ? <TopicAvatar data={data} /> : undefined, openUrl }}
       title={data?.title}
     >
       {id && data ? <SharedTopicBody fallback={hero} shareId={id} /> : null}
-    </ShareShell>
+    </ShareLayout>
   );
 });
 

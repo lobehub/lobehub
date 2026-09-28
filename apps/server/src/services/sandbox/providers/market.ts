@@ -2,6 +2,8 @@ import type { SandboxCallToolResult } from '@lobechat/builtin-tool-cloud-sandbox
 import type { CodeInterpreterToolName } from '@lobehub/market-sdk';
 import debug from 'debug';
 
+import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
+
 import { SandboxMiddlewareService } from '../service';
 import type {
   SandboxProvider,
@@ -71,7 +73,7 @@ export class MarketSandboxProvider implements SandboxProvider {
 
       if (!response.success) {
         return {
-          error: {
+          error: getToolAccessDeniedError(response.error, response.error?.message || '') || {
             message: response.error?.message || 'Unknown error',
             name: response.error?.code,
           },
@@ -90,7 +92,7 @@ export class MarketSandboxProvider implements SandboxProvider {
       log('Error calling sandbox tool %s: %O', toolName, error);
 
       return {
-        error: {
+        error: getToolAccessDeniedError(error, (error as Error).message) || {
           message: (error as Error).message,
           name: (error as Error).name,
         },
@@ -119,7 +121,7 @@ export class MarketSandboxProvider implements SandboxProvider {
 
       if (!response.success) {
         return {
-          error: {
+          error: getToolAccessDeniedError(response.error, response.error?.message || '') || {
             message: response.error?.message || 'Failed to export file from sandbox',
             name: response.error?.code,
           },
@@ -146,7 +148,9 @@ export class MarketSandboxProvider implements SandboxProvider {
       log('Error exporting file: %O', error);
 
       return {
-        error: { message: (error as Error).message },
+        error: getToolAccessDeniedError(error, (error as Error).message) || {
+          message: (error as Error).message,
+        },
         success: false,
       };
     }

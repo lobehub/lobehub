@@ -45,7 +45,11 @@ export const agentTraceRouter = router({
       try {
         // Ownership-scoped: an operation belonging to someone else reads as
         // absent rather than forbidden, so this can't be used to probe ids.
-        const operation = await ctx.agentOperationModel.findById(input.operationId);
+        // Agent-share visitor runs execute under the CREATOR's identity and so
+        // pass plain ownership — `findOwnOperationById` additionally excludes
+        // them, otherwise a creator holding a visitor operation id could pull
+        // that conversation's full trajectory snapshot.
+        const operation = await ctx.agentOperationModel.findOwnOperationById(input.operationId);
         if (!operation) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Operation not found' });
         }

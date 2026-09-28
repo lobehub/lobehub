@@ -7,6 +7,7 @@ import {
   type FtsSearchBackendScope,
   FtsSearchRepo,
   type FtsSearchRepoOptions,
+  PgLikeFtsSearchBackend,
   PgSearchFtsSearchBackend,
 } from '@/database/repositories/ftsSearch';
 import { ftsSearchEnv } from '@/envs/ftsSearch';
@@ -29,6 +30,7 @@ export interface CreateFtsSearchRepoInput {
 
 export const FTS_SEARCH_PROVIDERS = {
   elasticsearch: 'elasticsearch',
+  pgLike: 'pg_like',
   pgSearch: 'pg_search',
 } as const;
 
@@ -48,13 +50,20 @@ interface FtsSearchBackendFactoryDependencies {
     config: ElasticsearchFtsSearchConfig,
     usage: FtsSearchUsage,
   ) => ElasticsearchFtsSearchClient;
+  createPgLikeBackend?: (context: FtsSearchBackendFactoryContext) => FtsSearchBackend;
   createPgSearchBackend?: (context: FtsSearchBackendFactoryContext) => FtsSearchBackend;
   loadElasticsearchConfig?: () => ElasticsearchFtsSearchConfig | undefined;
   loadFtsSearchProvider?: () => FtsSearchProvider;
 }
 
 export interface ElasticsearchFtsSearchConfig {
-  apiKey: string;
+  /**
+   * Explicit opt-in for plaintext HTTP / no API key on a private container network.
+   * Optional so downstream callers that build a config literal keep the secure default (`false`).
+   */
+  allowInsecureHttp?: boolean;
+  /** Required unless `allowInsecureHttp` is enabled; never sent over plaintext HTTP. */
+  apiKey?: string;
   indexNamespace: string;
   url: string;
 }
@@ -73,9 +82,13 @@ export const loadElasticsearchFtsSearchConfig = (): ElasticsearchFtsSearchConfig
   const indexNamespace =
     ftsSearchEnv.ES_INDEX_NAMESPACE ??
     (process.env.NODE_ENV === 'development' ? 'lobehub-dev' : undefined);
-  if (!ftsSearchEnv.ES_API_KEY || !ftsSearchEnv.ES_URL || !indexNamespace) return;
+  const allowInsecureHttp = ftsSearchEnv.ES_ALLOW_INSECURE_HTTP === 'true';
+  /** The Elastic Cloud path keeps requiring an API key; only the explicit insecure mode may omit it. */
+  if (!ftsSearchEnv.ES_URL || !indexNamespace) return;
+  if (!ftsSearchEnv.ES_API_KEY && !allowInsecureHttp) return;
 
   return {
+    allowInsecureHttp,
     apiKey: ftsSearchEnv.ES_API_KEY,
     indexNamespace,
     url: ftsSearchEnv.ES_URL,
@@ -93,6 +106,18 @@ const createFtsSearchBackendForProvider = (
         new PgSearchFtsSearchBackend(context.db, context.scope));
     return createPgSearchBackend({ db, provider, scope, usage });
   }
+
+  if (provider === FTS_SEARCH_PROVIDERS.pgLike) {
+    const createPgLikeBackend =
+      dependencies.createPgLikeBackend ??
+      ((context: FtsSearchBackendFactoryContext) =>
+        new PgLikeFtsSearchBackend(context.db, context.scope));
+    return createPgLikeBackend({ db, provider, scope, usage });
+  }
+
+  // Only Elasticsearch remains; keep it explicit so a future provider cannot
+  // silently inherit the Elasticsearch path.
+  if (provider !== FTS_SEARCH_PROVIDERS.elasticsearch) return;
 
   const config = (dependencies.loadElasticsearchConfig ?? loadElasticsearchFtsSearchConfig)();
   if (!config) return;
@@ -144,6 +169,8 @@ export const createFtsSearchRepo = async (
   return new FtsSearchRepo(input.db, input.userId, input.workspaceId, input.callerAgentVisibility, {
     ...input.options,
     backend: observedBackend,
-    ftsSearchCandidateEnabled: provider === FTS_SEARCH_PROVIDERS.elasticsearch,
+    // pg_search keeps candidate retrieval inline in the model queries; every
+    // other provider answers candidate-only requests through the backend.
+    ftsSearchCandidateEnabled: provider !== FTS_SEARCH_PROVIDERS.pgSearch,
   });
 };

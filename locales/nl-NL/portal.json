@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "Download bronbestand",
   "FilePreview.tabs.chunk": "Fragment",
   "FilePreview.tabs.file": "Bestand",
   "Plugins": "Vaardigheden",
@@ -29,6 +30,7 @@
   "artifacts.svg.copySuccess": "Afbeelding succesvol gekopieerd",
   "artifacts.svg.download.png": "Downloaden als PNG",
   "artifacts.svg.download.svg": "Downloaden als SVG",
+  "document.saveConflict": "Dit document is elders bijgewerkt. Vernieuwen naar de nieuwste versie.",
   "document.todos.allCompleted": "Alle taken voltooid",
   "document.todos.title": "Taken",
   "emptyArtifactList": "Nog geen artefacten. Gebruik Vaardigheden in het gesprek en kom dan hier terug.",

@@ -18,13 +18,16 @@ import {
   userPersonaDocuments,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { notAgentShareDocument } from '../../utils/documentVisibility';
+import { notAgentShareFile, notAgentShareFileReference } from '../../utils/fileVisibility';
+import { searchableMessage } from '../../utils/searchableMessage';
 import type {
   FtsSearchBuiltDocument,
   FtsSearchDocumentEntity,
   FtsSearchDocumentKey,
   FtsSearchDocumentSourceMap,
-} from './schema';
-import { FTS_SEARCH_DOCUMENT_ENTITIES, parseFtsSearchDocumentSource } from './schema';
+} from './zodSchema';
+import { FTS_SEARCH_DOCUMENT_ENTITIES, parseFtsSearchDocumentSource } from './zodSchema';
 
 interface FtsSearchDocumentSelection {
   afterId?: string;
@@ -49,6 +52,21 @@ export interface FtsSearchDocumentRangeBatchOptions {
 export type FtsSearchDocumentRelationChange =
   | { fileIds: readonly string[]; relation: 'knowledgeBaseFiles' }
   | { memoryIds: readonly string[]; relation: 'userMemoryReferences' };
+
+/**
+ * Upper bound, in characters, of `documents.content` copied into a search document.
+ *
+ * Parsed files and generated documents can hold 100+ MiB of text (for example, a failed spreadsheet
+ * parse that emitted mostly blank cells). A document that large exceeds the incremental sync bulk
+ * limit, becomes a permanent dead letter, and blocks every later change; Elasticsearch Serverless
+ * also rejects such requests with 429. Only the prefix is indexed, so matches beyond it are not
+ * found. Results are hydrated from PostgreSQL, so callers never see the shortened text.
+ *
+ * One million characters matches Elasticsearch's default `index.highlight.max_analyzed_offset`.
+ * Even at 6 JSON-escaped bytes per character this stays far below
+ * `FTS_SEARCH_SYNC_BULK_MAX_BYTES`, so one document can no longer outgrow a bulk request.
+ */
+export const FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS = 1_000_000;
 
 const entityOrder = new Map(FTS_SEARCH_DOCUMENT_ENTITIES.map((entity, index) => [entity, index]));
 
@@ -96,8 +114,8 @@ const dedupeKeys = (keys: FtsSearchDocumentKey[]) =>
  * Canonical PostgreSQL → search projection builder.
  *
  * This repository is intentionally actor-agnostic: backfill, incremental sync, and reconciliation
- * need the complete source-of-truth projection. Product reads must continue to use FtsSearchRepo,
- * whose provider hydration reapplies authorization.
+ * need the complete searchable projection. Files that are never library-searchable are omitted at
+ * the projection boundary; product reads still use FtsSearchRepo, whose hydration reapplies access.
  */
 export class FtsSearchDocumentBuilder {
   constructor(private db: LobeChatDatabase) {}
@@ -370,11 +388,14 @@ export class FtsSearchDocumentBuilder {
       })
       .from(files)
       .where(
-        selection.ids
-          ? inArray(files.id, selection.ids)
-          : selection.afterId
-            ? gt(files.id, selection.afterId)
-            : undefined,
+        and(
+          notAgentShareFile(files.metadata),
+          selection.ids
+            ? inArray(files.id, selection.ids)
+            : selection.afterId
+              ? gt(files.id, selection.afterId)
+              : undefined,
+        ),
       )
       .orderBy(asc(files.id))
       .limit(selection.limit);
@@ -909,7 +930,10 @@ export class FtsSearchDocumentBuilder {
   private async buildDocuments(selection: FtsSearchDocumentSelection) {
     const rows = await this.db
       .select({
-        content: documents.content,
+        /** Truncate in SQL so oversized rows never cross the wire into application memory. */
+        content: sql<
+          string | null
+        >`left(${documents.content}, ${FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS})`,
         createdAt: documents.createdAt,
         description: documents.description,
         fileId: documents.fileId,
@@ -928,16 +952,20 @@ export class FtsSearchDocumentBuilder {
       })
       .from(documents)
       .where(
-        selection.ids
-          ? inArray(documents.id, selection.ids)
-          : and(
-              selection.afterId
-                ? gt(documents.id, selection.afterId)
-                : selection.fromId
-                  ? gte(documents.id, selection.fromId)
-                  : undefined,
-              selection.beforeId ? lt(documents.id, selection.beforeId) : undefined,
-            ),
+        and(
+          notAgentShareDocument(documents.metadata),
+          notAgentShareFileReference(this.db, documents.fileId),
+          selection.ids
+            ? inArray(documents.id, selection.ids)
+            : and(
+                selection.afterId
+                  ? gt(documents.id, selection.afterId)
+                  : selection.fromId
+                    ? gte(documents.id, selection.fromId)
+                    : undefined,
+                selection.beforeId ? lt(documents.id, selection.beforeId) : undefined,
+              ),
+        ),
       )
       .orderBy(asc(documents.id))
       .limit(selection.limit);
@@ -1005,16 +1033,19 @@ export class FtsSearchDocumentBuilder {
       })
       .from(messages)
       .where(
-        selection.ids
-          ? inArray(messages.id, selection.ids)
-          : and(
-              selection.afterId
-                ? gt(messages.id, selection.afterId)
-                : selection.fromId
-                  ? gte(messages.id, selection.fromId)
-                  : undefined,
-              selection.beforeId ? lt(messages.id, selection.beforeId) : undefined,
-            ),
+        and(
+          searchableMessage(),
+          selection.ids
+            ? inArray(messages.id, selection.ids)
+            : and(
+                selection.afterId
+                  ? gt(messages.id, selection.afterId)
+                  : selection.fromId
+                    ? gte(messages.id, selection.fromId)
+                    : undefined,
+                selection.beforeId ? lt(messages.id, selection.beforeId) : undefined,
+              ),
+        ),
       )
       .orderBy(asc(messages.id))
       .limit(selection.limit);

@@ -50,6 +50,49 @@ export const STATUS_KANBAN_COLUMNS: KanbanColumnDefinition[] = [
 export const normalizeKanbanGroupBy = (groupBy: TaskGroupBy): TaskKanbanGroupBy =>
   groupBy === 'assignee' || groupBy === 'member' || groupBy === 'priority' ? groupBy : 'status';
 
+export interface KanbanGroupQueryInput {
+  agentId?: string;
+  excludeStatuses?: readonly TaskStatus[];
+  groupBy: TaskKanbanGroupBy;
+  /** Set on the "My tasks" board; mutually exclusive with the other scopes. */
+  myTaskScope?: 'assigned' | 'created';
+  projectId?: string;
+}
+
+export interface KanbanGroupQuery {
+  agentId?: string;
+  allAgents?: boolean;
+  automated?: boolean;
+  excludeStatuses?: readonly TaskStatus[];
+  groupBy: TaskKanbanGroupBy;
+  projectId?: string;
+  scope?: 'assigned' | 'created';
+}
+
+/**
+ * The grouped query one board runs, picked from the scope it was mounted with.
+ *
+ * Every board except "My tasks" pins `automated: false`, keeping the tasks that
+ * still fire on their own out of the columns — they belong to the scheduled
+ * roll-up. "My tasks" deliberately sends no automation filter, because its list
+ * view sends none either: filtering only on the board side would make the
+ * caller's scheduled and heartbeat tasks vanish on the list -> board switch of
+ * one and the same collection.
+ */
+export const buildKanbanGroupQuery = ({
+  agentId,
+  excludeStatuses,
+  groupBy,
+  myTaskScope,
+  projectId,
+}: KanbanGroupQueryInput): KanbanGroupQuery => {
+  if (myTaskScope) return { excludeStatuses, groupBy, scope: myTaskScope };
+  if (projectId) return { automated: false, excludeStatuses, groupBy, projectId };
+  if (agentId) return { agentId, automated: false, excludeStatuses, groupBy };
+
+  return { allAgents: true, automated: false, excludeStatuses, groupBy };
+};
+
 export const buildKanbanColumns = (
   taskGroups: TaskGroupItem[],
   groupBy: TaskKanbanGroupBy,

@@ -246,6 +246,20 @@ describe('resolveCliCommand', () => {
       });
     });
 
+    it('resolves and validates Devin using its version banner', async () => {
+      callExecFile('/Users/x/.local/bin/devin\n');
+      callExecFile('devin 3000.4.25 (7e8e528a)');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('devin', 'devin');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.local/bin/devin',
+        version: '3000.4.25',
+      });
+    });
+
     it("falls back to Cursor's unambiguous alias when another CLI owns `agent`", async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;

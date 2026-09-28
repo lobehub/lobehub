@@ -14,11 +14,14 @@ const message = (id: string, overrides: Partial<UIChatMessage> = {}): UIChatMess
 
 const deepLink = (id: string) => ({ id, navigationKey: 'navigation-1' });
 
+const resolve = (messages: UIChatMessage[], id: string, rowIds = messages.map((m) => m.id)) =>
+  resolveMessageDeepLink(messages, rowIds, deepLink(id));
+
 describe('resolveMessageDeepLink', () => {
   it('returns the top-level virtual row for a direct message', () => {
     const messages = [message('first'), message('target')];
 
-    expect(resolveMessageDeepLink(messages, deepLink('target'))).toMatchObject({
+    expect(resolve(messages, 'target')).toMatchObject({
       displayMessageId: 'target',
       index: 1,
     });
@@ -36,7 +39,7 @@ describe('resolveMessageDeepLink', () => {
       }),
     ];
 
-    expect(resolveMessageDeepLink(messages, deepLink('assistant-2'))).toMatchObject({
+    expect(resolve(messages, 'assistant-2')).toMatchObject({
       displayMessageId: 'assistant-group',
       index: 1,
     });
@@ -55,12 +58,31 @@ describe('resolveMessageDeepLink', () => {
       }),
     ];
 
-    expect(resolveMessageDeepLink(messages, deepLink('task-hit'))?.index).toBe(0);
-    expect(resolveMessageDeepLink(messages, deepLink('council-hit'))?.index).toBe(1);
-    expect(resolveMessageDeepLink(messages, deepLink('compressed-hit'))?.index).toBe(2);
+    expect(resolve(messages, 'task-hit')?.index).toBe(0);
+    expect(resolve(messages, 'council-hit')?.index).toBe(1);
+    expect(resolve(messages, 'compressed-hit')?.index).toBe(2);
   });
 
   it('returns undefined when the message is not rendered by the list', () => {
-    expect(resolveMessageDeepLink([message('first')], deepLink('missing'))).toBeUndefined();
+    expect(resolve([message('first')], 'missing')).toBeUndefined();
+  });
+
+  it('targets the host row for a message folded into a steered chain', () => {
+    const messages = [
+      message('user'),
+      message('group-1', { children: [{ content: '', id: 'group-1' }], role: 'assistantGroup' }),
+      message('steer-1', { metadata: { steer: true } }),
+      message('group-2', { children: [{ content: '', id: 'child-2' }], role: 'assistantGroup' }),
+    ];
+    const rowIds = ['user', 'group-1'];
+
+    expect(resolve(messages, 'child-2', rowIds)).toMatchObject({
+      displayMessageId: 'group-1',
+      index: 1,
+    });
+    expect(resolve(messages, 'steer-1', rowIds)).toMatchObject({
+      displayMessageId: 'group-1',
+      index: 1,
+    });
   });
 });

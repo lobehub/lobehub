@@ -17,6 +17,7 @@ import {
 } from '@/utils/permissions';
 import * as electronIs from '@/utils/platform';
 import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
+import { safeGetPath } from '@/utils/user-path';
 
 import { ControllerModule, IpcMethod } from './index';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
@@ -65,12 +66,12 @@ export default class SystemController extends ControllerModule {
         // User Paths (ensure keys match UserPathData / DesktopAppState interface)
         desktop: app.getPath('desktop'),
         documents: app.getPath('documents'),
-        downloads: app.getPath('downloads'),
+        downloads: safeGetPath('downloads'),
         home: app.getPath('home'),
-        music: app.getPath('music'),
-        pictures: app.getPath('pictures'),
+        music: safeGetPath('music'),
+        pictures: safeGetPath('pictures'),
         userData: app.getPath('userData'),
-        videos: app.getPath('videos'),
+        videos: safeGetPath('videos'),
       },
     };
   }

@@ -103,7 +103,8 @@ static Napi::Value Setup(const Napi::CallbackInfo &info) {
 }
 
 static void ShowWithAuthorization(NSString *identifier, NSString *title, NSString *body, bool silent,
-                                  NSString *senderName, NSString *conversationId, NSData *avatarData) {
+                                  NSString *soundName, NSString *senderName,
+                                  NSString *conversationId, NSData *avatarData) {
   UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
   [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound |
                                            UNAuthorizationOptionBadge)
@@ -117,7 +118,11 @@ static void ShowWithAuthorization(NSString *identifier, NSString *title, NSStrin
     UNMutableNotificationContent *content = [UNMutableNotificationContent new];
     content.title = title ?: @"";
     content.body = body ?: @"";
-    if (!silent) content.sound = [UNNotificationSound defaultSound];
+    if (!silent) {
+      content.sound = soundName.length > 0
+                          ? [UNNotificationSound soundNamed:soundName]
+                          : [UNNotificationSound defaultSound];
+    }
 
     UNNotificationContent *finalContent = content;
     if (senderName.length > 0) {
@@ -194,6 +199,9 @@ static Napi::Value Show(const Napi::CallbackInfo &info) {
   NSString *title = options[@"title"];
   NSString *body = options[@"body"];
   bool silent = [options[@"silent"] boolValue];
+  NSString *soundName = [options[@"soundName"] isKindOfClass:[NSString class]]
+                            ? options[@"soundName"]
+                            : nil;
   NSDictionary *senderDict =
       [options[@"sender"] isKindOfClass:[NSDictionary class]] ? options[@"sender"] : nil;
   NSString *senderName = senderDict[@"name"];
@@ -201,7 +209,8 @@ static Napi::Value Show(const Napi::CallbackInfo &info) {
 
   EnsureDelegateInstalled();
   dispatch_async(dispatch_get_main_queue(), ^{
-    ShowWithAuthorization(identifier, title, body, silent, senderName, conversationId, avatarData);
+    ShowWithAuthorization(identifier, title, body, silent, soundName, senderName, conversationId,
+                          avatarData);
   });
   return env.Undefined();
 }
@@ -213,8 +222,10 @@ static Napi::Value GetAuthorizationStatus(const Napi::CallbackInfo &info) {
   UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
   [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
     long status = (long)settings.authorizationStatus;
-    tsfn.NonBlockingCall(
-        [status](Napi::Env env, Napi::Function fn) { fn.Call({Napi::Number::New(env, status)}); });
+    long sound = (long)settings.soundSetting;
+    tsfn.NonBlockingCall([status, sound](Napi::Env env, Napi::Function fn) {
+      fn.Call({Napi::Number::New(env, status), Napi::Number::New(env, sound)});
+    });
     tsfn.Release();
   }];
   return env.Undefined();

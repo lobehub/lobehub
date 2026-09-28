@@ -60,7 +60,7 @@ describe('task create', () => {
           id: 'task_1',
           identifier: 'T-1',
           name: 'Personal task',
-          url: 'https://app.example.com/task/T-1',
+          url: 'https://app.example.com/task/T-1/personal-task',
         },
         null,
         2,
@@ -81,7 +81,65 @@ describe('task create', () => {
 
     expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining('LOBE-321'));
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('https://app.example.com/lobehub/task/LOBE-321'),
+      expect.stringContaining('https://app.example.com/lobehub/task/LOBE-321/workspace-task'),
     );
+  });
+});
+
+describe('task edit', () => {
+  const mockUpdate = vi.fn();
+  const mockUpdateStatus = vi.fn();
+
+  beforeEach(() => {
+    mockUpdate.mockReset().mockResolvedValue({
+      data: { id: 'task_1', identifier: 'T-1' },
+      success: true,
+    });
+    mockUpdateStatus.mockReset().mockResolvedValue({
+      data: { id: 'task_1', identifier: 'T-1' },
+      success: true,
+    });
+    mockGetTrpcClient.mockResolvedValue({
+      task: {
+        update: { mutate: mockUpdate },
+        updateStatus: { mutate: mockUpdateStatus },
+      },
+    });
+    mockLogInfo.mockReset();
+  });
+
+  const run = async (...args: string[]) => {
+    const program = new Command();
+    program.exitOverride();
+    registerTaskCommand(program);
+    await program.parseAsync(['node', 'test', 'task', 'edit', ...args]);
+  };
+
+  // --status used to early-return, silently dropping --agent and every other
+  // field passed in the same invocation.
+  it('applies --agent and --status together in one invocation', async () => {
+    await run('task_1', '--agent', 'agt_new', '--status', 'backlog');
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ assigneeAgentId: 'agt_new', id: 'task_1', status: 'backlog' }),
+    );
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining('backlog'));
+  });
+
+  it('keeps the status-only path on the lifecycle API alone', async () => {
+    await run('task_1', '--status', 'paused');
+
+    expect(mockUpdateStatus).toHaveBeenCalledWith({ id: 'task_1', status: 'paused' });
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('keeps field-only edits off the lifecycle API', async () => {
+    await run('task_1', '--agent', 'agt_new');
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ assigneeAgentId: 'agt_new', id: 'task_1' }),
+    );
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
   });
 });

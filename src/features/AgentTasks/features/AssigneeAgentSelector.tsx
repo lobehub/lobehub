@@ -176,7 +176,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     }, [flatOptions, query, selectedKey]);
 
     const handleAgentChange = useCallback(
-      (agentId: string | null) => {
+      (agentId: string | null, agent?: SidebarAgentItem) => {
         if (!canEditTask || agentId === (currentAgentId ?? null)) return;
         setKey((value) => value + 1);
         setSearch('');
@@ -184,13 +184,34 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
           onChange(agentId);
           return;
         }
-        if (taskIdentifier) void updateTask(taskIdentifier, { assigneeAgentId: agentId });
+        if (taskIdentifier)
+          void updateTask(
+            taskIdentifier,
+            { assigneeAgentId: agentId },
+            // The picker is the one place that already holds the chosen agent's
+            // display metadata, so it hands it over for the optimistic feed row.
+            {
+              optimisticAssignee: agent
+                ? {
+                    // A group agent carries a member-avatar list; the feed row
+                    // only knows how to draw a single image.
+                    avatar: typeof agent.avatar === 'string' ? agent.avatar : null,
+                    id: agent.id,
+                    name: agentDisplayName(agent),
+                    type: 'agent',
+                  }
+                : undefined,
+            },
+          );
       },
       [canEditTask, currentAgentId, onChange, taskIdentifier, updateTask],
     );
 
     const handleSelect = useCallback(
-      (option: AgentOption) => handleAgentChange(option.kind === 'agent' ? option.agent.id : null),
+      (option: AgentOption) =>
+        option.kind === 'agent'
+          ? handleAgentChange(option.agent.id, option.agent)
+          : handleAgentChange(null),
       [handleAgentChange],
     );
 

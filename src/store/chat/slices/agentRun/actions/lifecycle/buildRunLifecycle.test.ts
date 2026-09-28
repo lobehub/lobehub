@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatStore } from '@/store/chat/store';
 
 import { messageMapKey } from '../../../../utils/messageMapKey';
+import { topicMapKey } from '../../../../utils/topicMapKey';
 import type { AgentRuntimeType } from '../dispatch/agentDispatcher';
 import { buildRunLifecycle } from './buildRunLifecycle';
 import type { RunCompleteEvent, RunTerminalStatus, UserMessagePersistedEvent } from './types';
@@ -46,7 +47,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     activeTopicId: 't1',
     completeOperation: vi.fn(),
     dbMessagesMap: {},
-    drainQueuedMessages: vi.fn(() => []),
+    drainQueuedMessages: vi.fn<ChatStore['drainQueuedMessages']>(() => []),
     failOperation: vi.fn(),
     internal_updateTopic: vi.fn(),
     markTopicUnread: vi.fn(),
@@ -59,7 +60,8 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
       },
     },
     refreshTopic: vi.fn(async () => {}),
-    summaryTopicTitle: vi.fn(),
+    sendMessage: vi.fn().mockResolvedValue(undefined),
+    summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
     // topicDataMap / messagesMap reads default to empty (no topic, no messages).
     topicDataMap: {},
     updateTopicStatus: vi.fn(async () => {}),
@@ -114,6 +116,34 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
         sourceType: 'client.runtime.complete',
       }),
     );
+  });
+
+  it('summarizes an audio-first topic before returning a queued follow-up', async () => {
+    const { get, store } = makeStore();
+    const messages = [
+      {
+        audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+        content: '',
+        id: 'u1',
+        role: 'user',
+      },
+      { content: 'The recording asks how to list files.', id: 'a1', role: 'assistant' },
+    ];
+    store.drainQueuedMessages = vi.fn(() => [{ content: 'follow up', id: 'q1' } as any]);
+    store.messagesMap = { [messageMapKey(CONTEXT)]: messages } as any;
+    store.topicDataMap = {
+      [topicMapKey({ agentId: 'a1' })]: {
+        items: [{ id: 't1', title: 'defaultTitle' }],
+        total: 1,
+      },
+    } as any;
+
+    const { requeued } = await lifecycle('client', get).completeRun(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(requeued).toBe(true);
+    expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
   });
 
   it.each<[RunTerminalStatus, 'completeOperation' | 'failOperation']>([
@@ -294,6 +324,39 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
     expect(store.drainQueuedMessages).toHaveBeenCalled();
   });
 
+  it('a drained queued follow-up is sent as a steer turn', async () => {
+    vi.useFakeTimers();
+    try {
+      const { get, store } = makeStore();
+      const sendMessage = vi.fn(async () => {});
+      (store as any).sendMessage = sendMessage;
+      store.drainQueuedMessages = vi.fn(() => [
+        {
+          content: 'queued',
+          createdAt: 1,
+          id: 'q1',
+          interruptMode: 'soft',
+          metadata: { scope: 'x' },
+        } as any,
+      ]);
+
+      const { requeued } = await lifecycle('gateway', get, 'top_level').completeRun(
+        completeEvent('gateway', { status: 'completed' }),
+      );
+      await vi.runAllTimersAsync();
+
+      expect(requeued).toBe(true);
+      expect(sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'queued',
+          metadata: expect.objectContaining({ scope: 'x', steer: true }),
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('afterRunComplete is a no-op for a sub_agent run (no notification)', async () => {
     const { get } = makeStore();
     // Resolves without touching the desktop notification path (early return on
@@ -370,6 +433,118 @@ describe('buildRunLifecycle.afterRunComplete — client desktop notification bod
     );
 
     expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+  });
+
+  it('summarizes an untitled topic after its audio-only first message receives a reply', async () => {
+    const { get, store } = makeStore();
+    const voiceMessage = {
+      audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+      content: '',
+      id: 'u1',
+      role: 'user',
+    } as any;
+    const messages = [voiceMessage, thisTurnAssistant];
+    store.messagesMap = { [KEY]: messages } as any;
+    store.topicDataMap = {
+      [topicMapKey({ agentId: 'a1' })]: {
+        items: [{ id: 't1', title: 'defaultTitle' }],
+        total: 1,
+      },
+    } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
+  });
+
+  it('summarizes an audio-first topic when the reply is grouped around a media tool call', async () => {
+    const { get, store } = makeStore();
+    const messages = [
+      {
+        audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+        content: '',
+        id: 'u1',
+        role: 'user',
+      },
+      {
+        children: [
+          {
+            content: 'Analyzing the recording.',
+            id: 'assistant-tool',
+            tools: [{ apiName: 'analyzeMedia', id: 'tool-1' }],
+          },
+          { content: 'The recording asks how to list files.', id: 'assistant-answer' },
+        ],
+        content: '',
+        id: 'assistant-group',
+        role: 'assistantGroup',
+      },
+    ];
+    store.messagesMap = { [KEY]: messages } as any;
+    store.topicDataMap = {
+      [topicMapKey({ agentId: 'a1' })]: {
+        items: [{ id: 't1', title: 'defaultTitle' }],
+        total: 1,
+      },
+    } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
+  });
+
+  it.each(['error', 'interrupted'] as const)(
+    'does not summarize partial audio replies when the client run ends as %s',
+    async (runtimeStatus) => {
+      const { get, store } = makeStore();
+      store.messagesMap = {
+        [KEY]: [
+          {
+            audioList: [
+              { alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' },
+            ],
+            content: '',
+            id: 'u1',
+            role: 'user',
+          },
+          { ...thisTurnAssistant, content: 'Partial reply' },
+        ],
+      } as any;
+      store.topicDataMap = {
+        [topicMapKey({ agentId: 'a1' })]: {
+          items: [{ id: 't1', title: 'defaultTitle' }],
+          total: 1,
+        },
+      } as any;
+
+      await lifecycle('client', get).afterRunComplete(completeEvent('client', { runtimeStatus }));
+
+      expect(store.summaryTopicTitle).not.toHaveBeenCalled();
+      expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not re-summarize a text-first topic after the reply completes', async () => {
+    const { get, store } = makeStore();
+    store.messagesMap = {
+      [KEY]: [{ content: 'hello', id: 'u1', role: 'user' }, thisTurnAssistant],
+    } as any;
+    store.topicDataMap = {
+      [topicMapKey({ agentId: 'a1' })]: {
+        items: [{ id: 't1', title: 'defaultTitle' }],
+        total: 1,
+      },
+    } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(store.summaryTopicTitle).not.toHaveBeenCalled();
   });
 });
 

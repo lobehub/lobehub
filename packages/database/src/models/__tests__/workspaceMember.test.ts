@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import {
   devices,
+  messengerAccountLinks,
   resourcePermissions,
   tasks,
   users,
@@ -159,6 +160,101 @@ describe('WorkspaceMemberModel', () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
 
       expect(await model.listMembers(workspaceId)).toEqual([]);
+    });
+  });
+
+  describe('searchAssignableMembers', () => {
+    const viewerId = 'wm-viewer';
+
+    const seedDirectory = async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await serverDB.insert(users).values({ id: viewerId });
+      await serverDB
+        .update(users)
+        .set({ email: 'alice@lobehub.com', fullName: 'Alice Chen', username: 'alice' })
+        .where(eq(users.id, memberId));
+      await serverDB
+        .update(users)
+        .set({ fullName: 'Bob Li', username: 'bob' })
+        .where(eq(users.id, otherUserId));
+      // `addMember` only hands out non-owner roles; seed the owner row directly.
+      await serverDB
+        .insert(workspaceMembers)
+        .values({ role: 'owner', userId: inviterId, workspaceId });
+      await model.addMember({ userId: memberId, workspaceId });
+      await model.addMember({ userId: otherUserId, workspaceId });
+      await model.addMember({ role: 'viewer', userId: viewerId, workspaceId });
+      // Alice's Discord identity is active in this workspace; her Telegram one
+      // belongs to another workspace and must stay invisible here.
+      await serverDB.insert(messengerAccountLinks).values([
+        {
+          platform: 'discord',
+          platformUserId: '4521',
+          platformUsername: 'Neko',
+          userId: memberId,
+          workspaceId,
+        },
+        {
+          platform: 'telegram',
+          platformUserId: 'tg-777',
+          platformUsername: 'alice_tg',
+          userId: memberId,
+          workspaceId: otherWorkspaceId,
+        },
+      ]);
+      return model;
+    };
+
+    it('lists active members whose role can own a task, name-ordered with a total', async () => {
+      const model = await seedDirectory();
+
+      const { rows, total } = await model.searchAssignableMembers(workspaceId, { limit: 50 });
+
+      // Viewers cannot own tasks; members without a name sort last.
+      expect(rows.map((r) => r.userId)).toEqual([memberId, otherUserId, inviterId]);
+      expect(rows.find((r) => r.userId === inviterId)?.role).toBe('owner');
+      expect(total).toBe(3);
+    });
+
+    it('narrows by id, name, handle, email or an IM identity linked under this workspace', async () => {
+      const model = await seedDirectory();
+      const ids = async (query: string) =>
+        (await model.searchAssignableMembers(workspaceId, { limit: 50, query })).rows.map(
+          (r) => r.userId,
+        );
+
+      expect(await ids('chen')).toEqual([memberId]);
+      expect(await ids('bob')).toEqual([otherUserId]);
+      expect(await ids('alice@lobehub.com')).toEqual([memberId]);
+      expect(await ids(memberId)).toEqual([memberId]);
+      expect(await ids('neko')).toEqual([memberId]);
+      expect(await ids('4521')).toEqual([memberId]);
+      // The Telegram identity is scoped to another workspace: no match here.
+      expect(await ids('alice_tg')).toEqual([]);
+      expect(await ids('tg-777')).toEqual([]);
+      // LIKE wildcards are literal characters, not patterns.
+      expect(await ids('%')).toEqual([]);
+      expect(await ids('_')).toEqual([]);
+    });
+
+    it('caps the page with limit and reports the total before the cap', async () => {
+      const model = await seedDirectory();
+
+      const { rows, total } = await model.searchAssignableMembers(workspaceId, { limit: 1 });
+
+      expect(rows).toEqual([{ role: 'member', userId: memberId }]);
+      expect(total).toBe(3);
+    });
+
+    it('ignores soft-deleted members and other workspaces', async () => {
+      const model = await seedDirectory();
+      await model.removeMember(workspaceId, otherUserId);
+      await model.addMember({ userId: otherUserId, workspaceId: otherWorkspaceId });
+
+      const { rows, total } = await model.searchAssignableMembers(workspaceId, { limit: 50 });
+
+      expect(rows.map((r) => r.userId)).toEqual([memberId, inviterId]);
+      expect(total).toBe(2);
     });
   });
 

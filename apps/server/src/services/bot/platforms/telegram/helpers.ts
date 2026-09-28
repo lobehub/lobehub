@@ -14,11 +14,6 @@ export function extractBotId(botToken: string): string {
   return botToken.slice(0, colonIndex);
 }
 
-/**
- * Salt used when no server-side key is configured. The derived secret is then
- * a pure function of the bot token — still unguessable to anyone who does not
- * already hold the token, which is the actual credential.
- */
 const TELEGRAM_WEBHOOK_SECRET_FALLBACK_KEY = 'lobehub-telegram-webhook-secret';
 
 /**
@@ -59,6 +54,21 @@ export function resolveTelegramSecretToken(
 }
 
 /**
+ * Update types this platform actually handles. Guest Mode summons arrive as
+ * `guest_message` and are dropped unless listed — Telegram keeps the previous
+ * `allowed_updates` when the field is omitted.
+ */
+export const TELEGRAM_ALLOWED_UPDATES = [
+  'message',
+  'edited_message',
+  'channel_post',
+  'edited_channel_post',
+  'callback_query',
+  'message_reaction',
+  'guest_message',
+] as const;
+
+/**
  * Call Telegram setWebhook API. Idempotent — safe to call on every startup.
  */
 export async function setTelegramWebhook(
@@ -67,17 +77,7 @@ export async function setTelegramWebhook(
   secretToken: string,
 ): Promise<void> {
   const params: Record<string, unknown> = {
-    // Explicitly request all update types we need, including group messages.
-    // Without this, Telegram keeps whatever `allowed_updates` was set previously,
-    // which may silently exclude group messages.
-    allowed_updates: [
-      'message',
-      'edited_message',
-      'channel_post',
-      'edited_channel_post',
-      'callback_query',
-      'message_reaction',
-    ],
+    allowed_updates: [...TELEGRAM_ALLOWED_UPDATES],
     secret_token: secretToken,
     url,
   };

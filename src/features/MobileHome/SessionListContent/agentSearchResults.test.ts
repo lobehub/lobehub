@@ -13,12 +13,10 @@ const createSearchResult = (overrides: Partial<SidebarAgentItem> = {}): SidebarA
 });
 
 describe('getVisibleAgentSearchResults', () => {
-  it('keeps mobile agent results that do not have a legacy session', () => {
-    const agentWithoutSession = createSearchResult({ sessionId: undefined });
+  it('keeps mobile agent results', () => {
+    const agent = createSearchResult();
 
-    expect(getVisibleAgentSearchResults([agentWithoutSession], true)).toEqual([
-      agentWithoutSession,
-    ]);
+    expect(getVisibleAgentSearchResults([agent], true)).toEqual([agent]);
   });
 
   it('hides chat groups only on the mobile home', () => {

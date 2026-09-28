@@ -62,7 +62,7 @@ export interface SandboxProviderFileExportRequest {
 }
 
 export interface SandboxProviderFileExportResult {
-  error?: { message: string; name?: string };
+  error?: SandboxExportFileResult['error'];
   mimeType?: string;
   result?: Record<string, unknown>;
   size?: number;
@@ -72,6 +72,8 @@ export interface SandboxProviderFileExportResult {
 export interface SandboxCommandResult {
   exitCode: number;
   output: string;
+  /** The provider recreated the workspace before executing this command. */
+  sessionExpiredAndRecreated?: boolean;
   stderr?: string;
   success: boolean;
 }

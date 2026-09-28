@@ -3,7 +3,6 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { resolveAppOrigin } from '@/libs/oidc-provider/config';
 import { OIDCService } from '@/server/services/oidc';
 
 const log = debug('lobe-oidc:consent');
@@ -115,16 +114,14 @@ export async function POST(request: NextRequest) {
     const internalRedirectUrlString = await oidcService.getInteractionResult(uid, result);
     log('OIDC Provider internal redirect URL string: %s', internalRedirectUrlString);
 
-    const internalUrl = new URL(internalRedirectUrlString);
-    const finalRedirectUrl = new URL(resolveAppOrigin(request.headers));
-    finalRedirectUrl.pathname = internalUrl.pathname;
-    finalRedirectUrl.search = internalUrl.search;
-    finalRedirectUrl.hash = internalUrl.hash;
+    // The gateway rewrites Host on the way to the origin, so the server cannot tell which
+    // public origin the browser is on. A relative Location keeps it on the origin that holds
+    // the interaction cookies.
+    const { pathname, search, hash } = new URL(internalRedirectUrlString);
+    const location = `${pathname}${search}${hash}`;
 
-    log('Redirecting to: %s', finalRedirectUrl.toString());
-    return NextResponse.redirect(finalRedirectUrl, {
-      status: 303,
-    });
+    log('Redirecting to: %s', location);
+    return new NextResponse(null, { headers: { location }, status: 303 });
   } catch (error) {
     console.error('Error processing consent:', error);
     return NextResponse.json(

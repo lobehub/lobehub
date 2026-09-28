@@ -19,7 +19,12 @@ export type SelectAllState = 'all' | 'loaded' | 'none';
  */
 export type ResourceListVisibilityFilter = 'private' | 'workspace';
 
-export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = 'private';
+/**
+ * Workspace mode opens on the team share, matching the task list's default:
+ * workspace resources are team work by default, and the private drawer stays
+ * one click away in the header scope dropdown.
+ */
+export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = 'workspace';
 
 export interface State {
   /**
@@ -30,6 +35,18 @@ export interface State {
    * Current view item ID (document ID or file ID)
    */
   currentViewItemId?: string;
+  /**
+   * Resource shown in the explorer's inline right detail panel (list click).
+   * Kept apart from `currentViewItemId`/`mode`: the panel is an in-context
+   * preview dock, not a view mode, so opening it must not kick the user out
+   * of the list or fight the `?file=` deep-link restoration.
+   */
+  detailPanelId?: string;
+  /**
+   * Whether the detail panel item is a page (文稿). Pages have no file URL, so
+   * the panel previews their document content instead of the file viewer.
+   */
+  detailPanelIsPage: boolean;
   /**
    * Current library ID
    */
@@ -105,6 +122,8 @@ export interface State {
 export const initialState: State = {
   category: FilesTabs.All,
   currentViewItemId: undefined,
+  detailPanelId: undefined,
+  detailPanelIsPage: false,
   libraryId: undefined,
   librarySearchQuery: '',
   // Personal mode keeps the historical neutral value; workspace mode hydrates

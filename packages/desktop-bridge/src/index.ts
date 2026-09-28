@@ -37,6 +37,14 @@ export const APP_WINDOW_MIN_SIZE = {
  */
 export const AUTH_REQUIRED_HEADER = 'X-Auth-Required';
 
+/**
+ * Companion to X-Auth-Required: a short machine-readable reason for the 401
+ * (e.g. `jwt_expired`, `jwt_signature`, `user_inactive`, `no_token`) so the
+ * desktop main-process log can record WHY the server rejected the session
+ * without access to server logs.
+ */
+export const AUTH_FAILURE_HEADER = 'X-Auth-Failure';
+
 // TRPC error codes (mirrors @trpc/server internal codes)
 /**
  * TRPC error code for unauthorized requests.

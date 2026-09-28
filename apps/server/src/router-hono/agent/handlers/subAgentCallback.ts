@@ -16,9 +16,11 @@ const log = debug('lobe-server:agent:subagent-callback');
  * Backfills the parent's placeholder tool message and barrier-resumes the
  * parked parent op via `completeSubAgentBridge`.
  *
- * Body: `{ operationId, reason, parentOperationId, threadId, toolMessageId }`
+ * Body: `{ operationId, reason, parentOperationId, threadId, toolMessageId, errorMessage? }`
  * — event fields from the hook dispatch plus the bridge params from
- * `webhook.body`.
+ * `webhook.body`. `errorMessage` is set by the watchdog abandon path, whose
+ * child state never records the failure; without it the parent reads a bare
+ * "Sub-agent did not complete (error).".
  *
  * Auth: `qstashAuth` on the route — QStash signature required.
  */
@@ -30,7 +32,7 @@ export async function subAgentCallback(c: Context): Promise<Response> {
     return c.json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { operationId, parentOperationId, reason, threadId, toolMessageId } = body;
+  const { errorMessage, operationId, parentOperationId, reason, threadId, toolMessageId } = body;
 
   log(
     'subagent-callback: operationId=%s, parentOperationId=%s, reason=%s, toolMessageId=%s',
@@ -63,11 +65,18 @@ export async function subAgentCallback(c: Context): Promise<Response> {
     // runtime's models stay workspace-scoped — a bare AgentRuntimeService
     // would be personal-scoped and the tool-message backfill / resume
     // barrier could miss workspace-scoped rows.
+    // Opt into visitor rows only for shared-agent visitor runs: metadata
+    // carries `streamOwnerUserId` when the operation executes as the creator
+    // but the visitor owns the stream. Ordinary creator ops keep the default
+    // exclusion.
+    const includeShareVisitor = Boolean(metadata.streamOwnerUserId);
     const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
+      includeShareVisitor,
       workspaceId: metadata.workspaceId,
     });
 
     const resumed = await aiAgentService.completeSubAgentBridge({
+      errorMessage: typeof errorMessage === 'string' ? errorMessage : undefined,
       operationId,
       parentOperationId,
       reason: reason ?? 'done',

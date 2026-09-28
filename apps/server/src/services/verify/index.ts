@@ -5,6 +5,12 @@ export {
   planCheckIdRemap,
 } from './acceptanceMerge';
 export {
+  previewAcceptancePurge,
+  purgeAcceptance,
+  type PurgePreview,
+  purgeVerifyRun,
+} from './acceptancePurge';
+export {
   type AcceptanceCheckHistoryEntry,
   type AcceptanceCheckReviewEvent,
   type AcceptanceCheckReviewOverlay,
@@ -39,6 +45,7 @@ export {
   type RepairSpawner,
   VerifyRepairService,
 } from './repairService';
+export { settleFailedRepair } from './repairTerminal';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
 export {
   isCurrentReviewPrediction,

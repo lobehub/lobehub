@@ -1,12 +1,13 @@
 'use client';
 
-import { Checkbox, Tag } from '@lobehub/ui/base-ui';
-import { Badge, Skeleton, Table, Tooltip, Typography } from 'antd';
+import { Badge, Checkbox, Tag, Tooltip } from '@lobehub/ui/base-ui';
+import { Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type FC, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { agentEvalService } from '@/services/agentEval';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -99,11 +100,13 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
         key: 'select',
         render: (_: any, record: ResumableCase) => (
           <Tooltip title={record.canResume ? undefined : record.reason}>
-            <Checkbox
-              checked={selectedIds.includes(record.testCaseId)}
-              disabled={!record.canResume}
-              onChange={(checked) => handleToggleRow(record.testCaseId, checked)}
-            />
+            <span style={{ display: 'inline-flex' }}>
+              <Checkbox
+                checked={selectedIds.includes(record.testCaseId)}
+                disabled={!record.canResume}
+                onChange={(checked) => handleToggleRow(record.testCaseId, checked)}
+              />
+            </span>
           </Tooltip>
         ),
         title: (
@@ -140,7 +143,9 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
         key: 'status',
         render: (_: any, record: ResumableCase) => (
           <Tooltip title={record.canResume ? undefined : record.reason}>
-            <StatusLabel status={record.resumeStatus} />
+            <span style={{ display: 'inline-flex' }}>
+              <StatusLabel status={record.resumeStatus} />
+            </span>
           </Tooltip>
         ),
         title: t('table.columns.status'),
@@ -151,7 +156,7 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
   );
 
   return loading ? (
-    <Skeleton active paragraph={{ rows: 4 }} />
+    <ArticleSkeleton rows={4} />
   ) : (
     <Table
       columns={columns}

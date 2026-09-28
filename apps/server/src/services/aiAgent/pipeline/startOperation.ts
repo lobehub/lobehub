@@ -32,16 +32,20 @@ export interface StartOperationInput {
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
   clientIp?: string;
+  /** Tri-state disabled plugin identifiers, kept on the world slot for the context rules. */
+  disabledPluginIds?: string[];
   discordContext?: any;
   discovery: ToolDiscoveryResult;
   enableExpertise: boolean;
   evalContext?: InternalExecAgentParams['evalContext'];
   evalRuntime?: InternalExecAgentParams['evalRuntime'];
   hooks?: InternalExecAgentParams['hooks'];
+  includeFinalState?: boolean;
   /** Final runtime context — base prep context with 16b/16c overrides applied. */
   initialContext: OperationPrepResult['initialContext'];
   initialStepCount?: number;
   maxSteps?: number;
+  onOperationCreated?: InternalExecAgentParams['onOperationCreated'];
   operationId: string;
   operationTaskId?: string;
   parentOperationId?: string;
@@ -82,6 +86,8 @@ export const startOperation = async (
     parentMessageId,
     provider,
     resolvedAgentId,
+    shareGate,
+    topicEditingGroupId,
     topicId,
     trigger,
     userMessageId,
@@ -94,6 +100,7 @@ export const startOperation = async (
     botContext,
     botPlatformContext,
     clientIp,
+    disabledPluginIds,
     discordContext,
     discovery,
     enableExpertise,
@@ -118,6 +125,13 @@ export const startOperation = async (
     userInterventionConfig,
     userTimezone,
   } = input;
+  const { audio, video, vision } = discovery.modelMediaCapabilities;
+  // A builder topic continued from another surface (scope `main`, an approval
+  // resume) arrives without the group it edits; the group the topic was opened
+  // on stands in, so the run still knows its target.
+  const editingGroupId =
+    (appContext?.scope === 'group_agent_builder' ? appContext.editingGroupId : undefined) ||
+    topicEditingGroupId;
 
   log(
     'execAgent: creating operation %s — agentDocuments=%d, knowledgeBases=%s, tools=%d, skills=%d',
@@ -132,12 +146,54 @@ export const startOperation = async (
   // If createOperation fails, we still have valid messages that need error info
   try {
     const result = await deps.agentRuntimeService.createOperation({
+      includeFinalState: input.includeFinalState,
       activeDeviceId: discovery.activeDeviceId,
       activeDeviceScope: discovery.activeDeviceScope,
       agentConfig,
       agentGroup: discovery.operationAgentGroup,
+      agentShareVisitor: shareGate
+        ? {
+            agentId: shareGate.agentId,
+            // Mirrors `shareConfig.allowReadMemory` so `BuiltinToolsExecutor`
+            // can re-check the memory tool's grant at dispatch time (the
+            // actual chokepoint) via `isShareBlockedDataToolCall` — see
+            // `shareGate.ts`.
+            allowReadMemory: shareGate.shareConfig.allowReadMemory,
+            // Mirrors `shareConfig.toolGrants` so tool runtimes resolved
+            // outside `toolManifestMap` (e.g. `activateSkill`, which queries
+            // builtin/DB skills by name) can enforce the same allowlist.
+            toolGrants: shareGate.shareConfig.toolGrants,
+            // Sourced from the agent's OWN persisted assignment
+            // (`agentConfig.knowledgeBases`, already blanked by
+            // `applyShareGateToAgentConfig` in `execAgent`), never from visitor
+            // input. Lets `isShareBlockedDataToolCall` scope
+            // `lobe-knowledge-base.viewKnowledgeBase`'s `id` argument to
+            // knowledge bases actually mounted on this agent.
+            knowledgeBaseIds: (agentConfig.knowledgeBases ?? [])
+              .filter((kb: { enabled?: boolean | null; id?: string | null }) => kb.enabled && kb.id)
+              .map((kb: { id?: string | null }) => kb.id as string),
+            // The share instance this run was authorized against. Re-read (not
+            // reused) at every step boundary by
+            // `AgentRuntimeService.executeStep` via
+            // `AgentShareModel.isRunStillAuthorized`, so a revocation
+            // committed mid-run is caught at the next step instead of only at
+            // creation time. See `AgentShareGate.shareId`'s JSDoc for why the
+            // id itself is the revocation token.
+            shareId: shareGate.shareId,
+            // Mirrors `shareConfig.skillGrants` so the skill runtime can
+            // re-check every load against the SAME allowlist the skill pool was
+            // assembled from. Assembly alone is not enough: `activateSkill`
+            // resolves a model-supplied skill NAME, so a name the pool never
+            // offered still reaches the runtime.
+            skillGrants: shareGate.shareConfig.skillGrants,
+            showErrorDetails: shareGate.shareConfig.showErrorDetails,
+            showModelInfo: shareGate.shareConfig.showModelInfo,
+            visitorUserId: shareGate.visitorUserId,
+          }
+        : undefined,
       deviceSystemInfo:
         Object.keys(prep.deviceSystemInfo).length > 0 ? prep.deviceSystemInfo : undefined,
+      disabledPluginIds,
       executionPlan: discovery.executionPlan,
       searchDecision: discovery.searchDecision,
       userTimezone,
@@ -146,7 +202,7 @@ export const startOperation = async (
         // inherit the builtin agent's tools / systemRole / model), but their
         // resource tools and receipts must attribute to the *reviewed* user
         // agent, which rides on the marker. Prefer it so the tool-execution
-        // context (state.metadata.agentId) targets the reviewed agent; ordinary
+        // context (state.origin.agentId) targets the reviewed agent; ordinary
         // runs (no marker) fall back to the resolved executing agent.
         agentId: appContext?.agentSignal?.agentId ?? resolvedAgentId,
         // Propagate the originating request's client IP / user agent into
@@ -166,11 +222,9 @@ export const startOperation = async (
         // owned by the builtin builder agent, so the edited group only rides
         // here. Read by the group-agent-builder server runtime and by the
         // `<current_group_context>` injector.
-        ...(appContext?.scope === 'group_agent_builder' && appContext?.editingGroupId
-          ? { editingGroupId: appContext.editingGroupId }
-          : {}),
+        ...(editingGroupId ? { editingGroupId } : {}),
         // Run-scoped Agent Signal marker for background self-iteration / memory
-        // runs — lands in state.metadata.agentSignal so the completion path can
+        // runs — lands in state.origin.signal so the completion path can
         // project receipts/briefs. Undefined for ordinary chat runs.
         ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
         defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
@@ -194,14 +248,19 @@ export const startOperation = async (
         trigger,
       },
       autoStart,
+      onOperationCreated: input.onOperationCreated,
       botContext,
       botPlatformContext,
       deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
       discordContext,
+      // Run context the context engine injects into the system message —
+      // carried on the operation like `expertise`, not on the agent config.
+      connectorOwnershipNote: discovery.connectorOwnershipNote,
       evalContext,
       evalRuntime,
       enableExpertise,
       expertise: prep.expertise,
+      projectInstructions: prep.projectInstructions,
       initialContext,
       initialMessages: prep.allMessages,
       initialStepCount,
@@ -222,8 +281,24 @@ export const startOperation = async (
           }
         : {}),
       maxSteps,
-      modelRuntimeConfig: { model, provider },
+      modelRuntimeConfig: {
+        mediaCapabilities: {
+          ...(typeof audio === 'boolean' && { audio }),
+          ...(typeof video === 'boolean' && { video }),
+          ...(typeof vision === 'boolean' && { vision }),
+        },
+        // Read once during discovery: every LLM attempt of this run resolves its
+        // parameters from here, so no step re-reads the bank, the user's model
+        // row or the reasoning config — and none of them can change mid-run.
+        modelFacts: discovery.modelFacts,
+        model,
+        provider,
+      },
       hooks,
+      // Listed once during discovery: every step renders {{CREDS_LIST}} from
+      // here instead of asking the Market API again. Awaited only now, so the
+      // read overlapped with the operation preparation that ran in between.
+      operationCredentials: await discovery.credentialFactsPromise,
       operationId,
       parentOperationId,
       signal,
@@ -285,11 +360,16 @@ export const startOperation = async (
       });
     }
 
-    // Generate a short-lived JWT for Gateway WebSocket authentication
+    // Generate a short-lived JWT for Gateway WebSocket authentication.
+    // Share-visitor runs sign for the VISITOR: signUserJWT mints a full
+    // oidcAuth token, so a creator-signed token handed to the visitor's
+    // browser would be creator account access. The gateway channel is
+    // registered under the visitor's id (`streamOwnerUserId`), so the
+    // visitor's own `sub` matches.
     let gatewayToken: string | undefined;
     if (!deps.withholdGatewayToken) {
       try {
-        gatewayToken = await signUserJWT(deps.userId);
+        gatewayToken = await signUserJWT(shareGate?.visitorUserId ?? deps.userId);
       } catch {
         log('execAgent: failed to sign gateway JWT, gateway auth will be unavailable');
       }

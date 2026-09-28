@@ -187,6 +187,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   // changes required.
   const stdinPayload = buildHeteroExecStdinPayload({
     imageList: params.imageList,
+    isNewSession: !resumeSessionId,
     prompt,
     resumeFallbackSystemContext: params.resumeFallbackSystemContext,
     systemContext: params.systemContext,

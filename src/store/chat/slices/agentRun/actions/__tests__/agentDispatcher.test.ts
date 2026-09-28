@@ -23,6 +23,7 @@ const codexApiHeteroProvider = {
 };
 const remoteHeteroProvider = { type: 'openclaw' as const };
 const remoteHeteroProviderHermes = { type: 'hermes' as const };
+const codexCliProvider = { command: 'codex', type: 'codex' as const };
 
 describe('selectRuntimeType', () => {
   describe('on web (isDesktop = false)', () => {
@@ -55,6 +56,33 @@ describe('selectRuntimeType', () => {
       expect(
         selectRuntimeType(
           { heterogeneousProvider: remoteHeteroProviderHermes, isGatewayMode: false },
+          opts,
+        ),
+      ).toBe('gateway');
+    });
+
+    it('routes Codex device execution to gateway on Android (isDesktop=false)', () => {
+      // Android cannot spawn the CLI in-process. A bound macOS device must go
+      // through Agent Gateway — never the Provider API (`client`).
+      expect(
+        selectRuntimeType(
+          {
+            boundDeviceId: 'macos-device',
+            executionTarget: 'device',
+            heterogeneousProvider: codexCliProvider,
+            isGatewayMode: false,
+          },
+          opts,
+        ),
+      ).toBe('gateway');
+      expect(
+        selectRuntimeType(
+          {
+            boundDeviceId: 'macos-device',
+            executionTarget: 'device',
+            heterogeneousProvider: codexCliProvider,
+            isGatewayMode: true,
+          },
           opts,
         ),
       ).toBe('gateway');

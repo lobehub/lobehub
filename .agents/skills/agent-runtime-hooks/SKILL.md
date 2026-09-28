@@ -1,6 +1,6 @@
 ---
 name: agent-runtime-hooks
-description: 'Agent runtime lifecycle hooks. Use for before/after tool or step hooks, tool mocks, human intervention, sub-agent calls, context compression, evals, callAgent, or lifecycle events.'
+description: 'Use for agent lifecycle hooks, tool mocks, intervention, sub-agent calls and context compression.'
 user-invocable: false
 ---
 
@@ -203,7 +203,3 @@ Note: CallAgent hooks require `parentOperationId` in `ExecSubAgentTaskParams`.
 - **Local only**: `beforeToolCall` mock only works in local mode (in-memory hooks). Webhook mode does not support mocking.
 - **Scoped per operation**: Auto-cleaned via `hookDispatcher.unregister()` on completion.
 - **Sandbox/MCP**: No separate hooks — they go through `executeTool`, so `beforeToolCall`/`afterToolCall` cover them. Use `event.identifier` to filter.
-
-## Real-World Example: agent-evals
-
-See `devtools/agent-evals/helpers/runner.ts` — `createEvalHooks()` uses `afterStep`, `onComplete`, `afterToolCall`, and `beforeToolCall` (for mock).

@@ -971,6 +971,18 @@ export const agentDocumentRouter = router({
       return ctx.agentDocumentService.associateDocument(input.agentId, input.documentId);
     }),
 
+  importFile: agentDocumentProcedureWrite
+    .input(
+      z.object({
+        agentId: z.string(),
+        fileId: z.string(),
+        parentId: z.string().nullish(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.agentDocumentService.importFile(input.agentId, input.fileId, input.parentId);
+    }),
+
   /**
    * Tool-oriented: create document
    */
@@ -1047,7 +1059,11 @@ export const agentDocumentRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const topic = input.title.trim() ? undefined : await ctx.topicModel.findById(input.topicId);
+        // Use the creator-facing finder: a visitor topic's title must not be
+        // copied into a creator-owned document.
+        const topic = input.title.trim()
+          ? undefined
+          : await ctx.topicModel.findOwnTopicById(input.topicId);
         const title = input.title.trim() || topic?.title || '';
         const doc = await ctx.agentDocumentService.createForTopic(
           input.agentId,

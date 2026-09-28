@@ -45,11 +45,13 @@ describe('buildAuthSeoEntry', () => {
 });
 
 describe('buildSeoMeta', () => {
-  it('joins canonical path onto official url for mapped paths', async () => {
+  it('generates title and description for mapped paths', async () => {
     const meta = await buildSeoMeta('en-US', '/signin');
 
     expect(meta).toContain('<title>Sign In</title>');
-    expect(meta).toContain('property="og:url" content="https://app.lobehub.com/signin"');
+    expect(meta).toContain('<meta name="description" content="');
+    expect(meta).not.toContain('og:');
+    expect(meta).not.toContain('twitter:');
   });
 
   it('normalizes hostile locale input to an allowlisted value', async () => {
@@ -58,13 +60,14 @@ describe('buildSeoMeta', () => {
 
     expect(meta).not.toContain(hostile);
     expect(meta).not.toContain('alert(1)');
-    expect(meta).toContain('property="og:locale" content="en-US"');
+    expect(meta).toContain('<title>Sign In</title>');
   });
 
-  it('uses official url for unmapped paths', async () => {
+  it('falls back to branding for unmapped paths', async () => {
     const meta = await buildSeoMeta('en-US', '/verify-email');
 
-    expect(meta).toContain('property="og:url" content="https://app.lobehub.com"');
-    expect(meta).toContain('property="og:locale" content="en-US"');
+    expect(meta).toContain('<title>');
+    expect(meta).not.toContain('og:');
+    expect(meta).not.toContain('twitter:');
   });
 });

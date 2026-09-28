@@ -230,7 +230,10 @@ const WorkPreview = memo<WorkPreviewProps>(({ item, title }) => {
           <DescriptorIcon size={17} />
         )}
       </div>
-      {!isLinear && !isGithub && status && (
+      {/* An orphan's status is the last snapshot of a resource that no longer
+          exists, and the badge shares the top-right corner with the card's
+          hover Remove action, so drop it once the resource is gone. */}
+      {!isLinear && !isGithub && status && !item.resourceDeleted && (
         <Tag className={styles.status} color={getStatusColor(status)} size={'small'}>
           {status}
         </Tag>

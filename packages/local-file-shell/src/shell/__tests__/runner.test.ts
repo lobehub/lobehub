@@ -39,9 +39,34 @@ describe('runCommand', () => {
       const first = await runCommand({ command: 'echo first' }, { processManager: localManager });
       const second = await runCommand({ command: 'echo second' }, { processManager: localManager });
 
-      expect(first.shell_id).toBe('sh-1');
-      expect(second.shell_id).toBe('sh-2');
+      expect(first.shell_id).toMatch(/^sh-[\da-f]{6}-1$/);
+      expect(second.shell_id).toBe(first.shell_id!.replace(/-1$/, '-2'));
       localManager.cleanupAll();
+    });
+
+    // Regression: shell ids were a bare per-process counter (`sh-1`, `sh-2`…),
+    // so when getCommandOutput reached a different device process than the one
+    // that ran the command (app restart, two device processes on one machine),
+    // the same id named an unrelated command there and its output came back.
+    it('should not resolve a shell ID issued by another process to its own command', async () => {
+      const processA = new ShellProcessManager(tmpDir);
+      const processB = new ShellProcessManager(tmpDir);
+
+      try {
+        const fromA = await runCommand({ command: 'echo from-A' }, { processManager: processA });
+        const fromB = await runCommand({ command: 'echo from-B' }, { processManager: processB });
+
+        expect(fromA.shell_id).not.toBe(fromB.shell_id);
+
+        const crossed = await processB.getOutput({ shell_id: fromA.shell_id!, timeout: 0 });
+
+        expect(crossed.stdout).not.toContain('from-B');
+        expect(crossed.success).toBe(false);
+        expect(crossed.error).toContain(`Shell ID ${fromA.shell_id} not found`);
+      } finally {
+        processA.cleanupAll();
+        processB.cleanupAll();
+      }
     });
 
     it('should capture stderr output separately', async () => {
@@ -105,7 +130,7 @@ describe('runCommand', () => {
       expect(result.stdout).toContain('/tmp');
     });
 
-    it('should report the real spawn error when cwd does not exist', async () => {
+    it('[R4] reports a missing cwd as a missing working directory, not as a missing shell', async () => {
       const missingCwd = path.join(tmpDir, 'missing-worktree');
       const result = await runCommand(
         { command: 'echo unreachable', cwd: missingCwd },
@@ -114,8 +139,23 @@ describe('runCommand', () => {
 
       expect(result.success).toBe(false);
       expect(result.exit_code).toBeUndefined();
-      expect(result.error).toContain(`working directory: ${missingCwd}`);
-      expect(result.error).toContain('ENOENT');
+      // Node blames the executable (`spawn /bin/sh ENOENT`) when cwd is missing,
+      // which sends the model off debugging a healthy shell.
+      expect(result.error).not.toMatch(/spawn \S+ ENOENT/);
+      expect(result.error).toContain(`Working directory does not exist on ${os.hostname()}`);
+      expect(result.error).toContain(missingCwd);
+    });
+
+    it('reports a cwd that is a file as not a directory', async () => {
+      const fileCwd = path.join(tmpDir, 'a-file');
+      fs.writeFileSync(fileCwd, '');
+      const result = await runCommand(
+        { command: 'echo unreachable', cwd: fileCwd },
+        { processManager },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain(`Working directory is not a directory on ${os.hostname()}`);
     });
 
     it('should merge env into child process environment', async () => {
@@ -228,7 +268,7 @@ describe('runCommand', () => {
       expect(result.success).toBe(true);
       expect(result.shell_id).toBeDefined();
       expect(result.exit_code).toBeUndefined();
-      expect(result.output_files?.stdout.path).toMatch(/sh-\d+\/stdout\.log$/);
+      expect(result.output_files?.stdout.path).toMatch(/sh-[\da-f]{6}-\d+\/stdout\.log$/);
       expect(result.stdout).toBeUndefined();
     });
 

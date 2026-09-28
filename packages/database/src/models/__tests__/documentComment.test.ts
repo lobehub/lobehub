@@ -93,6 +93,74 @@ describe('DocumentCommentModel', () => {
     expect(duplicate).toMatchObject({ isDuplicate: true, comment: { id: first.comment.id } });
   });
 
+  it('anchors a root comment to a body selection and never lets a reply carry its own', async () => {
+    const selectionAnchor = {
+      end: 9,
+      prefix: 'the ',
+      quote: 'quick',
+      start: 4,
+      suffix: ' brown fox',
+    };
+
+    const root = await authorModel.create({
+      clientId: 'anchored-root',
+      content: 'about this phrase',
+      documentId,
+      selectionAnchor,
+    });
+
+    expect(root.comment.selectionAnchor).toEqual(selectionAnchor);
+
+    // The thread's anchor lives on its root row, so an anchor sent with a reply
+    // is dropped rather than splitting the thread across two runs of the body.
+    const reply = await memberModel.create({
+      clientId: 'anchored-reply',
+      content: 'agreed',
+      documentId,
+      parentCommentId: root.comment.id,
+      selectionAnchor,
+    });
+
+    expect(reply.comment.parentCommentId).toBe(root.comment.id);
+    expect(reply.comment.selectionAnchor).toBeNull();
+
+    const [stored] = await serverDB
+      .select({ selectionAnchor: documentComments.selectionAnchor })
+      .from(documentComments)
+      .where(eq(documentComments.id, root.comment.id));
+    expect(stored.selectionAnchor).toEqual(selectionAnchor);
+
+    // The body paints from the document's full anchor set, independent of
+    // thread paging: roots only, anchored only, scoped to the workspace.
+    await memberModel.create({ clientId: 'plain-root', content: 'whole page', documentId });
+    expect(await authorModel.listAnchors(documentId)).toEqual([
+      { id: root.comment.id, selectionAnchor },
+    ]);
+    expect(await authorModel.listAnchors(secondDocumentId)).toEqual([]);
+    expect(await outsiderModel.listAnchors(documentId)).toEqual([]);
+
+    // Each surface pages its own subset: the gutter takes anchored roots, the
+    // list below the body takes document-level ones; no filter keeps them mixed.
+    const anchoredThreads = await authorModel.listThreads({ anchored: true, documentId });
+    expect(anchoredThreads.items.map(({ root: { clientId } }) => clientId)).toEqual([
+      'anchored-root',
+    ]);
+    const documentThreads = await authorModel.listThreads({ anchored: false, documentId });
+    expect(documentThreads.items.map(({ root: { clientId } }) => clientId)).toEqual(['plain-root']);
+    const allThreads = await authorModel.listThreads({ documentId });
+    expect(allThreads.items).toHaveLength(2);
+  });
+
+  it('leaves a comment made without a selection unanchored', async () => {
+    const root = await authorModel.create({
+      clientId: 'document-level',
+      content: 'about the whole page',
+      documentId,
+    });
+
+    expect(root.comment.selectionAnchor).toBeNull();
+  });
+
   it('rejects foreign parents and flattens replies to replies into the root thread', async () => {
     await expect(
       authorModel.create({ clientId: 'foreign', content: 'no', documentId: foreignDocumentId }),
@@ -145,6 +213,73 @@ describe('DocumentCommentModel', () => {
       parentCommentId: root.comment.id,
       replyToCommentId: null,
     });
+  });
+
+  it('collects thread participants for replies and skips tombstoned reply targets', async () => {
+    const outsiderInWorkspaceModel = new DocumentCommentModel(serverDB, outsiderId, workspaceId);
+    const root = await authorModel.create({ clientId: 'root', content: 'root', documentId });
+    expect(root.threadParticipantUserIds).toEqual([]);
+
+    const memberReply = await memberModel.create({
+      clientId: 'member-reply',
+      content: 'member',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    // First reply: only the root author is in the thread, and they are the
+    // direct target, so nobody else needs the weaker thread ping.
+    expect(memberReply.parentAuthorUserId).toBe(authorId);
+    expect(memberReply.threadParticipantUserIds).toEqual([]);
+
+    const outsiderReply = await outsiderInWorkspaceModel.create({
+      clientId: 'outsider-reply',
+      content: 'outsider',
+      documentId,
+      parentCommentId: memberReply.comment.id,
+    });
+    // Replying to the member's reply: member gets `replied`, root author is a
+    // thread participant, the actor is excluded.
+    expect(outsiderReply.parentAuthorUserId).toBe(memberId);
+    expect(outsiderReply.threadParticipantUserIds).toEqual([authorId]);
+
+    const authorReply = await authorModel.create({
+      clientId: 'author-reply',
+      content: 'author again',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    // Root author replying to their own root: no direct target ping, the two
+    // other repliers are participants.
+    expect(authorReply.parentAuthorUserId).toBe(authorId);
+    expect(new Set(authorReply.threadParticipantUserIds)).toEqual(new Set([memberId, outsiderId]));
+
+    // Only roots leave tombstones (replies to replies are flattened). Tombstone
+    // the root and reply to it: the deleted comment's author must not be a
+    // target, and the live repliers are still participants.
+    expect(await authorModel.delete(root.comment.id)).toBe('soft');
+    const replyToTombstone = await memberModel.create({
+      clientId: 'reply-to-tombstone',
+      content: 'still here?',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    expect(replyToTombstone.parentAuthorUserId).toBeNull();
+    // The root author stays a participant through their live reply.
+    expect(new Set(replyToTombstone.threadParticipantUserIds)).toEqual(
+      new Set([authorId, outsiderId]),
+    );
+    expect(replyToTombstone.comment).toMatchObject({
+      parentCommentId: root.comment.id,
+      replyToCommentId: null,
+    });
+
+    const duplicate = await memberModel.create({
+      clientId: 'reply-to-tombstone',
+      content: 'still here?',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    expect(duplicate).toMatchObject({ isDuplicate: true, threadParticipantUserIds: [] });
   });
 
   it('scopes updates and deletes to the author unless explicitly overridden', async () => {
@@ -349,5 +484,14 @@ describe('DocumentCommentModel', () => {
       .where(eq(documentComments.id, oldRoot.id));
     expect(await authorModel.summary(documentId)).toEqual({ total: 3 });
     expect(await outsiderModel.summary(foreignDocumentId)).toEqual({ total: 0 });
+
+    // Single-thread lookup for deep links: live replies only, scoped to the workspace.
+    expect(await authorModel.countLiveReplies(oldRoot.id)).toBe(2);
+    expect(await outsiderModel.countLiveReplies(oldRoot.id)).toBe(0);
+    await serverDB
+      .update(documentComments)
+      .set({ deletedAt: new Date() })
+      .where(eq(documentComments.clientId, 'reply-2'));
+    expect(await authorModel.countLiveReplies(oldRoot.id)).toBe(1);
   });
 });

@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
 
+import { coordinatorNodeTitleKey } from './coordinatorCopy';
 import type { GoalGraphView, GoalNodeView } from './goalGraphViewModel';
 import { KindDot } from './shared';
 import { useElapsed } from './useElapsed';
@@ -125,6 +126,7 @@ const ActivityRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeVie
     const [open, setOpen] = useState(false);
     const { text, title } = useActivityTime(lastTouch(view));
     const hasDetail = view.attempts.length > 0 || view.findings.length > 0;
+    const coordinatorTitleKey = coordinatorNodeTitleKey(view);
 
     return (
       <Flexbox gap={0}>
@@ -143,7 +145,7 @@ const ActivityRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeVie
           />
           <KindDot kind={view.node.kind} />
           <Text ellipsis style={{ flexShrink: 1, minWidth: 0 }} weight={500}>
-            {view.node.title}
+            {coordinatorTitleKey ? t(coordinatorTitleKey as any) : view.node.title}
           </Text>
           <Text ellipsis fontSize={14} style={{ flexShrink: 1, minWidth: 0 }} type={'secondary'}>
             {summarize(view)}

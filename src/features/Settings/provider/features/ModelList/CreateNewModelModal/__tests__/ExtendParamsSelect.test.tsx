@@ -38,6 +38,7 @@ describe('ExtendParamsSelect', () => {
       gpt5_6ReasoningEffort: 'reasoningEffort',
       glm5_2ReasoningEffort: 'reasoningEffort',
       glm5_3ReasoningEffort: 'reasoningEffort',
+      qwen38ReasoningEffort: 'reasoningEffort',
       thinkingLevel2: 'thinkingLevel',
     };
 
@@ -55,6 +56,10 @@ describe('ExtendParamsSelect', () => {
 
     it('should map GLM-5.3 variant to reasoningEffort', () => {
       expect(TITLE_KEY_ALIASES['glm5_3ReasoningEffort']).toBe('reasoningEffort');
+    });
+
+    it('should map Qwen3.8 Max variant to reasoningEffort', () => {
+      expect(TITLE_KEY_ALIASES['qwen38ReasoningEffort']).toBe('reasoningEffort');
     });
 
     it('should map thinkingLevel2 to thinkingLevel', () => {
@@ -77,6 +82,7 @@ describe('ExtendParamsSelect', () => {
       gpt5_6ReasoningEffort: 'reasoningEffort',
       glm5_2ReasoningEffort: 'reasoningEffort',
       glm5_3ReasoningEffort: 'reasoningEffort',
+      qwen38ReasoningEffort: 'reasoningEffort',
       thinkingLevel2: 'thinkingLevel',
     };
 
@@ -88,6 +94,7 @@ describe('ExtendParamsSelect', () => {
       expect(getTitleKey('gpt5ReasoningEffort')).toBe('reasoningEffort');
       expect(getTitleKey('glm5_2ReasoningEffort')).toBe('reasoningEffort');
       expect(getTitleKey('glm5_3ReasoningEffort')).toBe('reasoningEffort');
+      expect(getTitleKey('qwen38ReasoningEffort')).toBe('reasoningEffort');
       expect(getTitleKey('thinkingLevel2')).toBe('thinkingLevel');
     });
 

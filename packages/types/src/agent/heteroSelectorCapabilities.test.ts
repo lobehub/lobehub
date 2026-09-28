@@ -19,13 +19,14 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('codex')).toBe(true);
     expect(isHeteroSelectorAvailable('cursor')).toBe(true);
     expect(isHeteroSelectorAvailable('droid')).toBe(true);
+    expect(isHeteroSelectorAvailable('devin')).toBe(true);
     expect(isHeteroSelectorAvailable('grok-build')).toBe(true);
+    expect(isHeteroSelectorAvailable('kimi-code')).toBe(true);
     expect(isHeteroSelectorAvailable('opencode')).toBe(true);
     expect(isHeteroSelectorAvailable('pi')).toBe(true);
     expect(isHeteroSelectorAvailable('qoder')).toBe(true);
     expect(isHeteroSelectorAvailable('trae')).toBe(true);
 
-    expect(isHeteroSelectorAvailable('kimi-code')).toBe(false);
     expect(isHeteroSelectorAvailable('openclaw')).toBe(false);
     expect(isHeteroSelectorAvailable(undefined)).toBe(false);
   });
@@ -42,7 +43,9 @@ describe('selector availability', () => {
     expect(getHeteroSelectorCapability('codex')?.speed).toBeDefined();
     expect(getHeteroSelectorCapability('cursor')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('droid')?.model?.source).toBe('catalog');
+    expect(getHeteroSelectorCapability('devin')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('grok-build')?.model?.source).toBe('catalog');
+    expect(getHeteroSelectorCapability('kimi-code')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('grok-build')?.effort?.levels('grok-4.6')).toEqual([
       'low',
       'medium',
@@ -80,8 +83,23 @@ describe('selector availability', () => {
 describe('applyHeteroSelection', () => {
   it('passes the selection through untouched for providers with no selector', () => {
     expect(
-      applyHeteroSelection({ args: ['--model', 'x'], type: 'kimi-code' }, { model: 'y' }),
+      applyHeteroSelection({ args: ['--model', 'x'], type: 'openclaw' }, { model: 'y' }),
     ).toEqual({ model: 'y' });
+  });
+
+  it('clears both Kimi Code model spellings before applying a catalog selection', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['-m', 'kimi-code/k3', '--verbose'],
+      type: 'kimi-code',
+    };
+    const patch = applyHeteroSelection(provider, { model: 'kimi-code/k3-256k' });
+
+    expect(patch).toEqual({ args: ['--verbose'], model: 'kimi-code/k3-256k' });
+    expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual([
+      '--verbose',
+      '--model',
+      'kimi-code/k3-256k',
+    ]);
   });
 
   it('leaves args alone when the provider is unknown', () => {
@@ -152,6 +170,25 @@ describe('applyHeteroSelection', () => {
     expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual([
       '--mode',
       'plan',
+      '--model',
+      'claude-sonnet-4-6-thinking',
+    ]);
+  });
+
+  it('clears a hand-authored Devin model before applying a catalog selection', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--agent-type', 'coding', '--model=old-model'],
+      type: 'devin',
+    };
+    const patch = applyHeteroSelection(provider, { model: 'claude-sonnet-4-6-thinking' });
+
+    expect(patch).toEqual({
+      args: ['--agent-type', 'coding'],
+      model: 'claude-sonnet-4-6-thinking',
+    });
+    expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual([
+      '--agent-type',
+      'coding',
       '--model',
       'claude-sonnet-4-6-thinking',
     ]);

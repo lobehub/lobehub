@@ -40,7 +40,7 @@ vi.mock('@/features/Acceptance', () => ({
   OriginConversationProvider: ({ children }: { children?: React.ReactNode }) => children,
 }));
 
-vi.mock('@/features/Acceptance/Viewer/TopicPanel', () => ({ default: () => null }));
+vi.mock('@/features/Acceptance/Viewer/Conversation/TopicPanel', () => ({ default: () => null }));
 
 describe('Portal Acceptance Body — draftToComposer via the global bus', () => {
   beforeEach(() => {

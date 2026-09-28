@@ -6,6 +6,7 @@ import { PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import LibraryStatusIcon from '@/components/LibIcon/StatusIcon';
 import {
   RESOURCE_HOME_SECTIONS,
@@ -17,6 +18,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { usePermission } from '@/hooks/usePermission';
 import { useKnowledgeBaseStore } from '@/store/library';
 
+import { getLibraryListAsyncState } from '../Layout/Body/LibraryList/state';
 import SectionTitle from './SectionTitle';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -109,7 +111,14 @@ const Libraries = memo(() => {
   const visibility = listVisibility === 'private' ? ('private' as const) : ('public' as const);
 
   const useFetchKnowledgeBaseList = useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList);
-  const { data, isLoading } = useFetchKnowledgeBaseList(visibility);
+  const { data, error, isLoading, isValidating, mutate } = useFetchKnowledgeBaseList(visibility);
+  // The hook uses fallbackData: []; for a new workspace/visibility key SWR therefore
+  // reports isLoading=false while the request is still validating.
+  const { isLoading: showSkeleton } = getLibraryListAsyncState({
+    data,
+    isLoading,
+    isValidating,
+  });
 
   const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
   const { open: openCreateLibrary } = useCreateNewModal();
@@ -126,7 +135,9 @@ const Libraries = memo(() => {
   return (
     <Flexbox gap={12}>
       <SectionTitle title={t('home.libraries')} />
-      {isLoading ? (
+      {error && !data?.length ? (
+        <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
+      ) : showSkeleton ? (
         <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.libraries} />
       ) : (
         <div className={styles.grid}>

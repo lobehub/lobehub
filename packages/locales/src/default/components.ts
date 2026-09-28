@@ -2,6 +2,14 @@ export default {
   'ArgsInput.addArgument': 'Add Argument',
   'ArgsInput.argumentPlaceholder': 'Argument {{index}}',
   'ArgsInput.enterFirstArgument': 'Enter first argument...',
+  'CodeEditorPane.cursor': 'Ln {{line}}, Col {{column}}',
+  'CodeEditorPane.readOnly': 'Read-only',
+  'CodeEditorPane.selected': '({{length}} selected)',
+  'CodeEditorPane.spaces': 'Spaces: {{size}}',
+  'CodeEditorPane.tabSize': 'Tab Size: {{size}}',
+  'CodeEditorPane.toggleWordWrap': 'Toggle word wrap',
+  'CodeEditorPane.wrapOff': 'No Wrap',
+  'CodeEditorPane.wrapOn': 'Wrap',
   'DragUpload.dragDesc': 'Drag and drop files here to upload multiple images.',
   'DragUpload.dragFileDesc':
     'Drag and drop images and files here to upload multiple images and files.',
@@ -251,7 +259,13 @@ export default {
   'ModelSwitchPanel.detail.releasedAt': 'Released {{date}}',
   'ModelSwitchPanel.emptyModel': 'No enabled model. Please go to settings to enable.',
   'ModelSwitchPanel.emptyProvider': 'No enabled providers. Please go to settings to enable one.',
+  'ModelSwitchPanel.free': 'Free',
   'ModelSwitchPanel.goToSettings': 'Go to settings',
+  'ModelSwitchPanel.meta.price': 'Relative price {{multiplier}}× (1× = $1 per 1M input tokens)',
+  'ModelSwitchPanel.meta.price.credits':
+    'Relative price {{multiplier}}× (1× = 1M credits per 1M input tokens)',
+  'ModelSwitchPanel.meta.rating':
+    '{{dimension}} score {{score}}/100 (relative to the top-rated model)',
   'ModelSwitchPanel.manageProvider': 'Manage Provider',
   'ModelSwitchPanel.provider': 'Provider',
   'ModelSwitchPanel.searchPlaceholder': 'Search models...',

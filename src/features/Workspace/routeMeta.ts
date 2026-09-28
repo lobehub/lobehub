@@ -1,10 +1,9 @@
 'use client';
 
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
-import HomeSkeleton from '@/components/Skeleton/Home';
 import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
-import { routeMeta } from '@/spa/router/routeMeta';
+import { NoRouteSkeleton, routeMeta } from '@/spa/router/routeMeta';
 
 const WorkspaceHomeDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   const workspaces = useWorkspaces();
@@ -25,6 +24,9 @@ const WorkspaceHomeDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) 
 
 export const workspaceHomeRouteMeta = routeMeta({
   DynamicMeta: WorkspaceHomeDynamicMeta,
-  Skeleton: HomeSkeleton,
+  // Home is mounted by the layout on web and as a static per-tab element on
+  // Electron — either way it never loads inside this outlet, so an outlet
+  // skeleton only ever stacks a second home on top of the real one.
+  Skeleton: NoRouteSkeleton,
   titleKey: 'navigation.home',
 });

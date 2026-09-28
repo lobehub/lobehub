@@ -1,11 +1,12 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useParams } from 'react-router';
 
-import AsyncBoundary from '@/components/AsyncBoundary';
+import AsyncError from '@/components/AsyncError';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { experimentSelectors, useEvalStore } from '@/store/eval';
 
 import BenchmarksSection from './BenchmarksSection';
@@ -37,33 +38,18 @@ const ExperimentDetailPage = memo(() => {
 
   const actions = useExperimentActions(experiment);
 
-  // Error (including a deleted / unknown experiment) must gate before the
-  // skeleton — otherwise a failed first load hangs on it forever (ux Feedback).
+  if (!experiment) {
+    if (isLoading || !error) return <RouteLoading />;
+    return <AsyncError error={error} variant={'page'} onRetry={() => void mutate()} />;
+  }
+
   return (
     <Flexbox className={styles.container} gap={24} height="100%" width="100%">
-      <AsyncBoundary
-        data={experiment}
-        error={error}
-        errorVariant={'block'}
-        isLoading={isLoading && !experiment}
-        loading={
-          <>
-            <Skeleton active paragraph={{ rows: 2 }} title={{ width: 240 }} />
-            <Skeleton active paragraph={{ rows: 6 }} title={false} />
-          </>
-        }
-        onRetry={() => mutate()}
-      >
-        {experiment && (
-          <>
-            <ExperimentHeader experiment={experiment} />
-            <ExperimentStats datasetCount={experiment.datasets.length} experiment={experiment} />
-            <BenchmarksSection actions={actions} experiment={experiment} />
-            <ScopedDatasetsSection actions={actions} />
-            <RunsSection actions={actions} experiment={experiment} />
-          </>
-        )}
-      </AsyncBoundary>
+      <ExperimentHeader experiment={experiment} />
+      <ExperimentStats datasetCount={experiment.datasets.length} experiment={experiment} />
+      <BenchmarksSection actions={actions} experiment={experiment} />
+      <ScopedDatasetsSection actions={actions} />
+      <RunsSection actions={actions} experiment={experiment} />
     </Flexbox>
   );
 });

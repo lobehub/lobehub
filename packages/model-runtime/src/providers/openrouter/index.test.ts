@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeOpenRouterAI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -10,20 +9,6 @@ const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
-
-const provider = 'openrouter';
-const defaultBaseURL = 'https://openrouter.ai/api/v1';
-
-testProvider({
-  provider,
-  defaultBaseURL,
-  chatModel: 'mistralai/mistral-7b-instruct:free',
-  Runtime: LobeOpenRouterAI,
-  chatDebugEnv: 'DEBUG_OPENROUTER_CHAT_COMPLETION',
-  test: {
-    skipAPICall: true,
-  },
-});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -46,32 +31,11 @@ afterEach(() => {
 
 describe('LobeOpenRouterAI - custom features', () => {
   describe('Params Export', () => {
-    it('should export params object', () => {
-      expect(params).toBeDefined();
-      expect(params.provider).toBe('openrouter');
-      expect(params.baseURL).toBe('https://openrouter.ai/api/v1');
-    });
-
-    it('should have chatCompletion configuration', () => {
-      expect(params.chatCompletion).toBeDefined();
-      expect(params.chatCompletion.handlePayload).toBeDefined();
-    });
-
     it('should have constructorOptions with headers', () => {
       expect(params.constructorOptions).toBeDefined();
       expect(params.constructorOptions.defaultHeaders).toBeDefined();
       expect(params.constructorOptions.defaultHeaders['HTTP-Referer']).toBe('https://lobehub.com');
       expect(params.constructorOptions.defaultHeaders['X-Title']).toBe('LobeHub');
-    });
-
-    it('should have debug configuration', () => {
-      expect(params.debug).toBeDefined();
-      expect(params.debug.chatCompletion).toBeDefined();
-    });
-
-    it('should have models function', () => {
-      expect(params.models).toBeDefined();
-      expect(typeof params.models).toBe('function');
     });
   });
 

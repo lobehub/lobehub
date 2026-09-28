@@ -16,7 +16,17 @@
 
 /** What caused this advance. `unknown` covers traces written before a caller was labelled. */
 export type GoalAdvanceTrigger =
-  'create' | 'decide' | 'settle' | 'sweep' | 'resume' | 'budget' | 'manual' | 'unknown';
+  | 'create'
+  | 'decide'
+  | 'settle'
+  | 'sweep'
+  | 'resume'
+  | 'restart'
+  | 'budget'
+  | 'manual'
+  /** A measurement landed — the goal moves on observation, not only on work. */
+  | 'observe'
+  | 'unknown';
 
 /** Which arm of the coordinator ran. One per `tick` return path. */
 export type GoalTickBranch =
@@ -25,13 +35,21 @@ export type GoalTickBranch =
   | 'goal_terminal'
   /** A gate is open; the goal is parked on a person. */
   | 'pending_decision'
-  /** No work node is eligible: none exists, or all remaining ones are blocked. */
+  /** No task node is eligible: none exists, or all remaining ones are blocked. */
   | 'no_frontier'
-  /** The graph has no work yet — decompose the goal into explorable directions first. */
+  /** The graph has no tasks yet — decompose the goal into explorable directions first. */
   | 'plan_decomposition'
-  /** Every work node finished; the goal-level acceptance contract is next. */
+  | 'explore_graph'
+  /** Every task node finished; the goal-level acceptance contract is next. */
   | 'terminal_acceptance'
-  /** The chosen work has no responsible task yet. */
+  /**
+   * Every task node finished, but a declared numeric clause is unmet, so the
+   * delivery contract is not attempted. Distinct from `terminal_acceptance`
+   * on purpose: both stop in the terminal phase, and a replay that could not
+   * tell them apart would report a regressed gate as a match.
+   */
+  | 'measured_acceptance'
+  /** The chosen task node has no responsible task yet. */
   | 'create_task'
   /** Its task row is gone. */
   | 'missing_task'
@@ -45,9 +63,9 @@ export type GoalTickBranch =
   /** Task is parked or already in flight. */
   | 'task_paused'
   | 'task_running'
-  /** Budget stopped the goal before this work could be dispatched. */
+  /** Budget stopped the goal before this task could be dispatched. */
   | 'budget_exhausted'
-  /** Start a run for the chosen work. */
+  /** Start a run for the chosen task. */
   | 'dispatch_task';
 
 export type GoalTickOutcome =
@@ -57,6 +75,17 @@ export type GoalTickOutcome =
 
 export interface GoalTraceGoal {
   agentId?: string | null;
+  exploration?: {
+    instruction: string;
+    maxExperiments: number;
+    checkpoint?: {
+      token: string;
+      snapshot: string;
+      expiresAt: string;
+      readyForAcceptance?: boolean;
+      reviewedNodeIds?: string[];
+    };
+  };
   id: string;
   maxRounds?: number | null;
   maxTotalCost?: number | null;
@@ -116,7 +145,7 @@ export interface GoalGraphDelta {
 // ==================== Decision input surface ====================
 
 /**
- * A work node that was eligible this tick. Losers are recorded too — without
+ * A task node that was eligible this tick. Losers are recorded too — without
  * them a trace cannot answer "why not that node", which is the whole point of
  * keeping the input surface rather than the result.
  */
@@ -143,6 +172,30 @@ export interface GoalBudgetState {
   roundLimitReached: boolean;
   runs: number;
   totalCost: number;
+}
+
+/**
+ * One numeric acceptance clause as it read at decision time.
+ *
+ * The measured value travels with the verdict for the same reason
+ * `deadlinePassed` does: a replay must see the number the live run saw, not
+ * whatever the series holds when the trajectory is re-read.
+ */
+export interface GoalMetricCriterionState {
+  key: string;
+  met: boolean;
+  /** When the recorded value was observed; absent when nothing was measured. */
+  observedAt?: number;
+  op: string;
+  target: number;
+  /** Latest observation, or null when the series has no points (or no series). */
+  value: number | null;
+}
+
+/** The measured half of Goal acceptance, evaluated only in the terminal phase. */
+export interface GoalMetricCriteriaState {
+  allMet: boolean;
+  criteria: GoalMetricCriterionState[];
 }
 
 /** A candidate's responsible task at decision time; drives every post-dispatch branch. */
@@ -210,6 +263,11 @@ export interface GoalTickSnapshot {
   graphShape: GoalGraphShape;
   index: number;
   message: string;
+  /**
+   * Present only on terminal-phase decisions of a goal that declares numeric
+   * criteria — the one place the coordinator reads them.
+   */
+  metricCriteria?: GoalMetricCriteriaState;
   outcome: GoalTickOutcome;
   taskId?: string;
 }

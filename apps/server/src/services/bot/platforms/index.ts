@@ -13,13 +13,18 @@ import { wechat } from './wechat/definition';
 
 export {
   allowFromField,
+  BOT_REACTION_MODES,
+  type BotReactionMode,
+  type BotReactionPhase,
   type BotReplyLocale,
+  DEFAULT_BOT_REACTION_MODE,
   displayToolCallsField,
   type DmDecision,
   type DmPolicy,
   type DmSettings,
   extractDmSettings,
   extractGroupSettings,
+  extractGuestSettings,
   extractUserAllowlist,
   extractWatchKeywordEntries,
   extractWatchKeywords,
@@ -28,17 +33,25 @@ export {
   getStepReactionEmoji,
   type GroupPolicy,
   type GroupSettings,
+  type GuestDecision,
+  type GuestPolicy,
+  type GuestSettings,
   makeDmPolicyField,
   makeGroupPolicyFields,
+  makeGuestPolicyField,
   makeServerIdField,
   makeUserIdField,
   messageMatchesWatchKeyword,
   normalizeAllowFromEntries,
+  normalizeBotReactionMode,
   normalizeBotReplyLocale,
+  reactionModeField,
   RECEIVED_REACTION_EMOJI,
   shouldAllowSender,
+  shouldApplyReaction,
   shouldHandleDm,
   shouldHandleGroup,
+  shouldHandleGuest,
   THINKING_REACTION_EMOJI,
   type UserAllowlist,
   validateAccessSettings,
@@ -65,7 +78,12 @@ export type {
   ValidationResult,
 } from './types';
 export { ClientFactory, messengerContentText } from './types';
-export type { ProviderConfigInput, ResolvedBotProviderConfig } from './utils';
+export type {
+  BotConcurrencyStrategy,
+  ProviderConfigInput,
+  ResolvedBotConcurrency,
+  ResolvedBotProviderConfig,
+} from './utils';
 export {
   buildRuntimeKey,
   extractDefaults,
@@ -76,8 +94,10 @@ export {
   mergeWithDefaults,
   parseRuntimeKey,
   platformFromThreadId,
+  resolveBotConcurrency,
   resolveBotProviderConfig,
   resolveConnectionMode,
+  withResolvedConcurrencySettings,
 } from './utils';
 export type { BotProviderFieldValues, FieldFormatViolation } from './validateFieldFormats';
 export { collectFieldFormatViolations, formatFieldFormatViolations } from './validateFieldFormats';

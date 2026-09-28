@@ -1,7 +1,10 @@
 import { isDesktop } from '@lobechat/const';
+import type { HeterogeneousTopicPin } from '@lobechat/types';
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { t } from 'i18next';
+import type { AiModelReasoningConfig } from 'model-bank';
 
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import {
   type ChatTopic,
   type ChatTopicSummary,
@@ -33,11 +36,21 @@ const currentTopicData = (s: ChatStoreState): TopicData | undefined => {
 
 const currentTopics = (s: ChatStoreState): ChatTopic[] | undefined => currentTopicData(s)?.items;
 
-// Get topics without cron-triggered ones
-const currentTopicsWithoutCron = (s: ChatStoreState): ChatTopic[] | undefined => {
+/**
+ * Every list surface reads through here, so system-owned topics (cron, task
+ * runs, doc chats, evals) stay out of the user's chat history.
+ *
+ * The sidebar fetch already excludes them server-side; this repeats the filter
+ * because `topicDataMap` is keyed by container and not by query, so any panel
+ * fetching the same agent with looser filters overwrites the bucket. Belt and
+ * braces — the fetch decides the page and the total, this decides what renders.
+ */
+const currentTopicsWithoutSystemTriggers = (s: ChatStoreState): ChatTopic[] | undefined => {
   const topics = currentTopics(s);
   if (!topics) return undefined;
-  return topics.filter((topic) => topic.trigger !== 'cron');
+  return topics.filter(
+    (topic) => !topic.trigger || !MAIN_SIDEBAR_EXCLUDE_TRIGGERS.includes(topic.trigger),
+  );
 };
 
 const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
@@ -50,12 +63,14 @@ const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
 };
 const searchTopics = (s: ChatStoreState): ChatTopic[] => s.searchTopics;
 
-const displayTopics = (s: ChatStoreState): ChatTopic[] | undefined => currentTopicsWithoutCron(s);
+const displayTopics = (s: ChatStoreState): ChatTopic[] | undefined =>
+  currentTopicsWithoutSystemTriggers(s);
 
 const currentUnFavTopics = (s: ChatStoreState): ChatTopic[] =>
-  currentTopicsWithoutCron(s)?.filter((s) => !s.favorite) || [];
+  currentTopicsWithoutSystemTriggers(s)?.filter((s) => !s.favorite) || [];
 
-const currentTopicLength = (s: ChatStoreState): number => currentTopicsWithoutCron(s)?.length || 0;
+const currentTopicLength = (s: ChatStoreState): number =>
+  currentTopicsWithoutSystemTriggers(s)?.length || 0;
 
 const currentTopicCount = (s: ChatStoreState): number => currentTopicData(s)?.total || 0;
 
@@ -143,6 +158,74 @@ const activeTopicModel = (s: ChatStoreState): { model: string; provider: string 
   return getTopicModelById(s.activeTopicId)(s);
 };
 
+export interface TopicReasoningPin {
+  model: string;
+  provider: string;
+  /** Absent on legacy topics and topics created before the config was loaded. */
+  reasoningConfig?: AiModelReasoningConfig;
+}
+
+/**
+ * The reasoning effort pinned to a topic together with the model it was pinned
+ * for (`ChatTopicMetadata.reasoningConfig` + `ChatTopic.model`). Consumers must
+ * only honor `reasoningConfig` when the pinned model matches the model they are
+ * about to run — a sub-agent `modelOverride` or a stale snapshot must not leak
+ * another model's effort — and fall back to the user-level model-instance
+ * config otherwise. Undefined when the topic has no model pinned at all.
+ */
+const getTopicReasoningPinById =
+  (id: string) =>
+  (s: ChatStoreState): TopicReasoningPin | undefined => {
+    const topic = getTopicById(id)(s);
+    if (!topic?.model) return undefined;
+
+    return {
+      model: topic.model,
+      provider: topic.provider || '',
+      reasoningConfig: topic.metadata?.reasoningConfig,
+    };
+  };
+
+/**
+ * The reasoning config pinned to `id` for exactly `model`/`provider`, else
+ * undefined (no pin, legacy topic, or pinned for another model).
+ */
+const getTopicReasoningConfigForModel =
+  (id: string, model: string, provider: string) =>
+  (s: ChatStoreState): AiModelReasoningConfig | undefined => {
+    const pin = getTopicReasoningPinById(id)(s);
+    if (!pin || pin.model !== model || pin.provider !== provider) return undefined;
+    return pin.reasoningConfig;
+  };
+
+/**
+ * Everything a topic pins for a heterogeneous run — the model/provider columns
+ * plus `metadata.heteroEffort`. Undefined when nothing is pinned, so callers
+ * can pass it straight to `applyTopicModelToHeterogeneousProvider`.
+ */
+export const resolveTopicHeteroPin = (
+  topic: Pick<ChatTopic, 'metadata' | 'model' | 'provider'> | undefined,
+): HeterogeneousTopicPin | undefined => {
+  if (!topic) return undefined;
+  const effort = topic.metadata?.heteroEffort;
+  if (!topic.model && effort === undefined) return undefined;
+
+  return {
+    ...(topic.model ? { model: topic.model, provider: topic.provider || '' } : {}),
+    ...(effort === undefined ? {} : { effort }),
+  };
+};
+
+const getTopicHeteroPinById =
+  (id: string) =>
+  (s: ChatStoreState): HeterogeneousTopicPin | undefined =>
+    resolveTopicHeteroPin(getTopicById(id)(s));
+
+const activeTopicHeteroPin = (s: ChatStoreState): HeterogeneousTopicPin | undefined => {
+  if (!s.activeTopicId) return undefined;
+  return getTopicHeteroPinById(s.activeTopicId)(s);
+};
+
 /**
  * Extract a topic's working directory from its metadata.
  * On desktop: local filesystem path.
@@ -221,7 +304,7 @@ const sortTopics = (topics: ChatTopic[], sortBy: TopicSortBy): ChatTopic[] => {
 const displayTopicsForSidebar =
   (pageSize: number, sortBy: TopicSortBy = 'updatedAt', includeCompleted = true) =>
   (s: ChatStoreState): ChatTopic[] | undefined => {
-    const topics = currentTopicsWithoutCron(s);
+    const topics = currentTopicsWithoutSystemTriggers(s);
     if (!topics) return undefined;
 
     const visibleTopics = includeCompleted
@@ -378,6 +461,7 @@ const agentTopicsViewLoadMoreError = (s: ChatStoreState): unknown =>
   agentTopicsViewData(s)?.loadMoreError;
 
 export const topicSelectors = {
+  activeTopicHeteroPin,
   activeTopicModel,
   agentTopicsViewHasMore,
   agentTopicsViewIsLoadingMore,
@@ -391,13 +475,16 @@ export const topicSelectors = {
   currentTopicMetadata,
   currentTopicWorkingDirectory,
   currentTopics,
-  currentTopicsWithoutCron,
+  currentTopicsWithoutSystemTriggers,
   currentUnFavTopics,
   displayTopics,
   displayTopicsForSidebar,
   getTopicById,
   getTopicContainerKeyById,
+  getTopicHeteroPinById,
   getTopicModelById,
+  getTopicReasoningConfigForModel,
+  getTopicReasoningPinById,
   getTopicWorkingDirectory,
   getTopicsByAgentId,
   groupedTopicsForSidebar,

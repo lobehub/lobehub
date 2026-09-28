@@ -17,7 +17,10 @@ export const SearchKnowledgeBaseInspector = memo<
 
   const query = args?.query || partialArgs?.query || '';
   // Use fileResults length for display (aggregated by file)
-  const resultCount = pluginState?.fileResults?.length ?? 0;
+  // The read path drops the hit lists and pins the size as `resultCount`; the
+  // array is only here for a payload stored before that.
+  const resultCount = pluginState?.resultCount ?? pluginState?.fileResults?.length ?? 0;
+  const hasSettled = !!pluginState?.fileResults || typeof pluginState?.resultCount === 'number';
   const hasResults = resultCount > 0;
 
   // During argument streaming
@@ -49,7 +52,7 @@ export const SearchKnowledgeBaseInspector = memo<
         </span>
         {query && <span className={highlightTextStyles.gold}>{query}</span>}
         {!isLoading &&
-          pluginState?.fileResults &&
+          hasSettled &&
           (hasResults ? (
             <span style={{ marginInlineStart: 4 }}>({resultCount})</span>
           ) : (

@@ -4,7 +4,7 @@ import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
 import { Button, TabsIndicator, TabsList, TabsRoot, TabsTab } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowLeft, Bot, ClipboardCheck, Terminal } from 'lucide-react';
-import { memo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
@@ -20,13 +20,14 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 14px;
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
-    text-align: start;
+    text-align: center;
   `,
   container: css`
     overflow: auto;
+    flex: 1;
 
     width: 100%;
-    height: 100%;
+    min-height: 0;
     border: 1px solid ${cssVar.colorBorder};
     border-radius: ${cssVar.borderRadius};
 
@@ -34,9 +35,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   content: css`
     width: 100%;
-    max-width: 960px;
-    margin: auto;
-    padding-block: 12px 16px;
+    max-width: 720px;
+    margin-inline: auto;
+    padding-block: clamp(32px, 8vh, 96px) 48px;
     padding-inline: 24px;
 
     @media (width <= 680px) {
@@ -49,23 +50,23 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 40px;
-    height: 40px;
+    width: 56px;
+    height: 56px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
     color: ${cssVar.colorTextSecondary};
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorFillQuaternary};
   `,
   method: css`
     min-width: 0;
-    padding: 16px;
+    padding: 24px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
   `,
   methodDescription: css`
-    font-size: 13px;
+    font-size: ${cssVar.fontSize};
     line-height: 1.55;
     color: ${cssVar.colorTextTertiary};
   `,
@@ -73,14 +74,14 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   methodTitle: css`
-    font-size: 15px;
+    font-size: ${cssVar.fontSize};
     font-weight: 600;
     color: ${cssVar.colorText};
   `,
   step: css`
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr);
-    gap: 10px;
+    gap: 12px;
 
     min-width: 0;
     padding: 12px;
@@ -104,8 +105,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   steps: css`
     display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.9fr);
-    gap: 10px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
 
     @media (width <= 680px) {
       grid-template-columns: 1fr;
@@ -122,9 +123,12 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
   `,
   page: css`
+    flex: 1;
+
     width: 100%;
     min-width: 0;
-    height: 100dvh;
+    height: 100%;
+    min-height: 0;
     padding: 8px;
 
     background: ${cssVar.colorBgLayout};
@@ -133,7 +137,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
 
     font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
+    font-size: ${cssVar.fontSize};
     line-height: 1.65;
     color: ${cssVar.colorText};
     overflow-wrap: anywhere;
@@ -150,16 +154,16 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorText};
   `,
   title: css`
-    font-size: 22px;
+    font-size: ${cssVar.fontSizeHeading2};
     font-weight: 600;
     line-height: 1.25;
     color: ${cssVar.colorText};
-    text-align: start;
+    text-align: center;
     letter-spacing: -0.02em;
   `,
 }));
 
-const AcceptanceOnboarding = memo(() => {
+const AcceptanceOnboarding = () => {
   const { t } = useTranslation('verify');
   const navigate = useNavigate();
   const [mode, setMode] = useState<'agent' | 'manual'>('agent');
@@ -172,12 +176,12 @@ const AcceptanceOnboarding = memo(() => {
             {t('back', { ns: 'common' })}
           </Button>
         </Flexbox>
-        <Flexbox className={styles.content} gap={16}>
-          <Flexbox horizontal align={'center'} gap={12}>
+        <Flexbox className={styles.content} gap={32}>
+          <Flexbox align={'center'} gap={16}>
             <span className={styles.icon}>
-              <Icon icon={ClipboardCheck} size={20} />
+              <Icon icon={ClipboardCheck} size={28} />
             </span>
-            <Flexbox gap={4}>
+            <Flexbox align={'center'} gap={12}>
               <span className={styles.title}>{t('acceptance.workspace.onboarding.title')}</span>
               <span className={styles.description}>
                 {t('acceptance.workspace.onboarding.description')}
@@ -243,7 +247,7 @@ const AcceptanceOnboarding = memo(() => {
                 ].map((step, index) => (
                   <div className={styles.step} key={step.title}>
                     <span className={styles.stepIndex}>{index + 1}</span>
-                    <Flexbox gap={6}>
+                    <Flexbox gap={8}>
                       <span className={styles.methodTitle}>{step.title}</span>
                       <span className={styles.methodDescription}>{step.description}</span>
                       <CommandLine command={step.command} />
@@ -257,8 +261,6 @@ const AcceptanceOnboarding = memo(() => {
       </Flexbox>
     </Flexbox>
   );
-});
-
-AcceptanceOnboarding.displayName = 'AcceptanceOnboarding';
+};
 
 export default AcceptanceOnboarding;

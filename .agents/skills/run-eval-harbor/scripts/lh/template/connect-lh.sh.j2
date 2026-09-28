@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+test -f {{ login_ready }} || {
+  echo "lh login did not complete" >&2
+  exit 1
+}
+rm -f {{ device_ready }}
+mkdir -p "$HOME/.lobehub" /logs/agent
+rm -f "$HOME/.lobehub/daemon.log"
+ln -s /logs/agent/daemon.log "$HOME/.lobehub/daemon.log"
+
+cat > {{ connect_script }} <<'LH_CONNECT'
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p "$HOME/.lobehub" /logs/agent
+printf "%s\n" "$$" > "$HOME/.lobehub/daemon.pid"
+exec {{ cli_command }} connect --daemon-child{% if gateway_url %} --gateway {{ gateway_url }}{% endif %}
+LH_CONNECT
+chmod +x {{ connect_script }}
+
+cat > {{ supervisor_config }} <<'LH_SUPERVISOR'
+{% include "supervisord.conf.j2" -%}
+LH_SUPERVISOR
+supervisord -c {{ supervisor_config }}

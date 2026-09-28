@@ -398,10 +398,10 @@ describe('useConversationScroll — pin behavior', () => {
     expect(scrollToIndex).not.toHaveBeenCalled();
   });
 
-  // Regression: settle re-pins fire while the content height is still changing
-  // (e.g. a workflow collapse at turn completion). A smooth scroll there is
-  // itself a visible slide, so only the initial send scroll may animate.
-  it('re-pins without smooth scrolling once the spacer layout settles', () => {
+  // Regression: the send scroll fires before the spacer row exists and gets
+  // clamped by virtua, so the visible slide is the settle re-pin after mount.
+  // An instant re-pin there aborts the animation (the "no slide" bug).
+  it('keeps settle re-pins smooth right after send', () => {
     const { result, rerender } = renderScrollHook({
       dataSource: [assistantId, 'prev'],
       isSecondLastMessageFromUser: false,
@@ -414,8 +414,31 @@ describe('useConversationScroll — pin behavior', () => {
     expect(scrollToIndex).toHaveBeenCalledWith(2, { align: 'start', smooth: true });
     scrollToIndex.mockClear();
 
-    // Registering the spacer node bumps spacerLayoutVersion, which is the
-    // "layout settled" beat the pin controller retries on.
+    vi.advanceTimersByTime(100);
+    const spacerNode = document.createElement('div');
+    act(() => {
+      result.current.registerSpacerNode(spacerNode);
+    });
+
+    expect(scrollToIndex).toHaveBeenCalledWith(2, { align: 'start', smooth: true });
+  });
+
+  // Regression: settle re-pins fire while the content height is still changing
+  // (e.g. a workflow collapse at turn completion). A smooth scroll there is
+  // itself a visible slide, so late re-pins must land instantly.
+  it('re-pins without smooth scrolling once the send animation window has passed', () => {
+    const { result, rerender } = renderScrollHook({
+      dataSource: [assistantId, 'prev'],
+      isSecondLastMessageFromUser: false,
+    });
+
+    rerender({
+      dataSource: ['m0', 'm1', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    scrollToIndex.mockClear();
+
+    vi.advanceTimersByTime(1000);
     const spacerNode = document.createElement('div');
     act(() => {
       result.current.registerSpacerNode(spacerNode);

@@ -7,7 +7,9 @@ import {
   collapseSubTasks,
   compareTaskItems,
   DEFAULT_TASK_LIST_VIEW_OPTIONS,
+  getVisibleTaskStatuses,
   groupTaskItems,
+  HIDDEN_WHEN_COMPLETED_STATUSES,
   normalizeTaskListViewOptions,
 } from './listViewOptions';
 
@@ -227,5 +229,19 @@ describe('buildTaskRows', () => {
     });
 
     expect(rows.map((row) => row.task.id)).toEqual(['parent', 'alpha', 'beta']);
+  });
+});
+
+describe('getVisibleTaskStatuses', () => {
+  it('translates hideCompleted into the server status filter, before pagination', () => {
+    const statuses = getVisibleTaskStatuses({ hideCompleted: true });
+    expect(statuses).toBeDefined();
+    for (const hidden of HIDDEN_WHEN_COMPLETED_STATUSES) expect(statuses).not.toContain(hidden);
+    expect(statuses).toContain('backlog');
+    expect(statuses).toContain('running');
+  });
+
+  it('applies no narrowing when completed tasks are shown', () => {
+    expect(getVisibleTaskStatuses({ hideCompleted: false })).toBeUndefined();
   });
 });

@@ -148,7 +148,7 @@ const buildWorkAnchor = ({
 }): MessageMetadata['work'] => {
   if (output.toolsCalling.length > 0 || output.toolCalls.length > 0) return undefined;
 
-  const sourceMessageId = state.metadata?.sourceMessageId;
+  const sourceMessageId = state.origin?.sourceMessageId;
   const sourceMessageIndex =
     typeof sourceMessageId === 'string'
       ? state.messages.findIndex((message) => message.id === sourceMessageId)
@@ -226,6 +226,9 @@ const buildFinalState = ({
   visibleOutputEndPublishedStepIndex?: number;
 }): AgentState => {
   const newState = structuredClone(state);
+  // Completion must retain the persisted assistant identity even when messages
+  // are rehydrated into display groups before the next runtime step.
+  newState.metadata = { ...newState.metadata, workAssistantMessageId: assistantMessageId };
   newState.toolCallRepeatGuard = toolCallRepeatGuard;
   newState.messages.push({
     content: output.content,
@@ -276,20 +279,27 @@ export const finalizeCallLlmTurn = async ({
   stepLabel,
 }: FinalizeCallLlmTurnInput): Promise<InstructionExecutionResult> => {
   const { operation, transports } = host;
-  const toolCallRepeatGuard = updateToolCallRepeatGuard(
-    state.toolCallRepeatGuard,
-    output.toolsCalling,
-  );
-  const finalizedOutput =
-    output.finishReason !== 'abort' && hasRepeatedToolCall(toolCallRepeatGuard)
-      ? {
-          ...output,
-          content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
-          finishReason: 'tool_call_repeat_limit',
-          toolCalls: [],
-          toolsCalling: [],
-        }
-      : output;
+  const repeatCounts = updateToolCallRepeatGuard(state.toolCallRepeatGuard, output.toolsCalling);
+  const stoppedByRepeatLimit = output.finishReason !== 'abort' && hasRepeatedToolCall(repeatCounts);
+  // Carried on the state so the terminal reason can name this stop. Sticky once
+  // set: later turns emit no tool calls, and `updateToolCallRepeatGuard` resets
+  // its counts on those, which would otherwise erase the only trace of why the
+  // run ended.
+  const toolCallRepeatGuard = {
+    ...repeatCounts,
+    ...((stoppedByRepeatLimit || state.toolCallRepeatGuard?.stoppedByRepeatLimit) && {
+      stoppedByRepeatLimit: true,
+    }),
+  };
+  const finalizedOutput = stoppedByRepeatLimit
+    ? {
+        ...output,
+        content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
+        finishReason: 'tool_call_repeat_limit',
+        toolCalls: [],
+        toolsCalling: [],
+      }
+    : output;
 
   events.push({
     result: {

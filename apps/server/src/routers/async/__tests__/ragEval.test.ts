@@ -11,24 +11,38 @@ import {
 import { ragEvalRouter } from '../ragEval';
 
 vi.mock('@/database/models/chunk', () => ({
-  ChunkModel: vi.fn(() => ({})),
+  ChunkModel: vi.fn(function () {
+    return {};
+  }),
 }));
 vi.mock('@/database/models/embedding', () => ({
-  EmbeddingModel: vi.fn(() => ({})),
+  EmbeddingModel: vi.fn(function () {
+    return {};
+  }),
 }));
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(() => ({})),
+  FileModel: vi.fn(function () {
+    return {};
+  }),
 }));
 vi.mock('@/database/models/ragEval', () => ({
-  EvalDatasetRecordModel: vi.fn(() => ({ findById: vi.fn() })),
-  EvalEvaluationModel: vi.fn(() => ({ update: vi.fn() })),
-  EvaluationRecordModel: vi.fn(() => ({ findById: vi.fn().mockResolvedValue(null) })),
+  EvalDatasetRecordModel: vi.fn(function () {
+    return { findById: vi.fn() };
+  }),
+  EvalEvaluationModel: vi.fn(function () {
+    return { update: vi.fn() };
+  }),
+  EvaluationRecordModel: vi.fn(function () {
+    return { findById: vi.fn().mockResolvedValue(null) };
+  }),
 }));
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
 }));
 vi.mock('@/server/services/chunk', () => ({
-  ChunkService: vi.fn(() => ({})),
+  ChunkService: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/libs/trpc/async', async () => {
@@ -45,13 +59,19 @@ vi.mock('@/libs/trpc/async', async () => {
 describe('ragEvalRouter.runRecordEvaluation', () => {
   const userId = 'user_test';
   const serverDB = {
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn().mockResolvedValue([{ workspaceId: 'workspace-1' }]),
-        })),
-      })),
-    })),
+    select: vi.fn(function () {
+      return {
+        from: vi.fn(function () {
+          return {
+            where: vi.fn(function () {
+              return {
+                limit: vi.fn().mockResolvedValue([{ workspaceId: 'workspace-1' }]),
+              };
+            }),
+          };
+        }),
+      };
+    }),
   };
 
   beforeEach(() => {

@@ -20,7 +20,7 @@ import { buildWorkspaceWhere } from '@/database/utils/workspace';
  * frequently omit the field, so we treat a missing `status` as uploaded.
  */
 
-const FILE_PROXY_RE = /\/f\/(file_[\w-]+)/;
+const FILE_PROXY_RE = /\/f\/([\w-]+)(?:[/?#]|$)/;
 const IMAGE_NODE_TYPES = new Set(['image', 'block-image']);
 const FILE_NODE_TYPE = 'file';
 

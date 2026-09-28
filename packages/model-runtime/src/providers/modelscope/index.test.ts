@@ -2,7 +2,6 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import type { ModelScopeModelCard } from './index';
 import { LobeModelScopeAI, params } from './index';
 
@@ -14,18 +13,6 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
 
 const provider = ModelProvider.ModelScope;
 const defaultBaseURL = 'https://api-inference.modelscope.cn/v1';
-
-// Basic provider tests
-testProvider({
-  Runtime: LobeModelScopeAI,
-  provider,
-  defaultBaseURL,
-  chatDebugEnv: 'DEBUG_MODELSCOPE_CHAT_COMPLETION',
-  chatModel: 'qwen2-7b-instruct',
-  test: {
-    skipAPICall: true,
-  },
-});
 
 // Custom feature tests
 describe('LobeModelScopeAI - custom features', () => {

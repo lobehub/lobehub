@@ -49,7 +49,13 @@ export const crawlResultsPrompt = (results: Array<CrawlResultItem | CrawlErrorIt
           attrs.push(`url="${escapeXmlAttr(item.url)}"`);
         }
 
-        return `  <error ${attrs.join(' ')} />`;
+        // The crawler puts model-facing guidance in `content` (e.g. "dead link, do not
+        // retry"); keep it visible instead of collapsing the error to two attributes.
+        const guidance = item.content ? escapeXmlContent(item.content) : '';
+
+        return guidance
+          ? `  <error ${attrs.join(' ')}>${guidance}</error>`
+          : `  <error ${attrs.join(' ')} />`;
       }
 
       // Handle successful crawl items

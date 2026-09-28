@@ -45,7 +45,7 @@ export const GoalManifest: BuiltinToolManifest = {
           instruction: { description: 'Detailed task direction and constraints.', type: 'string' },
           maxIterations: {
             description:
-              'Maximum attempts one task may take before the goal opens a decision gate. Default 3, minimum 2. Null means no user-specified cap.',
+              'Maximum attempts one task may take before the goal opens a decision gate. Default 8, minimum 2. Null means no user-specified cap.',
             type: ['number', 'null'],
           },
           maxTotalCost: {

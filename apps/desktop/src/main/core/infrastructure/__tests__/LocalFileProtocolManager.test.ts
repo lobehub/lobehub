@@ -1,27 +1,38 @@
+import { EXTERNAL_PUBLISH_ASSET_MAX_BYTES } from '@lobechat/device-control/file-preview';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalFileProtocolManager } from '../LocalFileProtocolManager';
 
-const { mockApp, mockProtocol, mockReadFile, mockRealpath, mockStat, protocolHandlerRef } =
-  vi.hoisted(() => {
-    const protocolHandlerRef = { current: null as any };
+const {
+  mockApp,
+  mockCopyFile,
+  mockMkdir,
+  mockProtocol,
+  mockReadFile,
+  mockRealpath,
+  mockStat,
+  protocolHandlerRef,
+} = vi.hoisted(() => {
+  const protocolHandlerRef = { current: null as any };
 
-    return {
-      mockApp: {
-        isReady: vi.fn().mockReturnValue(true),
-        whenReady: vi.fn().mockResolvedValue(undefined),
-      },
-      mockProtocol: {
-        handle: vi.fn((_scheme: string, handler: any) => {
-          protocolHandlerRef.current = handler;
-        }),
-      },
-      mockReadFile: vi.fn(),
-      mockRealpath: vi.fn(),
-      mockStat: vi.fn(),
-      protocolHandlerRef,
-    };
-  });
+  return {
+    mockApp: {
+      isReady: vi.fn().mockReturnValue(true),
+      whenReady: vi.fn().mockResolvedValue(undefined),
+    },
+    mockProtocol: {
+      handle: vi.fn((_scheme: string, handler: any) => {
+        protocolHandlerRef.current = handler;
+      }),
+    },
+    mockCopyFile: vi.fn(),
+    mockMkdir: vi.fn(),
+    mockReadFile: vi.fn(),
+    mockRealpath: vi.fn(),
+    mockStat: vi.fn(),
+    protocolHandlerRef,
+  };
+});
 
 vi.mock('electron', () => ({
   app: mockApp,
@@ -29,6 +40,8 @@ vi.mock('electron', () => ({
 }));
 
 vi.mock('node:fs/promises', () => ({
+  copyFile: mockCopyFile,
+  mkdir: mockMkdir,
   realpath: mockRealpath,
   readFile: mockReadFile,
   stat: mockStat,
@@ -445,6 +458,99 @@ describe('LocalFileProtocolManager', () => {
       workspaceRoot: '/tmp',
     });
     expect(neighborUrl).toBeNull();
+  });
+
+  it('can mint one external URL without granting lasting preview access', async () => {
+    const manager = new LocalFileProtocolManager();
+    const url = await manager.createPreviewUrl({
+      allowExternalFile: true,
+      filePath: '/outside/app.css',
+      persistExternalApproval: false,
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(url).toContain('token=');
+    await expect(
+      manager.createPreviewUrl({
+        filePath: '/outside/app.css',
+        workspaceRoot: '/Users/alice/project',
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('reads an external publish asset without the preview cap or lasting approval', async () => {
+    mockStat.mockResolvedValue({ isFile: () => true, size: 20 * 1024 * 1024 + 1 });
+    mockReadFile.mockResolvedValue(Buffer.from('%PDF publish bytes'));
+    const manager = new LocalFileProtocolManager();
+
+    const result = await manager.readExternalFileForPublish({
+      filePath: '/outside/big.pdf',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(result?.buffer).toEqual(Buffer.from('%PDF publish bytes'));
+    expect(mockReadFile).toHaveBeenCalledWith('/outside/big.pdf');
+    await expect(
+      manager.createPreviewUrl({
+        filePath: '/outside/big.pdf',
+        workspaceRoot: '/Users/alice/project',
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('copies an external publish asset into the workspace without lasting approval', async () => {
+    const manager = new LocalFileProtocolManager();
+
+    await expect(
+      manager.copyExternalFileForPublish({
+        filePath: '/outside/logo.png',
+        targetPath: '/Users/alice/project/.lobe-artifacts/site/logo.png',
+        workspaceRoot: '/Users/alice/project',
+      }),
+    ).resolves.toBe(true);
+
+    expect(mockMkdir).toHaveBeenCalledWith('/Users/alice/project/.lobe-artifacts/site', {
+      recursive: true,
+    });
+    expect(mockCopyFile).toHaveBeenCalledWith(
+      '/outside/logo.png',
+      '/Users/alice/project/.lobe-artifacts/site/logo.png',
+    );
+    await expect(
+      manager.createPreviewUrl({
+        filePath: '/outside/logo.png',
+        workspaceRoot: '/Users/alice/project',
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('refuses to copy a publish asset to a path outside the workspace', async () => {
+    const manager = new LocalFileProtocolManager();
+
+    await expect(
+      manager.copyExternalFileForPublish({
+        filePath: '/outside/logo.png',
+        targetPath: '/Users/alice/project/../elsewhere/logo.png',
+        workspaceRoot: '/Users/alice/project',
+      }),
+    ).resolves.toBe(false);
+    expect(mockCopyFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects an external publish asset over the limit before reading it', async () => {
+    mockStat.mockResolvedValue({
+      isFile: () => true,
+      size: EXTERNAL_PUBLISH_ASSET_MAX_BYTES + 1,
+    });
+    const manager = new LocalFileProtocolManager();
+
+    await expect(
+      manager.readExternalFileForPublish({
+        filePath: '/outside/huge.mp4',
+        workspaceRoot: '/Users/alice/project',
+      }),
+    ).rejects.toThrow('File is too large to publish');
+    expect(mockReadFile).not.toHaveBeenCalled();
   });
 
   it('can approve a project root derived from an already approved nested scope', async () => {

@@ -18,7 +18,11 @@ export const resolveAcceptanceHistoryNavigation = (
  * every click answers "Acceptance not found"; deriving it from ownership alone
  * is what locked a workspace owner out of a teammate's delivery.
  */
-export const canReviewAcceptance = (
-  bundle?: { canReview?: boolean; isOwner?: boolean } | null,
-) =>
+export const canReviewAcceptance = (bundle?: { canReview?: boolean; isOwner?: boolean } | null) =>
   Boolean(bundle?.canReview);
+
+/** Authors give region feedback through the check's rejection action. */
+export const canCommentOnAcceptanceEvidence = (
+  bundle: { isOwner: boolean } | null | undefined,
+  canComment: boolean,
+) => canComment && bundle?.isOwner === false;

@@ -133,7 +133,7 @@ export const buildGoalTraceRollup = (trajectory: GoalTrajectory): GoalTraceRollu
     operationsTotal: operationIds.size,
     tasksCompleted: shape.tasksCompleted,
     tasksRetired: finalGraph.nodes.filter(
-      (node) => node.kind === 'work' && node.status === 'retired',
+      (node) => node.kind === 'task' && node.status === 'retired',
     ).length,
   };
 };

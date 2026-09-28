@@ -3,6 +3,7 @@ import type {
   DocumentCommentItem,
   DocumentCommentJson,
   DocumentCommentReplyPage,
+  DocumentCommentSelectionAnchor,
   DocumentCommentThreadPage,
 } from '@lobechat/types';
 
@@ -14,6 +15,7 @@ interface CreateOptimisticCommentParams {
   editorData: DocumentCommentJson | null;
   parentCommentId?: string;
   replyTo?: DocumentCommentItem['replyTo'];
+  selectionAnchor?: DocumentCommentSelectionAnchor;
   userId: string | null;
   workspaceId: string;
 }
@@ -22,6 +24,8 @@ export interface DocumentCommentSubmitInput {
   clientId: string;
   content: string;
   editorData: DocumentCommentJson;
+  /** Set only by the root composer, and only when the comment was started from a selection. */
+  selectionAnchor?: DocumentCommentSelectionAnchor;
 }
 
 export interface DocumentCommentEditorValue {
@@ -90,6 +94,7 @@ export const createOptimisticComment = ({
   editorData,
   parentCommentId,
   replyTo = null,
+  selectionAnchor,
   userId,
   workspaceId,
 }: CreateOptimisticCommentParams): DocumentCommentItem => {
@@ -110,6 +115,7 @@ export const createOptimisticComment = ({
     parentCommentId: parentCommentId ?? null,
     replyTo,
     replyToCommentId: replyTo?.id ?? null,
+    selectionAnchor: selectionAnchor ?? null,
     updatedAt: now,
     workspaceId,
   };

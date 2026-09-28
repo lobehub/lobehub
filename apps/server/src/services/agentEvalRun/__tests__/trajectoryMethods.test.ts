@@ -19,9 +19,11 @@ import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 // Mock AiAgentService — created inside executeTrajectory
 const mockExecAgent = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    execAgent: mockExecAgent,
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      execAgent: mockExecAgent,
+    };
+  }),
 }));
 
 // Mock appEnv so APP_URL is deterministic
@@ -31,9 +33,11 @@ vi.mock('@/envs/app', () => ({
 
 // Mock AgentRuntimeService (required by service constructor path for checkAndHandleRunTimeout)
 vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    interruptOperation: vi.fn().mockResolvedValue(true),
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      interruptOperation: vi.fn().mockResolvedValue(true),
+    };
+  }),
 }));
 
 const serverDB = await getTestDB();

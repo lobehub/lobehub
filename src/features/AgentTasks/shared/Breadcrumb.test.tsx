@@ -73,9 +73,12 @@ describe('Breadcrumb', () => {
 
     expect(screen.getByRole('link', { name: 'T-parent' })).toHaveAttribute(
       'href',
-      '/agent/agt_parent/task/T-parent',
+      '/agent/agt_parent/task/T-parent/parent-task',
     );
-    expect(screen.getByRole('link', { name: 'T-root' })).toHaveAttribute('href', '/task/T-root');
+    expect(screen.getByRole('link', { name: 'T-root' })).toHaveAttribute(
+      'href',
+      '/task/T-root/root-task',
+    );
   });
 
   it('falls back to the global route when an ancestor owner is unknown', () => {
@@ -93,7 +96,7 @@ describe('Breadcrumb', () => {
 
     expect(screen.getByRole('link', { name: 'T-parent' })).toHaveAttribute(
       'href',
-      '/task/T-parent',
+      '/task/T-parent/parent-task',
     );
   });
 });

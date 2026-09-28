@@ -297,13 +297,13 @@ describe('WorkModel · listByWorkspace', () => {
     });
 
     // UI/CLI delete (no tool dispatch) leaves the Work orphaned; the LEFT JOIN
-    // miss must render as `taskDeleted` from the version snapshot, not drop it.
+    // miss must render as `resourceDeleted` from the version snapshot, not drop it.
     await taskModel.delete(task.id);
 
     const { items } = await workModel.listByWorkspace({});
     expect(items).toHaveLength(1);
     const summary = expectTaskSummaryItem(items[0]);
     expect(summary.task.name).toBe('Orphan task');
-    expect(summary.taskDeleted).toBe(true);
+    expect(summary.resourceDeleted).toBe(true);
   });
 });

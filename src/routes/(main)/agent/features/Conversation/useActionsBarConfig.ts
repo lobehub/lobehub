@@ -9,7 +9,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 /**
  * Hetero-agent (Claude Code / Codex) sessions keep the menu minimal — copy +
  * delete — because the external runtime owns the assistant message lifecycle
- * (edit / regenerate / branching / translate / tts / share don't apply).
+ * (edit / regenerate / branching / translate / share don't apply).
  * `select` remains available because forwarding / batch deletion is handled by
  * the local conversation UI and does not depend on the external runtime.
  *

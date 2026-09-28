@@ -17,6 +17,7 @@ import type {
 } from './types';
 
 export * from './elasticsearch';
+export { PgLikeFtsSearchBackend } from './pgLike';
 export { PgSearchFtsSearchBackend } from './pgSearch';
 export * from './types';
 

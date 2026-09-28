@@ -1,6 +1,13 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { documentLikes, documents, workspaceMembers, workspaces } from '@lobechat/database/schemas';
+import {
+  documentLikes,
+  documents,
+  knowledgeBases,
+  resourcePermissions,
+  workspaceMembers,
+  workspaces,
+} from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +18,11 @@ import { cleanupTestUser, createTestUser } from './setup';
 let testDB: LobeChatDatabase;
 const notifyDocumentLiked = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const revokeDocumentLikeNotification = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(() => testDB) }));
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
+}));
 vi.mock('@/business/server/document-like/notifyActivity', () => ({
   notifyDocumentLiked,
   revokeDocumentLikeNotification,
@@ -85,6 +96,48 @@ describe('documentLikeRouter integration', () => {
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     await Promise.all(
       [ownerId, memberId, viewerId, outsiderId].map((id) => cleanupTestUser(db, id)),
+    );
+  });
+
+  it('withholds a like notification when its author cannot browse the knowledge base', async () => {
+    const [knowledgeBase] = await db
+      .insert(knowledgeBases)
+      .values({ name: 'Restricted content', userId: ownerId, visibility: 'public', workspaceId })
+      .returning();
+    await db.insert(resourcePermissions).values({
+      accessLevel: 'use',
+      resourceId: knowledgeBase.id,
+      resourceType: 'knowledgeBase',
+      workspaceId,
+    });
+    await db
+      .update(documents)
+      .set({ knowledgeBaseId: knowledgeBase.id, userId: memberId })
+      .where(eq(documents.id, documentId));
+    const owner = documentLikeRouter.createCaller(context(ownerId, workspaceId));
+
+    await owner.like({ documentId });
+    await flushAfterResponse();
+
+    expect(notifyDocumentLiked).not.toHaveBeenCalled();
+
+    await owner.unlike({ documentId });
+    await flushAfterResponse();
+    expect(revokeDocumentLikeNotification).toHaveBeenCalledTimes(1);
+
+    await db.insert(resourcePermissions).values({
+      accessLevel: 'edit',
+      resourceId: knowledgeBase.id,
+      resourceType: 'knowledgeBase',
+      userId: memberId,
+      workspaceId,
+    });
+    await owner.like({ documentId });
+    await flushAfterResponse();
+
+    expect(notifyDocumentLiked).toHaveBeenCalledTimes(1);
+    expect(notifyDocumentLiked).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientUserId: memberId }),
     );
   });
 

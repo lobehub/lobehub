@@ -2,8 +2,7 @@
 
 // Highlighter is intentionally avoided: it pulls every shiki grammar (~10 MB) into the auth bundle
 import { Block, Flexbox, FluentEmoji } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { Result } from 'antd';
+import { Button, Result, Text } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 

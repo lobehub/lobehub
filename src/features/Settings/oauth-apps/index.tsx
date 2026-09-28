@@ -1,5 +1,4 @@
-import { Skeleton } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Skeleton } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
@@ -14,6 +13,7 @@ import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors'
 
 import { createOAuthAppModal } from './features/CreateAppModal';
 import OAuthApps from './features/OAuthApps';
+import { showClientSecretModal } from './features/SecretModal';
 
 const CreateAppButton = () => {
   const { t } = useTranslation('auth');
@@ -31,6 +31,10 @@ const CreateAppButton = () => {
       onSubmit: async (values) => {
         const created = await lambdaClient.oauthApp.create.mutate(values);
         navigate(`/settings/oauth-apps/${created.id}`);
+
+        // Web apps get a confidential secret, and this is the one and only
+        // render of its plaintext.
+        if (created.clientSecret) showClientSecretModal({ clientSecret: created.clientSecret });
       },
     });
   };
@@ -55,7 +59,7 @@ const Page = () => {
     labPreferSelectors.enableOAuthApps(s),
   ]);
 
-  if (!isPreferenceInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isPreferenceInit) return <Skeleton.Text rows={5} />;
   if (!enableOAuthApps) return <NotFound />;
 
   return (

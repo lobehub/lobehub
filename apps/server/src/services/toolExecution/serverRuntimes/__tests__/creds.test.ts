@@ -10,7 +10,9 @@ const { getMember } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/workspaceMember', () => ({
-  WorkspaceMemberModel: vi.fn().mockImplementation(() => ({ getMember })),
+  WorkspaceMemberModel: vi.fn().mockImplementation(function () {
+    return { getMember };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
@@ -83,6 +85,39 @@ describe('credsRuntime', () => {
     await expect(credsRuntime.factory({ toolManifestMap: {} })).rejects.toThrow(
       'userId is required for Creds execution',
     );
+  });
+
+  // `lobe-creds` is already absent from `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`,
+  // so this runtime should never even be constructed for a share visitor —
+  // this is the belt-and-braces backstop in case that allowlist gate is ever
+  // bypassed: the sandbox write path must refuse on its own too, since
+  // `~/.creds/env` must never receive the creator's decrypted credentials
+  // inside a sandbox a visitor's model can run arbitrary shell commands in.
+  it('refuses to write credentials into the sandbox for a share-visitor run', async () => {
+    vi.mocked(MarketService).mockImplementation(function () {
+      return {
+        market: {
+          creds: {
+            inject: vi.fn().mockResolvedValue({
+              credentials: { env: { FOO: 'bar' } },
+            }),
+          },
+        },
+      } as any;
+    });
+
+    const runtime = await credsRuntime.factory({
+      agentShareVisitor: { agentId: 'agent-1' } as any,
+      serverDB,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const result = await (runtime as any).injectCredsToSandbox({ keys: ['FOO'] });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain('unavailable in shared conversations');
   });
 });
 

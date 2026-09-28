@@ -8,7 +8,9 @@ const { generateObject, resolveGoalModelConfig } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/aiGeneration', () => ({
-  AiGenerationService: vi.fn(() => ({ generateObject })),
+  AiGenerationService: vi.fn(function () {
+    return { generateObject };
+  }),
 }));
 
 vi.mock('@/server/services/goal/modelConfig', () => ({ resolveGoalModelConfig }));

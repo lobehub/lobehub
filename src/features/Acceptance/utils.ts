@@ -1,4 +1,8 @@
-import { normalizeVerifySurface, type VerifySurface } from '@lobechat/const/verify';
+import {
+  HOLISTIC_CHECK_TITLE,
+  normalizeVerifySurface,
+  type VerifySurface,
+} from '@lobechat/const/verify';
 import type { VerifyCheckItem, VerifyCodingScope } from '@lobechat/types';
 
 import type { VerifyStatus } from '@/database/models/agentOperation';
@@ -15,6 +19,14 @@ export type DockPhase =
   | 'errored'
   | 'repairing'
   | 'passed';
+
+/**
+ * The holistic fallback check is persisted with a fixed English title
+ * ({@link HOLISTIC_CHECK_TITLE}) — swap in the localized copy at display time.
+ * Author-provided titles are shown verbatim.
+ */
+export const checkDisplayTitle = (title: string, holisticLabel: string): string =>
+  title === HOLISTIC_CHECK_TITLE ? holisticLabel : title;
 
 /** Map the persisted rollup status to the dock's phase state machine. */
 export const phaseFromStatus = (status: VerifyStatus | null | undefined): DockPhase => {

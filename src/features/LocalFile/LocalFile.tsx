@@ -1,5 +1,4 @@
 import { Flexbox, Popover } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLink, EyeIcon, FolderOpen } from 'lucide-react';
 import React from 'react';
@@ -28,6 +27,61 @@ const styles = createStaticStyles(({ css }) => ({
       outline: 2px solid ${cssVar.colorPrimaryBorder};
       outline-offset: 1px;
     }
+  `,
+  segment: css`
+    cursor: pointer;
+
+    position: relative;
+
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 5px;
+    padding-inline: 11px;
+    border: none;
+
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 20px;
+    color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
+
+    background: transparent;
+
+    & + &::before {
+      content: '';
+
+      position: absolute;
+      inset-block: 5px;
+      inset-inline-start: 0;
+
+      width: 1px;
+
+      background: ${cssVar.colorBorderSecondary};
+    }
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
+
+    &:hover::before,
+    &:hover + &::before {
+      background: transparent;
+    }
+
+    &:focus-visible {
+      border-radius: 6px;
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: -2px;
+    }
+  `,
+  segmented: css`
+    overflow: hidden;
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   title: css`
     overflow: hidden;
@@ -97,34 +151,22 @@ export const LocalFile = ({
 
   // File: show popover with actions
   const popoverContent = (
-    <Flexbox horizontal gap={4} padding={4}>
+    <div className={styles.segmented}>
       {canPreview && (
-        <Button
-          icon={EyeIcon}
-          size="small"
-          title={t('LocalFile.action.preview')}
-          onClick={handlePreview}
-        >
+        <button className={styles.segment} type={'button'} onClick={handlePreview}>
+          <EyeIcon size={15} />
           {t('LocalFile.action.preview')}
-        </Button>
+        </button>
       )}
-      <Button
-        icon={ExternalLink}
-        size="small"
-        title={t('LocalFile.action.open')}
-        onClick={handleOpenFile}
-      >
+      <button className={styles.segment} type={'button'} onClick={handleOpenFile}>
+        <ExternalLink size={15} />
         {t('LocalFile.action.open')}
-      </Button>
-      <Button
-        icon={FolderOpen}
-        size="small"
-        title={t('LocalFile.action.showInFolder')}
-        onClick={handleOpenFolder}
-      >
+      </button>
+      <button className={styles.segment} type={'button'} onClick={handleOpenFolder}>
+        <FolderOpen size={15} />
         {t('LocalFile.action.showInFolder')}
-      </Button>
-    </Flexbox>
+      </button>
+    </div>
   );
 
   return (
