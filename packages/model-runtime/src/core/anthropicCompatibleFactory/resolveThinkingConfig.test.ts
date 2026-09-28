@@ -27,6 +27,18 @@ describe('resolveClaudeThinkingConfig', () => {
       // its default `omitted` display, which is what turning the switch off asks for.
       expect(resolve('claude-fable-5', { type: 'disabled' })).toBeUndefined();
     });
+
+    it('should omit disabled thinking when the mapped request model always thinks', () => {
+      // A channel may redirect Sonnet 5 (which accepts `disabled`) to Sonnet 5.5 upstream.
+      expect(
+        resolveClaudeThinkingConfig({
+          maxTokens: 4096,
+          model: 'claude-sonnet-5',
+          requestModel: 'global.anthropic.claude-sonnet-5-5',
+          thinking: { type: 'disabled' },
+        }),
+      ).toBeUndefined();
+    });
   });
 
   describe('models that default thinking off but omit the display', () => {
