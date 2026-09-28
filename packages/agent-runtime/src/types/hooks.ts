@@ -252,26 +252,55 @@ export interface CompactErrorHookEvent {
   userId?: string;
 }
 
-export interface BeforeHumanInterventionHookEvent {
-  operationId: string;
-  pendingTools: Array<{ apiName: string; identifier: string }>;
+/** Run identity shared with tool notifications; never infer lineage from a resume. */
+export type HumanInterventionHookContext = Pick<
+  ToolCallHookContext,
+  | 'agentId'
+  | 'assistantMessageId'
+  | 'documentId'
+  | 'groupId'
+  | 'operationId'
+  | 'parentOperationId'
+  | 'sessionId'
+  | 'sourceMessageId'
+  | 'taskId'
+  | 'threadId'
+  | 'topicId'
+  | 'userId'
+  | 'workspaceId'
+>;
+
+export interface HumanInterventionPendingTool {
+  apiName: string;
+  /** Effective parsed arguments from the same payload used by the approval card. */
+  args?: Record<string, unknown>;
+  /** Exact approval-card arguments, also retained when they cannot be parsed. */
+  arguments?: string;
+  identifier: string;
+  /** Native call id; optional for compatibility with existing producers. */
+  toolCallId?: string;
+}
+
+export interface BeforeHumanInterventionHookEvent extends HumanInterventionHookContext {
+  pendingTools: HumanInterventionPendingTool[];
   stepIndex: number;
-  userId?: string;
 }
 
-export interface AfterHumanInterventionHookEvent {
+export interface AfterHumanInterventionHookEvent extends HumanInterventionHookContext {
   action: 'approve' | 'reject' | 'rejectAndContinue';
-  operationId: string;
   rejectionReason?: string;
   toolCallId?: string;
-  userId?: string;
+  /** All native calls resolved by this action, not unresolved batch siblings. */
+  toolCallIds?: string[];
 }
 
-export interface StopByHumanInterventionHookEvent {
-  operationId: string;
+export interface StopByHumanInterventionHookEvent extends HumanInterventionHookContext {
+  /** Existing runtime stop reason, distinct from the user's rejection text. */
+  reason?: string;
   rejectionReason?: string;
   toolCallId?: string;
-  userId?: string;
+  /** All pending native calls affected by stopping the operation. */
+  toolCallIds?: string[];
 }
 
 export interface BeforeCallAgentHookEvent {

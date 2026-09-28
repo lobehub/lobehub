@@ -6525,7 +6525,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           pendingToolsCalling: [
             {
               apiName: 'post_tweet',
-              arguments: '{}',
+              arguments: '{"text":"reviewed tweet"}',
               id: 'tc-1',
               identifier: 'twitter',
               type: 'default' as const,
@@ -6536,13 +6536,31 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         await executors.request_human_approve!(instruction, state);
 
+        // The hook and the durable approval card use the same effective input
+        // and native ID, rather than a message ID or an earlier input snapshot.
+        expect(mockMessageModel.create).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            parentId: 'asst-1',
+            plugin: expect.objectContaining({ arguments: '{"text":"reviewed tweet"}', id: 'tc-1' }),
+            tool_call_id: 'tc-1',
+          }),
+        );
+
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'op-123',
           'beforeHumanIntervention',
           expect.objectContaining({
-            pendingTools: [{ apiName: 'post_tweet', identifier: 'twitter' }],
+            pendingTools: [
+              {
+                apiName: 'post_tweet',
+                identifier: 'twitter',
+                args: { text: 'reviewed tweet' },
+                arguments: '{"text":"reviewed tweet"}',
+                toolCallId: 'tc-1',
+              },
+            ],
           }),
-          undefined, // serializedHooks from state.metadata._hooks
+          undefined, // serializedHooks from state.host.hooks
         );
       });
     });

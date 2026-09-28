@@ -1,4 +1,10 @@
 import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
+import {
+  buildAfterHumanInterventionEvent,
+  buildHumanInterventionHookContext,
+  buildStopByHumanInterventionEvent,
+} from '@lobechat/agent-runtime';
+import type { ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
 
 import type { MessageModel } from '@/database/models/message';
@@ -90,14 +96,18 @@ export class HumanInterventionHandler {
 
     hookDispatcher
       .dispatch(
-        state.metadata?.operationId ?? '',
+        state.operationId ?? state.metadata?.operationId ?? '',
         'afterHumanIntervention',
-        {
-          action: 'approve',
-          operationId: state.metadata?.operationId ?? '',
-          toolCallId: approvedToolCall.id,
-          userId: state.origin?.userId,
-        },
+        buildAfterHumanInterventionEvent(
+          buildHumanInterventionHookContext(state, {
+            operationId: state.operationId ?? state.metadata?.operationId ?? '',
+          }),
+          {
+            action: 'approve',
+            toolCallId: approvedToolCall.id,
+            toolCallIds: [approvedToolCall.id],
+          },
+        ),
         state.host?.hooks,
       )
       .catch(() => {});
@@ -173,15 +183,19 @@ export class HumanInterventionHandler {
   ): InterventionResult {
     hookDispatcher
       .dispatch(
-        state.metadata?.operationId ?? '',
+        state.operationId ?? state.metadata?.operationId ?? '',
         'afterHumanIntervention',
-        {
-          action: 'rejectAndContinue',
-          operationId: state.metadata?.operationId ?? '',
-          rejectionReason,
-          toolCallId: rejectedToolCallId,
-          userId: state.origin?.userId,
-        },
+        buildAfterHumanInterventionEvent(
+          buildHumanInterventionHookContext(state, {
+            operationId: state.operationId ?? state.metadata?.operationId ?? '',
+          }),
+          {
+            action: 'rejectAndContinue',
+            rejectionReason,
+            toolCallId: rejectedToolCallId,
+            toolCallIds: rejectedToolCallId ? [rejectedToolCallId] : [],
+          },
+        ),
         state.host?.hooks,
       )
       .catch(() => {});
@@ -207,14 +221,24 @@ export class HumanInterventionHandler {
   ): InterventionResult {
     hookDispatcher
       .dispatch(
-        state.metadata?.operationId ?? '',
+        state.operationId ?? state.metadata?.operationId ?? '',
         'onStopByHumanIntervention',
-        {
-          operationId: state.metadata?.operationId ?? '',
-          rejectionReason,
-          toolCallId: rejectedToolCallId,
-          userId: state.origin?.userId,
-        },
+        buildStopByHumanInterventionEvent(
+          buildHumanInterventionHookContext(state, {
+            operationId: state.operationId ?? state.metadata?.operationId ?? '',
+          }),
+          {
+            reason: 'human_rejected',
+            rejectionReason,
+            toolCallId: rejectedToolCallId,
+            toolCallIds: [
+              ...new Set<string>([
+                ...(state.pendingToolsCalling ?? []).map((tool: ChatToolPayload) => tool.id),
+                ...(rejectedToolCallId ? [rejectedToolCallId] : []),
+              ]),
+            ],
+          },
+        ),
         state.host?.hooks,
       )
       .catch(() => {});
