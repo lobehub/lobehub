@@ -95,6 +95,30 @@ const Group = memo<GroupChildrenProps>(
       isEqual,
     );
     const allBlocks = useMemo(() => chains.flatMap((chain) => chain.blocks), [chains]);
+    const blockIds = useMemo(() => new Set(allBlocks.map((block) => block.id)), [allBlocks]);
+    /** A stale group projection must receive persisted finish types before empty-block filtering. */
+    const persistedFinishTypes = useConversationStore((s) => {
+      const result: Record<string, string> = {};
+      for (const message of s.dbMessages) {
+        const finishType = message.metadata?.finishType;
+        if (blockIds.has(message.id) && typeof finishType === 'string') {
+          result[message.id] = finishType;
+        }
+      }
+      return result;
+    }, isEqual);
+    const chainsWithFinishTypes = useMemo(
+      () =>
+        chains.map((chain) => ({
+          ...chain,
+          blocks: chain.blocks.map((block) => {
+            if (block.metadata?.finishType != null) return block;
+            const finishType = persistedFinishTypes[block.id];
+            return finishType ? { ...block, metadata: { ...block.metadata, finishType } } : block;
+          }),
+        })),
+      [chains, persistedFinishTypes],
+    );
     const chainDurations = useConversationStore(
       (s) => chains.map((chain) => getTurnDurationMs(s.dbMessages, chain.blocks)),
       isEqual,
@@ -110,13 +134,13 @@ const Group = memo<GroupChildrenProps>(
 
     const views = useMemo(
       () =>
-        chains.map((chain, index) =>
+        chainsWithFinishTypes.map((chain, index) =>
           buildChainView(chain, {
             hasActiveOperation: !!activeFlags[index],
             isGenerating: !!generatingFlags[index],
           }),
         ),
-      [activeFlags, chains, generatingFlags],
+      [activeFlags, chainsWithFinishTypes, generatingFlags],
     );
     const lastView = views.at(-1)!;
     const isGenerating = lastView.isGenerating;

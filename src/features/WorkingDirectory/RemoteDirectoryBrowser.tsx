@@ -1,15 +1,16 @@
 'use client';
 
 import { Flexbox, Input } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Spin, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { ArrowUpIcon, FolderIcon, HouseIcon } from 'lucide-react';
+import { ArrowUpIcon, HouseIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useFetchDeviceDirectory } from '@/store/device/directoryHooks';
+
+import { getFolderIcon } from './folderIcons';
 
 interface RemoteDirectoryBrowserProps {
   defaultPath?: string;
@@ -48,20 +49,22 @@ export const RemoteDirectoryBrowser = ({
     <Flexbox gap={16}>
       <Text type={'secondary'}>{t('workingDirectory.browseDescription')}</Text>
       <Flexbox horizontal align={'center'} gap={8}>
-        <ActionIcon
-          aria-label={t('workingDirectory.home')}
-          disabled={loading}
-          icon={HouseIcon}
-          title={t('workingDirectory.home')}
-          onClick={() => navigate()}
-        />
-        <ActionIcon
-          aria-label={t('workingDirectory.parentFolder')}
-          disabled={loading || !directory?.parentPath}
-          icon={ArrowUpIcon}
-          title={t('workingDirectory.parentFolder')}
-          onClick={() => directory?.parentPath && navigate(directory.parentPath)}
-        />
+        <Flexbox horizontal flex={'none'} gap={2}>
+          <ActionIcon
+            aria-label={t('workingDirectory.home')}
+            disabled={loading}
+            icon={HouseIcon}
+            title={t('workingDirectory.home')}
+            onClick={() => navigate()}
+          />
+          <ActionIcon
+            aria-label={t('workingDirectory.parentFolder')}
+            disabled={loading || !directory?.parentPath}
+            icon={ArrowUpIcon}
+            title={t('workingDirectory.parentFolder')}
+            onClick={() => directory?.parentPath && navigate(directory.parentPath)}
+          />
+        </Flexbox>
         <Input
           aria-label={t('workingDirectory.current')}
           disabled={loading}
@@ -92,7 +95,7 @@ export const RemoteDirectoryBrowser = ({
       >
         {isLoading ? (
           <Flexbox align={'center'} flex={1} gap={8} justify={'center'}>
-            <NeuralNetworkLoading />
+            <Spin size="small" />
             <Text type={'secondary'}>{t('workingDirectory.foldersLoading')}</Text>
           </Flexbox>
         ) : (
@@ -102,7 +105,7 @@ export const RemoteDirectoryBrowser = ({
                 aria-disabled={loading || !entry.readable}
                 disabled={loading || !entry.readable}
                 flex={'none'}
-                icon={FolderIcon}
+                icon={getFolderIcon(entry.name)}
                 key={entry.path + entry.name}
                 role={'button'}
                 tabIndex={loading || !entry.readable ? -1 : 0}

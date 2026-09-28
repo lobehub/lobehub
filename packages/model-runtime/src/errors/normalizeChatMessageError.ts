@@ -70,6 +70,16 @@ const buildPayloadBody = (
   // layers so normalizing `{ errorType, error }` does not drop the fields the
   // chat error renderer needs later.
   const sourceBody = payload.body ?? payload._responseBody ?? payload.error ?? originalError;
+  /**
+   * Error hooks attach display fields such as `traceId` through `_responseBody`. A stream error
+   * already carries the provider `body`, which would otherwise hide them from the error card.
+   */
+  const displayFields =
+    payload.body !== undefined &&
+    isRecord(payload._responseBody) &&
+    payload._responseBody !== payload.body
+      ? payload._responseBody
+      : undefined;
   const context: Record<string, unknown> = {};
 
   if (payload.budget !== undefined) context.budget = payload.budget;
@@ -80,6 +90,7 @@ const buildPayloadBody = (
 
     return {
       ...sourceBody,
+      ...displayFields,
       // `_responseBody` is the display-facing body, but gateway/model-runtime
       // still carries status/provider details in `error` for some failures:
       // `{ _responseBody: { error: { message } }, error: { status: 402 } }`.
@@ -221,8 +232,15 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
     // out of some `JSON.parse` those two say nothing about WHERE it blew up.
     // Persist a bounded stack so a recurring 500 is locatable from the stored
     // operation instead of needing a live repro.
+    // Error hooks attach display fields such as `traceId` through `_responseBody` — also on
+    // plain Errors, e.g. a provider stream that fails with `TypeError: terminated`.
+    const responseBody = (error as { _responseBody?: unknown })._responseBody;
     return enrichWithSpec({
-      body: { name: error.name, stack: truncateStack(error.stack) },
+      body: {
+        ...(isRecord(responseBody) ? responseBody : {}),
+        name: error.name,
+        stack: truncateStack(error.stack),
+      },
       message: error.message,
       type: ChatErrorType.InternalServerError,
     });

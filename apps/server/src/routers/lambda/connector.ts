@@ -548,9 +548,18 @@ export const connectorRouter = router({
       const redirectUri = getConnectorRedirectUri();
 
       // 1. Discover the authorization server backing the MCP resource.
+      // Discovery and registration failures below are server-compatibility
+      // problems the user must fix in their OAuth setup, not internal errors —
+      // surface them as BAD_REQUEST with the reason so the form can show it.
       const { authorizationServerUrl, metadata } = await discoverConnectorOAuth(
         connector.mcpServerUrl,
-      );
+      ).catch((error: unknown) => {
+        throw new TRPCError({
+          cause: error,
+          code: 'BAD_REQUEST',
+          message: (error as Error)?.message ?? String(error),
+        });
+      });
 
       // Default to the scopes advertised by the server when the user did not
       // specify any — many MCP authorization servers reject (or issue a useless
@@ -576,6 +585,12 @@ export const connectorRouter = router({
           metadata,
           redirectUri,
           scopes,
+        }).catch((error: unknown) => {
+          throw new TRPCError({
+            cause: error,
+            code: 'BAD_REQUEST',
+            message: `Dynamic client registration failed: ${(error as Error)?.message ?? String(error)}`,
+          });
         });
         clientId = reg.client_id;
         clientSecret = reg.client_secret ?? undefined;

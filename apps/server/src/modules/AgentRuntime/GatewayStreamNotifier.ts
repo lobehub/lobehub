@@ -6,6 +6,7 @@ import urlJoin from 'url-join';
 
 import { sanitizeVisitorError } from '@/database/models/message';
 
+import { shouldRecordGatewayError } from './gatewayErrorRecord';
 import {
   buildPublicEndEventData,
   buildPublicInitEventData,
@@ -93,6 +94,9 @@ const GATEWAY_INIT_META_KEYS = [
   'parentOperationId',
   'mirrorToOperationId',
   'rootOperationId',
+  // A heterogeneous CLI run can go silent through a long shell command; the
+  // gateway's inactivity watchdog gives it a longer window.
+  'heteroType',
 ] as const;
 
 export type GatewayInitMeta = Partial<Record<(typeof GATEWAY_INIT_META_KEYS)[number], string>>;
@@ -127,8 +131,40 @@ export const pickGatewayInitMeta = (initialState: unknown): GatewayInitMeta | un
  * Redis SSE remains the primary event storage / subscription mechanism.
  * The Gateway is an additional push channel for WebSocket delivery.
  */
+export interface GatewayStreamNotifierOptions {
+  /**
+   * Let `publishStreamEvent` return before its ordering-barrier pushes
+   * (`stream_end`, `message_patch`) reach the gateway. Only for a caller that
+   * calls `drainPushes` at every point its invocation can be frozen or handed
+   * over — otherwise an unawaited push can be lost with the invocation.
+   */
+  deferPushes?: boolean;
+}
+
 export class GatewayStreamNotifier implements IStreamEventManager {
   private inflight = 0;
+
+  /**
+   * Gateway pushes issued for an operation that have not settled yet, and the
+   * last ordering barrier among them.
+   *
+   * The step used to await the push of `stream_end` and `message_patch` so the
+   * client could not apply a later event first. That put a gateway round trip
+   * (~250ms, twice per step in production traces) on the path between two
+   * steps. Ordering does not actually need the step to wait — it needs the
+   * pushes to leave in order, which these two maps arrange:
+   *
+   *  - an ordinary push queues behind the last barrier, and otherwise runs
+   *    concurrently with its neighbours, exactly as stream chunks always have;
+   *  - a barrier push additionally waits for everything already in flight, so
+   *    nothing issued before it can land after it.
+   *
+   * This is strictly stronger than the previous arrangement, where every push
+   * that was not awaited — chunks included — could overtake one that was.
+   */
+  private pendingPushes = new Map<string, Set<Promise<void>>>();
+
+  private pushBarriers = new Map<string, Promise<void>>();
 
   /**
    * `operationId → mirrorOperationId`. When an operation declares a
@@ -195,6 +231,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     private resolvePersistedShareVisitor?: (
       operationId: string,
     ) => Promise<GatewayVisitorRedaction>,
+    private options: GatewayStreamNotifierOptions = {},
   ) {
     log('Gateway notifier initialized: %s', gatewayUrl);
   }
@@ -207,15 +244,15 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   ): Promise<string> {
     const result = await this.inner.publishStreamEvent(operationId, event);
     const gatewayEvent = { ...event, operationId, timestamp: Date.now() };
-    if (event.type === 'stream_end' || event.type === 'message_patch') {
-      // `visible_output_end` may be published immediately after `stream_end`.
-      // Await ordering boundaries so the client applies stream_end.finalContent
-      // before visible_output_end, and its canonical message patch before the
-      // following step_start / agent_runtime_end revision check.
-      await this.pushEvent(operationId, gatewayEvent);
-    } else {
-      void this.pushEvent(operationId, gatewayEvent);
-    }
+    // `visible_output_end` may be published immediately after `stream_end`.
+    // These two are ordering barriers so the client applies
+    // stream_end.finalContent before visible_output_end, and the canonical
+    // message patch before the following step_start / agent_runtime_end
+    // revision check. Ordering comes from `issuePush`; waiting is only
+    // skipped for a caller that drains before its invocation ends.
+    const barrier = event.type === 'stream_end' || event.type === 'message_patch';
+    const push = this.issuePush(operationId, gatewayEvent, { barrier });
+    if (barrier && !this.options.deferPushes) await push;
     return result;
   }
 
@@ -225,7 +262,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     chunkData: StreamChunkData,
   ): Promise<string> {
     const result = await this.inner.publishStreamChunk(operationId, stepIndex, chunkData);
-    void this.pushEvent(operationId, {
+    void this.issuePush(operationId, {
       data: chunkData,
       operationId,
       stepIndex,
@@ -287,16 +324,21 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       log('Gateway /api/operations/init failed: %O', error);
     }
 
-    void this.pushEvent(operationId, {
-      // Every run, not just share visitors: nothing on the other end reads this
-      // event's data, while the raw `initialState` is the whole `AgentState` —
-      // the LLM context plus the tool-set maps. See `buildPublicInitEventData`.
-      data: buildPublicInitEventData(initialState),
+    void this.issuePush(
       operationId,
-      stepIndex: 0,
-      timestamp: Date.now(),
-      type: 'agent_runtime_init',
-    });
+      {
+        // Every run, not just share visitors: nothing on the other end reads this
+        // event's data, while the raw `initialState` is the whole `AgentState` —
+        // the LLM context plus the tool-set maps. See `buildPublicInitEventData`.
+        data: buildPublicInitEventData(initialState),
+        operationId,
+        stepIndex: 0,
+        timestamp: Date.now(),
+        type: 'agent_runtime_init',
+      },
+      // The run's first event: everything else for this op queues behind it.
+      { barrier: true },
+    );
 
     return result;
   }
@@ -351,6 +393,14 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // snapshot, so dropping it here would break the SoT contract.
     const endEventData = {
       errorType,
+      // The gateway files errors on its board only when told to — the
+      // user-side / board-worthy decision lives here, next to the error spec.
+      ...(reason === 'error' && {
+        recordError: shouldRecordGatewayError({
+          errorType: rawErrorType,
+          provider: finalState?.modelRuntimeConfig?.provider,
+        }),
+      }),
       ...(!messagePatchMode && { finalState }),
       ...(messagePatchMode && { messagePatchMode: true, messageRevision }),
       reason,
@@ -358,17 +408,24 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       ...(uiMessages !== undefined && { uiMessages }),
     };
 
-    void this.pushEvent(operationId, {
-      // Share-visitor runs must not receive the creator's raw AgentState
-      // (world.userMemory / world.agent, systemRole,
-      // userInterventionConfig, ...) over their WS channel — see
-      // `buildPublicEndEventData`.
-      data: endRedaction ? buildPublicEndEventData(endEventData) : endEventData,
+    // Terminal, so it is worth waiting for: the run is over and nothing else
+    // will carry this event if the invocation is frozen before the push lands.
+    // As a barrier it also flushes everything the run issued before it.
+    await this.issuePush(
       operationId,
-      stepIndex,
-      timestamp: Date.now(),
-      type: 'agent_runtime_end',
-    });
+      {
+        // Share-visitor runs must not receive the creator's raw AgentState
+        // (world.userMemory / world.agent, systemRole,
+        // userInterventionConfig, ...) over their WS channel — see
+        // `buildPublicEndEventData`.
+        data: endRedaction ? buildPublicEndEventData(endEventData) : endEventData,
+        operationId,
+        stepIndex,
+        timestamp: Date.now(),
+        type: 'agent_runtime_end',
+      },
+      { barrier: true },
+    );
 
     // Terminal event has been forwarded (including any mirror); drop the mapping
     // so it can't leak across a reused operationId.
@@ -490,6 +547,58 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     }
 
     await Promise.all(pushes);
+  }
+
+  /**
+   * Hand a push to the gateway without making the caller wait for it. Returns a
+   * promise that never rejects, so a failed push cannot poison the order it was
+   * issued in.
+   */
+  private issuePush(
+    operationId: string,
+    event: Record<string, unknown>,
+    options?: { barrier?: boolean },
+  ): Promise<void> {
+    const barrier = this.pushBarriers.get(operationId);
+    const pending = this.pendingPushes.get(operationId) ?? new Set<Promise<void>>();
+    const waitFor = options?.barrier
+      ? Promise.allSettled([...pending, ...(barrier ? [barrier] : [])]).then(() => {})
+      : (barrier ?? Promise.resolve());
+
+    const settled = waitFor.then(() =>
+      this.pushEvent(operationId, event).catch((error) => {
+        log('Gateway push failed for %s (%s): %O', operationId, event.type, error);
+      }),
+    );
+
+    pending.add(settled);
+    this.pendingPushes.set(operationId, pending);
+    void settled.then(() => {
+      pending.delete(settled);
+      if (pending.size === 0 && this.pendingPushes.get(operationId) === pending) {
+        this.pendingPushes.delete(operationId);
+      }
+      if (this.pushBarriers.get(operationId) === settled) this.pushBarriers.delete(operationId);
+    });
+
+    if (options?.barrier) this.pushBarriers.set(operationId, settled);
+
+    return settled;
+  }
+
+  /**
+   * Wait for an operation's issued pushes to reach the gateway. The invocation
+   * that produced them calls this before it can be frozen or handed over —
+   * nothing else guarantees an unawaited push survives the end of a request.
+   */
+  async drainPushes(operationId: string): Promise<void> {
+    // A settling barrier releases pushes queued behind it, so draining takes a
+    // few rounds; bounded so a pathological producer cannot spin here.
+    for (let round = 0; round < 5; round += 1) {
+      const pending = this.pendingPushes.get(operationId);
+      if (!pending?.size) return;
+      await Promise.allSettled(pending);
+    }
   }
 
   private mirrorPush(mirrorTo: string, event: Record<string, unknown>): Promise<void> {

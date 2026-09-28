@@ -58,10 +58,13 @@ vi.mock('@/server/modules/Mecha', () => ({
       }),
     };
   }),
-  serverMessagesEngine: vi.fn().mockResolvedValue([
-    { role: 'system', content: 'You are a helpful assistant.' },
-    { role: 'user', content: 'Hello' },
-  ]),
+  serverMessagesEngine: vi.fn().mockResolvedValue({
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'Hello' },
+    ],
+    metadata: {},
+  }),
 }));
 
 // Mock AiChatService to avoid S3 dependency

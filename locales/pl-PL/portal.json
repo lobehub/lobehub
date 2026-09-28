@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "Pobierz plik źródłowy",
   "FilePreview.tabs.chunk": "Fragment",
   "FilePreview.tabs.file": "Plik",
   "Plugins": "Umiejętności",
@@ -29,6 +30,7 @@
   "artifacts.svg.copySuccess": "Obraz skopiowany pomyślnie",
   "artifacts.svg.download.png": "Pobierz jako PNG",
   "artifacts.svg.download.svg": "Pobierz jako SVG",
+  "document.saveConflict": "Ten dokument został zaktualizowany gdzie indziej. Odświeżanie do najnowszej wersji.",
   "document.todos.allCompleted": "Wszystkie zadania ukończone",
   "document.todos.title": "Zadania",
   "emptyArtifactList": "Brak artefaktów. Użyj umiejętności w rozmowie, a następnie wróć tutaj.",

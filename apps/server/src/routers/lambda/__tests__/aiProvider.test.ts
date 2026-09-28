@@ -4,6 +4,7 @@ import { OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
 import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AiModelModel } from '@/database/models/aiModel';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { getServerGlobalConfig } from '@/server/globalConfig';
@@ -22,6 +23,7 @@ vi.mock('@/business/server/aiProvider', () => ({
 vi.mock('@/server/globalConfig');
 vi.mock('@/server/modules/KeyVaultsEncrypt');
 vi.mock('@/database/repositories/aiInfra');
+vi.mock('@/database/models/aiModel');
 vi.mock('@/database/models/aiProvider');
 vi.mock('@/database/models/user');
 vi.mock('@/server/modules/ModelRuntime', () => ({
@@ -70,6 +72,8 @@ describe('aiProviderRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetHiddenBuiltinModelsForUser.mockResolvedValue([]);
+    // Keep the automock default (no configs) so a per-test override doesn't leak
+    vi.mocked(AiModelModel).prototype.getAllModelReasoningConfigs = vi.fn();
 
     vi.mocked(getServerGlobalConfig).mockReturnValue({
       aiProvider: {},
@@ -178,6 +182,21 @@ describe('aiProviderRouter', () => {
         providerBindingAgentTypes: {},
       });
       expect(mockGetState).toHaveBeenCalledWith(KeyVaultsGateKeeper.getUserKeyVaults);
+    });
+
+    it('returns the personal reasoning configs alongside the runtime state', async () => {
+      vi.mocked(AiInfraRepos).prototype.getAiProviderRuntimeState = vi
+        .fn()
+        .mockResolvedValue(mockRuntimeState);
+      const modelReasoningConfigs = { 'openai/gpt-5.6-sol': { gpt5_6ReasoningEffort: 'high' } };
+      vi.mocked(AiModelModel).prototype.getAllModelReasoningConfigs = vi
+        .fn()
+        .mockResolvedValue(modelReasoningConfigs);
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.getAiProviderRuntimeState({});
+
+      expect(result.modelReasoningConfigs).toEqual(modelReasoningConfigs);
     });
 
     it('should append user-scoped hidden builtin models without changing runtime state loading', async () => {

@@ -5,6 +5,7 @@ import {
   AppWindowIcon,
   BellIcon,
   Blocks,
+  BlocksIcon,
   Brain,
   Building2,
   ChartColumnBigIcon,
@@ -73,6 +74,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   // immediately 403s.
   const { allowed: canCreateContent } = usePermission('create_content');
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
+  const enableIntegrations = useUserStore(labPreferSelectors.enableIntegrations);
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
@@ -124,6 +126,18 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Messenger,
               label: t('tab.messenger'),
             },
+            // An installation connected here belongs to the workspace, so
+            // every member sees the same one. Labs alpha, like the personal
+            // surface.
+            ...(enableIntegrations
+              ? [
+                  {
+                    icon: BlocksIcon,
+                    key: WorkspaceSettingsTabs.Integrations,
+                    label: t('tab.integrations'),
+                  },
+                ]
+              : []),
           ],
           key: WorkspaceSettingsGroupKey.Account,
           title: t('group.profile'),
@@ -305,6 +319,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       tLabs,
       tSubscription,
       enableOAuthApps,
+      enableIntegrations,
       canManageWorkspace,
       canViewBilling,
       canCreateContent,

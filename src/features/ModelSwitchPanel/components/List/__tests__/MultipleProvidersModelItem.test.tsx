@@ -126,7 +126,6 @@ describe('MultipleProvidersModelItem', () => {
       <MultipleProvidersModelItem
         activeKey="lobehub/gpt-5.4"
         newLabel="new"
-        showInfoTag={false}
         data={{
           displayName: 'GPT-5.4',
           model: {
@@ -158,7 +157,6 @@ describe('MultipleProvidersModelItem', () => {
         activeKey="anthropic/claude-opus-4-7"
         newLabel="new"
         proLabel="pro"
-        showInfoTag={false}
         data={{
           displayName: 'Claude Opus 4.7',
           model: {

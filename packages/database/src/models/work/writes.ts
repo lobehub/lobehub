@@ -4,6 +4,7 @@ import type {
   DeleteWorkParams,
   WorkDisplayField,
   WorkItem,
+  WorkMetadata,
   WorkResourceType,
   WorkType,
   WorkVisibility,
@@ -14,7 +15,12 @@ import { documents } from '../../schemas/file';
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
-import { documentOwnership, type WorkContext, workOwnership } from './context';
+import {
+  documentOwnership,
+  resolveWorkAccessScope,
+  type WorkContext,
+  workOwnership,
+} from './context';
 import {
   type CreateVersionInput,
   truncateContentText,
@@ -138,6 +144,20 @@ const buildVersionSnapshot = (
  * uniqueness retry. Callers must do their reads through the tx-scoped context
  * `buildInput` receives.
  */
+/** Server-owned `works.metadata` for a fresh identity row under `ctx`'s scope. */
+const buildWorkMetadata = (ctx: WorkContext): WorkMetadata | null => {
+  const scope = resolveWorkAccessScope(ctx);
+  if (scope.type !== 'agentShare') return null;
+
+  return {
+    agentShare: {
+      shareId: scope.shareId,
+      topicId: scope.topicId,
+      visitorUserId: scope.visitorUserId,
+    },
+  };
+};
+
 export const registerWorkVersion = async (
   ctx: WorkContext,
   identity: RegisterWorkIdentity,
@@ -156,6 +176,11 @@ export const registerWorkVersion = async (
           .insert(works)
           .values({
             ...identity,
+            // Share provenance is stamped ONLY here as well: a Work registered
+            // from a visitor's share topic carries that topic's scope for its
+            // whole life, so the creator's ordinary reads (and any other
+            // visitor topic) never resolve it — see `workMatchesAccessScope`.
+            metadata: buildWorkMetadata(ctx),
             // Origin provenance is stamped ONLY here: it records where the Work
             // identity was first registered and stays immutable through every
             // later version (the current-projection UPDATE below never touches it).

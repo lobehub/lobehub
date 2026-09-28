@@ -9,7 +9,9 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { type PartialDeep } from 'type-fest';
 
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { AgentModel } from '@/database/models/agent';
+import { AgentShareModel } from '@/database/models/agentShare';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '@/database/utils/inboxAgent';
@@ -22,6 +24,7 @@ import {
   RedisKeys,
 } from '@/libs/redis';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { type UpdateAgentResult } from './type';
 
@@ -65,6 +68,65 @@ export class AgentService {
     this.workspaceId = workspaceId;
     this.agentModel = new AgentModel(db, userId, workspaceId);
     this.userModel = new UserModel(db, userId);
+  }
+
+  /** Validate the effective selection at configuration boundaries, including inherited defaults. */
+  async assertShareModelAllowed(agentId: string, patch: PartialDeep<AgentItem> = {}) {
+    if (!AGENT_SHARE_ALLOWED_PROVIDERS) return;
+
+    const agent = await this.agentModel.getAgentConfigById(agentId);
+    if (!agent) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+
+    const selection = await this.resolveModelSelection({ ...agent, ...patch });
+    const { provider } = selection;
+    if (!AGENT_SHARE_ALLOWED_PROVIDERS.includes(provider)) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `Shared agents only support models from: ${AGENT_SHARE_ALLOWED_PROVIDERS.join(', ')}. Switch providers or turn off sharing first.`,
+      });
+    }
+    return selection;
+  }
+
+  /** Serialize provider changes and publication on the existing shared-agent row lock. */
+  async withShareModelLock<T>(
+    agentId: string,
+    action: (service: AgentService, shares: AgentShareModel) => Promise<T>,
+  ): Promise<T> {
+    if (!AGENT_SHARE_ALLOWED_PROVIDERS) {
+      return action(this, new AgentShareModel(this.db, this.userId, this.workspaceId));
+    }
+    return this.db.transaction(async (transaction) => {
+      const tx = transaction as LobeChatDatabase;
+      if (
+        !(await AgentShareModel.lockScopedAgentRow(tx, agentId, {
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        }))
+      ) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+      }
+      if (this.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'manage',
+          db: tx,
+          resourceId: agentId,
+          resourceType: 'agent',
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        });
+      }
+      return action(
+        new AgentService(tx, this.userId, this.workspaceId),
+        new AgentShareModel(tx, this.userId, this.workspaceId),
+      );
+    });
+  }
+
+  /** Pin inherited defaults so later account changes cannot alter a published model. */
+  async prepareShareModel(agentId: string) {
+    const selection = await this.assertShareModelAllowed(agentId);
+    if (selection) await this.agentModel.updateConfig(agentId, selection);
   }
 
   async createInbox() {
@@ -275,6 +337,30 @@ export class AgentService {
     agentId: string,
     value: PartialDeep<AgentItem>,
   ): Promise<UpdateAgentResult> {
+    if (
+      AGENT_SHARE_ALLOWED_PROVIDERS &&
+      !this.workspaceId &&
+      ('model' in value || 'provider' in value)
+    ) {
+      return this.withShareModelLock(agentId, (service) => service.saveAgentConfig(agentId, value));
+    }
+    return this.saveAgentConfig(agentId, value);
+  }
+
+  private async saveAgentConfig(
+    agentId: string,
+    value: PartialDeep<AgentItem>,
+  ): Promise<UpdateAgentResult> {
+    if (AGENT_SHARE_ALLOWED_PROVIDERS && ('model' in value || 'provider' in value)) {
+      const share = await new AgentShareModel(this.db, this.userId, this.workspaceId).getByAgentId(
+        agentId,
+      );
+      if (share?.visibility === 'link') {
+        const selection = await this.assertShareModelAllowed(agentId, value);
+        value = { ...value, ...selection };
+      }
+    }
+
     // 1. Execute update
     // `AgentItem` here is the `@lobechat/types` domain shape (plugins:
     // AgentPluginEntry[]); `agentModel.updateConfig` takes the DB-layer

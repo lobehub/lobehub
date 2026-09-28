@@ -20,10 +20,13 @@ import { agents, agentShares, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { isUuid } from '../utils/uuid';
+import { AgentShareProfileModel } from './agentShareProfile';
 
 const DEFAULT_AGENT_SHARE_CONFIG = {
   allowCreatorViewSessions: false,
   allowReadMemory: false,
+  demoCases: [],
+  featuredWorkIds: [],
   maxFileStorage: AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
   maxTopicsPerVisitor: AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
   maxTurnsPerTopic: AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
@@ -40,6 +43,8 @@ const normalizeAgentShareConfig = (
   allowCreatorViewSessions:
     config?.allowCreatorViewSessions ?? DEFAULT_AGENT_SHARE_CONFIG.allowCreatorViewSessions,
   allowReadMemory: config?.allowReadMemory ?? DEFAULT_AGENT_SHARE_CONFIG.allowReadMemory,
+  demoCases: config?.demoCases ?? [],
+  featuredWorkIds: config?.featuredWorkIds ?? [],
   maxFileStorage: config?.maxFileStorage ?? DEFAULT_AGENT_SHARE_CONFIG.maxFileStorage,
   maxTopicsPerVisitor:
     config?.maxTopicsPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxTopicsPerVisitor,
@@ -47,6 +52,11 @@ const normalizeAgentShareConfig = (
   monthlySpendLimit: config?.monthlySpendLimit ?? DEFAULT_AGENT_SHARE_CONFIG.monthlySpendLimit,
   showErrorDetails: config?.showErrorDetails ?? DEFAULT_AGENT_SHARE_CONFIG.showErrorDetails,
   showModelInfo: config?.showModelInfo ?? DEFAULT_AGENT_SHARE_CONFIG.showModelInfo,
+  /**
+   * Left absent rather than defaulted to `[]`: both read as "no skill
+   * granted", so a default would only write a value the creator never picked.
+   */
+  skillGrants: config?.skillGrants,
   slug: config?.slug,
   toolGrants: config?.toolGrants ?? DEFAULT_AGENT_SHARE_CONFIG.toolGrants,
 });
@@ -60,11 +70,17 @@ export type AgentShareData = NonNullable<
   Awaited<ReturnType<(typeof AgentShareModel)['findByShareId']>>
 >;
 
-/** Minimal locked-row snapshot returned by {@link AgentShareModel.lockOwnedAgentRow}. */
+/** Minimal locked-row snapshot returned by {@link AgentShareModel.lockScopedAgentRow}. */
 interface LockedAgentSnapshot {
   id: string;
   /** The agent's own profile slug (`agents.slug`), unique per owner only. */
   slug: string | null;
+  workspaceId: string | null;
+}
+
+interface AgentShareModelOptions {
+  /** Re-check Workspace share authority after the Agent row lock is acquired. */
+  authorizeMutation?: (tx: LobeChatDatabase, agentId: string) => Promise<void>;
 }
 
 /**
@@ -82,26 +98,41 @@ const getShareSlugRejection = (
 };
 
 export class AgentShareModel {
+  private authorizeMutation?: AgentShareModelOptions['authorizeMutation'];
   private db: LobeChatDatabase;
   private userId: string;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options: AgentShareModelOptions = {},
+  ) {
+    this.authorizeMutation = options.authorizeMutation;
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
 
-  /** Agent sharing is personal-only; workspace agents fail this predicate. */
-  private ownership = () =>
+  /**
+   * Scope a share to the Agent's current tenancy. In personal mode the caller
+   * must still own the Agent; Workspace authorization is enforced by the
+   * resource-permission service before this model is called.
+   */
+  private scope = () =>
     exists(
       this.db
         .select({ id: agents.id })
         .from(agents)
         .where(
-          and(
-            eq(agents.id, agentShares.agentId),
-            eq(agents.userId, this.userId),
-            isNull(agents.workspaceId),
-          ),
+          this.workspaceId
+            ? and(eq(agents.id, agentShares.agentId), eq(agents.workspaceId, this.workspaceId))
+            : and(
+                eq(agents.id, agentShares.agentId),
+                eq(agents.userId, this.userId),
+                isNull(agents.workspaceId),
+              ),
         ),
     );
 
@@ -112,19 +143,28 @@ export class AgentShareModel {
    * `updateSlug`) serializes on this same physical row, so two concurrent
    * writes on the same agent's share can never interleave.
    *
-   * Returns `null` (never locks) when the agent does not exist, is not
-   * personally owned by `ownerId`, or is workspace-scoped — callers must fail
-   * closed on `null`.
+   * Returns `null` (never locks) when the agent does not exist in the requested
+   * scope. Personal scope additionally requires ownership. Workspace callers
+   * are checked once by the router and again through `authorizeMutation` after
+   * this lock, closing the owner-handover race between authorization and write.
    */
-  static lockOwnedAgentRow = async (
+  static lockScopedAgentRow = async (
     tx: LobeChatDatabase,
     agentId: string,
-    ownerId: string,
+    params: { userId: string; workspaceId?: string },
   ): Promise<LockedAgentSnapshot | null> => {
     const [agent] = await tx
-      .select({ id: agents.id, slug: agents.slug })
+      .select({ id: agents.id, slug: agents.slug, workspaceId: agents.workspaceId })
       .from(agents)
-      .where(and(eq(agents.id, agentId), eq(agents.userId, ownerId), isNull(agents.workspaceId)))
+      .where(
+        params.workspaceId
+          ? and(eq(agents.id, agentId), eq(agents.workspaceId, params.workspaceId))
+          : and(
+              eq(agents.id, agentId),
+              eq(agents.userId, params.userId),
+              isNull(agents.workspaceId),
+            ),
+      )
       .for('update');
 
     return agent ?? null;
@@ -186,21 +226,25 @@ export class AgentShareModel {
     return updated ?? share;
   };
 
-  private withOwnedPersonalAgentLock = async <T>(
+  private withScopedAgentLock = async <T>(
     agentId: string,
     mutation: (tx: LobeChatDatabase, agent: LockedAgentSnapshot) => Promise<T>,
   ): Promise<T | null> =>
     this.db.transaction(async (transaction) => {
       const tx = transaction as LobeChatDatabase;
-      const agent = await AgentShareModel.lockOwnedAgentRow(tx, agentId, this.userId);
+      const agent = await AgentShareModel.lockScopedAgentRow(tx, agentId, {
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
 
       if (!agent) return null;
+      await this.authorizeMutation?.(tx, agentId);
       return mutation(tx, agent);
     });
 
   /** Create a private share by default, or return the existing share for the agent. */
   create = async (agentId: string, visibility: ShareVisibility = 'private') => {
-    const share = await this.withOwnedPersonalAgentLock(agentId, async (tx, agent) => {
+    const share = await this.withScopedAgentLock(agentId, async (tx, agent) => {
       // One row per agent, forever: `onConflictDoNothing` on `agentId` makes a
       // re-enable fall back to the SELECT below, returning the existing row
       // untouched. That is what keeps a share's id and custom slug — i.e. the
@@ -208,7 +252,11 @@ export class AgentShareModel {
       // since disabling only flips `visibility` to `private`.
       const [created] = await tx
         .insert(agentShares)
-        .values({ agentId, shareConfig: DEFAULT_AGENT_SHARE_CONFIG, visibility })
+        .values({
+          agentId,
+          shareConfig: DEFAULT_AGENT_SHARE_CONFIG,
+          visibility,
+        })
         .onConflictDoNothing({ target: agentShares.agentId })
         .returning();
 
@@ -227,7 +275,7 @@ export class AgentShareModel {
     if (!share) {
       throw new TRPCError({
         code: 'FORBIDDEN',
-        message: 'Agent sharing is only available to personal agent owners',
+        message: 'Agent sharing is not available in this scope',
       });
     }
 
@@ -239,13 +287,87 @@ export class AgentShareModel {
     const [share] = await this.db
       .select()
       .from(agentShares)
-      .where(and(eq(agentShares.agentId, agentId), this.ownership()))
+      .where(and(eq(agentShares.agentId, agentId), this.scope()))
       .limit(1);
 
     if (!share) return null;
 
     return { ...share, shareConfig: normalizeAgentShareConfig(share.shareConfig) };
   };
+
+  /**
+   * Minimal Workspace-wide share inventory for administrators. Deliberately
+   * excludes `shareConfig` and Agent profile fields: an administrator may
+   * audit and stop external exposure without gaining read access to a private
+   * Agent's instructions, tools, credentials, or visitor conversations.
+   */
+  static listWorkspaceSharesForAudit = async (
+    db: LobeChatDatabase,
+    workspaceId: string,
+    options: { limit: number; offset: number },
+  ) =>
+    db
+      .select({
+        agentId: agentShares.agentId,
+        agentVisibility: agents.visibility,
+        createdAt: agentShares.createdAt,
+        ownerId: agents.userId,
+        shareId: agentShares.id,
+        shareVisibility: agentShares.visibility,
+        updatedAt: agentShares.updatedAt,
+        userViewCount: agentShares.userViewCount,
+      })
+      .from(agentShares)
+      .innerJoin(agents, eq(agentShares.agentId, agents.id))
+      .where(eq(agents.workspaceId, workspaceId))
+      .orderBy(sql`${agentShares.updatedAt} DESC, ${agentShares.id} DESC`)
+      .limit(options.limit)
+      .offset(options.offset);
+
+  /**
+   * Administrative emergency stop for one Workspace share. This is a pause,
+   * not an irreversible revoke: it keeps the row and URL so the Agent owner
+   * may inspect the state and explicitly republish later.
+   */
+  static forceDisableWorkspaceShare = async (
+    db: LobeChatDatabase,
+    workspaceId: string,
+    shareId: string,
+    options: AgentShareModelOptions = {},
+  ) =>
+    db.transaction(async (transaction) => {
+      const tx = transaction as LobeChatDatabase;
+      const [share] = await tx
+        .select({ agentId: agentShares.agentId })
+        .from(agentShares)
+        .innerJoin(agents, eq(agentShares.agentId, agents.id))
+        .where(and(eq(agentShares.id, shareId), eq(agents.workspaceId, workspaceId)))
+        .limit(1);
+      if (!share) return null;
+
+      // Serialize against owner-side enable/disable/config mutations, all of
+      // which lock this same Agent row before touching the share.
+      const agent = await AgentShareModel.lockScopedAgentRow(tx, share.agentId, {
+        userId: '',
+        workspaceId,
+      });
+      if (!agent) return null;
+      // The administrator may lose membership or `agent:update:all` while waiting for this lock.
+      // Recheck inside the transaction so a revocation that won the race also wins the mutation.
+      await options.authorizeMutation?.(tx, share.agentId);
+
+      const [updated] = await tx
+        .update(agentShares)
+        .set({ updatedAt: new Date(), visibility: 'private' })
+        .where(and(eq(agentShares.id, shareId), eq(agentShares.agentId, agent.id)))
+        .returning({
+          agentId: agentShares.agentId,
+          shareId: agentShares.id,
+          visibility: agentShares.visibility,
+        });
+
+      return updated ?? null;
+    });
 
   /**
    * Atomically merge client-owned fields into the existing config, preserving
@@ -261,8 +383,14 @@ export class AgentShareModel {
     agentId: string,
     config: AgentShareConfigPatch,
   ): Promise<NormalizedAgentShareItem | null> =>
-    this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+    this.withScopedAgentLock(agentId, async (tx) => {
       const { slug: _slug, ...patch } = config as AgentShareConfigPatch & { slug?: unknown };
+      if (patch.featuredWorkIds !== undefined) {
+        await new AgentShareProfileModel(tx, this.userId).validateFeaturedWorks(
+          agentId,
+          patch.featuredWorkIds,
+        );
+      }
       const setEntries = Object.entries(patch).filter(([, v]) => v !== undefined);
 
       let configExpr = sql`COALESCE(${agentShares.shareConfig}, '{}'::jsonb)`;
@@ -285,7 +413,7 @@ export class AgentShareModel {
     });
 
   /**
-   * Update share visibility for a personally owned agent. This is also the
+   * Update share visibility for an Agent in the model's owning scope. This is also the
    * "turn sharing off" path (`private`): the row, its id and its custom slug
    * are all preserved, so flipping back to `link` republishes the exact same
    * URL the owner already handed out.
@@ -294,7 +422,7 @@ export class AgentShareModel {
     agentId: string,
     visibility: ShareVisibility,
   ): Promise<NormalizedAgentShareItem | null> =>
-    this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+    this.withScopedAgentLock(agentId, async (tx) => {
       const [updated] = await tx
         .update(agentShares)
         .set({ updatedAt: new Date(), visibility })
@@ -325,7 +453,7 @@ export class AgentShareModel {
     slug: string | null,
   ): Promise<NormalizedAgentShareItem | null> => {
     if (slug === null) {
-      return this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+      return this.withScopedAgentLock(agentId, async (tx) => {
         const [updated] = await tx
           .update(agentShares)
           .set({
@@ -346,7 +474,7 @@ export class AgentShareModel {
       throw new TRPCError({ code: 'BAD_REQUEST', message: rejection });
     }
 
-    return this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+    return this.withScopedAgentLock(agentId, async (tx) => {
       if (await AgentShareModel.isShareSlugTaken(tx, slug, agentId)) {
         throw new TRPCError({ code: 'CONFLICT', message: 'SHARE_SLUG_TAKEN' });
       }
@@ -377,7 +505,7 @@ export class AgentShareModel {
    * `isRunStillAuthorized` guards against).
    */
   deleteByAgentId = async (agentId: string): Promise<AgentShareItem | null> =>
-    this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+    this.withScopedAgentLock(agentId, async (tx) => {
       const [deleted] = await tx
         .delete(agentShares)
         .where(eq(agentShares.agentId, agentId))
@@ -407,11 +535,17 @@ export class AgentShareModel {
       Pick<AgentShareConfig, 'maxTopicsPerVisitor' | 'maxTurnsPerTopic' | 'monthlySpendLimit'>
     > & {
       shareId: string | null;
+      workspaceId: string | null;
     }
   > => {
     const [row] = await db
-      .select({ id: agentShares.id, shareConfig: agentShares.shareConfig })
+      .select({
+        id: agentShares.id,
+        shareConfig: agentShares.shareConfig,
+        workspaceId: agents.workspaceId,
+      })
       .from(agentShares)
+      .innerJoin(agents, eq(agentShares.agentId, agents.id))
       .where(eq(agentShares.agentId, agentId));
 
     const normalized = normalizeAgentShareConfig(row?.shareConfig ?? null);
@@ -420,6 +554,7 @@ export class AgentShareModel {
       maxTurnsPerTopic: normalized.maxTurnsPerTopic!,
       monthlySpendLimit: normalized.monthlySpendLimit!,
       shareId: row?.id ?? null,
+      workspaceId: row?.workspaceId ?? null,
     };
   };
 
@@ -452,21 +587,8 @@ export class AgentShareModel {
    * comes back as a different instance — a hard delete (`deleteByAgentId`) or
    * the agent being deleted and recreated under the same id.
    *
-   * The agent must ALSO still be personal (`agents.workspaceId IS NULL`) —
-   * the same condition `findByShareId` resolves through. Sharing is
-   * personal-only, so a creator moving the agent into a workspace mid-run
-   * leaves the share row intact while every entry point stops resolving it;
-   * without this join the in-flight run would keep spending under the creator
-   * after the share was effectively paused. Same-owner personal ↔ workspace
-   * moves preserve the row deliberately, so returning the agent to personal
-   * scope resumes the same link. An OWNERSHIP TRANSFER is different:
-   * `AgentModel.transferAgents` / `transferAgentOwnership` REFUSE to change
-   * `agents.userId` while this row exists (`AGENT_SHARED_TRANSFER_BLOCKED`)
-   * — the share carries the previous owner's grants and spend cap, and
-   * visitor conversations reached through the link live under (agentId,
-   * senderId) within that owner's scope. Disabling sharing keeps the row
-   * (`private`), so the block lifts only once the row itself is removed;
-   * a product entry point for that is a follow-up, not part of this model.
+   * The Agent is the sole source of ownership and Workspace scope. Transfers
+   * are blocked while a share row exists, including paused shares.
    *
    * Deliberately cheap (one indexed lookup + a primary-key join): it runs once
    * per runtime step. Returns `false` — never throws — for an ordinary
@@ -481,18 +603,15 @@ export class AgentShareModel {
       .select({ id: agentShares.id, visibility: agentShares.visibility })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
-      .where(and(eq(agentShares.agentId, params.agentId), isNull(agents.workspaceId)))
+      .where(eq(agentShares.agentId, params.agentId))
       .limit(1);
 
     return !!share && share.id === params.shareId && share.visibility === 'link';
   };
 
   /**
-   * Resolve the public metadata required by an agent share page. Workspace
-   * agents never resolve here — `agentShares` rows only exist for personal
-   * agents (see `create`'s ownership check), but the `isNull` guard is kept
-   * as defense in depth against a row surviving some future write path that
-   * does not go through this model.
+   * Resolve public share metadata and derive ownership and billing scope from
+   * the Agent. Sharing prevents transfers, so no separate tenancy snapshot is needed.
    */
   static findByShareId = async (db: LobeChatDatabase, shareId: string) => {
     if (!isUuid(shareId)) return null;
@@ -514,8 +633,7 @@ export class AgentShareModel {
         agentTitle: agents.title,
         // Creator identity for the visitor-facing profile. Left-joined on the
         // owner rather than read through a second query: the share page needs
-        // it on its only round trip, and the row is already joined for the
-        // personal-scope guard below.
+        // it on its only round trip alongside the Agent's Workspace scope.
         ownerAvatar: users.avatar,
         ownerFullName: users.fullName,
         ownerId: agents.userId,
@@ -524,11 +642,12 @@ export class AgentShareModel {
         shareId: agentShares.id,
         userViewCount: agentShares.userViewCount,
         visibility: agentShares.visibility,
+        workspaceId: agents.workspaceId,
       })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
       .leftJoin(users, eq(agents.userId, users.id))
-      .where(and(eq(agentShares.id, shareId), isNull(agents.workspaceId)))
+      .where(eq(agentShares.id, shareId))
       .limit(1);
 
     if (!share) return null;

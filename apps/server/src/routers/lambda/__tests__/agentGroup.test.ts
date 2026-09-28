@@ -353,6 +353,30 @@ describe('agentGroupRouter', () => {
     });
   });
 
+  describe('transferGroup to another workspace', () => {
+    it('maps a shared owned member failure to SharedTransferBlocked', async () => {
+      mockCtx.workspaceId = 'ws-1';
+      chatGroupModelMock.findById.mockResolvedValue({
+        id: 'cg_1',
+        userId,
+        workspaceId: 'ws-1',
+      });
+      agentGroupRepoMock.transferToWorkspace.mockRejectedValue(
+        new Error(AgentModelModule.AGENT_SHARED_TRANSFER_BLOCKED),
+      );
+
+      await expect(
+        agentGroupRouter.createCaller(mockCtx).transferGroup({
+          groupId: 'cg_1',
+          targetWorkspaceId: 'ws-2',
+        }),
+      ).rejects.toMatchObject({
+        cause: { data: { code: 'AGENT_SHARED_TRANSFER_BLOCKED' } },
+        code: 'PRECONDITION_FAILED',
+      });
+    });
+  });
+
   describe('getGroup', () => {
     it('should get a group by id', async () => {
       const mockGroup = {

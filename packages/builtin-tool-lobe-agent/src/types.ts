@@ -92,7 +92,8 @@ export interface VentParams {
   toolName?: string;
 }
 
-export type VentRejectionReason = 'invalid_category' | 'invalid_severity' | 'rate_limited';
+export type VentRejectionReason =
+  'duplicate' | 'empty_content' | 'invalid_category' | 'invalid_severity' | 'rate_limited';
 
 export type VentStateReason = VentRejectionReason | 'missing_context' | 'runtime_error' | null;
 
@@ -142,6 +143,12 @@ export interface CallSubAgentParams {
   inheritMessages?: boolean;
   instruction: string;
   runInClient?: boolean;
+  /**
+   * Id of an earlier sub-agent (from its result's `<sub_agent id>` trailer).
+   * When set, `instruction` is sent as a new turn to that same sub-agent, which
+   * keeps its previous history, instead of starting a fresh one.
+   */
+  subAgentId?: string;
   timeout?: number;
 }
 

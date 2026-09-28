@@ -56,7 +56,7 @@ The `DEFAULT_AGENT_CONFIG` is used to configure the default settings for the Lob
 | Configuration Type      | Example                                                                                                            | Explanation                                                                                            |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | Basic Key-Value Pair    | `model=gpt-4`                                                                                                      | Set the model to `gpt-4`.                                                                              |
-| Nested Field            | `tts.sttLocale=en-US`                                                                                              | Set the language locale for the text-to-speech service to `en-US`.                                     |
+| Nested Field            | `tts.voice.openai=nova`                                                                                            | Set the default OpenAI text-to-speech voice to `nova`.                                                 |
 | Array                   | `plugins=search-engine,lobe-image-designer`                                                                        | Enable the `search-engine` and `lobe-image-designer` plugins.                                          |
 | Chinese Comma           | `plugins=search-engine，lobe-image-designer`                                                                        | Same as above, demonstrating support for Chinese comma separation.                                     |
 | Multiple Configurations | `model=glm-4;provider=zhipu`                                                                                       | Set the model to `glm-4` and the model provider to `zhipu`.                                            |
@@ -128,6 +128,13 @@ Business builds enable Gateway Mode automatically. Self-hosted deployments can s
 - Description: Agent Gateway endpoint used by Gateway Mode to run supported agent tasks through the backend. Browsers open their WebSocket connection to this address, so it must be reachable from the browser.
 - Default: -
 - Example: `https://agent-gateway.example.com`
+
+### `AGENT_GATEWAY_PROTOCOL`
+
+- Type: Optional
+- Description: Which Agent Gateway wire protocol clients may use. `1` is the per-operation WebSocket (`GET /ws`), which is what `lobehub/lobehub-gateway` serves; `2` adds the per-user multiplexed socket (`GET /v2/ws`). Self-hosted deployments default to `1` — a client that dials `/v2/ws` on a gateway without it cannot stream until it falls back. Set it only if you run a gateway that does serve `/v2/ws`.
+- Default: `1`
+- Example: `2`
 
 ### `AGENT_GATEWAY_INTERNAL_URL`
 

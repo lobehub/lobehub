@@ -38,28 +38,4 @@ describe('testProvider', () => {
       provider: 'TestProvider',
     });
   });
-
-  describe('should handle OpenAI API errors correctly', () => {
-    testProvider({
-      Runtime: createTestRuntime(),
-      bizErrorType: 'TestBizError',
-      chatDebugEnv: 'TEST_DEBUG',
-      chatModel: 'test-model',
-      defaultBaseURL: 'https://default.test',
-      invalidErrorType: 'InvalidAPIKey',
-      provider: 'TestProvider',
-    });
-  });
-
-  describe('should handle debug stream correctly', () => {
-    testProvider({
-      Runtime: createTestRuntime(),
-      bizErrorType: 'TestBizError',
-      chatDebugEnv: 'TEST_DEBUG',
-      chatModel: 'test-model',
-      defaultBaseURL: 'https://default.test',
-      invalidErrorType: 'InvalidAPIKey',
-      provider: 'TestProvider',
-    });
-  });
 });

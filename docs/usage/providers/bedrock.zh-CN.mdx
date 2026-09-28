@@ -3,9 +3,8 @@ title: 在 LobeHub 中使用 Amazon Bedrock API Key
 description: 学习如何在 LobeHub 中配置和使用 Amazon Bedrock，一个完全托管的基础模型API服务，以便开始对话。
 tags:
   - Amazon Bedrock
-  - Claude 3.5 sonnect
-  - API keys
-  - Claude 3 Opus
+  - Bedrock API Key
+  - AWS 凭据
   - Web UI
 ---
 
@@ -67,13 +66,13 @@ Amazon Bedrock 是一个完全托管的基础模型 API 服务，允许用户通
 
   ### 步骤三：在 LobeHub 中配置 Amazon Bedrock
 
-  - 访问 LobeHub 的`设置`界面
-  - 在`AI 服务商`下找到`Amazon Bedrock`的设置项并打开
+  - 打开 **应用设置 → AI 服务商**，选择 **Amazon Bedrock**，然后打开服务商
 
   <Image alt={'LobeHub 中填写 Amazon Bedrock 密钥'} inStep src={'/blog/assets34400653/7468594b-3355-4cb9-85bc-c9dace137653.webp'} />
 
-  - 打开 Amazon Bedrock 并填入获得的访问密钥与秘密访问密钥
-  - 为你的助手选择一个 Amazone Bedrock 的模型即可开始对话
+  - 选择认证方式：可以填写 Bedrock API Key；也可以填写 Access Key ID、Secret Access Key，并按需填写 Session Token
+  - 选择 AWS 区域，点击 **检查** 测试连接
+  - 在模型列表中启用需要的 Amazon Bedrock 模型，然后在助理设置中选择该模型
 
   <Image alt={' 选择并使用 Amazon Bedrock 模型 '} inStep src={'/blog/assets34400653/164b34b5-671e-418d-b34a-3b70f1156d06.webp'} />
 
@@ -82,4 +81,4 @@ Amazon Bedrock 是一个完全托管的基础模型 API 服务，允许用户通
   </Callout>
 </Steps>
 
-至此你已经可以在 LobeHub 中使用 Amazone Bedrock 提供的模型进行对话了。
+至此你已经可以在 LobeHub 中使用 Amazon Bedrock 提供的模型进行对话了。

@@ -47,6 +47,48 @@ describe('lobeAgentExecutor.callSubAgent', () => {
     });
   });
 
+  it('refuses to continue an earlier sub-agent instead of starting a fresh one', async () => {
+    const run = vi.fn();
+
+    const result = await lobeAgentExecutor.callSubAgent(
+      { ...params, subAgentId: 'thd_1' },
+      createContext(run),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('not supported in this runtime');
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  // GPT-family models fill every declared field, so a fresh dispatch arrives as
+  // `subAgentId: ""` (or whitespace) instead of an omitted key.
+  it('treats a blank subAgentId as starting a new sub-agent', async () => {
+    const run = vi.fn().mockResolvedValue({ result: 'done', success: true, threadId: 'thd_2' });
+
+    const result = await lobeAgentExecutor.callSubAgent(
+      { ...params, subAgentId: '  ' },
+      createContext(run),
+    );
+
+    expect(result.success).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([42, true, {}])(
+    'rejects a non-string subAgentId (%j) without dispatching',
+    async (id) => {
+      const run = vi.fn();
+
+      const result = await lobeAgentExecutor.callSubAgent(
+        { ...params, subAgentId: id as any },
+        createContext(run),
+      );
+
+      expect(result).toEqual({ content: 'subAgentId must be a string.', success: false });
+      expect(run).not.toHaveBeenCalled();
+    },
+  );
+
   it('surfaces a failed run as a tool error without state', async () => {
     const run = vi.fn().mockResolvedValue({
       error: 'boom',

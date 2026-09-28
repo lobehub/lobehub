@@ -15,6 +15,11 @@ import {
 } from '@lobechat/builtin-tool-lobe-agent';
 import { MEMORY_WRITE_API_NAMES, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import {
+  AGENT_SHARE_SKILL_API_NAMES,
+  SkillsIdentifier,
+  SkillsManifest,
+} from '@lobechat/builtin-tool-skills';
+import {
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
   builtinTools,
   isBuiltinToolIdentifier,
@@ -23,6 +28,7 @@ import {
   hasShareToolGrant,
   isShareToolApiGranted,
   PLUGIN_SCHEMA_SEPARATOR,
+  resolveShareAllowedSkillIds,
   resolveShareToolGrants,
   type ShareToolGrant,
 } from '@lobechat/const';
@@ -96,6 +102,21 @@ export const filterPluginsByShareGate = (pluginIds: string[], gate: AgentShareGa
 };
 
 /**
+ * Intersect a run's candidate SKILL ids with the share's skill grants.
+ *
+ * Skills are governed by `shareConfig.skillGrants`, not `toolGrants`: a skill
+ * grant also authorizes the no-tool path (a pinned skill's body is injected
+ * straight into context), so it cannot be expressed as a grant on the
+ * `lobe-skills` tool entry. See {@link resolveShareAllowedSkillIds} for the
+ * default-closed semantics.
+ *
+ * Kept next to {@link filterPluginsByShareGate} so the two read as the pair
+ * they are; callers must not use the plugin filter for skill ids.
+ */
+export const filterSkillsByShareGate = (skillIds: string[], gate: AgentShareGate): string[] =>
+  resolveShareAllowedSkillIds(skillIds, gate.shareConfig);
+
+/**
  * Builtins whose Share grant is also their runtime opt-in.
  *
  * Agent Documents is a default activatable builtin rather than a profile
@@ -158,8 +179,51 @@ export interface ShareDataToolPermissions {
    * below stays wired should a knowledge-base grant return.
    */
   knowledgeBaseIds?: string[];
+  /**
+   * The share's `skillGrants`. Read here only to answer "does this share
+   * authorize any skill at all", which is what turns the `lobe-skills` TOOL on;
+   * which individual skills it may load is decided by
+   * {@link filterSkillsByShareGate} at assembly and re-checked at load time in
+   * the skill runtime.
+   */
+  skillGrants?: string[];
   toolGrants?: AgentShareToolGrant[];
 }
+
+/**
+ * Whether this share authorizes any skill at all — the condition under which
+ * the `lobe-skills` tool itself becomes available to a visitor.
+ *
+ * Skills are NOT picked in the tool picker, so no creator ever writes a
+ * `lobe-skills` entry into `toolGrants`; the skill list IS the opt-in, the same
+ * way {@link getShareGrantActivatedPluginIds} lets the Documents grant double as
+ * that tool's runtime opt-in. Without this, a share could list skills the
+ * visitor's model has no tool to load.
+ */
+const hasShareSkillAuthorization = (permissions: ShareDataToolPermissions): boolean =>
+  (permissions.skillGrants?.length ?? 0) > 0;
+
+/**
+ * `resolveShareToolGrants` plus the grants that are implied rather than picked.
+ *
+ * Today that is only `lobe-skills`, whose opt-in lives in `skillGrants` (see
+ * {@link hasShareSkillAuthorization}). The synthetic grant is toolset-level
+ * (`'all'`) on purpose: narrowing the Skills tool down to its two visitor-safe
+ * APIs is {@link DATA_TOOL_ACCESS_RULES}' job, and expressing it twice would
+ * let the two lists drift.
+ *
+ * Every gate that asks "did the creator grant this identifier" must go through
+ * here, or the tool passes one layer and is rejected by the next.
+ */
+const resolveEffectiveShareToolGrants = (
+  permissions: ShareDataToolPermissions,
+): Map<string, ShareToolGrant> => {
+  const grants = resolveShareToolGrants(permissions.toolGrants);
+
+  if (hasShareSkillAuthorization(permissions)) grants.set(SkillsIdentifier, 'all');
+
+  return grants;
+};
 
 /**
  * See `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`'s JSDoc in
@@ -291,6 +355,26 @@ const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
     // write API the gate strips anyway.
     writeApiNames: [...MEMORY_WRITE_API_NAMES],
   },
+  [SkillsIdentifier]: {
+    // The grant is the creator's skill list, not a tool-picker entry — see
+    // `hasShareSkillAuthorization`. `'read'` is the widest a share can reach:
+    // the two surviving APIs only read skill content, and WHICH skills they may
+    // read is enforced separately (`filterSkillsByShareGate` at assembly, the
+    // skill runtime's own check at load time — the latter is the real gate,
+    // since `activateSkill` resolves a model-supplied name).
+    grant: (permissions) => (hasShareSkillAuthorization(permissions) ? 'read' : 'none'),
+    // Derived as "everything outside the visitor-safe set" rather than listed,
+    // so a skill API added later is denied by default. Today that resolves to
+    // `runCommand` / `execScript` / `exportFile`: the first two declare
+    // `humanIntervention: 'required'` and are therefore ALSO stripped by
+    // `applyShareGateToInterventionRequiredApis`, but they are named here on
+    // purpose — that strip exists to honor an approval policy, and the day
+    // Agent Share grows a real approval step it must be a deliberate decision
+    // to open them, not a side effect of the policy check going quiet.
+    writeApiNames: SkillsManifest.api
+      .map((api) => api.name)
+      .filter((apiName) => !AGENT_SHARE_SKILL_API_NAMES.has(apiName)),
+  },
 };
 
 /**
@@ -382,7 +466,7 @@ export const isShareBlockedBuiltinDispatch = (
   // The owner's picker must grant this identifier at all (toolset-level or
   // naming this specific `apiName`) — a grant scoped to a DIFFERENT api on
   // the same identifier does not authorize this call.
-  if (!isShareToolApiGranted(resolveShareToolGrants(agentShare.toolGrants), identifier, apiName))
+  if (!isShareToolApiGranted(resolveEffectiveShareToolGrants(agentShare), identifier, apiName))
     return true;
 
   // Sub-agent dispatch has no humanIntervention config to catch it, and the
@@ -470,7 +554,7 @@ const applyShareGateToDataToolAccess = (toolSet: ShareGateToolSet, gate: AgentSh
  * exempted; a share with no configured tools is a plain-chat run).
  */
 export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentShareGate): void => {
-  const grants = resolveShareToolGrants(gate.shareConfig.toolGrants);
+  const grants = resolveEffectiveShareToolGrants(gate.shareConfig);
 
   // A tool must clear BOTH gates: the owner's own `toolGrants` picker
   // (`grants` — toolset-level OR scoped to at least one API), AND — for
@@ -709,10 +793,6 @@ const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): vo
  *   creator's live agent. `installPlugin` installs an arbitrary market MCP
  *   plugin onto it as the creator, with no consent step.
  *
- * - `lobe-skills`: `findById`/`findByName` resolve any skill across the
- *   creator's ENTIRE personal skill catalog, scoped only by an opt-out
- *   `disabledSkillIds` set.
- *
  * - `lobe-brief`: `createBrief` unconditionally persists a row via
  *   `BriefModel.create` under `context.userId` (the creator) from
  *   model-supplied content, with no intervention marker to gate it.
@@ -788,6 +868,33 @@ const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): vo
  *   `lobe-creds` stays denied above so nothing ever writes `~/.creds/env`
  *   into that session either. No creator credential or JWT is therefore
  *   reachable from inside a visitor's sandbox command.
+ *
+ * - `lobe-skills`: the tool DOES resolve skills out of the creator's personal
+ *   catalog — that is what it is for, and it was denied for exactly that reason
+ *   until the catalog stopped being the unit of authorization. What changed is
+ *   that the creator now names individual skills (`shareConfig.skillGrants`),
+ *   so the reachable set is an explicit allowlist instead of "everything the
+ *   creator owns minus an opt-out `disabledSkillIds` set". Three things make
+ *   that allowlist the real boundary rather than a UI suggestion:
+ *
+ *   1. the operation's skill pool is intersected with it at assembly
+ *      ({@link filterSkillsByShareGate}, applied in `operationPrep`);
+ *   2. `activateSkill` resolves a MODEL-SUPPLIED name, so assembly alone would
+ *      be bypassable — the skill runtime re-checks the allowlist at load time,
+ *      on every path that opens skill content (name/id resolution AND the
+ *      archive/resource loads that `execScript` and `readReference` reach
+ *      through). A name outside the grant fails there even if the model
+ *      invents it;
+ *   3. only `activateSkill` / `readReference` survive at all
+ *      (`AGENT_SHARE_SKILL_API_NAMES`, enforced by the rule above): both are
+ *      pure reads of granted skill content. The exec-class APIs, which are what
+ *      would turn a granted skill into arbitrary code running as the creator,
+ *      stay blocked.
+ *
+ *   The grant deliberately carries whatever the granted skill itself does —
+ *   a creator who opens a skill opens that skill's instructions, and that is
+ *   the premise of Agent Share, not a hole in it. The gate's job is to execute
+ *   the grant exactly, not to second-guess which skills a creator should share.
  */
 
 /**

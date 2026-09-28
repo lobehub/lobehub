@@ -31,6 +31,9 @@ import { asyncTasks } from './asyncTask';
 import { users } from './user';
 import { workspaces } from './workspace';
 
+export const nextDocumentUpdatedAt = () =>
+  sql`GREATEST(date_trunc('milliseconds', clock_timestamp()), "documents"."updated_at" + interval '1 millisecond')`;
+
 export const DOCUMENT_FOLDER_TYPE = 'custom/folder';
 
 /** File type used by the parent document for a managed skill bundle. */
@@ -150,6 +153,10 @@ export const documents = pgTable(
     /** Recycle bin — see `schemas/trash.ts`. */
     ...softDeleteColumns(),
     ...timestamps,
+    updatedAt: timestamptz('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => nextDocumentUpdatedAt()),
   },
   (table) => [
     index('documents_source_idx').on(table.source),

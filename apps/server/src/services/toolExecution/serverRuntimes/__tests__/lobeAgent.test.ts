@@ -218,6 +218,41 @@ describe('lobeAgentRuntime', () => {
     expect([...pixel.subarray(0, 3)]).toEqual([255, 255, 255]);
   });
 
+  it('should explain that media analysis needs LobeHub credits when the budget is exhausted', async () => {
+    mockChat.mockRejectedValueOnce({
+      budget: { availableCredits: 0, requiredCredits: 1219, shortfallCredits: 1219 },
+      error: { message: 'Budget exceeded' },
+      errorType: 'InsufficientBudgetForModel',
+      provider: 'test-provider',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/image.png'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: 'InsufficientBudgetForModel' });
+    expect(result.content).toContain('credits');
+    expect(result.content).toContain('test-provider/vision-model');
+    expect(result.content).toMatch(/own API key/i);
+  });
+
+  it('should reject loopback media urls before calling the multimodal model', async () => {
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['http://127.0.0.1:8899/D.jpg'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('local or private network address');
+    expect(mockChat).not.toHaveBeenCalled();
+    expect(mockImageUrlToBase64).not.toHaveBeenCalled();
+  });
+
   it('should detect suffixless images after downloading without transcoding supported formats', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
@@ -893,6 +928,79 @@ describe('lobeAgentRuntime', () => {
       expect(result.success).toBe(false);
       expect(result.content).toBe('Sub-agent failed to start: QStash queue unavailable');
       expect(result).toMatchObject({ error: { code: 'SUB_AGENT_START_FAILED' } });
+    });
+
+    it('passes subAgentId to the runner to continue an earlier sub-agent', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi
+        .fn()
+        .mockResolvedValue({ started: true, subOperationId: 'sub-op-2', threadId: 'thread-1' });
+
+      const result = await runtime.callSubAgent(
+        {
+          description: 'Hand over',
+          instruction: 'Summarize your findings',
+          subAgentId: ' thread-1 ',
+        },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(run).toHaveBeenCalledWith(expect.objectContaining({ subAgentId: 'thread-1' }));
+      expect(result).toMatchObject({ deferred: true, state: { threadId: 'thread-1' } });
+    });
+
+    it('explains why an earlier sub-agent could not be continued', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi.fn().mockResolvedValue({
+        error: 'Sub-agent "thread-1" is still running.',
+        started: false,
+        threadId: 'thread-1',
+      });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Hand over', instruction: 'Summarize', subAgentId: 'thread-1' },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result.deferred).toBeUndefined();
+      expect(result.content).toBe(
+        'Sub-agent could not be continued: Sub-agent "thread-1" is still running.',
+      );
+    });
+
+    // GPT-family models fill every declared field, so "start a new sub-agent"
+    // arrives as `subAgentId: ""` rather than an omitted key.
+    it.each(['', '  '])('starts a new sub-agent when subAgentId is blank (%j)', async (blank) => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi
+        .fn()
+        .mockResolvedValue({ started: true, subOperationId: 'sub-op-3', threadId: 'thread-3' });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Research', instruction: 'Find the answer', subAgentId: blank },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(run).toHaveBeenCalledWith({
+        description: 'Research',
+        instruction: 'Find the answer',
+        subAgentId: undefined,
+        timeout: undefined,
+      });
+      expect(result).toMatchObject({ deferred: true, success: true });
+    });
+
+    it('rejects a non-string subAgentId', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi.fn();
+
+      const result = await runtime.callSubAgent(
+        { description: 'Hand over', instruction: 'Summarize', subAgentId: 42 as any },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result).toMatchObject({ error: { code: 'INVALID_ARGUMENTS' }, success: false });
+      expect(run).not.toHaveBeenCalled();
     });
 
     it('fails (not deferred) when no sub-agent runner is available', async () => {

@@ -14,7 +14,7 @@ Memory effort level: {{memory_effort}}
 </memory_effort_policy>
 
 <core_responsibilities>
-1. Inspect every turn for information that belongs to the five memory layers (identity, context, preference, experience, activity). When information is relevant and clear, err on the side of allowing extraction so specialised aggregators can refine it.
+1. Inspect every turn for information that belongs to the four memory layers (identity, context, preference, activity). When information is relevant and clear, err on the side of allowing extraction so specialised aggregators can refine it.
 2. Call **queryTaxonomyOptions** to discover live categories, tags, labels, statuses, roles, and relationships when you need better search vocabulary or extraction guidance.
 3. Call **searchUserMemory** with one or more targeted queries plus structured filters before proposing new memories. Use **timeIntent** for calendar-style requests such as "December 2025", "last month", or "yesterday", and use **timeRange** only when you already know exact boundaries. Compare any potential extraction against retrieved items to avoid duplication and highlight genuine updates.
 4. Enforce that all memory candidates are self-contained, language-consistent, and ready for long-term reuse without relying on the surrounding conversation.
@@ -22,7 +22,7 @@ Memory effort level: {{memory_effort}}
 
 <routing_boundaries>
 - Do **not** use memory tools for requests to create, update, refine, merge, consolidate, or store reusable skills, procedures, workflows, playbooks, checklists, agent capabilities, agent prompts, or agent documents.
-- If the user asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, leave it to the skill/document management path. Do not convert it into addPreferenceMemory, addExperienceMemory, or addContextMemory.
+- If the user asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, leave it to the skill/document management path. Do not convert it into addPreferenceMemory or addContextMemory.
 - The same boundary applies in Chinese. Requests about "复用 skill", "可复用流程", "review 流程", "检查清单", "下次参考这个流程", "保留这个流程", or "合并/更新清单" belong to skill/workflow management unless they also contain a separate personal preference.
 - If recent evidence includes an agent document or tool outcome marked hintIsSkill=true, treat that as skill/document evidence, not memory evidence.
 - Preference memory is only for durable user preferences about how the assistant should behave; it is not a replacement for executable or document-like procedures.
@@ -37,7 +37,6 @@ Memory effort level: {{memory_effort}}
 - **searchUserMemory time rule**: Prefer \`timeIntent\` for relative or calendar expressions. Example: "December 2025" → \`{ "timeIntent": { "selector": "month", "year": 2025, "month": 12 } }\`, "yesterday" → \`{ "timeIntent": { "selector": "yesterday" } }\`, "3 days after December 15 2025" → \`{ "timeIntent": { "selector": "relativeDay", "anchor": { "selector": "day", "date": "2025-12-15T00:00:00.000Z" }, "offsetDays": 3 } }\`. \`timeIntent\` always resolves to a \`createdAt\` time range on the server, so do not add or infer a field inside \`timeIntent\`. Use \`timeRange\` only when exact boundaries are already known.
 - **addActivityMemory**: title, summary, details?, withActivity → Capture time-bound events (what happened, when/where, who/what was involved, and how it felt).
 - **addContextMemory**: title, summary, details?, withContext → Capture ongoing situations (actors, resources, status, urgency/impact, description, tags).
-- **addExperienceMemory**: title, summary, details?, withExperience → Record Situation → Reasoning → Action → Outcome narratives and confidence.
 - **addIdentityMemory**: title, summary, details?, withIdentity → Store enduring identity facts, relationships, roles, and evidence.
 - **addPreferenceMemory**: title, summary, details?, withPreference → Persist durable directives and scopes the assistant should follow.
 - **updateIdentityMemory**: id, mergeStrategy, set → Merge or replace existing identity entries with refined information.
@@ -48,7 +47,7 @@ Memory effort level: {{memory_effort}}
 Valid **searchUserMemory** examples:
 - Single intent: \`{ "queries": ["prefers concise answers"] }\`
 - Multiple intents: \`{ "queries": ["prefers concise answers", "works in fintech"] }\`
-- Query with filters: \`{ "queries": ["TypeScript testing preferences"], "layers": ["preference", "experience"], "tags": ["typescript"] }\`
+- Query with filters: \`{ "queries": ["TypeScript testing preferences"], "layers": ["preference", "context"], "tags": ["typescript"] }\`
 - Calendar time filter: \`{ "queries": ["Electron debugging"], "timeIntent": { "selector": "month", "year": 2025, "month": 12 } }\`
 - Relative time filter: \`{ "queries": ["weekly planning"], "timeIntent": { "selector": "lastMonth" } }\`
 - Use **queryTaxonomyOptions** first when vocabulary is unclear, then search with the discovered categories/tags/labels.
@@ -85,7 +84,6 @@ Query construction guidance:
 - **Identity Layer** — enduring facts about people and their relationships: roles, demographics, background, priorities, and relational context.
 - **Context Layer** — ongoing situations such as projects, goals, partnerships, or environments. Capture actors (associatedSubjects), resources (associatedObjects), currentStatus, timelines, and impact/urgency assessments.
 - **Preference Layer** — durable directives that guide future assistant behaviour (communication style, workflow choices, priority rules). Exclude single-use task instructions or purely implementation details.
-- **Experience Layer** — lessons, insights, and transferable know-how. Preserve the Situation → Reasoning → Action → Outcome narrative and note confidence when available.
 </memory_layer_definitions>
 
 <formatting_guardrails>
@@ -103,7 +101,6 @@ Query construction guidance:
 - **Identity**: Track labels, relationships, and life focus areas. Note relationship enums (self, mentor, teammate, etc.) when known.
 - **Context**: Describe shared storylines tying multiple memories together. Update existing contexts instead of duplicating; surface currentStatus changes and resource/actor involvement.
 - **Preference**: Record enduring choices that affect future interactions (response formats, decision priorities, recurring do/do-not expectations). Ensure conclusionDirectives are actionable on their own.
-- **Experience**: Capture practical takeaways, heuristics, or playbooks. Emphasise why the lesson matters and how confident the user is in applying it again.
 </layer_specific_highlights>
 
 <security_and_privacy>

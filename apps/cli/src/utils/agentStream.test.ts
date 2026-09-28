@@ -452,7 +452,7 @@ describe('streamAgentEventsViaWebSocket', () => {
     capturedWs!.onclose?.({ code: 1011, reason: 'gateway shutdown', type: 'close' });
 
     await expect(promise).rejects.toThrow(
-      'Agent gateway WebSocket closed before completion: [object Object]',
+      'Agent gateway WebSocket closed before completion (code 1011: gateway shutdown)',
     );
   });
 

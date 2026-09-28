@@ -4,7 +4,7 @@ import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/re
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { CSSProperties, FC, ReactNode, UIEvent } from 'react';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import type { ComposerTarget } from '@/features/Conversation/types';
@@ -25,6 +25,7 @@ import DocumentCommentsPanel from './DocumentComments/Gutter';
 import { GUTTER_COLUMN_ATTRIBUTE } from './DocumentComments/Gutter/useGutterLayout';
 import DocumentLikes from './DocumentLikes';
 import EditorCanvas from './EditorCanvas';
+import { recallEditorScrollTop, rememberEditorScrollTop } from './editorScrollMemory';
 import Header from './Header';
 import LockedAlert from './LockedAlert';
 import LockStatusBanner from './LockStatusBanner';
@@ -172,6 +173,11 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
   const isRestoringScrollRef = useRef(false);
   const isPointerInsideEditorPaneRef = useRef(false);
   const lastEditorScrollTopRef = useRef(0);
+  // Set while a freshly switched-in document is still loading its content and
+  // has a remembered offset to return to. Cleared once we land there or the
+  // user scrolls on their own.
+  const pendingDocumentRestoreRef = useRef(false);
+  const activeDocumentIdRef = useRef<string | undefined>(undefined);
   const editorPaneRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const editorContentRef = useRef<HTMLDivElement>(null);
@@ -191,6 +197,12 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
     const targetScrollTop = Math.min(lastEditorScrollTopRef.current, maxScrollTop);
 
     if (targetScrollTop <= 0 || node.scrollTop === targetScrollTop) return;
+
+    // The remembered offset is only reachable once the document's content has
+    // grown tall enough; keep waiting for the next layout change otherwise.
+    if (targetScrollTop === lastEditorScrollTopRef.current) {
+      pendingDocumentRestoreRef.current = false;
+    }
 
     isRestoringScrollRef.current = true;
     node.scrollTop = targetScrollTop;
@@ -221,6 +233,17 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
       const nextScrollTop = node.scrollTop;
       const previousScrollTop = lastEditorScrollTopRef.current;
 
+      // While a switched-in document is still loading, the browser clamps the
+      // offset as content streams in. Those events are layout noise, not the
+      // user scrolling — keep aiming for the remembered offset.
+      if (pendingDocumentRestoreRef.current) {
+        if (nextScrollTop < previousScrollTop && !isUserInteractingWithEditor()) {
+          scheduleRestoreEditorScrollPosition();
+          return;
+        }
+        pendingDocumentRestoreRef.current = false;
+      }
+
       if (
         shouldRestoreEditorScroll({
           isUserInteractingWithEditor: isUserInteractingWithEditor(),
@@ -234,9 +257,59 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
       }
 
       lastEditorScrollTopRef.current = nextScrollTop;
+      rememberEditorScrollTop(activeDocumentIdRef.current, nextScrollTop);
     },
     [isUserInteractingWithEditor, scheduleRestoreEditorScrollPosition],
   );
+
+  // Every document keeps its own scroll offset. Switching documents in place
+  // (ResourceManager renders PageEditor without a key) must not carry the
+  // previous document's offset over: a never-opened document starts at the
+  // top, a revisited one returns to where the reader left off once its
+  // content has loaded.
+  useLayoutEffect(() => {
+    if (activeDocumentIdRef.current === documentId) return;
+
+    activeDocumentIdRef.current = documentId;
+
+    const rememberedScrollTop = recallEditorScrollTop(documentId);
+    lastEditorScrollTopRef.current = rememberedScrollTop;
+    pendingDocumentRestoreRef.current = rememberedScrollTop > 0;
+
+    const node = contentWrapperRef.current;
+    if (!node) return;
+
+    if (node.scrollTop !== 0) {
+      isRestoringScrollRef.current = true;
+      node.scrollTop = 0;
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          isRestoringScrollRef.current = false;
+        });
+      } else {
+        isRestoringScrollRef.current = false;
+      }
+    }
+
+    if (pendingDocumentRestoreRef.current) scheduleRestoreEditorScrollPosition();
+  }, [documentId, scheduleRestoreEditorScrollPosition]);
+
+  // Document content arrives asynchronously (SWR); the pane itself doesn't
+  // resize when the content grows, so watch the content box to know when the
+  // remembered offset becomes reachable.
+  useEffect(() => {
+    const node = editorContentRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => {
+      if (pendingDocumentRestoreRef.current) scheduleRestoreEditorScrollPosition();
+    });
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [scheduleRestoreEditorScrollPosition]);
 
   const notifyEditorLayoutChange = useCallback(() => {
     if (typeof window === 'undefined') return;

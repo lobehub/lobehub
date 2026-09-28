@@ -917,4 +917,91 @@ describe('AnthropicStream', () => {
       ].map((item) => `${item}\n`),
     );
   });
+  it('should report a dropped connection as a stream error instead of ending normally', async () => {
+    // @ts-ignore
+    const mockAnthropicStream: Stream = {
+      [Symbol.asyncIterator]() {
+        let count = 0;
+        return {
+          next: async () => {
+            if (count++ === 0) {
+              return {
+                done: false,
+                value: { type: 'message_start', message: { id: 'message_1', usage: {} } },
+              };
+            }
+            throw new TypeError('terminated');
+          },
+        };
+      },
+    };
+
+    const onErrorMock = vi.fn();
+    const onFinalMock = vi.fn();
+    const protocolStream = AnthropicStream(mockAnthropicStream, {
+      callbacks: { onError: onErrorMock, onFinal: onFinalMock },
+      payload: { apiMode: 'messages', model: 'deepseek-flash', provider: 'deepseek' },
+    });
+
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toContain('event: error\n');
+    expect(onErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'terminated', type: 'ProviderBizError' }),
+    );
+    expect(onFinalMock).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.objectContaining({ message: 'terminated' }) }),
+    );
+  });
+
+  describe('relay-shaped failures', () => {
+    const collect = async (events: any[]) => {
+      const onCompletion = vi.fn();
+      const stream = new ReadableStream({
+        start(controller) {
+          for (const event of events) controller.enqueue(event);
+          controller.close();
+        },
+      });
+      const chunks: string[] = [];
+      const reader = AnthropicStream(stream, { callbacks: { onCompletion } }).getReader();
+      const decoder = new TextDecoder();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(decoder.decode(value, { stream: true }));
+      }
+      return { chunks, completion: onCompletion.mock.calls[0]?.[0] };
+    };
+
+    it('surfaces an inline error event instead of an empty completion', async () => {
+      const { chunks, completion } = await collect([
+        {
+          message: { id: 'msg_1', usage: { input_tokens: 100, output_tokens: 1 } },
+          type: 'message_start',
+        },
+        { error: { message: 'Overloaded', type: 'overloaded_error' }, type: 'error' },
+      ]);
+
+      expect(chunks.some((c) => c.includes('event: error'))).toBe(true);
+      expect(completion.error).toMatchObject({ message: 'Overloaded' });
+    });
+
+    it('names an OpenAI-format answer on an Anthropic endpoint as a malformed response', async () => {
+      const { completion } = await collect([
+        {
+          choices: [{ delta: { content: 'Hello' }, finish_reason: null, index: 0 }],
+          id: 'chatcmpl_1',
+          object: 'chat.completion.chunk',
+        },
+      ]);
+
+      expect(completion.error).toMatchObject({ type: 'UpstreamMalformedResponse' });
+    });
+  });
 });

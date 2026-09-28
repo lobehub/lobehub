@@ -201,7 +201,31 @@ const initialLoadProcedures = new Set(['user.getUserState', 'config.getGlobalCon
 // its `JSON.parse` with `Unexpected token '<'`. Split it out so a slow message
 // read only slows itself.
 const slowProcedures = new Set(['market.getAssistantList', 'message.getMessages']);
-const SKIP_BATCH_PROCEDURES = new Set([...initialLoadProcedures, ...slowProcedures]);
+// Procedures whose latency is felt directly as "the UI is stuck". The gateway
+// token refresh gates every reconnect: until it answers, the client cannot
+// register the local operation that drives the status tray, the sidebar elapsed
+// time and the stop button — so a topic switch shows a live run as idle for as
+// long as the slowest procedure sharing its batch. It is a cheap read; give it
+// its own request instead of the shared queue.
+const latencyCriticalProcedures = new Set([
+  'aiAgent.refreshGatewayToken',
+  // The share-visitor mirror of the same reconnect handshake.
+  'shareChat.refreshGatewayToken',
+]);
+const SKIP_BATCH_PROCEDURES = new Set([
+  ...initialLoadProcedures,
+  ...slowProcedures,
+  ...latencyCriticalProcedures,
+]);
+
+// Every `device.*` read leaves the server and hops to one of the user's own
+// machines, where the server waits out a 10-60s RPC timeout if that machine is
+// asleep, offline or busy. Batched with ordinary lambda reads, one such hop
+// holds the whole batch's response — opening a topic with a working directory
+// fires several of them at once (git branch / ahead-behind / working tree /
+// linked PR / agent quota). Keep them batched among themselves, but in their
+// own dataloader so they can only ever delay each other.
+const DEVICE_RPC_PREFIX = 'device.';
 
 // Queries whose input can exceed the GET URL budget (`maxURLLength` 2083):
 // the transfer-job status poll sends the visible-topic candidate set (up to
@@ -223,7 +247,14 @@ const buildHttpLinks = (options: typeof linkOptions) =>
     condition: (op) => LARGE_INPUT_QUERY_PROCEDURES.has(op.path),
     false: splitLink({
       condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
-      false: httpBatchLink({ ...options, maxURLLength: 2083 }),
+      false: splitLink({
+        condition: (op) => op.path.startsWith(DEVICE_RPC_PREFIX),
+        // Two distinct link instances on purpose: each `httpBatchLink` owns its
+        // own dataloader, which is what keeps the device hops in a separate HTTP
+        // request from everything else.
+        false: httpBatchLink({ ...options, maxURLLength: 2083 }),
+        true: httpBatchLink({ ...options, maxURLLength: 2083 }),
+      }),
       true: httpLink(options),
     }),
     true: httpLink({ ...options, methodOverride: 'POST' }),

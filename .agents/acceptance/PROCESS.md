@@ -131,7 +131,8 @@ regardless.
 6. **Screen-recording preflight, only for OS-capture surfaces.** macOS
    `screencapture`/osascript returns a fully black frame when Screen Recording
    permission is missing _or_ the display is asleep. Gate on
-   `.agents/acceptance/scripts/check-screen-recording.sh` (exit 0 = safe), and keep
+   `bash .agents/skills/acceptance/scripts/check-screen-recording.sh`
+   (only exit 0 confirms permission and a measured non-black frame), and keep
    the display awake for the session with `caffeinate -dimsu &`. CDP capture
    (`agent-browser screenshot`, `cdp-screenshot.sh`, `record-app-screen.sh`) is
    unaffected.
@@ -192,18 +193,27 @@ will not take the intended path, call the server endpoint directly.
 ### Step 4 — Run
 
 Project scripts live in `.agents/acceptance/scripts/` and are described in
-`PROJECT.md` §5. The generic capture toolchain:
+`PROJECT.md` §5:
 
-| Script                      | Use                                                                 |
-| --------------------------- | ------------------------------------------------------------------- |
-| `report-init.sh`            | Scaffold a report directory grouped by acceptance subject           |
-| `fixture.mjs`               | Per-check fixtures: `init-check`, `list`, `compose`                 |
-| `record-gif.sh`             | Frame sequence → GIF for time-based behavior                        |
-| `check-screen-recording.sh` | Preflight for OS capture (permission + display awake)               |
-| `cdp-screenshot.sh`         | Electron/Chrome screenshot over raw CDP (bypasses the daemon)       |
-| `capture-app-window.sh`     | Screenshot one app window (macOS OS capture)                        |
-| `record-app-screen.sh`      | Record an app screen (CDP frames → video + gallery)                 |
-| `agent-browser-klm.mjs`     | Wrap an `agent-browser` action and append its interaction-cost atom |
+| Script                  | Use                                                                 |
+| ----------------------- | ------------------------------------------------------------------- |
+| `report-init.sh`        | Scaffold a report directory grouped by acceptance subject           |
+| `fixture.mjs`           | Per-check fixtures: `init-check`, `list`, `compose`                 |
+| `record-gif.sh`         | Frame sequence → GIF for time-based behavior                        |
+| `capture-app-window.sh` | Screenshot one app window (macOS OS capture)                        |
+| `record-app-screen.sh`  | Record an app screen (CDP frames → video + gallery)                 |
+| `agent-browser-klm.mjs` | Wrap an `agent-browser` action and append its interaction-cost atom |
+
+Generic capture helpers come from the installed skill, not the project layer:
+
+```bash
+bash .agents/skills/acceptance/scripts/check-screen-recording.sh --json
+bash .agents/skills/acceptance/scripts/cdp-screenshot.sh --port 9222 --out "$DIR/assets/window.png"
+```
+
+Follow [`screenshot-helpers.md`](../skills/acceptance/references/screenshot-helpers.md)
+for prerequisites and exit codes. A missing tool or an undetermined check is not
+a pass.
 
 macOS automation patterns: [`references/osascript.md`](./references/osascript.md).
 Screen recording: [`references/record-app-screen.md`](./references/record-app-screen.md).
@@ -261,19 +271,10 @@ What is specific to this repository:
   (`check.json` + `seed/`). Execution outputs stay in the round's `assets/` and are
   never copied back into a fixture.
 
-- **Publish against PRODUCTION defaults, not the local dev profile.** The product
-  under test runs locally, but publishing there yields a URL nobody can open and a
-  stub bucket that silently drops evidence uploads. Strip the local overrides:
-
-  ```bash
-  env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
-    lh acceptance run ingest "$DIR" --source agent-testing --subject "$SUBJECT" \
-    --requirement "$REQUIREMENT" --open --json
-  ```
-
-  Verify auth in the same clean env first; if it reports no authentication, have
-  the user run `lh login`. If a publish flag is rejected as an unknown option, the
-  `lh` on PATH is stale — publish through `npx @lobehub/cli@latest` instead.
+- **Publish to production with a verified production credential, not the local
+  test profile.** Follow [Publish auth preflight](#publish-auth-preflight) below
+  for both looking up existing rounds and publishing. Do not unconditionally
+  remove API keys or assume a stored login exists.
 
 - **Choose the subject by business continuity**, not by what is easiest to create:
   an explicit instruction first; else the current conversation's `topic:<id>` (the
@@ -294,6 +295,89 @@ What is specific to this repository:
   run-page paths. Leave whitespace between the URL and any following text — CJK
   punctuation glued to it gets swallowed into the href.
 
+#### Publish auth preflight
+
+1. **Inspect locally before sending credentials anywhere.** Run
+   `lh doctor --offline --json` and inspect `endpoints.resolution`,
+   `credentials.source`, and workspace scope. This identifies the effective
+   server and credential source without network requests; it does **not** prove
+   that the credential is valid or belongs to production. Do not print raw
+   environment variables, credential files, or use `set -x` around credentials.
+
+2. **Establish provenance, then choose one publish environment.** Use the known
+   login/key provisioning context, not just a variable's presence or a URL.
+   `LOBEHUB_JWT` takes precedence over `LOBEHUB_CLI_API_KEY`, which takes
+   precedence over the stored login. Changing `LOBEHUB_CLI_HOME` alone does not
+   override an environment token. Do not assume the legacy `LOBE_API_KEY` name
+   is supported by the installed CLI; the source diagnostic is authoritative.
+
+   - **Known production environment credential:** retain the production API key
+     or JWT and its intended CLI home. In particular, do not remove a production
+     API key just because no disk login exists. Once the winning credential is
+     confirmed to belong to this target, define:
+
+     ```bash
+     publish_lh() { env LOBEHUB_SERVER=https://app.lobehub.com lh "$@"; }
+     ```
+
+   - **Known local test profile:** do not merely replace its server URL; that
+     would send the test token to production. Return to the original shell or
+     process containing the known production credential. If instead a production
+     login is known to exist in the default `~/.lobehub` directory, deliberately
+     select that login by defining this alternative:
+
+     ```bash
+     publish_lh() {
+       env -u LOBEHUB_JWT -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
+         -u LOBEHUB_WORKSPACE_ID LOBEHUB_SERVER=https://app.lobehub.com lh "$@"
+     }
+     ```
+
+     Clear the inherited workspace together with its credential: an environment
+     workspace ID overrides the stored login's scope and may belong to another
+     account or server. Clearing it does **not** force personal scope — the
+     selected login may have a saved workspace. Verify the intended scope below
+     before publishing; do not silently move a workspace acceptance to personal.
+
+   - **Unknown provenance or no usable production credential:** stop before any
+     authenticated request. Ask for the intended production profile/credential;
+     do not try an unknown key against different servers. Request user-run
+     `lh login --server https://app.lobehub.com` only when a login is actually
+     needed, with conflicting test tokens removed from that login environment.
+     Do not launch interactive login on the user's behalf.
+
+3. **Preflight and publish with exactly the same environment and CLI binary.**
+   Run `publish_lh doctor --offline --json` to confirm the selected source,
+   target, and personal/workspace scope against the intended acceptance target.
+   If a workspace is intended, run `publish_lh workspace list --json` with the
+   selected production credential and confirm that the exact target ID is
+   present. Only then restore that verified ID if needed: in the stored-login
+   wrapper above, add `LOBEHUB_WORKSPACE_ID=<verified-production-workspace-id>`
+   after the `-u` options and before `lh`. Repeat the offline check after any
+   wrapper change. If personal scope is intended, confirm no workspace resolves;
+   if a saved workspace still resolves, stop and select the intended profile
+   rather than publishing under that saved scope.
+
+   Neither a successful offline doctor nor `acceptance run list` proves
+   workspace membership: an unauthorized workspace header may fall back to
+   personal scope. Stop if the intended scope cannot be established. Once it is
+   verified, use a read-only authenticated request as the final gate; only
+   proceed on success:
+
+   ```bash
+   publish_lh acceptance run list --json \
+     && publish_lh acceptance run ingest "$DIR" --source agent-testing \
+       --requirement "$REQUIREMENT" --open --json
+   ```
+
+   Add `--subject` or `--acceptance` only as required by the round's intended
+   association. For a lookup-only task, stop after `list`; do not publish a new
+   round. Do not change keys, home, or workspace scope between the check and
+   publication. On failure, distinguish missing credentials from server
+   rejection, permission, or network errors; do not treat all of them as a need
+   to log in again. If the CLI lacks a required command/flag, upgrade it (or use
+   `npx @lobehub/cli@latest` in `publish_lh`) and repeat this preflight.
+
 ## Phase 3 — Finish
 
 ### Step 6 — Teardown
@@ -304,6 +388,14 @@ in a source file corrupts the next run and the next agent's mental model.
 - **Stop only what THIS run started**, using `PROJECT.md` §2 stop commands. Never a
   global process-name kill; never a listener you did not launch. A dev server the
   user started stays up.
+- **Close every agent-browser session this run opened**:
+  `agent-browser --session "$SESSION" close` per session. Each named session is a
+  detached daemon plus a headless Chrome that never exits on its own, so
+  run-specific session names (P05) leak one browser per run until someone closes
+  them — dozens of stale sessions add up to tens of GB. Never `close --all`: it
+  kills sibling runs' browsers. Export `AGENT_BROWSER_IDLE_TIMEOUT_MS=1800000`
+  before the first `agent-browser` call so a run that dies before teardown
+  still releases its browser.
 - **Revert every code injection.** Restore the file and verify: `grep -rn AGENT-TEST`
   returns nothing. When you injected into a file that already had uncommitted
   changes, `git checkout --` is the WRONG revert — it wipes the branch's edits too;

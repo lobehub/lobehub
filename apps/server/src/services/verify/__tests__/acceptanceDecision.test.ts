@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   findRunById: vi.fn(),
   foldIntoRound: vi.fn(),
   ensureForSubject: vi.fn(),
+  listResultsByRun: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
   taskResolve: vi.fn(),
@@ -42,7 +43,11 @@ vi.mock('@/database/models/verifyRun', () => ({
     };
   }),
 }));
-vi.mock('@/database/models/verifyCheckResult', () => ({ VerifyCheckResultModel: vi.fn() }));
+vi.mock('@/database/models/verifyCheckResult', () => ({
+  VerifyCheckResultModel: vi.fn(function () {
+    return { listByRun: mocks.listResultsByRun };
+  }),
+}));
 vi.mock('@/database/models/verifyEvidence', () => ({ VerifyEvidenceModel: vi.fn() }));
 vi.mock('@/database/models/verifyReport', () => ({
   VerifyReportModel: vi.fn(function () {
@@ -77,6 +82,8 @@ const acceptance = (status: string) => ({
 describe('AcceptanceService decision gating', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // A run that has not executed yet — the only kind that may fold into a draft.
+    mocks.listResultsByRun.mockResolvedValue([]);
     mocks.findPolicyById.mockImplementation(function (...args) {
       return mocks.findById(...args);
     });
@@ -223,6 +230,30 @@ describe('AcceptanceService decision gating', () => {
     await expect(service().attachRun('run-2', 'acc-1')).resolves.toMatchObject({ id: 'run-1' });
     expect(mocks.foldIntoRound).toHaveBeenCalledWith('run-2', 'run-1');
     expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Regression: a verification driven through the CLI writes its results before the
+   * Task drive binds the round. `foldIntoRound` refuses any source with results, so
+   * picking the fold path for it threw, the binder swallowed the throw, and the round
+   * stayed orphaned — the Goal review then errored on "no Acceptance" anyway.
+   */
+  it('appends an executed run after the draft instead of trying to fold it', async () => {
+    mocks.findById.mockResolvedValue(acceptance('planned'));
+    mocks.findRunById.mockResolvedValue({ acceptanceId: null, id: 'run-2', plan: [] });
+    mocks.listByAcceptance.mockResolvedValue([
+      { id: 'run-1', planConfirmedAt: null, roundIndex: 1, status: 'planned', userDecision: null },
+    ]);
+    mocks.listResultsByRun.mockResolvedValue([{ id: 'result-1', verifyRunId: 'run-2' }]);
+    mocks.attachToAcceptance.mockResolvedValue({
+      acceptanceId: 'acc-1',
+      id: 'run-2',
+      roundIndex: 2,
+    });
+
+    await expect(service().attachRun('run-2', 'acc-1')).resolves.toMatchObject({ id: 'run-2' });
+    expect(mocks.foldIntoRound).not.toHaveBeenCalled();
+    expect(mocks.attachToAcceptance).toHaveBeenCalledWith('run-2', 'acc-1', undefined);
   });
 
   it('opens a new round when the newest one is no longer a draft', async () => {

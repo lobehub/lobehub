@@ -154,6 +154,9 @@ export const CloudSandboxManifest: BuiltinToolManifest = {
         required: ['path', 'content'],
         type: 'object',
       },
+      // Queues with editFile on the same path: parallel read-modify-writes of
+      // one file would otherwise drop all but the last edit.
+      serializeBy: 'path',
     },
     {
       description:
@@ -182,6 +185,7 @@ export const CloudSandboxManifest: BuiltinToolManifest = {
         required: ['path', 'search', 'replace'],
         type: 'object',
       },
+      serializeBy: 'path',
     },
     {
       defaultTimeoutMs: 120_000,

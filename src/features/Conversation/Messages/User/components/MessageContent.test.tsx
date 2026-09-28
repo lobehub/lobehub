@@ -35,6 +35,27 @@ vi.mock('./AudioFileListViewer', () => ({
 }));
 
 describe('User MessageContent', () => {
+  it('renders a bot-channel referenced message as a quote instead of raw markup', () => {
+    render(
+      <MessageContent
+        createdAt={Date.now()}
+        id={'msg-ref'}
+        role={'user'}
+        updatedAt={Date.now()}
+        content={
+          '<speaker id="1" username="jianxu" nickname="JianXu" />\n<referenced_message sender="Bob">@Lobo 帮 @Shadow Arvin 查一下明天的天气</referenced_message>\n你怎么看'
+        }
+      />,
+    );
+
+    const quote = screen.getByTestId('referenced-message');
+    expect(quote).toHaveTextContent('Bob');
+    expect(quote).toHaveTextContent('@Lobo 帮 @Shadow Arvin 查一下明天的天气');
+    expect(screen.getByTestId('markdown-message')).toHaveTextContent('你怎么看');
+    expect(document.body.textContent).not.toContain('<referenced_message');
+    expect(document.body.textContent).not.toContain('<speaker');
+  });
+
   it('should prefer rich text rendering when editorData exists', () => {
     render(
       <MessageContent

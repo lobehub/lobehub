@@ -1,9 +1,8 @@
 'use client';
 
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
+import { Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2 } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -74,7 +73,7 @@ export const TopicMigrationPlaceholder = memo<MigrationBannerProps>(
 
     return (
       <Flexbox align={'center'} flex={1} gap={12} justify={'center'} padding={24}>
-        <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={20} />
+        <Spin size="middle" style={{ color: cssVar.colorTextDescription }} />
         <Text type={'secondary'} weight={500}>
           {t(
             data?.type === 'copy'
@@ -129,7 +128,7 @@ export const AgentMigrationBadge = memo<MigrationTarget>(({ agentId, groupId }) 
   return (
     <Tooltip title={t('transferMigration.agentBanner.desc')}>
       <Flexbox horizontal align={'center'} className={chipStyles.chip} gap={6}>
-        <Icon spin color={cssVar.colorWarning} icon={Loader2} size={12} />
+        <Spin size={12} style={{ color: cssVar.colorWarning }} />
         <span>
           {t(
             data.type === 'copy'

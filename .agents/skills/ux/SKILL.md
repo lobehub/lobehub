@@ -77,6 +77,10 @@ surface uses (grep `NavItem`, `Accordion`) and compose it; fall to raw elements 
 genuinely novel row. See **[Read §1.10](references/read.md)** for the full pattern; the
 **react** component-priority rule covers the mechanics.
 
+### Review messages in page context・Certainty
+
+Distinguish routine explanations from action-blocking states; do not stack equally prominent warning banners for different roles. Restriction copy must name the current condition and the next action, using precise product entities (for example, distinguish a model from its provider). Verify the whole page, not just the changed component.
+
 ## Checklist modules
 
 Grouped by **interaction type** — the kind of thing the user is doing. Jump to the module
@@ -140,7 +144,7 @@ Use this scan to identify applicable checks, then read the linked module for its
 
 **Feedback — loading & system response** ([feedback.md](references/feedback.md))
 
-- [ ] Use project loaders rather than antd `Spin`.
+- [ ] Loading form matches the scenario table in [feedback §4.1](references/feedback.md).
 - [ ] Match skeleton structure to measured rendered layouts, including platform and route variants.
 - [ ] Loading and load-more failures have visible recovery paths; failed items persist rather than auto-dismiss.
 - [ ] Dependent-fetch gates release on settled data, absence, or error; error/not-found branches remain reachable.

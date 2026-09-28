@@ -9,12 +9,21 @@ Its two siblings:
 - [`PROCESS.md`](./PROCESS.md) — the run process (plan gate, execution rules,
   publishing, teardown).
 - `.agents/skills/acceptance/` — the portable skill: what a check, evidence,
-  report, and round are. In this repository that path is a symlink onto the
-  skill's source, `packages/builtin-skills/src/acceptance/`.
+  report, and round are. This is a committed, generated snapshot of
+  [`lobehub/acceptance`](https://github.com/lobehub/acceptance), the only maintenance
+  source. Update it from the repository's current default branch with
+  `bun apps/cli/src/index.ts acceptance update --json`, then review and commit the
+  downloaded files. The JSON records the exact source commit; publishing a tag
+  or release is not required. Do not hand-edit this installed copy.
+  `.claude/skills` shares `.agents/skills`.
 
-Every script referenced below lives under `.agents/acceptance/scripts/`, including
-the generic capture toolchain (`report-init.sh`, `cdp-screenshot.sh`,
-`record-gif.sh`, `check-screen-recording.sh`, …).
+Project helpers (`report-init.sh`, `record-gif.sh`, `capture-app-window.sh`, …)
+live under `.agents/acceptance/scripts/`. Generic CDP capture and screen-recording
+preflight live only under `.agents/skills/acceptance/scripts/`; invoke their shell
+scripts with `bash`. See the installed skill's
+[`screenshot-helpers.md`](../skills/acceptance/references/screenshot-helpers.md)
+for commands, prerequisites, and exit codes. Do not copy these implementations
+into the project layer.
 
 ## 1. Project summary
 
@@ -177,17 +186,30 @@ stale standalone install: a recently added workspace package fails to resolve �
 - Invocation: from source, no rebuild — `cd apps/cli && bun src/index.ts <cmd>`
   (referred to as `$CLI`). CLI-side code changes take effect immediately.
 
-- Auth: see §3 CLI. Source the seeded profile first:
-  `source .records/env/agent-testing-cli.env`. It sets `LOBE_API_KEY` /
-  `LOBEHUB_CLI_API_KEY`, `LOBEHUB_SERVER=http://localhost:3010`, and
-  `LOBEHUB_CLI_HOME=.lobehub-dev` for isolated settings.
+- Auth: see §3 CLI. Load `.records/env/agent-testing-cli.env` only inside the
+  local-test subshell below. It sets `LOBE_API_KEY` / `LOBEHUB_CLI_API_KEY`,
+  `LOBEHUB_SERVER=http://localhost:3010`, and `LOBEHUB_CLI_HOME=.lobehub-dev`
+  for isolated settings.
 
-- **Local-run vs publish env distinction:** those seeded overrides are for
-  _running_ the local backend test. They are WRONG for _publishing_ — a localhost
-  run yields a verify URL nobody else can open, and the local stub S3 makes
-  evidence upload fail. Strip them for the publish step (the skill's Step 6 does
-  `env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh verify ingest-report …`
-  so `lh` uses production defaults + the user's real `~/.lobehub` login).
+- **Local-run vs publish env distinction:** seeded credentials are only for the
+  local backend. Load the test profile inside a subshell so it does not overwrite
+  production credentials in the parent shell; remove any inherited production
+  JWT inside that subshell because it would override the seeded API key:
+
+  ```bash
+  (
+    unset LOBEHUB_JWT
+    source .records/env/agent-testing-cli.env
+    lh whoami
+    # Run the local CLI test commands here.
+  )
+  ```
+
+  For publication or existing-round lookup, follow
+  [Publish auth preflight](PROCESS.md#publish-auth-preflight). Preserve known
+  production credentials; do not blindly clear API keys or assume `~/.lobehub`
+  contains a login. Never change only the server URL while retaining a local
+  test credential.
 
 - Standalone install: `cd apps/cli && pnpm install` (root install does not cover it).
 
@@ -354,7 +376,7 @@ in `.agents/acceptance/references/agent-gateway.md`.
 - **OS-capture surfaces are macOS-only** (bot channels, `capture-app-window.sh`,
   osascript screenshots): they come out black without Screen Recording (TCC)
   permission or when the display is asleep/locked. CDP-based evidence
-  (`agent-browser screenshot`, `.agents/acceptance/scripts/cdp-screenshot.sh`) is
+  (`agent-browser screenshot`, `bash .agents/skills/acceptance/scripts/cdp-screenshot.sh`) is
   unaffected. Electron runs on Linux/cloud only under `xvfb-run`, and there OS
   capture does not work — prefer CDP evidence for cloud-portable runs.
 

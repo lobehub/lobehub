@@ -1,6 +1,9 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { beforeEach, describe, expect, it } from 'vitest';
+import * as xlsx from 'xlsx';
 
 import type { FileLoaderInterface } from '../../types';
 import { ExcelLoader } from './index';
@@ -52,5 +55,28 @@ describe('ExcelLoader', () => {
     expect(pages.length).toBeGreaterThan(0);
     expect(pages[0].pageContent).toBeTruthy(); // Should contain header content
     expect(pages).toMatchSnapshot('only_header_pages');
+  });
+
+  it('drops blank columns and rows from a sheet whose used range is stretched', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'excel-loader-'));
+    try {
+      const worksheet = xlsx.utils.aoa_to_sheet([['name', 'value'], ['a', 1], [], ['b', 2]]);
+      // Simulate formatting that stretches the used range far beyond the real data
+      worksheet['!ref'] = 'A1:ZZ2000';
+      const workbook = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Sparse');
+      const filePath = path.join(dir, 'sparse.xlsx');
+      await writeFile(filePath, xlsx.write(workbook, { bookType: 'xlsx', type: 'buffer' }));
+
+      const pages = await loader.loadPages(filePath);
+
+      expect(pages[0].pageContent).toContain(
+        '| name | value |\n| --- | --- |\n| a | 1 |\n| b | 2 |',
+      );
+      expect(pages[0].pageContent).not.toContain('__EMPTY');
+      expect(pages[0].pageContent.length).toBeLessThan(500);
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
   });
 });

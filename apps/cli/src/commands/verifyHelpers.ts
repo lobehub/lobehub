@@ -784,6 +784,77 @@ export function planFromResult(result: Record<string, unknown>, droppedIds?: Set
   return items;
 }
 
+interface ExistingAcceptanceCheck {
+  id: string;
+  planItem?: { id?: string; sourceCriterionId?: string | null } | null;
+}
+
+/**
+ * Line a new round's plan up with the checks its acceptance already holds.
+ * The server mints a fresh criterion for every item that arrives without one,
+ * and the union keys rows by criterion — so a re-verification that skips this
+ * lands every check as a brand-new row instead of the next entry in its history.
+ */
+export function reuseSourceCriteria<T extends { id: string; sourceCriterionId?: string | null }>(
+  plan: T[] | undefined,
+  checks: ExistingAcceptanceCheck[] | null | undefined,
+): T[] | undefined {
+  if (!plan || !checks?.length) return plan;
+
+  return plan.map((item) => ({
+    ...item,
+    sourceCriterionId:
+      item.sourceCriterionId ??
+      checks.find((check) => check.id === item.id || check.planItem?.id === item.id)?.planItem
+        ?.sourceCriterionId ??
+      undefined,
+  }));
+}
+
+interface ExistingAcceptanceRound {
+  report?: { content?: string | null; summary?: string | null } | null;
+  run: {
+    id: string;
+    plan?: { id: string; title: string }[] | null;
+    roundIndex?: number | null;
+  };
+}
+
+/**
+ * The acceptance's latest round when it already publishes exactly this report.
+ * Re-running the same ingest (a retry loop, a re-sent command) would otherwise
+ * stack identical rounds on the page. Compares what the author wrote — body,
+ * conclusion and plan — not the published counts, which the ingest derives
+ * later from evidence uploads. Only a report with a body counts: without one,
+ * two genuinely different runs of the same plan are indistinguishable here.
+ */
+export function findIdenticalLatestRound(
+  rounds: ExistingAcceptanceRound[] | null | undefined,
+  incoming: {
+    plan?: { id: string; title: string }[];
+    report: { content?: string; summary?: string };
+  },
+): ExistingAcceptanceRound['run'] | undefined {
+  if (!incoming.report.content || !rounds?.length) return undefined;
+
+  const latest = rounds.reduce((a, b) =>
+    (b.run.roundIndex ?? 0) > (a.run.roundIndex ?? 0) ? b : a,
+  );
+  const published = latest.report;
+  if (!published) return undefined;
+
+  const same = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
+  const planKey = (items: { id: string; title: string }[] | null | undefined) =>
+    JSON.stringify((items ?? []).map(({ id, title }) => [id, title]));
+
+  const identical =
+    same(published.content, incoming.report.content) &&
+    same(published.summary, incoming.report.summary) &&
+    planKey(latest.run.plan) === planKey(incoming.plan);
+
+  return identical ? latest.run : undefined;
+}
+
 /**
  * The LobeHub conversation this harness is running inside, read off the env the
  * agent runtime echoes into the child process. Lets a report published from an

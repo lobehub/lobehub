@@ -12,6 +12,7 @@ import {
   makeGroupPolicyFields,
   makeServerIdField,
   makeUserIdField,
+  reactionModeField,
   watchKeywordsField,
 } from '../const';
 import type { FieldSchema } from '../types';
@@ -111,6 +112,7 @@ export const schema: FieldSchema[] = [
         type: 'boolean',
       },
       displayToolCallsField,
+      reactionModeField,
       {
         key: 'historyLimit',
         default: DEFAULT_BOT_HISTORY_LIMIT,

@@ -49,3 +49,14 @@ describe('TaskManifest human assignee (assigneeUserId)', () => {
     );
   });
 });
+
+describe('TaskManifest identifier examples', () => {
+  it('shows the identifier format tasks really get (T-1), never TASK-1', () => {
+    // Models copy the example verbatim; "TASK-2" never resolves, so every call
+    // written from it answered "Task not found".
+    const text = JSON.stringify(TaskManifest);
+
+    expect(text).not.toMatch(/TASK-\d/);
+    expect(text).toMatch(/\bT-1\b/);
+  });
+});

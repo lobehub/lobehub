@@ -290,6 +290,8 @@ export default {
     'For Grok 4.5 series; controls reasoning intensity (low/medium/high, default high).',
   'providerModels.item.modelConfig.extendParams.options.grok4_6ReasoningEffort.hint':
     'For Grok 4.6 series; controls reasoning intensity (low/medium/high/xhigh, default high). Reasoning cannot be disabled.',
+  'providerModels.item.modelConfig.extendParams.options.grok4_7ReasoningEffort.hint':
+    'For Grok 4.7; controls reasoning intensity (low/medium/high/xhigh, default high). Reasoning cannot be disabled.',
   'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint':
     'For Hy3 models; controls reasoning intensity. no_think (ultra-fast response), low (quick reasoning), and high (deep reasoning)—to accommodate varying latency and depth requirements, from high-frequency interactions to complex engineering tasks.',
   'providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint':

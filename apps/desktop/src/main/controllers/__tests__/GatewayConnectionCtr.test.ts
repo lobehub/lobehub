@@ -239,6 +239,11 @@ vi.mock('fflate', () => ({ unzipSync: vi.fn() }));
 // ─── Mock Controllers ───
 
 const mockLocalFileCtr = {
+  getSkillDirectoryDeps: vi.fn(() => ({})),
+  trashLocalFiles: vi.fn().mockResolvedValue({
+    items: [{ path: '/proj/a.txt', success: true }],
+    success: true,
+  }),
   handleEditFile: vi.fn().mockResolvedValue({ success: true }),
   handleGlobFiles: vi.fn().mockResolvedValue({ files: [] }),
   handleGrepContent: vi.fn().mockResolvedValue({ matches: [] }),
@@ -625,7 +630,7 @@ describe('GatewayConnectionCtr', () => {
   // ─── Reconnection ───
 
   describe('reconnection', () => {
-    it('should broadcast reconnecting status when client emits reconnecting', async () => {
+    it('should broadcast reconnecting status once the reconnect outlasts the grace period', async () => {
       ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
@@ -633,7 +638,11 @@ describe('GatewayConnectionCtr', () => {
       mockBroadcast.mockClear();
 
       client.simulateReconnecting(1000);
+      expect(mockBroadcast).not.toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
+        status: 'reconnecting',
+      });
 
+      vi.advanceTimersByTime(5000);
       expect(mockBroadcast).toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
         status: 'reconnecting',
       });
@@ -917,6 +926,18 @@ describe('GatewayConnectionCtr', () => {
           success: false,
         },
       });
+    });
+  });
+
+  describe('device RPC host deps', () => {
+    it('hands the device-control dispatcher an OS-trash handler backed by LocalFileCtr', async () => {
+      const deps = (ctr as any).deviceControlDeps;
+
+      await expect(deps.trashLocalFiles({ paths: ['/proj/a.txt'] })).resolves.toEqual({
+        items: [{ path: '/proj/a.txt', success: true }],
+        success: true,
+      });
+      expect(mockLocalFileCtr.trashLocalFiles).toHaveBeenCalledWith({ paths: ['/proj/a.txt'] });
     });
   });
 

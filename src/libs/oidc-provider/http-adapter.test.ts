@@ -48,6 +48,28 @@ describe('OIDC HTTP adapter', () => {
   });
 
   describe('createNodeRequest', () => {
+    it('hands discovery to the provider route it hardcodes', async () => {
+      const request = new Request(
+        'https://example.com/oidc/.well-known/openid-configuration',
+      ) as unknown as NextRequest;
+
+      const { createNodeRequest } = await import('./http-adapter');
+      const nodeRequest = await createNodeRequest(request);
+
+      expect(nodeRequest.url).toBe('/.well-known/openid-configuration');
+    });
+
+    it('leaves the prefixed routes untouched', async () => {
+      const { createNodeRequest } = await import('./http-adapter');
+
+      for (const path of ['/oidc/jwks', '/oidc/me', '/oidc/auth', '/oidc/token']) {
+        const request = new Request(`https://example.com${path}`) as unknown as NextRequest;
+        const nodeRequest = await createNodeRequest(request);
+
+        expect(nodeRequest.url).toBe(path);
+      }
+    });
+
     it('passes POST bodies through as a readable Node stream without pre-parsing', async () => {
       const body = 'grant_type=authorization_code&code=test-code';
       const request = new Request('https://example.com/oidc/token?client_id=test', {

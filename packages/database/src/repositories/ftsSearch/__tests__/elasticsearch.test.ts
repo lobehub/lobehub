@@ -241,10 +241,19 @@ describe('ElasticsearchFtsSearchBackend', () => {
         title: 'Other memory',
         userId: otherUserId,
       },
+      // Experience memory is retired: an indexed row still hits, but hydration drops it.
+      {
+        id: 'memory-experience',
+        lastAccessedAt: new Date(),
+        memoryLayer: 'experience',
+        title: 'Own experience',
+        userId,
+      },
     ]);
     const client = createClient([
       { _id: 'memory-other', _score: 12 },
       { _id: 'memory-deleted', _score: 10 },
+      { _id: 'memory-experience', _score: 9 },
       { _id: 'memory-own', _score: 8 },
     ]);
     const operations: string[] = [];

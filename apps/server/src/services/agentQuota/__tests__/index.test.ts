@@ -4,13 +4,15 @@ import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  AgentAccountBindingModel,
   AgentProviderAccountModel,
   AgentQuotaCalibrationModel,
   AgentQuotaUsageLedgerModel,
   AgentQuotaWindowModel,
 } from '@/database/models/agentQuota';
-import { users } from '@/database/schemas';
+import { agents, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { QuotaBindingRole } from '@/database/types/agentQuota';
 
 import { AgentQuotaService } from '../index';
 
@@ -142,6 +144,48 @@ describe('AgentQuotaService.ingestSnapshot', () => {
   });
 });
 
+describe('AgentQuotaService.selectForAgent', () => {
+  it('never routes a caller onto another provider’s account, pinned or pooled', async () => {
+    // Bindings are written provider-blind from the account manager; a claude
+    // caller must not inherit a codex/kimi pin (Codex review on PR #19770).
+    const bindings = new AgentAccountBindingModel(serverDB, userId);
+    await serverDB.insert(agents).values([
+      { id: 'agent-1', slug: 'agent-1', title: 'Agent 1', userId },
+      { id: 'agent-2', slug: 'agent-2', title: 'Agent 2', userId },
+    ]);
+    const claudeAccount = await service.ingestSnapshot({
+      identity: { externalAccountId: 'claude-acc' },
+      provider: 'claude-code',
+      readings: [],
+    });
+    const codexAccount = await service.ingestSnapshot({
+      identity: { externalAccountId: 'codex-acc' },
+      provider: 'codex',
+      readings: [],
+    });
+    await bindings.upsert({
+      accountId: codexAccount.id,
+      agentId: 'agent-1',
+      role: QuotaBindingRole.pinned,
+    });
+
+    // Without a provider the historical behavior is unchanged…
+    expect((await service.selectForAgent('agent-1'))?.accountId).toBe(codexAccount.id);
+    // …but a claude caller skips the foreign pin and finds no route.
+    expect(await service.selectForAgent('agent-1', { provider: 'claude-code' })).toBeNull();
+
+    // A same-provider pin is honored.
+    await bindings.upsert({
+      accountId: claudeAccount.id,
+      agentId: 'agent-2',
+      role: QuotaBindingRole.pinned,
+    });
+    expect((await service.selectForAgent('agent-2', { provider: 'claude-code' }))?.accountId).toBe(
+      claudeAccount.id,
+    );
+  });
+});
+
 describe('AgentQuotaService.listLatestReadings', () => {
   const now = Date.parse('2026-07-02T00:00:00Z');
   const weeklyReading = {
@@ -238,6 +282,31 @@ describe('AgentQuotaService.recordUsage', () => {
     expect(await ledger.sumCostUsd(account.id, from, to)).toBeCloseTo(2.175, 6);
   });
 
+  it('creates the account for a first-run turn instead of landing it unattributed', async () => {
+    // A codex run can outrun the quota menu's ingestion: the account row does
+    // not exist yet when the first usage arrives (Codex review on PR #19770).
+    const accounts = new AgentProviderAccountModel(serverDB, userId);
+    await service.recordUsage({
+      externalAccountId: 'codex-fresh-acc',
+      messageId: 'msg-first-run',
+      model: 'gpt-5.3-codex',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'codex',
+      usage: { input: 1000, output: 500 },
+    });
+
+    const account = await accounts.findByExternalId('codex', 'codex-fresh-acc');
+    expect(account).not.toBeNull();
+    // The ledger row is attributed to the freshly created account.
+    expect(
+      await ledger.sumCostUsd(
+        account!.id,
+        new Date('2026-07-01T00:00:00Z'),
+        new Date('2026-07-01T02:00:00Z'),
+      ),
+    ).toBeGreaterThan(0);
+  });
+
   it('stores tokens without a cost for a model the bank does not know', async () => {
     const account = await service.ingestSnapshot({
       identity,
@@ -273,6 +342,59 @@ describe('AgentQuotaService.recordUsage', () => {
       usage: { output: 1000 },
     });
     // no throw = pass; the row is accountId-null and excluded from calibration
+  });
+
+  it('prices a codex turn from the openai model bank, reasoning at the output rate', async () => {
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'codex',
+      readings: [],
+    });
+
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-codex-1',
+      model: 'gpt-5.3-codex',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'codex',
+      usage: { cacheRead: 1_000_000, input: 10_000, output: 30_000, reasoning: 10_000 },
+    });
+
+    // gpt-5.3-codex: in $1.75, out $14, cacheRead $0.175 per MTok →
+    // 0.01*1.75 + (0.03+0.01)*14 + 1*0.175 = 0.7525
+    expect(
+      await ledger.sumCostUsd(
+        account.id,
+        new Date('2026-07-01T00:00:00Z'),
+        new Date('2026-07-01T02:00:00Z'),
+      ),
+    ).toBeCloseTo(0.7525, 6);
+  });
+
+  it('stores tokens without a cost for a codex model the bank does not know', async () => {
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'codex',
+      readings: [],
+    });
+
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-unknown-codex-model',
+      model: 'gpt-9-codex',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'codex',
+      usage: { output: 40_000 },
+    });
+
+    // row exists (tokens kept) but contributes no fabricated cost
+    expect(
+      await ledger.sumCostUsd(
+        account.id,
+        new Date('2026-07-01T00:00:00Z'),
+        new Date('2026-07-01T02:00:00Z'),
+      ),
+    ).toBe(0);
   });
 });
 
