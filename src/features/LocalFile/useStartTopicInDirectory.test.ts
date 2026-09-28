@@ -2,8 +2,10 @@
  * @vitest-environment happy-dom
  */
 import { renderHook } from '@testing-library/react';
+import { createElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { StartTopicConversationContext } from './StartTopicConversation';
 import { useStartTopicInDirectory } from './useStartTopicInDirectory';
 
 const mocks = vi.hoisted(() => ({
@@ -11,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   activeTopicId: 'topic-1' as string | null,
   commitAgentDefault: vi.fn(),
   isPreferenceLoading: false,
+  useCommitWorkingDirectory: vi.fn(),
   switchTopic: vi.fn(),
   toastError: vi.fn(),
 }));
@@ -26,10 +29,13 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
 }));
 
 vi.mock('@/features/ChatInput/ControlBar/useCommitWorkingDirectory', () => ({
-  useCommitWorkingDirectory: () => ({
-    commitAgentDefault: mocks.commitAgentDefault,
-    isPreferenceLoading: mocks.isPreferenceLoading,
-  }),
+  useCommitWorkingDirectory: (...args: unknown[]) => {
+    mocks.useCommitWorkingDirectory(...args);
+    return {
+      commitAgentDefault: mocks.commitAgentDefault,
+      isPreferenceLoading: mocks.isPreferenceLoading,
+    };
+  },
 }));
 
 vi.mock('@/store/agent', () => {
@@ -51,7 +57,7 @@ vi.mock('@/store/chat', () => {
 const renderStartTopic = (params: Partial<Parameters<typeof useStartTopicInDirectory>[0]> = {}) =>
   renderHook(() =>
     useStartTopicInDirectory({
-      conversationAgentId: 'agent-1',
+      conversation: { agentId: 'agent-1', topicId: 'topic-1' },
       isDirectory: true,
       path: '/Users/me/Compositor',
       readonly: false,
@@ -112,7 +118,9 @@ describe('useStartTopicInDirectory', () => {
     // e.g. a group chat opened from a task: the global active agent is still the
     // task agent, which must not receive this directory as its default.
     mocks.activeAgentId = 'task-agent';
-    const { result } = renderStartTopic({ conversationAgentId: 'supervisor-agent' });
+    const { result } = renderStartTopic({
+      conversation: { agentId: 'supervisor-agent', topicId: 'topic-1' },
+    });
 
     expect(result.current.canStartTopic).toBe(false);
     await result.current.startTopic();
@@ -120,10 +128,47 @@ describe('useStartTopicInDirectory', () => {
     expect(mocks.commitAgentDefault).not.toHaveBeenCalled();
   });
 
+  it('picks the conversation up from context for chips rendered without props', () => {
+    // Rich-text user messages render folder chips headlessly — no props.
+    const conversation = { agentId: 'agent-1', topicId: 'topic-1' };
+    const { result } = renderHook(
+      () =>
+        useStartTopicInDirectory({
+          isDirectory: true,
+          path: '/Users/me/Compositor',
+          readonly: false,
+        }),
+      {
+        wrapper: ({ children }) =>
+          createElement(StartTopicConversationContext, { value: conversation }, children),
+      },
+    );
+
+    expect(result.current.canStartTopic).toBe(true);
+  });
+
   it('is unavailable outside a conversation', () => {
-    const { result } = renderStartTopic({ conversationAgentId: undefined });
+    const { result } = renderStartTopic({ conversation: undefined });
 
     expect(result.current.canStartTopic).toBe(false);
+  });
+
+  it('is unavailable from a conversation that is not the active topic', () => {
+    // e.g. a portal or floating panel showing another topic of the same agent:
+    // clearing the global active topic would act on the route, not on it.
+    const { result } = renderStartTopic({
+      conversation: { agentId: 'agent-1', topicId: 'topic-other' },
+    });
+
+    expect(result.current.canStartTopic).toBe(false);
+  });
+
+  it('writes the directory for the device a fresh topic will use', () => {
+    // A `null` topic keeps the current topic's pinned device from redirecting
+    // the write away from the agent's default target.
+    renderStartTopic();
+
+    expect(mocks.useCommitWorkingDirectory).toHaveBeenCalledWith('agent-1', null);
   });
 
   it('keeps a topic the user navigated to while the directory was saving', async () => {

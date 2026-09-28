@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 
+import { type StartTopicConversation } from './StartTopicConversation';
 import { useLocalFileActions } from './useLocalFileActions';
 import { useStartTopicInDirectory } from './useStartTopicInDirectory';
 
@@ -98,10 +99,11 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface LocalFileProps {
   /**
-   * Agent of the conversation rendering this reference. Enables "start a topic
-   * in this folder" for that agent; omitted outside a conversation.
+   * The conversation rendering this reference, enabling "start a topic in this
+   * folder" for it. Falls back to `StartTopicConversationContext`; absent
+   * outside an eligible conversation.
    */
-  conversationAgentId?: string;
+  conversation?: StartTopicConversation;
   isDirectory?: boolean;
   name: string;
   path?: string;
@@ -113,7 +115,7 @@ interface LocalFileProps {
 }
 
 export const LocalFile = ({
-  conversationAgentId,
+  conversation,
   name,
   path,
   isDirectory = false,
@@ -123,7 +125,7 @@ export const LocalFile = ({
   const { canPreview, handleClick, handleOpenFile, handleOpenFolder, handlePreview } =
     useLocalFileActions({ isDirectory, path, readonly });
   const { canStartTopic, startTopic } = useStartTopicInDirectory({
-    conversationAgentId,
+    conversation,
     isDirectory,
     path,
     readonly,

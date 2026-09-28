@@ -3,6 +3,7 @@ import React, { memo } from 'react';
 
 import { LocalFile } from '@/features/LocalFile';
 
+import { useStartTopicConversation } from '../../../../hooks/useStartTopicConversation';
 import { useConversationStore } from '../../../../store';
 import { type MarkdownElementProps } from '../../type';
 
@@ -22,12 +23,7 @@ const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
   const isSharePage = useConversationStore(
     (s) => !!s.context.topicShareId || !!s.context.agentShareId,
   );
-  // "Start a topic in this folder" writes an agent default and opens a fresh
-  // main-agent topic, so only offer it in a single-agent conversation — a group
-  // chat's new topic would not inherit an individual agent's directory.
-  const conversationAgentId = useConversationStore((s) =>
-    s.context.groupId ? undefined : s.context.agentId,
-  );
+  const conversation = useStartTopicConversation();
 
   if (!name || !path) {
     // If required properties are missing, render an error or null
@@ -40,7 +36,7 @@ const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
 
   return (
     <LocalFile
-      conversationAgentId={conversationAgentId}
+      conversation={conversation}
       isDirectory={isDir}
       name={name}
       path={path}

@@ -1,35 +1,54 @@
 import { isDesktop } from '@lobechat/const';
 import { toast } from '@lobehub/ui/base-ui';
+import { use } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
+import {
+  type StartTopicConversation,
+  StartTopicConversationContext,
+} from './StartTopicConversation';
+
 interface UseStartTopicInDirectoryParams {
   /**
-   * The agent of the conversation that rendered the reference. The action is
-   * only offered when it is also the active main-agent conversation: the global
+   * The conversation that rendered the reference (falls back to
+   * `StartTopicConversationContext`). The action is only offered
+   * while it is the active main conversation (same agent and topic): the global
    * `activeAgentId` can point at another agent (e.g. a task agent while a group
    * chat is shown), and `switchTopic` acts on the active conversation only.
    */
-  conversationAgentId?: string;
+  conversation?: StartTopicConversation;
   isDirectory: boolean;
   path?: string;
   readonly: boolean;
 }
 
 export const useStartTopicInDirectory = ({
-  conversationAgentId,
+  conversation: conversationProp,
   isDirectory,
   path,
   readonly,
 }: UseStartTopicInDirectoryParams) => {
   const { t } = useTranslation('components');
+  // Rich-text folder chips render headlessly and cannot receive props, so they
+  // pick the conversation up from context instead.
+  const conversationFromContext = use(StartTopicConversationContext);
+  const conversation = conversationProp ?? conversationFromContext;
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const isActiveConversation = !!conversationAgentId && conversationAgentId === activeAgentId;
+  const activeTopicId = useChatStore((s) => s.activeTopicId ?? null);
+  const isActiveConversation =
+    !!conversation &&
+    conversation.agentId === activeAgentId &&
+    conversation.topicId === activeTopicId;
+  // `null` topic: resolve the device the FRESH topic will run on (the agent's
+  // default target), not the current topic's pinned machine — otherwise the
+  // directory lands under a device the new topic never reads.
   const { commitAgentDefault, isPreferenceLoading } = useCommitWorkingDirectory(
-    conversationAgentId ?? '',
+    conversation?.agentId ?? '',
+    null,
   );
   const switchTopic = useChatStore((s) => s.switchTopic);
   // Wait for a workspace agent's preference fetch: until it settles the write
