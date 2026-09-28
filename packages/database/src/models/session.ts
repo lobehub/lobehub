@@ -545,6 +545,25 @@ export class SessionModel {
     return links.map((link) => link.agentId);
   };
 
+  /**
+   * Whether `sessionId` is the agent's one and only shell and carries no other
+   * agent — i.e. removing the session means removing the agent. The schema
+   * allows an agent to be linked to several sessions (and a group shell to
+   * several agents); in either case only the selected shell may go. Link
+   * counting mirrors {@link clearOrphanAgent}: every link counts, so an agent
+   * is never treated as orphaned while anything still points at it.
+   */
+  isSoleShellOfAgent = async (sessionId: string, agentId: string): Promise<boolean> => {
+    const links = await this.db
+      .select({ agentId: agentsToSessions.agentId, sessionId: agentsToSessions.sessionId })
+      .from(agentsToSessions)
+      .where(or(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.sessionId, sessionId)));
+    return (
+      links.length > 0 &&
+      links.every((link) => link.agentId === agentId && link.sessionId === sessionId)
+    );
+  };
+
   clearOrphanAgent = async (agentIds: string[], trx: any): Promise<string[]> => {
     if (agentIds.length === 0) return [];
 

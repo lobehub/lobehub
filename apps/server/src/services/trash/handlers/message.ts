@@ -39,12 +39,11 @@ export const softDeleteMessages = async (
 
   const roots = rows.filter((row) => !row.isCompanion);
   const companions = rows.filter((row) => row.isCompanion);
-  return roots.map((root, index) => ({
-    // Companions of an assistant turn belong to it; with several roots in one
-    // batch we can't tell whose companion is whose from the rows alone, so
-    // attach them all to the first root — restore / purge treat the batch as
-    // one unit either way.
-    children: index === 0 ? companions.map(entry) : [],
+  return roots.map((root) => ({
+    // Companions go under the assistant turn whose tool call produced them:
+    // roots are restored and purged independently, so filing them under any
+    // other root would strand or destroy them out of step with their turn.
+    children: companions.filter((row) => row.ownerId === root.id).map(entry),
     root: entry(root),
   }));
 };
@@ -60,6 +59,14 @@ export const messageHandler: TrashHandler = {
     const messageModel = new MessageModel(ctx.db, ctx.userId, ctx.workspaceId);
     const [message] = await messageModel.findTrashedByIds([root.resourceId]);
     if (!message) throw new TrashRestoreError('notFound');
+
+    // The parent message must be live too: when an ancestor and its descendant
+    // are trashed in one batch, the descendant keeps pointing at the ancestor,
+    // so restoring it first would leave a branch hanging off a hidden row.
+    if (message.parentId) {
+      const [parent] = await messageModel.findTrashedByIds([message.parentId]);
+      if (parent) throw new TrashRestoreError('parentTrashed');
+    }
 
     // The topic the message lives in must itself be live.
     if (message.topicId) {

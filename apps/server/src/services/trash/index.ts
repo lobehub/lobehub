@@ -224,33 +224,52 @@ export class TrashService {
       if (!known.has(id)) outcome.failed.push({ code: 'notFound', id });
     }
 
-    for (const root of roots) {
-      if (root.rootId) {
-        // Children are restored through their root, never on their own.
-        outcome.failed.push({ code: 'parentTrashed', id: root.id });
-        continue;
-      }
-      try {
-        await this.db.transaction(async (tx) => {
-          const db = tx as unknown as LobeChatDatabase;
-          const registry = new TrashModel(db, this.userId, this.workspaceId);
-          const children = await registry.findChildren(root.id, tx);
-          await resolveTrashHandler(root.resourceType).restore(this.ctx(db), root, children);
-          await registry.removeByIds([root.id], tx);
-        });
-        outcome.restored.push(this.toItem(root));
-      } catch (error) {
-        if (error instanceof TrashRestoreError) {
-          if (error.code === 'notFound') {
-            // Nothing to bring back — drop the stale registry row so the bin
-            // stops advertising it.
-            await this.trashModel.removeByIds([root.id]);
-          }
-          outcome.failed.push({ code: error.code, id: root.id });
+    // Roots restored in one call may depend on each other (a message and its
+    // trashed ancestor, a topic and its agent) and come back in whatever order
+    // the registry hands them over. A root blocked on a trashed parent is
+    // retried as long as the previous pass brought something back.
+    let pending = roots;
+    while (pending.length > 0) {
+      const blocked: typeof roots = [];
+      let progressed = false;
+      for (const root of pending) {
+        if (root.rootId) {
+          // Children are restored through their root, never on their own.
+          outcome.failed.push({ code: 'parentTrashed', id: root.id });
           continue;
         }
-        throw error;
+        try {
+          await this.db.transaction(async (tx) => {
+            const db = tx as unknown as LobeChatDatabase;
+            const registry = new TrashModel(db, this.userId, this.workspaceId);
+            const children = await registry.findChildren(root.id, tx);
+            await resolveTrashHandler(root.resourceType).restore(this.ctx(db), root, children);
+            await registry.removeByIds([root.id], tx);
+          });
+          outcome.restored.push(this.toItem(root));
+          progressed = true;
+        } catch (error) {
+          if (error instanceof TrashRestoreError) {
+            if (error.code === 'parentTrashed') {
+              blocked.push(root);
+              continue;
+            }
+            if (error.code === 'notFound') {
+              // Nothing to bring back — drop the stale registry row so the bin
+              // stops advertising it.
+              await this.trashModel.removeByIds([root.id]);
+            }
+            outcome.failed.push({ code: error.code, id: root.id });
+            continue;
+          }
+          throw error;
+        }
       }
+      if (!progressed) {
+        for (const root of blocked) outcome.failed.push({ code: 'parentTrashed', id: root.id });
+        break;
+      }
+      pending = blocked;
     }
     return outcome;
   };

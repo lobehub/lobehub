@@ -265,6 +265,73 @@ describe('TrashService', () => {
       const [toolAfter] = await serverDB.select().from(messages).where(eq(messages.id, tool.id));
       expect(toolAfter.deletedAt).toBeNull();
     });
+
+    it('files each tool companion under its own assistant turn in a multi-select delete', async () => {
+      const { agent, topic, u1 } = await seedChain();
+      const turn = async (callId: string) => {
+        const assistant = await messageModel.create({
+          agentId: agent.id,
+          content: '',
+          parentId: u1.id,
+          role: 'assistant',
+          tools: [
+            { apiName: 'search', arguments: '{}', id: callId, identifier: 'web', type: 'default' },
+          ],
+          topicId: topic.id,
+        });
+        const tool = await messageModel.create({
+          agentId: agent.id,
+          content: 'result',
+          parentId: assistant.id,
+          plugin: { apiName: 'search', arguments: '{}', identifier: 'web', type: 'default' },
+          role: 'tool',
+          tool_call_id: callId,
+          topicId: topic.id,
+        } as any);
+        return { assistant, tool };
+      };
+      const first = await turn('call_a');
+      const second = await turn('call_b');
+
+      const roots = await service.trashMessages([first.assistant.id, second.assistant.id]);
+      const rootOf = (id: string) => roots.find((r) => r.resourceId === id)!;
+      const childrenOf = async (id: string) =>
+        (await trashModel.findChildren(rootOf(id).id)).map((c) => c.resourceId);
+      expect(await childrenOf(first.assistant.id)).toEqual([first.tool.id]);
+      expect(await childrenOf(second.assistant.id)).toEqual([second.tool.id]);
+
+      // Restoring the second turn alone brings its own tool result back …
+      await service.restore([rootOf(second.assistant.id).id]);
+      const toolRow = async (id: string) =>
+        (await serverDB.select().from(messages).where(eq(messages.id, id)))[0];
+      expect((await toolRow(second.tool.id)).deletedAt).toBeNull();
+      // … and purging the first turn leaves it alone.
+      await service.purge([rootOf(first.assistant.id).id]);
+      expect(await toolRow(first.tool.id)).toBeUndefined();
+      expect(await toolRow(second.tool.id)).toBeTruthy();
+    });
+
+    it('refuses to restore a message whose parent message is still in the bin', async () => {
+      const { a1, u2 } = await seedChain();
+      const roots = await service.trashMessages([a1.id, u2.id]);
+      const ancestorRoot = roots.find((r) => r.resourceId === a1.id)!;
+      const descendantRoot = roots.find((r) => r.resourceId === u2.id)!;
+
+      const blocked = await service.restore([descendantRoot.id]);
+      expect(blocked.failed).toEqual([{ code: 'parentTrashed', id: descendantRoot.id }]);
+      const [u2Row] = await serverDB.select().from(messages).where(eq(messages.id, u2.id));
+      expect(u2Row.deletedAt).toBeTruthy();
+
+      // Restored together, the order they are handed over in does not matter.
+      const outcome = await service.restore([descendantRoot.id, ancestorRoot.id]);
+      expect(outcome.failed).toEqual([]);
+      expect(outcome.restored.map((i) => i.id).sort()).toEqual(
+        [ancestorRoot.id, descendantRoot.id].sort(),
+      );
+      const [u2After] = await serverDB.select().from(messages).where(eq(messages.id, u2.id));
+      expect(u2After.deletedAt).toBeNull();
+      expect(u2After.parentId).toBe(a1.id);
+    });
   });
 
   describe('sweep', () => {

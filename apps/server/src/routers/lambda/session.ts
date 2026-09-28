@@ -240,10 +240,15 @@ export const sessionRouter = router({
         }
       }
 
-      // A session is the legacy 1:1 shell of an agent: removing it means
-      // removing the agent, so route through the agent's recycle-bin cascade
-      // (agent + session + topics all stamped, restorable as one unit).
-      if (session?.agent) {
+      // A session is normally the legacy 1:1 shell of an agent: removing it
+      // means removing the agent, so route through the agent's recycle-bin
+      // cascade (agent + session + topics all stamped, restorable as one unit).
+      // When the agent has other shells (or this shell holds other agents),
+      // only this session goes — the agent must stay with its other sessions.
+      if (
+        session?.agent &&
+        (await ctx.sessionModel.isSoleShellOfAgent(session.id, session.agent.id))
+      ) {
         const trashService = new TrashService(
           ctx.serverDB,
           ctx.userId,
@@ -252,8 +257,9 @@ export const sessionRouter = router({
         return trashService.trashAgent(session.agent.id);
       }
 
-      // No linked agent (a stray legacy row): nothing to bring back later,
-      // hard delete as before.
+      // No linked agent (a stray legacy row) or a shell the agent does not
+      // depend on: hard delete this session only, as before. An agent left
+      // without any shell is orphan-deleted by the model.
       const { orphanedAgentIds, result } = await ctx.sessionModel.delete(input.id);
       if (ctx.workspaceId && orphanedAgentIds.length > 0) {
         const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
