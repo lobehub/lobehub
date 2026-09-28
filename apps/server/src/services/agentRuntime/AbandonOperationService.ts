@@ -261,16 +261,18 @@ export class AbandonOperationService {
     // silently, and a throw inside it is swallowed as non-fatal. Any of those
     // used to leave the operation `running` forever — nothing else retires a
     // non-Goal op, so it stayed live on the dashboard and blocked its own
-    // recovery. `settleRunning` is idempotent and only matches rows still in
-    // `running`, so it cannot overwrite the richer outcome when the dispatch
-    // did happen.
+    // recovery. `settleLive` is idempotent and only matches rows still live, so
+    // it cannot overwrite the richer outcome when the dispatch did happen. It
+    // also covers a parked row (`waiting_for_human` / `waiting_for_async_tool`):
+    // a sub-agent child parked on its own nested call skips the dispatch above,
+    // and once abandoned nothing can ever resume it.
     if (origin.userId) {
       try {
         const settled = await new AgentOperationModel(
           this.db,
           origin.userId,
           origin.workspaceId,
-        ).settleRunning(operationId, 'error');
+        ).settleLive(operationId, 'error');
         if (settled) {
           log('[%s] durable row settled by abandon safety net', operationId);
         }

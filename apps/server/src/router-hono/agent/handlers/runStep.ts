@@ -3,14 +3,21 @@ import { eq } from 'drizzle-orm';
 import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { agentOperations } from '@/database/schemas/agentOperations';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
-import type { AgentExecutionResult, AgentStepContinuation } from '@/server/services/agentRuntime';
+import {
+  AbandonOperationService,
+  type AgentExecutionResult,
+  type AgentStepContinuation,
+} from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import {
   flushScheduledWork,
   runWithScheduledWorkScope,
 } from '@/server/utils/scheduleAfterResponse';
+
+import { resumeAbandonedParent } from './resumeAbandonedParent';
 
 const log = debug('lobe-server:agent:run-step');
 
@@ -72,6 +79,7 @@ async function getOperationRowDiagnostic(operationId: string) {
         status: agentOperations.status,
         stepCount: agentOperations.stepCount,
         traceS3Key: agentOperations.traceS3Key,
+        updatedAt: agentOperations.updatedAt,
       })
       .from(agentOperations)
       .where(eq(agentOperations.id, operationId))
@@ -84,6 +92,7 @@ async function getOperationRowDiagnostic(operationId: string) {
       status: row?.status ?? null,
       stepCount: row?.stepCount ?? null,
       traceS3KeyPresent: Boolean(row?.traceS3Key),
+      updatedAt: toIsoString(row?.updatedAt),
     };
   } catch (error) {
     return {
@@ -91,6 +100,67 @@ async function getOperationRowDiagnostic(operationId: string) {
       exists: null,
       status: null,
     };
+  }
+}
+
+/**
+ * How long a `running` row may go without a lease refresh before a delivery
+ * that finds no coordinator metadata treats the run as dead. A live step
+ * refreshes the lease every 90s (see `touchRunning`), and this matches the
+ * agent-gateway idle watchdog window.
+ */
+const ORPHANED_RUNNING_LEASE_MS = 10 * 60 * 1000;
+
+/**
+ * Settle a run that can never make progress again: its row still claims
+ * `running`, but the coordinator metadata every step needs is gone.
+ *
+ * Returning 401 alone leaves the row `running` and the assistant placeholder
+ * loading forever: the stale-operation reaper skips runs without coordinator
+ * state, and the gateway watchdog may never have armed or may already have
+ * fired. The metadata read also returns null on a Redis error, so the claim is
+ * the same lease CAS the reaper uses (`settleStaleRunning`) — a heartbeat that
+ * lands first wins and the run is left alone.
+ */
+async function settleOrphanedRunningOperation(
+  operationId: string,
+  dbRow: Awaited<ReturnType<typeof getOperationRowDiagnostic>>,
+): Promise<void> {
+  if (dbRow.status !== 'running') return;
+
+  try {
+    const serverDB = await getServerDB();
+    const [owner] = await serverDB
+      .select({ userId: agentOperations.userId, workspaceId: agentOperations.workspaceId })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, operationId))
+      .limit(1);
+    if (!owner) return;
+
+    const claimed = await new AgentOperationModel(
+      serverDB,
+      owner.userId,
+      owner.workspaceId ?? undefined,
+    ).settleStaleRunning(operationId, new Date(Date.now() - ORPHANED_RUNNING_LEASE_MS));
+    if (!claimed) return;
+
+    // The claim already moved the row to `abandoned`; tell the lifecycle so it
+    // persists onto that status instead of refusing it as a conflicting owner.
+    const result = await new AbandonOperationService(serverDB).finalizeAbandoned(
+      operationId,
+      'operation_metadata_missing',
+      { settledAsAbandoned: true },
+    );
+    // State and metadata are separate Redis keys, so a sub-agent child can
+    // still reach the with-state branch here; its parent needs the resume.
+    if (result.subAgentResume) {
+      await resumeAbandonedParent(serverDB, operationId, result.subAgentResume);
+    }
+    console.warn(
+      JSON.stringify({ event: 'agent.run_step.orphaned_operation_settled', operationId, result }),
+    );
+  } catch (error) {
+    console.error('[run-step] failed to settle orphaned operation %s: %O', operationId, error);
   }
 }
 
@@ -160,6 +230,8 @@ export async function runStep(c: Context): Promise<Response> {
 
       log(`[${operationId}] Invalid operation or no userId found: %O`, diagnostic);
       console.warn(JSON.stringify(diagnostic));
+
+      await settleOrphanedRunningOperation(operationId, dbRow);
       return c.json({ error: 'Invalid operation or unauthorized' }, 401);
     }
 

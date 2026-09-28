@@ -44,13 +44,13 @@ vi.mock('@/database/models/message', () => ({
 
 const findOperationMock = vi.fn().mockResolvedValue(null);
 const recordCompletionMock = vi.fn().mockResolvedValue(undefined);
-const settleRunningMock = vi.fn().mockResolvedValue(true);
+const settleLiveMock = vi.fn().mockResolvedValue(true);
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn().mockImplementation(function () {
     return {
       findById: findOperationMock,
       recordCompletion: recordCompletionMock,
-      settleRunning: settleRunningMock,
+      settleLive: settleLiveMock,
     };
   }),
 }));
@@ -126,7 +126,7 @@ describe('AbandonOperationService', () => {
     findOperationMock.mockReset().mockResolvedValue(null);
     recordCompletionMock.mockClear();
     findThreadMock.mockReset().mockResolvedValue(null);
-    settleRunningMock.mockReset().mockResolvedValue(true);
+    settleLiveMock.mockReset().mockResolvedValue(true);
     latestSpineMessageIdMock.mockReset().mockResolvedValue(undefined);
     messageCreateMock.mockReset().mockResolvedValue({ id: 'msg_new_failure' });
     topicSettleRunningOperationMock
@@ -847,7 +847,7 @@ describe('AbandonOperationService', () => {
       snapshotStore: store as any,
     }).finalizeAbandoned('op_x', 'inactivity_watchdog');
 
-    expect(settleRunningMock).toHaveBeenCalledWith('op_x', 'error');
+    expect(settleLiveMock).toHaveBeenCalledWith('op_x', 'error');
   });
 
   it('still settles the durable row when the lifecycle dispatch is skipped', async () => {
@@ -864,7 +864,29 @@ describe('AbandonOperationService', () => {
     }).finalizeAbandoned('op_idle', 'stale_lease');
 
     expect(dispatchHooksMock).not.toHaveBeenCalled();
-    expect(settleRunningMock).toHaveBeenCalledWith('op_idle', 'error');
+    expect(settleLiveMock).toHaveBeenCalledWith('op_idle', 'error');
+  });
+
+  it('settles a parked sub-agent row that the lifecycle dispatch skips', async () => {
+    // Regression (LOBE-14161): a sub-agent child parked on its own nested call
+    // skips `dispatchHooks`, and a `running`-only safety net left its row in
+    // `waiting_for_async_tool` forever.
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(
+        stateWith({
+          origin: { lineage: { isSubAgent: true }, topicId: 'tpc_x', userId: 'user_x' },
+          status: 'waiting_for_async_tool',
+        }),
+      ),
+    });
+
+    await new AbandonOperationService(buildDb(), {
+      coordinator: coord as any,
+      snapshotStore: buildPartiallessStore() as any,
+    }).finalizeAbandoned('op_parked_child', 'inactivity_watchdog');
+
+    expect(dispatchHooksMock).not.toHaveBeenCalled();
+    expect(settleLiveMock).toHaveBeenCalledWith('op_parked_child', 'error');
   });
 
   it('creates an assistant failure row when the dying step never made a placeholder', async () => {
@@ -928,7 +950,7 @@ describe('AbandonOperationService', () => {
     expect(messageCreateMock).not.toHaveBeenCalled();
     expect(result.assistantMessageUpdated).toBe(false);
     // The durable row still settles, so the run is not left running.
-    expect(settleRunningMock).toHaveBeenCalledWith('op_no_placeholder', 'error');
+    expect(settleLiveMock).toHaveBeenCalledWith('op_no_placeholder', 'error');
   });
 
   it('marks the existing placeholder rather than creating a row when the step made one', async () => {

@@ -610,6 +610,60 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('settleLive', () => {
+    it('retires running and parked rows but never rewrites a terminal one', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await model.recordStart({ operationId: 'op-live-running' });
+      await model.recordStart({ operationId: 'op-live-human' });
+      await model.recordCompletion('op-live-human', {
+        completionReason: 'waiting_for_human',
+        status: 'waiting_for_human',
+      });
+      await model.recordStart({ operationId: 'op-live-async' });
+      await model.recordCompletion('op-live-async', {
+        completionReason: 'waiting_for_async_tool',
+        status: 'waiting_for_async_tool',
+      });
+      await model.recordStart({ operationId: 'op-live-done' });
+      await model.settleRunning('op-live-done', 'done');
+
+      expect(await model.settleLive('op-live-running', 'error')).toBe(true);
+      expect(await model.settleLive('op-live-human', 'error')).toBe(true);
+      expect(await model.settleLive('op-live-async', 'error')).toBe(true);
+      expect(await model.settleLive('op-live-done', 'error')).toBe(false);
+
+      for (const id of ['op-live-running', 'op-live-human', 'op-live-async']) {
+        expect(await model.findById(id)).toMatchObject({
+          completionReason: 'error',
+          status: 'error',
+        });
+      }
+      expect((await model.findById('op-live-done'))?.status).toBe('done');
+    });
+
+    it('leaves parked rows alone through settleRunning', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await model.recordStart({ operationId: 'op-parked-kept' });
+      await model.recordCompletion('op-parked-kept', {
+        completionReason: 'waiting_for_human',
+        status: 'waiting_for_human',
+      });
+
+      expect(await model.settleRunning('op-parked-kept', 'error')).toBe(false);
+      expect((await model.findById('op-parked-kept'))?.status).toBe('waiting_for_human');
+    });
+
+    it("does not settle another user's row", async () => {
+      await new AgentOperationModel(serverDB, userId).recordStart({
+        operationId: 'op-live-foreign',
+      });
+
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).settleLive('op-live-foreign', 'error'),
+      ).toBe(false);
+    });
+  });
+
   describe('claimStaleRedrive', () => {
     const makeStale = async (operationId: string) =>
       serverDB
