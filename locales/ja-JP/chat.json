@@ -1588,7 +1588,6 @@
   "shareModal.withRole": "メッセージの役割を含める",
   "shareModal.withSystemRole": "アシスタントプロフィールを含める",
   "sharePage.actions.tryItYourself": "自分で試す",
-  "sharePage.artifact.share": "共有",
   "sharePage.error.forbidden.subtitle": "この共有は非公開のため、アクセスできません。",
   "sharePage.error.forbidden.title": "アクセスが拒否されました",
   "sharePage.error.notFound.subtitle": "このトピックは存在しないか、削除されました。",

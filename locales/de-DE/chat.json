@@ -1588,7 +1588,6 @@
   "shareModal.withRole": "Rolleninformationen einbeziehen",
   "shareModal.withSystemRole": "Agentenprofil einbeziehen",
   "sharePage.actions.tryItYourself": "Probiere es selbst aus",
-  "sharePage.artifact.share": "Teilen",
   "sharePage.error.forbidden.subtitle": "Diese Freigabe ist privat und nicht zugänglich.",
   "sharePage.error.forbidden.title": "Zugriff verweigert",
   "sharePage.error.notFound.subtitle": "Dieses Thema existiert nicht oder wurde entfernt.",

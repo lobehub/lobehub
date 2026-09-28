@@ -1588,7 +1588,6 @@
   "shareModal.withRole": "Включить роль сообщений",
   "shareModal.withSystemRole": "Включить профиль агента",
   "sharePage.actions.tryItYourself": "Попробуйте сами",
-  "sharePage.artifact.share": "Поделиться",
   "sharePage.error.forbidden.subtitle": "Этот доступ является приватным и недоступен.",
   "sharePage.error.forbidden.title": "Доступ запрещён",
   "sharePage.error.notFound.subtitle": "Эта тема не существует или была удалена.",

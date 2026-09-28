@@ -1588,7 +1588,6 @@
   "shareModal.withRole": "تضمين دور الرسالة",
   "shareModal.withSystemRole": "تضمين ملف الوكيل",
   "sharePage.actions.tryItYourself": "جرّبه بنفسك",
-  "sharePage.artifact.share": "مشاركة",
   "sharePage.error.forbidden.subtitle": "هذه المشاركة خاصة ولا يمكن الوصول إليها.",
   "sharePage.error.forbidden.title": "تم رفض الوصول",
   "sharePage.error.notFound.subtitle": "هذا الموضوع غير موجود أو تم حذفه.",

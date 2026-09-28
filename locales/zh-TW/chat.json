@@ -1588,7 +1588,6 @@
   "shareModal.withRole": "包含訊息角色",
   "shareModal.withSystemRole": "包含助手角色設定",
   "sharePage.actions.tryItYourself": "自己試試看",
-  "sharePage.artifact.share": "分享",
   "sharePage.error.forbidden.subtitle": "此分享為私人內容，無法存取。",
   "sharePage.error.forbidden.title": "拒絕存取",
   "sharePage.error.notFound.subtitle": "此主題不存在或已被移除。",

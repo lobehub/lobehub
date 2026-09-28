@@ -1588,7 +1588,6 @@
   "shareModal.withRole": "Включи роля на съобщението",
   "shareModal.withSystemRole": "Включи профил на агента",
   "sharePage.actions.tryItYourself": "Опитай сам",
-  "sharePage.artifact.share": "Сподели",
   "sharePage.error.forbidden.subtitle": "Това споделяне е поверително и не е достъпно.",
   "sharePage.error.forbidden.title": "Достъпът е отказан",
   "sharePage.error.notFound.subtitle": "Тази тема не съществува или е била премахната.",

@@ -24,7 +24,7 @@ export default function ExplainTopic({ shareId }: { shareId: string }) {
   };
 
   return (
-    <Button icon={Sparkles} loading={loading} onClick={copyPrompt}>
+    <Button icon={Sparkles} loading={loading} size={'small'} type={'fill'} onClick={copyPrompt}>
       {t('sharePage.explain.action')}
     </Button>
   );

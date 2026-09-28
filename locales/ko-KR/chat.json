@@ -1588,7 +1588,6 @@
   "shareModal.withRole": "메시지 역할 포함",
   "shareModal.withSystemRole": "도우미 프로필 포함",
   "sharePage.actions.tryItYourself": "직접 해보세요",
-  "sharePage.artifact.share": "공유",
   "sharePage.error.forbidden.subtitle": "이 공유는 비공개이며 접근할 수 없습니다.",
   "sharePage.error.forbidden.title": "접근 거부됨",
   "sharePage.error.notFound.subtitle": "이 주제는 존재하지 않거나 삭제되었습니다.",

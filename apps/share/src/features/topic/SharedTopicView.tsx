@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { useParams } from 'react-router';
 import useSWR from 'swr';
 
-import ShareShell, { ShareHero } from '@/business/client/features/ShareShell';
+import { ShareHero } from '@/business/client/features/ShareShell';
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import { shareKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -14,6 +14,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { clientOnly } from '../../shell/clientOnly';
+import ShareLayout from '../../shell/ShareLayout';
 import ExplainTopic from './ExplainTopic';
 import TopicAvatar from './TopicAvatar';
 import { buildTopicByline } from './topicByline';
@@ -52,7 +53,7 @@ const SharedTopicView = memo(() => {
   ) : null;
 
   return (
-    <ShareShell
+    <ShareLayout
       actions={id && data?.visibility === 'link' ? <ExplainTopic shareId={id} /> : undefined}
       aside={<SharedTopicAside />}
       contentWidth={wideScreen ? undefined : CONVERSATION_MIN_WIDTH}
@@ -63,7 +64,7 @@ const SharedTopicView = memo(() => {
       title={data?.title}
     >
       {id && data ? <SharedTopicBody fallback={hero} shareId={id} /> : null}
-    </ShareShell>
+    </ShareLayout>
   );
 });
 

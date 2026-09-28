@@ -1588,7 +1588,6 @@
   "shareModal.withRole": "Includi ruolo messaggio",
   "shareModal.withSystemRole": "Includi profilo agente",
   "sharePage.actions.tryItYourself": "Prova tu stesso",
-  "sharePage.artifact.share": "Condividi",
   "sharePage.error.forbidden.subtitle": "Questa condivisione è privata e non accessibile.",
   "sharePage.error.forbidden.title": "Accesso negato",
   "sharePage.error.notFound.subtitle": "Questo argomento non esiste o è stato rimosso.",
