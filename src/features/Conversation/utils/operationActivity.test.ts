@@ -31,12 +31,7 @@ describe('resolveOperationActivity', () => {
   });
 
   it('maps generation ops to generating', () => {
-    const genOps: OperationType[] = [
-      'callLLM',
-      'groupAgentStream',
-      'createAssistantMessage',
-      'supervisorDecision',
-    ];
+    const genOps: OperationType[] = ['callLLM', 'createAssistantMessage', 'supervisorDecision'];
     for (const type of genOps) {
       expect(resolveOperationActivity(type)).toBe('generating');
     }

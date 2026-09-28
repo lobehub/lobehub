@@ -61,8 +61,6 @@ export type OperationType =
 
   // === Group Chat ===
   | 'supervisorDecision' // Supervisor decision
-  | 'groupAgentGenerate' // Group agent generate (deprecated, use groupAgentStream)
-  | 'groupAgentStream' // Group agent SSE stream (sub-operation of execServerAgentRuntime)
 
   // === Sub-Agent (Desktop only) ===
   | 'execClientSubAgent' // Dispatch single sub-agent on the desktop client
