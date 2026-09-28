@@ -1096,6 +1096,44 @@ describe('GoalService', () => {
     expect(next.outcome).not.toBe('waiting_human');
   });
 
+  it('retires a stray node only together with the unfinished tasks depending on it', async () => {
+    // A duplicated plan branch never gets a Task, so nothing else ever closes it
+    // and the goal can never reach acceptance.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ tasks: ['First', 'Second', 'Keep'], title: 'Duplicates' });
+    const [first, second, keep] = ['First', 'Second', 'Keep'].map((title) =>
+      graph.nodes.find((node) => node.kind === 'task' && node.title === title)!,
+    );
+    await service.addEdge(graph.goal.id, second.id, first.id, 'depends_on');
+
+    await expect(service.retireNodes(graph.goal.id, [first.id])).rejects.toThrow(second.id);
+
+    const result = await service.retireNodes(graph.goal.id, [first.id, second.id], 'duplicate');
+
+    expect(result.retiredNodeIds.sort()).toEqual([first.id, second.id].sort());
+    const after = await service.graph(graph.goal.id);
+    const status = (id: string) => after.nodes.find((node) => node.id === id)?.status;
+    expect(status(first.id)).toBe('retired');
+    expect(status(second.id)).toBe('retired');
+    expect(status(keep.id)).not.toBe('retired');
+  });
+
+  it('retiring a dispatched node cancels its task and the gate parking the goal', async () => {
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({ tasks: ['Canceled elsewhere'], title: 'Stray gate' });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'paused', { error: 'Task canceled' });
+    expect((await service.tick(graph.goal.id)).outcome).toBe('waiting_human');
+
+    await service.retireNodes(graph.goal.id, [created.nodeId!]);
+
+    expect((await taskModel.findById(created.taskId!))?.status).toBe('canceled');
+    const after = await service.graph(graph.goal.id);
+    expect(after.decisions[0].status).toBe('canceled');
+    expect(after.goal.status).toBe('running');
+  });
+
   it('leaves a deliberately paused goal paused when its budget changes', async () => {
     // Nothing distinguishes a user pause from a budget pause on the row, so the
     // reopen is limited to goals whose budget was actually binding.

@@ -490,6 +490,29 @@ export const goalRouter = router({
       }
     }),
 
+  retireNodes: goalWriteProcedure
+    .input(
+      idInput.extend({
+        nodeIds: z.array(z.string().uuid()).min(1),
+        reason: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const data = await ctx.goalService.retireNodes(input.id, input.nodeIds, input.reason);
+        // Retiring can unpark the goal or clear the last unfinished task.
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'manual',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: `Retired ${data.retiredNodeIds.length} node(s)`, success: true };
+      } catch (error) {
+        mapGoalError(error, 'retireNodes');
+      }
+    }),
+
   /** Declare or clear the numeric clauses gating this goal's acceptance. */
   setMetricCriteria: goalWriteProcedure
     .input(
