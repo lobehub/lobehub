@@ -1,6 +1,7 @@
 import type { GoalEventType, GoalGraphEvent, GoalNodeKind } from '@lobechat/types';
 import { Empty, Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
+import { GithubIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -8,6 +9,7 @@ import {
   ArrowUpRight,
   Ban,
   Check,
+  GitPullRequest,
   History,
   Link2,
   type LucideIcon,
@@ -60,20 +62,22 @@ import {
 const BADGE = 20;
 /** The metric panel body's padding (`Body`), which is also the scroller's. */
 const PANEL_PADDING = 16;
+/** How much closer to the panel title a stuck day label sits than at rest. */
+const STUCK_LIFT = 12;
 
 const styles = createStaticStyles(({ css }) => ({
   artifact: css`
     margin: 0;
     padding-block: 8px;
     padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
+    border: none;
     border-radius: ${cssVar.borderRadius};
 
     font: inherit;
     color: ${cssVar.colorText};
     text-align: start;
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorFillTertiary};
   `,
   artifactIcon: css`
     display: flex;
@@ -91,7 +95,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     &:hover {
-      background: ${cssVar.colorFillQuaternary};
+      background: ${cssVar.colorFillSecondary};
     }
 
     &:focus-visible {
@@ -109,14 +113,15 @@ const styles = createStaticStyles(({ css }) => ({
     height: ${BADGE}px;
     border-radius: 50%;
   `,
-  // Sticks flush to the panel's top edge instead of the scroller's padding
-  // edge, so rows scrolling past never show through the gap above it. The
+  // Sticks past the panel's top edge instead of at the scroller's padding edge,
+  // so rows scrolling by never show through a gap above it, and a stuck label
+  // sits close under the panel title rather than a full padding below it. The
   // negative margin cancels the extra padding, leaving the resting layout as is.
   // Each day's header is bounded by its own group, so the next day pushes it out.
   day: css`
     position: sticky;
     z-index: 1;
-    inset-block-start: -${PANEL_PADDING}px;
+    inset-block-start: -${PANEL_PADDING + STUCK_LIFT}px;
 
     margin-block-start: -${PANEL_PADDING}px;
     padding-block: ${PANEL_PADDING + 6}px 6px;
@@ -306,13 +311,28 @@ const Subject = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView }>
 
 Subject.displayName = 'GoalMetricLifecycleSubject';
 
-const hostOf = (url: string | null) => {
+const parseUrl = (url: string | null) => {
   if (!url) return null;
   try {
-    return new URL(url).host;
+    return new URL(url);
   } catch {
     return null;
   }
+};
+
+/**
+ * The glyph and caption a deliverable card leads with. A GitHub link is named
+ * by its own glyph — a pull request as a PR — so its host would only repeat
+ * what the icon already says; any other external link keeps its host.
+ */
+const artifactLook = (artifact: GoalArtifactView) => {
+  const url = artifact.type === 'document' ? null : parseUrl(artifact.url);
+  if (url?.hostname === 'github.com')
+    return {
+      host: null,
+      icon: /\/pull\/\d+/.test(url.pathname) ? GitPullRequest : GithubIcon,
+    };
+  return { host: url?.host ?? null, icon: artifactIconOf(artifact.type) };
 };
 
 /**
@@ -325,7 +345,7 @@ const ArtifactCard = memo<{ artifact: GoalArtifactView }>(({ artifact }) => {
   const open = useOpenGoalArtifact();
   const openable = !!openTargetOf(artifact);
   const label = artifact.title || artifact.identifier || t('goalProcess.deliverables.untitled');
-  const host = artifact.type === 'document' ? null : hostOf(artifact.url);
+  const { host, icon } = artifactLook(artifact);
 
   return (
     <Flexbox
@@ -337,7 +357,7 @@ const ArtifactCard = memo<{ artifact: GoalArtifactView }>(({ artifact }) => {
       {...(openable ? { onClick: () => open(artifact), type: 'button' as const } : {})}
     >
       <span className={styles.artifactIcon}>
-        <Icon color={cssVar.colorTextSecondary} icon={artifactIconOf(artifact.type)} size={16} />
+        <Icon color={cssVar.colorTextSecondary} icon={icon} size={16} />
       </span>
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
         <Text ellipsis fontSize={13} weight={500}>
