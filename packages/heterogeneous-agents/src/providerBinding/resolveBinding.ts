@@ -1,5 +1,4 @@
 import type { LocalHeterogeneousAgentType } from '../config';
-import { isKimiModelCandidate } from './modelCompatibility';
 import type {
   HeterogeneousProviderBindingCapability,
   HeterogeneousProviderBindingError,
@@ -220,19 +219,16 @@ export const resolveHeterogeneousProviderBinding = ({
 
   let modelMetadata: HeterogeneousProviderBindingResolution['modelMetadata'];
   if (enabledModels) {
-    // Kimi only consumes the primary model; legacy secondary values must not block it.
-    const boundModels = [
-      apiConfig.model,
-      agentType === 'kimi-code' ? undefined : apiConfig.smallFastModel,
-    ].filter((model): model is string => !!model);
+    const boundModels = [apiConfig.model, apiConfig.smallFastModel].filter(
+      (model): model is string => !!model,
+    );
     const unavailableModel = boundModels.find(
       (boundModel) =>
         !enabledModels.some(
           (model) =>
             model.providerId === apiConfig.providerId &&
             model.id === boundModel &&
-            model.type === 'chat' &&
-            (capability.agentType !== 'kimi-code' || isKimiModelCandidate(model)),
+            model.type === 'chat',
         ),
     );
     if (unavailableModel) {

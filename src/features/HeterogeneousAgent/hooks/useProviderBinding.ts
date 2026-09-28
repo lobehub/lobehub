@@ -1,7 +1,6 @@
 import {
   type HeterogeneousProviderBindingError,
   isHeterogeneousProviderBindingSupported,
-  isKimiModelCandidate,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousProviderApiConfig } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
@@ -48,19 +47,16 @@ export const useProviderBindingValidation = (
   } else if (!bindingAgentTypes[apiConfig.providerId]?.includes(agentType!)) {
     error = { agentType: agentType!, code: 'protocolMismatch', providerId: apiConfig.providerId };
   } else {
-    // Kimi only consumes the primary model; legacy secondary values must not block it.
-    const boundModels = [
-      apiConfig.model,
-      agentType === 'kimi-code' ? undefined : apiConfig.smallFastModel,
-    ].filter((model): model is string => !!model);
+    const boundModels = [apiConfig.model, apiConfig.smallFastModel].filter(
+      (model): model is string => !!model,
+    );
     const unavailableModel = boundModels.find(
       (boundModel) =>
         !enabledModels.some(
           (model) =>
             model.providerId === apiConfig.providerId &&
             model.id === boundModel &&
-            model.type === 'chat' &&
-            (agentType !== 'kimi-code' || isKimiModelCandidate(model)),
+            model.type === 'chat',
         ),
     );
     if (unavailableModel) {
@@ -81,7 +77,6 @@ export const useProviderBindingValidation = (
 /** Providers whose actual wire protocol intersects with the selected local agent driver. */
 export const useProviderBindingCompatibleProviders = (
   agentType: string | undefined,
-  boundProviderId?: string,
 ): CompatibleProvidersResult => {
   const providerList = useAiInfraStore((state) => state.enabledAiProviders ?? [], isEqual);
   const bindingAgentTypes = useAiInfraStore((state) => state.providerBindingAgentTypes, isEqual);
@@ -96,7 +91,6 @@ export const useProviderBindingCompatibleProviders = (
 
     for (const model of enabledModels) {
       if (model.type !== 'chat' || !compatibleProviderIds.has(model.providerId)) continue;
-      if (agentType === 'kimi-code' && !isKimiModelCandidate(model)) continue;
       modelsByProvider[model.providerId] ??= [];
       modelsByProvider[model.providerId].push({
         displayName: model.displayName,
@@ -106,9 +100,8 @@ export const useProviderBindingCompatibleProviders = (
     }
 
     const providers = candidateProviders
-      // Keep the current binding diagnosable even when its models are filtered out.
-      .filter(({ id }) => id === boundProviderId || modelsByProvider[id]?.length)
+      .filter(({ id }) => modelsByProvider[id]?.length)
       .map(({ id, logo, name, source }) => ({ id, logo, name, source }));
     return { modelsByProvider, providers };
-  }, [agentType, bindingAgentTypes, boundProviderId, enabledModels, providerList]);
+  }, [agentType, bindingAgentTypes, enabledModels, providerList]);
 };

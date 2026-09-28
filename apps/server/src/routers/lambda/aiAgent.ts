@@ -1722,7 +1722,7 @@ const assertServerDefaultControlAuth = (oidcAuth: Record<string, unknown> | null
   }
 };
 
-export const resolveServerDefaultHeterogeneousCapability = async (userEmail?: string | null) => {
+export const resolveServerDefaultHeterogeneousCapability = async () => {
   const base = {
     model: 'lobehub-default' as const,
   };
@@ -1731,7 +1731,7 @@ export const resolveServerDefaultHeterogeneousCapability = async (userEmail?: st
   }
 
   try {
-    const models = await getServerDefaultHeterogeneousModels({ userEmail });
+    const models = await getServerDefaultHeterogeneousModels();
     const agents = SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES.filter(
       (agentType) => models[agentType].length > 0,
     );
@@ -1824,10 +1824,8 @@ const settleServerDefaultControlOperation = async (params: {
 };
 
 export const aiAgentRouter = router({
-  getServerDefaultHeterogeneousCapability: aiAgentBaseProcedure.query(async ({ ctx }) =>
-    resolveServerDefaultHeterogeneousCapability(
-      (await UserModel.findById(ctx.serverDB, ctx.userId))?.email,
-    ),
+  getServerDefaultHeterogeneousCapability: aiAgentBaseProcedure.query(() =>
+    resolveServerDefaultHeterogeneousCapability(),
   ),
 
   beginServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
@@ -1856,8 +1854,7 @@ export const aiAgentRouter = router({
           workspaceId,
         });
       }
-      const userEmail = (await UserModel.findById(ctx.serverDB, ctx.userId))?.email;
-      const capability = await resolveServerDefaultHeterogeneousCapability(userEmail);
+      const capability = await resolveServerDefaultHeterogeneousCapability();
       if (!capability.enabled) {
         throw new TRPCError({
           code: 'FORBIDDEN',
@@ -1867,9 +1864,10 @@ export const aiAgentRouter = router({
               : 'No server model is available',
         });
       }
-      const selection = await resolveServerDefaultHeterogeneousModel(input.agentType, input.model, {
-        userEmail,
-      }).catch((error) => {
+      const selection = await resolveServerDefaultHeterogeneousModel(
+        input.agentType,
+        input.model,
+      ).catch((error) => {
         throw new TRPCError({
           cause: error,
           code: 'BAD_REQUEST',

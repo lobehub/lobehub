@@ -1,5 +1,4 @@
 // @vitest-environment node
-import type * as BusinessConst from '@lobechat/business-const';
 import {
   LobeAnthropicAI,
   LobeAzureOpenAI,
@@ -38,19 +37,6 @@ import {
 
 const getServerGlobalConfig = vi.hoisted(() => vi.fn());
 const loadModels = vi.hoisted(() => vi.fn());
-const isLobeHubModelAvailable = vi.hoisted(() => vi.fn(async () => true));
-const businessAccessPolicy = vi.hoisted(() => ({
-  enabled: true,
-}));
-
-vi.mock('@lobechat/business-const', async (importOriginal) => ({
-  ...(await importOriginal<typeof BusinessConst>()),
-  get ENABLE_BUSINESS_FEATURES() {
-    return businessAccessPolicy.enabled;
-  },
-}));
-
-vi.mock('@lobechat/business-model-bank/model-config', () => ({ isLobeHubModelAvailable }));
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
   loadModels,
@@ -171,68 +157,6 @@ describe('getServerDefaultHeterogeneousModels', () => {
     await expect(
       resolveServerDefaultHeterogeneousModel('kimi-code', 'deployment-new-model'),
     ).resolves.toMatchObject({ model: 'deployment-new-model' });
-  });
-  it('preserves configured server models in deployments without business access policies', async () => {
-    businessAccessPolicy.enabled = false;
-    isLobeHubModelAvailable.mockResolvedValue(false);
-    getServerGlobalConfig.mockResolvedValue({
-      aiProvider: {
-        lobehub: {
-          enabled: true,
-          serverModelLists: [
-            {
-              abilities: { functionCall: true },
-              enabled: true,
-              id: 'local-deployment-model',
-              type: 'chat',
-            },
-          ],
-        },
-      },
-    });
-    try {
-      expect((await getServerDefaultHeterogeneousModels())['kimi-code']).toEqual([
-        { model: 'local-deployment-model' },
-      ]);
-      await expect(
-        resolveServerDefaultHeterogeneousModel('kimi-code', 'local-deployment-model'),
-      ).resolves.toMatchObject({ model: 'local-deployment-model' });
-    } finally {
-      businessAccessPolicy.enabled = true;
-      isLobeHubModelAvailable.mockResolvedValue(true);
-    }
-  });
-  it('applies user catalog access to discovery and execution, including historical Kimi IDs', async () => {
-    getServerGlobalConfig.mockResolvedValue({
-      aiProvider: {
-        lobehub: {
-          enabled: true,
-          serverModelLists: [
-            {
-              abilities: { functionCall: true },
-              enabled: true,
-              id: 'claude-fable-5',
-              type: 'chat',
-            },
-          ],
-        },
-      },
-    });
-    isLobeHubModelAvailable.mockResolvedValueOnce(false);
-    expect(
-      (await getServerDefaultHeterogeneousModels({ userEmail: 'normal@example.com' }))['kimi-code'],
-    ).toEqual([]);
-    expect(isLobeHubModelAvailable).toHaveBeenLastCalledWith(
-      'claude-fable-5',
-      'chat',
-      expect.objectContaining({ userEmail: 'normal@example.com' }),
-    );
-    isLobeHubModelAvailable.mockResolvedValueOnce(false);
-    await expect(
-      resolveServerDefaultHeterogeneousModel('kimi-code', 'claude-fable-5', {
-        userEmail: 'normal@example.com',
-      }),
-    ).rejects.toThrow('not compatible');
   });
 
   it('offers newly enabled tool-capable catalog aliases to Kimi without an ID allowlist', async () => {

@@ -183,11 +183,6 @@ export default {
   'ModelSelect.staleModel.removed.tag': 'Unavailable',
   'ModelSelect.staleModel.removed.tooltip':
     'This model has been removed from the service. Related features may fail — please choose another model.',
-  'ModelSelect.staleModel.unsupported.hint':
-    'This model does not support the capabilities needed here. Choose another model below.',
-  'ModelSelect.staleModel.unsupported.tag': 'Incompatible',
-  'ModelSelect.staleModel.unsupported.tooltip':
-    'Enabling this model will not add the required capabilities. Choose another model.',
   'ModelSwitchPanel.byModel': 'By Model',
   'ModelSwitchPanel.byProvider': 'By Provider',
   'ModelSwitchPanel.detail.abilities': 'Abilities',

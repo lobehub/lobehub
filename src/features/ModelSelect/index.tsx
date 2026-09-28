@@ -94,10 +94,6 @@ interface ModelSelectProps extends Pick<
 > {
   defaultValue?: { model: string; provider?: string };
   initialWidth?: boolean;
-  /** Apply an agent's capability filter to available choices. */
-  modelFilter?: (model: EnabledProviderWithModels['children'][number]) => boolean;
-  /** Decorate available options without changing the closed trigger or stale-model remedies. */
-  modelOptionRender?: (model: ModelOption, label: ReactNode) => ReactNode;
   modelType?: 'asr' | 'chat' | 'embedding';
   onChange?: (props: { model: string; provider: string }) => void;
   /** Fired when the selection is cleared via `allowClear`. */
@@ -129,8 +125,6 @@ const ModelSelect = memo<ModelSelectProps>(
     initialWidth = false,
     popupWidth,
     modelType = 'chat',
-    modelFilter,
-    modelOptionRender,
     providerIds,
   }) => {
     const { t } = useTranslation('components');
@@ -156,15 +150,12 @@ const ModelSelect = memo<ModelSelectProps>(
 
     const options = useMemo<SelectProps['options']>(() => {
       const getChatModels = (provider: EnabledProviderWithModels) => {
-        const candidates = modelFilter
-          ? provider.children.filter((model) => modelFilter(model))
-          : provider.children;
         const models =
           requiredAbilities && requiredAbilities.length > 0
-            ? candidates.filter((model) =>
+            ? provider.children.filter((model) =>
                 requiredAbilities.every((ability) => Boolean(model.abilities?.[ability])),
               )
-            : candidates;
+            : provider.children;
 
         return models.map((model) => ({
           ...model,
@@ -199,7 +190,7 @@ const ModelSelect = memo<ModelSelectProps>(
           };
         })
         .filter(Boolean) as SelectProps['options'];
-    }, [enabledList, modelFilter, requiredAbilities]);
+    }, [enabledList, requiredAbilities]);
 
     const staleState = useMemo(() => {
       // Before the runtime state hydrates, the store lists are empty and any valid
@@ -210,7 +201,6 @@ const ModelSelect = memo<ModelSelectProps>(
       return resolveStaleModelState(value, {
         builtinAiModelList,
         enabledList,
-        modelFilter,
         modelRedirects,
         modelType,
       });
@@ -218,7 +208,6 @@ const ModelSelect = memo<ModelSelectProps>(
       builtinAiModelList,
       enabledList,
       isInitAiProviderRuntimeState,
-      modelFilter,
       modelRedirects,
       modelType,
       value,
@@ -396,14 +385,13 @@ const ModelSelect = memo<ModelSelectProps>(
             const stale = option as unknown as { __stale?: boolean; popupLabel?: ReactNode };
             if (stale.__stale) return stale.popupLabel ?? option.label;
 
-            const label = (
+            return (
               <ModelItemRender
                 {...(option as ModelOption)}
                 {...(option as ModelOption).abilities}
                 showInfoTag={false}
               />
             );
-            return modelOptionRender ? modelOptionRender(option as ModelOption, label) : label;
           }}
           style={{
             minWidth: 200,

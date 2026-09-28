@@ -1,6 +1,4 @@
 import { type GoogleGenAIOptions } from '@google/genai';
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
 import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG,
@@ -38,8 +36,6 @@ import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
-import { UserModel } from '@/database/models/user';
-import { getServerDB } from '@/database/server';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
 import { getServerGlobalConfig } from '@/server/globalConfig';
@@ -543,22 +539,6 @@ export type ServerDefaultHeterogeneousModels = Record<
   ServerDefaultHeterogeneousModelReference[]
 >;
 
-interface ServerDefaultModelAccess {
-  userEmail?: string | null;
-  userId?: string;
-}
-
-const isServerDefaultModelAvailable = (model: string, access: ServerDefaultModelAccess) => {
-  // OSS deployments use the enabled server catalog without a business access policy.
-  if (!ENABLE_BUSINESS_FEATURES) return true;
-  return isLobeHubModelAvailable(model, 'chat', {
-    userEmail: access.userEmail,
-    getUserEmail: access.userId
-      ? async () => (await UserModel.findById(await getServerDB(), access.userId!))?.email
-      : undefined,
-  });
-};
-
 /**
  * Every supported CLI uses the single LobeHub relay provider. `lobehub` is a
  * deployment-owned router slot, not a hosted-only upstream: official and
@@ -629,16 +609,13 @@ const toServerModelSelection = (provider: string, modelConfig: AiFullModelCard) 
 });
 
 /** Return compatible models from the single deployment-owned relay provider. */
-export const getServerDefaultHeterogeneousModels = async (
-  access: ServerDefaultModelAccess = {},
-) => {
+export const getServerDefaultHeterogeneousModels = async () => {
   const models = {} as ServerDefaultHeterogeneousModels;
   for (const agentType of SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES) {
     models[agentType] = [];
   }
 
   for (const model of await getEnabledServerChatModels(ModelProvider.LobeHub)) {
-    if (!(await isServerDefaultModelAvailable(model.id, access))) continue;
     for (const agentType of SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES) {
       if (supportsServerDefaultHeterogeneousAgent(agentType, model)) {
         models[agentType].push({ model: model.id });
@@ -657,22 +634,15 @@ export const resolveServerModel = async (provider: string, model: string) =>
 export const resolveServerDefaultHeterogeneousModel = async (
   agentType: ServerDefaultHeterogeneousAgentType,
   model: string,
-  access: ServerDefaultModelAccess = {},
 ) => {
   const modelConfig = await findEnabledServerChatModel(ModelProvider.LobeHub, model);
-  if (
-    !supportsServerDefaultHeterogeneousAgent(agentType, modelConfig) ||
-    !(await isServerDefaultModelAvailable(model, access))
-  ) {
+  if (!supportsServerDefaultHeterogeneousAgent(agentType, modelConfig)) {
     throw new Error('The selected server model is not compatible with this heterogeneous agent');
   }
 
   return {
     ...toServerModelSelection(ModelProvider.LobeHub, modelConfig),
     ...(modelConfig.maxOutput !== undefined && { maxOutput: modelConfig.maxOutput }),
-    ...(modelConfig.contextWindowTokens !== undefined && {
-      contextWindowTokens: modelConfig.contextWindowTokens,
-    }),
     supportsAdaptiveThinking:
       modelConfig.settings?.extendParams?.includes('enableAdaptiveThinking') === true,
   };

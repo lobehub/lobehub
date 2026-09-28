@@ -225,7 +225,6 @@ export const aiProviderRouter = router({
         .map(
           ({ abilities, contextWindowTokens, displayName, id, maxOutput, providerId, type }) => ({
             abilities: {
-              functionCall: abilities.functionCall,
               reasoning: abilities.reasoning,
               vision: abilities.vision,
             },

@@ -1,10 +1,6 @@
 import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import { getKimiModelCompatibility } from '@lobechat/heterogeneous-agents';
-import { Flexbox, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import type { LobeDefaultAiModelListItem } from 'model-bank';
-import type { ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { ModelItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
 
@@ -13,40 +9,9 @@ export const MODEL_PICKER_STYLE = { minWidth: 200, width: 'initial' } as const;
 /** Closed trigger next to the composer send button — hug the label, cap growth. */
 export const COMPACT_MODEL_PICKER_STYLE = { maxWidth: 160, minWidth: 0, width: 'auto' } as const;
 
-export interface ServerDefaultModel {
-  compatibility?: 'untested' | 'toolsUnknown';
+interface ServerDefaultModel {
   model: string;
 }
-
-const CompatibilityHint = ({
-  status,
-}: {
-  status: NonNullable<ServerDefaultModel['compatibility']>;
-}) => {
-  const { t } = useTranslation('setting');
-  return (
-    <Tooltip title={t('heterogeneousStatus.apiMode.compatibility.hint')}>
-      <span className={modelPickerStyles.compatibility}>
-        {t(`heterogeneousStatus.apiMode.compatibility.${status}`)}
-      </span>
-    </Tooltip>
-  );
-};
-
-export const renderKimiModelOption = (
-  model: Parameters<typeof getKimiModelCompatibility>[0],
-  label: ReactNode,
-) => {
-  const status = getKimiModelCompatibility(model);
-  if (status === 'toolsUnsupported') return label;
-
-  return (
-    <Flexbox horizontal align="center" gap={12} justify="space-between">
-      {label}
-      <CompatibilityHint status={status} />
-    </Flexbox>
-  );
-};
 
 /** A server deployed before an agent was added can omit that agent's model entry. */
 export const resolveServerDefaultAgentModels = (
@@ -55,11 +20,6 @@ export const resolveServerDefaultAgentModels = (
 ): ServerDefaultModel[] => (agentType ? (models?.[agentType] ?? []) : []);
 
 export const modelPickerStyles = createStaticStyles(({ css }) => ({
-  compatibility: css`
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0.65;
-  `,
   compactLabel: css`
     overflow: hidden;
 
@@ -94,21 +54,18 @@ export const buildServerDefaultModelOptions = (
   models: ServerDefaultModel[],
   builtinAiModelList: LobeDefaultAiModelListItem[],
 ) =>
-  models.map(({ compatibility, model }) => {
+  models.map(({ model }) => {
     const meta = resolveServerDefaultModelMeta(model, builtinAiModelList);
     const title = meta?.displayName ?? model;
 
     return {
       label: (
-        <Flexbox horizontal align="center" gap={12} justify="space-between">
-          <ModelItemRender
-            displayName={meta?.displayName}
-            id={model}
-            releasedAt={meta?.releasedAt}
-            showInfoTag={false}
-          />
-          {compatibility && <CompatibilityHint status={compatibility} />}
-        </Flexbox>
+        <ModelItemRender
+          displayName={meta?.displayName}
+          id={model}
+          releasedAt={meta?.releasedAt}
+          showInfoTag={false}
+        />
       ),
       title,
       value: model,

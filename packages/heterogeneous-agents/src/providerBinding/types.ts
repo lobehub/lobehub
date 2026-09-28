@@ -63,7 +63,6 @@ export type HeterogeneousProviderBindingError =
 
 export interface EnabledProviderBindingModelRef {
   abilities?: {
-    functionCall?: boolean;
     reasoning?: boolean;
     vision?: boolean;
   };

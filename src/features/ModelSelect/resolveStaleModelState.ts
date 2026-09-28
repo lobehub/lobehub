@@ -10,9 +10,8 @@ export interface StaleModelState {
    * `redirected`: the model id is retired but mapped to a successor — requests
    * are transparently served by the successor model.
    * `removed`: the model id is unknown entirely — calls to it will fail.
-   * `unsupported`: the model does not meet this picker's capability requirements.
    */
-  status: 'notEnabled' | 'redirected' | 'removed' | 'unsupported';
+  status: 'notEnabled' | 'redirected' | 'removed';
   /** The successor model's metadata; only set for `redirected`. */
   successor?: LobeDefaultAiModelListItem;
   /** The successor model's id; only set for `redirected`. */
@@ -22,7 +21,6 @@ export interface StaleModelState {
 export interface ResolveStaleModelStateContext {
   builtinAiModelList: LobeDefaultAiModelListItem[];
   enabledList: EnabledProviderWithModels[];
-  modelFilter?: (model: EnabledProviderWithModels['children'][number]) => boolean;
   modelRedirects?: Record<string, string>;
   modelType: 'asr' | 'chat' | 'embedding';
 }
@@ -69,28 +67,15 @@ export const resolveEnableTargetProviderId = (
  */
 export const resolveStaleModelState = (
   value: { model: string; provider?: string } | undefined,
-  {
-    builtinAiModelList,
-    enabledList,
-    modelFilter,
-    modelRedirects,
-    modelType,
-  }: ResolveStaleModelStateContext,
+  { builtinAiModelList, enabledList, modelRedirects, modelType }: ResolveStaleModelStateContext,
 ): StaleModelState | undefined => {
   if (!value?.model) return;
 
-  const enabledModel = enabledList
-    .find((provider) => provider.id === value.provider)
-    ?.children.find((model) => model.id === value.model);
-  if (enabledModel) {
-    if (modelFilter && !modelFilter(enabledModel)) {
-      return {
-        meta: { ...enabledModel, providerId: value.provider!, type: modelType },
-        status: 'unsupported',
-      };
-    }
-    return;
-  }
+  const isInEnabledList = enabledList.some(
+    (provider) =>
+      provider.id === value.provider && provider.children.some((model) => model.id === value.model),
+  );
+  if (isInEnabledList) return;
 
   const findBuiltin = (id: string, providerId?: string) =>
     builtinAiModelList.find(
@@ -101,8 +86,7 @@ export const resolveStaleModelState = (
     );
 
   const meta = findBuiltin(value.model, value.provider) ?? findBuiltin(value.model);
-  if (meta)
-    return { meta, status: modelFilter && !modelFilter(meta) ? 'unsupported' : 'notEnabled' };
+  if (meta) return { meta, status: 'notEnabled' };
 
   // Redirect keys are provider-scoped (`${providerId}/${modelId}`) so a same-named
   // model under an unrelated provider is never treated as redirected.
@@ -110,11 +94,9 @@ export const resolveStaleModelState = (
     ? modelRedirects?.[`${value.provider}/${value.model}`]
     : undefined;
   if (successorId) {
-    const successor = findBuiltin(successorId, value.provider) ?? findBuiltin(successorId);
-    if (successor && modelFilter && !modelFilter(successor)) return { status: 'unsupported' };
     return {
       status: 'redirected',
-      successor,
+      successor: findBuiltin(successorId, value.provider) ?? findBuiltin(successorId),
       successorId,
     };
   }
