@@ -4,7 +4,6 @@ import type {
   ExpertiseEnforcement,
   ExpertiseLayerDefinition,
   ExpertiseLessonSection,
-  ExpertiseReasonKind,
 } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm';
 
@@ -360,12 +359,9 @@ export class ExpertiseModel {
    * many generations as there are. One level is not enough — merging a rule that was itself a
    * merge would otherwise keep the counts and lose the evidence.
    */
-  private resolveLineage = async (
-    lessonId: string,
-    db: Pick<LobeChatDatabase, 'select'> = this.db,
-  ): Promise<string[]> => {
+  private resolveLineage = async (lessonId: string): Promise<string[]> => {
     const readLinks = (ids: string[]) =>
-      db
+      this.db
         .select({
           generalizedFromIds: expertiseLessons.generalizedFromIds,
           salvagedFromId: expertiseLessons.salvagedFromId,
@@ -956,90 +952,46 @@ export class ExpertiseModel {
   };
 
   /**
-   * Field-level edits from the rule document. Wording and body edits are versioned like a
-   * conversational correction — same table, same `user-feedback` kind — so the history reads as
-   * one list whether the reviewer typed a sentence or rewrote a paragraph. Switches (enforcement,
-   * compilability, reason kind) are not versioned: they are settings, not judgments.
+   * The lesson's current revision number, read under a row lock. Call it inside the transaction
+   * that writes the next revision, so two concurrent edits cannot both claim the same number.
    */
-  updateRule = async (
+  lockLessonRevision = async (lessonId: string) => {
+    const [row] = await this.db
+      .select({ currentRevision: expertiseLessons.currentRevision })
+      .from(expertiseLessons)
+      .where(eq(expertiseLessons.id, lessonId))
+      .for('update');
+    return row?.currentRevision;
+  };
+
+  /** Appends one entry to a lesson's edit history. */
+  insertLessonRevision = async (values: typeof expertiseLessonRevisions.$inferInsert) => {
+    await this.db.insert(expertiseLessonRevisions).values(values);
+  };
+
+  /** Writes fields of one lesson row; `updatedAt` is always refreshed. */
+  updateLessonFields = async (
     lessonId: string,
-    patch: {
-      compilability?: 'compilable' | 'not-compilable';
-      enforcement?: ExpertiseEnforcement;
-      reasonKind?: ExpertiseReasonKind;
-      sections?: Partial<Record<'rule' | 'why' | 'how' | 'limits', string | null>>;
-      title?: string;
-    },
+    fields: Partial<typeof expertiseLessons.$inferInsert>,
   ) => {
-    const lesson = await this.findLesson(lessonId);
-    if (!lesson) return null;
+    await this.db
+      .update(expertiseLessons)
+      .set({ ...fields, updatedAt: new Date() })
+      .where(eq(expertiseLessons.id, lessonId));
+  };
 
-    const title = patch.title?.trim();
-    const titleChanged = Boolean(title) && title !== lesson.title;
-
-    let sections = lesson.sections;
-    let sectionsChanged = false;
-    if (patch.sections) {
-      sections = lesson.sections.filter((section) => !(section.key in patch.sections!));
-      for (const [key, body] of Object.entries(patch.sections)) {
-        const text = body?.trim();
-        if (text) sections.push({ body: text, key: key as ExpertiseLessonSection['key'] });
-      }
-      sectionsChanged = true;
-    }
-    // The rule sentence and the title are the same words seen from two places.
-    if (titleChanged && !patch.sections?.rule) {
-      sections = [
-        { body: title!, key: 'rule' as const },
-        ...sections.filter((section) => section.key !== 'rule'),
-      ];
-      sectionsChanged = true;
-    }
-
-    const versioned = titleChanged || sectionsChanged;
-    let revision = lesson.currentRevision;
-    const feedback = titleChanged
-      ? title!
-      : (Object.values(patch.sections ?? {})
-          .find(Boolean)
-          ?.trim() ?? null);
-
-    await this.db.transaction(async (tx) => {
-      if (versioned) {
-        // Take the next number under a row lock: two edits racing on a stale read would
-        // otherwise both claim it and trip the (lesson, revision) unique key.
-        const [locked] = await tx
-          .select({ currentRevision: expertiseLessons.currentRevision })
-          .from(expertiseLessons)
-          .where(eq(expertiseLessons.id, lessonId))
-          .for('update');
-        revision = (locked?.currentRevision ?? lesson.currentRevision) + 1;
-        await tx.insert(expertiseLessonRevisions).values({
-          changedBy: 'user',
-          changedByUserId: this.userId,
-          feedback,
-          kind: 'user-feedback',
-          lessonId,
-          prevTitle: titleChanged ? lesson.title : null,
-          revision,
-          sections,
-        });
-      }
-      await tx
-        .update(expertiseLessons)
-        .set({
-          ...(patch.compilability && { compilability: patch.compilability }),
-          ...(patch.enforcement && { enforcement: patch.enforcement }),
-          ...(patch.reasonKind && { reasonKind: patch.reasonKind }),
-          ...(titleChanged && { title }),
-          ...(sectionsChanged && { sections }),
-          // A switch flip is not a revision and must not write back a number it read earlier.
-          ...(versioned && { currentRevision: revision }),
-          updatedAt: new Date(),
-        })
-        .where(eq(expertiseLessons.id, lessonId));
-    });
-    return { id: lessonId, revision };
+  /**
+   * Distinct runs a lesson has been proven in across its whole lineage. Runs are "distinct
+   * situations", so two merged rules hit in the same delivery count it once.
+   */
+  countLineageRuns = async (lessonId: string) => {
+    const lineage = await this.resolveLineage(lessonId);
+    if (lineage.length === 0) return 0;
+    const [row] = await this.db
+      .select({ runs: sql<number>`count(distinct ${expertiseHits.runId})::int` })
+      .from(expertiseHits)
+      .where(inArray(expertiseHits.lessonId, lineage));
+    return row?.runs ?? 0;
   };
 
   /**
@@ -1132,71 +1084,6 @@ export class ExpertiseModel {
         .where(eq(expertiseLessons.id, lessonId));
       return { domainId, id: copy.id };
     });
-  };
-
-  /**
-   * Folds one rule into another: the counts move to the target, the target gets a `generalize`
-   * revision naming what it absorbed and a lineage pointer to read the source's evidence, and the
-   * source is retired with a pointer back. Nothing is deleted — the archived source still opens
-   * and still says where it went.
-   */
-  mergeRules = async (fromId: string, intoId: string) => {
-    if (fromId === intoId) return null;
-    const [from, into] = await Promise.all([this.findLesson(fromId), this.findLesson(intoId)]);
-    if (!from || !into) return null;
-    // Folding into an archived rule would leave neither rule in force.
-    if (from.status !== 'active' || into.status !== 'active') return null;
-
-    const revision = into.currentRevision + 1;
-    await this.db.transaction(async (tx) => {
-      // The evidence stays where it is; `generalizedFromIds` is how the target reads it.
-      await tx.insert(expertiseLessonRevisions).values({
-        changedBy: 'user',
-        changedByUserId: this.userId,
-        feedback: from.title,
-        kind: 'generalize',
-        lessonId: intoId,
-        prevTitle: null,
-        revision,
-        sections: into.sections,
-      });
-      await tx
-        .update(expertiseLessons)
-        .set({
-          currentRevision: revision,
-          exampleCount: into.exampleCount + from.exampleCount,
-          falsePositiveCount: into.falsePositiveCount + from.falsePositiveCount,
-          generalizedFromIds: [...(into.generalizedFromIds ?? []), fromId],
-          hitCount: into.hitCount + from.hitCount,
-          lastHitAt:
-            from.lastHitAt && (!into.lastHitAt || from.lastHitAt > into.lastHitAt)
-              ? from.lastHitAt
-              : into.lastHitAt,
-          updatedAt: new Date(),
-        })
-        .where(eq(expertiseLessons.id, intoId));
-      // Runs are "distinct situations": two rules proven in the same delivery must count it
-      // once, so recount over the merged lineage instead of adding the two counters.
-      const lineage = await this.resolveLineage(intoId, tx);
-      const [{ runs }] = await tx
-        .select({ runs: sql<number>`count(distinct ${expertiseHits.runId})::int` })
-        .from(expertiseHits)
-        .where(inArray(expertiseHits.lessonId, lineage));
-      await tx
-        .update(expertiseLessons)
-        .set({ hitRunCount: runs })
-        .where(eq(expertiseLessons.id, intoId));
-      await tx
-        .update(expertiseLessons)
-        .set({
-          rejectedReason: `merged-into:${intoId}`,
-          retiredAt: new Date(),
-          status: 'retired',
-          updatedAt: new Date(),
-        })
-        .where(eq(expertiseLessons.id, fromId));
-    });
-    return { fromId, intoId, revision };
   };
 
   /**

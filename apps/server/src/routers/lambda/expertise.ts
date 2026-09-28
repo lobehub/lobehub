@@ -6,6 +6,7 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ExpertiseModel } from '@/database/models/expertise';
+import { ExpertiseRuleRepository } from '@/database/repositories/expertiseRules';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
@@ -33,6 +34,11 @@ const expertiseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
         ctx.workspaceId ?? undefined,
       ),
       expertiseIngestionService: new ExpertiseIngestionService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ),
+      expertiseRuleRepository: new ExpertiseRuleRepository(
         ctx.serverDB,
         ctx.userId,
         ctx.workspaceId ?? undefined,
@@ -308,7 +314,7 @@ export const expertiseRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { lessonId, ...patch } = input;
-      return ctx.expertiseModel.updateRule(lessonId, patch);
+      return ctx.expertiseRuleRepository.updateRule(lessonId, patch);
     }),
 
   /** The order the reviewer dragged one group into. */
@@ -331,7 +337,9 @@ export const expertiseRouter = router({
   /** Folds one rule into another; the source is archived with a pointer to where it went. */
   mergeRules: expertiseWriteProcedure
     .input(z.object({ fromId: z.string(), intoId: z.string() }))
-    .mutation(async ({ ctx, input }) => ctx.expertiseModel.mergeRules(input.fromId, input.intoId)),
+    .mutation(async ({ ctx, input }) =>
+      ctx.expertiseRuleRepository.mergeRules(input.fromId, input.intoId),
+    ),
 
   /** Puts an archived rule back into practice. */
   restoreLesson: expertiseWriteProcedure

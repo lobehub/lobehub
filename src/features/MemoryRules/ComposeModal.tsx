@@ -7,6 +7,7 @@ import {
   Button,
   createModal,
   DropdownMenu,
+  Spin,
   Text,
   toast,
   Tooltip,
@@ -28,7 +29,6 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { expertiseService, type RuleDraft, type RuleGroup } from '@/services/expertise';
 import { shinyTextStyles } from '@/styles';
 
@@ -252,7 +252,7 @@ const ComposeContent = ({
             </GeneratingBorder>
             {step === 'preparing' ? (
               <Flexbox horizontal align={'center'} className={composeStyles.status} gap={8}>
-                <NeuralNetworkLoading size={18} />
+                <Spin size={'small'} variant={'network'} />
                 <span className={shinyTextStyles.shinyText}>
                   {generating[tick % generating.length]}
                 </span>

@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { ExpertiseRuleRepository } from '../../repositories/expertiseRules';
 import {
   agents,
   expertiseBindings,
@@ -496,7 +497,10 @@ describe('ExpertiseModel', () => {
     const { first } = await seedRuleGroup();
     const model = new ExpertiseModel(serverDB, userId);
 
-    await model.updateRule(first, { enforcement: 'block', reasonKind: 'mechanism' });
+    await new ExpertiseRuleRepository(serverDB, userId).updateRule(first, {
+      enforcement: 'block',
+      reasonKind: 'mechanism',
+    });
     let lesson = await model.findLesson(first);
     expect(lesson).toMatchObject({
       currentRevision: 1,
@@ -504,7 +508,7 @@ describe('ExpertiseModel', () => {
       reasonKind: 'mechanism',
     });
 
-    await model.updateRule(first, {
+    await new ExpertiseRuleRepository(serverDB, userId).updateRule(first, {
       sections: { limits: '被验的就是报错态本身时除外' },
       title: '证据要拍成功路径本身',
     });
@@ -522,16 +526,18 @@ describe('ExpertiseModel', () => {
 
   it('numbers revisions from the row, not from a stale read', async () => {
     const { first } = await seedRuleGroup();
-    const model = new ExpertiseModel(serverDB, userId);
-    await model.updateRule(first, { title: '第二版' });
-    await model.updateRule(first, { title: '第三版' });
+    const rules = new ExpertiseRuleRepository(serverDB, userId);
+    await rules.updateRule(first, { title: '第二版' });
+    await rules.updateRule(first, { title: '第三版' });
 
     // Another request read the rule back when it was still at revision 1.
-    const stale = { ...(await model.findLesson(first))!, currentRevision: 1 };
-    model.findLesson = async () => stale;
+    const reader = new ExpertiseModel(serverDB, userId);
+    const stale = { ...(await reader.findLesson(first))!, currentRevision: 1 };
+    const racing = new ExpertiseRuleRepository(serverDB, userId);
+    racing['model'].findLesson = async () => stale;
 
     // A switch flip does not write the stale number back...
-    await model.updateRule(first, { enforcement: 'block' });
+    await racing.updateRule(first, { enforcement: 'block' });
     const [afterSwitch] = await serverDB
       .select({ rev: expertiseLessons.currentRevision })
       .from(expertiseLessons)
@@ -539,7 +545,7 @@ describe('ExpertiseModel', () => {
     expect(afterSwitch.rev).toBe(3);
 
     // ...and a wording edit takes the next free number instead of colliding with revision 2.
-    await expect(model.updateRule(first, { title: '第四版' })).resolves.toMatchObject({
+    await expect(racing.updateRule(first, { title: '第四版' })).resolves.toMatchObject({
       revision: 4,
     });
   });
@@ -648,7 +654,7 @@ describe('ExpertiseModel', () => {
   it('refuses to fold into, or restore, a rule a merge already accounted for', async () => {
     const { first, second } = await seedRuleGroup();
     const model = new ExpertiseModel(serverDB, userId);
-    await model.mergeRules(second, first);
+    await new ExpertiseRuleRepository(serverDB, userId).mergeRules(second, first);
 
     // The source now lives inside the target; restoring it would count its history twice.
     expect(await model.restoreLesson(second)).toBeNull();
@@ -664,7 +670,9 @@ describe('ExpertiseModel', () => {
       sections: [{ body: '第三条', key: 'rule' }],
       title: '第三条',
     });
-    expect(await model.mergeRules(third, second)).toBeNull();
+    expect(
+      await new ExpertiseRuleRepository(serverDB, userId).mergeRules(third, second),
+    ).toBeNull();
     expect(await model.findLesson(third)).toMatchObject({ status: 'active' });
     expect(await model.findLesson(first)).toMatchObject({ hitCount: 9 });
   });
@@ -706,7 +714,7 @@ describe('ExpertiseModel', () => {
     ]);
     const model = new ExpertiseModel(serverDB, userId);
 
-    await model.mergeRules(second, first);
+    await new ExpertiseRuleRepository(serverDB, userId).mergeRules(second, first);
 
     expect((await model.findLesson(first))?.hitRunCount).toBe(2);
   });
@@ -741,8 +749,8 @@ describe('ExpertiseModel', () => {
     });
     const model = new ExpertiseModel(serverDB, userId);
 
-    await model.mergeRules(second, first);
-    await model.mergeRules(first, third);
+    await new ExpertiseRuleRepository(serverDB, userId).mergeRules(second, first);
+    await new ExpertiseRuleRepository(serverDB, userId).mergeRules(first, third);
 
     // The hit sits on the grandparent of `third`; one level of lineage would lose it.
     expect((await model.listLessonSources(third)).map(({ example }) => example)).toEqual([
@@ -900,7 +908,9 @@ describe('ExpertiseModel', () => {
     const { first } = await seedRuleGroup();
     await seedHitOn(first);
     const model = new ExpertiseModel(serverDB, userId);
-    await model.updateRule(first, { title: '证据要拍成功路径本身' });
+    await new ExpertiseRuleRepository(serverDB, userId).updateRule(first, {
+      title: '证据要拍成功路径本身',
+    });
 
     const moved = await model.moveRule(first, 'rules-domain-2');
 
@@ -915,7 +925,7 @@ describe('ExpertiseModel', () => {
     const model = new ExpertiseModel(serverDB, userId);
 
     await seedHitOn(second);
-    await model.mergeRules(second, first);
+    await new ExpertiseRuleRepository(serverDB, userId).mergeRules(second, first);
 
     const target = await model.findLesson(first);
     expect(target).toMatchObject({

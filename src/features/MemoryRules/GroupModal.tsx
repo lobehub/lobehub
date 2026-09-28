@@ -6,6 +6,7 @@ import {
   Button,
   createModal,
   Input,
+  Spin,
   Text,
   toast,
   useModalContext,
@@ -16,7 +17,6 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { expertiseService, type RuleGroup } from '@/services/expertise';
 import { shinyTextStyles } from '@/styles';
 
@@ -218,7 +218,7 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
             </GeneratingBorder>
             {step === 'preparing' && (
               <Flexbox horizontal align={'center'} className={composeStyles.status} gap={8}>
-                <NeuralNetworkLoading size={18} />
+                <Spin size={'small'} variant={'network'} />
                 <span className={shinyTextStyles.shinyText}>{t('rules.group.generating')}</span>
               </Flexbox>
             )}
