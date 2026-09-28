@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  accountDraftKey,
   clearClarificationDraft,
   readClarificationDraft,
   writeClarificationDraft,
@@ -33,6 +34,13 @@ describe('clarification draft storage', () => {
     clearClarificationDraft('goal:g1:d1');
 
     expect(readClarificationDraft('goal:g1:d1')).toBeUndefined();
+  });
+
+  it("never restores one account's draft for another in the same browser", () => {
+    writeClarificationDraft(accountDraftKey('user-a', 'goal:g1:d1')!, draft);
+
+    expect(readClarificationDraft(accountDraftKey('user-b', 'goal:g1:d1')!)).toBeUndefined();
+    expect(accountDraftKey(undefined, 'goal:g1:d1')).toBeUndefined();
   });
 
   it('treats an unreadable entry as no draft', () => {

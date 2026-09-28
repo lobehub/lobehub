@@ -3,6 +3,15 @@ import type { AskUserDraft } from '@lobechat/shared-tool-ui/ask-user';
 const KEY_PREFIX = 'lobechat:clarification:draft:v1:';
 
 /**
+ * A draft holds the signed-in user's own words, so its key carries the account:
+ * another account in the same browser never gets it back. No user, no draft.
+ */
+export const accountDraftKey = (
+  userId: string | undefined,
+  draftKey: string | undefined,
+): string | undefined => (userId && draftKey ? `${userId}:${draftKey}` : undefined);
+
+/**
  * Unsent answers outlive the form: collapsing the island, leaving the page or
  * reloading unmounts it, and the user should find what they picked still
  * picked. Local storage, keyed by the round the answers belong to.

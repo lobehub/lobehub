@@ -30,20 +30,34 @@ describe('goalIdFromPath', () => {
 describe('selectIslandGoalClarifications', () => {
   const groups = [group('goal_a'), group('goal_b'), group('goal_c')];
 
+  it('asks nothing of a member who cannot edit the goals', () => {
+    expect(selectIslandGoalClarifications(groups, { canAnswer: false, onGoalPage: false })).toEqual(
+      [],
+    );
+  });
+
   it('stays out of a goal page entirely, even for other goals', () => {
-    expect(selectIslandGoalClarifications(groups, { onGoalPage: true })).toEqual([]);
+    expect(selectIslandGoalClarifications(groups, { canAnswer: true, onGoalPage: true })).toEqual(
+      [],
+    );
   });
 
   it('skips only the goal open in the portal beside a conversation', () => {
     expect(
-      selectIslandGoalClarifications(groups, { onGoalPage: false, portalGoalId: 'goal_b' }).map(
-        (g) => g.goalId,
-      ),
+      selectIslandGoalClarifications(groups, {
+        canAnswer: true,
+        onGoalPage: false,
+        portalGoalId: 'goal_b',
+      }).map((g) => g.goalId),
     ).toEqual(['goal_a', 'goal_c']);
-    expect(selectIslandGoalClarifications(groups, { onGoalPage: false })).toHaveLength(3);
+    expect(
+      selectIslandGoalClarifications(groups, { canAnswer: true, onGoalPage: false }),
+    ).toHaveLength(3);
   });
 
   it('drops a goal with nothing left to ask', () => {
-    expect(selectIslandGoalClarifications([group('goal_a', 0)], { onGoalPage: false })).toEqual([]);
+    expect(
+      selectIslandGoalClarifications([group('goal_a', 0)], { canAnswer: true, onGoalPage: false }),
+    ).toEqual([]);
   });
 });

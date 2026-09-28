@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useLocation } from 'react-router';
 
 import type { PendingGoalClarification } from '@/features/AgentGoals/GoalClarification';
+import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGoalStore } from '@/store/goal';
@@ -32,26 +33,35 @@ export const goalIdFromPath = (pathname: string): string | undefined =>
  */
 export const selectIslandGoalClarifications = (
   groups: GoalClarificationGroup[],
-  { onGoalPage, portalGoalId }: { onGoalPage: boolean; portalGoalId?: string },
+  {
+    canAnswer,
+    onGoalPage,
+    portalGoalId,
+  }: { canAnswer: boolean; onGoalPage: boolean; portalGoalId?: string },
 ): GoalClarificationGroup[] =>
-  onGoalPage
+  // A member who cannot edit the goal cannot answer for it either — the
+  // island would only offer a form that fails on submit.
+  !canAnswer || onGoalPage
     ? []
     : groups.filter((group) => group.questions.length > 0 && group.goalId !== portalGoalId);
 
 /** Goal clarification rounds the island should ask, oldest first. */
 export const usePendingGoalClarifications = (): GoalClarificationGroup[] => {
   const enabled = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  // The same gate the goal page puts on its answer controls.
+  const { allowed: canAnswer } = usePermission('create_content');
   const useFetchPendingClarifications = useGoalStore((s) => s.useFetchPendingClarifications);
-  const { data } = useFetchPendingClarifications(enabled);
+  const { data } = useFetchPendingClarifications(enabled && canAnswer);
   const { pathname } = useLocation();
   const portalGoalId = useChatStore(chatPortalSelectors.goalPortalId);
 
   return useMemo(
     () =>
       selectIslandGoalClarifications(data ?? [], {
+        canAnswer,
         onGoalPage: goalIdFromPath(pathname) !== undefined,
         portalGoalId,
       }),
-    [data, pathname, portalGoalId],
+    [canAnswer, data, pathname, portalGoalId],
   );
 };

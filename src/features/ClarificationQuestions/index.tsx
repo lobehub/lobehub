@@ -11,6 +11,9 @@ import { Alert } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+
 import {
   type ClarificationAnswer,
   type ClarificationQuestion,
@@ -19,6 +22,7 @@ import {
   toClarificationAnswers,
 } from './answers';
 import {
+  accountDraftKey,
   clearClarificationDraft,
   readClarificationDraft,
   writeClarificationDraft,
@@ -72,8 +76,10 @@ const ClarificationQuestions = memo<ClarificationQuestionsProps>(
   }) => {
     const { t } = useTranslation('tool');
     const labels = useAskUserLabels({ skip: skipLabel, submit: submitLabel });
+    const userId = useUserStore(userProfileSelectors.userId);
+    const storageKey = accountDraftKey(userId, draftKey);
     const [draft, setDraft] = useState<AskUserDraft | undefined>(() =>
-      draftKey ? readClarificationDraft(draftKey) : undefined,
+      storageKey ? readClarificationDraft(storageKey) : undefined,
     );
     const [failed, setFailed] = useState(false);
     const args = useMemo(() => toAskUserArgs(questions), [questions]);
@@ -81,10 +87,10 @@ const ClarificationQuestions = memo<ClarificationQuestionsProps>(
     const writeDraft = useCallback(
       (next: AskUserDraft) => {
         setDraft(next);
-        if (draftKey) writeClarificationDraft(draftKey, next);
+        if (storageKey) writeClarificationDraft(storageKey, next);
         onAnswersChange?.(draftToClarificationAnswers(questions, next));
       },
-      [draftKey, onAnswersChange, questions],
+      [onAnswersChange, questions, storageKey],
     );
 
     const onInteractionAction = useCallback<
@@ -97,14 +103,14 @@ const ClarificationQuestions = memo<ClarificationQuestionsProps>(
           else if (action.type === 'submit')
             await onSubmit(toClarificationAnswers(questions, action.payload ?? {}));
           // Sent: nothing left to restore. A failed send keeps the draft.
-          if (draftKey) clearClarificationDraft(draftKey);
+          if (storageKey) clearClarificationDraft(storageKey);
         } catch (error) {
           setFailed(true);
           // Rethrow so the form leaves its submitting state and can be retried.
           throw error;
         }
       },
-      [draftKey, onSkip, onSubmit, questions],
+      [onSkip, onSubmit, questions, storageKey],
     );
 
     const form = useAskUserForm({
