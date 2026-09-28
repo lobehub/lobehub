@@ -42,6 +42,8 @@
   "features.selfLearning.title": "Autoevolução",
   "features.taskVerify.desc": "Adicione uma seção de aceitação de entrega aos detalhes da tarefa: descreva a aceitação em uma frase e deixe a IA gerar critérios de verificação editáveis.",
   "features.taskVerify.title": "Aceitação de Entrega da Tarefa",
+  "features.topicAcceptance.desc": "Crie uma lista de verificação de entrega para o tópico atual logo acima do compositor, para que a conversa siga os padrões que você pode editar a qualquer momento.",
+  "features.topicAcceptance.title": "Aceitação de Tópico",
   "group.desktop": "Desktop",
   "group.general": "Geral",
   "stage.alpha.desc": "Apenas para testes internos. Ainda não recomendado para uso diário — pode mudar ou apresentar falhas a qualquer momento.",

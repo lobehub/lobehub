@@ -17,11 +17,17 @@ describe('labPreferSelectors.enableGoals', () => {
     );
   });
 
-  it('lets the new key override the legacy one', () => {
+  // This client writes both keys, while older clients write only the legacy
+  // one — so when they disagree, the legacy key holds the latest choice.
+  it('honours an older client turning Goals off through the legacy key', () => {
     expect(
       labPreferSelectors.enableGoals(
-        stateWithLab({ enableGoals: false, enableTopicAcceptance: true }),
+        stateWithLab({ enableGoals: true, enableTopicAcceptance: false }),
       ),
     ).toBe(false);
+  });
+
+  it('reads the new key when the legacy one was never written', () => {
+    expect(labPreferSelectors.enableGoals(stateWithLab({ enableGoals: true }))).toBe(true);
   });
 });

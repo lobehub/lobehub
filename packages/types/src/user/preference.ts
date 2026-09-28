@@ -231,9 +231,9 @@ export const UserLabSchema = z.object({
    */
   enableGoals: z.boolean().optional(),
   /**
-   * @deprecated Renamed to `enableGoals`. Still read as its fallback so users
-   * who opted in under the old name keep the lab on, and written alongside it so
-   * older clients that only know this key stay in sync.
+   * @deprecated Renamed to `enableGoals`. Written alongside it, and read first,
+   * while older clients that only know this key are still around: their writes
+   * touch only this key, so it carries the latest choice.
    */
   enableTopicAcceptance: z.boolean().optional(),
   /**

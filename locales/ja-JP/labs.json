@@ -42,6 +42,8 @@
   "features.selfLearning.title": "自己進化",
   "features.taskVerify.desc": "タスク詳細に納品受け入れセクションを追加: 受け入れ内容を1文で記述し、AIが編集可能な検証基準を生成します。",
   "features.taskVerify.title": "タスク納品受け入れ",
+  "features.topicAcceptance.desc": "現在のトピックのための配達チェックリストを作成し、コンポーザーのすぐ上に配置します。これにより、会話がいつでも編集可能な基準に従って行われます。",
+  "features.topicAcceptance.title": "トピック承認",
   "group.desktop": "デスクトップ",
   "group.general": "一般",
   "stage.alpha.desc": "内部テスト専用。日常使用にはまだ推奨されません — いつでも変更や不具合が発生する可能性があります。",

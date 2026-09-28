@@ -28,7 +28,9 @@ export const labPreferSelectors = {
   enableOAuthApps: (s: UserState): boolean => s.preference.lab?.enableOAuthApps ?? false,
   enableSelfLearning: (s: UserState): boolean => s.preference.lab?.enableSelfLearning ?? false,
   enableProjects: (s: UserState): boolean => s.preference.lab?.enableProjects ?? false,
+  // `updateLab` writes both keys, but older clients only write the legacy
+  // `enableTopicAcceptance` — so while both exist it holds the latest choice.
   enableGoals: (s: UserState): boolean =>
-    s.preference.lab?.enableGoals ?? s.preference.lab?.enableTopicAcceptance ?? false,
+    s.preference.lab?.enableTopicAcceptance ?? s.preference.lab?.enableGoals ?? false,
   enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
 };

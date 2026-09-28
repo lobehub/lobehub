@@ -42,6 +42,8 @@
   "features.selfLearning.title": "自我進化",
   "features.taskVerify.desc": "在任務詳情中新增交付驗收部分：用一句話描述驗收內容，並讓 AI 生成可編輯的驗收標準。",
   "features.taskVerify.title": "任務交付驗收",
+  "features.topicAcceptance.desc": "在編輯器上方為當前主題撰寫交付清單，以確保對話符合標準，您可以隨時進行編輯。",
+  "features.topicAcceptance.title": "主題接受",
   "group.desktop": "桌面",
   "group.general": "一般",
   "stage.alpha.desc": "僅供內部測試使用。目前不建議日常使用——可能隨時更改或出現問題。",
