@@ -871,7 +871,11 @@ describe('skillsRuntime', () => {
     // A multi-MB skill on a slow link outlasts the prepare deadline while the
     // device keeps downloading; the next call reuses that work. Telling the
     // model the app may be outdated made it give up and blame the user's app.
-    it.each(['{"error":"TIMEOUT","success":false}', 'The operation was aborted due to timeout'])(
+    it.each([
+      '{"error":"TIMEOUT","success":false}',
+      'DEVICE_RESPONSE_TIMEOUT (HTTP 504)',
+      'The operation was aborted due to timeout',
+    ])(
       'asks for a later retry, not an app update, when the prepare times out (%s)',
       async (error) => {
         mocks.prepareSkillDirectory.mockResolvedValue({ error, success: false });
