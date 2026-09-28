@@ -255,14 +255,17 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
    * `AzureOpenAI` rewrites `/audio/transcriptions` to
    * `/deployments/{model}/audio/transcriptions` using the request `model`
    * (already mapped to the deployment name) and appends `api-version`.
+   *
+   * Forwards every client option the chat client received (e.g. `dangerouslyAllowBrowser`
+   * for the client BYOK runtime, `maxRetries`, `timeout`); only the endpoint and
+   * `api-version` differ.
    */
   protected getTranscriptionClient(): OpenAI {
     this.transcriptionClient ??= new AzureOpenAI({
+      ...this._options,
       apiKey: this._options.apiKey,
       apiVersion: AZURE_TRANSCRIPTION_API_VERSION,
       baseURL: this.transcriptionBaseURL,
-      defaultHeaders: this._options.defaultHeaders,
-      fetch: this._options.fetch,
     });
 
     return this.transcriptionClient;

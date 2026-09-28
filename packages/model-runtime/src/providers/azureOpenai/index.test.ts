@@ -543,14 +543,17 @@ describe('LobeAzureOpenAI', () => {
 
     const createTranscribeInstance = (
       fetch: Mock,
-      options: { baseURL?: string; modelIdMapping?: Record<string, string> } = {},
+      options: { baseURL?: string; modelIdMapping?: Record<string, string> } & Record<
+        string,
+        unknown
+      > = {},
     ) =>
       new LobeAzureOpenAI({
         apiKey: 'test_key',
-        baseURL: options.baseURL ?? 'https://test.cognitiveservices.azure.com/',
         fetch,
         maxRetries: 0,
-        modelIdMapping: options.modelIdMapping,
+        ...options,
+        baseURL: options.baseURL ?? 'https://test.cognitiveservices.azure.com/',
       });
 
     it('should call the deployments transcription path with api-version and api-key', async () => {
@@ -591,6 +594,21 @@ describe('LobeAzureOpenAI', () => {
       expect(requestURL.pathname).toBe(
         '/openai/deployments/prod-mini-transcribe/audio/transcriptions',
       );
+    });
+
+    it('should forward client options such as dangerouslyAllowBrowser (client BYOK path)', async () => {
+      // The OpenAI SDK refuses to construct a client in a browser without this flag.
+      vi.stubGlobal('window', { document: {} });
+      try {
+        const fetch = vi.fn().mockResolvedValue(Response.json({ text: 'ok' }));
+        const runtime = createTranscribeInstance(fetch, { dangerouslyAllowBrowser: true });
+
+        await expect(runtime.transcribe({ file, model: 'gpt-4o-transcribe' })).resolves.toEqual({
+          text: 'ok',
+        });
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     it('should keep chat requests on the v1 surface', async () => {
