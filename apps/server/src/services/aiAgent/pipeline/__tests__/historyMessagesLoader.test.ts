@@ -9,9 +9,9 @@ vi.mock('@/server/services/file', () => ({
   },
 }));
 
-const GROUP_ID = 'cg_LluIaCobAwjx';
-const TOPIC_ID = 'tpc_xV5ta1LDOZCF';
-const SUPERVISOR_ID = 'agt_egT0oP0CbJPw';
+const GROUP_ID = 'cg_test_group';
+const TOPIC_ID = 'tpc_test_topic';
+const SUPERVISOR_ID = 'agt_test_supervisor';
 
 // A prior group-supervisor turn that activated lobe-agent-management.
 const groupTopicMessages = [
