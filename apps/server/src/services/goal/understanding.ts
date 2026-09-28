@@ -70,6 +70,12 @@ export const normalizeUnderstanding = (
       question: item.question.trim(),
     }))
     .filter((item) => item.question && !answered.has(questionKey(item.question)))
+    // The same question twice would be asked as two decisions sharing one answer.
+    .filter(
+      (item, index, all) =>
+        all.findIndex((other) => questionKey(other.question) === questionKey(item.question)) ===
+        index,
+    )
     .slice(0, MAX_QUESTIONS);
 
   const ask = alreadyAsked ? [] : questions.filter((item) => item.blocking);

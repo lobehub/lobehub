@@ -1420,6 +1420,46 @@ describe('GoalService', () => {
     );
   });
 
+  it('writes none of a clarification round when one answer is invalid, and retries cleanly', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      assumptions: [],
+      problemStatement: '写发布说明',
+      questions: [
+        {
+          assumption: '终端用户',
+          blocking: true,
+          options: ['终端用户', '开发者'],
+          question: '给谁看？',
+        },
+        { assumption: '更新日志', blocking: true, options: [], question: '发在哪里？' },
+      ],
+      tasks: [{ dependsOn: [], hypothesis: null, instruction: '写', title: '撰写' }],
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Release notes' });
+    await service.tick(graph.goal.id);
+    const [{ questions }] = await service.pendingClarifications();
+    const audience = questions.find((q) => q.question === '给谁看？')!;
+    const place = questions.find((q) => q.question === '发在哪里？')!;
+
+    // The second answer is invalid, so the first must not be written either.
+    await expect(
+      service.answerClarifications(graph.goal.id, [
+        { decisionId: audience.decisionId, optionId: 'option-2' },
+        { decisionId: place.decisionId, optionId: 'no-such-option' },
+      ]),
+    ).rejects.toThrow('Unknown decision option');
+    expect((await service.pendingClarifications())[0].questions).toHaveLength(2);
+
+    // A retry after a partial write succeeds: the recorded answer is skipped.
+    await service.decide(graph.goal.id, audience.decisionId, 'option-2');
+    await service.answerClarifications(graph.goal.id, [
+      { decisionId: audience.decisionId, optionId: 'option-2' },
+      { decisionId: place.decisionId, optionId: 'assume' },
+    ]);
+    expect(await service.pendingClarifications()).toEqual([]);
+  });
+
   it('keeps the coordinator understanding when the user edits the goal policy', async () => {
     vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
       assumptions: ['只修 P0'],

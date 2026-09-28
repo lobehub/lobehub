@@ -32,14 +32,31 @@ export type ClarificationAnswer =
     }
   | { questionId: string; text: string; type: 'text' };
 
-export const toAskUserArgs = (questions: ClarificationQuestion[]): AskUserQuestionArgs => ({
-  questions: questions.map(({ description, header, options, question }) => ({
-    ...(description ? { description } : {}),
-    header,
-    options,
-    question,
-  })),
-});
+/**
+ * The text each question is keyed by inside the form. The form keys answers by
+ * question text, so two questions worded the same would share one answer; a
+ * repeat gets a counter to keep every key — and every answer — its own.
+ */
+const formQuestionTexts = (questions: ClarificationQuestion[]): string[] => {
+  const seen = new Map<string, number>();
+  return questions.map(({ question }) => {
+    const count = (seen.get(question) ?? 0) + 1;
+    seen.set(question, count);
+    return count === 1 ? question : `${question} (${count})`;
+  });
+};
+
+export const toAskUserArgs = (questions: ClarificationQuestion[]): AskUserQuestionArgs => {
+  const texts = formQuestionTexts(questions);
+  return {
+    questions: questions.map(({ description, header, options }, index) => ({
+      ...(description ? { description } : {}),
+      header,
+      options,
+      question: texts[index],
+    })),
+  };
+};
 
 /**
  * Read the form's submit payload back as one answer per question.
@@ -62,8 +79,9 @@ export const toClarificationAnswers = (
       ? (payload[SUPPLEMENT_PAYLOAD_KEY] as string).trim() || undefined
       : undefined;
 
-  return questions.flatMap((q): ClarificationAnswer[] => {
-    const value = payload[q.question];
+  const texts = formQuestionTexts(questions);
+  return questions.flatMap((q, index): ClarificationAnswer[] => {
+    const value = payload[texts[index]];
     if (typeof value !== 'string' || !value.trim()) return [];
     if (q.options.some((option) => option.id === value)) {
       return [{ note, optionId: value, questionId: q.id, type: 'option' }];

@@ -18,6 +18,11 @@ import {
   toAskUserArgs,
   toClarificationAnswers,
 } from './answers';
+import {
+  clearClarificationDraft,
+  readClarificationDraft,
+  writeClarificationDraft,
+} from './draftStorage';
 import { useAskUserLabels } from './useAskUserLabels';
 
 export type { ClarificationAnswer, ClarificationQuestion } from './answers';
@@ -25,6 +30,11 @@ export type { ClarificationAnswer, ClarificationQuestion } from './answers';
 export interface ClarificationQuestionsProps {
   /** Portal the Skip/Submit footer into a host-owned footer. */
   actionsPortalTarget?: HTMLElement | null;
+  /**
+   * Keeps unsent answers across unmounts (collapsing the island, leaving the
+   * page, reloading). Identify the round, so a new round starts blank.
+   */
+  draftKey?: string;
   /** Mirror the answers the draft would submit, for hosts that own the result. */
   onAnswersChange?: (answers: ClarificationAnswer[]) => void;
   /** What "skip" means is the host's call: proceed on assumptions, or without answers. */
@@ -51,6 +61,7 @@ export interface ClarificationQuestionsProps {
 const ClarificationQuestions = memo<ClarificationQuestionsProps>(
   ({
     actionsPortalTarget,
+    draftKey,
     onAnswersChange,
     onSkip,
     onSubmit,
@@ -61,16 +72,19 @@ const ClarificationQuestions = memo<ClarificationQuestionsProps>(
   }) => {
     const { t } = useTranslation('tool');
     const labels = useAskUserLabels({ skip: skipLabel, submit: submitLabel });
-    const [draft, setDraft] = useState<AskUserDraft>();
+    const [draft, setDraft] = useState<AskUserDraft | undefined>(() =>
+      draftKey ? readClarificationDraft(draftKey) : undefined,
+    );
     const [failed, setFailed] = useState(false);
     const args = useMemo(() => toAskUserArgs(questions), [questions]);
 
     const writeDraft = useCallback(
       (next: AskUserDraft) => {
         setDraft(next);
+        if (draftKey) writeClarificationDraft(draftKey, next);
         onAnswersChange?.(draftToClarificationAnswers(questions, next));
       },
-      [onAnswersChange, questions],
+      [draftKey, onAnswersChange, questions],
     );
 
     const onInteractionAction = useCallback<
@@ -82,13 +96,15 @@ const ClarificationQuestions = memo<ClarificationQuestionsProps>(
           if (action.type === 'skip') await onSkip();
           else if (action.type === 'submit')
             await onSubmit(toClarificationAnswers(questions, action.payload ?? {}));
+          // Sent: nothing left to restore. A failed send keeps the draft.
+          if (draftKey) clearClarificationDraft(draftKey);
         } catch (error) {
           setFailed(true);
           // Rethrow so the form leaves its submitting state and can be retried.
           throw error;
         }
       },
-      [onSkip, onSubmit, questions],
+      [draftKey, onSkip, onSubmit, questions],
     );
 
     const form = useAskUserForm({

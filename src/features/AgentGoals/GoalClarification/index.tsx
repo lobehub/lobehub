@@ -48,9 +48,14 @@ const GoalClarification = memo<GoalClarificationProps>(
       [answerGoalClarifications, goalId, pending],
     );
 
+    // One draft per round: the same goal asking new questions starts blank.
+    const draftKey = `goal:${goalId}:${pending.map((item) => item.decisionId).join(',')}`;
+
     return (
       <ClarificationQuestions
         actionsPortalTarget={actionsPortalTarget}
+        draftKey={draftKey}
+        key={draftKey}
         questions={questions}
         skipLabel={t('goalProcess.clarify.skip')}
         submitLabel={t('goalProcess.clarify.submit')}

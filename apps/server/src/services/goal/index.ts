@@ -1465,7 +1465,33 @@ export class GoalService {
     goalId: string,
     answers: Array<{ decisionId: string; optionId: string; resolution?: string }>,
   ) => {
-    for (const answer of answers) {
+    const graph = await this.requireGraph(goalId);
+    const decisions = new Map(graph.decisions.map((decision) => [decision.id, decision]));
+
+    // Check the whole round before writing any of it: one bad answer used to
+    // leave the ones before it resolved, and the client's retry then failed on
+    // those. An answer already recorded as given is a retry, not a conflict.
+    const toResolve = answers.filter((answer) => {
+      const decision = decisions.get(answer.decisionId);
+      if (!decision) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Pending decision not found' });
+      }
+      if (decision.status === 'resolved' && decision.resolvedOptionId === answer.optionId) {
+        return false;
+      }
+      if (decision.status !== 'pending') {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Decision was already resolved' });
+      }
+      if (decision.options?.length && !decision.options.some((o) => o.id === answer.optionId)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unknown decision option' });
+      }
+      if (answer.optionId === GOAL_CLARIFICATION_OPTION.answer && !answer.resolution?.trim()) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'This answer needs a note' });
+      }
+      return true;
+    });
+
+    for (const answer of toResolve) {
       await this.decide(goalId, answer.decisionId, answer.optionId, answer.resolution);
     }
   };

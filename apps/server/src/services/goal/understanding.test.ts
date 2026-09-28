@@ -23,7 +23,10 @@ describe('normalizeUnderstanding', () => {
     const result = normalizeUnderstanding(
       {
         assumptions: [],
-        questions: [question(), question({ blocking: false, assumption: 'CSV' })],
+        questions: [
+          question(),
+          question({ assumption: 'CSV', blocking: false, question: 'Which export format?' }),
+        ],
       },
       false,
     );
@@ -73,6 +76,15 @@ describe('normalizeUnderstanding', () => {
     });
     // An answer from before the fields existed plans as a clear goal.
     expect(normalizeUnderstanding({}, false).level).toBe('high');
+  });
+
+  it('asks a repeated question once', () => {
+    const result = normalizeUnderstanding(
+      { questions: [question(), question({ question: 'which client should this ship on' })] },
+      false,
+    );
+
+    expect(result.ask).toHaveLength(1);
   });
 
   it('caps the questions and drops blank ones', () => {

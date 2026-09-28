@@ -75,6 +75,23 @@ describe('toClarificationAnswers', () => {
   });
 });
 
+describe('questions worded the same', () => {
+  const twins: ClarificationQuestion[] = [
+    { header: '', id: 'a', options: [{ id: 'x', label: 'X' }], question: 'Which one?' },
+    { header: '', id: 'b', options: [{ id: 'y', label: 'Y' }], question: 'Which one?' },
+  ];
+
+  it('keep separate answers instead of sharing one', () => {
+    const texts = toAskUserArgs(twins).questions.map((q) => q.question);
+    expect(new Set(texts).size).toBe(2);
+
+    expect(toClarificationAnswers(twins, { [texts[0]]: 'x', [texts[1]]: 'y' })).toEqual([
+      { note: undefined, optionId: 'x', questionId: 'a', type: 'option' },
+      { note: undefined, optionId: 'y', questionId: 'b', type: 'option' },
+    ]);
+  });
+});
+
 describe('draftToClarificationAnswers', () => {
   it('reports what the draft would submit right now', () => {
     expect(
