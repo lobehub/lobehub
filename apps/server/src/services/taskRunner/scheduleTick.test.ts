@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { TRPCError } from '@trpc/server';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BriefModel } from '@/database/models/brief';
@@ -10,14 +11,15 @@ import { TaskRunnerService } from './index';
 import { runScheduleTick } from './scheduleTick';
 
 const mockSelectTask = vi.fn();
+const mockWhereTask = vi.fn(() => ({
+  limit: () => mockSelectTask(),
+}));
 
 vi.mock('@/database/server', () => ({
   getServerDB: vi.fn().mockResolvedValue({
     select: () => ({
       from: () => ({
-        where: () => ({
-          limit: () => mockSelectTask(),
-        }),
+        where: mockWhereTask,
       }),
     }),
   }),
@@ -92,6 +94,14 @@ describe('runScheduleTick', () => {
 
     expect(outcome).toEqual({ ran: false, reason: 'not-found' });
     expect(mockRunner.runTask).not.toHaveBeenCalled();
+  });
+
+  it('excludes trashed tasks from the queued tick lookup', async () => {
+    const outcome = await runScheduleTick(taskId, userId);
+
+    const condition = mockWhereTask.mock.calls[0][0];
+    expect(new PgDialect().sqlToQuery(condition).sql).toContain('"tasks"."is_deleted" IS NOT TRUE');
+    expect(outcome).toEqual({ ran: false, reason: 'not-found' });
   });
 
   it('skips when automationMode has been changed away from schedule', async () => {
