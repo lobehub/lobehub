@@ -263,6 +263,16 @@ describe('deriveGoalResultStatus', () => {
 });
 
 describe('deriveSignOffState', () => {
+  /**
+   * Regression (T-558 acceptance): after the owner failed the Goal at its
+   * acceptance gate, the unmet round left the acceptance `delivered` and the
+   * page still offered 接受交付 / 提出修改 on a failed Goal.
+   */
+  it('reads a Goal the owner failed at the acceptance gate as stopped', () => {
+    expect(deriveSignOffState('delivered', 'failed', 'decided')).toBe('stopped');
+    expect(deriveSignOffState('accepted', 'failed', 'decided')).toBe('accepted');
+  });
+
   it('opens sign-off only on an acceptance the server can still decide', () => {
     expect(deriveSignOffState('delivered', 'achieved')).toBe('open');
     expect(deriveSignOffState('errored', 'review')).toBe('open');

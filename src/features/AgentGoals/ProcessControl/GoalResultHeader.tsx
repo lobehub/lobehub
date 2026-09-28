@@ -30,6 +30,7 @@ import {
   deriveGoalResultStatus,
   deriveSignOffState,
   findGoalAcceptanceGate,
+  type GoalAcceptanceGate,
   type GoalResultStatus,
   type GoalSignOffState,
 } from './goalResultState';
@@ -79,17 +80,25 @@ const SIGN_OFF_TEXT: Record<GoalSignOffState, string> = {
 
 interface SignOffStripProps {
   data: GoalResultData;
+  gate?: GoalAcceptanceGate['kind'];
   goalId: string;
   goalStatus: string;
   onContinue: () => void;
   partial: boolean;
 }
 
-const SignOffStrip = ({ data, goalId, goalStatus, onContinue, partial }: SignOffStripProps) => {
+const SignOffStrip = ({
+  data,
+  gate,
+  goalId,
+  goalStatus,
+  onContinue,
+  partial,
+}: SignOffStripProps) => {
   const { t } = useTranslation('chat');
   const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
   const { acceptanceId, acceptanceStatus, canReview, mutateAcceptance, outcomes } = data;
-  const state = deriveSignOffState(acceptanceStatus, goalStatus);
+  const state = deriveSignOffState(acceptanceStatus, goalStatus, gate);
   const unmet = outcomes.filter((outcome) => outcome.state !== 'passed').length;
 
   const settle = async (action: () => Promise<unknown>) => {
@@ -316,6 +325,7 @@ const GoalResultHeader = ({ data, graph, onContinue }: GoalResultHeaderProps) =>
       ) : (
         <SignOffStrip
           data={data}
+          gate={gate?.kind}
           goalId={goal.id}
           goalStatus={goal.status}
           partial={status === 'partial'}

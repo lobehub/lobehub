@@ -150,8 +150,13 @@ export type GoalSignOffState = 'accepted' | 'changesRequested' | 'open' | 'stopp
 export const deriveSignOffState = (
   acceptanceStatus: AcceptanceStatus | undefined,
   goalStatus: string,
+  gate?: GoalAcceptanceGate['kind'],
 ): GoalSignOffState => {
   if (acceptanceStatus === 'accepted') return 'accepted';
+  // The owner already ended the Goal at its acceptance gate. The unmet round
+  // leaves the acceptance `delivered`, but offering to accept a delivery the
+  // owner just judged failed would undo that call.
+  if (gate === 'decided' && STOPPED_GOAL_STATUSES.has(goalStatus)) return 'stopped';
   if (acceptanceStatus === 'delivered' || acceptanceStatus === 'errored') return 'open';
   if (STOPPED_GOAL_STATUSES.has(goalStatus)) return 'stopped';
   if (acceptanceStatus === 'rejected' || acceptanceStatus === 'repairing')
