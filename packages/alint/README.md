@@ -6,14 +6,14 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 
 ## Rules
 
-| Rule                          | Severity | Scope                                                         | Source of the rule                              |
-| ----------------------------- | -------- | ------------------------------------------------------------- | ----------------------------------------------- |
-| `pmap-over-promise-all`       | error    | `apps/server/src`, `packages/database`                        | fan-out over a runtime-sized list needs `pMap`  |
-| `no-transactions-in-models`   | error    | `packages/database/src/models`                                | cross-table write transactions use repositories |
-| `no-effect-fetching`          | error    | `src/**/*.tsx`                                                | `data-fetching-architecture` skill              |
-| `no-dynamic-import-in-server` | warn     | `apps/server/src`, `packages/database`                        | backend code uses static top-level imports      |
-| `no-mode-flags`               | warn     | `src/**/*.tsx`                                                | `compose-atoms` skill                           |
-| `no-node-in-browser`          | error    | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | nothing Node-only where the SPA runs it         |
+| Rule                          | Severity | Scope                                                         | Source of the rule                                             |
+| ----------------------------- | -------- | ------------------------------------------------------------- | -------------------------------------------------------------- |
+| `pmap-over-promise-all`       | error    | `apps/server/src`, `packages/database`                        | fan-out over a runtime-sized list needs `pMap`                 |
+| `no-transactions-in-models`   | error    | `packages/database/src/models`                                | cross-aggregate write transactions use repositories            |
+| `no-effect-fetching`          | error    | `src/**/*.tsx`                                                | `data-fetching-architecture` skill                             |
+| `no-dynamic-import-in-server` | warn     | `apps/server/src`, `packages/database`                        | backend code uses static top-level imports                     |
+| `no-mode-flags`               | warn     | `src/**/*.tsx`                                                | `compose-atoms` skill                                          |
+| `no-node-in-browser`          | error    | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | no Node-only npm package where the SPA runs it (paths: ESLint) |
 
 Package-level rules, kept next to the package they describe:
 
@@ -25,6 +25,8 @@ Package-level rules, kept next to the package they describe:
 `hetero/host-capability-placement` encodes two review rejections: code that only one Node host uses (the quota sampler, `lh hetero exec`, the desktop main process) moves behind a Node-only entry even when it is pure, and it is never made browser-portable to stay where it is. It reads one file, so it cannot see who imports a symbol; it reports only a host the file names itself, and misses host-only code whose docs do not say so.
 
 `error` is reserved for rules measured at zero false positives on real PRs; an error turns the ALint check red. A rule starts at `warn` and is promoted only after its findings have been read on real PRs. A rule whose findings are mostly true but not worth acting on per PR does not belong here: `test-the-exit-not-the-entry` was removed after five days because it produced 92% of all findings and drowned out the rest.
+
+**What belongs here, and what belongs in ESLint.** A check that an AST or a path list decides — an import path, a banned call, a naming pattern — goes into ESLint, where it is exact, free and runs in the editor. alint takes only what needs judgement: whether a list is runtime-sized, whether a table is another aggregate, whether an effect reads the server. Leaving a deterministic check to a model buys false positives: `no-node-in-browser` once flagged 34 imports on canary and 33 were type-only or browser-safe, while the same boundary written as `no-restricted-imports` (the browser runtime block in `eslint.config.mjs`) found exactly the one real violation. The model also emits findings whose own message concludes "no violation"; a prompt does not reliably suppress that, so every rule states its carve-outs as "return no finding".
 
 Scopes are declared as `[[config.group]]` entries in the root `alint.config.toml`. Never scope a rule with `includeFiles` inside `rule.alint.toml`: it only filters reports, so every file still runs (double the jobs), and it marks the rule uncacheable.
 
@@ -46,8 +48,9 @@ export ALINT_API_KEY=...     # or DEEPSEEK_API_KEY
 bun run alint:setup          # writes .alint/config.toml (gitignored)
 bun run alint plugin install # registers ./packages/alint/rules (once, and after adding a rule)
 
-bun run check --alint          # changed files, alongside the other selectors
-bun run alint --dirty          # the same scope, alint's own reporter
+bun run check --alint          # changed lines of changed files, like CI
+bun run check --alint src/a.ts # explicit paths are linted whole
+bun run alint --dirty          # the same scope as the first line, alint's own reporter
 bun run alint src/features/Foo # any files or directories
 ```
 
@@ -76,6 +79,22 @@ The `alint ·` steps at the end of the "ALint & Test Desktop App" job in `.githu
 | one file changed                      | 1    | 3 s  | 873        |
 
 About 14 input tokens per source line per rule. Two cold runs over the same files differed by one finding; a finding can appear or vanish between runs, which is why fixtures exist and why only rules measured at zero false positives are promoted to `error`.
+
+## Whole-repo calibration, 2026-09-29
+
+Every rule was run cold over all of canary (apps/server, packages, src: 14.7k model calls, 40M input tokens, about 10 minutes at `--rule-concurrency 32`), and each finding was read or sampled. Findings are legacy code; CI and `check --alint` only report changed lines, so they surface when someone edits that line.
+
+| Rule                          | Before | After | What changed                                                                                                                                                        |
+| ----------------------------- | ------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `no-node-in-browser`          | 34     | 0     | 33 were type-only (`import { type X }` is erased without `verbatimModuleSyntax`) or browser-safe; the path part moved to ESLint, which found the one real violation |
+| `no-transactions-in-models`   | 109    | 51    | redefined on aggregates: owned child rows, event / history rows, link rows and cascade deletes are the same aggregate                                               |
+| `no-mode-flags`               | 98     | 17    | only flags that name a host (`inShare`, `embedded`, `mobile` page compositions) and gate fetching or editing                                                        |
+| `no-effect-fetching`          | 48     | 43    | writes then refresh, prefetch, auth / QR handshakes, locale chunks and repeat call sites dropped; store actions fetching on mount added                             |
+| `pmap-over-promise-all`       | 211    | 216   | high precision; code-level registries (adapter maps) no longer reported                                                                                             |
+| `no-dynamic-import-in-server` | 51     | 51    | matches the rule as written; left as `warn`                                                                                                                         |
+| `hetero/*`                    | 0      | 0     |                                                                                                                                                                     |
+
+Known remaining false positives: `no-transactions-in-models` still reports a subtype row deleted with its `user_memories` base row and a topic usage rollup recomputed after a message write (six findings) — one file at a time the model sees another table with its own Model.
 
 ## Adding a rule
 

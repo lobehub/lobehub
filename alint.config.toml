@@ -61,8 +61,10 @@ lobehub = "./packages/alint/rules"
 "lobehub/no-mode-flags" = "warn"
 
 
-# Browser code, everywhere: nothing Node-only may be imported where the SPA
-# (or the Electron renderer) runs it. Global rule, in packages/alint/rules.
+# Browser code, everywhere: no third-party package that needs Node may be
+# imported where the SPA (or the Electron renderer) runs it. Node built-ins and
+# server / database aliases are enforced exactly by ESLint (the browser runtime
+# block in eslint.config.mjs); this rule only judges npm packages.
 # `src/app` and `src/libs` are left out on purpose: they mix Next.js shells and
 # server helpers (instrumentation, OIDC, MCP) with web code.
 [[config.group]]
