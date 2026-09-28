@@ -330,9 +330,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .alintcache
-          key: alint-${{ hashFiles('alint.config.toml', 'packages/alint/rules/**') }}-${{ github.sha }}
+          key: alint-${{ hashFiles('alint.config.toml', 'packages/alint/rules/**', 'packages/*/alint/rules/**') }}-${{ github.sha }}
           restore-keys: |
-            alint-${{ hashFiles('alint.config.toml', 'packages/alint/rules/**') }}-
+            alint-${{ hashFiles('alint.config.toml', 'packages/alint/rules/**', 'packages/*/alint/rules/**') }}-
 
       - name: alint · lint changed files
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
@@ -356,7 +356,7 @@ jobs:
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
         continue-on-error: true
         run: |
-          if git status --porcelain -- alint.config.toml packages/alint | grep -q .; then
+          if git status --porcelain -- alint.config.toml packages/alint ':(glob)packages/*/alint/**' | grep -q .; then
             cd packages/alint && bunx vitest run fixtures.test.ts
           else
             echo "rules and fixtures unchanged; skipping calibration"

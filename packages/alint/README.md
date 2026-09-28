@@ -6,17 +6,35 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 
 ## Rules
 
-| Rule                          | Severity | Scope                                  | Source of the rule                              |
-| ----------------------------- | -------- | -------------------------------------- | ----------------------------------------------- |
-| `pmap-over-promise-all`       | error    | `apps/server/src`, `packages/database` | fan-out over a runtime-sized list needs `pMap`  |
-| `no-transactions-in-models`   | error    | `packages/database/src/models`         | cross-table write transactions use repositories |
-| `no-effect-fetching`          | error    | `src/**/*.tsx`                         | `data-fetching-architecture` skill              |
-| `no-dynamic-import-in-server` | warn     | `apps/server/src`, `packages/database` | backend code uses static top-level imports      |
-| `no-mode-flags`               | warn     | `src/**/*.tsx`                         | `compose-atoms` skill                           |
+| Rule                          | Severity | Scope                                                         | Source of the rule                              |
+| ----------------------------- | -------- | ------------------------------------------------------------- | ----------------------------------------------- |
+| `pmap-over-promise-all`       | error    | `apps/server/src`, `packages/database`                        | fan-out over a runtime-sized list needs `pMap`  |
+| `no-transactions-in-models`   | error    | `packages/database/src/models`                                | cross-table write transactions use repositories |
+| `no-effect-fetching`          | error    | `src/**/*.tsx`                                                | `data-fetching-architecture` skill              |
+| `no-dynamic-import-in-server` | warn     | `apps/server/src`, `packages/database`                        | backend code uses static top-level imports      |
+| `no-mode-flags`               | warn     | `src/**/*.tsx`                                                | `compose-atoms` skill                           |
+| `no-node-in-browser`          | warn     | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | nothing Node-only where the SPA runs it         |
+
+Package-level rules, kept next to the package they describe:
+
+| Rule                    | Severity | Scope                                                                        | Lives in                                    |
+| ----------------------- | -------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
+| `hetero/agent-layering` | warn     | the browser-reachable layer of `heterogeneous-agents` and its spawn pipeline | `packages/heterogeneous-agents/alint/rules` |
 
 `error` is reserved for rules measured at zero false positives on real PRs; an error turns the ALint check red. A rule starts at `warn` and is promoted only after its findings have been read on real PRs. A rule whose findings are mostly true but not worth acting on per PR does not belong here: `test-the-exit-not-the-entry` was removed after five days because it produced 92% of all findings and drowned out the rest.
 
 Scopes are declared as `[[config.group]]` entries in the root `alint.config.toml`. Never scope a rule with `includeFiles` inside `rule.alint.toml`: it only filters reports, so every file still runs (double the jobs), and it marks the rule uncacheable.
+
+## Where a rule lives
+
+Rules come in two layers, and each layer is registered as its own plugin in `alint.config.toml`:
+
+- **Repo-wide rules** live in `packages/alint/rules` under the `lobehub/` prefix. They state something true of a kind of code wherever it is, for example "browser code imports nothing Node-only" (`no-node-in-browser`).
+- **Package-level rules** live next to the package they describe, in `packages/<pkg>/alint/rules` with their fixtures in `packages/<pkg>/alint/fixtures`, under a prefix of their own (`hetero/` for `heterogeneous-agents`). They encode that package's architecture, for example which of its layers the web app reaches (`agent-layering`), and are only ever scoped to that package.
+
+A per-file rule cannot see an import graph. When a package's boundary matters, pair its package-level rule with a deterministic test of the graph: `heterogeneous-agents` has `src/browserSafeRoot.test.ts`, which walks everything the package root reaches and fails on any Node built-in.
+
+To add a package-level rule: register the directory as a plugin in the rule's `[[config.group]]`, add a fixture group for it, and add its fixtures directory with the plugin prefix to `FIXTURE_ROOTS` in `fixtures.test.ts`. CI already keys the cache on `packages/*/alint/rules/**` and runs calibration when `packages/*/alint/**` changes.
 
 ## Setup and run
 
@@ -61,5 +79,5 @@ About 14 input tokens per source line per rule. Two cold runs over the same file
 1. Create `rules/<name>/rule.alint.toml` with `name`, `builtInAgent = "basic-structured"`, and an `instruction`. Write the rule as the reviewer would: what to report, which line to anchor on, what the message and suggestion must contain, and an explicit "do not report" list. The carve-outs are where the false positives live.
 2. Add a `[[config.group]]` for its scope in `alint.config.toml`, and a fixture group `packages/alint/fixtures/<name>/**`.
 3. Add fixtures under `fixtures/<name>/`: at least one `bad-*` file with a standalone `// alint-expect` comment on the line above the one the finding must anchor to, and one `good-*` file per carve-out. Keep them short and realistic.
-4. Run `bun run alint plugin install`, then `cd packages/alint && bunx vitest run fixtures.test.ts` with a provider set up. The suite skips itself when there is no setup.
+4. Run `bun run alint plugin install`, then `cd packages/alint && bunx vitest run fixtures.test.ts` with a provider set up. The suite skips itself when there is no setup. Delete `.alintcache` after every rule edit while calibrating: the local cache is keyed by file content, so an edited rule otherwise replays the previous rule's findings.
 5. Before enabling the rule on a scope, run it over a few dozen real files and read every finding.

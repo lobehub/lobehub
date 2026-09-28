@@ -1,0 +1,22 @@
+name = "no-node-in-browser"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from LobeHub's web client: the Vite SPA under `src/` (features, routes, store, services, hooks, components, helpers) or a package module the SPA bundles (React UI, client helpers).
+
+Team rule: code that runs in the browser must not import anything that only exists in Node. The SPA is bundled by Vite, which replaces a Node built-in with a stub that throws on first access; one such import anywhere in the module graph blanks the whole app in development, and production only survives if tree-shaking happens to drop it. The Electron renderer is browser code too — it reaches Node only through IPC.
+
+Report each static `import` or `export ... from` in this file whose module is Node-only:
+- a Node built-in, with or without the `node:` prefix (`fs`, `fs/promises`, `path`, `os`, `child_process`, `crypto` used as the Node module, `stream`, `net`, `http`, `worker_threads`, `module`, `url` used for `fileURLToPath`, …);
+- a package that needs Node at runtime (a database driver, `sharp`, `electron` main-process APIs, `server-only`, SDKs that read files or spawn processes);
+- a server-only alias or entry: `@/server/*`, `@/database/*` models or repositories, `@lobechat/database` models, or a workspace package subpath documented as Node-only (for `@lobechat/heterogeneous-agents`: `/spawn`, `/rpc`, `/quota-sampler`, `/scanHost`, `/resolveCliCommand`, `/workingDirectory`, `/askUser`, `/builtinMcp`, `/models`).
+
+Anchor the finding on the import line. In the message, name the module and say why it cannot run in the browser. In the suggestion, say where the work belongs instead: behind a server endpoint (TRPC/service), behind an Electron IPC call, or in a Node-only subpath of the package, with the browser keeping only a pure part (types, parsing, formatting).
+
+Do not report:
+- `import type` / `export type` and `typeof import('...')` in type positions — they vanish at build time;
+- a dynamic `import('...')` inside code that only runs on the server or in Electron main, when the file clearly also serves that side (say so only if the file is the browser's);
+- files that run on the server or outside the browser: Next.js route handlers and shells (`src/app/(backend)/**`, `route.ts`, server actions), middleware / proxy, `instrumentation*`, files that import `server-only`, `*.server.ts`, config files, scripts, and tests;
+- browser-safe packages that merely share a name with a Node module (`path-browserify`, `buffer` polyfills, `url` used only for the WHATWG `URL`).
+
+If you cannot tell whether the file runs in the browser, use low confidence rather than forcing a finding.
+"""

@@ -63,6 +63,28 @@ describe('toFindings', () => {
     );
     expect(findings).toEqual([]);
   });
+
+  /**
+   * Regression: only `packages/alint/fixtures` was recognised, so a package-level
+   * rule's own bad fixtures would have turned the ALint check red on every PR
+   * that touched them.
+   */
+  it('drops the fixtures of package-level rules too, but not ordinary alint paths', () => {
+    const findings = toFindings(
+      {
+        diagnostics: [
+          diagnostic({
+            filePath: '/repo/packages/heterogeneous-agents/alint/fixtures/agent-layering/bad.ts',
+          }),
+          diagnostic({ filePath: '/repo/packages/heterogeneous-agents/src/alint/fixtures.ts' }),
+        ],
+      },
+      '/repo',
+    );
+    expect(findings.map((finding) => finding.file)).toEqual([
+      'packages/heterogeneous-agents/src/alint/fixtures.ts',
+    ]);
+  });
 });
 
 describe('verdict', () => {
