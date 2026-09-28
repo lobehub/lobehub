@@ -1000,6 +1000,30 @@ describe('AgentDocumentModel', () => {
       expect(nonWeb.map((item) => item.filename)).toEqual(['file.md']);
     });
 
+    it('should include agent-authored docs when filtering by the "file" source type', async () => {
+      // `create` defaults to the `agent` source type — that is how every
+      // createDocument / Portal doc is stored. The tool contract defines
+      // sourceType="file" as "documents authored or edited as agent documents",
+      // so it has to cover them, not only uploaded originals (`file`).
+      const authored = await agentDocumentModel.create(agentId, 'daily-report.md', 'report');
+      await agentDocumentModel.create(agentId, 'upload.pdf', 'parsed pdf', { sourceType: 'file' });
+      await agentDocumentModel.create(agentId, 'web-page', 'web content', {
+        fileType: 'article',
+        sourceType: 'web',
+      });
+
+      const fileOnly = await agentDocumentModel.listByAgent(agentId, { sourceType: 'file' });
+      expect(fileOnly.map((item) => item.filename).sort()).toEqual([
+        'daily-report.md',
+        'upload.pdf',
+      ]);
+
+      const byIds = await agentDocumentModel.listByDocumentIds(agentId, [authored.documentId], {
+        sourceType: 'file',
+      });
+      expect(byIds.map((item) => item.filename)).toEqual(['daily-report.md']);
+    });
+
     it('should return only skill-managed docs for skill registry assembly', async () => {
       const bundle = await agentDocumentModel.create(agentId, 'bug-triage', 'bundle body', {
         fileType: SKILL_BUNDLE_FILE_TYPE,

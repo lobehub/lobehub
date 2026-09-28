@@ -721,6 +721,50 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
 
     expect(dispatch).not.toHaveBeenCalled();
   });
+
+  describe('a row the caller already retired as abandoned', () => {
+    // Mirrors `recordCompletion`'s guard: a row the stale-lease CAS moved to
+    // `abandoned` only accepts a write that keeps that status.
+    const retiredRowModel = () => ({
+      findById: vi.fn(async () => ({ id: 'op-stale', status: 'abandoned' })),
+      recordCompletion: vi.fn(async (_id: string, params: { status: string }) => {
+        return params.status === 'abandoned';
+      }),
+      sumChildUsage: vi.fn(async () => undefined),
+    });
+
+    it('persists onto the abandoned status and still fires the hooks', async () => {
+      const lifecycle = buildLifecycle();
+      const model = retiredRowModel();
+      (lifecycle as any).agentOperationModel = model;
+      const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+      vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+      await lifecycle.dispatchHooks('op-stale', { host: { hooks: [] }, status: 'error' }, 'error', {
+        settledAsAbandoned: true,
+        skipErrorMessageWrite: true,
+      });
+
+      expect(model.recordCompletion).toHaveBeenCalledWith(
+        'op-stale',
+        expect.objectContaining({ completionReason: 'lease_expired', status: 'abandoned' }),
+      );
+      expect(dispatch).toHaveBeenCalled();
+    });
+
+    it('is refused as a conflicting owner without the flag, so no hooks fire', async () => {
+      const lifecycle = buildLifecycle();
+      (lifecycle as any).agentOperationModel = retiredRowModel();
+      const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+      vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+      await lifecycle.dispatchHooks('op-stale', { host: { hooks: [] }, status: 'error' }, 'error', {
+        skipErrorMessageWrite: true,
+      });
+
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
@@ -800,7 +844,12 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
 
     await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_async_tool');
 
-    expect(persistSpy).toHaveBeenCalledWith('op-1', parkedState, 'waiting_for_async_tool');
+    expect(persistSpy).toHaveBeenCalledWith(
+      'op-1',
+      parkedState,
+      'waiting_for_async_tool',
+      undefined,
+    );
     expect(dispatchSpy).not.toHaveBeenCalled();
     expect(unregisterSpy).not.toHaveBeenCalled();
   });

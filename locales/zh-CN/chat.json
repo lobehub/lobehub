@@ -783,6 +783,8 @@
   "goalProcess.tag.retired": "已放弃",
   "goalProcess.tag.verifying": "验证中",
   "goalTask.checks": "{{passed}}/{{total}} 项通过",
+  "goalTask.currentStep": "当前:{{title}}",
+  "goalTask.nextStep": "下一步:{{title}}",
   "goalTask.round": "第 {{current}} 轮",
   "goalTask.roundWithBudget": "第 {{current}}/{{total}} 轮",
   "goalTask.status.achieved": "已达成",
