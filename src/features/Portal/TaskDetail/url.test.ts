@@ -20,6 +20,17 @@ describe('getTaskDetailPageUrl', () => {
     );
   });
 
+  it('appends the readable title slug when a title is known', () => {
+    expect(
+      getTaskDetailPageUrl({
+        appOrigin: 'https://app.example.com',
+        taskId: 'T-245',
+        title: '飞书适配器支持 POST 图文消息',
+        workspaceSlug: 'lobehub',
+      }),
+    ).toBe('https://app.example.com/lobehub/task/T-245/飞书适配器支持-post-图文消息');
+  });
+
   it('returns undefined without a resolvable absolute URL', () => {
     expect(getTaskDetailPageUrl({ appOrigin: 'https://app.example.com' })).toBeUndefined();
     expect(getTaskDetailPageUrl({ taskId: 'T-245' })).toBeUndefined();

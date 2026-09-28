@@ -1,11 +1,15 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { Segmented } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  useHomeUsageWidget,
+  useHomeUsageWidgetActive,
+} from '@/business/client/features/HomeUsageWidget';
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
@@ -20,7 +24,7 @@ import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { goalSelectors, useGoalStore } from '@/store/goal';
+import { useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
@@ -32,7 +36,7 @@ import { resolveInboxBlockState } from './inboxBlockState';
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
 import NeedsYouRailCard from './NeedsYouRailCard';
-import { resolveShownNewsOffset } from './newsDayOffset';
+import { resolveShownNewsOffset, shouldShowNewsItemTime } from './newsDayOffset';
 import NewsList from './NewsList';
 import { ownsRailSections } from './railSectionPlacement';
 import RunningTasksCard from './RunningTasksCard';
@@ -171,9 +175,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const showGoals = isLogin === true && goalsEnabled && showRailSections;
   const useFetchHomeGoals = useGoalStore((s) => s.useFetchHomeGoals);
   const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
-  const goals = useGoalStore(goalSelectors.homeGoals(cacheScope));
-  const isGoalsInit = useGoalStore(goalSelectors.isHomeGoalsInitialized(cacheScope));
-  // The goal rail reads the goal's own lifecycle state (`goals.status`), so it
+  // Branch off the SWR response: a persisted-cache hit never fires a network
+  // callback, so the store-backed selector lags a frame and the rail would
+  // render nothing until the revalidate lands.
+  const goals = goalsSWR.data?.goals; // The goal rail reads the goal's own lifecycle state (`goals.status`), so it
   // no longer needs a separate acceptance read to decide each pile.
   const goalEntries = useMemo(
     () => (showGoals ? buildHomeGoalEntries(goals) : []),
@@ -186,6 +191,13 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const topics = useHomeInboxTopics(isLogin);
   const recommendationsVisible = useRecommendationsVisible();
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
+
+  // Business-slot widget: `enabled` false while it's toggled off or its column
+  // isn't on the page, so the slot implementation can skip its fetches.
+  const usageActive = useHomeUsageWidgetActive();
+  const usageNode = useHomeUsageWidget(
+    isLogin === true && usageActive && showRailSections && !hiddenWidgets.includes('usage'),
+  );
 
   // A team context is a workspace with more than the viewer in it. In personal
   // mode this map is empty, so `isTeam` is false and the whole mine/team layer
@@ -270,7 +282,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
         hideUnread,
         needsYouCount: needsYou.length,
         preferUnread: isMain,
-        runningCount: runningTopics.length,
         unreadCount: unreadTopics.length,
       })
     : null;
@@ -282,7 +293,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // A goal feed failure must not be silent: without this the card just vanishes,
   // which is indistinguishable from having no open goals — the one reading a
   // long-running goal surface can least afford.
-  if (showGoals && goalsSWR.error && !isGoalsInit)
+  if (showGoals && goalsSWR.error && goals === undefined)
     sections.push({
       key: 'goals-error',
       label: t('inbox.goals.title'),
@@ -396,14 +407,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   if (!hideRunning && !isRail && runningTopics.length > 0)
     sections.push({
       key: 'running',
-      node: (
-        <RunningTasksCard
-          action={placeToggle('running')}
-          bare={isRail}
-          running={runningTopics}
-          showAuthor={teamView}
-        />
-      ),
+      node: <RunningTasksCard bare={isRail} running={runningTopics} showAuthor={teamView} />,
     });
 
   // A first-load failure of the day feed must not make the whole section
@@ -486,11 +490,22 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             {t(shownNewsOffset === 0 ? 'inbox.news.emptyToday' : 'inbox.news.emptyDay')}
           </span>
         ) : (
-          <NewsList bare={isRail} news={news} />
+          <NewsList bare={isRail} news={news} showTime={shouldShowNewsItemTime(shownNewsOffset)} />
         ),
       subtitle: t('inbox.news.subtitle'),
     });
   }
+
+  // The rail's LAST card, below even the suggestions: usage is passive
+  // reference data, glanceable but never urgent, so it sits under everything
+  // that reports actual work. Same shell as every other rail widget.
+  const usageCard =
+    usageNode &&
+    (isRail ? (
+      <RailCard title={t('inbox.usage.title')}>{usageNode}</RailCard>
+    ) : (
+      <GroupBlock title={t('inbox.usage.title')}>{usageNode}</GroupBlock>
+    ));
 
   const visibleSections = filterHiddenWidgetSections(sections, hiddenWidgets);
 
@@ -498,9 +513,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     if (isMain) return null;
 
     if (isRail)
-      return recommendationsVisible ? (
+      return recommendationsVisible || usageCard ? (
         <Flexbox gap={12}>
-          <Recommendations variant={'rail'} />
+          {recommendationsVisible && <Recommendations variant={'rail'} />}
+          {usageCard}
         </Flexbox>
       ) : null;
 
@@ -514,6 +530,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             <Recommendations />
           </Flexbox>
         )}
+        {usageCard}
       </>
     );
   }
@@ -584,6 +601,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       )}
 
       {!isMain && <Recommendations variant={variant} />}
+      {usageCard}
     </Flexbox>
   );
 });

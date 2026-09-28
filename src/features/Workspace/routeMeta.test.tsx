@@ -56,6 +56,13 @@ describe('workspaceHomeRouteMeta', () => {
     });
   });
 
+  it('renders no outlet skeleton — Home never loads inside the outlet', () => {
+    const Skeleton = workspaceHomeRouteMeta.Skeleton!;
+    const { container } = render(<Skeleton />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('returns no dynamic meta while the workspace slug is unresolved', async () => {
     const onResolve = renderDynamicMeta('acme');
 

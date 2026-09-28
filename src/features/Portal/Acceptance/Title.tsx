@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAcceptanceBundle } from '@/features/Verify/hooks';
+import { useAcceptanceBundle } from '@/features/Acceptance/hooks';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 

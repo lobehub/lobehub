@@ -1,5 +1,9 @@
 import chroma from 'chroma-js';
 
+/** Returns true only for parseable colors whose alpha channel is fully transparent. */
+export const isFullyTransparentColor = (color: string): boolean =>
+  chroma.valid(color) && chroma(color).alpha() === 0;
+
 export const convertAlphaToSolid = (foreground: string, background: string): string => {
   const fgColor = chroma(foreground);
   const bgColor = chroma(background);

@@ -130,7 +130,20 @@ const execInSandboxSchema = z.object({
   params: z.record(z.string(), z.any()),
   toolName: z.string(),
   topicId: z.string(),
-  userId: z.string().optional(), // Optional: fallback to ctx.userId if not provided
+  /**
+   * SECURITY: accepted for backward compatibility with older clients (the SPA
+   * and desktop still send it, see `src/services/cloudSandbox.ts`) but
+   * ALWAYS IGNORED by the handler — the effective identity is `ctx.userId`.
+   *
+   * It used to override `ctx.userId`, which let any authenticated caller mint
+   * and read another user's JWT: `preprocessLhCommand` signs a user JWT and
+   * inlines it into the shell command run inside a sandbox the caller fully
+   * controls (`declare -f lh` prints the injected token back). The same forged
+   * id also selected the AgentSkill/File rows and the sandbox session.
+   *
+   * @deprecated Ignored by the server; will be dropped once no client sends it.
+   */
+  userId: z.string().optional(),
 });
 
 // Schema for export and upload file (combined operation)
@@ -191,7 +204,19 @@ const execInSandboxHandler = async ({
   input: ExecInSandboxInput;
 }): Promise<CallToolResult> => {
   const { toolName, params, topicId } = input;
-  const userId = input?.userId || ctx.userId;
+  // SECURITY: never trust `input.userId` — see the JSDoc on `execInSandboxSchema`.
+  // Everything downstream (JWT minting, skill/file lookups, sandbox session
+  // isolation) is keyed off this id, so it must come from the authenticated
+  // context only.
+  const userId = ctx.userId;
+
+  if (input?.userId && input.userId !== ctx.userId) {
+    log(
+      'execInSandbox: ignored deprecated input.userId=%s (differs from ctx.userId=%s)',
+      input.userId,
+      ctx.userId,
+    );
+  }
 
   log('execInSandbox: tool=%s, topicId=%s', toolName, topicId);
 
@@ -199,6 +224,12 @@ const execInSandboxHandler = async ({
     let enhancedParams = params;
 
     // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
+    //
+    // The minted credential is always scoped to `ctx.userId`, i.e. the caller
+    // themselves. This route is an `authedProcedure` invoked directly by a
+    // client, so it carries no `agentShareVisitor` context; a visitor reaching
+    // it can therefore only ever act as (and spend as) their own account, which
+    // is why no `shareVisitorBlocked` guard is applied here.
     if ((toolName === 'execScript' || toolName === 'runCommand') && params.command) {
       const lhResult = await preprocessLhCommand(
         params.command,

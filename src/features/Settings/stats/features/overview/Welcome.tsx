@@ -1,5 +1,6 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { Clock3Icon, ClockArrowUp } from 'lucide-react';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -48,7 +49,7 @@ const Welcome = memo<{ mobile?: boolean }>(({ mobile }) => {
           components={{
             span:
               isLoading || !data ? (
-                <Skeleton.Button active style={{ height: 24, minWidth: 40, width: 40 }} />
+                <Skeleton height={24} style={{ minWidth: 40 }} width={40} />
               ) : (
                 <span style={{ fontWeight: 'bold' }} />
               ),

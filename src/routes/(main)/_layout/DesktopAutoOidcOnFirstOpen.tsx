@@ -56,4 +56,6 @@ const DesktopAutoOidcOnFirstOpen = memo(() => {
   return null;
 });
 
+DesktopAutoOidcOnFirstOpen.displayName = 'DesktopAutoOidcOnFirstOpen';
+
 export default DesktopAutoOidcOnFirstOpen;

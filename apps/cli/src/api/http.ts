@@ -1,4 +1,4 @@
-import { getValidToken } from '../auth/refresh';
+import { describeTokenLookup, getValidToken } from '../auth/refresh';
 import { CLI_API_KEY_ENV, readCliApiKeyEnv } from '../constants/auth';
 import { CLI_PRIMARY_BIN } from '../constants/identity';
 import { resolveServerUrl } from '../settings';
@@ -30,7 +30,7 @@ export async function getAuthInfo(workspaceId?: string): Promise<AuthInfo> {
   }
 
   const result = await getValidToken();
-  if (!result) {
+  if (result.status !== 'ok') {
     if (readCliApiKeyEnv()) {
       log.error(
         `API key auth from ${CLI_API_KEY_ENV} is not supported for /webapi/* routes. Run OIDC login instead.`,
@@ -38,11 +38,16 @@ export async function getAuthInfo(workspaceId?: string): Promise<AuthInfo> {
       process.exit(1);
     }
 
-    log.error(`No authentication found. Run '${CLI_PRIMARY_BIN} login' first.`);
+    const report = describeTokenLookup(result);
+    log.error(
+      report
+        ? `${report.detail} ${report.fix}`
+        : `No authentication found. Run '${CLI_PRIMARY_BIN} login' first.`,
+    );
     process.exit(1);
   }
 
-  const accessToken = result!.credentials.accessToken;
+  const accessToken = result.credentials.accessToken;
 
   return {
     accessToken,
@@ -99,9 +104,12 @@ export async function getAgentStreamAuthInfo(workspaceId?: string): Promise<Agen
   }
 
   const result = await getValidToken();
-  if (!result) {
+  if (result.status !== 'ok') {
+    const report = describeTokenLookup(result);
     log.error(
-      `No authentication found. Run '${CLI_PRIMARY_BIN} login' first, or set ${CLI_API_KEY_ENV}.`,
+      report
+        ? `${report.detail} ${report.fix}`
+        : `No authentication found. Run '${CLI_PRIMARY_BIN} login' first, or set ${CLI_API_KEY_ENV}.`,
     );
     process.exit(1);
 

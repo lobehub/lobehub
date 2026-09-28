@@ -81,6 +81,10 @@ export const shareRoutes: RouteObject[] = [
         path: 'share/page/:id',
       },
       {
+        element: lazyElement(() => import('./features/artifact/SharedArtifactView')),
+        path: 'share/artifact/:id',
+      },
+      {
         element: <ExitShare />,
         path: '*',
       },

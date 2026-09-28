@@ -20,23 +20,15 @@ vi.mock('../settings', () => ({
   saveSettings: vi.fn(),
 }));
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-  setVerbose: vi.fn(),
-}));
-
 // Track event handlers registered on GatewayClient instances
 let clientEventHandlers: Record<string, (...args: any[]) => any> = {};
 let connectCalled = false;
 let clientOptions: any = {};
 
 vi.mock('@lobechat/device-gateway-client', () => ({
-  GatewayClient: vi.fn().mockImplementation((opts: any) => {
+  // A plain function, not an arrow: the command calls `new GatewayClient(...)`,
+  // and an arrow implementation is not constructible.
+  GatewayClient: vi.fn().mockImplementation(function (opts: any) {
     clientOptions = opts;
     clientEventHandlers = {};
     connectCalled = false;
@@ -139,6 +131,19 @@ describe('status command', () => {
     await parsePromise;
     expect(log.info).toHaveBeenCalledWith('CONNECTED');
     expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('should point a failed handshake at doctor', async () => {
+    const program = createProgram();
+    const parsePromise = program.parseAsync(['node', 'test', 'status']);
+    await vi.advanceTimersByTimeAsync(0);
+
+    clientEventHandlers['auth_failed']?.('signature verification failed');
+
+    await parsePromise;
+    expect(log.error).toHaveBeenCalledWith(
+      "Run 'lh doctor --profile connect' for a full diagnosis.",
+    );
   });
 
   it('should log FAILED on disconnected', async () => {

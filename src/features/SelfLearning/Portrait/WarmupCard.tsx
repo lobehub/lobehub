@@ -1,7 +1,7 @@
 'use client';
 
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, keyframes } from 'antd-style';
 import { DnaIcon, HistoryIcon } from 'lucide-react';
 import { memo } from 'react';

@@ -131,6 +131,27 @@ export class UserService {
     return lambdaClient.user.updateGuide.mutate(guide);
   };
 
+  updateToolIntervention = async (value: {
+    appendAllowList?: string[];
+    approvalMode?: 'auto-run' | 'allow-list' | 'manual';
+  }) => {
+    return lambdaClient.user.updateToolIntervention.mutate(value);
+  };
+
+  updateToolChannels = async (value: { crawlerImpls?: string[]; searchProviders?: string[] }) => {
+    return lambdaClient.user.updateToolChannels.mutate(value);
+  };
+
+  updateUninstalledBuiltinTools = async (
+    uninstalledBuiltinTools: string[],
+    workspaceId: string | null,
+  ) => {
+    return lambdaClient.user.updateUninstalledBuiltinTools.mutate({
+      uninstalledBuiltinTools,
+      workspaceId,
+    });
+  };
+
   updateUserSettings = async (value: PartialDeep<UserSettings>, signal?: AbortSignal) => {
     return lambdaClient.user.updateSettings.mutate(value, { signal });
   };

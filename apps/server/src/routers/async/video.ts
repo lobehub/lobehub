@@ -9,6 +9,7 @@ import {
   AsyncTaskErrorType,
   AsyncTaskStatus,
   RequestTrigger,
+  type SpendOrigin,
 } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
@@ -47,6 +48,11 @@ const createVideoInputSchema = z.object({
   model: z.string(),
   prechargeResult: z.any().optional(),
   provider: z.string(),
+  /**
+   * Origin of the submitting request, forwarded so the completion charge keeps
+   * the spend attributed after the async hand-off.
+   */
+  spendOrigin: z.custom<SpendOrigin>().optional(),
   workspaceId: z.string().optional(),
 });
 
@@ -59,10 +65,11 @@ const checkAbortSignal = (signal: AbortSignal) => {
 async function pollUntilCompletion(
   modelRuntime: any,
   inferenceId: string,
+  model: string,
   signal: AbortSignal,
 ): Promise<{ headers?: Record<string, string>; videoUrl: string } | null> {
-  const maxRetries = 120;
   const pollingInterval = 5000;
+  const maxRetries = Math.ceil(ASYNC_TASK_TIMEOUT / pollingInterval);
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     checkAbortSignal(signal);
@@ -70,7 +77,7 @@ async function pollUntilCompletion(
     try {
       log('Polling attempt %d/%d for inferenceId: %s', attempt + 1, maxRetries, inferenceId);
 
-      const result = await modelRuntime.handlePollVideoStatus(inferenceId);
+      const result = await modelRuntime.handlePollVideoStatus(inferenceId, model);
 
       if (result.status === 'success') {
         log('Video generation succeeded for inferenceId: %s', inferenceId);
@@ -134,6 +141,7 @@ export const videoRouter = router({
       model,
       prechargeResult,
       provider,
+      spendOrigin,
       workspaceId,
     } = input;
     const asyncTaskModel = new AsyncTaskModel(ctx.serverDB, ctx.userId, workspaceId);
@@ -165,7 +173,7 @@ export const videoRouter = router({
 
         checkAbortSignal(signal);
 
-        const pollResult = await pollUntilCompletion(modelRuntime, inferenceId, signal);
+        const pollResult = await pollUntilCompletion(modelRuntime, inferenceId, model, signal);
 
         if (!pollResult) {
           log('Polling completed but no video URL returned for inferenceId: %s', inferenceId);
@@ -223,6 +231,7 @@ export const videoRouter = router({
               },
               latency: duration,
               metadata: {
+                ...spendOrigin,
                 asyncTaskId,
                 generationBatchId,
                 topicId: generationTopicId,
@@ -300,6 +309,7 @@ export const videoRouter = router({
           await chargeAfterGenerate({
             isError: true,
             metadata: {
+              ...spendOrigin,
               asyncTaskId,
               generationBatchId,
               topicId: generationTopicId,

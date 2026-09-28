@@ -1,8 +1,8 @@
 'use client';
 
 import { type FormItemProps, type FormModalProps } from '@lobehub/ui';
-import { FormModal, Skeleton } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { FormModal } from '@lobehub/ui';
+import { Skeleton, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,17 +11,7 @@ import { ImageType, imageTypeOptions, useScreenshot } from '@/hooks/useScreensho
 import dynamic from '@/libs/next/dynamic';
 
 const Preview = dynamic(() => import('./Preview'), {
-  loading: () => (
-    <Skeleton.Button
-      active
-      block
-      size={'large'}
-      style={{
-        height: 400,
-        width: '100%',
-      }}
-    />
-  ),
+  loading: () => <Skeleton height={400} width={'100%'} />,
 });
 
 const prefixCls = 'ant';

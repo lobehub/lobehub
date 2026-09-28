@@ -84,6 +84,6 @@ previewBox: css`
 `,
 ```
 
-For the common "icon + file/title header, then one content box" shape, reuse `ToolResultCard` from `@lobechat/shared-tool-ui/components` instead of rebuilding it — it's already single-layer (flat wrapper, one `colorFillTertiary` content box) and is what CC `Read` / `Grep` / `Glob` / `Write` / `WebSearch` / `WebFetch` render through.
+For the common "icon + file/title header" shape, reuse a shared Inspector factory from `@lobechat/shared-tool-ui/inspectors` (`createReadLocalFileInspector`, `createGrepContentInspector`, `createGlobLocalFilesInspector`, `createWriteLocalFileInspector`, `createRunCommandInspector`, …) instead of rebuilding the header — this is what CC `Read` / `Grep` / `Glob` / `Write` / `Bash` reuse (see `packages/builtin-tool-claude-code/src/client/Inspector/index.ts`). There's no equivalent shared component for the content box itself — `Write` / `WebSearch` / `WebFetch` each render their own single `Highlighter`/`Markdown` block following the single-layer rules above.
 
 The exception is a deliberate **panel** pattern — an `<Block variant="outlined">` with a header bar + list rows (CC `TodoWrite` / `Task`). There the single outlined block is the panel and the header fill is a header bar, not a nested card. One structured panel is fine; stacked decorative fills are not.

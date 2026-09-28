@@ -1,18 +1,22 @@
 import type {
   RegisterExternalWorkParams,
-  WorkListBaseItem,
+  WorkItem,
   WorkListItem,
   WorkSummaryItem,
   WorkVersionEventItem,
 } from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
+import { documents } from '../../schemas/file';
 import { works, workVersions } from '../../schemas/work';
 import { type WorkContext, workOwnership } from './context';
 import {
   currentWorkListFields,
   type DisplayWorkType,
+  documentDeletedField,
+  documentSummaryJoin,
   listDisplayVersionEventRows,
+  resourceNeverDeletedField,
   type WorkDisplayColumns,
   type WorkTypeAdapter,
 } from './internal';
@@ -57,17 +61,26 @@ export const registerExternalWork = async (
  * list/summary payloads.
  */
 export const createDisplayWorkAdapter = (config: { type: DisplayWorkType }): WorkTypeAdapter => {
-  const toListItem = (work: WorkListBaseItem): WorkListItem => work as WorkListItem;
+  const toListItem = (work: WorkItem, resourceDeleted: boolean): WorkListItem =>
+    ({ ...work, resourceDeleted }) as WorkListItem;
+  // `document` is the only display-backed type with a local backing row, so it
+  // is the only one that LEFT JOINs to derive `resourceDeleted`; the others
+  // answer with a constant `false`.
+  const isDocument = config.type === 'document';
 
   return {
     listConversationRows: async (ctx, params) => {
-      const rows = await ctx.db
+      const query = ctx.db
         .select({
           eventCreatedAt: workVersions.createdAt,
+          resourceDeleted: isDocument ? documentDeletedField : resourceNeverDeletedField,
           work: currentWorkListFields,
         })
         .from(workVersions)
         .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
+        .$dynamic();
+
+      const rows = await (isDocument ? query.leftJoin(documents, documentSummaryJoin) : query)
         .where(
           and(
             eq(workVersions.topicId, params.topicId),
@@ -80,7 +93,7 @@ export const createDisplayWorkAdapter = (config: { type: DisplayWorkType }): Wor
 
       return rows.map((row) => ({
         eventCreatedAt: row.eventCreatedAt,
-        item: toListItem(row.work),
+        item: toListItem(row.work, row.resourceDeleted),
       }));
     },
 
@@ -90,7 +103,7 @@ export const createDisplayWorkAdapter = (config: { type: DisplayWorkType }): Wor
       return rows.map(
         (row) =>
           ({
-            ...toListItem(row.work),
+            ...toListItem(row.work, row.resourceDeleted),
             version: row.version,
           }) as WorkVersionEventItem,
       );
@@ -98,7 +111,7 @@ export const createDisplayWorkAdapter = (config: { type: DisplayWorkType }): Wor
 
     mapCurrentRow: (row, totalCost) =>
       ({
-        ...toListItem(row.work),
+        ...toListItem(row.work, row.resourceDeleted),
         event: row.event,
         totalCost,
         version: row.version,

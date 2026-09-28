@@ -1,12 +1,23 @@
-import type { CheckpointConfig, TaskAutomationMode, TaskDetailData } from '@lobechat/types';
+import type {
+  CheckpointConfig,
+  TaskAutomationMode,
+  TaskAutomationSnapshot,
+  TaskDetailData,
+} from '@lobechat/types';
 
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 import { OptimisticEngine } from '@/store/utils/optimisticEngine';
 import { runMutation } from '@/store/utils/runMutation';
 import { saveToast } from '@/store/utils/saveToast';
 
 import type { TaskStore } from '../../store';
+import {
+  appendOptimisticPropertyActivity,
+  buildOptimisticPropertyActivity,
+} from '../detail/optimisticActivity';
 
 // Slice of TaskStore that the OptimisticEngine for setAutomationMode reads/writes.
 // Keeping it narrow ensures `extractAffectedPaths` produces `taskDetailMap.<id>`
@@ -30,6 +41,20 @@ const resolveDefaultTimezone = (): string => {
 };
 
 type Setter = StoreSetter<TaskStore>;
+
+/** The automation columns as the feed sees them, read off the cached detail. */
+const snapshotAutomationFromDetail = (
+  detail: TaskDetailData | undefined,
+): TaskAutomationSnapshot | null =>
+  detail?.automationMode
+    ? {
+        heartbeatInterval: detail.heartbeat?.interval ?? null,
+        maxExecutions: detail.schedule?.maxExecutions ?? null,
+        mode: detail.automationMode,
+        schedulePattern: detail.schedule?.pattern ?? null,
+        scheduleTimezone: detail.schedule?.timezone ?? null,
+      }
+    : null;
 
 export const createTaskConfigSlice = (set: Setter, get: () => TaskStore, _api?: unknown) =>
   new TaskConfigSliceActionImpl(set, get, _api);
@@ -209,10 +234,38 @@ export class TaskConfigSliceActionImpl {
     // after the user's next click and clobber their latest state.
     const engine = this.#getAutomationEngine();
     const tx = engine.createTransaction(`setAutomationMode(${id})`);
+    // The feed row for this change rides the same optimistic patch as the
+    // fields themselves — there is deliberately no refetch here (see below),
+    // so without it the row would only show up on the next unrelated refresh.
+    const before = snapshotAutomationFromDetail(detail);
+    const after: TaskAutomationSnapshot | null = mode
+      ? {
+          heartbeatInterval: update.heartbeatInterval ?? detail?.heartbeat?.interval ?? null,
+          maxExecutions: detail?.schedule?.maxExecutions ?? null,
+          mode,
+          schedulePattern: update.schedulePattern ?? detail?.schedule?.pattern ?? null,
+          scheduleTimezone: update.scheduleTimezone ?? detail?.schedule?.timezone ?? null,
+        }
+      : null;
+    const userState = useUserStore.getState();
+    const actorId = userProfileSelectors.userId(userState);
+    const optimisticRow = buildOptimisticPropertyActivity({
+      actor: actorId
+        ? {
+            avatar: userProfileSelectors.userAvatar(userState) || null,
+            id: actorId,
+            name: userProfileSelectors.displayUserName(userState) || null,
+            type: 'user',
+          }
+        : undefined,
+      change: { field: 'automation', from: before, to: after },
+      now: new Date().toISOString(),
+    });
     tx.set((draft) => {
       const target = draft.taskDetailMap[id];
       if (!target) return;
       target.automationMode = mode;
+      target.activities = appendOptimisticPropertyActivity(target.activities ?? [], optimisticRow);
       if (update.heartbeatInterval !== undefined) {
         target.heartbeat ??= {};
         target.heartbeat.interval = update.heartbeatInterval;
@@ -267,10 +320,41 @@ export class TaskConfigSliceActionImpl {
     // arrive after the user's next click and overwrite their input.
     const engine = this.#getAutomationEngine();
     const tx = engine.createTransaction(`updateSchedule(${id})`);
+    // The server logs a pattern / timezone edit as an automation change when
+    // the schedule is on; this path never refetches, so the feed row has to
+    // ride the same patch (see setAutomationMode).
+    const detail = this.#get().taskDetailMap[id];
+    const before = snapshotAutomationFromDetail(detail);
+    const after: TaskAutomationSnapshot | null = before
+      ? {
+          ...before,
+          maxExecutions: schedule.maxExecutions,
+          schedulePattern: schedule.pattern,
+          scheduleTimezone: schedule.timezone,
+        }
+      : null;
+    const userState = useUserStore.getState();
+    const actorId = userProfileSelectors.userId(userState);
+    const optimisticRow =
+      before && JSON.stringify(before) !== JSON.stringify(after)
+        ? buildOptimisticPropertyActivity({
+            actor: actorId
+              ? {
+                  avatar: userProfileSelectors.userAvatar(userState) || null,
+                  id: actorId,
+                  name: userProfileSelectors.displayUserName(userState) || null,
+                  type: 'user',
+                }
+              : undefined,
+            change: { field: 'automation', from: before, to: after },
+            now: new Date().toISOString(),
+          })
+        : undefined;
     tx.set((draft) => {
       const target = draft.taskDetailMap[id];
       if (!target) return;
       target.config = nextConfig;
+      target.activities = appendOptimisticPropertyActivity(target.activities ?? [], optimisticRow);
       target.schedule = {
         maxExecutions: schedule.maxExecutions,
         pattern: schedule.pattern,

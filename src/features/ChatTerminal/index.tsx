@@ -1,8 +1,8 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { DraggablePanel } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { DraggablePanel } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { lazy, memo, Suspense, useEffect, useState } from 'react';
 
 import { useToggleTerminalPanelHotkey } from '@/hooks/useHotkeys';
@@ -13,20 +13,9 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 // panel is actually opened.
 const Content = lazy(() => import('./Content'));
 
-const styles = createStaticStyles(({ css }) => ({
-  // DraggablePanel hard-codes `transition: all 0.2s` on its inner panel. The
-  // doubled selector out-specifies that without !important, so the component's
-  // own inline `transition: none` still wins while dragging (no lag on resize).
-  smoothResize: css`
-    && {
-      transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
-    }
-  `,
-}));
-
-// Keep in sync with the 0.3s height transition above: the panel must finish
-// collapsing before the terminal is torn down.
-const COLLAPSE_UNMOUNT_DELAY = 300;
+// Keep in sync with DraggablePanel's own collapse duration: the panel must
+// finish collapsing before the terminal is torn down.
+const COLLAPSE_UNMOUNT_DELAY = 250;
 
 /**
  * Codex-style built-in terminal: a full-width bottom panel on the chat page
@@ -61,7 +50,6 @@ const ChatTerminalPanel = memo(() => {
   return (
     <DraggablePanel
       backgroundColor={cssVar.colorBgContainer}
-      classNames={{ content: styles.smoothResize }}
       expand={show}
       expandable={false}
       maxHeight={720}

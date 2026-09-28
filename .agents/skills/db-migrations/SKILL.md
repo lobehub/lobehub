@@ -1,6 +1,6 @@
 ---
 name: db-migrations
-description: 'Use for database rollout strategy, Drizzle migrations, online index creation, data backfills, migration regeneration, sequence conflicts after rebase, idempotent SQL review, or migration renames.'
+description: 'Use for Drizzle migration rollout, online indexes, backfills, idempotent SQL and migration regeneration or rebase conflicts.'
 user-invocable: false
 ---
 
@@ -25,9 +25,36 @@ Apply these before generating any migration — they change what the schema file
 
 - **Keep domain constants out of schema files.** In new or modified schema files under `packages/database/src/schemas/`, shared domain literal arrays, union types, and option interfaces belong in `@lobechat/types` (one module per domain, re-exported from its `index.ts`); both the schema (`.$type<>()`) and consumers (routers via `z.enum(...)`, services, UI) import from there. This rule targets domain constants only — table objects, inferred row types, Drizzle relation objects, and zod insert/select schemas (`insertAgentSchema`, …) are the schema file's job and stay put. Existing schema files that already export such constants (e.g. `resourcePermission.ts`) are grandfathered; migrate them opportunistically when the file is next touched, not in bulk.
 
+- **Prefixed ids only for rows that are addressed one at a time.** An `idGenerator` prefix (`task_`, `cmt_`, `brf_`) earns its keep when the id turns up somewhere a person reads it — a URL segment, an API argument, a tool-call payload, a support ticket. A child table whose rows are only ever fetched in bulk for their parent takes a plain uuid instead, like `task_dependencies` / `task_documents` / `task_topics`; there the prefix costs a registry entry in `idGenerator.ts` and buys nothing back.
+
+  ```ts
+  // ✅ Addressed individually — deleteComment(commentId), /task/:id
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => idGenerator('taskComments'))
+    .notNull(),
+
+  // ✅ Only ever read in bulk for one parent
+  id: uuid('id').defaultRandom().primaryKey().notNull(),
+  ```
+
+- **Column order: identity → scope → the table's own columns → `visibility` → timestamps.** Put `id` and the parent FK first, then the ownership columns (`user_id`, `workspace_id`), then whatever this table is actually for, then `visibility`, then the `...timestamps` / `createdAt()` spread. A reader scanning an unfamiliar table then finds the same field in the same place. `visibility` sitting at the end is the deliberate slot, not an accident of history: of the 22 tables that carry the column today, 17 place it in the last three columns and **none** place it directly after `id`. A new table that hoists it to the front becomes the one outlier — if the placement is ever worth changing, change it repo-wide and update this rule, not one table at a time.
+
 ## Choose the rollout strategy
 
 Classify every database change into one of these three rollout paths before generating or editing a migration.
+
+### Validate rollout assumptions on the actual Dev database
+
+Do not choose a rollout path from hypothetical claims such as “this migration might be slow” or “installing these triggers could block deployment.” Before deciding that a schema change needs a manual production step, deferred installation, or a dedicated backfill, test the relevant operation against the project's actual Dev database.
+
+- Classify the database target first using the project's approved database-access tooling; never read secret-bearing `.env` files directly.
+- Measure the real operation or the closest safe equivalent, such as creating an identically defined probe index under a temporary name or installing temporary triggers inside a transaction that is rolled back.
+- Record the tested SQL or operation, representative row count and table size, elapsed time, and cleanup verification.
+- Keep probes reversible and remove every temporary database object after the measurement.
+- Treat a single Dev result as evidence about the observed Dev scale, not proof of production behavior. State material differences in production scale, load, cache state, and lock contention explicitly, and label any resulting production claim as an inference.
+
+Rollout decisions must combine repository deployment facts with these measurements. Do not add operational tables, delayed activation paths, or manual release steps solely to guard against unmeasured performance concerns.
 
 ### 1. Regular Drizzle migration
 
@@ -74,14 +101,14 @@ Backfill scripts should be resumable, safe to retry, processed in bounded batche
 
 Schema changes churn during feature development. When the schema changes before the migration has shipped, do not hand-edit the existing migration SQL to chase the new schema shape. Delete the draft migration artifacts added by this branch (SQL file, matching snapshot, and matching journal entry), then run the generator again and re-apply the normal migration review steps below.
 
-For example, if this branch's draft migration is `0110_add_verify_tables_and_ai_infra_id`:
+For example, if this branch's draft migration is `NNNN_add_verify_tables` (substitute the branch's real number — never an already-shipped migration):
 
 ```bash
 # 1. Delete the draft SQL and its snapshot
-rm packages/database/migrations/0110_add_verify_tables_and_ai_infra_id.sql
-rm packages/database/migrations/meta/0110_snapshot.json
+rm packages/database/migrations/NNNN_add_verify_tables.sql
+rm packages/database/migrations/meta/NNNN_snapshot.json
 
-# 2. Remove the matching 0110 entry from the journal's "entries" array
+# 2. Remove the matching NNNN entry from the journal's "entries" array
 #    packages/database/migrations/meta/_journal.json
 
 # 3. Regenerate from the current schema
@@ -92,14 +119,14 @@ This keeps the generated SQL, snapshot, and journal aligned with the actual sche
 
 Before release, if a feature branch accumulated multiple development-only migrations, consolidate them into one migration when possible. Production does not need to replay every intermediate draft shape, and fewer migrations reduce deploy-time risk.
 
-For example, if this branch added `0110`, `0111`, and `0112`, delete all three drafts and regenerate a single migration:
+For example, if this branch added three drafts `AAAA`, `BBBB`, and `CCCC`, delete all three and regenerate a single migration:
 
 ```bash
 # 1. Delete every draft SQL and snapshot this branch added
-rm packages/database/migrations/011{0,1,2}_*.sql
-rm packages/database/migrations/meta/011{0,1,2}_snapshot.json
+rm packages/database/migrations/{AAAA,BBBB,CCCC}_*.sql
+rm packages/database/migrations/meta/{AAAA,BBBB,CCCC}_snapshot.json
 
-# 2. Remove the 0110/0111/0112 entries from the journal's "entries" array
+# 2. Remove those entries from the journal's "entries" array
 #    packages/database/migrations/meta/_journal.json
 
 # 3. Regenerate one migration covering the full schema delta
@@ -108,7 +135,7 @@ bun run db:generate
 
 Do not make a migration compatible with earlier development-only versions of the same branch. While the migration has not shipped, there is no production history to preserve. Fix local/dev databases directly with whatever SQL is simplest (drop the draft table, rename a column, delete draft rows), then regenerate the branch migration from the current schema.
 
-For example, if an earlier draft on this branch created `signup_attempt_id` and you have since renamed it to `user_signup_log_id`, do not add a compatibility `ALTER ... RENAME` to the migration. Just fix the dev DB directly (see the `access-pg` skill for the `bun -e` + `pg` pattern), then regenerate:
+For example, if an earlier draft on this branch created `signup_attempt_id` and you have since renamed it to `user_signup_log_id`, do not add a compatibility `ALTER ... RENAME` to the migration. Just fix the dev DB directly, then regenerate:
 
 ```bash
 # Fix the dev DB to match the new schema (simplest SQL wins)
@@ -143,7 +170,6 @@ This generates:
 And updates:
 
 - `packages/database/migrations/meta/_journal.json`
-- `packages/database/src/core/migrations.json`
 - `docs/development/database-schema.dbml`
 
 ## Custom Migrations (e.g. CREATE EXTENSION)

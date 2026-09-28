@@ -1,5 +1,5 @@
-import { Accordion, AccordionItem, Flexbox, Icon, InputNumber, Text } from '@lobehub/ui';
-import { Checkbox, Select } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, InputNumber } from '@lobehub/ui';
+import { Accordion, Checkbox, Select, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
@@ -305,70 +305,75 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         </Flexbox>
       )}
 
-      <Accordion defaultExpandedKeys={[]} gap={0}>
-        <AccordionItem
-          itemKey="advanced"
-          paddingBlock={6}
-          paddingInline={0}
-          title={
-            <Flexbox horizontal align="center" gap={8}>
-              <Icon color={cssVar.colorTextDescription} icon={SlidersHorizontal} size={14} />
-              <Text style={{ color: cssVar.colorTextSecondary }}>
-                {t('taskSchedule.advancedSettings')}
-              </Text>
-            </Flexbox>
-          }
-        >
-          <Flexbox gap={14} paddingBlock={'8px 4px'}>
-            <Flexbox gap={6}>
-              <Flexbox horizontal align="center" gap={6}>
-                <Icon color={cssVar.colorTextDescription} icon={Globe} size={14} />
-                <Text className={styles.fieldLabel}>{t('taskSchedule.timezone')}</Text>
-              </Flexbox>
-              <Select
-                showSearch
-                options={TIMEZONE_OPTIONS}
-                popupMatchSelectWidth={false}
-                value={tz}
-                variant="filled"
-                optionRender={(option) => {
-                  const data = option as TimezoneOption;
-                  return (
-                    <div className={styles.timezoneOption}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {data.label}
-                      </span>
-                      <span className={styles.timezoneOffset}>{data.offset}</span>
-                    </div>
-                  );
-                }}
-                onChange={handleTimezoneChange}
-              />
-            </Flexbox>
+      <Accordion
+        defaultValue={[]}
+        gap={0}
+        indicatorPlacement="inline"
+        styles={{ header: { paddingBlock: 6, paddingInline: 0 } }}
+        items={[
+          {
+            children: (
+              <Flexbox gap={14} paddingBlock={'8px 4px'}>
+                <Flexbox gap={6}>
+                  <Flexbox horizontal align="center" gap={6}>
+                    <Icon color={cssVar.colorTextDescription} icon={Globe} size={14} />
+                    <Text className={styles.fieldLabel}>{t('taskSchedule.timezone')}</Text>
+                  </Flexbox>
+                  <Select
+                    showSearch
+                    options={TIMEZONE_OPTIONS}
+                    popupMatchSelectWidth={false}
+                    value={tz}
+                    variant="filled"
+                    optionRender={(option) => {
+                      const data = option as TimezoneOption;
+                      return (
+                        <div className={styles.timezoneOption}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {data.label}
+                          </span>
+                          <span className={styles.timezoneOffset}>{data.offset}</span>
+                        </div>
+                      );
+                    }}
+                    onChange={handleTimezoneChange}
+                  />
+                </Flexbox>
 
-            <Flexbox gap={6}>
-              <Flexbox horizontal align="center" gap={6}>
-                <Icon color={cssVar.colorTextDescription} icon={Hash} size={14} />
-                <Text className={styles.fieldLabel}>{t('taskSchedule.maxExecutions')}</Text>
+                <Flexbox gap={6}>
+                  <Flexbox horizontal align="center" gap={6}>
+                    <Icon color={cssVar.colorTextDescription} icon={Hash} size={14} />
+                    <Text className={styles.fieldLabel}>{t('taskSchedule.maxExecutions')}</Text>
+                  </Flexbox>
+                  <Flexbox horizontal align="center" gap={12}>
+                    <InputNumber
+                      disabled={continuous}
+                      min={1}
+                      placeholder={t('taskSchedule.maxExecutionsPlaceholder')}
+                      style={{ flex: 1 }}
+                      value={maxExec ?? undefined}
+                      variant="filled"
+                      onChange={handleMaxExecChange}
+                    />
+                    <Checkbox checked={continuous} onChange={handleContinuousChange}>
+                      {t('taskSchedule.continuous')}
+                    </Checkbox>
+                  </Flexbox>
+                </Flexbox>
               </Flexbox>
-              <Flexbox horizontal align="center" gap={12}>
-                <InputNumber
-                  disabled={continuous}
-                  min={1}
-                  placeholder={t('taskSchedule.maxExecutionsPlaceholder')}
-                  style={{ flex: 1 }}
-                  value={maxExec ?? undefined}
-                  variant="filled"
-                  onChange={handleMaxExecChange}
-                />
-                <Checkbox checked={continuous} onChange={handleContinuousChange}>
-                  {t('taskSchedule.continuous')}
-                </Checkbox>
+            ),
+            key: 'advanced',
+            title: (
+              <Flexbox horizontal align="center" gap={8}>
+                <Icon color={cssVar.colorTextDescription} icon={SlidersHorizontal} size={14} />
+                <Text style={{ color: cssVar.colorTextSecondary }}>
+                  {t('taskSchedule.advancedSettings')}
+                </Text>
               </Flexbox>
-            </Flexbox>
-          </Flexbox>
-        </AccordionItem>
-      </Accordion>
+            ),
+          },
+        ]}
+      />
     </Flexbox>
   );
 });

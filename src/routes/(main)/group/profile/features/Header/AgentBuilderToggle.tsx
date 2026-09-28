@@ -1,4 +1,4 @@
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { BotMessageSquareIcon } from 'lucide-react';
 import { memo } from 'react';
 

@@ -1,5 +1,6 @@
 import type { TopicCommentItem } from '@lobechat/types';
-import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { MessageSquareText } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -20,7 +20,7 @@ interface ModelAndProvider {
  * Use this everywhere a capability is gated on the model that will actually run
  * (vision/upload, tool use, builtin search, context window, …) so the controls
  * stay in sync with the topic model after a switch — not the stale agent
- * default. The Model/ModelLabel controls resolve display + switch routing
+ * default. The Model control resolves display + switch routing
  * against the same topic model (see `useAgentModelSelection` composition there).
  */
 export const useEffectiveModel = (agentId: string): ModelAndProvider => {

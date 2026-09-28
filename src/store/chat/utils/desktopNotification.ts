@@ -192,21 +192,35 @@ export const notifyDesktopAgentCompleted = async (
 
   try {
     const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
+    const { completionSoundService } = await import('@/services/electron/completionSound');
     const fallback = t('notification.finishChatGeneration', { ns: 'electron' });
     const navigate = resolveNotificationNavigate(context);
-    const sender = await buildNotificationSender(context);
+    const [sender, soundName] = await Promise.all([
+      buildNotificationSender(context),
+      completionSoundService.getNotificationSoundFile(),
+    ]);
 
-    const tasks: Promise<unknown>[] = [
-      desktopNotificationService.showNotification({
-        body: buildNotificationBody(content, fallback),
-        navigate,
-        sender,
-        title: resolveNotificationTitle(get, context, fallback),
-      }),
-    ];
-    if (badge) tasks.push(desktopNotificationService.setBadgeCount(1));
+    if (badge) void desktopNotificationService.setBadgeCount(1);
 
-    await Promise.allSettled(tasks);
+    // The main process owns the window-focus decision, so it also decides which of the two
+    // sounds fires: a delivered banner carries the system sound, and only a banner that was
+    // skipped (or failed) hands the completion chime back to the renderer. Asking here
+    // instead of checking focus twice is what keeps them from doubling up.
+    const result = await desktopNotificationService.showNotification({
+      body: buildNotificationBody(content, fallback),
+      navigate,
+      sender,
+      soundName,
+      title: resolveNotificationTitle(get, context, fallback),
+    });
+
+    if (result?.success && !result.skipped) return;
+
+    try {
+      await completionSoundService.play();
+    } catch (error) {
+      console.error('Completion sound playback failed:', error);
+    }
   } catch (error) {
     console.error('Agent completion desktop notification failed:', error);
   }

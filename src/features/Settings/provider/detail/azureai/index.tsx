@@ -1,6 +1,6 @@
 'use client';
 
-import { ModelProvider } from 'model-bank';
+import { ModelProvider } from 'model-bank/modelProvider';
 import { AzureAIProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 

@@ -5,9 +5,9 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
-import { CheckerDock, RunResult } from '@/features/Verify';
-import { useVerifyState } from '@/features/Verify/hooks';
-import { phaseCardBackground, phaseFromStatus } from '@/features/Verify/utils';
+import { CheckerDock, RunResult } from '@/features/Acceptance';
+import { useVerifyState } from '@/features/Acceptance/hooks';
+import { phaseCardBackground, phaseFromStatus } from '@/features/Acceptance/utils';
 
 import { dataSelectors, useConversationStore } from '../../store';
 

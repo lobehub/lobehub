@@ -14,12 +14,6 @@ let category: FilesTabs = FilesTabs.All;
 let libraryId: string | undefined;
 let sourceFilter: ResourceSourceFilter | undefined;
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('@/features/LibraryModal', () => ({
   useCreateNewModal: () => ({ open: mockOpen }),
 }));

@@ -24,18 +24,22 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const mockGetFileAccessUrl = vi.fn();
 const mockGetFullFileUrl = vi.fn();
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFileAccessUrl: mockGetFileAccessUrl,
-    getFullFileUrl: mockGetFullFileUrl,
-  })),
+  FileService: vi.fn(function () {
+    return {
+      getFileAccessUrl: mockGetFileAccessUrl,
+      getFullFileUrl: mockGetFullFileUrl,
+    };
+  }),
 }));
 
 // Mock FileModel
 const mockFileModelCreate = vi.fn();
 vi.mock('../file', () => ({
-  FileModel: vi.fn().mockImplementation(() => ({
-    create: mockFileModelCreate,
-  })),
+  FileModel: vi.fn(function () {
+    return {
+      create: mockFileModelCreate,
+    };
+  }),
 }));
 
 const userId = 'generation-test-user-id';
@@ -666,6 +670,8 @@ describe('GenerationModel', () => {
         } as ImageGenerationAsset,
         accessedAt: new Date(),
         createdAt: new Date(),
+        deletedAt: null,
+        isDeleted: null,
         updatedAt: new Date(),
         asyncTask: {
           id: '550e8400-e29b-41d4-a716-446655440000',

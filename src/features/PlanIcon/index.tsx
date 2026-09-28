@@ -1,5 +1,6 @@
 import { Plans } from '@lobechat/types';
-import { Center, Flexbox, Tag } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Atom, Box, CircleSlash, Sparkle, Zap } from 'lucide-react';
 import { type CSSProperties, type MouseEvent } from 'react';

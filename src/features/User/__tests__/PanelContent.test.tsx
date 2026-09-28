@@ -7,8 +7,6 @@ import { useUserStore } from '@/store/user';
 import PanelContent from '../UserPanel/PanelContent';
 
 // Mock dependencies
-vi.mock('zustand/traditional');
-
 vi.mock('next/navigation', () => ({
   useRouter: vi.fn(() => ({
     push: vi.fn(),

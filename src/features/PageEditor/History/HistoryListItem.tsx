@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
-import { Tooltip } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Tag, Tooltip } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import { ArrowLeftRightIcon, RotateCcwIcon } from 'lucide-react';

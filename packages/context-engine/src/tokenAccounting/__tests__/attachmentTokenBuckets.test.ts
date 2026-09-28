@@ -174,5 +174,22 @@ describe('attachment token buckets', () => {
         mkUploadFile({ id: 'pdf', name: 'document.pdf', size: 1, type: 'application/pdf' }),
       ),
     ).toBe(false);
+    // HDL sources resolve to text/x-* via the custom mime map even when the
+    // browser reports an empty or octet-stream type.
+    expect(
+      isTextLikeUploadFile(
+        mkUploadFile({
+          id: 'verilog',
+          name: 'adder.v',
+          size: 1,
+          type: 'application/octet-stream',
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isTextLikeUploadFile(
+        mkUploadFile({ id: 'systemverilog', name: 'top.sv', size: 1, type: '' }),
+      ),
+    ).toBe(true);
   });
 });

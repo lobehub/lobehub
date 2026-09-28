@@ -1,16 +1,18 @@
 'use client';
 
-import { Center } from '@lobehub/ui';
 import { memo } from 'react';
 import { useParams } from 'react-router';
 import useSWR from 'swr';
 
 import PublishedShell from '@/business/client/features/PageShare/PublishedShell';
 import ReadOnlyPageViewer from '@/business/client/features/PageShare/ReadOnlyPageViewer';
-import Loading from '@/components/Loading/BrandTextLoading';
 import { shareKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { getIdFromIdentifier } from '@/utils/identifier';
+
+import ShareLayout from '../../shell/ShareLayout';
+
+const PAGE_READER_WIDTH = 820;
 
 const SharedPageView = memo(() => {
   const { id } = useParams<{ id: string }>();
@@ -22,20 +24,21 @@ const SharedPageView = memo(() => {
     { revalidateOnFocus: false },
   );
 
-  // The SSR document already carries the page, and SWR revalidates on mount
-  // with it in cache — gating on `isLoading` alone would blank it.
-  if (!error && !data && isLoading) {
-    return (
-      <Center height={'100vh'}>
-        <Loading debugId="SharedPageView" />
-      </Center>
-    );
-  }
-
   return (
-    <PublishedShell data={data} error={error}>
-      {data ? <ReadOnlyPageViewer data={data} /> : null}
-    </PublishedShell>
+    <ShareLayout
+      contentWidth={PAGE_READER_WIDTH}
+      error={error}
+      // The SSR document already carries the page, and SWR revalidates on mount
+      // with it in cache — gating on `isLoading` alone would blank it.
+      loading={isLoading && !data}
+      title={data?.document.title}
+    >
+      {data ? (
+        <PublishedShell data={data}>
+          <ReadOnlyPageViewer data={data} />
+        </PublishedShell>
+      ) : null}
+    </ShareLayout>
   );
 });
 

@@ -1,6 +1,6 @@
 ---
 name: project-overview
-description: 'LobeHub open-source monorepo architecture map. Use when locating code layers, understanding apps/packages/src layout, business stubs, project structure, or onboarding to the repository.'
+description: 'Use for the OSS repository map, code-layer lookup, apps/packages/src ownership and business stubs.'
 user-invocable: false
 ---
 

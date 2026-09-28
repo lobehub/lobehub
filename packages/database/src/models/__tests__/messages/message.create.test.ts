@@ -2,6 +2,7 @@ import type { DBMessageItem } from '@lobechat/types';
 import { asc, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { MAX_TOOL_IDENTIFIER_LENGTH } from '@/utils/clampToolIdentifier';
 import { uuid } from '@/utils/uuid';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -188,6 +189,61 @@ describe('MessageModel Create Tests', () => {
         .where(eq(messagePlugins.id, result.id));
       expect(pluginResult).toHaveLength(1);
       expect(pluginResult[0].identifier).toBe('plugin1');
+    });
+
+    it('should persist pluginError when creating a failed tool message', async () => {
+      // agent-runtime's createToolMessage passes the tool failure as pluginError
+      // together with an empty content; dropping it leaves the model with an
+      // `<empty_content>` tool result and no clue why the call failed.
+      const result = await messageModel.create({
+        content: undefined as unknown as string,
+        plugin: {
+          apiName: 'analyzeMedia',
+          arguments: '{}',
+          identifier: 'lobe-agent',
+          type: 'builtin',
+        },
+        pluginError: {
+          errorType: 'InsufficientBudgetForModel',
+          kind: 'stop',
+          message: 'budget exceeded',
+        },
+        role: 'tool',
+        sessionId: '1',
+        tool_call_id: 'call_budget',
+      });
+
+      const [row] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, result.id));
+      expect(row.error).toMatchObject({ errorType: 'InsufficientBudgetForModel' });
+    });
+
+    it('should clamp oversized plugin identifiers when creating a tool message', async () => {
+      const oversizedApiName = `api-${'a'.repeat(40_000)}`;
+      const oversizedIdentifier = `plugin-${'i'.repeat(40_000)}`;
+
+      const result = await messageModel.create({
+        content: 'tool result',
+        plugin: {
+          apiName: oversizedApiName,
+          arguments: '{}',
+          identifier: oversizedIdentifier,
+          type: 'default',
+        },
+        role: 'tool',
+        sessionId: '1',
+        tool_call_id: 'oversized-tool-call',
+      });
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, result.id));
+
+      expect(plugin.apiName).toBe(oversizedApiName.slice(0, MAX_TOOL_IDENTIFIER_LENGTH));
+      expect(plugin.identifier).toBe(oversizedIdentifier.slice(0, MAX_TOOL_IDENTIFIER_LENGTH));
     });
 
     it('should create tool message ', async () => {

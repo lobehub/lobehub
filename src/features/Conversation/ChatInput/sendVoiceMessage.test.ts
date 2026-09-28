@@ -123,4 +123,44 @@ describe('sendVoiceMessage', () => {
       'Voice message was not accepted',
     );
   });
+
+  it('sends the transcript as the message content while keeping the recording attached', async () => {
+    const sendMessage = vi.fn(async (params: SendMessageParams) => {
+      params.onMessageAccepted?.();
+    });
+    const transcribe = vi.fn(async () => 'list the files here');
+
+    await expect(sendVoiceMessage(sendMessage, voiceFile, { transcribe })).resolves.toBeUndefined();
+
+    expect(transcribe).toHaveBeenCalledWith(voiceFile, undefined);
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ files: [voiceFile], message: 'list the files here' }),
+    );
+  });
+
+  it('does not send when transcription fails', async () => {
+    const sendMessage = vi.fn();
+    const transcribe = vi.fn(async () => {
+      throw new Error('Voice message transcript is empty');
+    });
+
+    await expect(sendVoiceMessage(sendMessage, voiceFile, { transcribe })).rejects.toThrow(
+      'Voice message transcript is empty',
+    );
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not send when cancelled while transcribing', async () => {
+    const sendMessage = vi.fn();
+    const abortController = new AbortController();
+    const transcribe = vi.fn(async () => {
+      abortController.abort();
+      return 'too late';
+    });
+
+    await expect(
+      sendVoiceMessage(sendMessage, voiceFile, { signal: abortController.signal, transcribe }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
 });

@@ -3,7 +3,7 @@ import type {
   GenerateObjectPayload,
   GenerateObjectSchema,
 } from '@lobechat/model-runtime';
-import type { OpenAIChatMessage } from '@lobechat/types';
+import type { OpenAIChatMessage, RequestTrigger } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -19,10 +19,14 @@ export interface AiGenerationObjectInput {
 
 export interface AiGenerationObjectOptions {
   /**
-   * Free-form context forwarded to non-tracing hooks (billing, routing). Use
-   * `tracing` instead for `llm_generation_tracing` config.
+   * Context forwarded to non-tracing hooks (billing, routing). Use `tracing`
+   * instead for `llm_generation_tracing` config.
+   *
+   * `trigger` is required: it is the feature recorded on spend / route-attempt
+   * logs, and a missing one leaves the usage unattributed. It names the feature
+   * (e.g. `task`), not the prompt — the prompt goes in `tracing.scenario`.
    */
-  metadata?: Record<string, unknown>;
+  metadata: Record<string, unknown> & { trigger: RequestTrigger };
   signal?: AbortSignal;
   /**
    * Structured tracing config (scenario / promptVersion / schemaName /
@@ -58,7 +62,7 @@ export class AiGenerationService {
 
   async generateObject<T = unknown>(
     input: AiGenerationObjectInput,
-    options: AiGenerationObjectOptions = {},
+    options: AiGenerationObjectOptions,
   ): Promise<T> {
     const runtime = this.workspaceId
       ? await initModelRuntimeFromDB(this.db, this.userId, input.provider, this.workspaceId)

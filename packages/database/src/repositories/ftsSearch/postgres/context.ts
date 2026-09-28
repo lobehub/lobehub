@@ -1,0 +1,112 @@
+import type { SQL, SQLWrapper } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+
+import type { LobeChatDatabase } from '../../../type';
+import { buildWorkspaceWhere } from '../../../utils/workspace';
+import type { FtsSearchBackendScope } from '../types';
+import type { PostgresFtsSearchDialect } from './dialect';
+
+/** Columns shared by the workspace-aware tables searched by the PostgreSQL providers. */
+export interface PostgresFtsSearchWorkspaceScopedColumns {
+  userId: AnyPgColumn;
+  visibility?: AnyPgColumn;
+  workspaceId: AnyPgColumn;
+}
+
+/**
+ * Shared state and query-shaping helpers used by the PostgreSQL provider modules.
+ */
+export interface PostgresFtsSearchContext {
+  db: LobeChatDatabase;
+  dialect: PostgresFtsSearchDialect;
+  liftedScopeWhere: (workspaceIdColumn: SQLWrapper) => SQL | undefined;
+  liftsAgentFilter: boolean;
+  /**
+   * Whether non-indexed exclusions (restricted knowledge bases) sit above the
+   * scored scan. ParadeDB keeps them out of its TopN scan and lets restricted
+   * rows consume pool slots; plain PostgreSQL applies them inside the exact
+   * scan so a restricted top hit cannot take a slot from an authorized one.
+   */
+  liftsExclusionFilter: boolean;
+  liftsWorkspaceFilter: boolean;
+  scanCandidateLimit: (limit: number) => number;
+  scanScopeWhere: (cols: PostgresFtsSearchWorkspaceScopedColumns) => SQL;
+  scope: FtsSearchBackendScope;
+  userId: string;
+}
+
+/**
+ * Every query here is shaped as "inner single-table BM25 scan → outer enrichment",
+ * because ParadeDB only picks its TopN custom scan (`TopNScanExecState`, which
+ * visits a handful of heap rows) when the scan node itself carries the whole
+ * `ORDER BY paradedb.score() LIMIT n`. Joins and non-indexed ownership filters
+ * therefore stay outside the scan whenever the score ordering remains valid.
+ *
+ * The workspace filter is currently not a fast field in the BM25 indexes. In
+ * personal mode we keep the user filter in the scan and lift only the
+ * `workspace_id IS NULL` half above it, using a deeper candidate pool to keep
+ * personal rows from being displaced by workspace rows.
+ */
+const WORKSPACE_FILTER_CANDIDATE_MULTIPLIER = 5;
+
+/** See `WORKSPACE_FILTER_CANDIDATE_MULTIPLIER`; this floor protects small limits. */
+const WORKSPACE_FILTER_MIN_CANDIDATES = 500;
+
+/**
+ * Candidate pool used when the active-agent filter is lifted above the BM25
+ * scan. Agent IDs are not BM25 fields, so the pool must be deep enough for a
+ * small agent to survive the outer filter.
+ */
+const AGENT_SCOPE_CANDIDATE_POOL = 20_000;
+
+/**
+ * Flip to `true` once every BM25 index used by this repo carries `workspace_id`
+ * as a fast keyword field. At that point ownership can stay inline and
+ * personal-mode search becomes exact again.
+ */
+const WORKSPACE_ID_IN_BM25_INDEX = false;
+
+export function createPostgresFtsSearchContext(
+  db: LobeChatDatabase,
+  scope: FtsSearchBackendScope,
+  dialect: PostgresFtsSearchDialect,
+): PostgresFtsSearchContext {
+  // The original backend copied scope fields in its constructor. Keep the same
+  // snapshot semantics instead of retaining a caller-owned mutable object.
+  const normalizedScope: FtsSearchBackendScope = {
+    callerAgentVisibility: scope.callerAgentVisibility,
+    userId: scope.userId,
+    workspaceId: scope.workspaceId,
+  };
+  // Lifting filters above the scan only pays off for ParadeDB's TopN scan. A plain
+  // PostgreSQL dialect keeps every filter inline, which collapses each query to a
+  // single exact stage with the requested limit.
+  const liftsWorkspaceFilter =
+    dialect.isolatesScoredScan && !WORKSPACE_ID_IN_BM25_INDEX && !normalizedScope.workspaceId;
+  const liftsAgentFilter =
+    dialect.isolatesScoredScan && (WORKSPACE_ID_IN_BM25_INDEX || !normalizedScope.workspaceId);
+
+  return {
+    db,
+    dialect,
+    liftedScopeWhere: (workspaceIdColumn) =>
+      liftsWorkspaceFilter ? (isNull(workspaceIdColumn) as SQL) : undefined,
+    liftsAgentFilter,
+    liftsExclusionFilter: dialect.isolatesScoredScan,
+    liftsWorkspaceFilter,
+    scanCandidateLimit: (limit) =>
+      liftsWorkspaceFilter
+        ? Math.max(limit * WORKSPACE_FILTER_CANDIDATE_MULTIPLIER, WORKSPACE_FILTER_MIN_CANDIDATES)
+        : limit,
+    scanScopeWhere: (cols) => {
+      if (!liftsWorkspaceFilter) return buildWorkspaceWhere(normalizedScope, cols);
+
+      return eq(cols.userId, normalizedScope.userId) as SQL;
+    },
+    scope: normalizedScope,
+    userId: normalizedScope.userId,
+  };
+}
+
+export { AGENT_SCOPE_CANDIDATE_POOL, WORKSPACE_FILTER_CANDIDATE_MULTIPLIER };

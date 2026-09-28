@@ -1,4 +1,5 @@
 import { createGmailConnectorClient, hasGmailReadPermission } from '@lobechat/connector-data/gmail';
+import { getComposioAppByIdentifier } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { type ToolManifest } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -80,6 +81,22 @@ type ComposioToolInput = {
   description?: string;
   inputSchema?: Record<string, unknown>;
   name: string;
+};
+
+/**
+ * Rejects connector identities that are not an exact member of the supported Composio catalog.
+ *
+ * This validates both fields so an unsupported toolkit cannot be smuggled through a supported
+ * identifier before an external account is created or local connector state is written.
+ */
+const assertSupportedComposioApp = (identifier: string, appSlug: string): void => {
+  const app = getComposioAppByIdentifier(identifier);
+  if (app?.appSlug.toLowerCase() === appSlug.toLowerCase()) return;
+
+  throw new TRPCError({
+    code: 'BAD_REQUEST',
+    message: `Unsupported Composio app: ${identifier}`,
+  });
 };
 
 /**
@@ -219,6 +236,8 @@ export const composioRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { appSlug, identifier, label, agentId } = input;
       const { userId } = ctx;
+
+      assertSupportedComposioApp(identifier, appSlug);
 
       if (agentId)
         await assertCanEditAgent(ctx.serverDB, userId, agentId, ctx.workspaceId ?? undefined);
@@ -481,6 +500,8 @@ export const composioRouter = router({
         redirectUrl,
         agentId,
       } = input;
+
+      assertSupportedComposioApp(identifier, appSlug);
 
       if (agentId)
         await assertCanEditAgent(ctx.serverDB, ctx.userId, agentId, ctx.workspaceId ?? undefined);

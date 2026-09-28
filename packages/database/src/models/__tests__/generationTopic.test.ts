@@ -11,9 +11,11 @@ import { GenerationTopicModel } from '../generationTopic';
 // Mock FileService
 const mockGetFullFileUrl = vi.fn();
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: mockGetFullFileUrl,
-  })),
+  FileService: vi.fn(function () {
+    return {
+      getFullFileUrl: mockGetFullFileUrl,
+    };
+  }),
 }));
 
 const serverDB: LobeChatDatabase = await getTestDB();

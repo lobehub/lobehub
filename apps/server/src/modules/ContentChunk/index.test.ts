@@ -24,9 +24,11 @@ describe('ContentChunk', () => {
 
     // Setup LangChain mock
     mockLangChainPartition = vi.fn();
-    (ChunkingLoader as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-      partitionContent: mockLangChainPartition,
-    }));
+    (ChunkingLoader as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+      return {
+        partitionContent: mockLangChainPartition,
+      };
+    });
 
     contentChunk = new ContentChunk();
   });

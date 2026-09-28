@@ -8,7 +8,9 @@ import { t } from 'i18next';
 
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
+import { mutate } from '@/libs/swr';
 import { documentService } from '@/services/document';
+import { documentSWRKeys } from '@/services/document/swrKeys';
 import type { StoreSetter } from '@/store/types';
 import { composeSkillMarkdown, parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 import { setNamespace } from '@/utils/storeDebug';
@@ -32,6 +34,14 @@ export interface SaveExecutionOptions {
   saveSource?: 'autosave' | 'manual' | 'restore' | 'system' | 'llm_call';
 }
 
+export interface RemoteDocumentRow {
+  content?: string | null;
+  editorData?: unknown;
+  updatedAt: Date | string;
+}
+
+export type ReconcileResult = 'unchanged' | 'rebased' | 'adopted';
+
 type Setter = StoreSetter<DocumentStore>;
 export const createEditorSlice = (set: Setter, get: () => DocumentStore, _api?: unknown) =>
   new EditorActionImpl(set, get, _api);
@@ -39,6 +49,7 @@ export const createEditorSlice = (set: Setter, get: () => DocumentStore, _api?: 
 export class EditorActionImpl {
   readonly #get: () => DocumentStore;
   readonly #set: Setter;
+  readonly #inflightSaves = new Map<string, Promise<void>>();
 
   constructor(set: Setter, get: () => DocumentStore, _api?: unknown) {
     void _api;
@@ -76,7 +87,7 @@ export class EditorActionImpl {
     const { editor, activeDocumentId, documents, internal_dispatchDocument } = this.#get();
     const id = documentId || activeDocumentId;
 
-    if (!editor || !id) return false;
+    if (!editor || !id || id !== activeDocumentId) return false;
 
     const doc = documents[id];
     if (!doc) return false;
@@ -184,47 +195,52 @@ export class EditorActionImpl {
     internal_dispatchDocument({ id: documentId, type: 'updateDocument', value: { isDirty: true } });
   };
 
-  /**
-   * Apply a snapshot returned by the server-side page-agent tool executor.
-   * The server has already written `documents.content` / `documents.editorData`,
-   * so this only updates in-memory store state to match: clears the dirty flag,
-   * advances `lastSaved*` and refreshes `lastUpdatedTime`. Editor-level Lexical
-   * application is handled by `EditorRuntime.applyServerSnapshot` upstream.
-   */
-  applyServerSnapshot = (
-    documentId: string,
-    snapshot: {
-      content?: string;
-      editorData?: Record<string, unknown>;
-      title?: string;
-    },
-  ): void => {
+  reconcileRemote = (documentId: string, row: RemoteDocumentRow): ReconcileResult => {
     const { documents, internal_dispatchDocument } = this.#get();
     const doc = documents[documentId];
-    if (!doc) return;
+    if (!doc) return 'unchanged';
 
-    const value: Record<string, unknown> = {
-      isDirty: false,
-      lastUpdatedTime: new Date(),
-      saveStatus: 'saved',
-    };
-
-    if (typeof snapshot.content === 'string') {
-      value.content = snapshot.content;
-      value.lastSavedContent = snapshot.content;
-    }
-    if (snapshot.editorData && isValidEditorData(snapshot.editorData)) {
-      value.editorData = structuredClone(snapshot.editorData);
-      value.lastSavedEditorData = structuredClone(snapshot.editorData);
-    }
-    if (typeof snapshot.title === 'string') {
-      value.title = snapshot.title;
+    const updatedAt = row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt);
+    if (doc.lastUpdatedTime && updatedAt.getTime() <= doc.lastUpdatedTime.getTime()) {
+      return 'unchanged';
     }
 
+    const content = row.content ?? '';
+    const editorData = isValidEditorData(row.editorData) ? row.editorData : null;
+    const sameBody =
+      content === (doc.lastSavedContent ?? '') &&
+      isEqual(editorData, doc.lastSavedEditorData ?? null);
+
+    if (sameBody) {
+      internal_dispatchDocument(
+        { id: documentId, type: 'updateDocument', value: { lastUpdatedTime: updatedAt } },
+        n('reconcileRemote/rebased'),
+      );
+      return 'rebased';
+    }
+
+    this.#get().cancelDebouncedSave(documentId);
     internal_dispatchDocument(
-      { id: documentId, type: 'updateDocument', value: value as Partial<typeof doc> },
-      n('applyServerSnapshot'),
+      {
+        id: documentId,
+        type: 'updateDocument',
+        value: {
+          content,
+          editorData,
+          ...(doc.contentFormat === 'skillMarkdown'
+            ? { skillFrontmatter: parseSkillMarkdownFrontmatter(content).frontmatter }
+            : {}),
+          isDirty: false,
+          lastSavedContent: content,
+          lastSavedEditorData: editorData,
+          lastUpdatedTime: updatedAt,
+          saveBlockedByLock: false,
+          saveStatus: 'saved',
+        },
+      },
+      n('reconcileRemote/adopted'),
     );
+    return 'adopted';
   };
 
   onEditorInit = async (editor: IEditor): Promise<void> => {
@@ -290,18 +306,36 @@ export class EditorActionImpl {
     this.#set({ editor });
   };
 
+  getPendingSave = (documentId: string): Promise<void> | undefined =>
+    this.#inflightSaves.get(documentId);
+
   performSave = async (
     documentId?: string,
     metadata?: SaveMetadata,
     options?: SaveExecutionOptions,
   ): Promise<void> => {
     const id = documentId || this.#get().activeDocumentId;
-
     if (!id) return;
 
-    const { editor, documents, internal_dispatchDocument } = this.#get();
+    this.syncEditorContent(id, { triggerAutoSave: false });
+    const previous = this.#inflightSaves.get(id) ?? Promise.resolve();
+    const run = previous.catch(() => {}).then(() => this.#runSave(id, metadata, options));
+    this.#inflightSaves.set(id, run);
+    try {
+      await run;
+    } finally {
+      if (this.#inflightSaves.get(id) === run) this.#inflightSaves.delete(id);
+    }
+  };
+
+  #runSave = async (
+    id: string,
+    metadata?: SaveMetadata,
+    options?: SaveExecutionOptions,
+  ): Promise<void> => {
+    const { documents, internal_dispatchDocument } = this.#get();
     const doc = documents[id];
-    if (!doc || !editor) return;
+    if (!doc) return;
 
     const hasMetadataChanges = metadata?.emoji !== undefined || metadata?.title !== undefined;
 
@@ -312,9 +346,8 @@ export class EditorActionImpl {
     internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'saving' } });
 
     try {
-      const currentEditorMarkdown = (editor.getDocument('markdown') as unknown as string) || '';
-      const currentContent = this.getPersistedMarkdown(id, currentEditorMarkdown);
-      const currentEditorData = editor.getDocument('json');
+      const currentContent = doc.content ?? '';
+      const currentEditorData = doc.editorData;
 
       if (!isValidEditorData(currentEditorData)) {
         console.warn('[DocumentStore] Refusing to save invalid editorData:', currentEditorData);
@@ -325,51 +358,138 @@ export class EditorActionImpl {
       // Preserve diff nodes (pending review) through the save path.
       // Normalization only happens when the user explicitly clicks Accept/Reject
       // in DiffAllToolbar, which mutates editor state before calling performSave.
-      const result = await documentService.updateDocument({
-        content: currentContent,
-        editorData: JSON.stringify(currentEditorData),
-        id,
-        lockOwnerId: doc.lockOwnerId,
-        metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
-        restoreFromHistoryId: options?.restoreFromHistoryId,
-        saveSource: options?.saveSource,
-        title: metadata?.title,
-      });
+      const requestSave = (expectedUpdatedAt?: Date) =>
+        documentService.updateDocument({
+          content: currentContent,
+          editorData: JSON.stringify(currentEditorData),
+          ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
+          id,
+          lockOwnerId: doc.lockOwnerId,
+          metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
+          restoreFromHistoryId: options?.restoreFromHistoryId,
+          saveSource: options?.saveSource,
+          title: metadata?.title,
+        });
 
-      // Mark as clean and update save status
+      let result: Awaited<ReturnType<typeof requestSave>>;
+      try {
+        result = await requestSave(doc.lastUpdatedTime ?? undefined);
+      } catch (error) {
+        const canRetry = !hasMetadataChanges && !options?.restoreFromHistoryId;
+        result = await this.retrySaveAfterReconcile(id, doc, error, requestSave, canRetry);
+      }
+
+      // Old servers omit updatedAt. Keep the known token; conflict reconciliation
+      // refreshes it on the next save without trusting the history-only savedAt.
+      const savedAt = result.updatedAt ? new Date(result.updatedAt) : undefined;
+      const current = this.#get().documents[id];
+      if (savedAt && current?.lastUpdatedTime && savedAt < current.lastUpdatedTime) {
+        internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'saved' } });
+        return;
+      }
+
       internal_dispatchDocument({
         id,
         type: 'updateDocument',
         value: {
-          content: currentContent,
-          editorData: structuredClone(currentEditorData),
-
-          isDirty: false,
+          isDirty:
+            current?.content !== currentContent || !isEqual(current?.editorData, currentEditorData),
           lastSavedContent: currentContent,
           lastSavedEditorData: structuredClone(currentEditorData),
-          lastUpdatedTime: result.savedAt ? new Date(result.savedAt) : new Date(),
+          ...(savedAt ? { lastUpdatedTime: savedAt } : {}),
           saveBlockedByLock: false,
           saveStatus: 'saved',
         },
       });
+
+      if (this.#get().documents[id]?.isDirty && doc.autoSave !== false) {
+        this.#get().triggerDebouncedSave(id);
+      }
     } catch (error) {
-      // The server rejects writes to a workspace document another collaborator is
-      // actively editing (CONFLICT). Surface it as a lock block so the editor can
-      // flip to read-only at once instead of silently dropping the edit, and keep
-      // `isDirty` so the unsaved content stays visible to copy out.
       const errorCode = (error as { data?: { code?: string } })?.data?.code;
-      const lockBlocked = errorCode === 'CONFLICT';
+      const conflicted = errorCode === 'CONFLICT';
       // A view-level workspace member has no edit right on this document
       // (FORBIDDEN). Tell the user instead of silently dropping the edit.
       if (errorCode === 'FORBIDDEN') {
         toast.error(t('permission.saveNoEditPermission', { ns: 'setting' }));
       }
-      if (!lockBlocked) console.error('[DocumentStore] Failed to save:', error);
+      if (!conflicted) console.error('[DocumentStore] Failed to save:', error);
+      const live = this.#get().documents[id];
+      const lockBlocked = conflicted && !!live?.lockOwnerId;
+      const adoptedRemote = conflicted && !lockBlocked && live?.isDirty === false;
       internal_dispatchDocument({
         id,
         type: 'updateDocument',
-        value: { saveBlockedByLock: lockBlocked || undefined, saveStatus: 'idle' },
+        value: {
+          saveBlockedByLock: lockBlocked || undefined,
+          saveStatus: adoptedRemote ? 'saved' : 'idle',
+        },
       });
+      if (conflicted && !lockBlocked && live?.isDirty && live.autoSave !== false) {
+        this.#get().triggerDebouncedSave(id);
+      }
+      if (hasMetadataChanges) throw error;
+    }
+  };
+
+  private retrySaveAfterReconcile = async <T>(
+    id: string,
+    baseDoc: {
+      lastSavedContent?: string;
+      lastSavedEditorData?: unknown;
+      lockOwnerId?: string;
+    },
+    error: unknown,
+    requestSave: (expectedUpdatedAt?: Date) => Promise<T>,
+    canRetry: boolean,
+  ): Promise<T> => {
+    const errorCode = (error as { data?: { code?: string } })?.data?.code;
+    if (errorCode !== 'CONFLICT') throw error;
+
+    let latest: Awaited<ReturnType<typeof documentService.getDocumentById>>;
+    try {
+      latest = await documentService.getDocumentById(id);
+    } catch {
+      throw error;
+    }
+    if (!latest?.updatedAt) throw error;
+
+    const outcome = this.reconcileRemote(id, latest);
+    if (outcome === 'adopted') {
+      void mutate(documentSWRKeys.editor(id), latest, { revalidate: false });
+    }
+    if (outcome === 'adopted' || !canRetry) throw error;
+
+    // `baseDoc` is the store snapshot this request was built from; an
+    // overlapping newer save from this tab may have moved the live base since,
+    // in which case replaying this payload would roll that save back.
+    const live = this.#get().documents[id];
+    const sameBase =
+      (live?.lastSavedContent ?? '') === (baseDoc.lastSavedContent ?? '') &&
+      isEqual(live?.lastSavedEditorData ?? null, baseDoc.lastSavedEditorData ?? null);
+    if (!sameBase) throw error;
+
+    const { lockOwnerId } = baseDoc;
+    if (lockOwnerId) {
+      let lockedByOther: boolean;
+      try {
+        ({ lockedByOther } = await documentService.acquireDocumentLock(id, lockOwnerId));
+      } catch {
+        throw error;
+      }
+      if (lockedByOther) throw error;
+    }
+
+    try {
+      return await requestSave(latest.updatedAt);
+    } catch (retryError) {
+      // The reclaim above transferred the lease to this session for a retry
+      // that then failed. Keeping the stolen lease would make the lock
+      // recovery read this tab as the legitimate holder and clear the save
+      // block over a stale editor — release it so the lease goes back to
+      // whoever is actually editing.
+      if (lockOwnerId) void documentService.releaseDocumentLock(id, lockOwnerId).catch(() => {});
+      throw retryError;
     }
   };
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { copyToClipboard, Flexbox, Popover, Skeleton, Text, usePopoverContext } from '@lobehub/ui';
-import { Button, Checkbox, confirmModal, Select, toast } from '@lobehub/ui/base-ui';
+import { copyToClipboard, Flexbox, Popover, usePopoverContext } from '@lobehub/ui';
+import { Button, Checkbox, confirmModal, Select, Text, toast } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import {
   FileOutputIcon,
@@ -17,6 +17,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
@@ -239,7 +240,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
     return (
       <Flexbox className={styles.container} gap={16}>
         <Text strong>{t('share', { ns: 'common' })}</Text>
-        <Skeleton active paragraph={{ rows: 2 }} />
+        <ArticleSkeleton rows={2} />
       </Flexbox>
     );
   }

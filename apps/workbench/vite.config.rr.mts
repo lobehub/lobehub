@@ -83,8 +83,18 @@ const workbenchClientShikiCdn = (): Plugin => ({
 
 // Referenced in the client graph only from store tails that never execute in
 // workbench flows; requesting one at runtime degrades to raw keys instead of
-// bundling 18 locale files each.
-const I18N_DEAD_NS = new Set(['electron', 'file', 'modelProvider', 'setting', 'topic', 'video']);
+// bundling 18 locale files each. `agent` is pulled in by the agent-share
+// visitor upload branch of the chat upload store, a surface workbench has no
+// route for.
+const I18N_DEAD_NS = new Set([
+  'agent',
+  'electron',
+  'file',
+  'modelProvider',
+  'setting',
+  'topic',
+  'video',
+]);
 
 const I18N_NS_PATTERNS = [
   /useTranslation\(\s*['"]([A-Za-z]+)['"]/g,

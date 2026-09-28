@@ -1,24 +1,19 @@
+import { type ChatImageItem } from '@lobechat/types';
 import { PreviewGroup } from '@lobehub/ui';
 import { memo } from 'react';
 
 import GalleyGrid from '@/components/GalleyGrid';
 import ImageItem from '@/components/ImageItem';
 
-interface ImageFileItem {
-  alt?: string;
-  id: string;
-  loading?: boolean;
-  onRemove?: (id: string) => void;
-  url: string;
-}
+import { downloadPreviewImage } from './downloadPreviewImage';
 
 interface FileListProps {
-  items: ImageFileItem[];
+  items: ChatImageItem[];
 }
 
 const ImageFileListViewer = memo<FileListProps>(({ items }) => {
   return (
-    <PreviewGroup>
+    <PreviewGroup preview={{ onDownload: downloadPreviewImage }}>
       <GalleyGrid items={items} renderItem={ImageItem} />
     </PreviewGroup>
   );

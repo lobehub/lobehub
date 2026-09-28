@@ -78,7 +78,7 @@ const CODEX_MAX_REASONING_EFFORT_LEVELS = [
 ] as const satisfies readonly CodexReasoningEffort[];
 
 const CODEX_ULTRA_REASONING_MODELS = ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra'] as const;
-const CODEX_MAX_REASONING_MODELS = ['gpt-5.6-luna'] as const;
+const CODEX_MAX_REASONING_MODELS = ['gpt-6-astra', 'gpt-5.6-luna'] as const;
 
 /**
  * Qoder reasoning-effort levels, mirrored 1:1 with the CLI's
@@ -407,6 +407,16 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       source: 'catalog',
     },
   },
+  'droid': {
+    model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
+  },
+  'devin': {
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
+    },
+  },
   'grok-build': {
     effort: {
       encodings: [{ flags: GROK_BUILD_REASONING_EFFORT_FLAGS, kind: 'flag' }],
@@ -419,7 +429,9 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       source: 'catalog',
     },
   },
-  'kimi-code': {},
+  'kimi-code': {
+    model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
+  },
   'opencode': {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
   },

@@ -1,9 +1,8 @@
 'use client';
 
 import { AsyncTaskStatus } from '@lobechat/types';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Alert, Progress, Text } from '@lobehub/ui/base-ui';
 import { Loader2Icon, TriangleAlertIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -58,10 +57,15 @@ export const MemoryAnalysisStatus = memo<StatusProps>(({ task }) => {
           <Flexbox horizontal align="center" gap={12} wrap="wrap">
             <Progress
               percent={percent ?? 30}
-              showInfo={Boolean(percent)}
+              showInfo={false}
               status={isError ? 'exception' : 'active'}
               style={{ flex: 1, minWidth: 220 }}
             />
+            {percent !== undefined && !isError && (
+              <Text fontSize={13} type="secondary">
+                {percent}%
+              </Text>
+            )}
             <Text fontSize={13} type={isError ? 'danger' : 'secondary'}>
               {isError ? (errorText ?? t('analysis.status.errorTitle')) : progressText}
             </Text>

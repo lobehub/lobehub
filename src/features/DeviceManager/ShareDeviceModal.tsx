@@ -1,12 +1,14 @@
 'use client';
 
 import type { DeviceListItem, DeviceVisibility } from '@lobechat/types';
-import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   confirmModal,
   createModal,
   Select,
+  Tag,
+  Text,
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';
@@ -15,10 +17,10 @@ import { t } from 'i18next';
 import { CircleCheck, Lock, Users } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
 import { useWorkspaceOptionLabel } from '@/business/client/hooks/useWorkspaceOptionLabel';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 
 import { refreshDeviceList } from './const';
@@ -70,7 +72,7 @@ interface CompletionState {
 const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
   const { t: tSetting } = useTranslation(['setting', 'common']);
   const { close, setCanDismissByClickOutside } = useModalContext();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const workspaces = useWorkspaces();
   const renderWorkspaceLabel = useWorkspaceOptionLabel();
 
@@ -203,7 +205,9 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
   const goToTarget = () => {
     if (!completion) return;
 
-    navigate(`/${completion.slug}/settings/devices`);
+    // The global modal host sits outside Electron's tab routers. Route through
+    // the active tab and preserve the explicitly selected workspace destination.
+    navigate(`/${completion.slug}/settings/devices`, { escape: true });
     close();
   };
 

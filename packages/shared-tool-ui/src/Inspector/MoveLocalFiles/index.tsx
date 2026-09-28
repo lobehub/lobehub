@@ -2,7 +2,8 @@
 
 import type { MoveFilesState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon, Text } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { Check, X } from 'lucide-react';
 import { memo } from 'react';
@@ -31,8 +32,13 @@ export const createMoveLocalFilesInspector = (translationKey: string) => {
       const showShiny = isArgumentsStreaming || isLoading;
 
       return (
-        <div className={cx(inspectorTextStyles.root, showShiny && shinyTextStyles.shinyText)}>
-          <span style={{ marginInlineEnd: 6 }}>{t(translationKey as any)}</span>
+        <div className={inspectorTextStyles.root}>
+          <span
+            className={cx(showShiny && shinyTextStyles.shinyText)}
+            style={{ marginInlineEnd: 6 }}
+          >
+            {t(translationKey as any)}
+          </span>
           {totalCount > 0 && (
             <Text code as={'span'} fontSize={12}>
               {successCount === undefined ? totalCount : `${successCount}/${totalCount}`}

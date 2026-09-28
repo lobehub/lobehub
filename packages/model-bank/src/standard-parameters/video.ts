@@ -21,6 +21,24 @@ export const PRESET_VIDEO_ASPECT_RATIOS = [
 
 export const PRESET_VIDEO_RESOLUTIONS = ['480p', '720p', '1080p'];
 
+export const VIDEO_GENERATION_TASKS = [
+  'text_to_video',
+  'image_to_video',
+  'reference_to_video',
+  'edit',
+] as const;
+
+export const GEMINI_OMNI_VIDEO_MODEL_ID = 'gemini-omni-1.1-flash';
+
+/**
+ * Video models that can edit a finished generation by continuing its provider interaction.
+ * Every stored video carries an interaction id, so model support is the capability signal.
+ */
+export const CONVERSATIONAL_VIDEO_EDIT_MODELS: readonly string[] = [GEMINI_OMNI_VIDEO_MODEL_ID];
+
+export const supportsConversationalVideoEdit = (modelId: string) =>
+  CONVERSATIONAL_VIDEO_EDIT_MODELS.includes(modelId);
+
 export const VideoModelParamsMetaSchema = z.object({
   prompt: z.object({
     default: z.string().optional().default(''),
@@ -156,6 +174,15 @@ export const VideoModelParamsMetaSchema = z.object({
       max: z.number().optional().default(MAX_VIDEO_SEED),
       min: z.number().optional().default(-1),
       type: z.tuple([z.literal('number'), z.literal('null')]).optional(),
+    })
+    .optional(),
+
+  task: z
+    .object({
+      default: z.enum(VIDEO_GENERATION_TASKS),
+      description: z.string().optional(),
+      enum: z.array(z.enum(VIDEO_GENERATION_TASKS)),
+      type: z.literal('string').optional(),
     })
     .optional(),
 });

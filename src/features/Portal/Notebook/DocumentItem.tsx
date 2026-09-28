@@ -1,6 +1,6 @@
 import { type NotebookDocument } from '@lobechat/types';
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, confirmModal, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { FileTextIcon, Trash2Icon } from 'lucide-react';
 import { type MouseEvent } from 'react';

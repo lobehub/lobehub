@@ -28,6 +28,7 @@
       "@/business/server/*": ["./packages/business-server/src/*", "./src/business/server/*"],
       "@/server/*": ["./apps/server/src/*"],
       "@/*": ["./src/*"],
+      "~base-ui-stubs": ["./tests/mocks/baseUiStubs.tsx"],
       "~test-utils": ["./tests/utils.tsx"]
     },
     "plugins": [
@@ -42,12 +43,12 @@
     "apps/mobile/**",
     "apps/share/**",
     "apps/workbench/**",
-    "scripts/**",
     "tmp",
     "temp",
     ".temp",
     "e2e/**",
-    "knip.ts"
+    "knip.ts",
+    "packages/alint/fixtures/**"
   ],
   "include": [
     "src/**/*.d.ts",
@@ -61,6 +62,10 @@
     "tests/**/*.tsx",
     "apps/server/**/*.ts",
     "apps/server/**/*.tsx",
+    "scripts/elasticsearchReindex/**/*.ts",
+    "scripts/elasticsearchSync/**/*.ts",
+    "scripts/installFtsSearchSyncCapture/**/*.ts",
+    "scripts/pgSearchCleanup/**/*.ts",
     "*.ts",
     "*.mts",
     "*.cts",

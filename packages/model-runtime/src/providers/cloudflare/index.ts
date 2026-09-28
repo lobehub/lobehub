@@ -2,6 +2,13 @@ import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
+import {
+  captureRawProviderResponse,
+  finalizeProviderResponse,
+  initializeProviderDiagnostics,
+  observeProviderReadableStream,
+  recordProviderError,
+} from '../../core/providerDiagnostics';
 import { createCallbacksTransformer } from '../../core/streams';
 import {
   CloudflareStreamTransformer,
@@ -14,6 +21,7 @@ import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { StreamingResponse } from '../../utils/response';
+import { recordCloudflareStreamChunk } from './providerDiagnostics';
 
 export interface CloudflareModelCard {
   description: string;
@@ -87,16 +95,26 @@ export class LobeCloudflareAI implements LobeRuntimeAI {
     }
     const url = new URL(model, this.baseURL);
     const desensitizedEndpoint = desensitizeCloudflareUrl(url.toString());
+    const requestPayload = { tools: functions, ...restPayload };
+    const providerResponseDiagnostics = initializeProviderDiagnostics({
+      apiMode: 'cloudflare_workers_ai',
+      diagnostics: options?.diagnostics,
+      endpoint: desensitizedEndpoint,
+      payload: requestPayload,
+      sentAt: Date.now(),
+    });
 
     let response: Response;
     try {
       response = await fetch(url, {
-        body: JSON.stringify({ tools: functions, ...restPayload }),
+        body: JSON.stringify(requestPayload),
         headers: { 'Content-Type': 'application/json', ...headers },
         method: 'POST',
         signal: options?.signal,
       });
     } catch (error) {
+      recordProviderError(providerResponseDiagnostics, error);
+      await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
       throw AgentRuntimeError.chat({
         endpoint: desensitizeCloudflareUrl(this.baseURL),
         error: error as any,
@@ -104,6 +122,11 @@ export class LobeCloudflareAI implements LobeRuntimeAI {
         message: extractProviderErrorMessage(error) ?? 'Cloudflare API request failed',
         provider: ModelProvider.Cloudflare,
       });
+    }
+    if (providerResponseDiagnostics) {
+      providerResponseDiagnostics.responseReceivedAt = Date.now();
+      providerResponseDiagnostics.status = response.status;
+      captureRawProviderResponse(providerResponseDiagnostics, response);
     }
 
     if (response.status === 400) {
@@ -116,7 +139,7 @@ export class LobeCloudflareAI implements LobeRuntimeAI {
           // keep raw text
         }
       }
-      throw AgentRuntimeError.chat({
+      const error = AgentRuntimeError.chat({
         endpoint: desensitizedEndpoint,
         error:
           parsedBody && typeof parsedBody === 'object'
@@ -129,16 +152,25 @@ export class LobeCloudflareAI implements LobeRuntimeAI {
           'Cloudflare API returned 400 Bad Request',
         provider: ModelProvider.Cloudflare,
       });
+      recordProviderError(providerResponseDiagnostics, error);
+      await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
+      throw error;
     }
 
     // Only tee when debugging
+    const observedBody = observeProviderReadableStream(
+      response.body!,
+      providerResponseDiagnostics,
+      recordCloudflareStreamChunk,
+      options?.signal,
+    );
     let responseBody: ReadableStream;
     if (process.env.DEBUG_CLOUDFLARE_CHAT_COMPLETION === '1') {
-      const [prod, useForDebug] = response.body!.tee();
+      const [prod, useForDebug] = observedBody.tee();
       debugStream(useForDebug).catch();
       responseBody = prod;
     } else {
-      responseBody = response.body!;
+      responseBody = observedBody;
     }
 
     return StreamingResponse(

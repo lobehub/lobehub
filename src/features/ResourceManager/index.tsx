@@ -16,7 +16,6 @@ import { documentSelectors } from '@/store/file/slices/document/selectors';
 
 import FileEditor from './components/Editor';
 import Explorer from './components/Explorer';
-import UploadDock from './components/UploadDock';
 import { useTopLevelFileUpload } from './hooks/useTopLevelFileUpload';
 
 const ChunkDrawer = dynamic(() => import('./components/ChunkDrawer'), { ssr: false });
@@ -178,7 +177,6 @@ const ResourceManager = memo<ResourceManagerProps>(({ content }) => {
           )}
         </Flexbox>
       </DragUploadZone>
-      <UploadDock />
       <ChunkDrawer />
     </>
   );

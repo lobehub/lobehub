@@ -152,16 +152,16 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
   }
 
   return (
-    <ThemeProvider
-      appearance={appearance}
-      defaultAppearance={appearance}
-      defaultThemeMode={appearance}
-      theme={{ cssVar: { key: 'lobe-vars' } }}
-    >
-      <ConfigProvider motion={m}>
+    <ConfigProvider motion={m}>
+      <ThemeProvider
+        appearance={appearance}
+        defaultAppearance={appearance}
+        defaultThemeMode={appearance}
+        theme={{ cssVar: { key: 'lobe-vars' } }}
+      >
         <ErrorCapture error={error} resetPath={resetPath} />
-      </ConfigProvider>
-    </ThemeProvider>
+      </ThemeProvider>
+    </ConfigProvider>
   );
 };
 

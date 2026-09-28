@@ -43,6 +43,7 @@ export interface HeteroTraceTotals {
  * stashed on the partial so finalize prefers it over summing per-turn steps. */
 interface HeteroSessionUsage {
   totalCost?: number;
+  totalCredits?: number;
   totalInputTokens?: number;
   totalOutputTokens?: number;
   totalTokens?: number;
@@ -60,6 +61,39 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : und
  * and finalizing into the same `ExecutionSnapshot` S3 layout the built-in path
  * uses. Context-engine fields are intentionally never set (hetero has no CE).
  */
+/**
+ * The partial each warm instance last wrote, with the token that write returned.
+ * Ingest batches arrive as separate requests, so this has to outlive the service
+ * instance to be worth anything — without it every batch re-reads the whole
+ * partial from the store before it can append to it (~350ms of the ~1s the
+ * device waits for its ack).
+ *
+ * Keeping a copy is only safe because the write that follows is fenced on the
+ * token: a batch routed to another instance writes a newer object, and this
+ * instance's next write is refused instead of rolling that one back.
+ */
+const partialCache = new Map<string, { partial: Partial<ExecutionSnapshot>; token: string }>();
+
+/** Bounded so a long-lived instance cannot accumulate finished operations. */
+const PARTIAL_CACHE_MAX = 32;
+
+const rememberPartial = (
+  operationId: string,
+  partial: Partial<ExecutionSnapshot>,
+  token?: string,
+) => {
+  // Without a token the next write could not be fenced, so there is nothing
+  // safe to remember.
+  if (!token) return partialCache.delete(operationId);
+
+  partialCache.delete(operationId);
+  partialCache.set(operationId, { partial, token });
+  if (partialCache.size > PARTIAL_CACHE_MAX) {
+    const oldest = partialCache.keys().next().value;
+    if (oldest !== undefined) partialCache.delete(oldest);
+  }
+};
+
 export class HeteroTraceRecorder {
   constructor(private readonly store: ISnapshotStore | null) {}
 
@@ -73,17 +107,35 @@ export class HeteroTraceRecorder {
     if (!this.store || events.length === 0) return;
 
     try {
-      const partial = (await this.store.loadPartial(operationId)) ?? {};
-      if (!partial.steps) partial.steps = [];
-      if (!partial.startedAt) partial.startedAt = events[0].timestamp;
+      const cached = partialCache.get(operationId);
+      const fold = (partial: Partial<ExecutionSnapshot>) => {
+        if (!partial.steps) partial.steps = [];
+        if (!partial.startedAt) partial.startedAt = events[0].timestamp;
 
-      const byIndex = new Map<number, StepSnapshot>();
-      for (const s of partial.steps) byIndex.set(s.stepIndex, s);
+        const byIndex = new Map<number, StepSnapshot>();
+        for (const s of partial.steps) byIndex.set(s.stepIndex, s);
+        for (const event of events) this.applyEvent(partial, byIndex, event);
+        return partial;
+      };
 
-      for (const event of events) this.applyEvent(partial, byIndex, event);
+      const partial = fold(cached?.partial ?? (await this.store.loadPartial(operationId)) ?? {});
+      const result = await this.store.savePartial(operationId, partial, {
+        expected: cached?.token,
+      });
 
-      await this.store.savePartial(operationId, partial);
+      if (result?.conflict) {
+        // Another instance wrote this partial while we held a copy. Drop ours,
+        // read theirs, and fold this batch's events into it instead.
+        partialCache.delete(operationId);
+        const fresh = fold((await this.store.loadPartial(operationId)) ?? {});
+        const retry = await this.store.savePartial(operationId, fresh);
+        rememberPartial(operationId, fresh, retry?.token);
+        return;
+      }
+
+      rememberPartial(operationId, partial, result?.token);
     } catch (e) {
+      partialCache.delete(operationId);
       log('[%s] appendBatch failed (non-fatal): %O', operationId, e);
     }
   }
@@ -97,6 +149,13 @@ export class HeteroTraceRecorder {
     if (!this.store) return null;
 
     try {
+      // Always read the authoritative partial here, even with a copy in hand.
+      // `heteroFinish` is its own request and can land on an instance whose
+      // copy stopped at an earlier batch; finalizing from that would publish a
+      // snapshot missing every batch another instance recorded, and then delete
+      // the partial that had them. The per-batch write is fenced against that;
+      // this one write is not, so it does not get to guess.
+      partialCache.delete(operationId);
       const partial = await this.store.loadPartial(operationId);
       if (!partial) return null;
 
@@ -116,6 +175,8 @@ export class HeteroTraceRecorder {
       const totalOutputTokens =
         session?.totalOutputTokens ?? steps.reduce((sum, s) => sum + (s.outputTokens || 0), 0);
       const totalCost = session?.totalCost ?? steps.reduce((sum, s) => sum + (s.totalCost || 0), 0);
+      const totalCredits =
+        session?.totalCredits ?? steps.reduce((sum, s) => sum + (s.credits || 0), 0);
 
       // Fall back to the agentId/topicId encoded in the operationId when the
       // caller didn't supply them, so the snapshot body and its S3 key never
@@ -137,6 +198,7 @@ export class HeteroTraceRecorder {
         steps,
         topicId,
         totalCost,
+        totalCredits,
         totalSteps: steps.length,
         totalTokens,
         traceId: operationId,
@@ -250,6 +312,7 @@ export class HeteroTraceRecorder {
         const outT = usage ? num(usage.totalOutputTokens) : undefined;
         const tot = usage ? num(usage.totalTokens) : undefined;
         const cost = num(data.costUsd);
+        const credits = usage ? num(usage.credits) : undefined;
 
         // Claude Code emits one `turn_metadata` per turn (incremental usage) and
         // a single final `result_usage` carrying the authoritative SESSION
@@ -262,6 +325,7 @@ export class HeteroTraceRecorder {
           };
           target.heteroSessionUsage = {
             totalCost: cost ?? target.heteroSessionUsage?.totalCost,
+            totalCredits: credits ?? target.heteroSessionUsage?.totalCredits,
             totalInputTokens: inT ?? target.heteroSessionUsage?.totalInputTokens,
             totalOutputTokens: outT ?? target.heteroSessionUsage?.totalOutputTokens,
             totalTokens:
@@ -279,6 +343,7 @@ export class HeteroTraceRecorder {
         else if (inT !== undefined || outT !== undefined)
           step.totalTokens = (inT ?? 0) + (outT ?? 0);
         if (cost !== undefined) step.totalCost = cost;
+        if (credits !== undefined) step.credits = credits;
         break;
       }
       default: {

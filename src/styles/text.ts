@@ -1,3 +1,4 @@
+import { textGroupStyles } from '@lobehub/ui/base-ui';
 import { createStaticStyles, css, cx } from 'antd-style';
 
 export const lineEllipsis = (line: number) =>
@@ -18,6 +19,10 @@ export const oneLineEllipsis = lineEllipsis(1);
  */
 export const inspectorTextStyles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
+    /* Coordinate space for the shiny sweep: every shimmering span in the row
+     * resolves its overlay against this box, so they read as one wave. */
+    ${textGroupStyles.shinyGroup}
+
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -58,3 +63,7 @@ export const highlightTextStyles = createStaticStyles(({ css, cssVar }) => {
     warning: highlightBase(cssVar.colorWarningBg),
   };
 });
+
+export const shinyGroupStyles = {
+  shinyGroup: textGroupStyles.shinyGroup,
+};

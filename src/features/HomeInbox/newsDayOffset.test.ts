@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveShownNewsOffset } from './newsDayOffset';
+import { resolveShownNewsOffset, shouldShowNewsItemTime } from './newsDayOffset';
 
 describe('resolveShownNewsOffset', () => {
   it('maps the payload day to its offset from today', () => {
@@ -18,5 +18,13 @@ describe('resolveShownNewsOffset', () => {
   // on screen after local midnight must clamp to 0, not become "tomorrow".
   it('clamps a payload from a not-yet-refetched future day to today', () => {
     expect(resolveShownNewsOffset('2026-08-06', '2026-08-05T23:59:00')).toBe(0);
+  });
+});
+
+describe('shouldShowNewsItemTime', () => {
+  it('shows item time only for today', () => {
+    expect(shouldShowNewsItemTime(0)).toBe(true);
+    expect(shouldShowNewsItemTime(1)).toBe(false);
+    expect(shouldShowNewsItemTime(30)).toBe(false);
   });
 });

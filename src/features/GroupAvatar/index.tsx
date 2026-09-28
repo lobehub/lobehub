@@ -1,7 +1,8 @@
 'use client';
 
 import { type GroupAvatarProps } from '@lobehub/ui';
-import { GroupAvatar, Skeleton } from '@lobehub/ui';
+import { GroupAvatar } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 
@@ -40,7 +41,7 @@ const GroupAvatarComponent = memo<GroupAvatarComponentProps>(
       ];
     }, [avatars, userAvatar, nickName, username]);
 
-    if (loading) return <Skeleton.Avatar active shape={'square'} size={size} />;
+    if (loading) return <Skeleton.Avatar shape={'square'} size={size} />;
 
     return (
       <GroupAvatar

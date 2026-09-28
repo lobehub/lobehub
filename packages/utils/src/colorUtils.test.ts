@@ -1,8 +1,32 @@
 import { describe, expect, it } from 'vitest';
 
-import { convertAlphaToSolid } from './colorUtils';
+import { convertAlphaToSolid, isFullyTransparentColor } from './colorUtils';
 
 describe('colorUtils', () => {
+  describe('isFullyTransparentColor', () => {
+    it.each([
+      'transparent',
+      'rgba(0, 0, 0, 0)',
+      'hsla(120, 50%, 50%, 0)',
+      '#0000',
+      '#00000000',
+      'rgb(0 0 0 / 0)',
+    ])('recognizes the fully transparent color %s', (color) => {
+      expect(isFullyTransparentColor(color)).toBe(true);
+    });
+
+    it.each([
+      'rgba(0, 0, 0)',
+      'rgba(12, 34, 0)',
+      'hsla(120, 100%, 0%)',
+      '#000',
+      'rgba(0, 0, 0, 0.5)',
+      'linear-gradient(red, blue)',
+    ])('does not mistake the visual value %s for transparency', (color) => {
+      expect(isFullyTransparentColor(color)).toBe(false);
+    });
+  });
+
   describe('convertAlphaToSolid', () => {
     it('should convert fully opaque color to same color', () => {
       // Fully opaque (alpha = 1.0)

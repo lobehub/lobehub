@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Tag } from '@lobehub/ui';
-import { Alert, Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Alert, Button, Tag } from '@lobehub/ui/base-ui';
 import { Form as AntdForm, type FormInstance } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { RefreshCw, Trash2 } from 'lucide-react';
@@ -28,6 +28,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     max-width: 1024px;
   `,
+  resultDetail: css`
+    font-family: monospace;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+    word-break: break-all;
+  `,
   webhookBox: css`
     overflow: hidden;
     flex: 1;
@@ -47,6 +53,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
 }));
+
+/**
+ * Error body of a result banner: the readable hint first, the raw platform
+ * message below it in a muted tone so it stays available for diagnosis.
+ */
+const ResultDetail = memo<{ detail?: string; hint?: string }>(({ detail, hint }) => {
+  if (!hint) return <>{detail}</>;
+  return (
+    <Flexbox gap={4}>
+      <span>{hint}</span>
+      {detail && <span className={styles.resultDetail}>{detail}</span>}
+    </Flexbox>
+  );
+});
+
+ResultDetail.displayName = 'ResultDetail';
 
 interface FooterProps {
   connecting: boolean;
@@ -202,8 +224,12 @@ const Footer = memo<FooterProps>(
           <Alert
             closable
             showIcon
-            description={testResult.type === 'error' ? testResult.errorDetail : undefined}
             type={testResult.type}
+            description={
+              testResult.type === 'error' ? (
+                <ResultDetail detail={testResult.errorDetail} hint={testResult.hint} />
+              ) : undefined
+            }
             title={
               testResult.type === 'success' ? t('channel.testSuccess') : t('channel.testFailed')
             }

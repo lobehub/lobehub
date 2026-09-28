@@ -114,6 +114,9 @@ describe('nightly review source handler', () => {
     );
     expect(deps.collectContext).toHaveBeenCalledWith({
       agentId: 'agent-1',
+      // The reviewed local date rides along so receipt lookback can start from the
+      // nightly run that actually exists instead of the window end's future day.
+      localDate: '2026-05-04',
       reviewWindowEnd: reviewPayload.reviewWindowEnd,
       reviewWindowStart: reviewPayload.reviewWindowStart,
       userId: 'user-1',

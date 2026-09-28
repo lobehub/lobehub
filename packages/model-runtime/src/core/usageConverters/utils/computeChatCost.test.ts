@@ -715,6 +715,41 @@ describe('computeChatPricing', () => {
       expect(totalCredits).toBe(232);
     });
 
+    it('bills Gemini Omni video output separately from input and text output', () => {
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'videoGeneration', rate: 17.5, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      };
+
+      // A real conversational edit: the source video is billed as input.
+      const usage: ModelTokensUsage = {
+        inputTextTokens: 43,
+        inputVideoTokens: 58_511,
+        outputReasoningTokens: 383,
+        outputTextTokens: 1025,
+        outputVideoTokens: 57_920,
+        totalInputTokens: 58_554,
+        totalOutputTokens: 59_328,
+        totalTokens: 117_882,
+      };
+
+      const result = computeChatCost(pricing, usage);
+
+      expect(result?.issues).toHaveLength(0);
+      const breakdown = result!.breakdown;
+      expect(breakdown.find((item) => item.unit.name === 'textInput')?.quantity).toBe(43);
+      expect(breakdown.find((item) => item.unit.name === 'videoInput')?.quantity).toBe(58_511);
+      expect(breakdown.find((item) => item.unit.name === 'textOutput')?.quantity).toBe(1408);
+      expect(breakdown.find((item) => item.unit.name === 'videoGeneration')?.quantity).toBe(57_920);
+      expect(breakdown.find((item) => item.unit.name === 'imageInput')).toBeUndefined();
+      expect(result?.totalCost).toBe(1.114104);
+    });
+
     it('splits cache reads by modality when dedicated modality cache units exist', () => {
       const pricing: Pricing = {
         units: [
@@ -1225,9 +1260,9 @@ describe('computeChatPricing', () => {
   });
 
   describe('Anthropic', () => {
-    it('handles lookup pricing with TTL for Claude Opus 4.1', () => {
+    it('handles lookup pricing with TTL for Claude Opus 4.6', () => {
       const pricing = anthropicChatModels.find(
-        (model: { id: string }) => model.id === 'claude-opus-4-1-20250805',
+        (model: { id: string }) => model.id === 'claude-opus-4-6',
       )?.pricing;
       expect(pricing).toBeDefined();
 
@@ -1241,19 +1276,19 @@ describe('computeChatPricing', () => {
       const result = computeChatCost(pricing, usage, { lookupParams: { ttl: '5m' } });
       expect(result).toBeDefined();
       expect(result?.issues).toHaveLength(0);
-      expect(result?.totalCredits).toBe(58_425);
-      expect(result?.totalCost).toBeCloseTo(0.058425, 10);
+      expect(result?.totalCredits).toBe(19_475);
+      expect(result?.totalCost).toBeCloseTo(0.019475, 10);
 
       const cacheWrite = result?.breakdown.find(
         (item) => item.unit.name === 'textInput_cacheWrite',
       );
       expect(cacheWrite?.lookupKey).toBe('5m');
-      expect(cacheWrite?.credits).toBe(5_625);
+      expect(cacheWrite?.credits).toBe(1_875);
     });
 
     it('handles lookup pricing with missing key and adds issue', () => {
       const pricing = anthropicChatModels.find(
-        (model: { id: string }) => model.id === 'claude-opus-4-1-20250805',
+        (model: { id: string }) => model.id === 'claude-opus-4-6',
       )?.pricing;
       expect(pricing).toBeDefined();
 
@@ -1279,7 +1314,7 @@ describe('computeChatPricing', () => {
 
     it('handles lookup pricing with missing lookup params and adds issue', () => {
       const pricing = anthropicChatModels.find(
-        (model: { id: string }) => model.id === 'claude-opus-4-1-20250805',
+        (model: { id: string }) => model.id === 'claude-opus-4-6',
       )?.pricing;
       expect(pricing).toBeDefined();
 
@@ -1304,7 +1339,7 @@ describe('computeChatPricing', () => {
 
     it('handles lookup pricing with undefined lookup params and adds issue', () => {
       const pricing = anthropicChatModels.find(
-        (model: { id: string }) => model.id === 'claude-opus-4-1-20250805',
+        (model: { id: string }) => model.id === 'claude-opus-4-6',
       )?.pricing;
       expect(pricing).toBeDefined();
 

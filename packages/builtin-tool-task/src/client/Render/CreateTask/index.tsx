@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { ActionIcon, Block, Markdown, Text } from '@lobehub/ui';
+import { Block, Markdown } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { PanelRight, PanelRightClose } from 'lucide-react';
 import { memo } from 'react';

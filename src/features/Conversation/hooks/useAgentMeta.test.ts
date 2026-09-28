@@ -7,8 +7,6 @@ import type * as ConversationStoreModule from '../store';
 import { useConversationStore } from '../store';
 import { useAgentMeta, useIsBuiltinAgent } from './useAgentMeta';
 
-vi.mock('zustand/traditional');
-
 // Mock the ConversationStore
 vi.mock('../store', async (importOriginal) => {
   const actual = await importOriginal<typeof ConversationStoreModule>();

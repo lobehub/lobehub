@@ -193,12 +193,10 @@ export const MODEL_OWNER_DETECTION_CONFIG = {
   zhipu: ['glm'],
 } as const;
 
-export const isDeepSeekV4FamilyModel = (model: string | undefined): boolean =>
-  typeof model === 'string' && model.toLowerCase().includes('deepseek-v4');
-
-export const isDeepSeekThinkingEligibleModel = (model: string | undefined): boolean =>
-  typeof model === 'string' &&
-  (model.toLowerCase().includes('deepseek-reasoner') || isDeepSeekV4FamilyModel(model));
+export {
+  isDeepSeekThinkingEligibleModel,
+  isDeepSeekV4FamilyModel,
+} from '../providers/deepseek/modelId';
 
 // Image model keyword configuration
 export const IMAGE_MODEL_KEYWORDS = [

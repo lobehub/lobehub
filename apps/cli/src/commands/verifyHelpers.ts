@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type {
@@ -10,6 +10,7 @@ import type {
 } from '@lobechat/const/verify';
 import {
   acceptanceSubjectTypes,
+  GOMS_KLM_TRACE_FILE,
   isProgrammaticTestCheck,
   normalizeVerifySurface,
   PROGRAMMATIC_TEST_CHECK_HINT,
@@ -19,12 +20,15 @@ import {
 } from '@lobechat/const/verify';
 import type {
   VerifyCheckResultMetadata,
+  VerifyInteractionCost,
   VerifyVisualizationDataset,
   VerifyVisualizationField,
   VerifyVisualizationManifest,
   VerifyVisualizationValue,
   VerifyVisualizationView,
 } from '@lobechat/types';
+import { verifyCheckDefinitionSchema } from '@lobechat/types';
+import { parseKlmTrace, summarizeKlmTrace } from '@lobechat/utils/verify/interactionCost';
 import pc from 'picocolors';
 
 import { printTable, truncate } from '../utils/format';
@@ -753,6 +757,11 @@ export function planFromResult(result: Record<string, unknown>, droppedIds?: Set
       {
         ...(category === undefined ? {} : { category }),
         description: firstString(item.description),
+        sourceCriterionId: firstString(item.sourceCriterionId),
+        definition:
+          item.definition === undefined
+            ? undefined
+            : verifyCheckDefinitionSchema.parse(item.definition),
         id,
         index,
         onFail: 'manual' as const,
@@ -775,6 +784,77 @@ export function planFromResult(result: Record<string, unknown>, droppedIds?: Set
   return items;
 }
 
+interface ExistingAcceptanceCheck {
+  id: string;
+  planItem?: { id?: string; sourceCriterionId?: string | null } | null;
+}
+
+/**
+ * Line a new round's plan up with the checks its acceptance already holds.
+ * The server mints a fresh criterion for every item that arrives without one,
+ * and the union keys rows by criterion — so a re-verification that skips this
+ * lands every check as a brand-new row instead of the next entry in its history.
+ */
+export function reuseSourceCriteria<T extends { id: string; sourceCriterionId?: string | null }>(
+  plan: T[] | undefined,
+  checks: ExistingAcceptanceCheck[] | null | undefined,
+): T[] | undefined {
+  if (!plan || !checks?.length) return plan;
+
+  return plan.map((item) => ({
+    ...item,
+    sourceCriterionId:
+      item.sourceCriterionId ??
+      checks.find((check) => check.id === item.id || check.planItem?.id === item.id)?.planItem
+        ?.sourceCriterionId ??
+      undefined,
+  }));
+}
+
+interface ExistingAcceptanceRound {
+  report?: { content?: string | null; summary?: string | null } | null;
+  run: {
+    id: string;
+    plan?: { id: string; title: string }[] | null;
+    roundIndex?: number | null;
+  };
+}
+
+/**
+ * The acceptance's latest round when it already publishes exactly this report.
+ * Re-running the same ingest (a retry loop, a re-sent command) would otherwise
+ * stack identical rounds on the page. Compares what the author wrote — body,
+ * conclusion and plan — not the published counts, which the ingest derives
+ * later from evidence uploads. Only a report with a body counts: without one,
+ * two genuinely different runs of the same plan are indistinguishable here.
+ */
+export function findIdenticalLatestRound(
+  rounds: ExistingAcceptanceRound[] | null | undefined,
+  incoming: {
+    plan?: { id: string; title: string }[];
+    report: { content?: string; summary?: string };
+  },
+): ExistingAcceptanceRound['run'] | undefined {
+  if (!incoming.report.content || !rounds?.length) return undefined;
+
+  const latest = rounds.reduce((a, b) =>
+    (b.run.roundIndex ?? 0) > (a.run.roundIndex ?? 0) ? b : a,
+  );
+  const published = latest.report;
+  if (!published) return undefined;
+
+  const same = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
+  const planKey = (items: { id: string; title: string }[] | null | undefined) =>
+    JSON.stringify((items ?? []).map(({ id, title }) => [id, title]));
+
+  const identical =
+    same(published.content, incoming.report.content) &&
+    same(published.summary, incoming.report.summary) &&
+    planKey(latest.run.plan) === planKey(incoming.plan);
+
+  return identical ? latest.run : undefined;
+}
+
 /**
  * The LobeHub conversation this harness is running inside, read off the env the
  * agent runtime echoes into the child process. Lets a report published from an
@@ -795,6 +875,50 @@ export function originFromEnv(): VerifyRunOrigin | undefined {
   };
 
   return Object.values(origin).some(Boolean) ? origin : undefined;
+}
+
+/**
+ * Derive the round's GOMS-KLM interaction cost from a trace dropped in the
+ * report directory, so the number the page shows is always the platform's own
+ * counting of the recorded actions.
+ *
+ * Interaction cost is an optional overlay. A round with no UI driver — a CLI
+ * verification, or a machine without agent-browser — simply has no trace, and
+ * that is silently skipped, never a warning and never a failure. A driver that
+ * computed its own summary still wins.
+ *
+ * "Its own summary" means an actual object. A scaffolded `result.json` carries
+ * `"interactionCost": null` to document the field, and a null is the absence of
+ * a measurement, not an assertion that this round cost nothing — treating mere
+ * key presence as an override let the report scaffolder silently suppress
+ * pricing on every traced run it created.
+ */
+export function interactionCostFromReportDir(
+  dir: string,
+  result: Record<string, unknown>,
+): VerifyInteractionCost | undefined {
+  if (objectValue(result.interactionCost)) return undefined;
+
+  const tracePath = path.join(dir, GOMS_KLM_TRACE_FILE);
+  if (!existsSync(tracePath)) return undefined;
+
+  let raw: string;
+  try {
+    raw = readFileSync(tracePath, 'utf8');
+  } catch {
+    log.warn(`${GOMS_KLM_TRACE_FILE} could not be read — publishing without interaction cost`);
+    return undefined;
+  }
+
+  const cost = summarizeKlmTrace(parseKlmTrace(raw), { sourceTrace: GOMS_KLM_TRACE_FILE });
+  if (!cost) {
+    log.warn(
+      `${GOMS_KLM_TRACE_FILE} recorded no priceable action (driver missing, or every action blocked) — skipping interaction cost`,
+    );
+    return undefined;
+  }
+
+  return cost;
 }
 
 export function metadataForReport(
@@ -932,4 +1056,12 @@ export function formatAnnotationRegion(
   if (!label && !position) return undefined;
   if (!position) return label;
   return label ? `${label} @ ${position}` : position;
+}
+
+/** Keep file identity when small text artifacts are stored inline. */
+export function evidenceDescriptionForFile(
+  description?: string,
+  file?: string,
+): string | undefined {
+  return description?.trim() || (file ? path.basename(file) : undefined);
 }

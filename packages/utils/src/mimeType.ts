@@ -18,6 +18,8 @@ const CUSTOM_MIME_TYPES: Record<string, string> = {
   '.scala': 'text/x-scala',
   '.svelte': 'text/x-svelte',
   '.swift': 'text/x-swift',
+  '.sv': 'text/x-systemverilog',
+  '.v': 'text/x-verilog',
   '.vue': 'text/x-vue',
 };
 

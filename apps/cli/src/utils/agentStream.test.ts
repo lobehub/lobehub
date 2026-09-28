@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { streamAgentEvents, streamAgentEventsViaWebSocket } from './agentStream';
+import { replayAgentEvents, streamAgentEvents, streamAgentEventsViaWebSocket } from './agentStream';
 
 vi.mock('./logger', () => ({
   log: {
@@ -452,7 +452,7 @@ describe('streamAgentEventsViaWebSocket', () => {
     capturedWs!.onclose?.({ code: 1011, reason: 'gateway shutdown', type: 'close' });
 
     await expect(promise).rejects.toThrow(
-      'Agent gateway WebSocket closed before completion: [object Object]',
+      'Agent gateway WebSocket closed before completion (code 1011: gateway shutdown)',
     );
   });
 
@@ -636,5 +636,39 @@ describe('streamAgentEventsViaWebSocket', () => {
     expect(log.toolResult).toHaveBeenCalled();
     // Verify finish line
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Agent finished'));
+  });
+});
+
+describe('renderEvent tool_end', () => {
+  const toolEnd = (result: Record<string, unknown>) =>
+    [
+      {
+        data: {
+          executionTime: 120,
+          isSuccess: true,
+          payload: { toolCalling: { apiName: 'search', id: 'tc-1', identifier: 'web' } },
+          result,
+        },
+        type: 'tool_end',
+      },
+    ] as any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('prints the result body under --verbose', async () => {
+    const { log } = await import('./logger');
+    replayAgentEvents(toolEnd({ content: 'the body' }), { verbose: true });
+
+    expect(log.toolResult).toHaveBeenCalledWith('tc-1', true, 'the body');
+  });
+
+  it('falls back to the timing when the transport dropped the body', async () => {
+    const { log } = await import('./logger');
+    // The gateway WS projects `tool_end` — the body arrives with the message.
+    replayAgentEvents(toolEnd({ success: true }), { verbose: true });
+
+    expect(log.toolResult).toHaveBeenCalledWith('tc-1', true, ' 120ms');
   });
 });

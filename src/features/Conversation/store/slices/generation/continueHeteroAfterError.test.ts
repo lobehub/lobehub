@@ -33,6 +33,7 @@ let mockAgentVisibility: 'private' | 'public' = 'public';
 let mockIsWorkspaceAgent = false;
 let mockSharedExecutionTarget: 'device' | 'local' = 'local';
 let mockWorkspaceOverride: { boundDeviceId: string; executionTarget: 'local' } | undefined;
+let mockTopic: { id: string; model?: string; provider?: string } | undefined;
 vi.mock(
   '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume',
   async (importOriginal) => ({
@@ -92,7 +93,13 @@ vi.mock('@/store/agent/selectors', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: { getTopicById: () => () => undefined },
+  topicSelectors: {
+    getTopicById: () => () => mockTopic,
+    getTopicHeteroPinById: () => () =>
+      mockTopic?.model ? { model: mockTopic.model, provider: mockTopic.provider || '' } : undefined,
+    getTopicModelById: () => () =>
+      mockTopic?.model ? { model: mockTopic.model, provider: mockTopic.provider || '' } : undefined,
+  },
 }));
 
 vi.mock('@/store/electron', () => ({
@@ -105,10 +112,6 @@ vi.mock('@/store/user', () => ({
       agentDeviceOverrides: mockWorkspaceOverride ? { 'agent-1': mockWorkspaceOverride } : {},
     },
   }),
-}));
-
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { info: vi.fn() },
 }));
 
 const mockChatDeleteMessage = vi.fn(async () => {});
@@ -171,6 +174,7 @@ describe('continueHeteroAfterError', () => {
     mockResumeSessionId = 'sess-1';
     mockIsWorkspaceAgent = false;
     mockSharedExecutionTarget = 'local';
+    mockTopic = undefined;
     mockWorkspaceOverride = undefined;
   });
 
@@ -200,6 +204,23 @@ describe('continueHeteroAfterError', () => {
     });
     expect(executorParams().message).toContain('Continue the task from where it stopped');
     expect(executorParams().message).not.toBe(USER_MESSAGE.content);
+  });
+
+  it('continues with the topic-pinned heterogeneous model', async () => {
+    mockTopic = { id: 'topic-1', model: 'opus', provider: 'claude-code' };
+    const store = buildGroupStore([
+      { content: 'looking', id: 'step-1', tools: [{ id: 'call-1' }] },
+      { content: '', error: HETERO_RATE_LIMIT, id: 'step-2', tools: [{ id: 'call-2' }] },
+    ]);
+
+    await act(async () => {
+      await store.getState().continueHeteroAfterError('step-1');
+    });
+
+    expect(executorParams().heterogeneousProvider).toMatchObject({
+      model: 'opus',
+      type: 'claude-code',
+    });
   });
 
   it('drops an error-only tail step and chains the continuation onto its parent', async () => {
@@ -311,7 +332,10 @@ describe('continueHeteroAfterError', () => {
     expect(mockExecuteHeterogeneousAgent).not.toHaveBeenCalled();
   });
 
-  it('ignores a retained member device override while the Workspace Agent is private', async () => {
+  // The owner's own `local` pick lives in the per-user override even on a
+  // private Workspace Agent (the shared row must never reference a personal
+  // device — the server rejects it), so it must keep applying here.
+  it("applies the owner's own local override while the Workspace Agent is private", async () => {
     mockAgentVisibility = 'private';
     mockIsWorkspaceAgent = true;
     mockSharedExecutionTarget = 'device';
@@ -330,8 +354,8 @@ describe('continueHeteroAfterError', () => {
 
     expect(mockSelectRuntimeType).toHaveBeenCalledWith(
       expect.objectContaining({
-        boundDeviceId: 'workspace-device',
-        executionTarget: 'device',
+        boundDeviceId: 'personal-device',
+        executionTarget: 'local',
         isWorkspaceAgent: true,
         workspaceScoped: false,
       }),

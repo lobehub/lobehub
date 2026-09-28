@@ -18,11 +18,15 @@ describe('AiChatService', () => {
     const mockQueryMessages = vi.fn().mockResolvedValue([{ id: 'm1' }]);
     const mockQueryTopics = vi.fn().mockResolvedValue([{ id: 't1' }]);
 
-    vi.mocked(MessageModel).mockImplementation(() => ({ query: mockQueryMessages }) as any);
-    vi.mocked(TopicModel).mockImplementation(() => ({ query: mockQueryTopics }) as any);
-    vi.mocked(FileService).mockImplementation(
-      () => ({ getFullFileUrl: vi.fn().mockResolvedValue('url') }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return { query: mockQueryMessages } as any;
+    });
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return { query: mockQueryTopics } as any;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return { getFullFileUrl: vi.fn().mockResolvedValue('url') } as any;
+    });
 
     const service = new AiChatService(serverDB, 'u1');
 
@@ -53,11 +57,15 @@ describe('AiChatService', () => {
     const mockQueryMessages = vi.fn().mockResolvedValue([]);
     const mockQueryTopics = vi.fn().mockResolvedValue([]);
 
-    vi.mocked(MessageModel).mockImplementation(() => ({ query: mockQueryMessages }) as any);
-    vi.mocked(TopicModel).mockImplementation(() => ({ query: mockQueryTopics }) as any);
-    vi.mocked(FileService).mockImplementation(
-      () => ({ getFullFileUrl: vi.fn().mockResolvedValue('url') }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return { query: mockQueryMessages } as any;
+    });
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return { query: mockQueryTopics } as any;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return { getFullFileUrl: vi.fn().mockResolvedValue('url') } as any;
+    });
 
     const service = new AiChatService(serverDB, 'u1');
 
@@ -93,11 +101,15 @@ describe('AiChatService', () => {
     const serverDB = {} as unknown as LobeChatDatabase;
 
     const mockQueryMessages = vi.fn().mockResolvedValue([]);
-    vi.mocked(MessageModel).mockImplementation(() => ({ query: mockQueryMessages }) as any);
-    vi.mocked(TopicModel).mockImplementation(() => ({ query: vi.fn() }) as any);
-    vi.mocked(FileService).mockImplementation(
-      () => ({ getFullFileUrl: vi.fn().mockResolvedValue('url') }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return { query: mockQueryMessages } as any;
+    });
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return { query: vi.fn() } as any;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return { getFullFileUrl: vi.fn().mockResolvedValue('url') } as any;
+    });
 
     const service = new AiChatService(serverDB, 'u1');
 

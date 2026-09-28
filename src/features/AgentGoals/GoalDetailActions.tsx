@@ -1,23 +1,25 @@
-import { ActionIcon, copyToClipboard, Icon } from '@lobehub/ui';
-import { confirmModal, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { copyToClipboard, Icon } from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { CopyIcon, LinkIcon, MoreHorizontalIcon, TrashIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { useGoalStore } from '@/store/goal';
+
+import { useConfirmDeleteGoal, useGoalShareUrl } from './useGoalActions';
 
 interface GoalDetailActionsProps {
-  agentId: string;
+  /** Absent for a goal with no responsible agent — e.g. one created from a project. */
+  agentId?: string;
   goalId: string;
+  projectId?: string | null;
 }
 
-const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId }) => {
+const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId, projectId }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask } = usePermission('create_content');
-  const deleteGoal = useGoalStore((s) => s.deleteGoal);
+  const shareUrl = useGoalShareUrl({ agentId, goalId });
+  const confirmDelete = useConfirmDeleteGoal({ agentId, goalId, projectId });
 
   const items = useMemo<DropdownItem[]>(
     () => [
@@ -31,11 +33,13 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId }) => 
         },
       },
       {
+        disabled: !shareUrl,
         icon: <Icon icon={LinkIcon} />,
         key: 'copyLink',
         label: t('taskList.contextMenu.copyLink'),
         onClick: async () => {
-          await copyToClipboard(window.location.href);
+          if (!shareUrl) return;
+          await copyToClipboard(shareUrl);
           toast.success(t('taskList.contextMenu.copyLinkSuccess'));
         },
       },
@@ -46,21 +50,10 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId }) => 
         icon: <Icon icon={TrashIcon} />,
         key: 'delete',
         label: t('delete', { ns: 'common' }),
-        onClick: () => {
-          confirmModal({
-            content: t('goalDetail.deleteConfirm.content'),
-            okButtonProps: { danger: true },
-            okText: t('goalDetail.deleteConfirm.ok'),
-            onOk: async () => {
-              await deleteGoal(agentId, goalId);
-              navigate(`/agent/${agentId}/goals`);
-            },
-            title: t('goalDetail.deleteConfirm.title'),
-          });
-        },
+        onClick: confirmDelete,
       },
     ],
-    [agentId, canEditTask, deleteGoal, goalId, navigate, t],
+    [canEditTask, confirmDelete, goalId, shareUrl, t],
   );
 
   return (

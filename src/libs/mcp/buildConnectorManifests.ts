@@ -1,8 +1,8 @@
+import { buildConnectorManifest } from '@lobechat/mecha';
 import type { ToolManifest } from '@lobechat/types';
 
 import type { DecryptedConnector } from '@/database/models/connector';
 import type { UserConnectorToolItem } from '@/database/schemas';
-import { ConnectorToolPermission } from '@/database/schemas';
 
 /**
  * Convert connector DB rows into ToolManifest entries suitable for
@@ -27,57 +27,20 @@ export function buildConnectorManifests(
   const manifests: ToolManifest[] = [];
 
   for (const connector of connectors) {
-    if (!connector.isEnabled) continue;
-
-    const connectorTools = toolsByConnector.get(connector.id) ?? [];
-
-    // Include ALL tools in the manifest so the AI is aware of their existence.
-    // Disabled tools get a blocking description so the AI knows not to call them.
-    // At execution time, the callTool endpoint will double-check and hard-block disabled tools.
-    if (connectorTools.length === 0) continue;
-
-    const api = connectorTools.map((t) => {
-      if (t.permission === ConnectorToolPermission.disabled) {
-        return {
-          description:
-            `[TOOL DISABLED] The user has disabled this tool and it cannot be executed. ` +
-            `Do NOT call this tool. If the user asks to perform this action, inform them ` +
-            `that they have manually disabled "${t.toolName}" and can re-enable it in Settings > Connectors.`,
-          humanIntervention: 'required' as const,
-          name: t.toolName,
-          parameters: (t.inputSchema ?? { properties: {}, type: 'object' }) as Record<
-            string,
-            unknown
-          >,
-        };
-      }
-      return {
-        description: t.description ?? '',
-        humanIntervention:
-          t.permission === ConnectorToolPermission.needs_approval
-            ? ('required' as const)
-            : undefined,
-        name: t.toolName,
-        parameters: (t.inputSchema ?? { properties: {}, type: 'object' }) as Record<
-          string,
-          unknown
-        >,
-      };
+    // The listing and the permission mapping are the shared rule; the server
+    // adds the endpoint and credentials the runtime needs to call it.
+    const manifest = buildConnectorManifest({
+      identifier: connector.identifier,
+      isEnabled: connector.isEnabled,
+      name: connector.name,
+      tools: toolsByConnector.get(connector.id) ?? [],
     });
-
-    const mcpParams = buildMcpParams(connector);
+    if (!manifest) continue;
 
     manifests.push({
-      api,
-      identifier: connector.identifier,
+      ...(manifest as ToolManifest),
       // @ts-ignore — mcpParams is a runtime-only field not in the public type
-      mcpParams,
-      meta: {
-        avatar: 'MCP_AVATAR',
-        description: `${connector.name} connector with ${api.length} tools`,
-        title: connector.name,
-      },
-      type: 'mcp' as any,
+      mcpParams: buildMcpParams(connector),
     });
   }
 
@@ -101,8 +64,7 @@ function buildMcpParams(connector: DecryptedConnector) {
   // Merge them on top of any header-type credential headers (legacy rows), to
   // mirror the sync/callTool path in services/connector/sync.ts.
   const customHeaders = connector.metadata?.customHeaders as Record<string, string> | undefined;
-  const mergedHeaders =
-    headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
+  const mergedHeaders = headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
 
   return {
     auth,

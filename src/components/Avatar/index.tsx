@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar as LobeAvatar, type AvatarProps as LobeAvatarProps } from '@lobehub/ui';
+import { Avatar as LobeAvatar, type AvatarProps as LobeAvatarProps } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import { remoteAvatarSrc, resolveAvatar } from './fallback';

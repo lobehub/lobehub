@@ -1,6 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import type { ConnectorToolPermission } from '@/database/schemas';
 import { lambdaClient } from '@/libs/trpc/client';
 import { mcpService } from '@/services/mcp';
@@ -23,8 +24,32 @@ export class ConnectorActionImpl {
     this.#get = get;
   }
 
+  /**
+   * Whether the scope captured when a request was issued is still the active
+   * one. Connector lists are workspace-scoped server-side (the request carries
+   * the active workspace as a header), but the store bucket is a single global
+   * one — so a late response must not be written after the scope moved on.
+   *
+   * Booting straight into a workspace URL is exactly that case: the tree mounts
+   * once in personal context before the URL→store sync resolves the slug, so a
+   * personal `list` query is already in flight when the workspace switch fires
+   * its own. Whichever lands last wins, and when that is the personal one the
+   * workspace's own tools vanish from the tool picker for the rest of the
+   * session. In the open-source build there are no workspaces and
+   * `getActiveWorkspaceId()` is always `null`, so this is a no-op.
+   *
+   * Dropping a response deliberately leaves the one-shot init flag alone
+   * rather than marking the bucket loaded: a scope change remounts the
+   * workspace context slot's subtree, so the consumers gated on that flag
+   * re-issue their fetch under the new scope and the discarded result is not
+   * one anybody still needs.
+   */
+  #isStillInScope = (scope: string | null): boolean => getActiveWorkspaceId() === scope;
+
   fetchConnectors = async (): Promise<void> => {
+    const scope = getActiveWorkspaceId();
     const data = await lambdaClient.connector.list.query();
+    if (!this.#isStillInScope(scope)) return;
     this.#set({ connectors: data as any, isConnectorsInit: true }, false, 'fetchConnectors');
   };
 
@@ -48,7 +73,9 @@ export class ConnectorActionImpl {
    * context only returns that workspace's agent connectors.
    */
   fetchAgentBoundConnectors = async (): Promise<void> => {
+    const scope = getActiveWorkspaceId();
     const data = await lambdaClient.connector.listAgentBound.query();
+    if (!this.#isStillInScope(scope)) return;
     this.#set(
       { agentBoundConnectors: data as any, isAgentBoundInit: true },
       false,
@@ -61,7 +88,9 @@ export class ConnectorActionImpl {
    * tab. Stored keyed by agentId.
    */
   fetchAgentConnectors = async (agentId: string): Promise<void> => {
+    const scope = getActiveWorkspaceId();
     const data = await lambdaClient.connector.listByAgent.query({ agentId });
+    if (!this.#isStillInScope(scope)) return;
     this.#set(
       (s) => ({
         agentConnectors: { ...s.agentConnectors, [agentId]: data as any },

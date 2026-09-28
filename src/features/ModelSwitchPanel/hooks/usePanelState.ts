@@ -11,7 +11,7 @@ export const usePanelState = () => {
 
   const handleGroupModeChange = useCallback(
     (mode: GroupMode) => {
-      updateSystemStatus({ modelSwitchPanelGroupMode: mode });
+      updateSystemStatus({ modelSwitchPanelGroupBy: mode });
     },
     [updateSystemStatus],
   );

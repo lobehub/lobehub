@@ -43,6 +43,14 @@ export interface ResolvedRouteMeta {
   title: string;
 }
 
+/**
+ * For a route whose surface is mounted outside the router outlet, or that
+ * paints fast enough that any placeholder is pure flicker. Declared rather than
+ * omitted: an absent `Skeleton` makes `RouteLoading` render nothing, so the
+ * chunk wait is a blank pane.
+ */
+export const NoRouteSkeleton = () => null;
+
 export const routeMeta = (meta: RouteMeta): RouteMeta => meta;
 
 export const getRouteMetaFromHandle = (handle: unknown): RouteMeta | undefined => {

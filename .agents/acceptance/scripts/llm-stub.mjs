@@ -5,7 +5,7 @@
  * Lets a check drive a turn to COMPLETION (or to a deterministic provider
  * failure) without any real LLM key: a real HTTP + SSE round trip through the
  * app's whole provider pipeline, same principle as s3rver standing in for S3.
- * Probe the shell for real keys first (M19) — only stub what is provably absent.
+ * Probe the shell for real keys first (generic M17) — only stub what is provably absent.
  *
  * Implements BOTH protocols the app speaks:
  *   - /v1/chat/completions  (chat-completions SSE chunks)

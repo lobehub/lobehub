@@ -21,9 +21,18 @@ import { useFileStore } from '@/store/file';
  * - **personal mode** (no `activeWorkspaceId`): also `undefined`; personal
  *   rows have no visibility column semantics.
  */
-export const useTopLevelFileUpload = () => {
+interface UseTopLevelFileUploadOptions {
+  /**
+   * Upload to the library's root instead of the folder the URL is in (the
+   * sidebar toolbar's library-level "+").
+   */
+  rootLevel?: boolean;
+}
+
+export const useTopLevelFileUpload = ({ rootLevel }: UseTopLevelFileUploadOptions = {}) => {
   const activeWorkspaceId = useActiveWorkspaceId();
-  const currentFolderId = useCurrentFolderId();
+  const urlFolderId = useCurrentFolderId();
+  const currentFolderId = rootLevel ? null : urlFolderId;
   const libraryId = useResourceManagerStore((s) => s.libraryId);
   const listVisibility = useResourceManagerStore((s) => s.listVisibility);
   const pushDockFileList = useFileStore((s) => s.pushDockFileList);

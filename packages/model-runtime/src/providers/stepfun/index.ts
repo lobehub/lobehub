@@ -13,7 +13,7 @@ export const params = {
   baseURL: 'https://api.stepfun.com/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { enabledSearch, tools, ...rest } = payload;
+      const { enabledSearch, stream, tools, ...rest } = payload;
 
       const stepfunTools = enabledSearch
         ? [
@@ -29,7 +29,7 @@ export const params = {
 
       return {
         ...rest,
-        stream: !stepfunTools,
+        stream: stream ?? true,
         tools: stepfunTools,
       } as any;
     },

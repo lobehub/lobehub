@@ -11,6 +11,7 @@
  *      sub-agent's answer and resumes the parent.
  *   5. The parent op runs one more LLM step and reaches `done`.
  */
+import { stripSubAgentReference } from '@lobechat/builtin-tool-lobe-agent';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { agentOperations, agents, messages } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
@@ -29,13 +30,19 @@ process.env.OPENAI_API_KEY = 'sk-test-fake-api-key-for-testing';
 
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: vi.fn().mockImplementation((path: string) => (path ? `/files${path}` : null)),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn().mockImplementation(function (path: string) {
+        return path ? `/files${path}` : null;
+      }),
+    };
+  }),
 }));
 
 let mockResponsesCreate: any;
@@ -206,7 +213,7 @@ describe('Server callSubAgent suspend/resume', () => {
   it('parks the parent, runs the sub-op, backfills the tool message and resumes', async () => {
     // 1: parent emits callSubAgent  2: sub-op final answer  3: parent resume final
     let callCount = 0;
-    mockResponsesCreate.mockImplementation(() => {
+    mockResponsesCreate.mockImplementation(function () {
       callCount++;
       if (callCount === 1) return Promise.resolve(createCallSubAgentResponse() as any);
       if (callCount === 2) return Promise.resolve(createFinalTextResponse(SUB_AGENT_ANSWER) as any);
@@ -241,11 +248,14 @@ describe('Server callSubAgent suspend/resume', () => {
       .where(eq(agentOperations.parentOperationId, createResult.operationId));
     expect(childOps.length).toBeGreaterThanOrEqual(1);
 
-    // The placeholder tool message was backfilled with the sub-agent's answer
+    // The placeholder tool message was backfilled with the sub-agent's answer,
+    // followed by the hidden reference the parent uses to continue that sub-agent
     const allMessages = await serverDB.select().from(messages).where(eq(messages.userId, userId));
     const subAgentToolMessage = allMessages.find(
-      (m) => m.role === 'tool' && m.content === SUB_AGENT_ANSWER,
+      (m) =>
+        m.role === 'tool' && !!m.content && stripSubAgentReference(m.content) === SUB_AGENT_ANSWER,
     );
     expect(subAgentToolMessage).toBeDefined();
+    expect(subAgentToolMessage!.content).toMatch(/<sub_agent id="[^"]+" \/>$/);
   });
 });

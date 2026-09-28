@@ -1,11 +1,12 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 
 import AsyncError from '@/components/AsyncError';
 import CommentList, { type CommentListProps } from '@/components/CommentList';
 import RatingOverview from '@/components/RatingOverview';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { discoverService } from '@/services/discover';
 import { useDiscoverStore } from '@/store/discover';
 
@@ -47,7 +48,7 @@ const Reviews = memo(() => {
       {isLoading ? (
         <Flexbox gap={24}>
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton active key={i} paragraph={{ rows: 2 }} title={{ width: 120 }} />
+            <ArticleSkeleton key={i} rows={2} title={120} />
           ))}
         </Flexbox>
       ) : error ? (

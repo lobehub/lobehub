@@ -21,33 +21,39 @@ describe('useModelCatalog', () => {
     vi.restoreAllMocks();
   });
 
-  it.each(['codebuddy', 'cursor', 'grok-build', 'opencode', 'pi', 'qoder', 'trae'] as const)(
-    'starts loading the %s catalog as soon as the selector mounts',
-    async (type) => {
-      const pendingCatalog = new Promise<
-        Awaited<ReturnType<typeof heterogeneousAgentCatalogService.listModels>>
-      >(() => {});
-      const listModels = vi
-        .spyOn(heterogeneousAgentCatalogService, 'listModels')
-        .mockReturnValue(pendingCatalog);
+  it.each([
+    'codebuddy',
+    'cursor',
+    'droid',
+    'grok-build',
+    'opencode',
+    'pi',
+    'qoder',
+    'trae',
+  ] as const)('starts loading the %s catalog as soon as the selector mounts', async (type) => {
+    const pendingCatalog = new Promise<
+      Awaited<ReturnType<typeof heterogeneousAgentCatalogService.listModels>>
+    >(() => {});
+    const listModels = vi
+      .spyOn(heterogeneousAgentCatalogService, 'listModels')
+      .mockReturnValue(pendingCatalog);
 
-      const { result } = renderHook(
-        () =>
-          useModelCatalog({
-            isDeviceListLoading: false,
-            isPreferenceLoading: false,
-            open: false,
-            provider: { type },
-            targetReady: true,
-            type,
-          }),
-        { wrapper: createWrapper() },
-      );
+    const { result } = renderHook(
+      () =>
+        useModelCatalog({
+          isDeviceListLoading: false,
+          isPreferenceLoading: false,
+          open: false,
+          provider: { type },
+          targetReady: true,
+          type,
+        }),
+      { wrapper: createWrapper() },
+    );
 
-      await waitFor(() => expect(listModels).toHaveBeenCalledTimes(1));
-      expect(result.current.isLoading).toBe(true);
-    },
-  );
+    await waitFor(() => expect(listModels).toHaveBeenCalledTimes(1));
+    expect(result.current.isLoading).toBe(true);
+  });
 
   it('passes TRAE ACP provider arguments to model discovery', async () => {
     const listModels = vi.spyOn(heterogeneousAgentCatalogService, 'listModels').mockResolvedValue({

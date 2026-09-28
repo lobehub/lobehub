@@ -4,7 +4,7 @@ import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
 import { idGenerator, randomSlug } from '../utils/idGenerator';
-import { timestamps } from './_helpers';
+import { softDeleteColumns, timestamps } from './_helpers';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -39,6 +39,8 @@ export const sessionGroups = pgTable(
      */
     visibility: text('visibility', { enum: SESSION_GROUP_VISIBILITY }).default('public').notNull(),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (table) => ({
@@ -72,6 +74,14 @@ export type SessionGroupItem = typeof sessionGroups.$inferSelect;
 
 //  ======= sessions ======= //
 
+/**
+ * @deprecated Legacy 1:1 shell around an agent, kept only for rows that
+ * pre-date agent-native topics (`topics.agent_id`) and for the mobile session
+ * list. New code addresses conversations by `agents` / `topics` and must not
+ * write here. Not recycle-bin aware on purpose: the agent is the restorable
+ * unit — a trashed agent hides its session through the agent join, and the
+ * session row is hard-deleted with the agent at purge time.
+ */
 export const sessions = pgTable(
   'sessions',
   {

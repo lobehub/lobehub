@@ -60,6 +60,7 @@ runs:
           | grep 'PRE ' \
           | awk '{print $2}' \
           | sed 's|/$||' \
+          | { grep -vx 'core' || true; } \
           | sort -V)
 
         if [ -z "$all_versions" ]; then

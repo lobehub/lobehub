@@ -1,7 +1,8 @@
 'use client';
 
 import type { NotificationMetadata } from '@lobechat/types';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { BellOffIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';
@@ -24,8 +25,11 @@ import type { NotificationListHandle } from './useNotificationList';
 import { PAGE_SIZE, useNotificationList } from './useNotificationList';
 
 const styles = createStaticStyles(({ css }) => ({
+  // colorFillSecondary rather than colorBorderSecondary: see the note in
+  // ../InboxModal/index.tsx — the border token collapses into the modal's own
+  // surface in dark mode, which erased the separator between rows.
   item: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorFillSecondary};
 
     &:hover {
       background: ${cssVar.colorFillSecondary};

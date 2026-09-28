@@ -31,6 +31,26 @@ describe('normalizeAskUserQuestions', () => {
     ]);
   });
 
+  it('preserves stable option ids while stripping unknown option fields', () => {
+    const questions = normalizeAskUserQuestions({
+      questions: [
+        {
+          header: 'Permission',
+          options: [
+            { id: 'allow-once', ignored: 'raw', label: 'Continue' },
+            { id: 'reject-once', label: 'Continue' },
+          ],
+          question: 'Edit README?',
+        },
+      ],
+    });
+
+    expect(questions[0].options).toEqual([
+      { id: 'allow-once', label: 'Continue' },
+      { id: 'reject-once', label: 'Continue' },
+    ]);
+  });
+
   it('accepts a single question object for stale payloads', () => {
     const questions = normalizeAskUserQuestions({
       questions: {

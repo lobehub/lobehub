@@ -2,7 +2,7 @@
 
 import type { SearchFilesState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -41,14 +41,14 @@ export const createSearchLocalFilesInspector = ({
       if (isArgumentsStreaming) {
         if (!query)
           return (
-            <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-              <span>{t(translationKey as any)}</span>
+            <div className={inspectorTextStyles.root}>
+              <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}</span>
             </div>
           );
 
         return (
-          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey as any)}: </span>
+          <div className={inspectorTextStyles.root}>
+            <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}: </span>
             <span className={highlightTextStyles.primary}>{query}</span>
           </div>
         );
@@ -58,9 +58,11 @@ export const createSearchLocalFilesInspector = ({
       const hasResults = resultCount > 0;
 
       return (
-        <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
+        <div className={inspectorTextStyles.root}>
           <span style={{ marginInlineStart: 2 }}>
-            <span>{t(translationKey as any)}: </span>
+            <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+              {t(translationKey as any)}:{' '}
+            </span>
             {query && <span className={highlightTextStyles.primary}>{query}</span>}
             {!isLoading &&
               pluginState &&

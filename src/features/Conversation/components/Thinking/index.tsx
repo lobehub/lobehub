@@ -1,4 +1,5 @@
-import { Accordion, AccordionItem, ScrollArea } from '@lobehub/ui';
+import { ScrollArea } from '@lobehub/ui';
+import { Accordion } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { memo, useEffect, useState } from 'react';
@@ -51,52 +52,45 @@ const Thinking = memo<ThinkingProps>((props) => {
 
   return (
     <Accordion
-      expandedKeys={showDetail ? ['thinking'] : []}
       gap={8}
-      onExpandedChange={(keys) => setShowDetail(keys.length > 0)}
-    >
-      <AccordionItem
-        itemKey={'thinking'}
-        paddingBlock={4}
-        paddingInline={4}
-        title={<Title duration={duration} showDetail={showDetail} thinking={thinking} />}
-      >
-        <ScrollArea
-          disableContentFit
-          scrollFade
-          className={styles.scrollRoot}
-          contentProps={{
-            style: {
-              color: 'inherit',
-              display: 'block',
-              fontSize: 'inherit',
-              gap: 0,
-              lineHeight: 'inherit',
-            },
-          }}
-          viewportProps={{
-            className: styles.contentScroll,
-            ref: ref as RefObject<HTMLDivElement>,
-            onScroll: handleScroll,
-          }}
-        >
-          {typeof content === 'string' ? (
-            <MarkdownMessage
-              animated={thinkingAnimated}
-              citations={citations}
-              variant={'chat'}
-              style={{
-                overflow: 'unset',
+      indicatorPlacement="inline"
+      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+      value={showDetail ? ['thinking'] : []}
+      items={[
+        {
+          children: (
+            <ScrollArea
+              disableContentFit
+              scrollFade
+              className={styles.scrollRoot}
+              viewportProps={{
+                className: styles.contentScroll,
+                ref: ref as RefObject<HTMLDivElement>,
+                onScroll: handleScroll,
               }}
             >
-              {content}
-            </MarkdownMessage>
-          ) : (
-            content
-          )}
-        </ScrollArea>
-      </AccordionItem>
-    </Accordion>
+              {typeof content === 'string' ? (
+                <MarkdownMessage
+                  animated={thinkingAnimated}
+                  citations={citations}
+                  variant={'chat'}
+                  style={{
+                    overflow: 'unset',
+                  }}
+                >
+                  {content}
+                </MarkdownMessage>
+              ) : (
+                content
+              )}
+            </ScrollArea>
+          ),
+          key: 'thinking',
+          title: <Title duration={duration} showDetail={showDetail} thinking={thinking} />,
+        },
+      ]}
+      onValueChange={(keys) => setShowDetail(keys.length > 0)}
+    />
   );
 });
 

@@ -3,46 +3,31 @@ import { describe, expect, it } from 'vitest';
 
 import type { GoalListItem } from '@/store/goal/initialState';
 
-import {
-  buildHomeGoalEntries,
-  homeGoalHref,
-  indexAcceptanceStatuses,
-  resolveHomeGoalView,
-} from './homeGoals';
+import { buildHomeGoalEntries, homeGoalHref, resolveHomeGoalView } from './homeGoals';
 
-type GoalOverrides = Omit<Partial<GoalListItem>, 'goal' | 'id'> & {
-  goal?: Partial<NonNullable<GoalListItem['goal']>>;
+interface GoalOverrides {
+  agentId?: string | null;
+  goal?: Partial<GoalListItem['goal']>;
   id: string;
-};
+  pendingDecisions?: number;
+  taskDone?: number;
+  taskTotal?: number;
+  title?: string;
+}
 
-const goal = (overrides: GoalOverrides): GoalListItem =>
+const goal = ({ agentId = 'agt_1', id, goal: overrides, ...rest }: GoalOverrides): GoalListItem =>
   ({
-    assigneeAgentId: 'agt_1',
-    goal: { id: `g-${overrides.id}`, maxRounds: 3, status: 'running' },
-    identifier: `T-${overrides.id}`,
-    instruction: 'do the thing',
-    name: `goal ${overrides.id}`,
-    status: 'running',
-    totalTopics: 1,
-    ...overrides,
+    findingCount: 0,
+    goal: { agentId, id: `g-${id}`, status: 'running', title: `goal ${id}`, ...overrides },
+    pendingDecisions: 0,
+    totalRunCost: 0,
+    totalRunDuration: 0,
+    taskDone: 1,
+    taskTotal: 3,
+    ...rest,
   }) as GoalListItem;
 
 const titlesOf = (entries: { title: string }[]) => entries.map(({ title }) => title);
-
-describe('indexAcceptanceStatuses', () => {
-  it('indexes acceptances by subject id', () => {
-    expect(
-      indexAcceptanceStatuses([
-        { status: 'delivered', subjectId: 'task_1' },
-        { status: 'accepted', subjectId: 'task_2' },
-      ]),
-    ).toEqual({ task_1: 'delivered', task_2: 'accepted' });
-  });
-
-  it('tolerates a read that has not landed', () => {
-    expect(indexAcceptanceStatuses()).toEqual({});
-  });
-});
 
 describe('buildHomeGoalEntries', () => {
   it('puts the goals waiting on the user ahead of the ones still working', () => {
@@ -88,29 +73,17 @@ describe('buildHomeGoalEntries', () => {
     expect(entry.statusKey).toBe('goalList.status.verifying');
   });
 
-  it('carries the round budget and falls back to the identifier for an unnamed goal', () => {
-    const goals = [
-      goal({
-        goal: { id: 'g-x', maxRounds: 5, status: 'running' },
-        id: 'x',
-        instruction: '',
-        name: null,
-        totalTopics: 1,
-      }),
-    ];
+  it('carries the graph roll-up the row renders', () => {
+    const goals = [goal({ id: 'x', pendingDecisions: 2, taskDone: 2, taskTotal: 5 })];
 
     expect(buildHomeGoalEntries(goals)[0]).toMatchObject({
       agentId: 'agt_1',
-      maxRounds: 5,
-      rounds: 1,
-      title: 'T-x',
+      id: 'g-x',
+      pendingDecisions: 2,
+      title: 'goal x',
+      taskDone: 2,
+      taskTotal: 5,
     });
-  });
-
-  it('reports no round budget when the goal entity carries none', () => {
-    const goals = [goal({ goal: { id: 'g-x', maxRounds: null, status: 'running' }, id: 'x' })];
-
-    expect(buildHomeGoalEntries(goals)[0].maxRounds).toBeNull();
   });
 });
 
@@ -171,11 +144,11 @@ describe('homeGoalHref', () => {
   it('routes to the goal detail page under its owning agent', () => {
     const [entry] = buildHomeGoalEntries([goal({ id: 'g1' })]);
 
-    expect(homeGoalHref(entry)).toBe('/agent/agt_1/goal/T-g1');
+    expect(homeGoalHref(entry)).toBe('/agent/agt_1/goal/g-g1');
   });
 
   it('has nowhere to go for an unassigned goal', () => {
-    const [entry] = buildHomeGoalEntries([goal({ assigneeAgentId: null, id: 'g1' })]);
+    const [entry] = buildHomeGoalEntries([goal({ agentId: null, id: 'g1' })]);
 
     expect(homeGoalHref(entry)).toBeUndefined();
   });

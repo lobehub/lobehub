@@ -2,6 +2,10 @@ import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
+  type CopyLocalFilesParams,
+  type CreateLocalDirectoryParams,
+  type CreateLocalEntryResult,
+  type CreateLocalFileParams,
   type DeviceSandboxCapabilityResult,
   type DeviceSandboxInstallResult,
   type EditLocalFileParams,
@@ -14,14 +18,18 @@ import {
   type GlobFilesResult,
   type GrepContentParams,
   type GrepContentResult,
+  type HashLocalFileParams,
   type KillCommandParams,
   type KillCommandResult,
   type ListLocalFileParams,
   type ListLocalFilesResult,
   type ListProjectSkillsParams,
   type ListProjectSkillsResult,
+  type LocalCopyFilesResultItem,
   type LocalFileItem,
   type LocalFilePreviewUrlParams,
+  type LocalFileStats,
+  type LocalFileStatsParams,
   type LocalMoveFilesResultItem,
   type LocalReadFileParams,
   type LocalReadFileResult,
@@ -32,6 +40,8 @@ import {
   type OpenLocalFolderParams,
   type PrepareSkillDirectoryParams,
   type PrepareSkillDirectoryResult,
+  type ProjectDirectoryListParams,
+  type ProjectDirectoryListResult,
   type ProjectFileIndexParams,
   type ProjectFileIndexResult,
   type ProjectFileSearchParams,
@@ -43,6 +53,8 @@ import {
   type RunCommandResult,
   type ShowSaveDialogParams,
   type ShowSaveDialogResult,
+  type TrashLocalFilesParams,
+  type TrashLocalFilesResult,
   type WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 
@@ -177,6 +189,19 @@ const fetchLocalFilePreview = async (
   return { contentType, type: 'binary' };
 };
 
+const fetchLocalFileBytes = async (
+  url: string,
+): Promise<{ bytes: Uint8Array; contentType: string } | undefined> => {
+  const response = await fetch(url);
+  if (!response.ok) return;
+
+  return {
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    contentType:
+      normalizeContentType(response.headers.get('content-type')) || 'application/octet-stream',
+  };
+};
+
 class LocalFileService {
   // File Operations
   async listLocalFiles(params: ListLocalFileParams): Promise<ListLocalFilesResult> {
@@ -185,6 +210,14 @@ class LocalFileService {
 
   async readLocalFile(params: LocalReadFileParams): Promise<LocalReadFileResult> {
     return ensureElectronIpc().localSystem.readFile(params);
+  }
+
+  async hashLocalFile(params: HashLocalFileParams): Promise<string> {
+    return ensureElectronIpc().localSystem.hashLocalFile(params);
+  }
+
+  async getLocalFileStats(params: LocalFileStatsParams): Promise<LocalFileStats> {
+    return ensureElectronIpc().localSystem.getLocalFileStats(params);
   }
 
   async readLocalFiles(params: LocalReadFilesParams): Promise<LocalReadFileResult[]> {
@@ -201,6 +234,12 @@ class LocalFileService {
 
   async searchProjectFiles(params: ProjectFileSearchParams): Promise<ProjectFileSearchResult> {
     return ensureElectronIpc().localSystem.searchProjectFiles(params);
+  }
+
+  async listProjectDirectory(
+    params: ProjectDirectoryListParams,
+  ): Promise<ProjectDirectoryListResult> {
+    return ensureElectronIpc().localSystem.listProjectDirectory(params);
   }
 
   async listProjectSkills(params: ListProjectSkillsParams): Promise<ListProjectSkillsResult> {
@@ -230,6 +269,26 @@ class LocalFileService {
     return ensureElectronIpc().localSystem.handleWriteFile(params);
   }
 
+  /** Create a new file; fails instead of overwriting an existing one. */
+  async createLocalFile(params: CreateLocalFileParams): Promise<CreateLocalEntryResult> {
+    return ensureElectronIpc().localSystem.handleCreateFile(params);
+  }
+
+  /** Create a new folder; fails when the path is already taken. */
+  async createLocalDirectory(params: CreateLocalDirectoryParams): Promise<CreateLocalEntryResult> {
+    return ensureElectronIpc().localSystem.handleCreateDirectory(params);
+  }
+
+  /** Copy files/folders, or duplicate in place when an item has no `targetPath`. */
+  async copyLocalFiles(params: CopyLocalFilesParams): Promise<LocalCopyFilesResultItem[]> {
+    return ensureElectronIpc().localSystem.handleCopyFiles(params);
+  }
+
+  /** Move files/folders to the OS trash (recoverable), reporting each path. */
+  async trashLocalFiles(params: TrashLocalFilesParams): Promise<TrashLocalFilesResult> {
+    return ensureElectronIpc().localSystem.trashLocalFiles(params);
+  }
+
   async auditSafePaths(params: AuditSafePathsParams): Promise<AuditSafePathsResult> {
     return ensureElectronIpc().localSystem.auditSafePaths(params);
   }
@@ -251,14 +310,25 @@ class LocalFileService {
 
     if (!result.success || !result.url) return;
 
-    const response = await fetch(result.url);
-    if (!response.ok) return;
+    return fetchLocalFileBytes(result.url);
+  }
 
-    return {
-      bytes: new Uint8Array(await response.arrayBuffer()),
-      contentType:
-        normalizeContentType(response.headers.get('content-type')) || 'application/octet-stream',
-    };
+  async readExternalAssetForPublish(params: {
+    path: string;
+    workingDirectory: string;
+  }): Promise<{ bytes: Uint8Array; contentType: string } | undefined> {
+    const result = await ensureElectronIpc().localSystem.getExternalAssetForPublishUrl(params);
+    if (!result.success || !result.url) return;
+
+    return fetchLocalFileBytes(result.url);
+  }
+
+  async copyAssetForPublish(params: {
+    from: string;
+    to: string;
+    workingDirectory: string;
+  }): Promise<{ error?: string; success: boolean }> {
+    return ensureElectronIpc().localSystem.copyAssetForPublish(params);
   }
 
   async prepareSkillDirectory(

@@ -140,93 +140,160 @@ export class ToolNameResolver {
     offeredToolNames?: string[],
   ): ChatToolPayload[] {
     const offeredSet = offeredToolNames ? new Set(offeredToolNames) : null;
+    /** Built lazily: only a call that fails to resolve needs the candidate list. */
+    let repairCandidates: string[] | undefined;
+    const getRepairCandidates = (): string[] => {
+      repairCandidates ??= offeredToolNames ?? this.listManifestToolNames(manifests);
+      return repairCandidates;
+    };
 
     return toolCalls
       .map((toolCall): ChatToolPayload | null => {
-        const [initialIdentifier, initialApiName, type] =
-          toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
-        let identifier = initialIdentifier;
-        let apiName = initialApiName;
+        const resolved = this.resolveOne(toolCall, manifests, offeredSet);
+        if (resolved) return resolved;
 
-        // Fallback for malformed tool names without the `____` separator
-        // (e.g. model returns "activateTools" instead of
-        // "lobe-activator____activateTools"). When the bare name uniquely
-        // matches an API across the manifests we're allowed to consider,
-        // recover the identifier so we don't silently drop the tool call.
-        // The manifest's `type` is picked up by the existing `type ??
-        // manifests[identifier]?.type` fallback when building the payload.
-        if (!apiName) {
-          const bareName = initialIdentifier;
-          const matches: string[] = [];
-          for (const [id, manifest] of Object.entries(manifests)) {
-            const matchedApi = manifest?.api?.find(
-              (api: LobeChatPluginApi) => api.name === bareName,
-            );
-            if (!matchedApi) continue;
-            // Restrict to tools actually offered to the LLM this turn so a
-            // model can't reach tools that weren't enabled, and so disabled
-            // duplicates don't make an enabled call look ambiguous.
-            if (offeredSet && !offeredSet.has(this.generate(id, matchedApi.name, manifest.type))) {
-              continue;
-            }
-            matches.push(id);
-          }
-          if (matches.length === 1) {
-            identifier = matches[0];
-            apiName = bareName;
-          } else {
-            return null;
-          }
-        }
+        // Last resort: the model garbled the separator itself (observed in
+        // production: `lobe-local-system~~__runCommand` for
+        // `lobe-local-system____runCommand`, mid-operation, after earlier steps
+        // had spelled the same tool correctly). Nothing above can parse that,
+        // and dropping it ends the turn with an empty assistant message.
+        // Recover the name when it collapses to exactly one offered tool, then
+        // resolve it through the normal path.
+        const repairedName = this.repairToolName(toolCall.function.name, getRepairCandidates());
+        if (!repairedName) return null;
 
-        // Step 1: Resolve hashed identifier if needed
-        if (identifier.startsWith(PLUGIN_SCHEMA_API_MD5_PREFIX)) {
-          const identifierMd5 = identifier.replace(PLUGIN_SCHEMA_API_MD5_PREFIX, '');
-          // Find the manifest by hashed identifier
-          const foundIdentifier = Object.keys(manifests).find(
-            (id) => this.genHash(id) === identifierMd5,
-          );
-          if (foundIdentifier) {
-            identifier = foundIdentifier;
-          }
-        }
-
-        // Step 2: Resolve hashed apiName if needed
-        if (apiName.startsWith(PLUGIN_SCHEMA_API_MD5_PREFIX) && manifests[identifier]) {
-          const md5 = apiName.replace(PLUGIN_SCHEMA_API_MD5_PREFIX, '');
-          const manifest = manifests[identifier];
-
-          const api = manifest?.api.find(
-            (api: LobeChatPluginApi) => this.genHash(api.name) === md5,
-          );
-          if (api) {
-            apiName = api.name;
-          }
-        }
-
-        const manifest = manifests[identifier];
-        const matchedApi = manifest?.api.find((api: LobeChatPluginApi) => api.name === apiName);
-
-        // A tool explicitly offered by the server is already authoritative and
-        // may not have a prompt manifest. A stale namespaced call that was not
-        // offered this turn must still match a known manifest entry before it
-        // can be preserved for the downstream scope guard. This prevents a
-        // fabricated namespace/API pair from becoming a synthetic tool result.
-        if (offeredSet && !offeredSet.has(toolCall.function.name) && (!manifest || !matchedApi)) {
-          return null;
-        }
-
-        const payload: ChatToolPayload = {
-          apiName,
-          arguments: toolCall.function.arguments,
-          id: toolCall.id,
-          identifier,
-          thoughtSignature: toolCall.thoughtSignature,
-          type: (type ?? manifest?.type ?? 'builtin') as any,
-        };
-
-        return payload;
+        return this.resolveOne(
+          { ...toolCall, function: { ...toolCall.function, name: repairedName } },
+          manifests,
+          offeredSet,
+        );
       })
       .filter(Boolean) as ChatToolPayload[];
+  }
+
+  /**
+   * Comparison key for tool names: lowercase, letters and digits only. Both
+   * `lobe-local-system~~__runCommand` and `lobe-local-system____runCommand`
+   * collapse to `lobelocalsystemruncommand`, so a mangled separator still
+   * matches the tool it was meant to name.
+   */
+  private squashToolName(name: string): string {
+    return name.toLowerCase().replaceAll(/[^a-z0-9]/g, '');
+  }
+
+  /** Every tool name the manifests can produce; used when no offered list is given. */
+  private listManifestToolNames(manifests: Record<string, LobeToolManifest>): string[] {
+    const names: string[] = [];
+
+    for (const [identifier, manifest] of Object.entries(manifests)) {
+      for (const api of manifest?.api ?? []) {
+        names.push(this.generate(identifier, api.name, manifest.type));
+      }
+    }
+
+    return names;
+  }
+
+  /**
+   * Recover a malformed tool name by squashed comparison. Only an unambiguous
+   * match is accepted: when two candidates collapse to the same key the call
+   * stays unresolved rather than guessing which tool to run.
+   */
+  private repairToolName(name: string, candidateNames: string[]): string | undefined {
+    const squashed = this.squashToolName(name);
+    if (!squashed) return undefined;
+
+    const matches = new Set(
+      candidateNames.filter((candidate) => this.squashToolName(candidate) === squashed),
+    );
+
+    return matches.size === 1 ? [...matches][0] : undefined;
+  }
+
+  /** Resolve a single tool call, or `null` when its name maps to no known tool. */
+  private resolveOne(
+    toolCall: MessageToolCall,
+    manifests: Record<string, LobeToolManifest>,
+    offeredSet: Set<string> | null,
+  ): ChatToolPayload | null {
+    const [initialIdentifier, initialApiName, type] =
+      toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
+    let identifier = initialIdentifier;
+    let apiName = initialApiName;
+
+    // Fallback for malformed tool names without the `____` separator
+    // (e.g. model returns "activateTools" instead of
+    // "lobe-activator____activateTools"). When the bare name uniquely
+    // matches an API across the manifests we're allowed to consider,
+    // recover the identifier so we don't silently drop the tool call.
+    // The manifest's `type` is picked up by the existing `type ??
+    // manifests[identifier]?.type` fallback when building the payload.
+    if (!apiName) {
+      const bareName = initialIdentifier;
+      const matches: string[] = [];
+      for (const [id, manifest] of Object.entries(manifests)) {
+        const matchedApi = manifest?.api?.find((api: LobeChatPluginApi) => api.name === bareName);
+        if (!matchedApi) continue;
+        // Restrict to tools actually offered to the LLM this turn so a
+        // model can't reach tools that weren't enabled, and so disabled
+        // duplicates don't make an enabled call look ambiguous.
+        if (offeredSet && !offeredSet.has(this.generate(id, matchedApi.name, manifest.type))) {
+          continue;
+        }
+        matches.push(id);
+      }
+      if (matches.length === 1) {
+        identifier = matches[0];
+        apiName = bareName;
+      } else {
+        return null;
+      }
+    }
+
+    // Step 1: Resolve hashed identifier if needed
+    if (identifier.startsWith(PLUGIN_SCHEMA_API_MD5_PREFIX)) {
+      const identifierMd5 = identifier.replace(PLUGIN_SCHEMA_API_MD5_PREFIX, '');
+      // Find the manifest by hashed identifier
+      const foundIdentifier = Object.keys(manifests).find(
+        (id) => this.genHash(id) === identifierMd5,
+      );
+      if (foundIdentifier) {
+        identifier = foundIdentifier;
+      }
+    }
+
+    // Step 2: Resolve hashed apiName if needed
+    if (apiName.startsWith(PLUGIN_SCHEMA_API_MD5_PREFIX) && manifests[identifier]) {
+      const md5 = apiName.replace(PLUGIN_SCHEMA_API_MD5_PREFIX, '');
+      const manifest = manifests[identifier];
+
+      const api = manifest?.api.find((api: LobeChatPluginApi) => this.genHash(api.name) === md5);
+      if (api) {
+        apiName = api.name;
+      }
+    }
+
+    const manifest = manifests[identifier];
+    const matchedApi = manifest?.api.find((api: LobeChatPluginApi) => api.name === apiName);
+
+    // A tool explicitly offered by the server is already authoritative and
+    // may not have a prompt manifest. A stale namespaced call that was not
+    // offered this turn must still match a known manifest entry before it
+    // can be preserved for the downstream scope guard. This prevents a
+    // fabricated namespace/API pair from becoming a synthetic tool result.
+    if (offeredSet && !offeredSet.has(toolCall.function.name) && (!manifest || !matchedApi)) {
+      return null;
+    }
+
+    const payload: ChatToolPayload = {
+      apiName,
+      arguments: toolCall.function.arguments,
+      id: toolCall.id,
+      identifier,
+      thoughtSignature: toolCall.thoughtSignature,
+      type: (type ?? manifest?.type ?? 'builtin') as any,
+    };
+
+    return payload;
   }
 }

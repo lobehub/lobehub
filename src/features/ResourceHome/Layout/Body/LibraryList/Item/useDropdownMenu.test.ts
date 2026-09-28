@@ -18,17 +18,8 @@ const mocks = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@lobehub/ui', () => ({
   Icon: () => null,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  confirmModal: vi.fn(),
-  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -113,25 +104,27 @@ describe('Knowledge base list item dropdown menu', () => {
     mocks.currentUserId = 'user-current';
   });
 
-  it('lets workspace members rename and edit a shared knowledge base', () => {
+  it('lets workspace members edit and delete a shared knowledge base', () => {
     const items = getItems();
 
-    expect(getKeys(items)).toEqual(['rename', 'editDescription']);
+    expect(getKeys(items)).toEqual(['rename', 'editDescription', 'delete']);
     expect(items.filter((item) => item.key).every((item) => item.disabled !== true)).toBe(true);
   });
 
   it('omits unavailable ownership actions instead of disabling them', () => {
     const items = getItems(true);
 
-    expect(getKeys(items)).toEqual(['rename', 'editDescription', 'member-permissions']);
+    expect(getKeys(items)).toEqual(['rename', 'editDescription', 'member-permissions', 'delete']);
     expect(getMenuStructure(items)).toEqual([
       'rename',
       'editDescription',
       'divider',
       'member-permissions',
+      'divider',
+      'delete',
     ]);
     expect(getKeys(items)).not.toEqual(
-      expect.arrayContaining(['transfer-knowledge-base', 'copy-knowledge-base', 'delete']),
+      expect.arrayContaining(['transfer-knowledge-base', 'copy-knowledge-base']),
     );
   });
 

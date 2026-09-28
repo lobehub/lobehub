@@ -1,7 +1,8 @@
 'use client';
 
-import { type ActionIconGroupProps, type ActionIconProps } from '@lobehub/ui';
+import { type ActionIconGroupProps } from '@lobehub/ui';
 import { ActionIconGroup } from '@lobehub/ui';
+import { type ActionIconProps } from '@lobehub/ui/base-ui';
 import { Dices, Download, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

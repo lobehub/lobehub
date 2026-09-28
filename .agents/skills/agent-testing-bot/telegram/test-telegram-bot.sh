@@ -75,5 +75,5 @@ echo "[$APP] Waiting ${WAIT}s for bot response..."
 sleep "$WAIT"
 
 echo "[$APP] Capturing screenshot..."
-"$SCRIPT_DIR/../../agent-testing/scripts/capture-app-window.sh" "$APP" "$SCREENSHOT"
+"$SCRIPT_DIR/../../../acceptance/scripts/capture-app-window.sh" "$APP" "$SCREENSHOT"
 echo "[$APP] Done! Screenshot saved to $SCREENSHOT"

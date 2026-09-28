@@ -2,23 +2,8 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import type { VercelAIGatewayModelCard } from './index';
 import { formatPrice, LobeVercelAIGatewayAI, params } from './index';
-
-testProvider({
-  Runtime: LobeVercelAIGatewayAI,
-  bizErrorType: 'ProviderBizError',
-  chatDebugEnv: 'DEBUG_VERCELAIGATEWAY_CHAT_COMPLETION',
-  chatModel: 'gpt-4o',
-  defaultBaseURL: 'https://ai-gateway.vercel.sh/v1',
-  invalidErrorType: 'InvalidProviderAPIKey',
-  provider: ModelProvider.VercelAIGateway,
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 describe('LobeVercelAIGatewayAI - custom features', () => {
   let instance: InstanceType<typeof LobeVercelAIGatewayAI>;

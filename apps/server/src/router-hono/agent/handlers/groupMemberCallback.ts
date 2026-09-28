@@ -75,7 +75,13 @@ export async function groupMemberCallback(c: Context): Promise<Response> {
     }
 
     const serverDB = await getServerDB();
+    // Opt into visitor rows only for shared-agent visitor runs: metadata
+    // carries `streamOwnerUserId` when the operation executes as the creator
+    // but the visitor owns the stream. Ordinary creator ops keep the default
+    // exclusion.
+    const includeShareVisitor = Boolean(metadata.streamOwnerUserId);
     const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
+      includeShareVisitor,
       workspaceId: metadata.workspaceId,
     });
 

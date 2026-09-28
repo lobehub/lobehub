@@ -20,16 +20,6 @@ vi.mock('electron', () => ({
   },
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock dir constants
 vi.mock('@/const/dir', () => ({
   resourcesDir: '/mock/resources',
@@ -86,7 +76,9 @@ describe('Tray', () => {
     } as unknown as App;
 
     // Mock electron constructors
-    vi.mocked(ElectronTray).mockImplementation(() => mockElectronTray);
+    vi.mocked(ElectronTray).mockImplementation(function () {
+      return mockElectronTray;
+    });
     vi.mocked(nativeImage.createFromPath).mockReturnValue({
       setTemplateImage: vi.fn(),
     } as any);
@@ -211,7 +203,7 @@ describe('Tray', () => {
 
     it('should handle errors when creating tray', () => {
       const error = new Error('Failed to create tray');
-      vi.mocked(ElectronTray).mockImplementation(() => {
+      vi.mocked(ElectronTray).mockImplementation(function () {
         throw error;
       });
 
@@ -278,7 +270,9 @@ describe('Tray', () => {
         destroy: vi.fn(),
         displayBalloon: vi.fn(),
       };
-      vi.mocked(ElectronTray).mockImplementationOnce(() => mockTrayForRightClick as any);
+      vi.mocked(ElectronTray).mockImplementationOnce(function () {
+        return mockTrayForRightClick as any;
+      });
 
       const builtMenu = { _mockMenu: true } as any;
       vi.mocked(Menu.buildFromTemplate).mockReturnValue(builtMenu);

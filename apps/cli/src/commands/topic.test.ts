@@ -24,11 +24,6 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 describe('topic command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -260,6 +255,20 @@ describe('topic command', () => {
       expect(output()).toContain('Hello world');
       expect(output()).toContain('Hi there');
       expect(output()).toContain('Showing 1–2 of 2');
+    });
+
+    it('scopes the read to --workspace', async () => {
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'topic',
+        'view',
+        't1',
+        '--workspace',
+        'ws_1',
+      ]);
+
+      expect(mockGetTrpcClient).toHaveBeenCalledWith('ws_1');
     });
 
     it('uses the aggregate endpoint without loading messages for --no-messages', async () => {

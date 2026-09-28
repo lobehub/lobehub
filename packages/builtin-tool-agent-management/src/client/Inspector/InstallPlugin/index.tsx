@@ -32,20 +32,17 @@ export const InstallPluginInspector = memo<BuiltinInspectorProps<InstallPluginPa
 
     if (isArgumentsStreaming && !identifier) {
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-agent-management.apiName.installPlugin')}</span>
+        <div className={styles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-agent-management.apiName.installPlugin')}
+          </span>
         </div>
       );
     }
 
     return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-        gap={8}
-      >
-        <span className={styles.title}>
+      <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
           {t('builtins.lobe-agent-management.inspector.installPlugin.title')}
         </span>
         {identifier && <span className={highlightTextStyles.primary}>{identifier}</span>}

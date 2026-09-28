@@ -1,9 +1,13 @@
 import { readFile } from 'node:fs/promises';
 
+// Import straight from `@lobechat/utils`, not through a local re-export. In
+// the single-file CLI bundle, a re-export that is also reachable from a lazily
+// imported loader becomes a lazy module, and this eager loader then sees an
+// uninitialized `undefined` binding (lobehub/lobehub#19934).
+import { detectUtf16NoBom } from '@lobechat/utils/detectUtf16';
 import debug from 'debug';
 
 import type { DocumentPage, FileLoaderInterface } from '../../types';
-import { detectUtf16NoBom } from '../../utils/detectUtf16';
 
 const log = debug('file-loaders:text');
 

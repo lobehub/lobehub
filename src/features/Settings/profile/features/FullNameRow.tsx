@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox, Icon, Input } from '@lobehub/ui';
+import { Flexbox, Input } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { type InputRef } from 'antd';
-import { Loader2Icon } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -37,7 +37,7 @@ const FullNameRow = () => {
   return (
     <ProfileRow anchor={'profile-full-name'} label={t('profile.fullName')}>
       <Flexbox horizontal align="center" gap={8}>
-        {saving && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />}
+        {saving && <Spin size="small" style={{ opacity: 0.5 }} />}
         <Input
           defaultValue={fullName || ''}
           disabled={saving}

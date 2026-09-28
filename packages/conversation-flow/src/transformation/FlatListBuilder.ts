@@ -557,7 +557,7 @@ export class FlatListBuilder {
 
     while (true) {
       const nextContinuation = this.findNextUnprocessedChild(parentIds, processedIds);
-      if (!nextContinuation) return;
+      if (!nextContinuation) break;
 
       if (this.shouldDrainParentContinuations(nextContinuation.parentId, processedIds)) {
         this.buildFlatListRecursive(nextContinuation.parentId, flatList, processedIds, allMessages);
@@ -571,6 +571,57 @@ export class FlatListBuilder {
         processedIds,
         allMessages,
       );
+    }
+
+    this.continueInterruptedAssistantGroup(assistantChain, flatList, processedIds, allMessages);
+  }
+
+  /**
+   * A user can interrupt a tool run before its final assistant is persisted.
+   * The collector folds that run into one group, so the interruption is attached
+   * to an intermediate (now consumed) assistant rather than the group tail.
+   * Recover that user continuation without exposing regenerated assistant
+   * branches or overriding an explicit branch selection.
+   */
+  private continueInterruptedAssistantGroup(
+    assistantChain: Message[],
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): void {
+    const tail = assistantChain.at(-1);
+    if (!tail) return;
+
+    for (const assistant of assistantChain.slice(0, -1)) {
+      const childIds = this.childrenMap.get(assistant.id) ?? [];
+      const interruptions = childIds.filter((id) => {
+        const message = this.messageMap.get(id);
+        return (
+          message?.role === 'user' &&
+          !message.threadId &&
+          !processedIds.has(id) &&
+          message.createdAt >= assistant.createdAt &&
+          message.createdAt <= tail.createdAt
+        );
+      });
+      if (interruptions.length === 0) continue;
+
+      const activeId = this.branchResolver.getActiveBranchIdFromMetadata(
+        assistant,
+        interruptions,
+        this.childrenMap,
+        this.branchResolver.getMetadataBranchIds(childIds),
+      );
+      // Explicit indices use all non-tool siblings, not only interruptions.
+      if (activeId && interruptions.includes(activeId)) {
+        this.buildFlatListRecursiveForChild(
+          assistant.id,
+          activeId,
+          flatList,
+          processedIds,
+          allMessages,
+        );
+      }
     }
   }
 
@@ -974,23 +1025,53 @@ export class FlatListBuilder {
 
     // Create tool map for lookup
     const toolMap = new Map<string, Message>();
+    const toolMessagesById = new Map<string, Message>();
+    // `${parentId}:${tool_call_id}` → first result that assistant received
+    const toolMapByCaller = new Map<string, Message>();
     allToolMessages.forEach((tm) => {
+      toolMessagesById.set(tm.id, tm);
       if (tm.tool_call_id) {
         toolMap.set(tm.tool_call_id, tm);
+
+        const callerKey = `${tm.parentId}:${tm.tool_call_id}`;
+        if (tm.parentId && !toolMapByCaller.has(callerKey)) toolMapByCaller.set(callerKey, tm);
       }
     });
+    const chainAssistantIds = new Set(assistantChain.map((assistant) => assistant.id));
+
+    // `tool_call_id` is provider-supplied and not unique across a chain: Kimi
+    // (via zeabur / nvidia / moonshot) stores `<tool>:0` on every step. Pair a
+    // call with the result its own assistant produced first; the id-only map
+    // is a fallback that must never hand one step another step's result.
+    const findToolResult = (assistant: Message, toolCallId: string, resultMsgId?: string) => {
+      const explicit = resultMsgId ? toolMessagesById.get(resultMsgId) : undefined;
+      if (explicit) return explicit;
+
+      const own = toolMapByCaller.get(`${assistant.id}:${toolCallId}`);
+      if (own) return own;
+
+      const fallback = toolMap.get(toolCallId);
+      if (fallback?.parentId && chainAssistantIds.has(fallback.parentId)) return undefined;
+
+      return fallback;
+    };
 
     // Process each assistant in the chain
     for (const assistant of assistantChain) {
       // Build toolsWithResults for this assistant
       const toolsWithResults: ChatToolPayloadWithResult[] =
         assistant.tools?.map((tool) => {
-          const toolMsg = toolMap.get(tool.id);
+          const toolMsg = findToolResult(assistant, tool.id, tool.result_msg_id);
           if (toolMsg) {
             const result: any = {
               content: toolMsg.content || '',
               id: toolMsg.id,
             };
+            // A projected tool has an empty body and its real length here; the
+            // completion checks read this instead of the body.
+            if (typeof toolMsg.contentLength === 'number') {
+              result.contentLength = toolMsg.contentLength;
+            }
             if (toolMsg.error) result.error = toolMsg.error;
             if (toolMsg.pluginError) result.error = toolMsg.pluginError;
             if (toolMsg.pluginState) result.state = toolMsg.pluginState;
@@ -1085,11 +1166,14 @@ export class FlatListBuilder {
 
     const aggregated = this.messageTransformer.aggregateMetadata(children);
 
-    // Collect all non-usage/performance metadata from all children
+    // Finish reasons belong to their own response block; moving one to the first block can
+    // display a terminal notice beside an earlier tool step.
     const groupMetadata: Record<string, any> = {};
     children.forEach((child) => {
       if ((child as any).metadata) {
-        Object.assign(groupMetadata, (child as any).metadata);
+        Object.entries((child as any).metadata).forEach(([key, value]) => {
+          if (key !== 'finishType') groupMetadata[key] = value;
+        });
       }
     });
 
@@ -1101,9 +1185,11 @@ export class FlatListBuilder {
       }
       Object.assign((children[0] as any).metadata, groupMetadata);
 
-      // Remove metadata from subsequent children (keep only in first child)
+      // Keep each child's finish reason while collecting shared metadata on the first child.
       for (let i = 1; i < children.length; i++) {
-        delete (children[i] as any).metadata;
+        const finishType = (children[i] as any).metadata?.finishType;
+        if (finishType === undefined) delete (children[i] as any).metadata;
+        else (children[i] as any).metadata = { finishType };
       }
     }
 
@@ -1117,6 +1203,18 @@ export class FlatListBuilder {
       content: '',
       role: role as any,
     };
+
+    // Heterogeneous agents (e.g. kimi-code) may only learn model/provider at
+    // run end, stamped on the LAST step's assistant row — the group spreads
+    // the FIRST row, so backfill from the last chain assistant carrying one.
+    if (!result.model) {
+      const withModel = assistantChain.findLast((assistant) => !!assistant.model);
+      if (withModel) result.model = withModel.model;
+    }
+    if (!result.provider) {
+      const withProvider = assistantChain.findLast((assistant) => !!assistant.provider);
+      if (withProvider) result.provider = withProvider.provider;
+    }
 
     // Remove fields that should not be in assistantGroup/supervisor
     delete result.imageList;

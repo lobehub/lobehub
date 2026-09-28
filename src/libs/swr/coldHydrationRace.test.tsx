@@ -19,24 +19,25 @@
  * the provider and `await`s `hydrateScope()` before mounting the React root (the
  * `FIX (bootstrap-await)` case).
  */
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 import useSWR, { type Cache, SWRConfig, unstable_serialize, useSWRConfig } from 'swr';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { localDataCache } from './localDataCache';
+import { buildLocalDataKey, localDataCache } from './localDataCache';
 import { createCacheProvider, type ScopedSWRProvider } from './localStorageProvider';
 
-const SCOPE = 'race-user:personal';
+let scope: string;
+let scopeIndex = 0;
 const KEY = ['MSGS', 'topic-cold'];
 const CACHED = [{ id: 'm1', text: 'cached on disk' }];
 const FRESH = [{ id: 'm1', text: 'from network' }];
 
-const makeProvider = () =>
+const makeProvider = (providerScope = scope) =>
   createCacheProvider({
     debounceMs: 5,
-    getScope: () => SCOPE,
+    getScope: () => providerScope,
     idbPatterns: ['MSGS'],
     localPatterns: [],
   });
@@ -52,19 +53,25 @@ const wrapper =
 
 /** Seed IndexedDB with a persisted SWR state row, as a prior session would leave it. */
 const seedDisk = async () => {
-  const p = makeProvider();
-  const r = renderHook(() => useSWR(KEY, () => Promise.resolve(CACHED)), { wrapper: wrapper(p) });
-  await waitFor(() => expect(r.result.current.data).toEqual(CACHED));
-  await waitFor(async () => {
-    const rows = await localDataCache.entriesByScope(SCOPE);
-    expect(rows.length).toBeGreaterThan(0);
-  });
-  r.unmount();
+  // Seed the completed prior session, without a second live provider whose
+  // debounced writes can race with the cold-boot provider under test.
+  const key = buildLocalDataKey(scope, unstable_serialize(KEY));
+  await localDataCache.set(key, { data: CACHED }, '1.0.0');
+  expect(await localDataCache.get(key)).toEqual({ data: CACHED });
 };
 
 describe('cold-open hydration race (SWR + tiered provider + IndexedDB)', () => {
+  beforeEach(() => {
+    scope = `race-user-${++scopeIndex}:personal`;
+  });
+
   afterEach(async () => {
-    await localDataCache.clearScope(SCOPE);
+    cleanup();
+    // Flush pending provider timers before clearing disk, so a late network
+    // result cannot recreate a row after teardown.
+    window.dispatchEvent(new Event('pagehide'));
+    await localDataCache.entriesByScope(scope);
+    await localDataCache.clearScope(scope);
   });
 
   it('control: hydration completes BEFORE mount → cached row is served locally', async () => {
@@ -79,6 +86,7 @@ describe('cold-open hydration race (SWR + tiered provider + IndexedDB)', () => {
     const r = renderHook(() => useSWR(KEY, () => slow), { wrapper: wrapper(p) });
     expect(r.result.current.data).toEqual(CACHED);
     resolveNet(FRESH);
+    await waitFor(() => expect(r.result.current.data).toEqual(FRESH));
   });
 
   it('BUG: consumer mounts BEFORE hydration → never sees the cached row until the network resolves', async () => {

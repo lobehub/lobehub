@@ -8,7 +8,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import BenchmarkModalContent from './index';
 
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStaticStyles: () =>
     new Proxy({}, { get: (_target, prop: string) => prop }) as Record<string, string>,
   cssVar: new Proxy({}, { get: (_target, token) => `var(--${String(token)})` }),
@@ -29,20 +30,8 @@ vi.mock('@lobehub/charts', () => ({
   ),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children, ...props }: { children?: ReactNode }) => {
-    const {
-      horizontal: _h,
-      align: _a,
-      justify: _j,
-      gap: _g,
-      paddingBlock: _p,
-      ...rest
-    } = props as any;
-
-    return <div {...rest}>{children}</div>;
-  },
-  Icon: () => <span />,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Tooltip: ({ children, title }: { children: ReactNode; title?: ReactNode }) => (
     <span>
       <span data-testid={'tooltip'}>{title}</span>
@@ -57,7 +46,8 @@ interface MockMenuItem {
   onClick: () => void;
 }
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createModal: vi.fn(),
   DropdownMenu: ({ children, items }: { children: ReactNode; items: MockMenuItem[] }) => (
     <div>

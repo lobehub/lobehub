@@ -10,10 +10,12 @@ vi.mock('@/server/globalConfig/parseMemoryExtractionConfig', () => ({
 }));
 
 vi.mock('@/database/models/userMemory/sources/benchmarkLoCoMo', () => ({
-  UserMemorySourceBenchmarkLoCoMoModel: vi.fn().mockImplementation(() => ({
-    replaceParts,
-    upsertSource,
-  })),
+  UserMemorySourceBenchmarkLoCoMoModel: vi.fn().mockImplementation(function () {
+    return {
+      replaceParts,
+      upsertSource,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/memory/userMemory/extract', () => ({
@@ -25,7 +27,9 @@ vi.mock('@/server/services/memory/userMemory/extract', () => ({
 }));
 
 vi.mock('@lobechat/memory-user-memory', () => ({
-  BenchmarkLocomoContextProvider: vi.fn().mockImplementation((params) => params),
+  BenchmarkLocomoContextProvider: vi.fn().mockImplementation(function (params) {
+    return params;
+  }),
 }));
 
 /**

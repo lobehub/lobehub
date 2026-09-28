@@ -1,15 +1,6 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
-import {
-  ActionIcon,
-  Avatar,
-  Block,
-  Flexbox,
-  Icon,
-  Input,
-  stopPropagation,
-  Tooltip,
-} from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon, Input, stopPropagation, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Avatar, toast } from '@lobehub/ui/base-ui';
 import { type InputRef } from 'antd';
 import { Check, PaletteIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

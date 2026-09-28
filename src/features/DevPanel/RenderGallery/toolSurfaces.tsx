@@ -1,7 +1,8 @@
 'use client';
 
 import type { UIChatMessage } from '@lobechat/types';
-import { Block, Flexbox, Text } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Component, memo, type ReactNode, useMemo } from 'react';
 

@@ -8,10 +8,6 @@ const mocks = vi.hoisted(() => ({
   saveToast: vi.fn(),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/libs/better-auth/auth-client', () => ({
   requestPasswordReset: mocks.requestPasswordReset,
 }));
