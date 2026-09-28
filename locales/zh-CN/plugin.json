@@ -876,7 +876,6 @@
   "protocolInstall.warning": "安装前请确认你信任此技能的来源。你随时可以在设置中禁用或移除",
   "search.config.addKey": "添加秘钥",
   "search.config.close": "删除",
-  "search.config.confirm": "已完成配置并重试",
   "search.crawPages.crawling": "链接识别中",
   "search.crawPages.detail.preview": "预览",
   "search.crawPages.detail.raw": "原始文本",

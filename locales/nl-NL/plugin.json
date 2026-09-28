@@ -872,7 +872,6 @@
   "protocolInstall.warning": "Controleer de bron van de Skill. U kunt deze op elk moment uitschakelen of verwijderen via de instellingen.",
   "search.config.addKey": "Sleutel toevoegen",
   "search.config.close": "Verwijderen",
-  "search.config.confirm": "Gereed, opnieuw proberen",
   "search.crawPages.crawling": "Links identificeren",
   "search.crawPages.detail.preview": "Voorbeeld",
   "search.crawPages.detail.raw": "Ruwe tekst",

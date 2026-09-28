@@ -872,7 +872,6 @@
   "protocolInstall.warning": "Проверете източника на умението. Може да бъде деактивирано или премахнато по всяко време от настройките.",
   "search.config.addKey": "Добави ключ",
   "search.config.close": "Премахни",
-  "search.config.confirm": "Готово, опитай отново",
   "search.crawPages.crawling": "Идентифициране на връзки",
   "search.crawPages.detail.preview": "Преглед",
   "search.crawPages.detail.raw": "Суров текст",

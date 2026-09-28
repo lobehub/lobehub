@@ -1,7 +1,6 @@
 import {
   type ChatImageItem,
   type ChatMessageError,
-  type ChatMessagePluginError,
   type ChatToolPayload,
   type CreateMessageParams,
   type GroundingSearch,
@@ -253,18 +252,6 @@ export class MessageOptimisticUpdateActionImpl {
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages, { context: ctx });
-    }
-  };
-
-  optimisticUpdateMessagePluginError = async (
-    id: string,
-    error: ChatMessagePluginError | null,
-    context?: OptimisticUpdateContext,
-  ): Promise<void> => {
-    const ctx = this.#get().internal_getConversationContext(context);
-    const result = await messageService.updateMessagePluginError(id, error, ctx);
-    if (result?.success && result.messages) {
-      this.#get().replaceMessages(result.messages, { context: ctx });
     }
   };
 

@@ -872,7 +872,6 @@
   "protocolInstall.warning": "Skill-Quelle überprüfen. Kann jederzeit in den Einstellungen deaktiviert oder entfernt werden.",
   "search.config.addKey": "Schlüssel hinzufügen",
   "search.config.close": "Entfernen",
-  "search.config.confirm": "Fertig, erneut versuchen",
   "search.crawPages.crawling": "Links werden identifiziert",
   "search.crawPages.detail.preview": "Vorschau",
   "search.crawPages.detail.raw": "Rohtext",

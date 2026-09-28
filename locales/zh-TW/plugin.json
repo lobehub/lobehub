@@ -872,7 +872,6 @@
   "protocolInstall.warning": "⚠️ 請確認您信任此插件的來源，惡意插件可能會危害您的系統安全。",
   "search.config.addKey": "添加密鑰",
   "search.config.close": "刪除",
-  "search.config.confirm": "已完成配置並重試",
   "search.crawPages.crawling": "連結識別中",
   "search.crawPages.detail.preview": "預覽",
   "search.crawPages.detail.raw": "原始文本",

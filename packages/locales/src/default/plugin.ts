@@ -895,7 +895,6 @@ export default {
   'protocolInstall.warning': 'Verify the Skill source. Disable or remove anytime in settings.',
   'search.config.addKey': 'Add key',
   'search.config.close': 'Remove',
-  'search.config.confirm': 'Done, retry',
   'search.crawPages.crawling': 'Identifying links',
   'search.crawPages.detail.preview': 'Preview',
   'search.crawPages.detail.raw': 'Raw text',

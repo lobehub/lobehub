@@ -872,7 +872,6 @@
   "protocolInstall.warning": "منبع مهارت را بررسی کنید. در هر زمان می‌توانید آن را غیرفعال یا حذف کنید.",
   "search.config.addKey": "افزودن کلید",
   "search.config.close": "حذف",
-  "search.config.confirm": "انجام شد، تلاش مجدد",
   "search.crawPages.crawling": "در حال شناسایی لینک‌ها",
   "search.crawPages.detail.preview": "پیش‌نمایش",
   "search.crawPages.detail.raw": "متن خام",

@@ -872,7 +872,6 @@
   "protocolInstall.warning": "Zweryfikuj źródło Umiejętności. Możesz ją wyłączyć lub usunąć w ustawieniach.",
   "search.config.addKey": "Dodaj klucz",
   "search.config.close": "Usuń",
-  "search.config.confirm": "Gotowe, spróbuj ponownie",
   "search.crawPages.crawling": "Identyfikowanie linków",
   "search.crawPages.detail.preview": "Podgląd",
   "search.crawPages.detail.raw": "Surowy tekst",
