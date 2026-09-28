@@ -41,6 +41,8 @@ import { userProfileSelectors } from '@/store/user/selectors';
  */
 
 const BADGE = 20;
+/** The metric panel body's padding (`Body`), which is also the scroller's. */
+const PANEL_PADDING = 16;
 
 const styles = createStaticStyles(({ css }) => ({
   badge: css`
@@ -53,12 +55,17 @@ const styles = createStaticStyles(({ css }) => ({
     height: ${BADGE}px;
     border-radius: 50%;
   `,
+  // Sticks flush to the panel's top edge instead of the scroller's padding
+  // edge, so rows scrolling past never show through the gap above it. The
+  // negative margin cancels the extra padding, leaving the resting layout as is.
+  // Each day's header is bounded by its own group, so the next day pushes it out.
   day: css`
     position: sticky;
     z-index: 1;
-    inset-block-start: 0;
+    inset-block-start: -${PANEL_PADDING}px;
 
-    padding-block: 6px;
+    margin-block-start: -${PANEL_PADDING}px;
+    padding-block: ${PANEL_PADDING + 6}px 6px;
 
     font-size: 12px;
     font-weight: 600;
