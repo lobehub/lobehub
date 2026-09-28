@@ -19,9 +19,11 @@ import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 // Mock AiAgentService — created inside executeTrajectory
 const mockExecAgent = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    execAgent: mockExecAgent,
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      execAgent: mockExecAgent,
+    };
+  }),
 }));
 
 // Mock appEnv so APP_URL is deterministic
@@ -31,9 +33,11 @@ vi.mock('@/envs/app', () => ({
 
 // Mock AgentRuntimeService (required by service constructor path for checkAndHandleRunTimeout)
 vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    interruptOperation: vi.fn().mockResolvedValue(true),
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      interruptOperation: vi.fn().mockResolvedValue(true),
+    };
+  }),
 }));
 
 const serverDB = await getTestDB();
@@ -222,7 +226,7 @@ describe('AgentEvalRunService', () => {
       const evalTopic = allTopics.find((t) => t.id === result.topicId);
       expect(evalTopic).toBeDefined();
       expect(evalTopic?.trigger).toBe('eval');
-      expect(evalTopic?.title).toContain('[Eval Case #');
+      expect(evalTopic?.title).toContain(`[${(testCase.sortOrder ?? 0) + 1}]`);
 
       // Verify runTopic was created with 'running' status
       const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
@@ -412,7 +416,7 @@ describe('AgentEvalRunService', () => {
       expect(result).toHaveProperty('error', 'Agent execution failed to start');
     });
 
-    it('should use correct topic title with sortOrder and input', async () => {
+    it('should use an ordinal topic title without evaluation metadata', async () => {
       const { run, testCase } = await setupTrajectoryChain({
         input: 'A very long input that should be truncated at some point',
         sortOrder: 4,
@@ -433,7 +437,7 @@ describe('AgentEvalRunService', () => {
 
       const allTopics = await serverDB.select().from(topics);
       const evalTopic = allTopics.find((t) => t.id === result.topicId);
-      expect(evalTopic?.title).toContain('[Eval Case #5]');
+      expect(evalTopic?.title).toContain('[5]');
       expect(evalTopic?.title).toContain('A very long input that should be truncated at so');
     });
 

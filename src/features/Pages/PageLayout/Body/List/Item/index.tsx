@@ -1,4 +1,5 @@
-import { Avatar, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { FileTextIcon } from 'lucide-react';
 import { type MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';

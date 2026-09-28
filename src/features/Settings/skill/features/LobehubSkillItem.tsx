@@ -1,16 +1,10 @@
 'use client';
 
 import { type LobehubSkillProviderType } from '@lobechat/const';
-import { Avatar, Center, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Button as LobeButton, confirmModal } from '@lobehub/ui/base-ui';
+import { Center, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Avatar, Button, Button as LobeButton, confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import {
-  CircleCheck,
-  Loader2,
-  MoreHorizontalIcon,
-  SquareArrowOutUpRight,
-  Unplug,
-} from 'lucide-react';
+import { CircleCheck, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -239,7 +233,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     const renderAction = () => {
       if (isConnecting || isWaitingAuth) {
         return (
-          <Button disabled icon={<Icon spin icon={Loader2} />} type="default">
+          <Button disabled loading type="default">
             {t('tools.lobehubSkill.connect')}
           </Button>
         );
@@ -288,7 +282,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     // and aren't left staring at a blank detail panel wondering if it's a bug.
     const renderNavExtra = () => {
       if (isConnecting || isWaitingAuth) {
-        return <Button disabled icon={<Icon spin icon={Loader2} />} size="small" type="text" />;
+        return <Button disabled loading size="small" type="text" />;
       }
       if (isConnected) {
         return (

@@ -1,7 +1,7 @@
 'use client';
 
-import { ModelIcon, ProviderIcon } from '@lobehub/icons';
-import { Block, Flexbox, Icon, Popover, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Popover } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { ClockIcon } from 'lucide-react';
@@ -9,6 +9,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { ModelIcon, ProviderIcon } from '@/components/LobeIcons';
 import { ModelInfoTags } from '@/components/ModelSelect';
 import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';

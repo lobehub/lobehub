@@ -38,6 +38,31 @@ describe('agent document headless editor', () => {
     expect(isValidEditorData(snapshot.editorData)).toBe(true);
   });
 
+  it('should safely serialize concurrent headless document lifecycles', async () => {
+    const sources = await Promise.all(
+      Array.from({ length: 6 }, (_, index) =>
+        createMarkdownEditorSnapshot(
+          `# Report ${index}\n\n| Supplier | Price |\n| --- | --- |\n${`| Vendor ${index} | $${index} |\n`.repeat(40)}`,
+        ),
+      ),
+    );
+
+    const snapshots = await Promise.all(
+      sources.map((source) =>
+        exportEditorDataSnapshot({
+          editorData: source.editorData,
+          fallbackContent: source.content,
+          litexml: true,
+        }),
+      ),
+    );
+
+    snapshots.forEach((snapshot, index) => {
+      expect(snapshot.content).toContain(`Report ${index}`);
+      expect(snapshot.litexml).toContain(`Vendor ${index}`);
+    });
+  });
+
   it('should apply LiteXML operations and persist diff nodes for later human review', async () => {
     const initial = await exportEditorDataSnapshot({
       fallbackContent: 'Original',
@@ -134,7 +159,7 @@ describe('agent document headless editor', () => {
     ).rejects.toThrow('unexpectedly produced empty content');
   });
 
-  it('should reject a node edit that silently makes no change', async () => {
+  it('should reject a node edit that targets an unknown node id', async () => {
     const initial = await exportEditorDataSnapshot({
       fallbackContent: 'Original',
       litexml: true,
@@ -152,6 +177,6 @@ describe('agent document headless editor', () => {
           },
         ],
       }),
-    ).rejects.toThrow('did not change the document');
+    ).rejects.toThrow('Operation 1 of 1 (insert) failed: node "missing-node" not found');
   });
 });

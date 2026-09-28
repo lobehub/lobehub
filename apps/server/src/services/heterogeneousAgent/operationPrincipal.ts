@@ -1,3 +1,5 @@
+import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { isServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { eq } from 'drizzle-orm';
 
 import { RbacModel } from '@/database/models/rbac';
@@ -22,6 +24,7 @@ export class HeteroOperationPrincipalError extends Error {
 }
 
 export interface ActiveHeteroOperationPrincipal {
+  agentType?: ServerDefaultHeterogeneousAgentType;
   operationId: string;
   userId: string;
   workspaceId?: string;
@@ -29,12 +32,25 @@ export interface ActiveHeteroOperationPrincipal {
 
 /** Resolve and re-authorize an operation token against current durable state. */
 export const resolveActiveHeteroOperationPrincipal = async (params: {
+  /**
+   * Let the callback through when the operation row is already terminal.
+   *
+   * Only for the callbacks whose whole job is to report on a run that ended —
+   * `heteroIngest` answers "this batch was discarded", `heteroFinish` lands the
+   * turn's outcome. Rejecting those at the door leaves the producer retrying a
+   * permanent refusal and the user on an assistant bubble that never resolves.
+   * Every other check still runs, and neither callback can write anything to a
+   * terminal operation: the service refuses them on the same status, which is
+   * exactly the answer they exist to deliver. Live-work capabilities
+   * (`model:invoke`, token renewal, goal mutations) must never set this.
+   */
+  allowTerminalOperation?: boolean;
   capability: HeteroOperationCapability;
   claims: HeteroOperationJwtClaims;
   db: LobeChatDatabase;
   operationId: string;
 }): Promise<ActiveHeteroOperationPrincipal> => {
-  const { capability, claims, db, operationId } = params;
+  const { allowTerminalOperation, capability, claims, db, operationId } = params;
   if (claims.operation_id !== operationId || !claims.capabilities.includes(capability)) {
     throw new HeteroOperationPrincipalError('Operation token does not grant this request', 403);
   }
@@ -46,6 +62,7 @@ export const resolveActiveHeteroOperationPrincipal = async (params: {
   const [operation] = await db
     .select({
       id: agentOperations.id,
+      metadata: agentOperations.metadata,
       model: agentOperations.model,
       provider: agentOperations.provider,
       status: agentOperations.status,
@@ -65,8 +82,22 @@ export const resolveActiveHeteroOperationPrincipal = async (params: {
   ) {
     throw new HeteroOperationPrincipalError('Operation is outside the token scope', 403);
   }
-  if (operation.status !== 'running') {
+  if (operation.status !== 'running' && !allowTerminalOperation) {
     throw new HeteroOperationPrincipalError('Operation has already ended', 409);
+  }
+
+  const metadataAgentType = operation.metadata?.agentType;
+  const agentType =
+    operation.metadata?.serverDefaultHeterogeneous === true &&
+    typeof metadataAgentType === 'string' &&
+    isServerDefaultHeterogeneousAgentType(metadataAgentType)
+      ? metadataAgentType
+      : undefined;
+  if (capability === 'model:invoke' && (!claims.model || !claims.provider_id || !agentType)) {
+    throw new HeteroOperationPrincipalError(
+      'Operation token has no valid server model selection',
+      403,
+    );
   }
 
   const workspaceId = operation.workspaceId ?? undefined;
@@ -85,5 +116,5 @@ export const resolveActiveHeteroOperationPrincipal = async (params: {
     throw new HeteroOperationPrincipalError('Model invocation is no longer permitted', 403);
   }
 
-  return { operationId, userId: claims.sub, workspaceId };
+  return { agentType, operationId, userId: claims.sub, workspaceId };
 };

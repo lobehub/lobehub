@@ -40,6 +40,14 @@ vi.mock('@lobechat/fetch-sse', async (importOriginal) => {
   return { ...(module as any), getMessageError: vi.fn() };
 });
 
+vi.mock('@/libs/model-runtime/zhipu/authToken', () => ({
+  generateApiToken: vi
+    .fn()
+    .mockResolvedValue(
+      'eyJhbGciOiJIUzI1NiIsInNpZ25fdHlwZSI6IlNJR04iLCJ0eXAiOiJKV1QifQ.eyJhcGlfa2V5IjoiemhpcHUiLCJleHAiOjE3MTU5MTc2NzMsImlhdCI6MTcxMzMyNTY3M30.gt8o-hUDvJFPJLYcH4EhrT1LAmTXI8YnybHeQjpD9oM',
+    ),
+}));
+
 // Mock image processing utilities
 vi.mock('@/utils/url', () => ({
   isDesktopLocalStaticServerUrl: vi.fn(),
@@ -370,15 +378,6 @@ describe('ModelRuntimeOnClient', () => {
        */
 
       it('ZhiPu AI provider: with apiKey', async () => {
-        // Mock the generateApiToken function
-        vi.mock('@/libs/model-runtime/zhipu/authToken', () => ({
-          generateApiToken: vi
-            .fn()
-            .mockResolvedValue(
-              'eyJhbGciOiJIUzI1NiIsInNpZ25fdHlwZSI6IlNJR04iLCJ0eXAiOiJKV1QifQ.eyJhcGlfa2V5IjoiemhpcHUiLCJleHAiOjE3MTU5MTc2NzMsImlhdCI6MTcxMzMyNTY3M30.gt8o-hUDvJFPJLYcH4EhrT1LAmTXI8YnybHeQjpD9oM',
-            ),
-        }));
-
         await mockProviderKeyVaults(ModelProvider.ZhiPu, {
           apiKey: 'zhipu.user-key',
         });

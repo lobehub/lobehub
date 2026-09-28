@@ -1,16 +1,23 @@
 'use client';
 
+import AsyncError from '@/components/AsyncError';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { AgentTasksPage } from '@/features/AgentTasks';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
-import { useCurrentProjectDetail } from '@/store/project';
+import { useProjectStore } from '@/store/project';
 
 const ProjectTasks = () => {
   const { projectId } = useActiveRouteParams<{ projectId: string }>();
-  const detail = useCurrentProjectDetail(projectId);
+  const { data, error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectDetail)(
+    projectId,
+  );
 
-  if (!detail) return null;
+  if (isLoading && !data) return <RouteLoading />;
+  if (error && !data)
+    return <AsyncError error={error} variant={'page'} onRetry={() => void mutate()} />;
+  if (!data) return null;
 
-  return <AgentTasksPage projectId={detail.project.id} />;
+  return <AgentTasksPage projectId={data.data.project.id} />;
 };
 
 export default ProjectTasks;

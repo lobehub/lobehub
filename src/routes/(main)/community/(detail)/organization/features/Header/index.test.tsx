@@ -8,10 +8,6 @@ import {
 } from '../DetailProvider';
 import OrganizationHeader from './index';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/routes/(main)/community/(detail)/features/FollowButton', () => ({
   default: ({ userId }: { userId: number }) => <button>follow-{userId}</button>,
 }));

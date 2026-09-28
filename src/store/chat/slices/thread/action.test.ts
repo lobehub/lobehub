@@ -1,5 +1,5 @@
 import { LOADING_FLAT } from '@lobechat/const';
-import { type UIChatMessage } from '@lobechat/types';
+import { RequestTrigger, type UIChatMessage } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,10 +22,9 @@ vi.mock('@/libs/swr', async () => {
   };
 });
 
-vi.mock('zustand/traditional');
-
 // Mock version constants
-vi.mock('@/const/version', () => ({
+vi.mock(import('@/const/version'), async (importOriginal) => ({
+  ...(await importOriginal()),
   isDeprecatedEdition: false,
   isDesktop: false,
 }));
@@ -622,6 +621,7 @@ describe('thread action', () => {
       // written straight to the title, which leaked `{"title":"..."}`.
       expect(chatService.fetchPresetTaskResult).not.toHaveBeenCalled();
       expect((aiChatService.generateJSON as Mock).mock.calls[0][0]).toMatchObject({
+        metadata: { trigger: RequestTrigger.ThreadTitle },
         schema: { name: 'topic_title' },
         tracing: { scenario: 'topic_title' },
       });

@@ -629,7 +629,7 @@ describe('OpenAIStream', () => {
           `data: "stop"\n`,
           'id: chatcmpl-B7CcnaeK3jqWBMOhxg7SSKFwlk7dC',
           'event: usage',
-          `data: {"inputAudioTokens":0,"inputCacheMissTokens":1646,"inputTextTokens":1646,"outputTextTokens":11,"totalInputTokens":1646,"totalOutputTokens":11,"totalTokens":1657}\n`,
+          `data: {"inputAudioTokens":0,"inputCacheMissTokens":1646,"inputCachedTokens":0,"inputTextTokens":1646,"outputTextTokens":11,"totalInputTokens":1646,"totalOutputTokens":11,"totalTokens":1657}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -731,7 +731,7 @@ describe('OpenAIStream', () => {
           `data: {"delta":{},"id":"chatcmpl-c1f6a6a6-fcf8-463a-96bf-cf634d3e98a5","index":0}\n`,
           'id: chatcmpl-c1f6a6a6-fcf8-463a-96bf-cf634d3e98a5',
           'event: usage',
-          `data: {"inputAudioTokens":0,"inputCacheMissTokens":1797,"inputTextTokens":1797,"outputTextTokens":1720,"totalInputTokens":1797,"totalOutputTokens":1720,"totalTokens":3517}\n`,
+          `data: {"inputAudioTokens":0,"inputCacheMissTokens":1797,"inputCachedTokens":0,"inputTextTokens":1797,"outputTextTokens":1720,"totalInputTokens":1797,"totalOutputTokens":1720,"totalTokens":3517}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -1715,7 +1715,7 @@ describe('OpenAIStream', () => {
           `data: "这是最终答案。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":10,"inputTextTokens":10,"outputReasoningTokens":20,"outputTextTokens":30,"totalInputTokens":10,"totalOutputTokens":50,"totalTokens":60}\n`,
+          `data: {"inputCacheMissTokens":10,"inputCachedTokens":0,"inputTextTokens":10,"outputReasoningTokens":20,"outputTextTokens":30,"totalInputTokens":10,"totalOutputTokens":50,"totalTokens":60}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -1996,7 +1996,7 @@ describe('OpenAIStream', () => {
           `data: "帮助。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":6,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
+          `data: {"inputCacheMissTokens":6,"inputCachedTokens":0,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -2215,11 +2215,79 @@ describe('OpenAIStream', () => {
           `data: "帮助。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":6,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
+          `data: {"inputCacheMissTokens":6,"inputCachedTokens":0,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
         ].map((i) => `${i}\n`),
       );
     });
 
+    // Providers that batch several tokens per SSE frame (e.g. custom OpenAI-compatible
+    // proxies) can emit the tail of the reasoning and the head of the answer in the same
+    // delta. Both have to survive — dropping the content there makes the reply start
+    // mid-sentence. See the Venice AI reports.
+    it('should keep content when a single delta carries both reasoning_content and content', async () => {
+      const data = [
+        {
+          id: '1',
+          object: 'chat.completion.chunk',
+          created: 1737563070,
+          model: 'qwen-3-6-plus',
+          choices: [{ index: 0, delta: { role: 'assistant', reasoning_content: 'Let me think' } }],
+        },
+        {
+          id: '1',
+          object: 'chat.completion.chunk',
+          created: 1737563070,
+          model: 'qwen-3-6-plus',
+          choices: [
+            { index: 0, delta: { reasoning_content: '. Ready.', content: 'Dear Angela,' } },
+          ],
+        },
+        {
+          id: '1',
+          object: 'chat.completion.chunk',
+          created: 1737563070,
+          model: 'qwen-3-6-plus',
+          choices: [{ index: 0, delta: { content: ' I hear you.' } }],
+        },
+      ];
+
+      const mockOpenAIStream = new ReadableStream({
+        start(controller) {
+          data.forEach((chunk) => {
+            controller.enqueue(chunk);
+          });
+
+          controller.close();
+        },
+      });
+
+      const protocolStream = OpenAIStream(mockOpenAIStream);
+
+      const decoder = new TextDecoder();
+      const chunks = [];
+
+      // @ts-ignore
+      for await (const chunk of protocolStream) {
+        chunks.push(decoder.decode(chunk, { stream: true }));
+      }
+
+      expect(chunks).toEqual(
+        [
+          'id: 1',
+          'event: reasoning',
+          `data: "Let me think"\n`,
+          'id: 1',
+          'event: reasoning',
+          `data: ". Ready."\n`,
+          'id: 1',
+          'event: text',
+          `data: "Dear Angela,"\n`,
+          'id: 1',
+          'event: text',
+          `data: " I hear you."\n`,
+        ].map((i) => `${i}\n`),
+      );
+    });
     it('should handle reasoning in litellm', async () => {
       const data = [
         {
@@ -2416,7 +2484,7 @@ describe('OpenAIStream', () => {
           `data: "帮助。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":6,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
+          `data: {"inputCacheMissTokens":6,"inputCachedTokens":0,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -2617,7 +2685,7 @@ describe('OpenAIStream', () => {
           `data: "帮助。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":6,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
+          `data: {"inputCacheMissTokens":6,"inputCachedTokens":0,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
         ].map((i) => `${i}\n`),
       );
     });
@@ -2818,7 +2886,7 @@ describe('OpenAIStream', () => {
           `data: "帮助。"\n`,
           'id: 1',
           'event: usage',
-          `data: {"inputCacheMissTokens":6,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
+          `data: {"inputCacheMissTokens":6,"inputCachedTokens":0,"inputTextTokens":6,"outputReasoningTokens":70,"outputTextTokens":34,"totalInputTokens":6,"totalOutputTokens":104,"totalTokens":110}\n`,
         ].map((i) => `${i}\n`),
       );
     });

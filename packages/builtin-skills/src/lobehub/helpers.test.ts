@@ -1,0 +1,47 @@
+import { describe, expect, it } from 'vitest';
+
+import { readSkillVersion } from './helpers';
+
+const skill = (frontmatter: string) => `---\n${frontmatter}\n---\n\n# Body\n`;
+
+describe('readSkillVersion', () => {
+  it('reads metadata.version from an independently distributed Agent Skill', () => {
+    expect(readSkillVersion(skill('name: acceptance\nmetadata:\n  version: "0.5.0"'))).toBe(
+      '0.5.0',
+    );
+    expect(readSkillVersion(skill('version: 0.4.3\nmetadata: {version: "0.5.0"}'))).toBe('0.5.0');
+  });
+
+  it('does not confuse a description with nested metadata or accept invalid YAML', () => {
+    expect(
+      readSkillVersion(skill('description: |\n  metadata:\n    version: "9.0.0"')),
+    ).toBeUndefined();
+    expect(readSkillVersion(skill('metadata: [invalid'))).toBeUndefined();
+  });
+  it('reads the version declared in the frontmatter', () => {
+    expect(readSkillVersion(skill('name: acceptance\nversion: 1.2.3'))).toBe('1.2.3');
+  });
+
+  it('strips quotes so a YAML-quoted version is comparable', () => {
+    expect(readSkillVersion(skill("name: acceptance\nversion: '2.0.0'"))).toBe('2.0.0');
+  });
+
+  it('returns undefined for a skill that declares no version', () => {
+    // Every other builtin skill is unversioned today; that must stay legal.
+    expect(readSkillVersion(skill('name: artifacts\ndescription: x'))).toBeUndefined();
+  });
+
+  it('ignores a version line nested inside a block scalar', () => {
+    // `description: >` continuation lines are indented, and their prose can
+    // easily contain "version:". Only a column-zero key is the real field.
+    const content = skill(
+      'name: acceptance\ndescription: >\n  Bump the version: 9.9.9 when asked.',
+    );
+
+    expect(readSkillVersion(content)).toBeUndefined();
+  });
+
+  it('returns undefined when there is no frontmatter at all', () => {
+    expect(readSkillVersion('# Just a document\n\nversion: 1.0.0\n')).toBeUndefined();
+  });
+});

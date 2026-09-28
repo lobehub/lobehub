@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Tabs, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { useEffect, useRef, useState } from 'react';
 
@@ -24,9 +24,7 @@ const isGalleryView = (value: string | null): value is GalleryView =>
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
-    gap: 24px;
-    max-width: 1200px;
-    padding: 28px;
+    width: 100%;
   `,
   content: css`
     position: relative;
@@ -41,6 +39,25 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   controlGroup: css`
     gap: 8px;
     align-items: center;
+    min-width: 0;
+  `,
+  /*
+   * The label sits next to a Tabs whose root is `width: 100%`, so the tabs claim the
+   * whole row and the label absorbs every pixel of shrink. With the app-wide
+   * `overflow-wrap: anywhere`, its min-content width is one character, so it breaks
+   * mid-word ("Vie / w"). Keep the guard on the label itself, not on the row.
+   */
+  controlLabel: css`
+    flex-shrink: 0;
+    white-space: nowrap;
+  `,
+  /* Let the modes wrap onto a second row instead of overflowing a narrow panel. */
+  controlTabs: css`
+    min-width: 0;
+
+    [role='tablist'] {
+      flex-wrap: wrap;
+    }
   `,
   empty: css`
     flex: 1;
@@ -52,7 +69,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   header: css`
     gap: 8px;
-    padding-block-end: 4px;
+    padding: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   modeBar: css`
     position: sticky;
@@ -62,13 +80,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 16px;
     align-items: center;
 
-    padding-block: 10px;
-    padding-inline: 14px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 14px;
+    min-height: 44px;
+    padding-block: 6px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowTertiary};
   `,
 }));
 
@@ -192,11 +209,12 @@ const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
 
           <Flexbox horizontal className={styles.modeBar} wrap={'wrap'}>
             <Flexbox horizontal className={styles.controlGroup}>
-              <Text fontSize={12} type={'secondary'} weight={600}>
+              <Text className={styles.controlLabel} fontSize={12} type={'secondary'} weight={600}>
                 View
               </Text>
               <Tabs
                 activeKey={view}
+                className={styles.controlTabs}
                 size={'small'}
                 items={[
                   { key: 'api', label: 'By API' },
@@ -206,11 +224,12 @@ const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
               />
             </Flexbox>
             <Flexbox horizontal className={styles.controlGroup}>
-              <Text fontSize={12} type={'secondary'} weight={600}>
+              <Text className={styles.controlLabel} fontSize={12} type={'secondary'} weight={600}>
                 Lifecycle
               </Text>
               <Tabs
                 activeKey={mode}
+                className={styles.controlTabs}
                 size={'small'}
                 items={LIFECYCLE_MODES.map((value) => ({
                   key: value,

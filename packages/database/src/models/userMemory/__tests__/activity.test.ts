@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import type { NewUserMemoryActivity } from '../../../schemas';
@@ -234,6 +234,36 @@ describe('UserMemoryActivityModel', () => {
       const result = await activityModel.queryList({ pageSize: 200 });
 
       expect(result.pageSize).toBe(100);
+    });
+
+    it('hydrates external keyword candidates through current user and filter constraints', async () => {
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
+        candidates: [
+          { id: 'other-list-activity', score: 12 },
+          { id: 'deleted-list-activity', score: 10 },
+          { id: 'list-activity-2', score: 8 },
+          { id: 'list-activity-1', score: 6 },
+        ],
+        total: 4,
+      });
+      const model = new UserMemoryActivityModel(serverDB, userId, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.queryList({ q: 'candidate', status: ['completed'] });
+
+      expect(result.items.map(({ id }) => id)).toEqual(['list-activity-1']);
+      expect(result.total).toBe(1);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'memoryActivities',
+        filters: { memoryStatus: ['completed'] },
+        pagination: {},
+        query: {
+          fields: ['parent_title', 'narrative', 'notes', 'feedback'],
+          text: 'candidate',
+        },
+      });
     });
 
     // BM25 search requires pg_search extension (ParadeDB), not available in PGlite

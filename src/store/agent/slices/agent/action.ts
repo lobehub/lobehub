@@ -6,7 +6,6 @@ import {
   type LobeAgentAgencyConfig,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
@@ -14,9 +13,12 @@ import { produce } from 'immer';
 import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
+import { analyticsClient } from '@/libs/analytics/client';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
-import { agentConfigKeys } from '@/libs/swr/keys';
+import { agentConfigKeys, builtinAgentKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
 import {
@@ -160,9 +162,9 @@ export class AgentSliceActionImpl {
     // resolves on the client (`auto` follows the browser). A caller that already
     // carries a name — e.g. a market agent — keeps it.
     //
-    // A heterogeneous agent never draws a personal name: it is the user's
-    // external tool, not one of our own agents, so its default reads as whose
-    // tool it is — "{owner}'s {product}" (e.g. "Max 的 Claude Code").
+    // A heterogeneous agent never draws a random personal name. In personal or
+    // workspace-private scope its name is the product title; a shared workspace
+    // agent adds the creator so members can distinguish identical tools.
     const heteroProvider = params.config?.agencyConfig?.heterogeneousProvider;
     const locale = globalGeneralSelectors.currentLanguage(useGlobalStore.getState());
     const config = {
@@ -170,31 +172,28 @@ export class AgentSliceActionImpl {
       name:
         params.config?.name ||
         (heteroProvider
-          ? heteroAgentDefaultName(
-              params.config?.title || getHeterogeneousTypeLabel(heteroProvider.type),
-            )
+          ? heteroAgentDefaultName({
+              productTitle: params.config?.title || getHeterogeneousTypeLabel(heteroProvider.type),
+              visibility: params.visibility,
+              workspaceId: getActiveWorkspaceId(),
+            })
           : randomAgentName(locale)),
     };
 
     const result = await agentService.createAgent({ ...params, config });
     this.#get().invalidateAvailableAgents();
 
-    // Track new agent creation analytics
-    const analytics = getSingletonAnalyticsOptional();
-    if (analytics) {
-      const userStore = getUserStoreState();
-      const userId = userProfileSelectors.userId(userStore);
+    const userId = userProfileSelectors.userId(getUserStoreState());
 
-      analytics.track({
-        name: 'new_agent_created',
-        properties: {
-          agent_id: result.agentId,
-          assistant_name: params.config?.title || 'Untitled Agent',
-          assistant_tags: params.config?.tags || [],
-          user_id: userId || 'anonymous',
-        },
-      });
-    }
+    void analyticsClient.track({
+      name: 'new_agent_created',
+      properties: {
+        agent_id: result.agentId,
+        assistant_name: params.config?.title || 'Untitled Agent',
+        assistant_tags: params.config?.tags || [],
+        user_id: userId || 'anonymous',
+      },
+    });
 
     return result;
   };
@@ -723,6 +722,7 @@ export class AgentSliceActionImpl {
     signal?: AbortSignal,
   ): Promise<void> => {
     const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
+    const scope = getCacheScope();
 
     // 1. Optimistic update - meta fields are at the top level of agent config
     internal_dispatchAgentMap(id, meta as PartialDeep<LobeAgentConfig>);
@@ -731,10 +731,12 @@ export class AgentSliceActionImpl {
     try {
       // 2. API call returns updated agent data
       const result = await agentService.updateAgentMeta(id, meta, signal);
+      if (scope !== getCacheScope()) return;
 
-      // 3. Use returned data directly (no refetch needed!)
+      // 3. Apply returned data, then seed related caches for later subscribers.
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
+        await this.#get().internal_refreshAgentConfig(id, result.agent);
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
@@ -748,8 +750,33 @@ export class AgentSliceActionImpl {
     }
   };
 
-  internal_refreshAgentConfig = async (id: string): Promise<void> => {
-    await mutate(agentConfigKeys.config(id));
+  internal_refreshAgentConfig = async (
+    id: string,
+    updatedAgent?: LobeAgentConfig,
+  ): Promise<void> => {
+    /** Keep related agent and builtin-agent snapshots current after a successful edit. */
+    const slugs = Object.entries(this.#get().builtinAgentIdMap)
+      .filter(([, agentId]) => agentId === id)
+      .map(([slug]) => slug);
+
+    /** Reuse the authoritative update response; other mutations still need a network refresh. */
+    if (updatedAgent) {
+      const scope = getCacheScope();
+      await Promise.all([
+        mutate(agentConfigKeys.config(id), updatedAgent, { revalidate: false }),
+        ...slugs.map((slug) =>
+          mutate(builtinAgentKeys.init(slug, scope), updatedAgent as AgentItem, {
+            revalidate: false,
+          }),
+        ),
+      ]);
+      return;
+    }
+
+    await Promise.all([
+      mutate(agentConfigKeys.config(id)),
+      ...slugs.map((slug) => this.#get().refreshBuiltinAgent(slug)),
+    ]);
   };
 
   internal_createAbortController = (key: keyof AgentSliceState): AbortController => {

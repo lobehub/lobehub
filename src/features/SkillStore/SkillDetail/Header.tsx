@@ -1,9 +1,9 @@
 'use client';
 
-import { Avatar, Flexbox, Icon, Text, Tooltip, useModalContext } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tooltip, useModalContext } from '@lobehub/ui';
+import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Loader2, Plus, SquareArrowOutUpRight } from 'lucide-react';
+import { Plus, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -118,7 +118,7 @@ const Header = memo<HeaderProps>(({ type }) => {
 
     if (isConnecting) {
       return (
-        <Button disabled icon={<Icon spin icon={Loader2} />} type="default">
+        <Button disabled loading type="default">
           {t('tools.composio.connect', { defaultValue: 'Connect' })}
         </Button>
       );

@@ -195,7 +195,11 @@ ${resultContent}
     return {
       ...msg,
       content,
-      // Remove tool-related fields
+      // The tool-related fields go away because the result is embedded in the
+      // content now, but the content is still a verbatim tool result — keep the
+      // provenance so PlaceholderVariablesProcessor does not start rewriting it
+      // as if it were ordinary user prose.
+      foldedToolResult: { apiName: msg.plugin?.apiName, identifier: msg.plugin?.identifier },
       plugin: undefined,
       role: 'user',
       tool_call_id: undefined,

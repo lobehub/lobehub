@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { renderHook } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useTopicActionsDropdownMenu } from './useDropdownMenu';
@@ -43,22 +42,14 @@ vi.mock('@/store/user', () => ({
   useUserStore: () => userMock.currentUserId,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   confirmModal: confirmModalMock,
   toast: messageMock,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Icon: () => null,
-}));
-
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: messageMock,
@@ -68,7 +59,6 @@ vi.mock('antd', () => ({
       },
     }),
   },
-  Upload: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -142,41 +132,15 @@ describe('group useTopicActionsDropdownMenu', () => {
     expect(getMenuItem(result.current!, 'archiveMergedPullRequests')).toMatchObject({
       disabled: true,
     });
-    expect(getMenuItem(result.current!, 'deleteUnstarred')).toMatchObject({ disabled: true });
-    expect(getMenuItem(result.current!, 'deleteAll')).toMatchObject({ disabled: true });
+    expect(getMenuItem(result.current!, 'deleteUnstarred')).toBeUndefined();
+    expect(getMenuItem(result.current!, 'deleteAll')).toBeUndefined();
   });
 
-  it('keeps the personal delete-all copy and deletes through the group scope', async () => {
+  it('does not expose bulk delete actions in the topic menu', () => {
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
-    const item = getMenuItem(result.current!, 'deleteAll');
 
-    expect(item).toMatchObject({ label: 'actions.removeAll' });
-    if (item && 'onClick' in item) item.onClick?.({} as never);
-
-    const [{ content, onOk, title }] = confirmModalMock.mock.calls[0];
-    expect(content).toBe('actions.confirmRemoveAll');
-    expect(title).toBe('actions.removeAll');
-    await onOk();
-    expect(removeGroupTopicsMock).toHaveBeenCalledWith('group-1', 'own');
-  });
-
-  it('uses caller-scoped delete-all copy for workspace members', async () => {
-    workspaceMock.activeWorkspaceId = 'workspace-1';
-
-    const { result } = renderHook(() => useTopicActionsDropdownMenu());
-    const item = getMenuItem(result.current!, 'deleteAll');
-
-    expect(item).toMatchObject({ label: 'actions.removeAllOwn' });
-    if (item && 'onClick' in item) item.onClick?.({} as never);
-    expect(confirmModalMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: 'actions.confirmRemoveAllOwn',
-        title: 'actions.removeAllOwn',
-      }),
-    );
-    expect(getMenuItem(result.current!, 'deleteAllWorkspace')).toBeUndefined();
-    await confirmModalMock.mock.calls[0][0].onOk();
-    expect(removeGroupTopicsMock).toHaveBeenCalledWith('group-1', 'own');
+    expect(getMenuItem(result.current!, 'deleteUnstarred')).toBeUndefined();
+    expect(getMenuItem(result.current!, 'deleteAll')).toBeUndefined();
   });
 
   it('gives workspace owners separate own and workspace maintenance actions', async () => {
@@ -202,15 +166,9 @@ describe('group useTopicActionsDropdownMenu', () => {
     ];
 
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
-    const ownItem = getMenuItem(result.current!, 'deleteAll');
     const workspaceArchiveItem = getMenuItem(result.current!, 'archiveMergedPullRequestsWorkspace');
     const workspaceUnstarredItem = getMenuItem(result.current!, 'deleteUnstarredWorkspace');
     const workspaceItem = getMenuItem(result.current!, 'deleteAllWorkspace');
-
-    expect(ownItem).toMatchObject({ label: 'actions.removeAllOwn' });
-    if (ownItem && 'onClick' in ownItem) ownItem.onClick?.({} as never);
-    await confirmModalMock.mock.calls[0][0].onOk();
-    expect(removeGroupTopicsMock).toHaveBeenCalledWith('group-1', 'own');
 
     expect(workspaceArchiveItem).toMatchObject({
       label: 'actions.archiveMergedPullRequestsWorkspace',
@@ -221,7 +179,7 @@ describe('group useTopicActionsDropdownMenu', () => {
     expect(confirmModalMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ title: 'actions.confirmArchiveMergedPullRequestsWorkspace' }),
     );
-    await confirmModalMock.mock.calls[1][0].onOk();
+    await confirmModalMock.mock.calls[0][0].onOk();
     expect(chatStoreMock.updateTopicStatus).toHaveBeenCalledTimes(2);
     expect(chatStoreMock.updateTopicStatus).toHaveBeenCalledWith({
       status: 'completed',
@@ -284,7 +242,6 @@ describe('group useTopicActionsDropdownMenu', () => {
 
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
     const archiveItem = getMenuItem(result.current!, 'archiveMergedPullRequests');
-    const deleteUnstarredItem = getMenuItem(result.current!, 'deleteUnstarred');
 
     expect(archiveItem).toMatchObject({ label: 'actions.archiveMergedPullRequestsOwn' });
     if (archiveItem && 'onClick' in archiveItem) await archiveItem.onClick?.({} as never);
@@ -294,16 +251,8 @@ describe('group useTopicActionsDropdownMenu', () => {
       topicId: 'own-merged',
     });
 
-    expect(deleteUnstarredItem).toMatchObject({ label: 'actions.removeUnstarredOwn' });
-    if (deleteUnstarredItem && 'onClick' in deleteUnstarredItem) {
-      deleteUnstarredItem.onClick?.({} as never);
-    }
-    expect(confirmModalMock.mock.calls[0][0]).toMatchObject({
-      content: 'actions.confirmRemoveUnstarredOwn',
-      title: 'actions.removeUnstarredOwn',
-    });
-    await confirmModalMock.mock.calls[0][0].onOk();
-    expect(removeUnstarredTopicMock).toHaveBeenCalledWith({ onlyOwn: true });
+    expect(getMenuItem(result.current!, 'deleteUnstarred')).toBeUndefined();
+    expect(getMenuItem(result.current!, 'deleteAll')).toBeUndefined();
     expect(getMenuItem(result.current!, 'archiveMergedPullRequestsWorkspace')).toBeUndefined();
     expect(getMenuItem(result.current!, 'deleteUnstarredWorkspace')).toBeUndefined();
   });

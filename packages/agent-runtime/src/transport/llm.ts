@@ -105,6 +105,8 @@ export interface LLMRetryPolicy {
 
 export interface LLMTraceInput {
   assistantMessageId: string;
+  /** The built context this call sends, so a trace can record what the request really carries. */
+  context?: ContextBuildOutput;
   conversationId?: string;
   model: string;
   provider: string;

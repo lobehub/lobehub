@@ -4,21 +4,29 @@ import { describe, expect, it, vi } from 'vitest';
 import { getInstallationStore, messengerConnectionId, messengerConnectionIdForUser } from './index';
 
 vi.mock('./slack', () => ({
-  SlackInstallationStore: vi.fn().mockImplementation(() => ({ kind: 'slack' })),
+  SlackInstallationStore: vi.fn(function () {
+    return { kind: 'slack' };
+  }),
 }));
 
 vi.mock('./telegram', () => ({
   TELEGRAM_INSTALLATION_KEY: 'telegram:singleton',
-  TelegramInstallationStore: vi.fn().mockImplementation(() => ({ kind: 'telegram' })),
+  TelegramInstallationStore: vi.fn(function () {
+    return { kind: 'telegram' };
+  }),
 }));
 
 vi.mock('./discord', () => ({
   DISCORD_INSTALLATION_KEY: 'discord:singleton',
-  DiscordInstallationStore: vi.fn().mockImplementation(() => ({ kind: 'discord' })),
+  DiscordInstallationStore: vi.fn(function () {
+    return { kind: 'discord' };
+  }),
 }));
 
 vi.mock('./wechat', () => ({
-  WechatInstallationStore: vi.fn().mockImplementation(() => ({ kind: 'wechat' })),
+  WechatInstallationStore: vi.fn(function () {
+    return { kind: 'wechat' };
+  }),
   wechatInstallationKey: (tenantId: string) => `wechat:${tenantId}`,
 }));
 

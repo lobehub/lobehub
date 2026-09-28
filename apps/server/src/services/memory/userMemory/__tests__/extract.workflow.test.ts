@@ -42,23 +42,27 @@ vi.mock('@/database/server', () => ({
 
 vi.mock('@/database/models/asyncTask', () => ({
   AsyncTaskModel: mockAsyncTaskModel,
-  initHourlyUserMemoryExtractionMetadata: vi.fn((metadata: HourlyMetadataInput) => ({
-    control: (metadata as HourlyMetadataInput & { control?: unknown }).control,
-    cursor: metadata.cursor,
-    progress: {
-      processedUsers: 0,
-      scheduledBatches: 0,
-      scheduledChildRuns: 0,
-    },
-    source: 'hourly_chat_topic',
-    startedAt: metadata.startedAt,
-  })),
+  initHourlyUserMemoryExtractionMetadata: vi.fn(function (metadata: HourlyMetadataInput) {
+    return {
+      control: (metadata as HourlyMetadataInput & { control?: unknown }).control,
+      cursor: metadata.cursor,
+      progress: {
+        processedUsers: 0,
+        scheduledBatches: 0,
+        scheduledChildRuns: 0,
+      },
+      source: 'hourly_chat_topic',
+      startedAt: metadata.startedAt,
+    };
+  }),
 }));
 
 vi.mock('@/libs/qstash', () => ({
-  OtelWorkflowClient: vi.fn(() => ({
-    trigger: mockTrigger,
-  })),
+  OtelWorkflowClient: vi.fn(function () {
+    return {
+      trigger: mockTrigger,
+    };
+  }),
 }));
 
 describe('MemoryExtractionWorkflowService.triggerHourlyTracked', () => {
@@ -82,11 +86,13 @@ describe('MemoryExtractionWorkflowService.triggerHourlyTracked', () => {
     mockAppendUserMemoryWorkflowRunIds.mockResolvedValue(undefined);
     mockUpdate.mockResolvedValue(undefined);
     mockTrigger.mockResolvedValue({ workflowRunId: 'workflow-run-1' });
-    mockAsyncTaskModel.mockImplementation(() => ({
-      appendUserMemoryWorkflowRunIds: mockAppendUserMemoryWorkflowRunIds,
-      create: mockCreate,
-      update: mockUpdate,
-    }));
+    mockAsyncTaskModel.mockImplementation(function () {
+      return {
+        appendUserMemoryWorkflowRunIds: mockAppendUserMemoryWorkflowRunIds,
+        create: mockCreate,
+        update: mockUpdate,
+      };
+    });
   });
 
   afterEach(() => {

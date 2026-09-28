@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button, Drawer, Switch } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Drawer, Switch, Text } from '@lobehub/ui/base-ui';
 import { Popconfirm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Pencil, Trash } from 'lucide-react';

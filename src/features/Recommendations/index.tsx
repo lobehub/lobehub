@@ -1,5 +1,5 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { RefreshCw } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -103,8 +103,8 @@ const Recommendations = memo<RecommendationsProps>(({ variant = 'default' }) => 
           ctaKey={action.ctaKey}
           descriptionKey={action.descriptionKey}
           i18nValues={action.i18nValues}
-          icon={action.icon}
           key={action.id}
+          renderIcon={action.renderIcon}
           tagKey={action.tagKey}
           titleKey={action.titleKey}
           onAction={action.run}

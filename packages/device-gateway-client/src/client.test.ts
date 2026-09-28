@@ -4,6 +4,10 @@ import { GatewayClient } from './client';
 
 // Flag to control mock WS behavior
 let mockWsShouldThrow = false;
+// When set, the socket never opens — the real-world black-holed TLS handshake,
+// which raises no event at all rather than an error.
+let mockWsShouldHang = false;
+const mockWsInstances: { options?: unknown; url: string }[] = [];
 
 // Mock ws module — must use dynamic import for EventEmitter to avoid hoisting issues
 vi.mock('ws', async () => {
@@ -23,6 +27,11 @@ vi.mock('ws', async () => {
       if (mockWsShouldThrow) {
         mockWsShouldThrow = false;
         throw new Error('connection refused');
+      }
+      mockWsInstances.push(this);
+      if (mockWsShouldHang) {
+        this.readyState = 0; // CONNECTING, and it stays there
+        return;
       }
       // Simulate async open
       setTimeout(() => this.emit('open'), 0);
@@ -49,6 +58,8 @@ describe('GatewayClient', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    mockWsShouldHang = false;
+    mockWsInstances.length = 0;
     client = new GatewayClient({
       autoReconnect: false,
       deviceId: 'test-device-id',
@@ -184,9 +195,84 @@ describe('GatewayClient', () => {
       c.connect();
       const ws = (c as any).ws;
       expect(ws.options).toEqual({
+        handshakeTimeout: 15_000,
         headers: { 'User-Agent': 'LobeHub Desktop/1.2.3' },
       });
       c.disconnect();
+    });
+  });
+
+  describe('connect watchdog', () => {
+    const makeClient = (connectTimeoutMs = 15_000) =>
+      new GatewayClient({
+        autoReconnect: true,
+        connectTimeoutMs,
+        deviceId: 'test-device-id',
+        gatewayUrl: 'https://gateway.test.com',
+        serverUrl: 'https://app.test.com',
+        token: 'test-token',
+        tokenType: 'apiKey',
+        userId: 'test-user',
+      });
+
+    it('bounds the handshake inside ws itself', () => {
+      client.connect();
+
+      expect(mockWsInstances.at(-1)?.options).toMatchObject({ handshakeTimeout: 15_000 });
+    });
+
+    it('retries when the handshake hangs without raising an event', () => {
+      // A black-holed TLS handshake emits no open/error/close, so nothing ever
+      // called scheduleReconnect: the daemon reported `connecting` while the
+      // device sat offline for 15+ minutes, and the run silently fell through
+      // to the cloud sandbox.
+      mockWsShouldHang = true;
+      const hung = makeClient(1000);
+      hung.connect();
+
+      expect(hung.connectionStatus).toBe('connecting');
+      expect(mockWsInstances).toHaveLength(1);
+
+      vi.advanceTimersByTime(1000);
+      expect(hung.connectionStatus).toBe('reconnecting');
+
+      // ...and the backoff actually produces a fresh attempt.
+      mockWsShouldHang = false;
+      vi.advanceTimersByTime(1000);
+      expect(mockWsInstances.length).toBeGreaterThan(1);
+
+      hung.disconnect();
+    });
+
+    it('retries when the socket opens but auth never comes back', async () => {
+      // `startHeartbeat` only runs on auth_success, so a lost auth reply left
+      // the client parked in `authenticating` with no watchdog of any kind.
+      const stalled = makeClient(1000);
+      stalled.connect();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(stalled.connectionStatus).toBe('authenticating');
+
+      vi.advanceTimersByTime(1000);
+      expect(stalled.connectionStatus).toBe('reconnecting');
+
+      stalled.disconnect();
+    });
+
+    it('disarms once authenticated', async () => {
+      const connected = makeClient(1000);
+      connected.connect();
+      await vi.advanceTimersByTimeAsync(0);
+      mockWsInstances.at(-1);
+      connected['handleMessage'](JSON.stringify({ type: 'auth_success' }));
+      expect(connected.connectionStatus).toBe('connected');
+
+      const attemptsBefore = mockWsInstances.length;
+      vi.advanceTimersByTime(10_000);
+
+      expect(connected.connectionStatus).toBe('connected');
+      expect(mockWsInstances).toHaveLength(attemptsBefore);
+
+      connected.disconnect();
     });
   });
 
@@ -464,6 +550,112 @@ describe('GatewayClient', () => {
       await vi.advanceTimersByTimeAsync(30_000);
 
       expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'heartbeat' }));
+    });
+  });
+
+  describe('reportMetrics', () => {
+    const samples = [{ observedAt: 1 }] as any;
+
+    const connectAndAuth = async () => {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      (client as any).handleMessage(JSON.stringify({ type: 'auth_success' }));
+      return (client as any).ws;
+    };
+
+    it('rejects when not connected', async () => {
+      await expect(client.reportMetrics(samples)).rejects.toThrow('not connected');
+    });
+
+    it('resolves on the matching ack', async () => {
+      const ws = await connectAndAuth();
+      const pending = client.reportMetrics(samples);
+
+      const sent = JSON.parse(ws.send.mock.calls.at(-1)[0]);
+      expect(sent).toMatchObject({ samples, type: 'device_metrics' });
+      (client as any).handleMessage(
+        JSON.stringify({ accepted: 1, batchId: sent.batchId, type: 'device_metrics_ack' }),
+      );
+
+      await expect(pending).resolves.toBeUndefined();
+    });
+
+    it('rejects when no ack arrives in time', async () => {
+      await connectAndAuth();
+      const pending = client.reportMetrics(samples);
+      const assertion = expect(pending).rejects.toThrow('Timed out');
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      await assertion;
+    });
+
+    it('rejects in-flight batches when the socket goes away', async () => {
+      await connectAndAuth();
+      const pending = client.reportMetrics(samples);
+      const assertion = expect(pending).rejects.toThrow('closed');
+
+      await client.disconnect();
+      await assertion;
+    });
+  });
+
+  describe('tunnel serving', () => {
+    it('forwards tunnel frames to the tunnel host', async () => {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      (client as any).handleMessage(JSON.stringify({ type: 'auth_success' }));
+
+      const handleFrame = vi.spyOn((client as any).tunnelHost, 'handleFrame');
+      const frame = { bytes: 64, connId: 'c1', type: 'tunnel_ack' };
+      (client as any).handleMessage(JSON.stringify(frame));
+
+      expect(handleFrame).toHaveBeenCalledWith(frame);
+    });
+
+    it('releases tunnels on a forced reconnect, not just on a clean close', async () => {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      (client as any).handleMessage(JSON.stringify({ type: 'auth_success' }));
+
+      const closeAll = vi.spyOn((client as any).tunnelHost, 'closeAll');
+      // Miss enough heartbeat acks to trip forceReconnect, which detaches
+      // handleClose and so never reaches the normal close cleanup.
+      await vi.advanceTimersByTimeAsync(30_000 * 5);
+
+      expect(closeAll).toHaveBeenCalledWith('DEVICE_DISCONNECTED');
+    });
+
+    it('answers tunnel_open with TUNNEL_DISABLED when serving is off', async () => {
+      const offClient = new GatewayClient({
+        autoReconnect: false,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+        tunnel: false,
+      });
+      offClient.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      (offClient as any).handleMessage(JSON.stringify({ type: 'auth_success' }));
+      const ws = (offClient as any).ws;
+      ws.send.mockClear();
+
+      (offClient as any).handleMessage(
+        JSON.stringify({
+          connId: 'c1',
+          head: { headers: [], method: 'GET', path: '/' },
+          target: { host: '127.0.0.1', port: 3000 },
+          type: 'tunnel_open',
+        }),
+      );
+
+      expect(ws.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          connId: 'c1',
+          error: 'TUNNEL_DISABLED',
+          ok: false,
+          type: 'tunnel_open_ack',
+        }),
+      );
+      offClient.disconnect();
     });
   });
 

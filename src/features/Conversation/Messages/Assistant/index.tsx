@@ -6,6 +6,7 @@ import isEqual from 'fast-deep-equal';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 
+import AssistantMessageNotice from '@/business/client/components/AssistantMessageNotice';
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import { useMessageCommentCount } from '@/features/TopicComment/hooks';
@@ -177,6 +178,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
         messageExtra={
           <>
             {interrupted && <InterruptedHint />}
+            <AssistantMessageNotice finishType={metadata?.finishType} />
             <AssistantMessageExtra
               content={content}
               extra={extra}

@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
@@ -10,8 +11,7 @@ const PanelContentSkeleton = memo(() => {
       {/* UserInfo + DataStatistics area */}
       <Flexbox gap={8} style={{ padding: '12px 16px' }}>
         <Flexbox horizontal align="center" gap={12}>
-          <Skeleton.Button
-            size="small"
+          <Skeleton
             style={{
               borderRadius: cssVar.borderRadius,
               height: 40,
@@ -20,10 +20,7 @@ const PanelContentSkeleton = memo(() => {
             }}
           />
           <Flexbox flex={1} gap={4}>
-            <Skeleton.Button
-              active
-              block
-              size="small"
+            <Skeleton
               style={{
                 borderRadius: cssVar.borderRadius,
                 height: 16,
@@ -31,10 +28,7 @@ const PanelContentSkeleton = memo(() => {
                 opacity: 0.6,
               }}
             />
-            <Skeleton.Button
-              active
-              block
-              size="small"
+            <Skeleton
               style={{
                 borderRadius: cssVar.borderRadius,
                 height: 12,
@@ -46,10 +40,8 @@ const PanelContentSkeleton = memo(() => {
         </Flexbox>
         <Flexbox horizontal gap={4}>
           {[1, 2, 3].map((i) => (
-            <Skeleton.Button
-              active
+            <Skeleton
               key={i}
-              size="small"
               style={{
                 borderRadius: cssVar.borderRadius,
                 flex: 1,
@@ -66,8 +58,7 @@ const PanelContentSkeleton = memo(() => {
         <Flexbox gap={2} key={row} style={{ padding: '0 8px' }}>
           {[1, 2].map((i) => (
             <Flexbox horizontal align="center" gap={8} key={i} style={{ height: 36 }}>
-              <Skeleton.Button
-                size="small"
+              <Skeleton
                 style={{
                   borderRadius: cssVar.borderRadius,
                   height: 20,
@@ -75,10 +66,7 @@ const PanelContentSkeleton = memo(() => {
                   width: 20,
                 }}
               />
-              <Skeleton.Button
-                active
-                block
-                size="small"
+              <Skeleton
                 style={{
                   borderRadius: cssVar.borderRadius,
                   height: 14,
@@ -98,9 +86,7 @@ const PanelContentSkeleton = memo(() => {
         justify="space-between"
         style={{ padding: '6px 8px 6px 16px' }}
       >
-        <Skeleton.Button
-          active
-          size="small"
+        <Skeleton
           style={{
             borderRadius: cssVar.borderRadius,
             height: 20,
@@ -108,8 +94,7 @@ const PanelContentSkeleton = memo(() => {
             opacity: 0.4,
           }}
         />
-        <Skeleton.Button
-          size="small"
+        <Skeleton
           style={{
             borderRadius: cssVar.borderRadius,
             height: 28,

@@ -7,9 +7,10 @@ import type { MetaDescriptor } from 'react-router';
 const OG_IMAGE_URL = 'https://lobehub.com/assets/cao-og.webp';
 const TWITTER_SITE = '@lobehub';
 
-type DescriptionKey = 'pageDescription' | 'topicDescription';
+type DescriptionKey = 'artifactDescription' | 'pageDescription' | 'topicDescription';
 
 const FALLBACK_DESCRIPTION: Record<DescriptionKey, string> = {
+  artifactDescription: `An artifact shared from ${BRANDING_NAME}.`,
   pageDescription: `A page shared from ${BRANDING_NAME}.`,
   topicDescription: `A conversation shared from ${BRANDING_NAME}.`,
 };

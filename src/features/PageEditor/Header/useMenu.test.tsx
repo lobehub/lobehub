@@ -38,15 +38,12 @@ vi.mock('@lobechat/const', () => ({
   isDesktop: false,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Icon: () => null,
-}));
-
 vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: vi.fn(),
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: {
@@ -58,16 +55,6 @@ vi.mock('antd', () => ({
       },
     }),
   },
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({}),
-  cssVar: {
-    colorTextTertiary: 'colorTextTertiary',
-  },
-  cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
-  keyframes: () => '',
-  useResponsive: () => ({ lg: true }),
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({

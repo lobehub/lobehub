@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
 
-import { countAssistantLlmCalls, hasRenderableFinalAnswer, shouldFoldProcess } from './segments';
+import {
+  countAssistantLlmCalls,
+  hasRenderableFinalAnswer,
+  resolveWorkflowExpandLevel,
+  shouldFoldProcess,
+} from './segments';
 
 const a = (id: string, content = 'answer') => ({
   block: { content, id } as any,
@@ -135,5 +140,31 @@ describe('shouldFoldProcess', () => {
         processSegments: [a('p1')],
       }),
     ).toBe(false);
+  });
+});
+
+describe('resolveWorkflowExpandLevel', () => {
+  it('uses the setting when no override is given', () => {
+    expect(resolveWorkflowExpandLevel(undefined, 'collapsed')).toEqual({ streaming: 'collapsed' });
+  });
+
+  it('lets an explicit streaming override win over the setting', () => {
+    expect(resolveWorkflowExpandLevel({ streaming: 'full' }, 'collapsed')).toEqual({
+      streaming: 'full',
+    });
+  });
+
+  it('expands a string override into both phases and still wins', () => {
+    expect(resolveWorkflowExpandLevel('full', 'collapsed')).toEqual({
+      completion: 'full',
+      streaming: 'full',
+    });
+  });
+
+  it('keeps a completion-only override and fills streaming from the setting', () => {
+    expect(resolveWorkflowExpandLevel({ completion: 'full' }, 'semi')).toEqual({
+      completion: 'full',
+      streaming: 'semi',
+    });
   });
 });

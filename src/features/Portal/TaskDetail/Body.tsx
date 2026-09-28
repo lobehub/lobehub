@@ -47,7 +47,7 @@ const Body = memo(() => {
       paddingInline={16}
       style={{ minHeight: 0, overflowY: 'auto' }}
     >
-      {isInitialLoading ? <TaskDetailSkeleton /> : <TaskDetailSections />}
+      {isInitialLoading ? <TaskDetailSkeleton chrome={'body'} /> : <TaskDetailSections />}
       <TopicChatDrawer />
     </Flexbox>
   );

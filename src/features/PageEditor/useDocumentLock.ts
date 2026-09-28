@@ -54,6 +54,14 @@ export const useDocumentLock = () => {
   const isDirty = useDocumentStore((s) =>
     documentId ? editorSelectors.isDirty(documentId)(s) : false,
   );
+  // The lockOwnerId dispatch below is a plain `updateDocument`, which the
+  // reducer drops when the document row hasn't been fetched into the store yet
+  // — and on first mount this effect usually runs before the SWR fetch lands.
+  // Saves then go out with `lockOwnerId: undefined` while the lock driver holds
+  // the lease under a real ownerId, and the server rejects every content save
+  // as a CONFLICT against the user's own lock. Track document existence so the
+  // effect re-publishes the ownerId once the document is actually in the store.
+  const documentReady = useDocumentStore((s) => (documentId ? !!s.documents[documentId] : false));
   const saveBlockedByLock = useDocumentStore((s) =>
     documentId ? editorSelectors.saveBlockedByLock(documentId)(s) : false,
   );
@@ -88,7 +96,7 @@ export const useDocumentLock = () => {
         value: { lockOwnerId: undefined },
       });
     };
-  }, [documentId, ownerId, setLockOwnerId, workspacePage]);
+  }, [documentId, documentReady, ownerId, setLockOwnerId, workspacePage]);
 
   // Shared lock lifecycle. Pages receive realtime lock pushes via SSE, so the
   // viewer poll is off — the single peek-on-open plus those pushes keep it live.

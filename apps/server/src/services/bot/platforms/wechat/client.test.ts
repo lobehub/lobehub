@@ -52,13 +52,15 @@ vi.mock('@lobechat/chat-adapter-wechat', () => ({
   MessageItemType,
   MessageState,
   MessageType,
-  WechatApiClient: vi.fn().mockImplementation(() => ({
-    getUpdates: mockGetUpdates,
-    sendItem: mockSendItem,
-    sendMessage: mockSendMessage,
-    startTyping: mockStartTyping,
-    uploadCdnMedia: mockUploadCdnMedia,
-  })),
+  WechatApiClient: vi.fn().mockImplementation(function () {
+    return {
+      getUpdates: mockGetUpdates,
+      sendItem: mockSendItem,
+      sendMessage: mockSendMessage,
+      startTyping: mockStartTyping,
+      uploadCdnMedia: mockUploadCdnMedia,
+    };
+  }),
   WechatUploadMediaType,
 }));
 
@@ -94,19 +96,17 @@ describe('WechatGatewayClient', () => {
     let resolveLoop: ((value: any) => void) | undefined;
 
     mockGetUpdates
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveProbe = resolve;
-          }),
-      )
-      .mockImplementationOnce(
-        (_cursor?: string, signal?: AbortSignal) =>
-          new Promise((resolve, reject) => {
-            resolveLoop = resolve;
-            signal?.addEventListener('abort', () => reject(new Error('aborted')));
-          }),
-      );
+      .mockImplementationOnce(function () {
+        return new Promise((resolve) => {
+          resolveProbe = resolve;
+        });
+      })
+      .mockImplementationOnce(function (_cursor?: string, signal?: AbortSignal) {
+        return new Promise((resolve, reject) => {
+          resolveLoop = resolve;
+          signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      });
 
     const client = new WechatClientFactory().createClient(
       {
@@ -170,13 +170,12 @@ describe('WechatGatewayClient', () => {
         ],
         ret: 0,
       })
-      .mockImplementationOnce(
-        (_cursor?: string, signal?: AbortSignal) =>
-          new Promise((resolve, reject) => {
-            resolveLoop = resolve;
-            signal?.addEventListener('abort', () => reject(new Error('aborted')));
-          }),
-      );
+      .mockImplementationOnce(function (_cursor?: string, signal?: AbortSignal) {
+        return new Promise((resolve, reject) => {
+          resolveLoop = resolve;
+          signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      });
 
     const fetchMock = vi.mocked(fetch);
     const client = new WechatClientFactory().createClient(
@@ -408,7 +407,14 @@ describe('WechatGatewayClient', () => {
       const voiceBuf = Buffer.from('voice');
       mockDownloadMediaFromRawMessage.mockResolvedValue([
         { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', type: 'image', url: '' },
-        { buffer: voiceBuf, mimeType: 'audio/silk', type: 'audio', url: '' },
+        {
+          buffer: voiceBuf,
+          mimeType: 'audio/wav',
+          name: 'voice.wav',
+          size: 5,
+          type: 'audio',
+          url: '',
+        },
       ]);
       const client = createClient();
       const result = await client.extractFiles!(
@@ -422,7 +428,7 @@ describe('WechatGatewayClient', () => {
       expect(result).toEqual({
         files: [
           { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
-          { buffer: voiceBuf, mimeType: 'audio/silk', name: undefined, size: undefined },
+          { buffer: voiceBuf, mimeType: 'audio/wav', name: 'voice.wav', size: 5 },
         ],
         warnings: undefined,
       });

@@ -10,7 +10,9 @@ import type { SandboxProvider } from '../types';
 const findFilesToInitInSandbox = vi.fn();
 
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn().mockImplementation(() => ({ findFilesToInitInSandbox })),
+  FileModel: vi.fn().mockImplementation(function () {
+    return { findFilesToInitInSandbox };
+  }),
 }));
 
 const createProvider = (): SandboxProvider =>

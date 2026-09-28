@@ -14,6 +14,25 @@ describe('defineConfig', () => {
     else process.env.NEXT_PUBLIC_ASSET_PREFIX = originalLegacyPrefix;
   });
 
+  describe('headers', () => {
+    // Agent Share visitor pages (`/agent/:slugOrId`) are link-visible private
+    // content: the route-scoped noindex must come AFTER the global
+    // `x-robots-tag: all` rule so it overrides it for that path.
+    it('marks /agent/* noindex, overriding the global x-robots-tag', async () => {
+      const config = defineConfig({});
+      const rules = await config.headers!();
+
+      const globalIndex = rules.findIndex((rule) => rule.source === '/:path*');
+      const agentIndex = rules.findIndex((rule) => rule.source === '/agent/:path*');
+
+      expect(globalIndex).toBeGreaterThanOrEqual(0);
+      expect(agentIndex).toBeGreaterThan(globalIndex);
+      expect(rules[agentIndex].headers).toEqual([
+        { key: 'x-robots-tag', value: 'noindex, nofollow' },
+      ]);
+    });
+  });
+
   it('disables Next.js agent rule injection', () => {
     expect(defineConfig({}).agentRules).toBe(false);
   });

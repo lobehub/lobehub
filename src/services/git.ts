@@ -13,6 +13,11 @@ import type {
   DeviceGitDeleteBranchResult,
   DeviceGitLinkedPullRequest,
   DeviceGitLinkedPullRequestLookupStatus,
+  DeviceGitPullRequestAction,
+  DeviceGitPullRequestActionResult,
+  DeviceGitPullRequestActivity,
+  DeviceGitPullRequestDetailResult,
+  DeviceGitPullRequestMergeContext,
   DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
@@ -229,6 +234,80 @@ class GitService {
       pullRequestStatus: pr.status,
       upstream: pr.upstream,
     };
+  }
+
+  /** Full detail of a pull request in a working directory. */
+  async getPullRequestDetail({
+    coreOnly,
+    deviceId,
+    number,
+    path,
+  }: {
+    coreOnly?: boolean;
+    deviceId?: string;
+    number: number;
+    path: string;
+  }): Promise<DeviceGitPullRequestDetailResult> {
+    return deviceId
+      ? ((await lambdaClient.device.gitPullRequestDetail.query({
+          coreOnly,
+          deviceId,
+          number,
+          path,
+        })) ?? {
+          detail: null,
+          status: 'error',
+        })
+      : electronGitService.getPullRequestDetail({ coreOnly, number, path });
+  }
+
+  async getPullRequestActivity(params: {
+    deviceId?: string;
+    number: number;
+    path: string;
+  }): Promise<DeviceGitPullRequestActivity> {
+    if (!params.deviceId) return electronGitService.getPullRequestActivity(params);
+    const result = await lambdaClient.device.gitPullRequestActivity.query({
+      ...params,
+      deviceId: params.deviceId,
+    });
+    if (!result) throw new Error('Unable to load pull request activity');
+    return result;
+  }
+
+  /** Branch protection, viewer permission and base drift for a pull request. */
+  async getPullRequestMergeContext({
+    deviceId,
+    ...params
+  }: {
+    baseRefName: string;
+    deviceId?: string;
+    headRefOid: string;
+    number: number;
+    path: string;
+    repo: { name: string; owner: string };
+  }): Promise<DeviceGitPullRequestMergeContext | null> {
+    return deviceId
+      ? ((await lambdaClient.device.gitPullRequestMergeContext.query({ deviceId, ...params })) ??
+          null)
+      : electronGitService.getPullRequestMergeContext(params);
+  }
+
+  /** Run a `gh pr` mutation (merge, auto-merge, ready, comment, close, ...) on a pull request. */
+  async runPullRequestAction({
+    action,
+    deviceId,
+    number,
+    path,
+  }: {
+    action: DeviceGitPullRequestAction;
+    deviceId?: string;
+    number: number;
+    path: string;
+  }): Promise<DeviceGitPullRequestActionResult> {
+    return deviceId
+      ? lambdaClient.device.runGitPullRequestAction.mutate({ action, deviceId, number, path })
+      : electronGitService.runPullRequestAction({ action, number, path });
   }
 
   /** Working-tree dirty-file counts for a working directory. */

@@ -22,7 +22,7 @@ describe('isShikiSource', () => {
     ['@shikijs/transformers', undefined],
     ['@shikijs/core', undefined],
     ['@lobehub/ui', undefined],
-    ['/repo/src/features/Verify/Acceptance/index.tsx', undefined],
+    ['/repo/src/features/Acceptance/Viewer/index.tsx', undefined],
     ['./bundle-full.mjs', '/repo/node_modules/shiki/dist/index.mjs'],
   ] as const)('leaves %s from %s', (source, importer) => {
     expect(isShikiSource(source, importer)).toBe(false);

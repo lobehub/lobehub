@@ -1,8 +1,8 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { Form, Input, type InputRef } from 'antd';
 import { Lock, Mail } from 'lucide-react';
 import { useEffect, useRef } from 'react';
@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { AuthCard } from '@/features/AuthCard';
-import { AuthAgreement, useAuthAgreement } from '@/features/AuthShell';
+import AuthAgreement, { useAuthAgreement } from '@/features/AuthShell/AuthAgreement';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 
 import { useSignUp } from './useSignUp';

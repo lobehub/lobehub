@@ -42,6 +42,12 @@ export interface UniformSearchResponse {
   costTime: number;
   errorDetail?: string;
   query: string;
+  /**
+   * How many hits `results` held, pinned by the read-path projector before it
+   * drops them. The collapsed chip shows only this number; the card hydrates
+   * the real hits when the row is expanded.
+   */
+  resultCount?: number;
   resultNumbers: number;
   results: UniformSearchResult[];
 }

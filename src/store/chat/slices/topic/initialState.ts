@@ -77,6 +77,8 @@ export interface ChatTopicState {
    * keeps the real title instead of degrading to the "new topic" placeholder.
    */
   topicDetailMap: Record<string, ChatTopic>;
+  /** Topics with effort selections queued or being persisted. */
+  topicEffortUpdatingIds: string[];
   /**
    * Internal ref-count for topic loading owners. A topic can be loading because
    * the agent is running and because title-summary is streaming at the same time.
@@ -99,5 +101,6 @@ export const initialTopicState: ChatTopicState = {
   topicDetailMap: {},
   topicLoadingIdCounts: {},
   topicLoadingIds: [],
+  topicEffortUpdatingIds: [],
   topicSearchKeywords: '',
 };

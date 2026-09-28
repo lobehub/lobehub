@@ -1,5 +1,5 @@
-import { Accordion, AccordionItem, Text } from '@lobehub/ui';
-import { type Key, memo, useCallback } from 'react';
+import { Accordion, Text } from '@lobehub/ui/base-ui';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
@@ -22,8 +22,8 @@ const ThreadExecutionSummary = memo<ThreadExecutionSummaryProps>(({ messageId })
   const thread = useChatStore(threadSelectors.getIsolationThreadBySourceMsgId(messageId));
   const openThreadInPortal = useChatStore((s) => s.openThreadInPortal);
 
-  const handleExpandedChange = useCallback(
-    (_keys: Key[]) => {
+  const handleValueChange = useCallback(
+    (_value: string[]) => {
       if (!thread) return;
       openThreadInPortal(thread.id, messageId);
     },
@@ -37,14 +37,23 @@ const ThreadExecutionSummary = memo<ThreadExecutionSummaryProps>(({ messageId })
   });
 
   return (
-    <Accordion expandedKeys={[]} variant={'borderless'} onExpandedChange={handleExpandedChange}>
-      <AccordionItem
-        itemKey={'execution-record'}
-        paddingBlock={4}
-        paddingInline={4}
-        title={<Text type={'secondary'}>{label}</Text>}
-      />
-    </Accordion>
+    <Accordion
+      indicatorPlacement="inline"
+      items={[
+        {
+          key: 'execution-record',
+          title: (
+            <Text style={{ whiteSpace: 'nowrap' }} type={'secondary'}>
+              {label}
+            </Text>
+          ),
+        },
+      ]}
+      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+      value={[]}
+      variant={'borderless'}
+      onValueChange={handleValueChange}
+    />
   );
 });
 

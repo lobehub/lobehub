@@ -1,0 +1,297 @@
+import type { AcceptanceCommentItem, AcceptanceCommentThread } from '@lobechat/types';
+import { describe, expect, it } from 'vitest';
+
+import {
+  buildDiscussionTimeline,
+  countDiscussionMessages,
+  messageThreads,
+  regionThreads,
+} from './discussionTimeline';
+import { groupCommentThreads } from './threads';
+
+let seq = 0;
+const item = (overrides: Partial<AcceptanceCommentItem> = {}): AcceptanceCommentItem => {
+  seq += 1;
+  return {
+    acceptanceId: 'acc',
+    anchorType: 'acceptance',
+    attachments: [],
+    author: {
+      avatar: null,
+      fullName: 'u',
+      id: 'u1',
+      status: 'active',
+      type: 'user',
+      username: 'u',
+    },
+    authorAgentId: null,
+    authorUserId: 'u1',
+    canDelete: false,
+    checkItemId: null,
+    clientId: `c${seq}`,
+    content: `m${seq}`,
+    contextRoundIndex: null,
+    contextRunId: null,
+    createdAt: new Date(2026, 8, 9, 10, seq),
+    deletedAt: null,
+    editorData: null,
+    evidenceId: null,
+    id: `id${seq}`,
+    kind: 'comment',
+    parentCommentId: null,
+    reactions: [],
+    rect: null,
+    resolvedAt: null,
+    resolvedByUserId: null,
+    updatedAt: new Date(2026, 8, 9, 10, seq),
+    ...overrides,
+  };
+};
+const thread = (
+  root: AcceptanceCommentItem,
+  replies: AcceptanceCommentItem[] = [],
+): AcceptanceCommentThread => ({ replies, root });
+
+describe('round notes', () => {
+  it("folds a round's proposal into that round's entry instead of listing it", () => {
+    const proposal = item({
+      contextRunId: 'run-1',
+      id: 'proposal-1',
+      kind: 'proposal',
+    });
+    const remark = item({ id: 'remark-1' });
+
+    const entries = buildDiscussionTimeline({
+      approvals: [],
+      items: [proposal, remark],
+      rounds: [{ createdAt: new Date(2026, 8, 9, 9), id: 'run-1', roundIndex: 1 }],
+      threads: [
+        { replies: [], root: proposal },
+        { replies: [], root: remark },
+      ],
+    });
+
+    const round = entries.find((entry) => entry.kind === 'round');
+    expect(round?.kind === 'round' && round.proposal?.id).toBe('proposal-1');
+    // The note is the round's, so it never doubles as a message of its own.
+    expect(
+      entries.filter((entry) => entry.kind === 'message').map((entry) => entry.comment.id),
+    ).toEqual(['remark-1']);
+  });
+
+  it('leaves a round with no note as a plain event', () => {
+    const entries = buildDiscussionTimeline({
+      approvals: [],
+      items: [],
+      rounds: [{ createdAt: new Date(2026, 8, 9, 9), id: 'run-1', roundIndex: 1 }],
+      threads: [],
+    });
+    const round = entries.find((entry) => entry.kind === 'round');
+    expect(round?.kind === 'round' && round.proposal).toBeUndefined();
+  });
+});
+
+describe('discussion split', () => {
+  it('keeps delivery-wide remarks and leaves circled regions to the checks', () => {
+    const message = thread(item());
+    const region = thread(item({ anchorType: 'evidence', checkItemId: 'c2', evidenceId: 'ev1' }));
+
+    expect(messageThreads([message, region])).toEqual([message]);
+    expect(regionThreads([message, region])).toEqual([region]);
+  });
+});
+
+describe('discussion count', () => {
+  const rounds = [{ createdAt: '2026-09-01T10:00:00Z', id: 'run', roundIndex: 1 }];
+  const count = (items: AcceptanceCommentItem[]) =>
+    countDiscussionMessages({
+      approvals: items.filter((comment) => comment.kind === 'approval'),
+      items,
+      rounds,
+      threads: groupCommentThreads(items),
+    });
+
+  it('counts a round note as the first contribution and a new comment as the second', () => {
+    const proposal = item({ contextRunId: 'run', kind: 'proposal' });
+
+    expect(count([proposal])).toBe(1);
+    expect(count([proposal, item()])).toBe(2);
+  });
+
+  it('counts replies as individual contributions', () => {
+    const root = item();
+    const reply = item({ parentCommentId: root.id });
+
+    expect(count([root, reply])).toBe(2);
+  });
+
+  it('counts only the surviving note displayed for a round', () => {
+    const old = item({ contextRunId: 'run', kind: 'proposal' });
+    const latest = item({ contextRunId: 'run', kind: 'proposal' });
+    const deleted = item({ contextRunId: 'run', deletedAt: new Date(), kind: 'proposal' });
+    const orphan = item({ contextRunId: 'missing-run', kind: 'proposal' });
+
+    expect(count([old, latest, deleted, orphan])).toBe(1);
+  });
+
+  it('excludes bare round events, approvals, empty notes and evidence threads', () => {
+    const region = item({ anchorType: 'evidence', evidenceId: 'ev1' });
+
+    expect(count([])).toBe(0);
+    expect(
+      count([
+        item({ content: '  ', contextRunId: 'run', kind: 'proposal' }),
+        item({ kind: 'approval' }),
+        region,
+        item({ parentCommentId: region.id }),
+      ]),
+    ).toBe(0);
+  });
+
+  it('excludes deleted messages while keeping their surviving replies', () => {
+    const root = item({ deletedAt: new Date() });
+    const reply = item({ parentCommentId: root.id });
+    const deletedReply = item({ deletedAt: new Date(), parentCommentId: root.id });
+
+    expect(count([root])).toBe(0);
+    expect(count([root, reply, deletedReply])).toBe(1);
+  });
+
+  it('counts attachment-only comments once regardless of emoji reactions', () => {
+    const comment = item({
+      attachments: [{ id: 'image', name: 'image.png', url: '/image.png' }],
+      content: '',
+      reactions: [{ authorNames: ['u'], count: 3, emoji: '👍', mine: false }],
+    });
+
+    expect(count([comment])).toBe(1);
+  });
+});
+
+describe('buildDiscussionTimeline', () => {
+  it('preserves approvals and interleaves replies from separate threads with round events', () => {
+    const first = item({ createdAt: new Date('2026-09-01T10:00:00Z'), id: 'first' });
+    const second = item({ createdAt: new Date('2026-09-01T10:10:00Z'), id: 'second' });
+    const approval = item({
+      createdAt: new Date('2026-09-01T10:15:00Z'),
+      id: 'approval',
+      kind: 'approval',
+    });
+    const reply = item({
+      createdAt: new Date('2026-09-01T10:20:00Z'),
+      id: 'reply',
+      parentCommentId: first.id,
+    });
+    const items = [first, second, approval, reply];
+    const timeline = buildDiscussionTimeline({
+      approvals: items.filter((item) => item.kind === 'approval'),
+      items,
+      rounds: [{ createdAt: '2026-09-01T10:05:00Z', id: 'run', roundIndex: 2 }],
+      threads: groupCommentThreads(items),
+    });
+
+    expect(
+      timeline.map((entry) =>
+        entry.kind === 'message'
+          ? entry.comment.id
+          : entry.kind === 'approval'
+            ? entry.approval.id
+            : `round-${entry.roundIndex}`,
+      ),
+    ).toEqual(['first', 'round-2', 'second', 'approval', 'reply']);
+  });
+
+  it('uses the surviving latest proposal once in its round, not as a discussion message', () => {
+    const old = item({ contextRunId: 'run', id: 'old', kind: 'proposal' });
+    const latest = item({ contextRunId: 'run', id: 'latest', kind: 'proposal' });
+    const deleted = item({ contextRunId: 'run', deletedAt: new Date(), kind: 'proposal' });
+    const items = [old, latest, deleted];
+    const threads = groupCommentThreads(items);
+    const timeline = buildDiscussionTimeline({
+      approvals: [],
+      items,
+      rounds: [{ createdAt: '2026-09-01T10:00:00Z', id: 'run', roundIndex: 2 }],
+      threads,
+    });
+
+    expect(messageThreads(threads)).toEqual([]);
+    expect(timeline).toHaveLength(1);
+    expect(timeline[0]).toMatchObject({ kind: 'round', proposal: { id: 'latest' }, roundIndex: 2 });
+  });
+
+  it('interleaves messages, rounds and approvals oldest first', () => {
+    const early = thread(item({ createdAt: new Date(2026, 8, 9, 10, 0) }));
+    const late = thread(item({ createdAt: new Date(2026, 8, 9, 12, 0) }));
+    const approval = item({
+      createdAt: new Date(2026, 8, 9, 11, 30),
+      kind: 'approval',
+    });
+
+    const timeline = buildDiscussionTimeline({
+      approvals: [approval],
+      rounds: [
+        { createdAt: new Date(2026, 8, 9, 11, 0), roundIndex: 2 },
+        { createdAt: new Date(2026, 8, 9, 9, 0), roundIndex: 1 },
+      ],
+      threads: [late, early],
+    });
+
+    expect(timeline.map((entry) => entry.kind)).toEqual([
+      'round',
+      'message',
+      'round',
+      'approval',
+      'message',
+    ]);
+  });
+
+  it('flattens replies to a delivery-wide remark into their own messages', () => {
+    const root = item({ createdAt: new Date(2026, 8, 9, 10, 0) });
+    const reply = item({
+      createdAt: new Date(2026, 8, 9, 10, 30),
+      parentCommentId: root.id,
+    });
+
+    const timeline = buildDiscussionTimeline({
+      approvals: [],
+      rounds: [],
+      threads: [thread(root, [reply])],
+    });
+
+    expect(timeline).toHaveLength(2);
+    expect(timeline.map((entry) => (entry.kind === 'message' ? entry.comment.id : ''))).toEqual([
+      root.id,
+      reply.id,
+    ]);
+  });
+
+  it('leaves the answers to a circled region out of the chat', () => {
+    const root = item({ anchorType: 'evidence', evidenceId: 'ev1' });
+    const reply = item({ parentCommentId: root.id });
+    const timeline = buildDiscussionTimeline({
+      approvals: [],
+      rounds: [],
+      threads: [thread(root, [reply])],
+    });
+    expect(timeline).toEqual([]);
+  });
+
+  it('drops rounds with no index and withdrawn approvals', () => {
+    const timeline = buildDiscussionTimeline({
+      approvals: [item({ deletedAt: new Date(), kind: 'approval' })],
+      rounds: [
+        { createdAt: new Date(2026, 8, 9, 9, 0), roundIndex: null },
+        { createdAt: null, roundIndex: 3 },
+      ],
+      threads: [],
+    });
+
+    expect(timeline).toEqual([]);
+  });
+
+  it('never lists a circled region as a message', () => {
+    const region = thread(item({ anchorType: 'evidence', evidenceId: 'ev1' }));
+    const timeline = buildDiscussionTimeline({ approvals: [], rounds: [], threads: [region] });
+    expect(timeline).toEqual([]);
+  });
+});

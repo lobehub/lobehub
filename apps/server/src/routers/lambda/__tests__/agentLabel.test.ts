@@ -4,11 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // serverDatabase middleware calls getServerDB(); stub it (the model mock
 // ignores the db handle anyway).
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withScopedPermission: vi.fn(() => (opts: any) => opts.next({ ctx: opts.ctx })),
+  withScopedPermission: vi.fn(function () {
+    return (opts: any) => opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 const mockCreate = vi.fn();
@@ -16,11 +20,13 @@ const mockUpdate = vi.fn();
 const mockSetAgentLabels = vi.fn();
 
 vi.mock('@/database/models/agentLabel', () => ({
-  AgentLabelModel: vi.fn(() => ({
-    create: mockCreate,
-    setAgentLabels: mockSetAgentLabels,
-    update: mockUpdate,
-  })),
+  AgentLabelModel: vi.fn(function () {
+    return {
+      create: mockCreate,
+      setAgentLabels: mockSetAgentLabels,
+      update: mockUpdate,
+    };
+  }),
 }));
 
 const { agentLabelRouter } = await import('../agentLabel');

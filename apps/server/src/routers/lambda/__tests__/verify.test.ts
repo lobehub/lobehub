@@ -1,5 +1,6 @@
 import { getHTTPStatusCodeFromError } from '@trpc/server/http';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { strToU8, zipSync } from 'fflate';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTRPCErrorLogger } from '@/libs/trpc/utils/errorLogger';
 import { verifyRouter } from '@/server/routers/lambda/verify';
@@ -8,6 +9,7 @@ import type * as VerifyServiceModule from '@/server/services/verify';
 
 const modelMocks = vi.hoisted(() => ({
   createEvidence: vi.fn(),
+  purgeVerifyRun: vi.fn(),
   createRun: vi.fn(),
   deleteResult: vi.fn(),
   deleteRun: vi.fn(),
@@ -28,27 +30,33 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn(() => ({
-    delete: modelMocks.deleteResult,
-    findById: modelMocks.findResultById,
-    upsertByCheckItem: modelMocks.upsertByCheckItem,
-  })),
+  VerifyCheckResultModel: vi.fn(function () {
+    return {
+      delete: modelMocks.deleteResult,
+      findById: modelMocks.findResultById,
+      upsertByCheckItem: modelMocks.upsertByCheckItem,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    create: modelMocks.createRun,
-    delete: modelMocks.deleteRun,
-    findByOperation: modelMocks.findRunByOperation,
-    findById: modelMocks.findRunById,
-    update: modelMocks.updateRun,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      create: modelMocks.createRun,
+      delete: modelMocks.deleteRun,
+      findByOperation: modelMocks.findRunByOperation,
+      findById: modelMocks.findRunById,
+      update: modelMocks.updateRun,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/verifyEvidence', () => ({
-  VerifyEvidenceModel: vi.fn(() => ({
-    create: modelMocks.createEvidence,
-  })),
+  VerifyEvidenceModel: vi.fn(function () {
+    return {
+      create: modelMocks.createEvidence,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/verify', async (importOriginal) => ({
@@ -61,6 +69,10 @@ vi.mock('@/server/services/verify', async (importOriginal) => ({
   VerifyReporterService: class VerifyReporterService {},
 }));
 
+vi.mock('@/server/services/verify/acceptancePurge', () => ({
+  purgeVerifyRun: modelMocks.purgeVerifyRun,
+}));
+
 vi.mock('@/server/services/goal/criteriaGenerator', () => ({
   GoalCriteriaGeneratorService: class GoalCriteriaGeneratorService {
     generate = modelMocks.generateGoalCriteria;
@@ -69,32 +81,111 @@ vi.mock('@/server/services/goal/criteriaGenerator', () => ({
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({
-    getFullFileUrl: modelMocks.getFullFileUrl,
-  })),
+  FileService: vi.fn(function () {
+    return {
+      getFullFileUrl: modelMocks.getFullFileUrl,
+    };
+  }),
 }));
 
 const createCaller = () => verifyRouter.createCaller({ userId: 'verify-router-test-user' } as any);
 const createPublicCaller = () => verifyRouter.createCaller({} as any);
 
 const selectRows = <T>(rows: T[]) => ({
-  from: vi.fn(() => ({
-    where: vi.fn(() => ({
-      orderBy: vi.fn(async () => rows),
-    })),
-  })),
+  from: vi.fn(function () {
+    return {
+      where: vi.fn(function () {
+        return {
+          orderBy: vi.fn(async () => rows),
+        };
+      }),
+    };
+  }),
 });
 
 describe('verifyRouter', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   beforeEach(() => {
     vi.clearAllMocks();
     modelMocks.getServerDB.mockResolvedValue({});
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          getFullFileUrl: modelMocks.getFullFileUrl,
-        }) as any,
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        getFullFileUrl: modelMocks.getFullFileUrl,
+      } as any;
+    });
+  });
+
+  describe('getSkillBundle compatibility', () => {
+    const snapshot = {
+      content: '---\nname: acceptance\nmetadata:\n  version: "0.5.0"\n---\n# Acceptance',
+      files: { 'scripts/capture.cjs': 'capture();', 'surfaces/cli.md': '# CLI' },
+      identifier: 'acceptance',
+      name: 'acceptance',
+      source: {
+        commit: 'a'.repeat(40),
+        path: 'skills/acceptance',
+        repository: 'lobehub/acceptance',
+        ref: 'HEAD',
+      },
+      version: '0.5.0',
+    };
+
+    const mockSnapshot = () => {
+      const files = { 'SKILL.md': snapshot.content, ...snapshot.files };
+      const zip = zipSync(
+        Object.fromEntries(
+          Object.entries(files).map(([file, text]) => [
+            `acceptance-${snapshot.source.commit}/skills/acceptance/${file}`,
+            strToU8(text),
+          ]),
+        ),
+      );
+      return vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(Response.json({ sha: snapshot.source.commit }))
+        .mockResolvedValueOnce(new Response(new Uint8Array(zip).buffer));
+    };
+
+    it.each(['acceptance', 'verify'])(
+      'serves the default-branch source to legacy %s callers',
+      async (identifier) => {
+        mockSnapshot();
+        expect(await createCaller().getSkillBundle({ identifier })).toEqual(snapshot);
+      },
     );
+
+    it('keeps the old authentication requirement and unknown-identifier response', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      await expect(
+        createPublicCaller().getSkillBundle({ identifier: 'acceptance' }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+      await expect(createCaller().getSkillBundle({ identifier: 'unknown' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('resolves an explicitly requested tag for newer clients', async () => {
+      const fetchSpy = mockSnapshot();
+
+      expect(
+        await createCaller().getSkillBundle({ identifier: 'acceptance', version: 'v0.5.0' }),
+      ).toEqual({ ...snapshot, source: { ...snapshot.source, ref: 'v0.5.0' } });
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://api.github.com/repos/lobehub/acceptance/commits/v0.5.0',
+        expect.any(Object),
+      );
+    });
+
+    it('does not initialize reporting services to download an authenticated public skill', async () => {
+      mockSnapshot();
+      modelMocks.getServerDB.mockRejectedValueOnce(new Error('Reporting database unavailable'));
+
+      expect(await createCaller().getSkillBundle({ identifier: 'acceptance' })).toEqual(snapshot);
+      expect(modelMocks.getServerDB).not.toHaveBeenCalled();
+      modelMocks.getServerDB.mockReset().mockResolvedValue({});
+    });
   });
 
   describe('generateCriteria', () => {
@@ -114,8 +205,8 @@ describe('verifyRouter', () => {
       });
       expect(getHTTPStatusCodeFromError(error)).toBe(412);
 
-      const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const infoSpy = vi.spyOn(console, 'info').mockImplementation(function () {});
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
       createTRPCErrorLogger('/api/trpc')({
         error,
         path: 'verify.generateCriteria',
@@ -237,15 +328,26 @@ describe('verifyRouter', () => {
       );
 
       expect(modelMocks.findRunById).toHaveBeenCalledWith('other-user-run');
-      expect(modelMocks.deleteRun).not.toHaveBeenCalled();
+      expect(modelMocks.purgeVerifyRun).not.toHaveBeenCalled();
     });
 
-    it('deletes a run the caller owns and returns its id', async () => {
-      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+    it('purges a run the caller owns in its own scope and returns its id', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({
+        id: 'run-1',
+        userId: 'verify-router-test-user',
+        workspaceId: 'ws-1',
+      });
 
       const res = await createCaller().deleteRun({ verifyRunId: 'run-1' });
 
-      expect(modelMocks.deleteRun).toHaveBeenCalledWith('run-1');
+      expect(modelMocks.purgeVerifyRun).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        'verify-router-test-user',
+        'ws-1',
+        'run-1',
+      );
+      expect(modelMocks.deleteRun).not.toHaveBeenCalled();
       expect(res).toEqual({ id: 'run-1', success: true });
     });
   });
@@ -686,8 +788,8 @@ describe('verifyRouter', () => {
     });
 
     it('keeps returning the bundle when file URL resolution is unavailable', async () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      vi.mocked(FileService).mockImplementation(() => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
+      vi.mocked(FileService).mockImplementation(function () {
         throw new Error('S3 env missing');
       });
 

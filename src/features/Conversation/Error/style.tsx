@@ -1,5 +1,6 @@
 import { type CenterProps } from '@lobehub/ui';
-import { Avatar, Center, Flexbox } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
@@ -61,7 +62,6 @@ export const FormAction = memo<
           animation={animation}
           avatar={avatar}
           background={background ?? cssVar.colorFillContent}
-          gap={12}
           shape={'square'}
           size={80}
         />

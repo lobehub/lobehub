@@ -1,9 +1,12 @@
 import { spawn } from 'node:child_process';
+import { stat } from 'node:fs/promises';
+import os from 'node:os';
 
 import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellOutputFiles, ShellProcess, ShellProcessManager } from './process-manager';
+import { DEFAULT_OBSERVATION_TIMEOUT_MS } from './process-manager';
 import { detectWindowsShell, getShellConfig, normalizeEnvVarRefs } from './utils';
 
 export interface RunCommandOptions {
@@ -27,7 +30,24 @@ export interface RunCommandOptions {
   onSandboxUnavailable?: (error: Error) => void;
   processManager: ShellProcessManager;
   sandboxPolicy?: SandboxPolicy;
+  spawnProcess?: typeof spawn;
 }
+
+/**
+ * Node reports a missing spawn cwd as `spawn <shell> ENOENT` — blaming the
+ * shell binary — so the model goes off debugging a healthy shell. Check the
+ * directory first and name the real problem, and the machine it happened on
+ * (a cwd pinned on another device is the usual cause).
+ */
+const checkWorkingDirectory = async (cwd: string): Promise<string | undefined> => {
+  try {
+    if ((await stat(cwd)).isDirectory()) return;
+    return `Working directory is not a directory on ${os.hostname()}: ${cwd}`;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return;
+    return `Working directory does not exist on ${os.hostname()}: ${cwd}. The shell is fine — run the command from a directory that exists on this device.`;
+  }
+};
 
 export async function runCommand(
   {
@@ -36,9 +56,15 @@ export async function runCommand(
     description,
     env: extraEnv,
     run_in_background,
-    timeout = 30_000,
+    timeout = DEFAULT_OBSERVATION_TIMEOUT_MS,
   }: RunCommandParams,
-  { processManager, logger, onSandboxUnavailable, sandboxPolicy }: RunCommandOptions,
+  {
+    processManager,
+    logger,
+    onSandboxUnavailable,
+    sandboxPolicy,
+    spawnProcess = spawn,
+  }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   if (!command) {
     return { error: 'command is required', success: false };
@@ -46,6 +72,11 @@ export async function runCommand(
 
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
+
+  if (cwd) {
+    const cwdError = await checkWorkingDirectory(cwd);
+    if (cwdError) return { error: cwdError, success: false };
+  }
 
   const requestedEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
 
@@ -97,7 +128,7 @@ export async function runCommand(
     const shellId = processManager.createShellId();
     const shellOutputFiles = processManager.createOutputFiles(shellId);
     outputFiles = shellOutputFiles;
-    const childProcess = spawn(launchCommand.cmd, launchCommand.args, {
+    const childProcess = spawnProcess(launchCommand.cmd, launchCommand.args, {
       cwd,
       detached: process.platform !== 'win32',
       env: launchEnv,

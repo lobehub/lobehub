@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type ModelProviderCard } from '../types';
 import {
   DEFAULT_MODEL_PROVIDER_LIST,
+  getProviderDisplayName,
   isProviderDisableBrowserRequest,
   isProviderOAuthDeviceFlow,
 } from './index';
@@ -48,6 +49,11 @@ describe('model provider predicates', () => {
 
   it('returns false for unknown provider id', () => {
     expect(isProviderDisableBrowserRequest('not-exists')).toBe(false);
+  });
+
+  it('resolves a provider id to its display name and falls back to the id', () => {
+    expect(getProviderDisplayName('enabled-provider')).toBe('Test Provider');
+    expect(getProviderDisplayName('not-exists')).toBe('not-exists');
   });
 
   it('detects OAuth device flow providers', () => {

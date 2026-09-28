@@ -42,6 +42,11 @@ describe('createErrorResponse', () => {
     expect(response.status).toBe(400);
   });
 
+  it('returns a 400 status for RequestBodyTooLarge error type', () => {
+    const response = createErrorResponse(AgentRuntimeErrorType.RequestBodyTooLarge);
+    expect(response.status).toBe(400);
+  });
+
   describe('Provider Biz Error', () => {
     it('returns a 471 status for ProviderBizError error type', () => {
       const errorType = AgentRuntimeErrorType.ProviderBizError;

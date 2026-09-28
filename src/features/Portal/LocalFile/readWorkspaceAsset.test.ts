@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const callTool = vi.fn();
+const callTool = vi.hoisted(() => vi.fn());
+const getLocalFilePreview = vi.hoisted(() => vi.fn());
+const readProjectFileBytes = vi.hoisted(() => vi.fn());
+const readExternalAssetForPublishBytes = vi.hoisted(() => vi.fn());
 
 vi.mock('@/services/cloudSandbox', () => ({
   cloudSandboxService: {
@@ -10,13 +13,15 @@ vi.mock('@/services/cloudSandbox', () => ({
 
 vi.mock('@/services/projectFile', () => ({
   projectFileService: {
-    getLocalFilePreview: vi.fn(),
-    readProjectFileBytes: vi.fn(),
+    getLocalFilePreview,
+    readExternalAssetForPublish: readExternalAssetForPublishBytes,
+    readProjectFileBytes,
   },
 }));
 
 const { readWorkspaceAsset, resolveWorkspaceAssetContentType } =
   await import('./readWorkspaceAsset');
+const { readExternalAssetForPublish } = await import('./readExternalAssetForPublish');
 
 describe('resolveWorkspaceAssetContentType', () => {
   it('prefers the svg image type over a generic text/plain preview', () => {
@@ -33,6 +38,9 @@ describe('resolveWorkspaceAssetContentType', () => {
 describe('readWorkspaceAsset', () => {
   beforeEach(() => {
     callTool.mockReset();
+    getLocalFilePreview.mockReset();
+    readProjectFileBytes.mockReset();
+    readExternalAssetForPublishBytes.mockReset();
   });
 
   it('reads sandbox text files through readLocalFile', async () => {
@@ -104,5 +112,57 @@ describe('readWorkspaceAsset', () => {
         workingDirectory: '/sandbox',
       }),
     ).resolves.toEqual({ ok: false, reason: 'unreadable' });
+  });
+
+  it('accepts a local asset larger than the former 8 MiB packaging cap', async () => {
+    const bytes = new Uint8Array(9 * 1024 * 1024);
+    getLocalFilePreview.mockResolvedValue({ type: 'unsupported' });
+    readProjectFileBytes.mockResolvedValue({ bytes, contentType: 'application/javascript' });
+
+    const result = await readWorkspaceAsset({
+      path: '/tmp/runtime.js',
+      workingDirectory: '/tmp',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.bytes).toBe(bytes);
+  });
+
+  it('reports the measured size when a local asset exceeds the hosting hard limit', async () => {
+    const bytes = new Uint8Array(50 * 1024 * 1024 + 1);
+    getLocalFilePreview.mockResolvedValue({ type: 'unsupported' });
+    readProjectFileBytes.mockResolvedValue({ bytes, contentType: 'application/javascript' });
+
+    await expect(
+      readWorkspaceAsset({ path: '/tmp/runtime.js', workingDirectory: '/tmp' }),
+    ).resolves.toEqual({ ok: false, reason: 'oversized', sizeBytes: bytes.byteLength });
+  });
+
+  it('refuses a path outside the workspace before touching any normal transport', async () => {
+    await expect(
+      readWorkspaceAsset({ path: '/private/secret.txt', workingDirectory: '/repo' }),
+    ).resolves.toEqual({ ok: false, reason: 'missing' });
+
+    expect(getLocalFilePreview).not.toHaveBeenCalled();
+    expect(readProjectFileBytes).not.toHaveBeenCalled();
+  });
+
+  it('reads an external path only through the publish-scoped transport', async () => {
+    readExternalAssetForPublishBytes.mockResolvedValue({
+      bytes: new TextEncoder().encode('body{}'),
+      contentType: 'text/css',
+    });
+
+    await expect(
+      readExternalAssetForPublish({ path: '/private/app.css', workingDirectory: '/repo' }),
+    ).resolves.toMatchObject({ contentType: 'text/css', ok: true, text: 'body{}' });
+
+    expect(readExternalAssetForPublishBytes).toHaveBeenCalledWith({
+      deviceId: undefined,
+      path: '/private/app.css',
+      workingDirectory: '/repo',
+    });
+    expect(getLocalFilePreview).not.toHaveBeenCalled();
+    expect(readProjectFileBytes).not.toHaveBeenCalled();
   });
 });

@@ -209,6 +209,51 @@ describe('dispatchClientTool', () => {
     expect(result.workRegistration).toEqual(workRegistration);
   });
 
+  it('reports the device clock alongside the server-observed span', async () => {
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const streamManager = makeStreamManager(sendToolExecute);
+
+    mockBlpop.mockResolvedValue([
+      'tool_result:call-1',
+      JSON.stringify({
+        content: 'done',
+        executionTimeMs: 42,
+        success: true,
+        toolCallId: 'call-1',
+      }),
+    ]);
+
+    const result = await dispatchClientTool(makePayload(), {
+      operationId: 'op-1',
+      streamManager,
+    });
+
+    // `executionTime` is the round trip this process measured; the device's own
+    // number rides beside it. Without both, a slow tool and slow transport are
+    // indistinguishable — which is the whole reason the device reports one.
+    expect(result.deviceExecutionTime).toBe(42);
+    expect(result.executionTime).toBeGreaterThanOrEqual(0);
+  });
+
+  it('leaves the device clock undefined when the payload omits it', async () => {
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const streamManager = makeStreamManager(sendToolExecute);
+
+    // An older device, or a gateway that drops the field.
+    mockBlpop.mockResolvedValue([
+      'tool_result:call-1',
+      JSON.stringify({ content: 'done', success: true, toolCallId: 'call-1' }),
+    ]);
+
+    const result = await dispatchClientTool(makePayload(), {
+      operationId: 'op-1',
+      streamManager,
+    });
+
+    expect(result.deviceExecutionTime).toBeUndefined();
+    expect(result.executionTime).toBeGreaterThanOrEqual(0);
+  });
+
   it('leaves workRegistration undefined when the BLPOP payload omits it', async () => {
     const sendToolExecute = vi.fn().mockResolvedValue(undefined);
     const streamManager = makeStreamManager(sendToolExecute);

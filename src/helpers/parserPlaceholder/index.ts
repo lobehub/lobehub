@@ -34,7 +34,15 @@ const WORKING_DIRECTORY_UNSPECIFIED = '(not specified, use user Home directory a
 export const getEffectiveWorkingDirectoryPath = (topicId?: string | null): string | undefined =>
   resolveEffectiveWorkingDirectory(useChatStore.getState(), topicId);
 
-export const VARIABLE_GENERATORS = {
+/**
+ * Temporal placeholders rendered from the browser's own clock and locale.
+ *
+ * Only `parsePlaceholderVariables` (client-side text expansion) still uses
+ * these. Agent runs render their temporal placeholders through the shared
+ * context engineering core (`@lobechat/mecha`), localized to the user's
+ * timezone the same way on every host.
+ */
+export const TEMPORAL_VARIABLE_GENERATORS = {
   /**
    * Time-related template variables
    *
@@ -61,7 +69,6 @@ export const VARIABLE_GENERATORS = {
   day: () => new Date().getDate().toString().padStart(2, '0'),
   hour: () => new Date().getHours().toString().padStart(2, '0'),
   iso: () => new Date().toISOString(),
-  locale: () => Intl.DateTimeFormat().resolvedOptions().locale,
   minute: () => new Date().getMinutes().toString().padStart(2, '0'),
   month: () => (new Date().getMonth() + 1).toString().padStart(2, '0'),
   second: () => new Date().getSeconds().toString().padStart(2, '0'),
@@ -70,7 +77,16 @@ export const VARIABLE_GENERATORS = {
   timezone: () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   weekday: () => new Date().toLocaleDateString('en-US', { weekday: 'long' }),
   year: () => new Date().getFullYear().toString(),
+};
 
+/**
+ * Placeholders only this host can answer: the signed-in user, the desktop
+ * device paths, the active agent's model. Handed to the context engineering
+ * core as `variables`, where they override its defaults and leak guards.
+ */
+export const HOST_VARIABLE_GENERATORS = {
+  /** `{{locale}}` — the browser's locale, e.g. zh-CN. */
+  locale: () => Intl.DateTimeFormat().resolvedOptions().locale,
   /**
    * User information template variables
    *
@@ -212,6 +228,11 @@ const extractPlaceholderVariables = (text: string): string[] => {
  * @param depth - Recursion depth, default 1, set higher to support {{date}} within {{text}} etc.
  * @returns Replaced text
  */
+export const VARIABLE_GENERATORS: Record<string, () => string> = {
+  ...TEMPORAL_VARIABLE_GENERATORS,
+  ...HOST_VARIABLE_GENERATORS,
+};
+
 export const parsePlaceholderVariables = (text: string, depth = 2): string => {
   let result = text;
 

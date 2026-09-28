@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { log } from '../utils/logger';
 import { getUserIdFromApiKey } from './apiKey';
+import type * as RefreshModule from './refresh';
 import { getValidToken } from './refresh';
 import { resolveToken } from './resolveToken';
 
 vi.mock('./apiKey', () => ({
   getUserIdFromApiKey: vi.fn(),
 }));
-vi.mock('./refresh', () => ({
+vi.mock('./refresh', async (importOriginal) => ({
+  ...(await importOriginal<typeof RefreshModule>()),
   getValidToken: vi.fn(),
 }));
 vi.mock('../settings', () => ({
@@ -16,15 +19,6 @@ vi.mock('../settings', () => ({
     (process.env.LOBEHUB_SERVER || 'https://app.lobehub.com').replace(/\/$/, ''),
   ),
 }));
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
 // Helper to create a valid JWT with sub claim
 function makeJwt(sub: string): string {
   const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
@@ -142,6 +136,7 @@ describe('resolveToken', () => {
         credentials: {
           accessToken: token,
         },
+        status: 'ok',
       });
 
       const result = await resolveToken({});
@@ -163,6 +158,7 @@ describe('resolveToken', () => {
         credentials: {
           accessToken: token,
         },
+        status: 'ok',
       });
 
       await expect(resolveToken({})).rejects.toThrow('process.exit');
@@ -170,10 +166,30 @@ describe('resolveToken', () => {
     });
 
     it('should exit when no stored credentials', async () => {
-      vi.mocked(getValidToken).mockResolvedValue(null);
+      vi.mocked(getValidToken).mockResolvedValue({ status: 'no-login' });
 
       await expect(resolveToken({})).rejects.toThrow('process.exit');
       expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    /**
+     * An unanswered refresh must not be dressed up as a missing login: the stored credentials are
+     * still good, and telling the user to authenticate again is how a network blip turned into a
+     * re-login.
+     */
+    it('should say the login survived when the refresh went unanswered', async () => {
+      vi.mocked(getValidToken).mockResolvedValue({
+        detail: 'fetch failed',
+        status: 'unavailable',
+      });
+      const logError = vi.spyOn(log, 'error').mockImplementation(() => {});
+
+      await expect(resolveToken({})).rejects.toThrow('process.exit');
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining('fetch failed'));
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining('Retry in a moment'));
+      expect(logError).not.toHaveBeenCalledWith(expect.stringContaining('No authentication found'));
+
+      logError.mockRestore();
     });
   });
 });

@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, CopyButton, Flexbox, Markdown, ScrollShadow, TooltipGroup } from '@lobehub/ui';
-import { Button } from 'antd';
+import { CopyButton, Flexbox, Markdown, ScrollShadow, TooltipGroup } from '@lobehub/ui';
+import { ActionIcon, Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { FileTextIcon, Maximize2, Minimize2, PencilLine } from 'lucide-react';
 import { memo } from 'react';
@@ -56,10 +56,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface DocumentCardProps {
   content: string;
   documentId?: string;
+  readonly?: boolean;
   title: string;
 }
 
-const DocumentCard = memo<DocumentCardProps>(({ content, documentId, title }) => {
+const DocumentCard = memo<DocumentCardProps>(({ content, documentId, readonly, title }) => {
   const { t } = useTranslation('plugin');
   const [portalDocumentId, openDocument, closeDocument] = useChatStore((s) => [
     chatPortalSelectors.portalDocumentId(s),
@@ -92,7 +93,7 @@ const DocumentCard = memo<DocumentCardProps>(({ content, documentId, title }) =>
               size={'small'}
               title={t('builtins.lobe-notebook.actions.copy')}
             />
-            {documentId && (
+            {documentId && !readonly && (
               <ActionIcon
                 icon={PencilLine}
                 size={'small'}
@@ -109,13 +110,12 @@ const DocumentCard = memo<DocumentCardProps>(({ content, documentId, title }) =>
         </Markdown>
       </ScrollShadow>
 
-      {documentId && (
+      {documentId && !readonly && (
         <Button
           className={styles.expandButton}
-          color={'default'}
           icon={isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           shape={'round'}
-          variant={'outlined'}
+          type={'default'}
           onClick={handleToggle}
         >
           {isExpanded

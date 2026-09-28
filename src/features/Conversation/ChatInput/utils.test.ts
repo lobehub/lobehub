@@ -1,9 +1,11 @@
 import type { UIChatMessage } from '@lobechat/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createQueueSendNowGate,
   getContextWindowMessages,
   getConversationChatInputUiState,
+  getConversationSendButtonProps,
   toChatInputMessages,
 } from './utils';
 
@@ -13,6 +15,42 @@ const tokenMessages = [
   { content: 'latest tool', id: 'msg-3', role: 'tool' },
   { content: 'latest user', id: 'msg-4', role: 'user' },
 ] as UIChatMessage[];
+
+describe('createQueueSendNowGate', () => {
+  /**
+   * @example Two different queued rows are clicked before the first writer exits.
+   */
+  it('rejects an overlapping row while the first send-now task is settling', async () => {
+    // ROOT CAUSE:
+    //
+    // QueueTray previously keyed its in-flight guard by message id. Clicking a
+    // second row after the first cancellation marked the blocker as cancelled
+    // could therefore dispatch another turn while the native writer still exited.
+    //
+    // Before: each queued message owned an independent in-flight flag.
+    // After: the conversation tray owns one gate across all queued messages.
+    const gate = createQueueSendNowGate();
+    let releaseFirst!: () => void;
+    const firstTask = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        }),
+    );
+    const secondTask = vi.fn(async () => {});
+
+    const first = gate.run(firstTask);
+    const second = gate.run(secondTask);
+
+    await expect(second).resolves.toBe(false);
+    expect(secondTask).not.toHaveBeenCalled();
+
+    releaseFirst();
+    await expect(first).resolves.toBe(true);
+    await expect(gate.run(secondTask)).resolves.toBe(true);
+    expect(secondTask).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('toChatInputMessages', () => {
   it('preserves user, assistant, and tool messages with their real roles', () => {
@@ -85,8 +123,48 @@ describe('getContextWindowMessages', () => {
   });
 });
 
+describe('getConversationSendButtonProps', () => {
+  it.each([false, true])(
+    'keeps uploads disabled with generating=%s despite a host override',
+    (generating) => {
+      const defaults = {
+        disabled: true,
+        generating,
+        onStop: vi.fn(),
+        showSendWhileGenerating: generating,
+      };
+      const overrides = { disabled: false, shape: 'round' as const };
+
+      expect(getConversationSendButtonProps(defaults, overrides, true)).toEqual({
+        ...defaults,
+        disabled: true,
+        shape: 'round',
+      });
+      expect(getConversationSendButtonProps(defaults, overrides, false).disabled).toBe(false);
+    },
+  );
+
+  it.each([
+    { customDisabled: undefined, disabled: true, expected: true },
+    { customDisabled: undefined, disabled: false, expected: false },
+    { customDisabled: true, disabled: false, expected: true },
+    { customDisabled: false, disabled: true, expected: false },
+  ])(
+    'preserves non-upload disabled overrides: $customDisabled / $disabled',
+    ({ customDisabled, disabled, expected }) => {
+      expect(
+        getConversationSendButtonProps(
+          { disabled, generating: false, onStop: vi.fn() },
+          customDisabled === undefined ? undefined : { disabled: customDisabled },
+          false,
+        ).disabled,
+      ).toBe(expected);
+    },
+  );
+});
+
 describe('getConversationChatInputUiState', () => {
-  it('shows follow-up placeholder and stop button while loading with an empty composer', () => {
+  it('shows follow-up placeholder and only the stop button while loading with an empty composer', () => {
     expect(
       getConversationChatInputUiState({
         isInputEmpty: true,
@@ -95,15 +173,16 @@ describe('getConversationChatInputUiState', () => {
     ).toEqual({
       placeholderVariant: 'followUp',
       showSendMenu: false,
+      showSendWhileGenerating: false,
       showStopButton: true,
     });
   });
 
-  it('keeps the stop button visible while the user types a follow-up during loading', () => {
-    // Regression: flipping to Send the moment the composer had any text read
-    // as "agent finished" and made queued sends look like fresh sends. Stop
-    // must stay up for the whole loading window — Enter still enqueues, and
-    // the QueueTray exposes Send-now per item.
+  it('shows Send beside Stop while the user types a follow-up during loading', () => {
+    // Regression: flipping Stop to Send the moment the composer had any text
+    // read as "agent finished". Stop must stay up for the whole loading window;
+    // Send appears next to it so the follow-up can be queued by click as well
+    // as by Enter.
     expect(
       getConversationChatInputUiState({
         isInputEmpty: false,
@@ -112,6 +191,20 @@ describe('getConversationChatInputUiState', () => {
     ).toEqual({
       placeholderVariant: 'default',
       showSendMenu: false,
+      showSendWhileGenerating: true,
+      showStopButton: true,
+    });
+  });
+
+  it('keeps only Stop while loading when the host disables queueing', () => {
+    expect(
+      getConversationChatInputUiState({
+        disableQueue: true,
+        isInputEmpty: false,
+        isInputLoading: true,
+      }),
+    ).toMatchObject({
+      showSendWhileGenerating: false,
       showStopButton: true,
     });
   });
@@ -119,12 +212,13 @@ describe('getConversationChatInputUiState', () => {
   it('keeps the default composer state when not loading', () => {
     expect(
       getConversationChatInputUiState({
-        isInputEmpty: true,
+        isInputEmpty: false,
         isInputLoading: false,
       }),
     ).toEqual({
       placeholderVariant: 'default',
       showSendMenu: true,
+      showSendWhileGenerating: false,
       showStopButton: false,
     });
   });
@@ -139,6 +233,7 @@ describe('getConversationChatInputUiState', () => {
     ).toEqual({
       placeholderVariant: 'default',
       showSendMenu: false,
+      showSendWhileGenerating: false,
       showStopButton: true,
     });
   });

@@ -77,18 +77,20 @@ describe('extractFileIdsFromEditorData', () => {
     expect(db.select).not.toHaveBeenCalled();
   });
 
-  it('extracts fileIds from proxy URLs without DB query', async () => {
+  it('extracts prefixed and UUID fileIds from proxy URLs without DB query', async () => {
     const db = mockDb([]);
+    const uuid = '1c4521fe-3921-4f74-8de4-0f8085416ca2';
     const json = {
       root: {
         children: [
           image('http://localhost:3010/f/file_a'),
           file('http://localhost:3010/f/file_b', 'b.pdf'),
+          image(`https://app.lobehub.com/f/${uuid}`),
         ],
       },
     };
     const result = await extractFileIdsFromEditorData(json, { db, userId: 'u' });
-    expect(result.sort()).toEqual(['file_a', 'file_b']);
+    expect(result.sort()).toEqual([uuid, 'file_a', 'file_b'].sort());
     expect(db.select).not.toHaveBeenCalled();
   });
 

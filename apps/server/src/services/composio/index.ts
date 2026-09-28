@@ -85,6 +85,17 @@ export class ComposioService {
 
     log('executeComposioTool: %s/%s with args: %O', identifier, toolSlug, args);
 
+    if (!VALID_COMPOSIO_IDENTIFIERS.has(identifier)) {
+      return {
+        content: `Composio app "${identifier}" is not supported`,
+        error: {
+          code: 'COMPOSIO_APP_UNSUPPORTED',
+          message: `Composio app ${identifier} is not supported`,
+        },
+        success: false,
+      };
+    }
+
     if (!isComposioClientAvailable()) {
       return {
         content: 'Composio service is not configured on server',
@@ -257,7 +268,10 @@ export class ComposioService {
       try {
         const connectors = await this.connectorModel.resolveAll(agentId);
         const composioConnectors = connectors.filter(
-          (c) => c.isEnabled && c.metadata?.composio?.status === 'ACTIVE',
+          (c) =>
+            VALID_COMPOSIO_IDENTIFIERS.has(c.identifier) &&
+            c.isEnabled &&
+            c.metadata?.composio?.status === 'ACTIVE',
         );
 
         if (composioConnectors.length > 0) {

@@ -1,8 +1,8 @@
 'use client';
 
 import type { CrawlErrorResult, CrawlSuccessResult } from '@lobechat/web-crawler';
-import { ActionIcon, Block, Flexbox, stopPropagation, Text } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, stopPropagation } from '@lobehub/ui';
+import { ActionIcon, Alert, Text } from '@lobehub/ui/base-ui';
 import { Descriptions } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLink } from 'lucide-react';
@@ -98,7 +98,7 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
     );
   }
 
-  const { url, title, description } = result as CrawlSuccessResult;
+  const { url, title, description, length } = result as CrawlSuccessResult;
 
   return (
     <Block
@@ -132,7 +132,9 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
           }}
           items={[
             {
-              children: result.content?.length,
+              // `length` is pinned to the crawled body; `content` may be a
+              // preview once the read path projects this tool.
+              children: length ?? result.content?.length,
               label: t('search.crawPages.meta.words'),
             },
             {

@@ -103,6 +103,5 @@ export const openImportFromGithubModal = (): ModalInstance =>
     content: <ImportFromGithubContent />,
     footer: null,
     maskClosable: true,
-    styles: { header: { display: 'none' } },
     width: 480,
   });

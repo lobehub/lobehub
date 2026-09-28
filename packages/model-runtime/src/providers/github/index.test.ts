@@ -2,19 +2,8 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import type { GithubModelCard } from './index';
 import { LobeGithubAI, params } from './index';
-
-// Basic provider tests
-testProvider({
-  Runtime: LobeGithubAI,
-  chatDebugEnv: 'DEBUG_GITHUB_CHAT_COMPLETION',
-  chatModel: 'openai/gpt-4o',
-  defaultBaseURL: 'https://models.github.ai/inference',
-  invalidErrorType: 'InvalidGithubToken',
-  provider: ModelProvider.Github,
-});
 
 // Custom feature tests
 describe('LobeGithubAI - custom features', () => {

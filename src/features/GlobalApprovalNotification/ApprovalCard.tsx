@@ -2,8 +2,8 @@
 
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName, type UIChatMessage } from '@lobechat/types';
-import { ActionIcon, Avatar } from '@lobehub/ui';
-import { ArrowUpRight } from 'lucide-react';
+import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
+import { ArrowUpRight, ChevronUp } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -27,6 +27,11 @@ import { type GlobalApprovalGroup } from './useGlobalPendingApprovals';
 
 interface ApprovalCardProps {
   group: GlobalApprovalGroup;
+  /**
+   * Collapse the island to its pill. Lives in the card header so the "put this
+   * away and keep working" escape hatch is visible on the surface itself.
+   */
+  onCollapse?: () => void;
 }
 
 /**
@@ -36,7 +41,7 @@ interface ApprovalCardProps {
  * intervention UIs) operates on the right conversation without the user having
  * to switch into it.
  */
-const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
+const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
   const { context, interventions } = group;
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
@@ -163,6 +168,14 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
               size="small"
               title={t('globalApproval.goToConversation')}
               onClick={handleGoToConversation}
+            />
+          )}
+          {onCollapse && (
+            <ActionIcon
+              icon={ChevronUp}
+              size="small"
+              title={t('globalApproval.collapse')}
+              onClick={onCollapse}
             />
           )}
         </div>

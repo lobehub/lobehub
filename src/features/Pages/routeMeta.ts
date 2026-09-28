@@ -1,5 +1,6 @@
 import { FilePenIcon } from 'lucide-react';
 
+import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from '@/features/RouteMeta/workspaceScope';
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
@@ -29,5 +30,6 @@ const PageDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
 export const pageRouteMeta = routeMeta({
   DynamicMeta: PageDynamicMeta,
   icon: FilePenIcon,
+  Skeleton: createSurfaceSkeleton('editor'),
   titleKey: 'navigation.page',
 });

@@ -2,7 +2,6 @@ import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
 import { CLASSIC_ONBOARDING_MAX_STEP, getPluginMode, upsertPluginMode } from '@lobechat/types';
 
 import { userService } from '@/services/user';
-import { getAgentStoreState } from '@/store/agent';
 import { type StoreSetter } from '@/store/types';
 import { type UserStore } from '@/store/user';
 
@@ -97,6 +96,8 @@ export class OnboardingActionImpl {
   };
 
   toggleInboxAgentDefaultPlugin = async (id: string, open?: boolean): Promise<void> => {
+    /** Break the user → agent → cache-scope → user initialization cycle. */
+    const { getAgentStoreState } = await import('@/store/agent');
     const currentSettings = settingsSelectors.currentSettings(this.#get());
     const isDefaultPinned =
       getPluginMode(currentSettings.defaultAgent?.config?.plugins, id) === 'pinned';

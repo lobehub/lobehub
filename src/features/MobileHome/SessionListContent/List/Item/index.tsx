@@ -1,8 +1,8 @@
-import { ModelTag } from '@lobehub/icons';
 import { Flexbox } from '@lobehub/ui';
 import React, { memo, useMemo, useState } from 'react';
 import { shallow } from 'zustand/shallow';
 
+import { ModelTag } from '@/components/LobeIcons';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { INBOX_SESSION_ID } from '@/const/session';
 import { isDesktop } from '@/const/version';

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentRuntimeErrorType } from '../../../types/error';
 import {
   LobeDeepSeekAI,
   LobeDeepSeekAnthropicAI,
@@ -166,6 +167,29 @@ describe('LobeDeepSeekAI', () => {
 });
 
 describe('LobeDeepSeekOpenAI', () => {
+  it('should reject oversized Flash alias prompts before calling the upstream API', async () => {
+    const runtime = new LobeDeepSeekOpenAI({ apiKey: 'test_api_key' });
+    const create = vi
+      .spyOn(runtime.client.chat.completions, 'create')
+      .mockRejectedValue(new Error('Unexpected upstream request'));
+
+    await expect(
+      runtime.chat({
+        messages: [{ content: 'lorem ipsum dolor '.repeat(400_000), role: 'user' }],
+        model: 'deepseek-flash',
+        temperature: 0,
+      }),
+    ).rejects.toMatchObject({
+      error: {
+        ctx: 1_000_000,
+        model: 'deepseek-flash',
+        type: 'context_exceeded_pre_flight',
+      },
+      errorType: AgentRuntimeErrorType.ExceededContextWindow,
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
   describe('init', () => {
     it('should correctly initialize with an API key', () => {
       const runtime = new LobeDeepSeekOpenAI({ apiKey: 'test_api_key' });

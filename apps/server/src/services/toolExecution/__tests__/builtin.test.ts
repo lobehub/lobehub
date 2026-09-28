@@ -2,6 +2,7 @@ import type { ChatToolPayload } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BuiltinToolsExecutor } from '../builtin';
+import { hasServerRuntime } from '../serverRuntimes';
 import type { ToolExecutionContext } from '../types';
 
 const mocks = vi.hoisted(() => ({
@@ -12,26 +13,83 @@ const mockApiHandler = mocks.apiHandler;
 
 vi.mock('../serverRuntimes', () => ({
   hasServerRuntime: vi.fn().mockReturnValue(true),
-  getServerRuntime: vi.fn(async () => ({ createDocument: mocks.apiHandler })),
+  getServerRuntime: vi.fn(async () => ({
+    createDocument: mocks.apiHandler,
+    getCommandOutput: mocks.apiHandler,
+    runCommand: mocks.apiHandler,
+    searchUserMemory: mocks.apiHandler,
+  })),
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({})),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    executeLobehubSkill: mocks.executeLobehubSkill,
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      executeLobehubSkill: mocks.executeLobehubSkill,
+    };
+  }),
 }));
 
 // The runtime mock above only exposes `createDocument`, but the manifest is the
 // authoritative source of declared APIs — it also lists `listDocuments`, so an
 // UNKNOWN_API hint sourced from the manifest must surface both.
+//
+// The share-gate exports mirror the real module's semantics on this mock's
+// registry: both mocked identifiers are "builtin", neither is share-allowed —
+// except `lobe-user-memory`, granted so the memory-permission dispatch tests
+// below can exercise the per-API data-tool rules.
 vi.mock('@lobechat/builtin-tools', () => ({
+  AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS: new Set(['lobe-user-memory', 'lobe-consent-tool']),
+  isBuiltinToolIdentifier: (id: string) =>
+    ['lobe-notebook', 'lobe-task', 'lobe-user-memory', 'lobe-consent-tool'].includes(id),
   builtinTools: [
     {
       identifier: 'lobe-notebook',
       manifest: { api: [{ name: 'createDocument' }, { name: 'listDocuments' }] },
+    },
+    {
+      identifier: 'lobe-local-system',
+      manifest: {
+        api: [
+          {
+            name: 'runCommand',
+            parameters: {
+              properties: { command: { type: 'string' }, description: { type: 'string' } },
+              required: ['description', 'command'],
+              type: 'object',
+            },
+          },
+          {
+            name: 'getCommandOutput',
+            parameters: { properties: { shell_id: { type: 'string' } }, type: 'object' },
+          },
+        ],
+      },
+    },
+    {
+      identifier: 'lobe-user-memory',
+      manifest: {
+        api: [
+          { name: 'searchUserMemory' },
+          { name: 'addContextMemory' },
+          // exercises the dispatch gate's unstripped-manifest intervention check
+          { humanIntervention: 'required', name: 'consentGated' },
+        ],
+      },
+    },
+    {
+      identifier: 'lobe-consent-tool',
+      // Tool-level 'required' with an api-level 'never': assembly drops the
+      // WHOLE tool for such a config, so dispatch must too — the api-level
+      // 'never' must not override the tool-level restriction.
+      manifest: {
+        api: [{ humanIntervention: 'never', name: 'freeApi' }],
+        humanIntervention: 'required',
+      },
     },
     {
       identifier: 'lobe-task',
@@ -155,6 +213,80 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
 
     expect(mockApiHandler).toHaveBeenCalledWith({}, context);
     expect(result.success).toBe(true);
+  });
+
+  describe('empty arguments string', () => {
+    const buildRunCommandPayload = (argsStr: string): ChatToolPayload => ({
+      apiName: 'runCommand',
+      arguments: argsStr,
+      id: 't-run',
+      identifier: 'lobe-local-system',
+      type: 'builtin' as any,
+    });
+
+    // A tool call whose argument deltas never arrived (e.g. an OpenAI-compatible
+    // proxy that drops them) accumulates to `arguments: ""`. Silently passing
+    // `{}` made the device reply "command is required", which misled the model
+    // into blaming the platform instead of resending the call.
+    it('returns EMPTY_ARGUMENTS without invoking an API that declares required params', async () => {
+      const result = await executor.execute(buildRunCommandPayload(''), context);
+
+      expect(mockApiHandler).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('EMPTY_ARGUMENTS');
+      expect(result.content).toMatch(/empty arguments string/);
+      expect(result.content).toMatch(/command/);
+    });
+
+    it('treats a whitespace-only arguments string as empty', async () => {
+      const result = await executor.execute(buildRunCommandPayload('   '), context);
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('EMPTY_ARGUMENTS');
+      expect(mockApiHandler).not.toHaveBeenCalled();
+    });
+
+    it('prefers the manifest from the execution context when present', async () => {
+      const result = await executor.execute(
+        { ...buildRunCommandPayload(''), apiName: 'createDocument', identifier: 'lobe-notebook' },
+        {
+          ...context,
+          toolManifestMap: {
+            'lobe-notebook': {
+              api: [
+                {
+                  description: '',
+                  name: 'createDocument',
+                  parameters: {
+                    properties: { title: { type: 'string' } },
+                    required: ['title'],
+                    type: 'object',
+                  },
+                },
+              ],
+              identifier: 'lobe-notebook',
+              meta: {},
+              type: 'builtin',
+            } as any,
+          },
+        },
+      );
+
+      expect(mockApiHandler).not.toHaveBeenCalled();
+      expect(result.error?.code).toBe('EMPTY_ARGUMENTS');
+    });
+
+    it('still dispatches with {} for an API without required params', async () => {
+      mockApiHandler.mockResolvedValueOnce({ content: 'ok', success: true });
+
+      const result = await executor.execute(
+        { ...buildRunCommandPayload(''), apiName: 'getCommandOutput' },
+        context,
+      );
+
+      expect(mockApiHandler).toHaveBeenCalledWith({}, context);
+      expect(result.success).toBe(true);
+    });
   });
 
   it('returns a recoverable UNKNOWN_API error for a hallucinated apiName', async () => {
@@ -425,5 +557,176 @@ describe('BuiltinToolsExecutor manifest-driven Work registration', () => {
       targets: [{ taskIdentifier: 'T-1' }],
       type: 'task',
     });
+  });
+});
+
+// Regression for the share-visitor dispatch gate: the assembly-time tool-set
+// trim only shapes what the model is OFFERED — the executor must re-block on
+// its own, or any path that bypasses assembly (resume, recovery hints, future
+// discovery routes) executes with the creator's full permissions.
+describe('BuiltinToolsExecutor share-visitor gate', () => {
+  const executor = new BuiltinToolsExecutor({} as any, 'user-1');
+
+  const memoryPayload = (apiName: string): ChatToolPayload => ({
+    apiName,
+    arguments: '{"query":"hi"}',
+    id: 't-share',
+    identifier: 'lobe-user-memory',
+    type: 'default' as any,
+  });
+
+  // AgentShareVisitorContext now requires these id fields for billing
+  // attribution and revocation checks; the gate tests below only vary the
+  // permission fields, so share the ids across fixtures.
+  const visitorIds = { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' };
+
+  beforeEach(() => {
+    mockApiHandler.mockReset();
+    mockApiHandler.mockResolvedValue({ content: 'ok', success: true });
+  });
+
+  it('blocks a builtin identifier outside the share allowlist', async () => {
+    const result = await executor.execute(buildPayload('{}'), {
+      ...context,
+      agentShareVisitor: { ...visitorIds },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).not.toHaveBeenCalled();
+  });
+
+  it('executes the same call untouched when the run is not a share run', async () => {
+    const result = await executor.execute(buildPayload('{}'), context);
+
+    expect(result.error?.code).not.toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).toHaveBeenCalled();
+  });
+
+  it('blocks an allowlisted builtin the owner did not enable for the share', async () => {
+    // On the master allowlist AND permission-granted, but absent from the
+    // owner's toolGrants picker — must still be blocked at dispatch.
+    const result = await executor.execute(memoryPayload('searchUserMemory'), {
+      ...context,
+      agentShareVisitor: { ...visitorIds, allowReadMemory: true },
+    });
+
+    expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).not.toHaveBeenCalled();
+  });
+
+  it('blocks a consent-gated (humanIntervention) API even when the tool is enabled', async () => {
+    // The assembly strip removes the API's intervention config from the
+    // runtime-visible manifest, so headless would auto-run it — the dispatch
+    // gate must re-read the unstripped manifest and block instead.
+    const result = await executor.execute(memoryPayload('consentGated'), {
+      ...context,
+      agentShareVisitor: {
+        ...visitorIds,
+        allowReadMemory: true,
+        toolGrants: [{ identifier: 'lobe-user-memory' }],
+      },
+    });
+
+    expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).not.toHaveBeenCalled();
+  });
+
+  it("blocks a tool-level 'required' tool even when the called API is 'never'", async () => {
+    const result = await executor.execute(
+      {
+        apiName: 'freeApi',
+        arguments: '{}',
+        id: 't-consent',
+        identifier: 'lobe-consent-tool',
+        type: 'default' as any,
+      },
+      {
+        ...context,
+        agentShareVisitor: { ...visitorIds, toolGrants: [{ identifier: 'lobe-consent-tool' }] },
+      },
+    );
+
+    expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).not.toHaveBeenCalled();
+  });
+
+  it('blocks memory reads without allowReadMemory', async () => {
+    const result = await executor.execute(memoryPayload('searchUserMemory'), {
+      ...context,
+      agentShareVisitor: { ...visitorIds, toolGrants: [{ identifier: 'lobe-user-memory' }] },
+    });
+
+    expect(result.error?.code).toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).not.toHaveBeenCalled();
+  });
+
+  it('allows memory reads with allowReadMemory but still blocks memory writes', async () => {
+    const read = await executor.execute(memoryPayload('searchUserMemory'), {
+      ...context,
+      agentShareVisitor: {
+        ...visitorIds,
+        allowReadMemory: true,
+        toolGrants: [{ identifier: 'lobe-user-memory' }],
+      },
+    });
+    expect(read.error?.code).not.toBe('SHARE_GATE_BLOCKED');
+    expect(mockApiHandler).toHaveBeenCalled();
+
+    const write = await executor.execute(memoryPayload('addContextMemory'), {
+      ...context,
+      agentShareVisitor: {
+        ...visitorIds,
+        allowReadMemory: true,
+        toolGrants: [{ identifier: 'lobe-user-memory' }],
+      },
+    });
+    expect(write.error?.code).toBe('SHARE_GATE_BLOCKED');
+  });
+});
+
+describe('BuiltinToolsExecutor Composio app without an active connection', () => {
+  const executor = new BuiltinToolsExecutor({} as any, 'user-1');
+
+  // Only an ACTIVE Composio connection is routed with `source: 'composio'`. A
+  // stale activation (or a resumed run whose toolset predates a status change)
+  // lands here without that source — the model must learn the app is not
+  // connected, not that the tool "is not implemented".
+  it('returns COMPOSIO_NOT_CONNECTED instead of throwing "not implemented"', async () => {
+    vi.mocked(hasServerRuntime).mockReturnValueOnce(false);
+
+    const result = await executor.execute(
+      {
+        apiName: 'GMAIL_FETCH_EMAILS',
+        arguments: '{"query":"newer_than:3d"}',
+        id: 'call-gmail',
+        identifier: 'gmail',
+        type: 'default' as any,
+      },
+      context,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('COMPOSIO_NOT_CONNECTED');
+    expect(result.content).toContain('Gmail is not connected');
+    expect(result.content).toContain('Settings → Connectors');
+    expect(result.content).not.toMatch(/not implemented/);
+  });
+
+  it('still reports an unknown non-Composio builtin as not implemented', async () => {
+    vi.mocked(hasServerRuntime).mockReturnValueOnce(false);
+
+    await expect(
+      executor.execute(
+        {
+          apiName: 'doThing',
+          arguments: '{}',
+          id: 'call-x',
+          identifier: 'lobe-missing-tool',
+          type: 'default' as any,
+        },
+        context,
+      ),
+    ).rejects.toThrow('Builtin tool "lobe-missing-tool" is not implemented');
   });
 });

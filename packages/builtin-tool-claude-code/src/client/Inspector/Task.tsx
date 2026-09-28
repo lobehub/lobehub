@@ -189,14 +189,19 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
       );
       const text = subject ? `${label}${subject}` : label;
       return (
-        <div className={cx(inspectorTextStyles.root, inFlight && shinyTextStyles.shinyText)}>
+        <div className={inspectorTextStyles.root}>
           <ProgressRing stats={stats} />
           {stats.total > 0 && (
             <span className={styles.countChip}>
               {stats.completed}/{stats.total}
             </span>
           )}
-          <span style={{ marginInlineStart: 6 }}>{text}</span>
+          <span
+            className={cx(inFlight && shinyTextStyles.shinyText)}
+            style={{ marginInlineStart: 6 }}
+          >
+            {text}
+          </span>
         </div>
       );
     }
@@ -230,19 +235,17 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
                 ? t('builtins.lobe-claude-code.task.updateInProgress')
                 : t('builtins.lobe-claude-code.task.updatePending');
         return (
-          <div
-            className={cx(
-              inspectorTextStyles.root,
-              (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-            )}
-          >
+          <div className={inspectorTextStyles.root}>
             <ProgressRing stats={stats} />
             {stats.total > 0 && (
               <span className={styles.countChip}>
                 {stats.completed}/{stats.total}
               </span>
             )}
-            <span style={{ marginInlineStart: stats.total > 0 ? 6 : 0 }}>
+            <span
+              className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
+              style={{ marginInlineStart: stats.total > 0 ? 6 : 0 }}
+            >
               {subject ? `${verb}: ${subject}` : verb}
             </span>
           </div>
@@ -266,14 +269,17 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
             : 'builtins.lobe-claude-code.task.updateSubject.completed',
         );
         return (
-          <div className={cx(inspectorTextStyles.root, inFlight && shinyTextStyles.shinyText)}>
+          <div className={inspectorTextStyles.root}>
             <ProgressRing stats={stats} />
             {stats.total > 0 && (
               <span className={styles.countChip}>
                 {stats.completed}/{stats.total}
               </span>
             )}
-            <span style={{ marginInlineStart: stats.total > 0 ? 6 : 0 }}>
+            <span
+              className={cx(inFlight && shinyTextStyles.shinyText)}
+              style={{ marginInlineStart: stats.total > 0 ? 6 : 0 }}
+            >
               {`${verb}: ${subject}`}
             </span>
           </div>
@@ -324,9 +330,9 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
         : undefined;
 
     return (
-      <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
+      <div className={inspectorTextStyles.root}>
         <ProgressRing stats={stats} />
-        <span>{label}</span>
+        <span className={cx(isLoading && shinyTextStyles.shinyText)}>{label}</span>
         {detail && (
           <>
             <span>:</span>

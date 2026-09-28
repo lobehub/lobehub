@@ -1,16 +1,19 @@
 import { Hono } from 'hono';
 
 import { botCallback } from './handlers/botCallback';
+import { botReplay } from './handlers/botReplay';
 import { execAgent } from './handlers/execAgent';
 import { finalizeAbandoned } from './handlers/finalizeAbandoned';
 import { gatewayCallback } from './handlers/gatewayCallback';
 import { gatewayCron } from './handlers/gatewayCron';
+import { gatewayDesiredConnections } from './handlers/gatewayDesiredConnections';
 import { gatewayStart } from './handlers/gatewayStart';
 import { groupMemberCallback } from './handlers/groupMemberCallback';
 import { messengerInstall } from './handlers/messengerInstall';
 import { messengerOAuthCallback } from './handlers/messengerOAuthCallback';
 import { messengerWebhook } from './handlers/messengerWebhook';
 import { platformWebhook } from './handlers/platformWebhook';
+import { reapOperations } from './handlers/reapOperations';
 import { runStep, runStepHealth } from './handlers/runStep';
 import { subAgentCallback } from './handlers/subAgentCallback';
 import { toolResult } from './handlers/toolResult';
@@ -56,6 +59,13 @@ app.get(
   gatewayCron,
 );
 
+// GET /api/agent/reap-operations — Vercel cron entry point (Bearer CRON_SECRET)
+app.get(
+  '/reap-operations',
+  bearerSecretAuth(() => process.env.CRON_SECRET),
+  reapOperations,
+);
+
 // POST /api/agent/gateway/start — non-Vercel ensureRunning (Bearer KEY_VAULTS_SECRET)
 app.post(
   '/gateway/start',
@@ -67,8 +77,16 @@ app.post(
 // (auth is inline so the disabled-feature 204 short-circuits before auth)
 app.post('/gateway/callback', gatewayCallback);
 
+// POST /api/agent/gateway/desired-connections — a gateway pulls the connect
+// payloads it should hold, so it can rebuild itself after a restart.
+// (auth is inline for the same reason as the callback above)
+app.post('/gateway/desired-connections', gatewayDesiredConnections);
+
 // POST /api/agent/webhooks/bot-callback — agent step/completion webhooks (QStash)
 app.post('/webhooks/bot-callback', qstashAuth(), botCallback);
+
+// Replay retries carry no completion response and require the queue signature.
+app.post('/webhooks/bot-replay', qstashAuth(), botReplay);
 
 // POST /api/agent/webhooks/subagent-callback — sub-agent completion bridge (QStash)
 app.post('/webhooks/subagent-callback', qstashAuth(), subAgentCallback);

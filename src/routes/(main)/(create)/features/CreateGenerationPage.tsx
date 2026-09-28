@@ -1,7 +1,8 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { AnimatePresence, m as motion } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
+import * as motion from 'motion/react-m';
 import type { ComponentType, CSSProperties } from 'react';
 import { memo } from 'react';
 import { useMatch } from 'react-router';

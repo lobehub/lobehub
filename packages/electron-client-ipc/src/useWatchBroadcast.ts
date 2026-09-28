@@ -6,8 +6,7 @@ import type { MainBroadcastEventKey, MainBroadcastParams } from './events';
 
 interface ElectronAPI {
   ipcRenderer: {
-    on: (event: MainBroadcastEventKey, listener: (e: any, data: any) => void) => void;
-    removeListener: (event: MainBroadcastEventKey, listener: (e: any, data: any) => void) => void;
+    on: (event: MainBroadcastEventKey, listener: (e: any, data: any) => void) => () => void;
   };
 }
 
@@ -34,10 +33,6 @@ export const useWatchBroadcast = <T extends MainBroadcastEventKey>(
       handlerRef.current(data);
     };
 
-    window.electron.ipcRenderer.on(event, listener);
-
-    return () => {
-      window.electron.ipcRenderer.removeListener(event, listener);
-    };
+    return window.electron.ipcRenderer.on(event, listener);
   }, [event]);
 };

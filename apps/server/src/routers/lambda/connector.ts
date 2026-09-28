@@ -1,3 +1,4 @@
+import { getComposioAppByIdentifier } from '@lobechat/const';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -547,9 +548,18 @@ export const connectorRouter = router({
       const redirectUri = getConnectorRedirectUri();
 
       // 1. Discover the authorization server backing the MCP resource.
+      // Discovery and registration failures below are server-compatibility
+      // problems the user must fix in their OAuth setup, not internal errors —
+      // surface them as BAD_REQUEST with the reason so the form can show it.
       const { authorizationServerUrl, metadata } = await discoverConnectorOAuth(
         connector.mcpServerUrl,
-      );
+      ).catch((error: unknown) => {
+        throw new TRPCError({
+          cause: error,
+          code: 'BAD_REQUEST',
+          message: (error as Error)?.message ?? String(error),
+        });
+      });
 
       // Default to the scopes advertised by the server when the user did not
       // specify any — many MCP authorization servers reject (or issue a useless
@@ -575,6 +585,12 @@ export const connectorRouter = router({
           metadata,
           redirectUri,
           scopes,
+        }).catch((error: unknown) => {
+          throw new TRPCError({
+            cause: error,
+            code: 'BAD_REQUEST',
+            message: `Dynamic client registration failed: ${(error as Error)?.message ?? String(error)}`,
+          });
         });
         clientId = reg.client_id;
         clientSecret = reg.client_secret ?? undefined;
@@ -962,6 +978,12 @@ export const connectorRouter = router({
       // returning null tells the caller "no connector row produced" and the
       // "Configure" button opens CustomConnectorModal in migration mode.
       if (plugin.type === 'customPlugin' && plugin.customParams?.mcp) {
+        return { connectorId: null, toolCount: 0 };
+      }
+
+      // Legacy plugin rows can outlive a provider's removal from the Composio catalog. Do not
+      // project those rows back into user_connectors when the detail panel performs its sync.
+      if (plugin.customParams?.composio && !getComposioAppByIdentifier(input.identifier)) {
         return { connectorId: null, toolCount: 0 };
       }
 

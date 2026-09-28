@@ -1,6 +1,7 @@
 'use client';
 
-import { Avatar, Center, Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Tooltip } from '@lobehub/ui';
+import { Avatar, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, type ReactNode } from 'react';
 
@@ -131,11 +132,10 @@ const AgentProfileCard = memo<AgentProfileCardProps>(
                 </Text>
               </Tooltip>
             ) : loading ? (
-              <Skeleton
-                active
+              <Skeleton.Text
                 className={styles.descriptionSkeleton}
-                paragraph={{ rows: 2, width: ['100%', '60%'] }}
-                title={false}
+                rows={2}
+                width={['100%', '60%']}
               />
             ) : null}
           </Flexbox>

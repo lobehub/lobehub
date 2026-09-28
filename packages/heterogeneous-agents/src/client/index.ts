@@ -5,6 +5,7 @@ import {
   CodeBuddy,
   Codex,
   Cursor,
+  Devin,
   getLobeIconCDN,
   Grok,
   Kimi,
@@ -19,8 +20,9 @@ import {
   HETEROGENEOUS_AGENT_CONFIGS,
   isRemoteHeterogeneousType,
 } from '../config';
+import { DROID_AVATAR_URL, DroidIcon } from './DroidIcon';
 
-export { isRemoteHeterogeneousType };
+export { DROID_AVATAR_URL, DroidIcon, isRemoteHeterogeneousType };
 
 export type HeterogeneousAgentClientConfig = (typeof HETEROGENEOUS_AGENT_CONFIGS)[number] & {
   avatar: string;
@@ -33,6 +35,8 @@ const heterogeneousAgentIcons = {
   'codebuddy': CodeBuddy,
   'codex': Codex,
   'cursor': Cursor,
+  'droid': DroidIcon,
+  'devin': Devin,
   'grok-build': Grok,
   'kimi-code': Kimi,
   'opencode': OpenCode,
@@ -42,10 +46,12 @@ const heterogeneousAgentIcons = {
 } as const satisfies Record<HeterogeneousAgentClientConfig['type'], IconType>;
 
 const createAgentAvatar = (iconId: string) =>
-  getLobeIconCDN(iconId, {
-    cdn: 'aliyun',
-    format: 'avatar',
-  });
+  iconId === 'Droid'
+    ? DROID_AVATAR_URL
+    : getLobeIconCDN(iconId, {
+        cdn: 'aliyun',
+        format: 'avatar',
+      });
 
 export const HETEROGENEOUS_AGENT_CLIENT_CONFIGS = HETEROGENEOUS_AGENT_CONFIGS.map((config) => ({
   ...config,

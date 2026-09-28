@@ -57,6 +57,9 @@ export function defineConfig() {
     const url = new URL(request.url);
     logDefault('Processing request: %s %s', request.method, request.url);
 
+    // Public installation instructions must remain readable by coding agents.
+    if (url.pathname === '/acceptance/skill.md') return NextResponse.next();
+
     // skip all api requests
     if (backendApiEndpoints.some((path) => url.pathname.startsWith(path))) {
       logDefault('Skipping API request: %s', url.pathname);
@@ -237,6 +240,14 @@ export function defineConfig() {
     '/oidc/handoff',
     '/oidc/device/auth',
     '/oidc/token',
+    // OIDC protocol endpoints a client reads before (or without) any browser
+    // session: discovery and JWKS are public by spec, and userinfo authenticates
+    // with the bearer access token the provider itself checks. Session-gating them
+    // redirects non-browser callers to the sign-in HTML, which is what a
+    // third-party app registered through Settings → OAuth Apps hits first.
+    '/oidc/.well-known/openid-configuration',
+    '/oidc/jwks',
+    '/oidc/me',
     // Interaction details for the consent/login page — must be reachable
     // before the user has a session, so it cannot be session-gated.
     '/oidc/interaction/(.*)',

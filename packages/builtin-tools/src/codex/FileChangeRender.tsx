@@ -8,7 +8,8 @@ import {
   LineStats,
 } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, PatchDiff, Text } from '@lobehub/ui';
+import { Flexbox, PatchDiff } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,7 +1,8 @@
 'use client';
 
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
-import { ActionIcon, Empty, Flexbox } from '@lobehub/ui';
+import { Empty, Flexbox } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { Card } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight, Database } from 'lucide-react';

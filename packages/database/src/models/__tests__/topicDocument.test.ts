@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { agentShareDocumentAccessScope } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -227,6 +228,45 @@ describe('TopicDocumentModel', () => {
       // User 2 tries to find documents in user 1's topic
       const docsForUser2 = await topicDocumentModel2.findByTopicId(topicId);
       expect(docsForUser2).toHaveLength(0);
+    });
+
+    it('isolates Agent Share documents from ordinary topic reads', async () => {
+      const accessScope = agentShareDocumentAccessScope({
+        shareId: 'share-topic-documents',
+        topicId,
+        visitorUserId: 'visitor-topic-documents',
+      });
+      const shareDocumentModel = new DocumentModel(
+        serverDB,
+        userId,
+        undefined,
+        undefined,
+        accessScope,
+      );
+      const shareTopicDocumentModel = new TopicDocumentModel(
+        serverDB,
+        userId,
+        undefined,
+        accessScope,
+      );
+      const otherShareTopicDocumentModel = new TopicDocumentModel(
+        serverDB,
+        userId,
+        undefined,
+        agentShareDocumentAccessScope({
+          shareId: 'other-share',
+          topicId,
+          visitorUserId: 'visitor-topic-documents',
+        }),
+      );
+      const doc = await createTestDocument(shareDocumentModel, 'Visitor Document');
+      await topicDocumentModel.associate({ documentId: doc.id, topicId });
+
+      await expect(topicDocumentModel.findByTopicId(topicId)).resolves.toEqual([]);
+      await expect(otherShareTopicDocumentModel.findByTopicId(topicId)).resolves.toEqual([]);
+      await expect(shareTopicDocumentModel.findByTopicId(topicId)).resolves.toMatchObject([
+        { id: doc.id, title: 'Visitor Document' },
+      ]);
     });
 
     it('drops a doc that was flipped back to private after the association was created', async () => {

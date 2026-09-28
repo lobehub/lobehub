@@ -1,4 +1,5 @@
-import { Block, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { ClockIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';

@@ -19,7 +19,12 @@ export type RenderItem = FC<{ key: string } & UIChatMessage & ListItemProps>;
  * Action item with click handler
  */
 export interface MessageActionItem extends ActionIconGroupItemType {
-  children?: Array<{ handleClick?: () => void; key: string; label: string }>;
+  /**
+   * Submenu entries. Full actions rather than a narrower shape: a nested item
+   * carries the same icon and label as it would at the top level, since the
+   * same registered action can appear either way.
+   */
+  children?: MessageActionItem[];
   handleClick?: () => void | Promise<void>;
 }
 

@@ -1,8 +1,10 @@
+import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
+import type { TaskStatus } from '@lobechat/types';
 import { t } from 'i18next';
 
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
-export type TaskGroupBy = 'assignee' | 'automationMode' | 'none' | 'priority' | 'status';
+export type TaskGroupBy = 'assignee' | 'automationMode' | 'member' | 'none' | 'priority' | 'status';
 export type TaskOrderBy = 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
 export type TaskOrderDirection = 'asc' | 'desc';
 
@@ -24,8 +26,24 @@ export const HIDDEN_WHEN_COMPLETED_STATUSES: ReadonlyArray<NonNullable<TaskGroup
   'canceled',
 ];
 
+/**
+ * Server-side counterpart of `hideCompleted`: the statuses a paginated list
+ * has to request so the cut happens before `limit` / `offset` instead of on
+ * the fetched page (which could otherwise come back empty while older
+ * unfinished tasks exist). `undefined` means no status narrowing.
+ */
+export const getVisibleTaskStatuses = (
+  options: Pick<TaskListViewOptions, 'hideCompleted'>,
+): TaskStatus[] | undefined =>
+  options.hideCompleted
+    ? TASK_STATUSES.filter((status) => !HIDDEN_COMPLETED_STATUS_SET.has(status))
+    : undefined;
+
+const HIDDEN_COMPLETED_STATUS_SET = new Set<string>(HIDDEN_WHEN_COMPLETED_STATUSES);
+
 export interface TaskGroupMeta {
   assigneeId?: string;
+  assigneeUserId?: string;
   automationMode?: 'heartbeat' | 'schedule';
   groupBy: TaskGroupBy;
   key: string;
@@ -51,6 +69,7 @@ export const DEFAULT_TASK_LIST_VIEW_OPTIONS: TaskListViewOptions = {
 const TASK_GROUP_BY_SET = new Set<TaskGroupBy>([
   'assignee',
   'automationMode',
+  'member',
   'none',
   'priority',
   'status',
@@ -140,19 +159,36 @@ const getTaskStatusGroup = (task: TaskListItem): NonNullable<TaskGroupMeta['stat
   TASK_STATUS_TO_GROUP_MAP[task.status] ?? 'backlog';
 
 export const getTaskAssigneeGroupMeta = (agentId: string | null | undefined): TaskGroupMeta => {
-  if (!agentId) {
+  if (agentId) {
     return {
+      assigneeId: agentId,
       groupBy: 'assignee',
-      key: 'assignee:unassigned',
-      label: t('taskList.unassigned', { ns: 'chat' }),
+      key: `assignee:${agentId}`,
+      label: agentId,
     };
   }
 
   return {
-    assigneeId: agentId,
     groupBy: 'assignee',
-    key: `assignee:${agentId}`,
-    label: agentId,
+    key: 'assignee:unassigned',
+    label: t('taskList.unassigned', { ns: 'chat' }),
+  };
+};
+
+export const getTaskMemberGroupMeta = (userId: string | null | undefined): TaskGroupMeta => {
+  if (userId) {
+    return {
+      assigneeUserId: userId,
+      groupBy: 'member',
+      key: `member:${userId}`,
+      label: userId,
+    };
+  }
+
+  return {
+    groupBy: 'member',
+    key: 'member:unassigned',
+    label: t('taskList.unassigned', { ns: 'chat' }),
   };
 };
 
@@ -250,6 +286,9 @@ export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): Task
   switch (groupBy) {
     case 'assignee': {
       return getTaskAssigneeGroupMeta(task.assigneeAgentId);
+    }
+    case 'member': {
+      return getTaskMemberGroupMeta(task.assigneeUserId);
     }
     case 'automationMode': {
       // Automated tasks created before automationMode was introduced are schedules.

@@ -6,7 +6,7 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactor
 import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 import {
-  isGPT5ProResponsesModel,
+  isGPTProResponsesModel,
   isOpenAIComputerUseModel,
   isOpenAIReasoningPayloadModel,
   isResponsesAPIModel,
@@ -108,7 +108,7 @@ export const params = {
         const reasoning = payload.reasoning
           ? { ...payload.reasoning, summary: 'auto' }
           : { summary: 'auto' };
-        if (isGPT5ProResponsesModel(model)) {
+        if (isGPTProResponsesModel(model)) {
           reasoning.effort = 'high';
         }
         return pruneReasoningPayload({

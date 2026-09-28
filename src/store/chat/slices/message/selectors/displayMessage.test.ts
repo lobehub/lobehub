@@ -220,8 +220,22 @@ describe('displayMessageSelectors', () => {
         },
         activeAgentId: 'active-session',
       });
+      act(() => {
+        useAgentStore.setState({
+          activeAgentId: 'inbox-agent',
+          builtinAgentIdMap: { inbox: 'inbox-agent' },
+          agentMap: {
+            'inbox-agent': {
+              chatConfig: {
+                historyCount: 2,
+                enableHistoryCount: true,
+              },
+              model: 'abc',
+            },
+          },
+        });
+      });
 
-      // Assume that the mainAIChatsWithHistoryConfig will return the last two messages
       const expectedString = mockMessages
         .slice(-2)
         .map((m) => m.content)

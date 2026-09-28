@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Hotkey, Icon, KeyMapEnum, Text, TextArea } from '@lobehub/ui';
-import { Button, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Hotkey, Icon, KeyMapEnum, TextArea } from '@lobehub/ui';
+import { Button, Tabs, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Check, PenLine, Replace, Send, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,6 +12,9 @@ import { formatRemaining, isQuestionAnswered } from './draft';
 import QuestionPanel from './QuestionPanel';
 import type { AskUserQuestionItem } from './types';
 import type { AskUserFormApi } from './useAskUserForm';
+
+const optionValue = (option: AskUserQuestionItem['options'][number]): string =>
+  option.id ?? option.label;
 
 const styles = createStaticStyles(({ css }) => ({
   tabs: css`
@@ -53,7 +56,15 @@ export interface AskUserQuestionLabels {
   submit: string;
   supplementEnter: string;
   supplementPlaceholder: string;
+  /** Shown once the timeout fallback has answered on the user's behalf. */
   timeExpired: string;
+  /**
+   * Shown when the clock ran out with no fallback answer — provider-owned
+   * option ids (consent is never inferred) or a card opened after the
+   * producer already stopped waiting. Promising "option 1 will be used" here
+   * would describe a submission that is never going to happen.
+   */
+  timeExpiredNoAnswer: string;
   timeRemaining: (time: string) => string;
 }
 
@@ -81,6 +92,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     actionsPortalTarget,
     activeQuestion,
     activeTab,
+    autoSubmitted,
     custom,
     escapeActive,
     escapeText,
@@ -121,7 +133,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     if (stored != null) return stored;
     if (!activeQuestion.multiSelect) {
       const picked = picks[activeQuestion.question];
-      const idx = activeQuestion.options.findIndex((o) => o.label === picked);
+      const idx = activeQuestion.options.findIndex((option) => optionValue(option) === picked);
       if (idx >= 0) return idx;
     }
     return 0;
@@ -196,7 +208,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         if (idx < q.options.length) {
           event.preventDefault();
           setHighlight(q, idx);
-          handleToggle(q, q.options[idx].label, { submitOnComplete: true });
+          handleToggle(q, optionValue(q.options[idx]), { submitOnComplete: true });
         } else if (idx === q.options.length) {
           event.preventDefault();
           setHighlight(q, q.options.length);
@@ -220,7 +232,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         if (!rowNavEnabled || highlightedIndex == null || highlightedIndex >= q.options.length)
           return;
         event.preventDefault();
-        handleToggle(q, q.options[highlightedIndex].label);
+        handleToggle(q, optionValue(q.options[highlightedIndex]));
         return;
       }
 
@@ -238,10 +250,10 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
           highlightedIndex != null &&
           highlightedIndex < q.options.length &&
           !(custom[q.question] ?? '').trim() &&
-          picks[q.question] !== q.options[highlightedIndex].label
+          picks[q.question] !== optionValue(q.options[highlightedIndex])
         ) {
           event.preventDefault();
-          handleToggle(q, q.options[highlightedIndex].label, { submitOnComplete: true });
+          handleToggle(q, optionValue(q.options[highlightedIndex]), { submitOnComplete: true });
           return;
         }
         if (isSubmitDisabled) return;
@@ -279,7 +291,11 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     >
       {showCountdown && (
         <Text fontSize={12} type="secondary">
-          {expired ? labels.timeExpired : labels.timeRemaining(formatRemaining(remainingMs))}
+          {autoSubmitted
+            ? labels.timeExpired
+            : expired
+              ? labels.timeExpiredNoAnswer
+              : labels.timeRemaining(formatRemaining(remainingMs))}
         </Text>
       )}
       <Flexbox horizontal gap={8}>

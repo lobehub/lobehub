@@ -58,9 +58,15 @@ describe('expertiseRouter — workspace scoping', () => {
       reliabilitySeries: vi.fn().mockResolvedValue([]),
       seriesForDomains: vi.fn().mockResolvedValue([]),
     };
-    vi.mocked(ExpertiseModel).mockImplementation(() => model);
-    vi.mocked(ExpertiseDomainService).mockImplementation(() => ({}) as any);
-    vi.mocked(ExpertiseIngestionService).mockImplementation(() => ({}) as any);
+    vi.mocked(ExpertiseModel).mockImplementation(function () {
+      return model;
+    });
+    vi.mocked(ExpertiseDomainService).mockImplementation(function () {
+      return {} as any;
+    });
+    vi.mocked(ExpertiseIngestionService).mockImplementation(function () {
+      return {} as any;
+    });
   });
 
   const callerFor = (workspaceId?: string) =>

@@ -1,5 +1,6 @@
 import debug from 'debug';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { knowledgeBaseService } from '@/services/knowledgeBase';
 import { resourceService } from '@/services/resource';
 import type { StoreSetter } from '@/store/types';
@@ -7,6 +8,7 @@ import { OptimisticEngine } from '@/store/utils/optimisticEngine';
 import type { CreateResourceParams, ResourceItem, UpdateResourceParams } from '@/types/resource';
 
 import type { FileStore } from '../../store';
+import type { ResourceMoveCachePatch, ResourceParentKey } from './hooks';
 import type { ResourceState } from './initialState';
 import { initialResourceState } from './initialState';
 import { getResourceQueryKey } from './utils';
@@ -195,6 +197,35 @@ export class ResourceActionImpl {
     );
   };
 
+  /**
+   * The definite negative to `#isResourceVisibleInCurrentQuery`: that check
+   * says "no" whenever the open folder is addressed by slug and the parent is
+   * not cached, so a create must not gate on it or a fresh load inside a
+   * folder would never show the row it just created. This only reports rows
+   * that certainly belong elsewhere — another library, the root while a folder
+   * is open (or the reverse), or a cached parent whose slug is not the open one.
+   */
+  #isResourceOutsideCurrentQuery = (resource: ResourceItem): boolean => {
+    const { queryParams, resourceMap } = this.#get();
+
+    if (!queryParams) return false;
+
+    if (
+      queryParams.libraryId !== undefined &&
+      (resource.knowledgeBaseId ?? undefined) !== queryParams.libraryId
+    ) {
+      return true;
+    }
+
+    const inFolderView = queryParams.parentId != null;
+    if (!inFolderView) return !!resource.parentId;
+    if (!resource.parentId) return true;
+    if (resource.parentId === queryParams.parentId) return false;
+
+    const parentResource = resourceMap.get(resource.parentId);
+    return !!parentResource && parentResource.slug !== queryParams.parentId;
+  };
+
   #isResourceVisibleInCurrentQuery = (resource: ResourceItem): boolean => {
     const { queryParams, resourceMap } = this.#get();
 
@@ -222,6 +253,50 @@ export class ResourceActionImpl {
 
     const parentResource = resourceMap.get(resource.parentId);
     return parentResource?.slug === queryParams.parentId;
+  };
+
+  /**
+   * `queryParams.parentId` carries the folder slug from the URL while drop
+   * targets and the sidebar tree address folders by id. Collect both spellings
+   * for a folder from wherever it is already known client-side: the explorer's
+   * own rows, the current folder, or the loaded sidebar nodes. Unknown handles
+   * pass through unchanged; the root is always `null`.
+   */
+  #resolveParentCacheKeys = async (
+    parents: Array<ResourceParentKey | undefined>,
+  ): Promise<ResourceParentKey[]> => {
+    const handles = parents.filter((parent): parent is string => !!parent);
+    if (handles.length === 0) return [null];
+
+    const keys = new Set<string>(handles);
+    const { currentFolderId, queryParams, resourceMap } = this.#get();
+    const currentSlug = queryParams?.parentId ?? null;
+
+    const addFolder = (folder: { id: string; slug?: string | null }) => {
+      keys.add(folder.id);
+      if (folder.slug) keys.add(folder.slug);
+    };
+
+    for (const handle of handles) {
+      const row =
+        resourceMap.get(handle) ?? [...resourceMap.values()].find((item) => item.slug === handle);
+      if (row) addFolder(row);
+
+      if (currentFolderId && (handle === currentFolderId || handle === currentSlug)) {
+        addFolder({ id: currentFolderId, slug: currentSlug });
+      }
+    }
+
+    const { useTreeStore } = await import('@/store/tree');
+    for (const items of Object.values(useTreeStore.getState().children)) {
+      for (const node of items) {
+        if (node.isFolder && (keys.has(node.id) || (node.slug && keys.has(node.slug)))) {
+          addFolder(node);
+        }
+      }
+    }
+
+    return [...keys];
   };
 
   #patchLocalResourceEntries = (
@@ -346,9 +421,10 @@ export class ResourceActionImpl {
     const optimisticResource = this.#createOptimisticResource(params);
     const syncEngine = this.#getSyncEngine();
     const tx = syncEngine.createTransaction(`createResource(${optimisticResource.id})`);
+    const showInList = !this.#isResourceOutsideCurrentQuery(optimisticResource);
 
     tx.set((draft) => {
-      draft.resourceList.unshift(optimisticResource);
+      if (showInList) draft.resourceList.unshift(optimisticResource);
       draft.resourceMap.set(optimisticResource.id, optimisticResource);
       draft.syncingIds.add(optimisticResource.id);
     });
@@ -373,9 +449,13 @@ export class ResourceActionImpl {
     const optimisticResource = this.#createOptimisticResource(params);
     const syncEngine = this.#getSyncEngine();
     const tx = syncEngine.createTransaction(`createResourceAndSync(${optimisticResource.id})`);
+    // A row created for another folder (sidebar "+" at the root while a folder
+    // is open, a folder row's "+" while the root is open) must not surface in
+    // the list the Explorer is currently showing.
+    const showInList = !this.#isResourceOutsideCurrentQuery(optimisticResource);
 
     tx.set((draft) => {
-      draft.resourceList.unshift(optimisticResource);
+      if (showInList) draft.resourceList.unshift(optimisticResource);
       draft.resourceMap.set(optimisticResource.id, optimisticResource);
       draft.syncingIds.add(optimisticResource.id);
     });
@@ -610,7 +690,15 @@ export class ResourceActionImpl {
       return;
     }
 
-    if ((existing.parentId ?? null) === parentId) return;
+    // List rows may omit `parentId`; only a known parent can prove a no-op move.
+    if (existing.parentId !== undefined && (existing.parentId ?? null) === parentId) return;
+
+    // The row lives in the current explorer list, so the current query's
+    // parent names the source folder even when the row itself omits `parentId`.
+    const cachePatch = await this.prepareResourceMoveCachePatch(
+      [existing.parentId, queryParams?.parentId ?? null],
+      parentId,
+    );
 
     const syncEngine = this.#getSyncEngine();
     const tx = syncEngine.createTransaction(`moveResource(${id})`);
@@ -640,13 +728,57 @@ export class ResourceActionImpl {
       draft.resourceList = draft.resourceList.filter((item) => item.id !== id);
       draft.resourceMap.delete(id);
     });
-    tx.mutation = () => resourceService.moveResource(id, parentId);
+    tx.mutation = () => resourceService.moveResource(id, parentId, existing);
     tx.onSuccess = async (result) => {
-      if (!shouldKeepVisible) return;
-      this.#replaceLocalResource(id, result as ResourceItem);
+      const moved = result as ResourceItem;
+      if (shouldKeepVisible) this.#replaceLocalResource(id, moved);
+
+      await this.applyMovedResourceToCaches(moved, cachePatch);
     };
 
     await tx.commit<ResourceItem>();
+  };
+
+  /**
+   * Everything a completed move needs to patch the SWR folder-list caches,
+   * gathered *before* the request goes out: the workspace / library the move
+   * is issued from, and both folders widened to every key the explorer may
+   * query them by (`queryParams.parentId` carries the URL slug while drop
+   * targets and the sidebar tree address folders by id). The user may switch
+   * scope while the request is in flight, after which neither the scope nor
+   * the old folders' slug aliases can be read from the store any more.
+   *
+   * Callers pass whatever handle they hold for each folder — a drop target
+   * id, a URL slug or an empty root.
+   */
+  prepareResourceMoveCachePatch = async (
+    fromParent: ResourceParentKey | undefined | Array<ResourceParentKey | undefined>,
+    toParent: ResourceParentKey | undefined | Array<ResourceParentKey | undefined>,
+  ): Promise<ResourceMoveCachePatch> => {
+    const scope = {
+      libraryId: this.#get().queryParams?.libraryId,
+      workspaceId: getActiveWorkspaceId(),
+    };
+    const [fromParentKeys, toParentKeys] = await Promise.all([
+      this.#resolveParentCacheKeys(Array.isArray(fromParent) ? fromParent : [fromParent]),
+      this.#resolveParentCacheKeys(Array.isArray(toParent) ? toParent : [toParent]),
+    ]);
+
+    return { fromParentKeys, scope, toParentKeys };
+  };
+
+  /**
+   * Mirror a completed move into the SWR folder-list caches so the destination
+   * (and source) folder show the moved row on their next visit instead of the
+   * cached pre-move list. `patch` comes from `prepareResourceMoveCachePatch`,
+   * taken before the request.
+   */
+  applyMovedResourceToCaches = async (
+    resource: ResourceItem,
+    patch: ResourceMoveCachePatch,
+  ): Promise<void> => {
+    const { applyResourceMoveToListCaches } = await import('./hooks');
+    await applyResourceMoveToListCaches(resource, patch);
   };
 
   removeLocalResource = (id: string): void => {

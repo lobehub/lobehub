@@ -1,4 +1,5 @@
 import { formatSearchResults, promptFileContents, promptNoSearchResults } from '@lobechat/prompts';
+import { sliceReadWindow } from '@lobechat/prompts/textWindow';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
@@ -31,6 +32,8 @@ interface FileContentResult {
   error?: string;
   fileId: string;
   filename: string;
+  /** Original character count when the stored text was cut at parse time. */
+  originalCharCount?: number;
   preview?: string;
   totalCharCount?: number;
   totalLineCount?: number;
@@ -320,23 +323,54 @@ export class KnowledgeBaseExecutionRuntime {
     options?: { signal?: AbortSignal },
   ): Promise<BuiltinServerRuntimeOutput> {
     try {
-      const { fileIds } = args;
+      const { fileIds, limit, offset } = args;
 
       if (!fileIds || fileIds.length === 0) {
         return { content: 'Error: No file IDs provided', success: false };
       }
 
       const fileContents = await this.ragService.getFileContents(fileIds, options?.signal);
-      const formattedContent = promptFileContents(fileContents);
+
+      // Return one bounded window per file rather than the whole document: a
+      // whole-file read is the single largest context item in KB conversations
+      // and is what pushes tool results past the archive threshold.
+      const windows = fileContents.map((file) => {
+        if (file.error) return { file, window: undefined };
+        return { file, window: sliceReadWindow(file.content, { limit, offset }) };
+      });
+
+      const formattedContent = promptFileContents(
+        windows.map(({ file, window }) =>
+          window
+            ? {
+                content: window.content,
+                fileId: file.fileId,
+                filename: file.filename,
+                originalChars: file.originalCharCount,
+                range: window,
+              }
+            : {
+                content: file.content,
+                error: file.error,
+                fileId: file.fileId,
+                filename: file.filename,
+              },
+        ),
+      );
 
       const state: ReadKnowledgeState = {
-        files: fileContents.map((file) => ({
+        files: windows.map(({ file, window }) => ({
+          endLine: window?.endLine,
           error: file.error,
           fileId: file.fileId,
           filename: file.filename,
-          preview: file.preview,
-          totalCharCount: file.totalCharCount,
-          totalLineCount: file.totalLineCount,
+          // Preview what this window actually returned, so a paged read shows
+          // its own first lines on the card instead of the file head.
+          preview: window ? window.content.split('\n').slice(0, 5).join('\n') : file.preview,
+          startLine: window?.startLine,
+          totalCharCount: file.totalCharCount ?? window?.totalChars,
+          totalLineCount: file.totalLineCount ?? window?.totalLines,
+          truncated: window?.truncated,
         })),
       };
 
