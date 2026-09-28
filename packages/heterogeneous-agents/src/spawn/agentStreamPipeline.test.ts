@@ -197,6 +197,24 @@ describe('AgentStreamPipeline', () => {
       await expect(pipeline.collectPostRunUsage()).resolves.toEqual([]);
     });
 
+    it('no-ops for Kimi Code when the run has no session id or no wire log', async () => {
+      const kimiHome = await mkdtemp(path.join(os.tmpdir(), 'lobe-kimi-pipeline-'));
+      tempDirs.push(kimiHome);
+
+      const noSession = new AgentStreamPipeline({ agentType: 'kimi-code', operationId: 'op-1' });
+      await expect(
+        noSession.collectPostRunUsage({ env: { KIMI_CODE_HOME: kimiHome } }),
+      ).resolves.toEqual([]);
+
+      const missingLog = new AgentStreamPipeline({ agentType: 'kimi-code', operationId: 'op-2' });
+      await missingLog.push(
+        `${JSON.stringify({ role: 'meta', session_id: 'nope', type: 'session.resume_hint' })}\n`,
+      );
+      await expect(
+        missingLog.collectPostRunUsage({ env: { KIMI_CODE_HOME: kimiHome } }),
+      ).resolves.toEqual([]);
+    });
+
     it('emits Kimi Code wire-log usage as an operationId-stamped turn_metadata event', async () => {
       const kimiHome = await mkdtemp(path.join(os.tmpdir(), 'lobe-kimi-pipeline-'));
       tempDirs.push(kimiHome);

@@ -386,12 +386,18 @@ export interface HeterogeneousTerminalErrorData {
  * emit lifecycle events like tool_start / tool_end.
  */
 /**
- * Options for {@link AgentEventAdapter.collectPostRunUsage}. `env` is the
- * child process environment, so home-resolution honors relocations like
+ * Options for reading a run's usage after the CLI exits. `env` is the child
+ * process environment, so home-resolution honors relocations like
  * `KIMI_CODE_HOME` that only exist in the spawn env.
  */
 export interface PostRunUsageOptions {
   env?: Record<string, string | undefined>;
+}
+
+/** Token usage a CLI only records outside stdout, read once the run has exited. */
+export interface PostRunUsage {
+  model?: string;
+  usage: UsageData;
 }
 
 export interface AgentEventAdapter {
@@ -401,12 +407,13 @@ export interface AgentEventAdapter {
   adapt: (raw: any) => HeterogeneousAgentEvent[];
 
   /**
-   * Optional post-exit hook for agents whose token usage never appears on
-   * stdout (e.g. Kimi Code logs usage only to the session's wire.jsonl).
-   * Called after stdout drained and the child process exited. Must be
-   * best-effort: usage collection failures resolve to `[]`, never throw.
+   * Turn usage read after exit into events, for agents whose token usage never
+   * appears on stdout (e.g. Kimi Code logs it only to the session's
+   * wire.jsonl). Pure: the spawn pipeline reads the usage from disk and hands
+   * it over, because adapters are also bundled for the browser and must not
+   * touch the file system.
    */
-  collectPostRunUsage?: (options?: PostRunUsageOptions) => Promise<HeterogeneousAgentEvent[]>;
+  buildPostRunUsageEvents?: (usage: PostRunUsage) => HeterogeneousAgentEvent[];
 
   /**
    * Flush any buffered events (call at end of stream).
