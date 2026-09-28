@@ -124,6 +124,9 @@ describe('UpdaterManager', () => {
           broadcast: mockBroadcast,
         }),
       },
+      coreUpdateManager: {
+        checkForUpdates: vi.fn().mockResolvedValue(undefined),
+      },
       isQuiting: false,
       menuManager: {
         rebuildAppMenu: vi.fn(),
@@ -213,6 +216,18 @@ describe('UpdaterManager', () => {
       await updaterManager.checkForUpdates();
 
       expect(autoUpdater.checkForUpdates).toHaveBeenCalled();
+    });
+
+    it('should also check core OTA on a manual check', async () => {
+      await updaterManager.checkForUpdates({ manual: true });
+
+      expect(mockApp.coreUpdateManager.checkForUpdates).toHaveBeenCalledWith({ manual: true });
+    });
+
+    it('should leave core OTA to its own schedule on an auto check', async () => {
+      await updaterManager.checkForUpdates();
+
+      expect(mockApp.coreUpdateManager.checkForUpdates).not.toHaveBeenCalled();
     });
 
     it('should broadcast updaterStateChanged with checking stage when checking', async () => {

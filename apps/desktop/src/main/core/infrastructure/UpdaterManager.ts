@@ -177,6 +177,7 @@ export class UpdaterManager {
    * Check for updates
    */
   public checkForUpdates = async ({ manual = false }: { manual?: boolean } = {}) => {
+    if (manual) void this.app.coreUpdateManager.checkForUpdates({ manual: true });
     if (this.checking || this.downloading) return;
 
     this.checking = true;
