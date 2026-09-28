@@ -12,6 +12,8 @@ describe('coordinatorGateKind', () => {
   it('recognizes the two coordinator gate shapes and nothing else', () => {
     expect(coordinatorGateKind(decision(['retry', 'retire']))).toBe('recoverTask');
     expect(coordinatorGateKind(decision(['retry', 'fail']))).toBe('goalAcceptance');
+    // The terminal acceptance gate also offers abandoning it.
+    expect(coordinatorGateKind(decision(['retry', 'retire', 'fail']))).toBe('goalAcceptance');
     expect(coordinatorGateKind(decision(['approve', 'reject']))).toBeUndefined();
     expect(coordinatorGateKind(undefined)).toBeUndefined();
   });
@@ -59,6 +61,11 @@ describe('coordinatorGateReason', () => {
     expect(
       coordinatorGateReason(
         'Goal-level acceptance did not pass. Retry Goal acceptance or fail this Goal?',
+      ),
+    ).toBe('Goal-level acceptance did not pass');
+    expect(
+      coordinatorGateReason(
+        'Goal-level acceptance did not pass. Retry Goal acceptance, abandon it, or fail this Goal?',
       ),
     ).toBe('Goal-level acceptance did not pass');
   });

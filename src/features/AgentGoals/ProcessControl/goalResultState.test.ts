@@ -65,9 +65,11 @@ const gateDecision = (
   nodeId: gate.node.id,
   options: [
     { id: 'retry', label: 'Retry goal acceptance' },
+    { id: 'retire', label: 'Abandon goal acceptance' },
     { id: 'fail', label: 'Fail goal' },
   ],
-  question: 'Goal-level acceptance did not pass. Retry Goal acceptance or fail this Goal?',
+  question:
+    'Goal-level acceptance did not pass. Retry Goal acceptance, abandon it, or fail this Goal?',
   recommendedOptionId: 'retry',
   status: resolvedOptionId ? 'resolved' : 'pending',
   ...(resolvedOptionId ? { resolvedAt, resolvedByUserId: 'u1', resolvedOptionId } : {}),
@@ -215,6 +217,14 @@ describe('deriveGoalResultStatus', () => {
         unmetCriteria: 2,
       }),
     ).toBe('partial');
+    expect(
+      deriveGoalResultStatus({
+        acceptanceStatus: 'delivered',
+        gate: 'decided',
+        goalStatus: 'canceled',
+        unmetCriteria: 2,
+      }),
+    ).toBe('partial');
   });
 
   it('reads an achieved, unsigned Goal as waiting on the owner', () => {
@@ -270,6 +280,8 @@ describe('deriveSignOffState', () => {
    */
   it('reads a Goal the owner failed at the acceptance gate as stopped', () => {
     expect(deriveSignOffState('delivered', 'failed', 'decided')).toBe('stopped');
+    // 放弃任务 ends the Goal as canceled — the same stopped strip.
+    expect(deriveSignOffState('delivered', 'canceled', 'decided')).toBe('stopped');
     expect(deriveSignOffState('accepted', 'failed', 'decided')).toBe('accepted');
   });
 

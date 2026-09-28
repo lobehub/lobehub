@@ -1449,12 +1449,18 @@ export class GoalService {
         await this.graphModel.updateNodeStatus(goalId, source.id, 'retired', resolution);
       }
     }
-    const terminalAcceptanceFailed =
-      source?.title === GOAL_ACCEPTANCE_TASK_TITLE &&
-      (optionId === 'retire' || optionId === 'fail');
+    // Ending the terminal acceptance ends the Goal: `fail` is a verdict that
+    // the Goal failed, `retire` abandons it without one.
+    const terminalAcceptance = source?.title === GOAL_ACCEPTANCE_TASK_TITLE;
+    const nextStatus =
+      terminalAcceptance && optionId === 'fail'
+        ? 'failed'
+        : terminalAcceptance && optionId === 'retire'
+          ? 'canceled'
+          : 'running';
     await this.transitionStatus(
       graph.goal,
-      terminalAcceptanceFailed ? 'failed' : 'running',
+      nextStatus,
       `decision "${decision.question}" resolved: ${optionId}`,
     );
     return resolved;
@@ -2864,6 +2870,9 @@ export class GoalService {
           options: terminalAcceptance
             ? [
                 { id: 'retry', label: 'Retry goal acceptance' },
+                // Drop the acceptance Task and end the Goal without a verdict —
+                // unlike `fail`, which records that the Goal was judged failed.
+                { id: 'retire', label: 'Abandon goal acceptance' },
                 { id: 'fail', label: 'Fail goal' },
               ]
             : [
@@ -2871,7 +2880,7 @@ export class GoalService {
                 { id: 'retire', label: 'Retire task' },
               ],
           question: terminalAcceptance
-            ? `${reason}. Retry Goal acceptance or fail this Goal?`
+            ? `${reason}. Retry Goal acceptance, abandon it, or fail this Goal?`
             : `${reason}. Retry or retire this task node?`,
           recommendedOptionId: 'retry',
           requestedUserId: this.userId,

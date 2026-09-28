@@ -25,8 +25,10 @@ export const coordinatorGateKind = (
   decision?: GoalGraphDecision | null,
 ): CoordinatorGateKind | undefined => {
   const ids = idsOf(decision);
-  if (ids.has('retry') && ids.has('retire')) return 'recoverTask';
+  // `fail` only ever appears on the terminal acceptance gate, which may also
+  // offer `retire` — check it first.
   if (ids.has('retry') && ids.has('fail')) return 'goalAcceptance';
+  if (ids.has('retry') && ids.has('retire')) return 'recoverTask';
   return undefined;
 };
 
@@ -58,6 +60,7 @@ export const coordinatorNodeTitleKey = (view: GoalNodeView): string | undefined 
 const QUESTION_TAILS = [
   /\.?\s*Retry or retire this task node\?$/,
   /\.?\s*Retry Goal acceptance or fail this Goal\?$/,
+  /\.?\s*Retry Goal acceptance, abandon it, or fail this Goal\?$/,
 ];
 
 export const coordinatorGateReason = (question?: string | null): string | undefined => {
