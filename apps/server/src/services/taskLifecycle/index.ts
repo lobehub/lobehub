@@ -43,6 +43,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { translation } from '@/libs/i18n/serverTranslation';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
@@ -337,7 +338,12 @@ export class TaskLifecycleService {
         );
       }
     } else if (reason === 'error') {
-      if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'failed');
+      if (topicId)
+        await this.taskTopicModel.updateStatus(
+          taskId,
+          topicId,
+          resolveFailedRunStatus(errorMessage),
+        );
 
       const errorText = errorMessage || 'Unknown error';
 

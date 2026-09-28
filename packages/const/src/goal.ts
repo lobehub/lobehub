@@ -81,6 +81,13 @@ export const LEASE_EXPIRED_ERROR = 'Goal Task operation lease expired.';
  * coordinator recovers it the same way instead of asking a person.
  */
 export const ABANDONED_OPERATION_ERROR_PREFIX = 'Operation abandoned:';
+/**
+ * `task_topics.status` of a run that ended because its device was unavailable:
+ * the dispatch could not reach it, or the run was lost while the device was
+ * offline. Nothing judged the work, so the Goal coordinator does not charge the
+ * run to the Task's attempt budget and retries it on its own offline schedule.
+ */
+export const DEVICE_OFFLINE_RUN_STATUS = 'device_offline';
 /** The verifier ran and judged the delivery short of the criteria. */
 export const VERIFICATION_FAILED_ERROR = 'Delivery did not pass verification.';
 /** The verifier itself could not run, so the delivery was never evaluated. */

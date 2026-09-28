@@ -23,7 +23,7 @@ import { goals } from '@/database/schemas/goal';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
-import { DEFAULT_MANAGER_MAX_TURNS } from './recoveryPolicy';
+import { countDeviceOfflineRuns, DEFAULT_MANAGER_MAX_TURNS } from './recoveryPolicy';
 import { scheduleGoalAdvance } from './scheduler';
 import { recoveryEligibility } from './supervisor/policy';
 
@@ -450,7 +450,7 @@ export class GoalManagerService {
           runs[0].operationId,
         )
       : undefined;
-    return !recoveryEligibility(graph, failed, op).eligible;
+    return !recoveryEligibility(graph, failed, op, false, countDeviceOfflineRuns(runs)).eligible;
   };
 
   private startTurn = async (
@@ -770,7 +770,7 @@ export class GoalManagerService {
         if (
           !task ||
           runs[0]?.operationId !== plan.failedOperationId ||
-          !recoveryEligibility(graph, task, failure).eligible
+          !recoveryEligibility(graph, task, failure, false, countDeviceOfflineRuns(runs)).eligible
         )
           throw new TRPCError({
             code: 'CONFLICT',

@@ -13,6 +13,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
@@ -290,7 +291,11 @@ export class TaskRunnerService {
           });
         }
         if (result.topicId) {
-          await this.taskTopicModel.updateStatus(task.id, result.topicId, 'failed');
+          await this.taskTopicModel.updateStatus(
+            task.id,
+            result.topicId,
+            resolveFailedRunStatus(result.error),
+          );
         }
         throw new Error(result.error || result.message || 'Agent run failed to start');
       }

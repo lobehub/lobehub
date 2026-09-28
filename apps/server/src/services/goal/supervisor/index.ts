@@ -21,6 +21,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import { resolveGoalModelConfig } from '../modelConfig';
+import { countDeviceOfflineRuns } from '../recoveryPolicy';
 import { scheduleGoalAdvance } from '../scheduler';
 import { claimGoalTask } from '../taskClaim';
 import {
@@ -164,6 +165,7 @@ export class GoalSupervisorService {
         task,
         failedOperation,
         statusAuthoredByActor(await taskModel.getActivities(task.id, 20), task.status),
+        countDeviceOfflineRuns(runs),
       );
       if (eligibility.eligible && (await this.budgetBlocked(graph))) {
         eligibility = {
@@ -339,6 +341,7 @@ export class GoalSupervisorService {
             await new TaskModel(tx, this.userId, this.workspaceId).getActivities(task.id, 20),
             currentTask.status,
           ),
+          countDeviceOfflineRuns(currentRuns),
         ).eligible ||
         (await new GoalSupervisorService(tx, this.userId, this.workspaceId).budgetBlocked(
           currentGraph,
