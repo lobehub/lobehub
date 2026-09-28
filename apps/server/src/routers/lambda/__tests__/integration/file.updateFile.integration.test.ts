@@ -182,6 +182,49 @@ describe('fileRouter.updateFile integration', () => {
     expect(untouched.title).toBe('spec-2.pdf');
   });
 
+  it('still moves a knowledge-base parse row that an agent has merely associated', async () => {
+    // agentDocument.associateDocument binds a pre-existing document (see
+    // agentDocumentsOwnership.ts); it stays the KB mirror and must follow the file, or
+    // deleting the old folder would take the file with it again.
+    const oldFolder = await createFolder(db, userId, 'nf5bak');
+    const newFolder = await createFolder(db, userId, 'archive');
+    const [file] = await db
+      .insert(files)
+      .values({
+        fileType: 'text/markdown',
+        name: 'engine.md',
+        parentId: oldFolder.id,
+        size: 64,
+        url: 'files/engine.md',
+        userId,
+      })
+      .returning();
+    const [parseRow] = await db
+      .insert(documents)
+      .values({
+        content: '# Chapter engine',
+        fileId: file.id,
+        fileType: 'custom/document',
+        filename: 'engine.md',
+        parentId: oldFolder.id,
+        source: 'files/engine.md',
+        sourceType: 'file',
+        title: 'engine.md',
+        totalCharCount: 16,
+        totalLineCount: 1,
+        userId,
+      })
+      .returning();
+    const [agent] = await db.insert(agents).values({ userId }).returning();
+    await db.insert(agentDocuments).values({ agentId: agent.id, documentId: parseRow.id, userId });
+
+    await fileRouter
+      .createCaller(context(userId))
+      .updateFile({ id: file.id, parentId: newFolder.id });
+
+    expect((await readDocument(db, parseRow.id)).parentId).toBe(newFolder.id);
+  });
+
   it("does not touch another user's document that references the same file", async () => {
     const oldFolder = await createFolder(db, userId, 'nf5bak');
     const newFolder = await createFolder(db, userId, 'archive');

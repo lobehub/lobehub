@@ -1,4 +1,4 @@
-import { AGENT_ARTIFACT_SOURCE_TYPES } from '@lobechat/const';
+import { AGENT_ARTIFACT_SOURCE_TYPES, CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import type { DocumentAccessScope, FileAccessScope } from '@lobechat/types';
 import {
   ordinaryDocumentAccessScope,
@@ -453,13 +453,18 @@ export class DocumentModel {
         and(
           this.readScope(),
           eq(documents.fileId, fileId),
-          // A file imported into an agent's document tree keeps its own VFS filename and
-          // agent-folder parent; only knowledge-base mirror / parse rows follow the file.
-          notExists(
-            this.db
-              .select({ id: agentDocuments.id })
-              .from(agentDocuments)
-              .where(eq(agentDocuments.documentId, documents.id)),
+          // A file imported into an agent's document tree (AgentDocumentsService.importFile)
+          // is an empty row with the file's own MIME type and keeps its VFS filename and
+          // agent-folder parent. Knowledge-base parse rows (`custom/document`) still follow
+          // the file even when an agent merely has them associated.
+          or(
+            eq(documents.fileType, CUSTOM_DOCUMENT_FILE_TYPE),
+            notExists(
+              this.db
+                .select({ id: agentDocuments.id })
+                .from(agentDocuments)
+                .where(eq(agentDocuments.documentId, documents.id)),
+            ),
           ),
         ),
       )
