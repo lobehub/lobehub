@@ -97,7 +97,7 @@ ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/*.server.ts"
 lobehub = "./packages/alint/rules"
 
 [config.group.rules]
-"lobehub/no-node-in-browser" = "warn"
+"lobehub/no-node-in-browser" = "error"
 
 # Heterogeneous agents: the browser-reachable layer (root, adapters, …) stays
 # pure and I/O lives behind Node-only subpaths. A package-level rule, kept
@@ -128,7 +128,7 @@ ignores = [ "**/*.test.ts", "**/__tests__/**", "**/generated.ts" ]
 hetero = "./packages/heterogeneous-agents/alint/rules"
 
 [config.group.rules]
-"hetero/agent-layering" = "warn"
+"hetero/agent-layering" = "error"
 
 # Calibration fixtures: one group per rule so a fixture only meets its own rule.
 [[config.group]]

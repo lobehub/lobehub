@@ -13,13 +13,13 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 | `no-effect-fetching`          | error    | `src/**/*.tsx`                                                | `data-fetching-architecture` skill              |
 | `no-dynamic-import-in-server` | warn     | `apps/server/src`, `packages/database`                        | backend code uses static top-level imports      |
 | `no-mode-flags`               | warn     | `src/**/*.tsx`                                                | `compose-atoms` skill                           |
-| `no-node-in-browser`          | warn     | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | nothing Node-only where the SPA runs it         |
+| `no-node-in-browser`          | error    | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | nothing Node-only where the SPA runs it         |
 
 Package-level rules, kept next to the package they describe:
 
 | Rule                    | Severity | Scope                                                                        | Lives in                                    |
 | ----------------------- | -------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
-| `hetero/agent-layering` | warn     | the browser-reachable layer of `heterogeneous-agents` and its spawn pipeline | `packages/heterogeneous-agents/alint/rules` |
+| `hetero/agent-layering` | error    | the browser-reachable layer of `heterogeneous-agents` and its spawn pipeline | `packages/heterogeneous-agents/alint/rules` |
 
 `error` is reserved for rules measured at zero false positives on real PRs; an error turns the ALint check red. A rule starts at `warn` and is promoted only after its findings have been read on real PRs. A rule whose findings are mostly true but not worth acting on per PR does not belong here: `test-the-exit-not-the-entry` was removed after five days because it produced 92% of all findings and drowned out the rest.
 
