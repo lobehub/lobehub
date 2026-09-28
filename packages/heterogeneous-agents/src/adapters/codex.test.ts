@@ -211,6 +211,59 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it.each([
+    'Reconnecting... 2/5',
+    'Reconnecting... waiting for network',
+    'stream error: unexpected status 502 Bad Gateway; Reconnecting... 1/5',
+  ])('keeps the turn alive when Codex reports an in-flight retry: %s', (message) => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({ type: 'turn.started' });
+
+    expect(adapter.adapt({ message, type: 'error' })).toMatchObject([
+      { data: { message }, type: 'stream_retry' },
+    ]);
+
+    // Codex keeps running after a retry notice, so the turn must still settle.
+    const completed = adapter.adapt({ type: 'turn.completed', usage: {} });
+    expect(completed.map((event) => event.type)).toEqual([
+      'stream_end',
+      'visible_output_end',
+      'agent_runtime_end',
+    ]);
+    expect(adapter.validateCompletion()).toEqual([]);
+  });
+
+  it('reports the retry as the failure when the stream never recovers', () => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({ type: 'turn.started' });
+    adapter.adapt({ message: 'Reconnecting... 5/5', type: 'error' });
+
+    // No `turn.failed`, no `turn.completed`: the retry never came back.
+    const events = adapter.validateCompletion();
+
+    expect(events.map((event) => event.type)).toEqual([
+      'stream_end',
+      'visible_output_end',
+      'error',
+    ]);
+    expect(events.at(-1)?.data).toMatchObject({
+      agentType: 'codex',
+      clearEchoedContent: true,
+      message: 'Reconnecting... 5/5',
+    });
+  });
+
+  it('still fails a turn whose error is not a retry notice', () => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({ type: 'turn.started' });
+
+    expect(
+      adapter
+        .adapt({ message: 'We could not reach the Codex service.', type: 'error' })
+        .map((event) => event.type),
+    ).toEqual(['stream_end', 'visible_output_end', 'error']);
+  });
+
   it.each(['error', 'turn.failed'])(
     'classifies capacity failures from %s for auto-retry',
     (type) => {
