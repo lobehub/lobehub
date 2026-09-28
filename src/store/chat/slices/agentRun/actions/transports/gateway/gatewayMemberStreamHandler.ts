@@ -27,6 +27,13 @@ export interface GatewayMemberStreamHandlerParams {
    */
   ensureGroupHydrated: () => Promise<void>;
   /**
+   * Assistant rows currently being streamed by this run's member handlers,
+   * shared across them. A group re-read keeps these rows' in-memory copies:
+   * chunk persistence lags the socket, so the database snapshot would roll a
+   * sibling's live column back.
+   */
+  liveMessageIds: Set<string>;
+  /**
    * The member's server-side operationId (the op whose events are forwarded
    * onto the supervisor's WebSocket).
    */
@@ -66,6 +73,23 @@ export interface GatewayMemberStreamHandlerParams {
  * dispatch the full accumulated content (not deltas), any chunk that lands
  * before hydration completes is repainted once the row exists — self-healing.
  */
+/**
+ * Merge a group re-read into the bucket without rolling back live member
+ * streams: rows in `liveMessageIds` keep their in-memory copy when one exists;
+ * every other row takes the fetched snapshot.
+ */
+export const mergeGroupSnapshot = (
+  fetched: UIChatMessage[],
+  current: UIChatMessage[],
+  liveMessageIds: ReadonlySet<string>,
+): UIChatMessage[] => {
+  if (liveMessageIds.size === 0) return fetched;
+  const currentById = new Map(current.map((message) => [message.id, message]));
+  return fetched.map((message) =>
+    liveMessageIds.has(message.id) ? (currentById.get(message.id) ?? message) : message,
+  );
+};
+
 const APPROVAL_REFRESH_ATTEMPTS = 3;
 const APPROVAL_REFRESH_BASE_DELAY_MS = 500;
 
@@ -73,8 +97,14 @@ export const createGatewayMemberStreamHandler = (
   get: () => ChatStore,
   params: GatewayMemberStreamHandlerParams,
 ): ((event: AgentStreamEvent) => void) => {
-  const { context, ensureGroupHydrated, memberOperationId, parentOperationId, refreshGroup } =
-    params;
+  const {
+    context,
+    ensureGroupHydrated,
+    liveMessageIds,
+    memberOperationId,
+    parentOperationId,
+    refreshGroup,
+  } = params;
 
   // A failed read would leave the parked turn without its approval card and
   // nothing else to fetch it until a focus or reload, so retry with backoff.
@@ -143,7 +173,9 @@ export const createGatewayMemberStreamHandler = (
         if (!id) break;
 
         ensureLocalOp();
+        if (currentAssistantMessageId) liveMessageIds.delete(currentAssistantMessageId);
         currentAssistantMessageId = id;
+        liveMessageIds.add(id);
         if (localOperationId) get().associateMessageWithOperation(id, localOperationId);
         accumulatedContent = '';
         accumulatedReasoning = '';
@@ -201,6 +233,7 @@ export const createGatewayMemberStreamHandler = (
       case 'agent_runtime_end':
       case 'error': {
         ended = true;
+        if (currentAssistantMessageId) liveMessageIds.delete(currentAssistantMessageId);
         // The member row's final structure (tools, content, metadata) is
         // reconciled by the supervisor op's terminal refetch / council barrier.
         // This handler owns only the live text, so just retire the loading op.

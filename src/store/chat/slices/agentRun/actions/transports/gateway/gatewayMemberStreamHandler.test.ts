@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
+import { createGatewayMemberStreamHandler, mergeGroupSnapshot } from './gatewayMemberStreamHandler';
 
 const context = {
   agentId: 'member-agent',
@@ -55,6 +55,7 @@ describe('createGatewayMemberStreamHandler', () => {
     const handler = createGatewayMemberStreamHandler(() => store, {
       context,
       ensureGroupHydrated: vi.fn().mockResolvedValue(undefined),
+      liveMessageIds: new Set<string>(),
       memberOperationId: 'server-member-op',
       parentOperationId: 'owner-op',
       refreshGroup: vi.fn().mockResolvedValue(undefined),
@@ -77,6 +78,7 @@ describe('createGatewayMemberStreamHandler', () => {
     const handler = createGatewayMemberStreamHandler(() => store, {
       context,
       ensureGroupHydrated: vi.fn().mockResolvedValue(undefined),
+      liveMessageIds: new Set<string>(),
       memberOperationId: 'server-member-op',
       parentOperationId: 'owner-op',
       refreshGroup: vi.fn().mockResolvedValue(undefined),
@@ -96,15 +98,17 @@ describe('createGatewayMemberStreamHandler', () => {
       const store = createStore();
       const refreshGroup = vi.fn().mockResolvedValue(undefined);
       const ensureGroupHydrated = vi.fn().mockResolvedValue(undefined);
+      const liveMessageIds = new Set<string>();
       const handler = createGatewayMemberStreamHandler(() => store, {
         context,
         ensureGroupHydrated,
+        liveMessageIds,
         memberOperationId: 'server-member-op',
         parentOperationId: 'owner-op',
         refreshGroup,
       });
       handler(makeEvent('stream_start', { assistantMessage: { id: 'member-msg' } }));
-      return { ensureGroupHydrated, handler, refreshGroup, store };
+      return { ensureGroupHydrated, handler, liveMessageIds, refreshGroup, store };
     };
 
     it('re-reads the group tree so the approval card lands live (G-05)', async () => {
@@ -155,6 +159,54 @@ describe('createGatewayMemberStreamHandler', () => {
       handler(makeEvent('agent_runtime_end', { reason: 'completed' }));
 
       expect(refreshGroup).not.toHaveBeenCalled();
+    });
+  });
+
+  // Codex P1 on #20093: the approval re-read replaced the whole bucket, rolling
+  // a still-streaming sibling's column back to its lagging database snapshot.
+  describe('live sibling rows', () => {
+    it('tracks the row a member is streaming until it ends', () => {
+      const liveMessageIds = new Set<string>();
+      const handler = createGatewayMemberStreamHandler(() => createStore(), {
+        context,
+        ensureGroupHydrated: vi.fn().mockResolvedValue(undefined),
+        liveMessageIds,
+        memberOperationId: 'server-member-op',
+        parentOperationId: 'owner-op',
+        refreshGroup: vi.fn().mockResolvedValue(undefined),
+      });
+
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'member-msg' } }));
+      expect([...liveMessageIds]).toEqual(['member-msg']);
+
+      handler(makeEvent('agent_runtime_end', { reason: 'waiting_for_human' }));
+      expect(liveMessageIds.size).toBe(0);
+    });
+
+    it("keeps a live sibling's in-memory row and takes the snapshot for the rest", () => {
+      const fetched = [
+        { content: 'db stale', id: 'sibling-msg', role: 'assistant' },
+        {
+          content: '',
+          id: 'approval-tool',
+          pluginIntervention: { status: 'pending' },
+          role: 'tool',
+        },
+      ] as any[];
+      const current = [
+        { content: 'live streamed text', id: 'sibling-msg', role: 'assistant' },
+      ] as any[];
+
+      expect(mergeGroupSnapshot(fetched, current, new Set(['sibling-msg']))).toEqual([
+        current[0],
+        fetched[1],
+      ]);
+    });
+
+    it('takes the snapshot as-is when no member is streaming', () => {
+      const fetched = [{ content: 'db', id: 'a', role: 'assistant' }] as any[];
+
+      expect(mergeGroupSnapshot(fetched, [], new Set())).toBe(fetched);
     });
   });
 });

@@ -69,7 +69,7 @@ import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventBuffer } from './gatewayEventBuffer';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
 import { createGatewayEventRouter } from './gatewayEventRouter';
-import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
+import { createGatewayMemberStreamHandler, mergeGroupSnapshot } from './gatewayMemberStreamHandler';
 import {
   type GatewayMuxIdentity,
   getGatewayMux,
@@ -1812,10 +1812,22 @@ export class GatewayActionImpl {
     context: ConversationContext,
     parentOperationId: string,
   ): ((memberOperationId: string) => (event: AgentStreamEvent) => void) => {
-    // Rejects on failure so the approval refresh can retry.
+    const liveMessageIds = new Set<string>();
+    const bucketKey = messageMapKey({
+      agentId: context.agentId ?? '',
+      groupId: context.groupId,
+      scope: context.scope,
+      threadId: context.threadId,
+      topicId: context.topicId,
+    });
+    // Rejects on failure so the approval refresh can retry. Keeps rows other
+    // member handlers are still streaming (see `mergeGroupSnapshot`).
     const refreshGroup = () =>
       messageService.getMessages(context).then((messages) => {
-        this.#get().replaceMessages(messages, { context });
+        const current = this.#get().dbMessagesMap[bucketKey] ?? [];
+        this.#get().replaceMessages(mergeGroupSnapshot(messages, current, liveMessageIds), {
+          context,
+        });
       });
     let hydration: Promise<void> | undefined;
     const ensureGroupHydrated = () => {
@@ -1827,6 +1839,7 @@ export class GatewayActionImpl {
       createGatewayMemberStreamHandler(this.#get, {
         context,
         ensureGroupHydrated,
+        liveMessageIds,
         memberOperationId,
         parentOperationId,
         refreshGroup,
