@@ -4011,7 +4011,9 @@ When I am ___, I need ___
   // has a decision to make here, and a paragraph over a solved field reads as
   // a warning that something is about to go wrong.
   'environments.instances.directoryHint': 'Folder path. Cannot be changed once created.',
-  'environments.instances.unused': 'Never used',
+  'environments.instances.notSavedYet': 'Not saved yet',
+  'environments.instances.nothingToSave': 'Nothing to save',
+  'environments.sessions.stale': 'No end recorded',
   'environments.instances.remove': 'Delete instance',
   'environments.instances.rename': 'Rename instance',
   'environments.instances.renameFailed': 'Could not rename this instance',

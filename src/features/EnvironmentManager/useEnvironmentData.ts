@@ -67,6 +67,10 @@ export const useInstances = () => {
         ...instance,
         snapshot: byId.get(instance.id) ?? null,
       })),
+      // Whether the lease store answered at all. Carried through because a
+      // reader that cannot tell "free" from "not known" would report an
+      // unreachable Redis as every instance being idle.
+      occupancyUnavailable: rows.data.occupancyUnavailable,
       snapshotsPending: !sizes.data && !sizes.error,
       snapshotsUnavailable: sizes.data ? sizes.data.snapshotsUnavailable : !!sizes.error,
     };

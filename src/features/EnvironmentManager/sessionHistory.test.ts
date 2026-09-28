@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { withoutBuildVehicles } from './SessionHistorySection';
+import { isSessionRunning, withoutBuildVehicles } from './SessionHistorySection';
 
 const session = (overrides: Partial<any>): any => ({
   buildId: null,
@@ -70,5 +70,47 @@ describe('withoutBuildVehicles', () => {
     const rows = [session({ id: 1, topicId: 'tpc-1' })];
 
     expect(withoutBuildVehicles(rows)).toBe(rows);
+  });
+});
+
+describe('isSessionRunning', () => {
+  const free = { held: new Set<string>(), unknown: false };
+  const holding = (id: string) => ({ held: new Set([id]), unknown: false });
+
+  it('is running while its instance is actually held', () => {
+    expect(isSessionRunning(session({}), holding('inst-a'))).toBe(true);
+  });
+
+  // The bug this exists for: a sandbox that went away without a teardown never
+  // gets an `endedAt`, so the row said "running" for twelve hours while the
+  // composer's own menu offered the same instance as free.
+  it('is not running once the lease on its instance has gone', () => {
+    expect(isSessionRunning(session({}), free)).toBe(false);
+  });
+
+  // "Not known" is not "free". A reader that collapses the two would retire
+  // every live session on the page the moment the lease store hiccuped.
+  it('stays running when the lease store did not answer', () => {
+    expect(isSessionRunning(session({}), { held: new Set(), unknown: true })).toBe(true);
+  });
+
+  it('is never running once an end was recorded, whoever holds the instance', () => {
+    const ended = session({ endReason: 'idle', endedAt: '2026-09-24T03:00:00.000Z' });
+
+    expect(isSessionRunning(ended, holding('inst-a'))).toBe(false);
+    expect(isSessionRunning(ended, { held: new Set(['inst-a']), unknown: true })).toBe(false);
+  });
+
+  // A build's own record is a run like any other, and it is held by the
+  // instance it builds — nothing about it should read differently here.
+  it('judges a build the same way', () => {
+    const build = session({ buildId: 'build-1', kind: 'build', management: true });
+
+    expect(isSessionRunning(build, holding('inst-a'))).toBe(true);
+    expect(isSessionRunning(build, free)).toBe(false);
+  });
+
+  it('does not match an instance it has no id for', () => {
+    expect(isSessionRunning(session({ environment: null }), holding('inst-a'))).toBe(false);
   });
 });

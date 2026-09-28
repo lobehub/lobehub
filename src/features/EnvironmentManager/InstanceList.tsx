@@ -269,11 +269,20 @@ const InstanceRow = memo<InstanceRowProps>(
               {instance.workingDirectory}
             </Text>
           </Flexbox>
-          {/* Three states, and they are not the same thing. Still on its way
-        from the execution plane is a wait, so it looks like one — a dash there
-        reads as a settled answer and this one has not arrived. Never used is a
-        real answer. The dash is what is left: asked for and not obtained, which
-        the line under the list explains and this repeats on hover. */}
+          {/* How big the saved state is, and nothing else. It used to read
+        "not used yet" when there was no snapshot, which is a claim about the
+        instance rather than about its archive — and a false one: an
+        environment that installs nothing never produces an archive, so its
+        instances said "not used yet" after weeks of daily use.
+
+        Four states. Still on its way from the execution plane is a wait, so it
+        looks like one — a dash there reads as a settled answer and this one
+        has not arrived. The dash is asked-for-and-not-obtained, which the line
+        under the list explains and this repeats on hover. The other two are
+        both "no archive", told apart by whether one is ever coming: a
+        definition that clones and installs nothing has nothing to keep, and
+        offering "not saved yet" there would promise a number that never
+        arrives. */}
           {snapshotsPending ? (
             <Skeleton.Text rows={1} style={{ height: 14, width: 44 }} />
           ) : (
@@ -287,7 +296,9 @@ const InstanceRow = memo<InstanceRowProps>(
                   ? '—'
                   : instance.snapshot
                     ? formatSize(instance.snapshot.bytes)
-                    : t('environments.instances.unused')}
+                    : instance.buildable
+                      ? t('environments.instances.notSavedYet')
+                      : t('environments.instances.nothingToSave')}
               </Text>
             </Tooltip>
           )}
