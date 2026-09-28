@@ -414,7 +414,6 @@ describe('Files — reveal request integration', () => {
     render(<Files workingDirectory="/repo" />);
 
     fireEvent.click(screen.getByText('workingPanel.files.views.changes'));
-    fireEvent.click(screen.getByTitle('workingPanel.files.filters.title'));
     fireEvent.click(screen.getByText('workingPanel.files.filters.hideIgnored'));
     expandSearch();
     fireEvent.change(screen.getByPlaceholderText('workingPanel.files.searchPlaceholder'), {
