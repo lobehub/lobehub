@@ -178,16 +178,22 @@ export class ToolMessageReorder extends BaseProcessor {
 
       const isAnswered = (callerIndex: number) =>
         toolMessages.has(resultKey(callerIndex, message.tool_call_id));
-      // A result answers the nearest call before it; once that call has one,
-      // this row is a duplicate. Only a result stored ahead of every call
-      // (out-of-order rows) falls forward to the first unanswered one.
+      // A row's parentId names the assistant it answers when it is that raw
+      // row; otherwise a result answers the nearest call before it, and once
+      // that call has one this row is a duplicate. Only a result stored ahead
+      // of every call (out-of-order rows) falls forward to the first
+      // unanswered one.
+      const linkedCaller = message.parentId
+        ? callers.find((callerIndex) => messages[callerIndex].id === message.parentId)
+        : undefined;
       const precedingCaller = callers.findLast((callerIndex) => callerIndex < index);
+      const expectedCaller = linkedCaller ?? precedingCaller;
       const callerIndex =
-        precedingCaller === undefined
+        expectedCaller === undefined
           ? callers.find((callerIndex) => !isAnswered(callerIndex))
-          : isAnswered(precedingCaller)
+          : isAnswered(expectedCaller)
             ? undefined
-            : precedingCaller;
+            : expectedCaller;
 
       if (callerIndex === undefined) {
         // Duplicate of a result the call already has

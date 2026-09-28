@@ -362,6 +362,24 @@ describe('ToolMessageReorder', () => {
       expect(result.metadata.toolMessageReorder?.removedInvalidTools).toBe(1);
     });
 
+    it('should follow parentId when displaced results share a reused id', async () => {
+      const proc = new ToolMessageReorder();
+      const [a1] = step(1);
+      const [a2] = step(2);
+      const ctx = createContext([
+        a1,
+        a2,
+        { id: 't1', parentId: 'a1', role: 'tool', content: 'ok-1', tool_call_id: REUSED_ID },
+        { id: 't2', parentId: 'a2', role: 'tool', content: 'ok-2', tool_call_id: REUSED_ID },
+      ]);
+
+      const result = await proc.process(ctx);
+
+      expect(result.messages.map((m) => m.id)).toEqual(['a1', 't1', 'a2', 't2']);
+      expect(toolResults(result.messages)).toEqual(['ok-1', 'ok-2']);
+      expect(result.metadata.toolMessageReorder?.removedInvalidTools).toBe(0);
+    });
+
     it('should not append a reused id suffix that collides with a real id', async () => {
       const proc = new ToolMessageReorder();
       const ctx = createContext([
