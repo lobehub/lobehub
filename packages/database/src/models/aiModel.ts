@@ -325,8 +325,7 @@ export class AiModelModel {
     // non-chat model (e.g. a speech-to-text card) into a `chat` row, which would leak it into
     // chat pickers. Only the inserted row takes the builtin type; an existing row keeps its own.
     const type =
-      value.type ??
-      (await this.#resolveDefaultModelTypes(value.providerId, [value.id])).get(value.id);
+      value.type ?? (await this.#resolveDefaultModelTypes(value.providerId, [value.id])).get(value.id);
     if (type) insertValues.type = normalizeAiModelType(type);
 
     const updateValues: Partial<typeof aiModels.$inferInsert> = {

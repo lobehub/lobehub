@@ -100,11 +100,7 @@ describe('groupStripBlocks', () => {
   });
 
   it('aligns blocks to wall-clock boundaries rather than the window start', () => {
-    const blocks = groupStripBlocks(
-      [slot(1, 'online'), slot(2, 'online'), slot(3, 'online')],
-      BUCKET,
-      2 * BUCKET,
-    );
+    const blocks = groupStripBlocks([slot(1, 'online'), slot(2, 'online'), slot(3, 'online')], BUCKET, 2 * BUCKET);
 
     expect(blocks.map(({ end, start }) => ({ end, start }))).toEqual([
       { end: 2 * BUCKET, start: BUCKET },
