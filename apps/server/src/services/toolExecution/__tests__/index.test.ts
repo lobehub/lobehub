@@ -135,10 +135,29 @@ describe('ToolExecutionService', () => {
         success: false,
       },
     },
+    {
+      // The executor classifies `errorData ?? error`, so a structured payload
+      // bypasses the string path entirely. Its 503 status alone would classify
+      // as `retry` and replay the call.
+      case: 'the device is offline with structured errorData',
+      failure: {
+        content:
+          'The device is not reachable right now, so this tool call never ran on it (gateway responded HTTP 503). Nothing was executed, so retrying the same call is safe.',
+        error: 'DEVICE_OFFLINE',
+        errorData: {
+          code: 'DEVICE_OFFLINE',
+          message: 'Device is offline',
+          retryable: true,
+          status: 503,
+        },
+        success: false,
+      },
+    },
   ])('does not replay a device command when $case', async ({ failure }) => {
     // The device may already be running the first copy: a woken laptop ran a
     // single `echo >> file` three times after the transport replayed it.
-    vi.mocked(deviceGateway.executeToolCall).mockResolvedValue(failure);
+    vi.mocked(deviceGateway.executeToolCall).mockClear();
+    vi.mocked(deviceGateway.executeToolCall).mockResolvedValue(failure as any);
     const runtime = localSystemRuntime.factory({
       activeDeviceId: 'device-1',
       operationId: 'op-1',
@@ -170,6 +189,9 @@ describe('ToolExecutionService', () => {
     expect(result.success).toBe(false);
     expect(result.content).toBe(failure.content);
     expect(result.error).toMatchObject({ kind: 'stop' });
+    expect(result.errorData).toEqual(
+      'errorData' in failure ? { ...failure.errorData, kind: 'stop' } : undefined,
+    );
     expect(attempts).toBe(1);
     expect(deviceGateway.executeToolCall).toHaveBeenCalledTimes(1);
   });
