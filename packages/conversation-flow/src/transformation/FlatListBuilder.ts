@@ -1025,18 +1025,43 @@ export class FlatListBuilder {
 
     // Create tool map for lookup
     const toolMap = new Map<string, Message>();
+    const toolMessagesById = new Map<string, Message>();
+    // `${parentId}:${tool_call_id}` → first result that assistant received
+    const toolMapByCaller = new Map<string, Message>();
     allToolMessages.forEach((tm) => {
+      toolMessagesById.set(tm.id, tm);
       if (tm.tool_call_id) {
         toolMap.set(tm.tool_call_id, tm);
+
+        const callerKey = `${tm.parentId}:${tm.tool_call_id}`;
+        if (tm.parentId && !toolMapByCaller.has(callerKey)) toolMapByCaller.set(callerKey, tm);
       }
     });
+    const chainAssistantIds = new Set(assistantChain.map((assistant) => assistant.id));
+
+    // `tool_call_id` is provider-supplied and not unique across a chain: Kimi
+    // (via zeabur / nvidia / moonshot) stores `<tool>:0` on every step. Pair a
+    // call with the result its own assistant produced first; the id-only map
+    // is a fallback that must never hand one step another step's result.
+    const findToolResult = (assistant: Message, toolCallId: string, resultMsgId?: string) => {
+      const explicit = resultMsgId ? toolMessagesById.get(resultMsgId) : undefined;
+      if (explicit) return explicit;
+
+      const own = toolMapByCaller.get(`${assistant.id}:${toolCallId}`);
+      if (own) return own;
+
+      const fallback = toolMap.get(toolCallId);
+      if (fallback?.parentId && chainAssistantIds.has(fallback.parentId)) return undefined;
+
+      return fallback;
+    };
 
     // Process each assistant in the chain
     for (const assistant of assistantChain) {
       // Build toolsWithResults for this assistant
       const toolsWithResults: ChatToolPayloadWithResult[] =
         assistant.tools?.map((tool) => {
-          const toolMsg = toolMap.get(tool.id);
+          const toolMsg = findToolResult(assistant, tool.id, tool.result_msg_id);
           if (toolMsg) {
             const result: any = {
               content: toolMsg.content || '',
