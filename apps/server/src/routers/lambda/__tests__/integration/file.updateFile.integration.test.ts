@@ -5,6 +5,8 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentDocumentModel } from '@/database/models/agentDocuments';
+
 import { fileRouter } from '../../file';
 import { cleanupTestUser, createTestUser } from './setup';
 
@@ -139,9 +141,28 @@ describe('fileRouter.updateFile integration', () => {
     expect(renamed.parentId).toBe(folder.id);
   });
 
-  it('leaves an agent-document binding of the same file in its agent folder', async () => {
-    // AgentDocumentsService.importFile keeps the resource fileId but gives the agent copy
-    // its own collision-safe filename and agent-folder parent.
+  /** The row AgentDocumentsService.importFile creates: document + binding in one transaction. */
+  const importIntoAgent = async (
+    file: typeof files.$inferSelect,
+    filename: string,
+    parentId: string,
+  ) => {
+    const [agent] = await db.insert(agents).values({ userId }).returning();
+    return new AgentDocumentModel(db, userId).create(agent.id, filename, '', {
+      fileId: file.id,
+      fileType: file.fileType,
+      parentId,
+      source: file.url,
+      sourceType: 'file',
+      title: file.name,
+    });
+  };
+
+  it.each([
+    ['an uploaded file', 'application/pdf'],
+    // DocumentService.createDocument gives a knowledge-base page's backing file this type.
+    ['a knowledge-base page backing file', 'custom/document'],
+  ])("leaves an agent's imported copy of %s in its agent folder", async (_label, fileType) => {
     const kbFolder = await createFolder(db, userId, 'nf5bak');
     const newKbFolder = await createFolder(db, userId, 'archive');
     const agentFolder = await createFolder(db, userId, 'agent-notes');
@@ -151,23 +172,8 @@ describe('fileRouter.updateFile integration', () => {
       'spec.pdf',
       kbFolder.id,
     );
-    const [agentCopy] = await db
-      .insert(documents)
-      .values({
-        fileId: file.id,
-        fileType: 'application/pdf',
-        filename: 'spec-2.pdf',
-        parentId: agentFolder.id,
-        source: 'agent-document://spec-2.pdf',
-        sourceType: 'file',
-        title: 'spec-2.pdf',
-        totalCharCount: 0,
-        totalLineCount: 0,
-        userId,
-      })
-      .returning();
-    const [agent] = await db.insert(agents).values({ userId }).returning();
-    await db.insert(agentDocuments).values({ agentId: agent.id, documentId: agentCopy.id, userId });
+    await db.update(files).set({ fileType }).where(eq(files.id, file.id));
+    const agentCopy = await importIntoAgent({ ...file, fileType }, 'spec 2.pdf', agentFolder.id);
 
     await fileRouter
       .createCaller(context(userId))
@@ -176,10 +182,10 @@ describe('fileRouter.updateFile integration', () => {
     const movedMirror = await readDocument(db, mirror.id);
     expect(movedMirror.parentId).toBe(newKbFolder.id);
     expect(movedMirror.filename).toBe('spec-final.pdf');
-    const untouched = await readDocument(db, agentCopy.id);
+    const untouched = await readDocument(db, agentCopy.documentId);
     expect(untouched.parentId).toBe(agentFolder.id);
-    expect(untouched.filename).toBe('spec-2.pdf');
-    expect(untouched.title).toBe('spec-2.pdf');
+    expect(untouched.filename).toBe('spec 2.pdf');
+    expect(untouched.title).toBe('spec.pdf');
   });
 
   it('still moves a knowledge-base parse row that an agent has merely associated', async () => {
