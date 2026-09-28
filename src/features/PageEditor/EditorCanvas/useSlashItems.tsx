@@ -10,7 +10,7 @@ import {
   INSERT_TABLE_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
 } from '@lobehub/editor';
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import {
   Heading1Icon,
   Heading2Icon,

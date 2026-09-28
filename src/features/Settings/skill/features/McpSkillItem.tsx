@@ -1,7 +1,7 @@
 'use client';
 
-import { Avatar, Flexbox, Icon } from '@lobehub/ui';
-import { createModal } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, createModal } from '@lobehub/ui/base-ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';

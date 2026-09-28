@@ -3,9 +3,11 @@
 import isEqual from 'fast-deep-equal';
 import { type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 
 import { OFFICIAL_SITE } from '@/const/url';
 import { useToolStore } from '@/store/tool';
+import { loadBuiltinSkill } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 
 import { DetailContext, type DetailContextValue } from './DetailContext';
 
@@ -25,6 +27,12 @@ export const BuiltinAgentSkillDetailProvider = ({
   const skill = useMemo(
     () => builtinSkills.find((s) => s.identifier === identifier),
     [identifier, builtinSkills],
+  );
+
+  const { data: skillContent } = useSWR(
+    skill ? ['builtin-skill-content', identifier] : null,
+    async () => (await loadBuiltinSkill(identifier))?.content,
+    { revalidateOnFocus: false },
   );
 
   if (!skill) return null;
@@ -51,7 +59,7 @@ export const BuiltinAgentSkillDetailProvider = ({
     localizedDescription,
     localizedReadme,
     readme: '',
-    skillContent: skill.content,
+    skillContent,
     tools: [],
     toolsLoading: false,
   };

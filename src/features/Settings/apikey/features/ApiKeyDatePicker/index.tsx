@@ -8,9 +8,20 @@ import { useTranslation } from 'react-i18next';
 
 interface ApiKeyDatePickerProps extends Omit<DatePickerProps, 'onChange'> {
   onChange?: (date: Dayjs | null) => void;
+  /**
+   * The "never expires" footer clears the date. Hide it where "never" is
+   * already a sibling choice (the create form's preset select), so the picker
+   * only ever answers "which date".
+   */
+  showNeverExpiresFooter?: boolean;
 }
 
-const ApiKeyDatePicker: FC<ApiKeyDatePickerProps> = ({ value, onChange, ...props }) => {
+const ApiKeyDatePicker: FC<ApiKeyDatePickerProps> = ({
+  value,
+  onChange,
+  showNeverExpiresFooter = true,
+  ...props
+}) => {
   const { t } = useTranslation('auth');
 
   const handleOnChange = (date: Dayjs[] | Dayjs | null) => {
@@ -32,24 +43,26 @@ const ApiKeyDatePicker: FC<ApiKeyDatePickerProps> = ({ value, onChange, ...props
       minDate={dayjs()}
       placeholder={t('apikey.form.fields.expiresAt.placeholder')}
       showNow={false}
-      renderExtraFooter={() => (
-        <Flex justify="center">
-          <a
-            role="button"
-            style={{ cursor: 'pointer' }}
-            tabIndex={0}
-            onClick={() => handleOnChange(null)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                handleOnChange(null);
-              }
-            }}
-          >
-            {t('apikey.display.neverExpires')}
-          </a>
-        </Flex>
-      )}
+      renderExtraFooter={() =>
+        showNeverExpiresFooter && (
+          <Flex justify="center">
+            <a
+              role="button"
+              style={{ cursor: 'pointer' }}
+              tabIndex={0}
+              onClick={() => handleOnChange(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleOnChange(null);
+                }
+              }}
+            >
+              {t('apikey.display.neverExpires')}
+            </a>
+          </Flex>
+        )
+      }
       onChange={handleOnChange}
     />
   );

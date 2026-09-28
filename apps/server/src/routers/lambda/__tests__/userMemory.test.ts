@@ -18,46 +18,68 @@ const mockCountTopicsForMemoryExtractor = vi.fn();
 const mockDeleteAll = vi.fn();
 const mockDeletePersona = vi.fn();
 const mockListPersonaVersions = vi.fn();
+const mockResetMemoryExtractStatus = vi.fn();
 const mockRestorePersonaVersion = vi.fn();
 const { mockTriggerProcessUsers } = vi.hoisted(() => ({
   mockTriggerProcessUsers: vi.fn(),
 }));
 
 vi.mock('@/database/models/asyncTask', () => ({
-  AsyncTaskModel: vi.fn(() => ({
-    create: mockCreate,
-    findById: mockFindById,
-    findActiveByType: mockFindActiveByType,
-    update: mockUpdate,
-  })),
-  initUserMemoryExtractionMetadata: vi.fn((metadata) => metadata),
+  AsyncTaskModel: vi.fn(function () {
+    return {
+      create: mockCreate,
+      findById: mockFindById,
+      findActiveByType: mockFindActiveByType,
+      update: mockUpdate,
+    };
+  }),
+  initUserMemoryExtractionMetadata: vi.fn(function (metadata) {
+    return metadata;
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(() => ({
-    countTopicsForMemoryExtractor: mockCountTopicsForMemoryExtractor,
-  })),
+  TopicModel: vi.fn(function () {
+    return {
+      countTopicsForMemoryExtractor: mockCountTopicsForMemoryExtractor,
+      resetMemoryExtractStatus: mockResetMemoryExtractStatus,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/userMemory', () => ({
-  UserMemoryActivityModel: vi.fn(() => ({})),
-  UserMemoryContextModel: vi.fn(() => ({})),
-  UserMemoryExperienceModel: vi.fn(() => ({})),
-  UserMemoryIdentityModel: vi.fn(() => ({})),
-  UserMemoryModel: vi.fn(() => ({
-    deleteAll: mockDeleteAll,
-  })),
-  UserMemoryPreferenceModel: vi.fn(() => ({})),
+  UserMemoryActivityModel: vi.fn(function () {
+    return {};
+  }),
+  UserMemoryContextModel: vi.fn(function () {
+    return {};
+  }),
+  UserMemoryExperienceModel: vi.fn(function () {
+    return {};
+  }),
+  UserMemoryIdentityModel: vi.fn(function () {
+    return {};
+  }),
+  UserMemoryModel: vi.fn(function () {
+    return {
+      deleteAll: mockDeleteAll,
+    };
+  }),
+  UserMemoryPreferenceModel: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/database/models/userMemory/persona', () => ({
   UserPersonaVersionNotFoundError: class UserPersonaVersionNotFoundError extends Error {},
   UserPersonaVersionSnapshotMissingError: class UserPersonaVersionSnapshotMissingError extends Error {},
-  UserPersonaModel: vi.fn(() => ({
-    deletePersona: mockDeletePersona,
-    listVersions: mockListPersonaVersions,
-    restoreVersion: mockRestorePersonaVersion,
-  })),
+  UserPersonaModel: vi.fn(function () {
+    return {
+      deletePersona: mockDeletePersona,
+      listVersions: mockListPersonaVersions,
+      restoreVersion: mockRestorePersonaVersion,
+    };
+  }),
 }));
 
 vi.mock('@/envs/app', () => ({
@@ -68,10 +90,12 @@ vi.mock('@/envs/app', () => ({
 }));
 
 vi.mock('@/server/globalConfig/parseMemoryExtractionConfig', () => ({
-  parseMemoryExtractionConfig: vi.fn(() => ({
-    webhook: { baseUrl: 'https://internal.example.com' },
-    upstashWorkflowExtraHeaders: { 'x-test': 'ok' },
-  })),
+  parseMemoryExtractionConfig: vi.fn(function () {
+    return {
+      webhook: { baseUrl: 'https://internal.example.com' },
+      upstashWorkflowExtraHeaders: { 'x-test': 'ok' },
+    };
+  }),
 }));
 
 vi.mock('@/server/services/memory/userMemory/extract', () => ({
@@ -319,12 +343,14 @@ describe('userMemoryRouter.deleteAll', () => {
   it('purges all user memories through the aggregate model', async () => {
     mockDeleteAll.mockResolvedValue(undefined);
     mockDeletePersona.mockResolvedValue(undefined);
+    mockResetMemoryExtractStatus.mockResolvedValue(undefined);
 
     const caller = createCaller();
     const result = await caller.deleteAll();
 
     expect(mockDeleteAll).toHaveBeenCalledOnce();
     expect(mockDeletePersona).toHaveBeenCalledOnce();
+    expect(mockResetMemoryExtractStatus).toHaveBeenCalledOnce();
     expect(result).toEqual({ success: true });
   });
 });

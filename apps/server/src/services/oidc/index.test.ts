@@ -20,19 +20,23 @@ vi.mock('./oidcProvider', () => ({
 
 vi.mock('@lobechat/database', () => ({
   getServerDB: vi.fn(async () => ({
-    select: vi.fn((fields: Record<string, unknown>) => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(async () => {
-            const record = await ('userId' in fields
-              ? dbMocks.findFirstClient()
-              : dbMocks.findFirstUser());
+    select: vi.fn(function (fields: Record<string, unknown>) {
+      return {
+        from: vi.fn(function () {
+          return {
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => {
+                const record = await ('userId' in fields
+                  ? dbMocks.findFirstClient()
+                  : dbMocks.findFirstUser());
 
-            return record ? [record] : [];
-          }),
-        })),
-      })),
-    })),
+                return record ? [record] : [];
+              }),
+            })),
+          };
+        }),
+      };
+    }),
   })),
 }));
 
@@ -47,10 +51,12 @@ vi.mock('@/libs/oidc-provider/config', () => ({
 
 const createMockProvider = () => {
   const grantCtor = Object.assign(
-    vi.fn().mockImplementation((payload) => ({
-      ...payload,
-      destroy: vi.fn(),
-    })),
+    vi.fn().mockImplementation(function (payload) {
+      return {
+        ...payload,
+        destroy: vi.fn(),
+      };
+    }),
     { find: vi.fn() },
   );
 
@@ -157,7 +163,9 @@ describe('OIDCService', () => {
     provider.Grant.find.mockResolvedValue(staleGrant as any);
 
     const createdGrant = { accountId: 'account-2', clientId: 'client-1' };
-    provider.Grant.mockImplementation(() => createdGrant as any);
+    provider.Grant.mockImplementation(function () {
+      return createdGrant as any;
+    });
 
     const service = new OIDCService(provider as any);
     const grant = await service.findOrCreateGrants('account-2', 'client-1', 'grant-2');
@@ -170,7 +178,9 @@ describe('OIDCService', () => {
   it('findOrCreateGrants should create new grant when no existing id is provided', async () => {
     const provider = createMockProvider();
     const createdGrant = { accountId: 'account-3', clientId: 'client-3' };
-    provider.Grant.mockImplementation(() => createdGrant as any);
+    provider.Grant.mockImplementation(function () {
+      return createdGrant as any;
+    });
 
     const service = new OIDCService(provider as any);
     const grant = await service.findOrCreateGrants('account-3', 'client-3');
@@ -184,7 +194,9 @@ describe('OIDCService', () => {
     const provider = createMockProvider();
     provider.Grant.find.mockResolvedValue(undefined);
     const createdGrant = { accountId: 'account-4', clientId: 'client-4' };
-    provider.Grant.mockImplementation(() => createdGrant as any);
+    provider.Grant.mockImplementation(function () {
+      return createdGrant as any;
+    });
 
     const service = new OIDCService(provider as any);
     const grant = await service.findOrCreateGrants('account-4', 'client-4', 'grant-missing');
@@ -204,7 +216,9 @@ describe('OIDCService', () => {
     provider.Grant.find.mockResolvedValue(staleGrant as any);
 
     const createdGrant = { accountId: 'account-5', clientId: 'client-5' };
-    provider.Grant.mockImplementation(() => createdGrant as any);
+    provider.Grant.mockImplementation(function () {
+      return createdGrant as any;
+    });
 
     const service = new OIDCService(provider as any);
     const grant = await service.findOrCreateGrants(
@@ -228,7 +242,9 @@ describe('OIDCService', () => {
     provider.Grant.find.mockResolvedValue(staleGrant as any);
 
     const createdGrant = { accountId: 'account-6', clientId: 'client-6' };
-    provider.Grant.mockImplementation(() => createdGrant as any);
+    provider.Grant.mockImplementation(function () {
+      return createdGrant as any;
+    });
 
     const service = new OIDCService(provider as any);
     const grant = await service.findOrCreateGrants('account-6', 'client-6', 'grant-error');

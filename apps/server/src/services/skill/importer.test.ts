@@ -9,6 +9,7 @@ import { AgentSkillModel } from '@/database/models/agentSkill';
 
 import { SkillImportError } from './errors';
 import { SkillImporter } from './importer';
+import type * as ParserModule from './parser';
 
 // Mock external dependencies only (GitHub, S3, parser)
 const normalizeIdentifierPart = (part: string) =>
@@ -32,7 +33,9 @@ const mockGitHubInstance = {
   parseRepoUrl: vi.fn(),
 };
 vi.mock('@/server/modules/GitHub', () => ({
-  GitHub: vi.fn().mockImplementation(() => mockGitHubInstance),
+  GitHub: vi.fn(function () {
+    return mockGitHubInstance;
+  }),
   GitHubNotFoundError: class GitHubNotFoundError extends Error {
     constructor(message: string) {
       super(message);
@@ -52,7 +55,9 @@ const mockParserInstance = {
   parseZipPackage: vi.fn(),
 };
 vi.mock('./parser', () => ({
-  SkillParser: vi.fn().mockImplementation(() => mockParserInstance),
+  SkillParser: vi.fn(function () {
+    return mockParserInstance;
+  }),
 }));
 
 // User-supplied URLs must be fetched through ssrfSafeFetch (SSRF guard), never raw global
@@ -1022,6 +1027,53 @@ description: A nested skill
 
     // Regression: the imported body is stored and returned to the caller, so a raw fetch here
     // is a full-read SSRF. The fetch must go through the SSRF guard. See GHSA-53h9-fmjf-frwr / #16536.
+    it('should import a market ZIP whose SKILL.md has no front-matter (importFromMarket path)', async () => {
+      // Use the real parser for this case: the regression lives in manifest derivation
+      const { SkillParser: RealSkillParser } = (await vi.importActual(
+        './parser',
+      )) as typeof ParserModule;
+      const realParser = new RealSkillParser();
+      mockParserInstance.parseZipPackage.mockImplementation((buffer, options) =>
+        realParser.parseZipPackage(buffer, options),
+      );
+
+      // Real shape of market package brainbytes-dev-everything-claude-finance-aml-kyc
+      const skillMd = `# AML/KYC Compliance
+
+> Customer due diligence, suspicious activity reporting, PEP screening, sanctions — Anti-Money Laundering and Know Your Customer compliance.
+
+## When to Activate
+
+- Customer onboarding and KYC process design
+`;
+      const { zipSync } = await import('fflate');
+      const zipped = zipSync({ 'SKILL.md': new TextEncoder().encode(skillMd) });
+
+      mockSsrfSafeFetch.mockResolvedValue({
+        arrayBuffer: async () =>
+          zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength),
+        headers: new Headers({ 'content-type': 'application/zip' }),
+        ok: true,
+        status: 200,
+      });
+
+      const identifier = 'brainbytes-dev-everything-claude-finance-aml-kyc';
+      // Same call shape as agentSkillsRouter.importFromMarket
+      const result = await importer.importFromUrl(
+        { url: `https://market.lobehub.com/api/v1/skills/${identifier}/download` },
+        { identifier, source: 'market' },
+      );
+
+      expect(result.status).toBe('created');
+      expect(result.skill.identifier).toBe(identifier);
+      expect(result.skill.name).toBe('AML/KYC Compliance');
+      expect(result.skill.description).toMatch(/^Customer due diligence/);
+      expect(result.skill.source).toBe('market');
+      expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(expect.any(Buffer), {
+        fallbackName: identifier,
+      });
+    });
+
     describe('SSRF protection (#16536)', () => {
       it('should fetch the user URL through ssrfSafeFetch, not raw global fetch', async () => {
         mockSsrfSafeFetch.mockResolvedValue({

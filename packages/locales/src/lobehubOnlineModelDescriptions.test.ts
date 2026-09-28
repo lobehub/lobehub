@@ -8,11 +8,17 @@ const enUSDescriptions = enUSModels as Record<string, string>;
 const zhCNDescriptions = zhCNModels as Record<string, string>;
 
 const addedDescriptionKeys = [
+  'lobehub.deepseek-v4-flash-vision-exp.description',
   'lobehub.gemini-3.1-flash-image.description',
   'lobehub.gemini-3.1-flash-image:image.description',
   'lobehub.gemini-3.7-flash.description',
+  'lobehub.glm-5.3-flash.description',
   'lobehub.qwen3.8-max.description',
   'lobehub.grok-4.6.description',
+  'lobehub.grok-4.7.description',
+  'lobehub.mimo-v2.6-flash.description',
+  'lobehub.mimo-v2.6-pro-ultraspeed.description',
+  'lobehub.mimo-v2.6-pro.description',
 ] as const;
 
 describe('LobeHub online model descriptions', () => {

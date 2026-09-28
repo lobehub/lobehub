@@ -1,6 +1,7 @@
 import type { DocumentLoadRule } from '@lobechat/agent-templates';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
+import { agentShareDocumentAccessScope, ordinaryDocumentAccessScope } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 
 import { TaskModel } from '@/database/models/task';
@@ -19,11 +20,24 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
 
     const db = context.serverDB;
     const userId = context.userId;
+    if (context.agentShareVisitor && !context.topicId) {
+      throw new Error('topicId is required for Agent Share document execution');
+    }
+
+    const shareTopicId = context.agentShareVisitor ? context.topicId : undefined;
+    const documentAccessScope = context.agentShareVisitor
+      ? agentShareDocumentAccessScope({
+          shareId: context.agentShareVisitor.shareId,
+          topicId: shareTopicId!,
+          visitorUserId: context.agentShareVisitor.visitorUserId,
+        })
+      : ordinaryDocumentAccessScope;
     const service = new AgentDocumentsService(
       db,
       userId,
       context.workspaceId,
       context.agentVisibility,
+      documentAccessScope,
     );
     const { taskId } = context;
     const workRegistrar = createDocumentWorkRegistrar({
@@ -146,7 +160,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           );
           return doc;
         },
-        createDocument: async ({ agentId, content, hintIsSkill, title }) => {
+        createDocument: async ({ agentId, content, hintIsSkill, parentId, title }) => {
           const doc = await pinToTask(
             await withDocumentOutcome(
               {
@@ -158,12 +172,22 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
                 summary: 'Agent documents created a document.',
                 toolAction: 'create',
               },
-              () => service.createDocument(agentId, title, content, { hintIsSkill }),
+              () =>
+                shareTopicId
+                  ? service.createForTopic(agentId, title, content, shareTopicId)
+                  : service.createDocument(agentId, title, content, { hintIsSkill, parentId }),
             ),
           );
           return doc;
         },
-        createTopicDocument: async ({ agentId, content, hintIsSkill, title, topicId }) => {
+        createTopicDocument: async ({
+          agentId,
+          content,
+          hintIsSkill,
+          parentId,
+          title,
+          topicId,
+        }) => {
           const doc = await pinToTask(
             await withDocumentOutcome(
               {
@@ -175,7 +199,14 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
                 summary: 'Agent documents created a topic document.',
                 toolAction: 'create',
               },
-              () => service.createForTopic(agentId, title, content, topicId, { hintIsSkill }),
+              () =>
+                service.createForTopic(
+                  agentId,
+                  title,
+                  content,
+                  shareTopicId ?? topicId,
+                  shareTopicId ? undefined : { hintIsSkill, parentId },
+                ),
             ),
           );
           return doc;
@@ -183,10 +214,14 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         listDocuments: async ({ agentId, parentId, sourceType }) => {
           // Agents discover archived tool results via this path (see
           // `excludeArchivedToolResults`), so keep the `.tool-results` archive visible.
-          const docs = await service.listDocuments(agentId, sourceType, {
-            includeArchivedToolResults: true,
-            parentId,
-          });
+          const docs = shareTopicId
+            ? await service.listDocumentsForTopic(agentId, shareTopicId, sourceType, {
+                includeArchivedToolResults: true,
+              })
+            : await service.listDocuments(agentId, sourceType, {
+                includeArchivedToolResults: true,
+                parentId,
+              });
           return docs.map((d) => ({
             documentId: d.documentId,
             filename: d.filename,
@@ -195,9 +230,14 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           }));
         },
         listTopicDocuments: async ({ agentId, parentId, sourceType, topicId }) => {
-          const docs = await service.listDocumentsForTopic(agentId, topicId, sourceType, {
-            includeArchivedToolResults: true,
-          });
+          const docs = await service.listDocumentsForTopic(
+            agentId,
+            shareTopicId ?? topicId,
+            sourceType,
+            {
+              includeArchivedToolResults: true,
+            },
+          );
           // Topic listing joins through topic associations rather than the agent
           // folder tree, so the folder filter is applied in-memory here.
           const filtered = parentId ? docs.filter((d) => d.parentId === parentId) : docs;
@@ -282,8 +322,11 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           ),
       },
       {
-        getDocumentUrl: ({ agentId, documentId }) =>
-          workRegistrar.buildRegisteredDocumentUrl(agentId, documentId),
+        documentReadonly: Boolean(context.agentShareVisitor),
+        getDocumentUrl: context.agentShareVisitor
+          ? undefined
+          : ({ agentId, documentId }) =>
+              workRegistrar.buildRegisteredDocumentUrl(agentId, documentId),
       },
     );
   },

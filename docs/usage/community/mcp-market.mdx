@@ -1,222 +1,93 @@
 ---
 title: MCP Marketplace
-description: >-
-  Connect Agents to 10,000+ tools — databases, APIs, file systems, and more. One
-  protocol, endless integrations.
+description: Discover and install MCP servers that connect Agents to external tools, data, and services.
 tags:
   - LobeHub
   - MCP
   - Model Context Protocol
-  - Skills
-  - Integrations
+  - MCP Servers
+  - Connectors
 ---
 
 # MCP Marketplace
 
-The **Model Context Protocol (MCP)** is an open standard that connects Agents to external tools, data sources, and services. Think of it as a universal adapter — your Agents can interact with databases, APIs, file systems, development tools, business applications, and virtually any external service.
+MCP (Model Context Protocol) connects Agents to databases, APIs, file systems, development tools, and business apps. The MCP Marketplace brings together community MCP servers that you can browse and install.
 
-The LobeHub MCP Marketplace brings together high-quality MCPs from creators worldwide, with 10,000+ tools ready to extend your Agents.
+## MCP Servers and Skills
 
-## What is MCP?
+| Type | What it does | Example |
+| --- | --- | --- |
+| **MCP Server** | Connects external tools and data | Databases, GitHub, browsers, and business apps |
+| **Skill** | Tells an Agent how to complete a task | Writing guides, review checklists, and workflows |
 
-Traditional Agents are limited — they can only chat, and they can't interact with your tools or access real-time data. MCP breaks down these barriers:
+MCP connections and authorization are managed under **Settings → Connectors**. See [Skills Marketplace](/docs/usage/community/skills-market) to browse and install Skills.
 
-| Before MCP                         | With MCP                               |
-| ---------------------------------- | -------------------------------------- |
-| Isolated chatbots                  | Connected teammates                    |
-| Static knowledge only              | Real-time data access                  |
-| Manual copy/paste between tools    | Direct action on external systems      |
-| Each tool needs custom integration | One protocol for thousands of services |
+## Open the MCP Marketplace
 
-MCP transforms Agents from isolated chatbots into connected teammates that can actually do work.
+Open **Community** from the LobeHub sidebar, then select **MCP**.
 
-## How MCP Works
+The marketplace includes:
 
-### Architecture Overview
+- **Search** by name, description, or keyword
+- **Categories** for development, productivity, search, media, business services, and more
+- **Sorting** by featured status, installs, update time, and other options
+- **MCP cards** with name, author, description, grade, installs, and GitHub Stars
 
-<Steps>
-  ### MCP Server
+Marketplace counts and rankings change over time. The current values appear on the page.
 
-  An MCP server is a program that exposes tools and resources:
+## Read an MCP Card
 
-  - Runs as a separate process
-  - Implements the MCP protocol
-  - Provides tools (functions agents can call)
-  - Offers resources (data agents can access)
+An MCP card can show:
 
-  ### MCP Client (LobeHub)
+| Information | Meaning |
+| --- | --- |
+| **Name, author, and description** | What the MCP server does |
+| **Grade** | A combined grade based on validation, installation method, features, and repository information |
+| **Featured, official, or validated** | Marketplace status labels |
+| **Tools, Prompts, and Resources** | Capabilities included with the server |
+| **Local, cloud, or hybrid** | How the server runs |
+| **Installs and GitHub Stars** | Marketplace installations and source repository activity |
 
-  LobeHub acts as an MCP client:
+The information shown can vary by MCP server.
 
-  - Discovers available MCP servers
-  - Manages connections
-  - Routes agent requests to appropriate servers
-  - Handles authentication and permissions
+## View MCP Details
 
-  ### Agent Interaction
+Select a card to open its detail page. You can view:
 
-  When an agent needs external capabilities:
+- **Overview**: Summary, README, tags, and related MCP servers
+- **Installation**: Connection method, dependencies, commands, arguments, and environment variables
+- **Capabilities**: Tools, Prompts, and Resources
+- **Scores**: Overall grade and score details
+- **Version History**: Versions, release dates, and the latest version
+- **Source Information**: Website, license, and GitHub repository
 
-  - Agent determines which MCP tool to use
-  - LobeHub sends request to MCP server
-  - Server executes and returns results
-  - Agent incorporates results into response
-</Steps>
+## Install from the Marketplace
 
-### Connection Types
+1. Open an MCP server from **Community → MCP**.
+2. You can browse its description, installation method, and capabilities.
+3. Select **Install MCP Server**.
+4. Follow the page prompts to enter a URL, API key, or environment variables.
+5. Enable the connector for the Agent that will use it.
 
-MCP supports two connection methods:
+For services with account authorization, the page guides you through sign-in. STDIO servers that run local commands are available on desktop. HTTP servers can connect to remote services, and the desktop app can also connect to local or network endpoints.
 
-<AccordionGroup>
-  <Accordion title="STDIO (Standard Input/Output)">
-    **How it works**: MCP server runs as a local process, communicates via stdin/stdout
+## Add an MCP Manually
 
-    **Use cases**:
+If an MCP server is not listed in the marketplace, open **Settings → Connectors** to add it manually.
 
-    - Local tools and scripts
-    - Desktop applications
-    - File system access
-    - Development tools
+### HTTP Server
 
-    **Example**:
+Enter the MCP server URL and add authentication or headers when the service uses them. The desktop app can also connect to local or network addresses, such as:
 
-    ```json
-    {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/workspace"]
-    }
-    ```
-  </Accordion>
+```text
+http://127.0.0.1:3000/mcp
+```
 
-  <Accordion title="HTTP/HTTPS">
-    **How it works**: MCP server runs as a web service, communicates over HTTP
+### STDIO Server
 
-    **Use cases**:
+Enter the launch command, arguments, and environment variables. STDIO servers run as local processes and are currently available on desktop.
 
-    - Cloud services
-    - Remote APIs
-    - Multi-user tools
-    - Web applications
-
-    **Example**:
-
-    ```json
-    {
-      "type": "http",
-      "url": "https://api.example.com/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_TOKEN"
-      }
-    }
-    ```
-  </Accordion>
-</AccordionGroup>
-
-### Authentication
-
-MCP supports multiple authentication methods:
-
-<AccordionGroup>
-  <Accordion title="None (public access)">
-    No authentication required — suitable for public data sources.
-  </Accordion>
-
-  <Accordion title="Bearer Token">
-    Simple token-based authentication:
-
-    ```json
-    {
-      "auth": {
-        "type": "bearer",
-        "token": "your-api-token"
-      }
-    }
-    ```
-  </Accordion>
-
-  <Accordion title="OAuth 2.0">
-    Full OAuth flow for services like Google, GitHub, Microsoft:
-
-    ```json
-    {
-      "auth": {
-        "type": "oauth2",
-        "accessToken": "obtained-from-oauth-flow"
-      }
-    }
-    ```
-  </Accordion>
-
-  <Accordion title="Custom Headers">
-    API key or custom authentication:
-
-    ```json
-    {
-      "headers": {
-        "X-API-Key": "your-api-key",
-        "X-Custom-Auth": "custom-value"
-      }
-    }
-    ```
-  </Accordion>
-</AccordionGroup>
-
-## Explore the MCP Marketplace
-
-Click on "Community" → "MCP" in the left sidebar to access the MCP Marketplace homepage.
-
-![MCP Marketplace](/blog/assetsb811f2aae8e8346aef16793d6bd10f88.webp)
-
-The marketplace is organized by category, making it easy to quickly find the type of MCP you need:
-
-- **Development** — GitHub, GitLab, Linear, Jira, VS Code
-- **Productivity** — Google Drive, Notion, Slack, Trello, Asana
-- **Data & Analytics** — PostgreSQL, MongoDB, Redis, Elasticsearch
-- **Cloud Services** — AWS, Google Cloud, Azure, Cloudflare
-- **File Systems** — Local files, Dropbox, OneDrive, S3
-- **Communication** — Email, SMS, Discord, Telegram
-- **Search & Knowledge** — Web search, Wikipedia, documentation sites
-
-## Installing an MCP
-
-<Callout type={'info'}>Please exercise caution when using MCPs from unknown sources. LobeHub cannot guarantee the safety of all MCPs.</Callout>
-
-### One-Click Installation (Desktop App)
-
-The LobeHub Desktop application provides the easiest way to install MCP plugins:
-
-<Steps>
-  ### Find Plugin in Marketplace
-
-  Browse or search for the plugin you need.
-
-  ### Click Install
-
-  LobeHub automatically checks system dependencies and identifies configuration requirements.
-
-  ### Install Dependencies (if needed)
-
-  If system dependencies are missing, LobeHub provides installation commands for your OS.
-
-  ### Configure Connection
-
-  Provide required settings: API keys or tokens, connection URLs, authentication credentials, and custom parameters.
-
-  ### Test Connection
-
-  LobeHub verifies the server is reachable, authentication works, and tools are available.
-
-  ### Enable for Agents
-
-  Choose which agents can use the MCP plugin.
-</Steps>
-
-### Manual Installation (Self-Hosted)
-
-For self-hosted deployments, install MCP servers by configuring your connection settings.
-
-**Example: STDIO server (local process)**
+You can also import a `mcpServers` JSON block:
 
 ```json
 {
@@ -230,336 +101,59 @@ For self-hosted deployments, install MCP servers by configuring your connection 
 }
 ```
 
-**Example: HTTP server (remote service)**
+## Use MCP with an Agent
 
-```json
-{
-  "mcpServers": {
-    "github": {
-      "url": "https://mcp-server-github.example.com",
-      "type": "http",
-      "headers": {
-        "Authorization": "Bearer YOUR_GITHUB_TOKEN"
-      }
-    }
-  }
-}
-```
+After installation, enable the connection for the Agent that will use it:
 
-## Popular MCP Plugins
+1. Open **Agent Settings**.
+2. Go to **Connectors**.
+3. Select the MCP server.
+4. Set tool permissions and save.
 
-### File System Access
+Tool permissions have three modes:
 
-Read, write, search, and manage files in specified directories.
+| Permission | Behavior |
+| --- | --- |
+| **Allow** | The tool can run directly |
+| **Ask** | LobeHub asks before each run |
+| **Deny** | The tool does not run |
 
-```bash
-npm install -g @modelcontextprotocol/server-filesystem
-```
+The Agent can now call MCP tools when they fit the task. Tool call records in the conversation show the process and results.
 
-Use cases: code review, documentation search, log analysis, project file management.
+## Helpful Tips
 
-### GitHub Integration
-
-Interact with repositories, issues, pull requests, and GitHub workflows. Requires a GitHub personal access token.
-
-Use cases: project management, code review automation, issue triage, release management.
-
-### Database Access
-
-Query PostgreSQL, MySQL, and other databases. Analyze schemas, generate reports, explain query plans.
-
-Use cases: data analysis, schema exploration, report generation.
-
-### Web Search
-
-Real-time web search, news, and fact verification via Brave Search, Google Search, and others.
-
-Use cases: up-to-date information, research, news monitoring, competitive analysis.
-
-### Slack Integration
-
-Send messages, read conversation history, search messages, and manage notifications.
-
-Use cases: team notifications, automated reporting, incident management.
-
-## Using MCP with Agents
-
-Once installed, MCP plugins automatically expose their tools to your agents. Agents select and invoke tools as needed during conversation:
-
-```
-You: Search my project files for the authentication code
-
-Agent: I'll search your files now.
-       [Uses filesystem MCP — executes search tool]
-
-Agent: I found authentication-related code in src/auth/login.ts and
-       src/middleware/auth.ts. Here's what I found...
-```
-
-You can enable **Chain of Thought** to see exactly which MCP tools are being called and what parameters are used.
-
-### Enabling MCP for an Agent
-
-1. Open **Agent Settings**
-2. Navigate to **Skills**
-3. Select which MCP servers this Agent can access
-4. Save configuration
-
-### MCP in Agent Workflows
-
-Combine multiple MCP tools in sequences:
-
-<Steps>
-  ### User Request
-
-  "Analyze the GitHub issues from last week and create a summary document"
-
-  ### GitHub MCP
-
-  Fetches issues created in the past 7 days
-
-  ### Agent Processing
-
-  Analyzes issues, categorizes, identifies patterns
-
-  ### File System MCP
-
-  Creates summary document with findings
-</Steps>
-
-## Creating Custom MCP Servers
-
-### When to Create Custom MCP Servers
-
-Build your own MCP server to:
-
-- Connect to proprietary internal tools
-- Integrate custom APIs or databases
-- Expose domain-specific functionality
-- Create reusable tools for your team
-
-### MCP Server Basics
-
-An MCP server provides:
-
-<AccordionGroup>
-  <Accordion title="Tools (Functions)">
-    Callable functions agents can execute:
-
-    ```typescript
-    {
-      name: "create_ticket",
-      description: "Create a new support ticket",
-      parameters: {
-        title: { type: "string", required: true },
-        description: { type: "string", required: true },
-        priority: { type: "string", enum: ["low", "medium", "high"] }
-      }
-    }
-    ```
-  </Accordion>
-
-  <Accordion title="Resources (Data)">
-    Data sources agents can read:
-
-    ```typescript
-    {
-      uri: "database://tickets/recent",
-      name: "Recent Tickets",
-      description: "Tickets from the last 7 days",
-      mimeType: "application/json"
-    }
-    ```
-  </Accordion>
-
-  <Accordion title="Prompts (Templates)">
-    Pre-defined prompt templates:
-
-    ```typescript
-    {
-      name: "analyze_ticket",
-      description: "Analyze a support ticket",
-      arguments: [{ name: "ticket_id", required: true }]
-    }
-    ```
-  </Accordion>
-</AccordionGroup>
-
-You can add any MCP-compatible server directly to LobeHub without going through the marketplace. See the [Custom MCP](/docs/usage/community/custom-mcp) guide for a step-by-step walkthrough, or the [Skill Management](/docs/usage/community/skill-management) guide for an overview of all skill types.
-
-### Advanced Features
-
-#### Environment Variables
-
-Use environment variables for sensitive configuration:
-
-```json
-{
-  "type": "stdio",
-  "command": "python",
-  "args": ["mcp_server.py"],
-  "env": {
-    "API_KEY": "${MCP_API_KEY}",
-    "DATABASE_URL": "${MCP_DATABASE_URL}"
-  }
-}
-```
-
-#### Resource Subscriptions
-
-Agents can subscribe to resource changes — when new data appears, the agent is notified and can process it immediately.
-
-## Security & Permissions
-
-### Permission Model
-
-<AccordionGroup>
-  <Accordion title="Connection-Level Permissions">
-    Control whether an MCP server can connect:
-
-    - Approved servers only
-    - Review before first connection
-    - Revoke access anytime
-  </Accordion>
-
-  <Accordion title="Tool-Level Permissions">
-    Control which tools agents can use:
-
-    - Enable/disable specific tools
-    - Read-only vs. read-write access
-    - Require approval for destructive operations
-  </Accordion>
-
-  <Accordion title="Resource-Level Permissions">
-    Control access to resources:
-
-    - Limit to specific directories/databases
-    - Restrict sensitive data
-    - Audit access logs
-  </Accordion>
-</AccordionGroup>
-
-### Security Best Practices
-
-- Only install MCP plugins from trusted sources
-- Review what access each MCP server requests before approving
-- Start with read-only access and upgrade only if needed
-- Regularly rotate API keys and tokens
-- Test new MCP servers with non-production data first
-- Never hardcode secrets — store in environment variables
-
-## Example Workflows
-
-### Development Workflow
-
-<Steps>
-  ### GitHub MCP
-
-  "Show me open pull requests"
-
-  ### File System MCP
-
-  "Review the code in src/components/"
-
-  ### Agent Analysis
-
-  Analyzes code quality, suggests improvements
-
-  ### GitHub MCP
-
-  "Add review comments to PR #123"
-</Steps>
-
-### Business Operations
-
-<Steps>
-  ### Database MCP
-
-  "How many support tickets are unresolved?"
-
-  ### Slack MCP
-
-  "Send summary to #support channel"
-
-  ### Notion MCP
-
-  "Create a ticket analysis report"
-</Steps>
-
-### Content Management
-
-<Steps>
-  ### Google Drive MCP
-
-  "Find all blog post drafts from last month"
-
-  ### Agent Processing
-
-  Reviews drafts, suggests edits
-
-  ### File System MCP
-
-  "Save edited versions locally"
-</Steps>
+- Start with read-only access when trying a new MCP server
+- Keep API keys and tokens in Connector authentication settings
+- Use the desktop app for local and network addresses
+- Open launch commands to see which dependencies they use
+- Try a new connection with test data first
 
 ## Troubleshooting
 
-<AccordionGroup>
-  <Accordion title="Connection Failed">
-    **STDIO servers**:
+**The MCP server does not appear after installation**
 
-    - Verify command exists: `which npx` or `which python`
-    - Check file paths are absolute
-    - Ensure dependencies are installed
+- View whether installation completed
+- For STDIO servers, view whether the launch command is available
+- View startup information in the server logs
+- Reopen LobeHub
 
-    **HTTP servers**:
+**Tools do not appear in the conversation**
 
-    - Verify URL is reachable
-    - Check authentication credentials
-    - Review CORS settings
-  </Accordion>
+- View the connection status under **Settings → Connectors**
+- View whether the current Agent has the connector enabled
+- View whether tool permissions are set to **Allow** or **Ask**
 
-  <Accordion title="Tools Not Showing Up">
-    - Reconnect to the MCP server in Settings
-    - Confirm the agent has the plugin enabled in its Tools & Plugins settings
-    - Verify the server implements the MCP protocol correctly
-    - Check server logs for errors
-  </Accordion>
+**Connection or authentication fails**
 
-  <Accordion title="Authentication Errors">
-    - Verify your API key or token is correct and hasn't expired
-    - Check that the authentication type matches what the server requires
-    - For HTTP servers, confirm the URL is reachable and CORS is configured
-    - Enable debug logging: `DEBUG_MCP=1` to see detailed MCP communication
-  </Accordion>
-
-  <Accordion title="Permission Denied">
-    - Check file/database permissions
-    - Verify agent has appropriate access level
-    - Review MCP server permission settings
-    - Ensure environment variables are set
-  </Accordion>
-</AccordionGroup>
-
-## Environment Configuration
-
-For self-hosted deployments, configure MCP behavior with environment variables:
-
-```bash
-# Plugin timeout (milliseconds)
-MCP_TOOL_TIMEOUT=30000
-
-# Enable MCP debug logging
-DEBUG_MCP=1
-
-# MCP configuration file path
-MCP_CONFIG=/path/to/mcp-config.json
-```
+- View whether the API key or token is still valid
+- View whether the authentication method matches the service
+- For HTTP servers, view whether the current device can reach the URL
+- Open the server logs for authentication and network details
 
 <Cards>
-  <Card href={'/docs/usage/agent/web-search'} title={'Web Search'} />
+  <Card href={'/docs/usage/community/overview'} title={'Marketplace Overview'} />
 
-  <Card href={'/docs/usage/agent/chain-of-thought'} title={'Chain of Thought'} />
+  <Card href={'/docs/usage/community/skills-market'} title={'Skills Marketplace'} />
 
-  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+  <Card href={'/docs/usage/agent/connectors'} title={'Connectors'} />
 </Cards>

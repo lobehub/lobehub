@@ -17,6 +17,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { FileService } from '@/server/services/file';
+import { FileUploadService } from '@/server/services/fileUpload';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
 import { evalRunInputConfigSchema } from './evalRunConfig.schema';
@@ -44,6 +45,91 @@ const rubricTypeSchema = z.enum([
 
 const evalConfigSchema = z.object({ judgePrompt: z.string().optional() }).passthrough();
 
+const evalCaseEnvironmentSchema = z
+  .object({
+    envPrompt: z.string().optional(),
+    toolForwarding: z
+      .record(
+        z.string().trim().min(1),
+        z
+          .object({
+            endpoint: z.string().url(),
+            timeoutMs: z.number().int().positive().optional(),
+          })
+          .strict(),
+      )
+      .optional(),
+  })
+  .strict();
+
+const dateValueSchema = z.union([
+  z.number().finite(),
+  z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Invalid timestamp'),
+]);
+
+const recordSchema = z.record(z.string(), z.unknown());
+
+const evalTestCaseMessagesSchema = z
+  .array(
+    z
+      .object({
+        content: z.string(),
+        createdAt: dateValueSchema.optional(),
+        error: recordSchema.optional(),
+        id: z.string().min(1).optional(),
+        metadata: recordSchema.optional(),
+        model: z.string().optional(),
+        parentId: z.string().min(1).nullable().optional(),
+        plugin: recordSchema.optional(),
+        pluginError: recordSchema.optional(),
+        pluginIntervention: recordSchema.optional(),
+        pluginState: recordSchema.optional(),
+        provider: z.string().optional(),
+        reasoning: recordSchema.optional(),
+        role: z.enum(['user', 'assistant', 'system', 'tool']),
+        search: recordSchema.optional(),
+        tool_call_id: z.string().optional(),
+        tools: z.array(recordSchema).optional(),
+        traceId: z.string().optional(),
+        updatedAt: dateValueSchema.optional(),
+      })
+      .strict(),
+  )
+  .superRefine((messages, ctx) => {
+    const ids = new Set<string>();
+
+    for (const [index, message] of messages.entries()) {
+      if (!message.id) continue;
+      if (ids.has(message.id)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Message ids must be unique',
+          path: [index, 'id'],
+        });
+      }
+      ids.add(message.id);
+    }
+
+    for (const [index, message] of messages.entries()) {
+      if (message.parentId && !ids.has(message.parentId)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Message parentId must reference a message in the same sequence',
+          path: [index, 'parentId'],
+        });
+      }
+    }
+  });
+
+const evalTestCaseContentSchema = z.object({
+  category: z.string().optional(),
+  choices: z.array(z.string()).optional(),
+  environment: evalCaseEnvironmentSchema.optional(),
+  expected: z.string().optional(),
+  input: z.string(),
+  messages: evalTestCaseMessagesSchema.optional(),
+});
+
 const log = debug('lobe-lambda-router:agent-eval');
 
 const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -60,6 +146,7 @@ const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
       runTopicModel: new AgentEvalRunTopicModel(ctx.serverDB, ctx.userId, wsId),
       testCaseModel: new AgentEvalTestCaseModel(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      fileUploadService: new FileUploadService(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -264,7 +351,9 @@ export const agentEvalRouter = router({
   createDataset: agentEvalProcedureWrite
     .input(
       z.object({
-        benchmarkId: z.string(),
+        // Optional: a dataset accumulated from captured cases belongs to no
+        // published benchmark.
+        benchmarkId: z.string().optional(),
         identifier: z.string(),
         name: z.string(),
         description: z.string().optional(),
@@ -375,15 +464,15 @@ export const agentEvalRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const upload = await ctx.fileUploadService.assertActiveOrLegacy(input.pathname);
       const format = input.format || 'auto';
       const resolvedFilename = input.filename || input.pathname;
       const isXlsx = format === 'xlsx' || resolvedFilename?.match(/\.xlsx?$/i);
 
-      const content = isXlsx
-        ? await ctx.fileService.getFileByteArray(input.pathname)
-        : await ctx.fileService.getFileContent(input.pathname);
-
       try {
+        const content = isXlsx
+          ? await ctx.fileService.getFileByteArray(input.pathname)
+          : await ctx.fileService.getFileContent(input.pathname);
         const result = parseDataset(content, {
           filename: resolvedFilename,
           format: format === 'auto' ? undefined : format,
@@ -397,6 +486,7 @@ export const agentEvalRouter = router({
           format: result.format,
         };
       } catch (error: any) {
+        if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: `Failed to parse file: ${error.message}`,
@@ -423,98 +513,107 @@ export const agentEvalRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const format = input.format || 'auto';
-      const resolvedFilename = input.filename || input.pathname;
-      const isXlsx = format === 'xlsx' || resolvedFilename?.match(/\.xlsx?$/i);
+      const upload = await ctx.fileUploadService.assertActiveOrLegacy(input.pathname);
+      let imported = false;
 
-      const content = isXlsx
-        ? await ctx.fileService.getFileByteArray(input.pathname)
-        : await ctx.fileService.getFileContent(input.pathname);
-
-      let parsed;
       try {
-        parsed = parseDataset(content, {
-          filename: resolvedFilename,
-          format: format === 'auto' ? undefined : format,
+        const format = input.format || 'auto';
+        const resolvedFilename = input.filename || input.pathname;
+        const isXlsx = format === 'xlsx' || resolvedFilename?.match(/\.xlsx?$/i);
+
+        let parsed;
+        try {
+          const content = isXlsx
+            ? await ctx.fileService.getFileByteArray(input.pathname)
+            : await ctx.fileService.getFileContent(input.pathname);
+          parsed = parseDataset(content, {
+            filename: resolvedFilename,
+            format: format === 'auto' ? undefined : format,
+          });
+        } catch (error: any) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Failed to parse file: ${error.message}`,
+          });
+        }
+
+        const { fieldMapping } = input;
+
+        // Get the current max sortOrder so new imports continue from there
+        const existingCount = await ctx.testCaseModel.countByDatasetId(input.datasetId);
+
+        const testCases = parsed.rows.map((row, index) => {
+          let expectedStr: string | undefined;
+
+          if (fieldMapping.expected) {
+            const raw = row[fieldMapping.expected];
+            if (raw != null) {
+              // Split multi-candidate answers by delimiter
+              if (fieldMapping.expectedDelimiter) {
+                const candidates = String(raw)
+                  .split(fieldMapping.expectedDelimiter)
+                  .map((s: string) => s.trim())
+                  .filter(Boolean);
+                expectedStr = candidates.length > 1 ? JSON.stringify(candidates) : String(raw);
+              } else {
+                expectedStr = String(raw);
+              }
+            }
+          }
+
+          // Handle choices field (array or JSON string)
+          let choices: string[] | undefined;
+          if (fieldMapping.choices) {
+            const rawChoices = row[fieldMapping.choices];
+            if (Array.isArray(rawChoices)) {
+              choices = rawChoices.map(String);
+            } else if (typeof rawChoices === 'string') {
+              try {
+                const parsed = JSON.parse(rawChoices);
+                if (Array.isArray(parsed)) choices = parsed.map(String);
+              } catch {
+                // Not JSON, skip
+              }
+            }
+          }
+
+          // Compute sortOrder: use CSV column value if mapped, otherwise auto-increment from 1
+          let sortOrder: number;
+          if (fieldMapping.sortOrder) {
+            const raw = Number(row[fieldMapping.sortOrder]);
+            sortOrder = Number.isFinite(raw) ? raw : existingCount + index + 1;
+          } else {
+            sortOrder = existingCount + index + 1;
+          }
+
+          return {
+            datasetId: input.datasetId,
+            content: {
+              input: String(row[fieldMapping.input] ?? ''),
+              expected: expectedStr,
+              choices,
+              category: fieldMapping.category ? String(row[fieldMapping.category]) : undefined,
+            },
+            metadata: fieldMapping.metadata
+              ? Object.fromEntries(
+                  Object.entries(fieldMapping.metadata).map(([key, col]) => [
+                    key,
+                    row[col as string],
+                  ]),
+                )
+              : {},
+            sortOrder,
+          };
         });
-      } catch (error: any) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: `Failed to parse file: ${error.message}`,
-        });
+
+        const result = await ctx.testCaseModel.batchCreate(testCases);
+        imported = true;
+
+        return { count: result.length, data: result };
+      } finally {
+        if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
+        else if (imported) await ctx.fileService.deleteFile(input.pathname);
       }
-
-      const { fieldMapping } = input;
-
-      // Get the current max sortOrder so new imports continue from there
-      const existingCount = await ctx.testCaseModel.countByDatasetId(input.datasetId);
-
-      const testCases = parsed.rows.map((row, index) => {
-        let expectedStr: string | undefined;
-
-        if (fieldMapping.expected) {
-          const raw = row[fieldMapping.expected];
-          if (raw != null) {
-            // Split multi-candidate answers by delimiter
-            if (fieldMapping.expectedDelimiter) {
-              const candidates = String(raw)
-                .split(fieldMapping.expectedDelimiter)
-                .map((s: string) => s.trim())
-                .filter(Boolean);
-              expectedStr = candidates.length > 1 ? JSON.stringify(candidates) : String(raw);
-            } else {
-              expectedStr = String(raw);
-            }
-          }
-        }
-
-        // Handle choices field (array or JSON string)
-        let choices: string[] | undefined;
-        if (fieldMapping.choices) {
-          const rawChoices = row[fieldMapping.choices];
-          if (Array.isArray(rawChoices)) {
-            choices = rawChoices.map(String);
-          } else if (typeof rawChoices === 'string') {
-            try {
-              const parsed = JSON.parse(rawChoices);
-              if (Array.isArray(parsed)) choices = parsed.map(String);
-            } catch {
-              // Not JSON, skip
-            }
-          }
-        }
-
-        // Compute sortOrder: use CSV column value if mapped, otherwise auto-increment from 1
-        let sortOrder: number;
-        if (fieldMapping.sortOrder) {
-          const raw = Number(row[fieldMapping.sortOrder]);
-          sortOrder = Number.isFinite(raw) ? raw : existingCount + index + 1;
-        } else {
-          sortOrder = existingCount + index + 1;
-        }
-
-        return {
-          datasetId: input.datasetId,
-          content: {
-            input: String(row[fieldMapping.input] ?? ''),
-            expected: expectedStr,
-            choices,
-            category: fieldMapping.category ? String(row[fieldMapping.category]) : undefined,
-          },
-          metadata: fieldMapping.metadata
-            ? Object.fromEntries(
-                Object.entries(fieldMapping.metadata).map(([key, col]) => [
-                  key,
-                  row[col as string],
-                ]),
-              )
-            : {},
-          sortOrder,
-        };
-      });
-
-      const result = await ctx.testCaseModel.batchCreate(testCases);
-      return { count: result.length, data: result };
     }),
 
   // ============================================
@@ -524,12 +623,7 @@ export const agentEvalRouter = router({
     .input(
       z.object({
         datasetId: z.string(),
-        content: z.object({
-          input: z.string(),
-          expected: z.string().optional(),
-          choices: z.array(z.string()).optional(),
-          category: z.string().optional(),
-        }),
+        content: evalTestCaseContentSchema,
         evalMode: rubricTypeSchema.optional(),
         evalConfig: evalConfigSchema.optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
@@ -567,12 +661,7 @@ export const agentEvalRouter = router({
         datasetId: z.string(),
         cases: z.array(
           z.object({
-            content: z.object({
-              input: z.string(),
-              expected: z.string().optional(),
-              choices: z.array(z.string()).optional(),
-              category: z.string().optional(),
-            }),
+            content: evalTestCaseContentSchema,
             metadata: z.record(z.string(), z.unknown()).optional(),
             sortOrder: z.number().optional(),
           }),
@@ -608,9 +697,12 @@ export const agentEvalRouter = router({
         id: z.string(),
         content: z
           .object({
-            input: z.string(),
+            input: z.string().optional(),
             expected: z.string().optional(),
+            choices: z.array(z.string()).optional(),
             category: z.string().optional(),
+            environment: evalCaseEnvironmentSchema.optional(),
+            messages: evalTestCaseMessagesSchema.optional(),
           })
           .optional(),
         evalMode: rubricTypeSchema.nullish(),
@@ -621,7 +713,7 @@ export const agentEvalRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
-      const result = await ctx.testCaseModel.update(id, data);
+      const result = await ctx.testCaseModel.update(id, data as any);
       if (!result) {
         throw new TRPCError({
           code: 'NOT_FOUND',

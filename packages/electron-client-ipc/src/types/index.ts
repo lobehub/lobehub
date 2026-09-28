@@ -18,6 +18,7 @@ export * from './route';
 export * from './screenCapture';
 export * from './shortcut';
 export * from './system';
+export * from './tabPreview';
 export * from './terminal';
 export * from './topicPopup';
 export * from './tray';

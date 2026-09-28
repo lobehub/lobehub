@@ -1,5 +1,6 @@
 import { FileTextIcon } from 'lucide-react';
 
+import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from '@/features/RouteMeta/workspaceScope';
 import { useClientDataSWR } from '@/libs/swr';
@@ -30,5 +31,6 @@ const AgentDocumentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) 
 export const agentDocumentRouteMeta = routeMeta({
   DynamicMeta: AgentDocumentDynamicMeta,
   icon: FileTextIcon,
+  Skeleton: createSurfaceSkeleton('editor'),
   titleKey: 'navigation.document',
 });

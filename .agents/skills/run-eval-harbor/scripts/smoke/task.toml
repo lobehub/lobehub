@@ -1,0 +1,13 @@
+version = "1.0"
+
+[metadata]
+name = "LobeHub Harbor end-to-end smoke"
+
+[agent]
+timeout_sec = 300.0
+
+[environment]
+build_timeout_sec = 300.0
+cpus = 1
+memory_mb = 1024
+storage_mb = 1024

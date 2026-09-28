@@ -1,17 +1,36 @@
 import type { RealtimeAudioCapture } from './audio';
+import type {
+  RealtimeAsrSessionResponse,
+  RealtimeDictationErrorCode,
+  RealtimeDictationSnapshot,
+} from './contract';
 import {
   parseRealtimeAsrServerEvent,
   REALTIME_ASR_PROTOCOL_VERSION,
-  type RealtimeAsrSessionResponse,
   RealtimeDictationError,
-  type RealtimeDictationErrorCode,
-  type RealtimeDictationSnapshot,
 } from './contract';
-import { type DictationEditorAdapter } from './editor';
+import type { DictationEditorAdapter } from './editor';
 import { BoundedWebSocketFrameQueue } from './frameQueue';
 import { DictationTranscript } from './transcript';
 
 export type DictationCancelReason = 'audio_interruption' | 'network_change' | 'user_cancelled';
+
+export type RealtimeDictationTimingStage =
+  'admission' | 'admission_refresh' | 'capture' | 'permission' | 'ws_ready';
+
+export interface RealtimeDictationTiming {
+  durationMs: number;
+  stage: RealtimeDictationTimingStage;
+}
+
+export const REALTIME_DICTATION_PERFORMANCE_MARKS = {
+  admission: 'lobe:voice-dictation:admission',
+  admission_refresh: 'lobe:voice-dictation:admission_refresh',
+  capture: 'lobe:voice-dictation:capture',
+  permission: 'lobe:voice-dictation:permission',
+  start: 'lobe:voice-dictation:start',
+  ws_ready: 'lobe:voice-dictation:ws_ready',
+} as const;
 
 export interface RealtimeAsrWebSocket {
   addEventListener: ((type: 'close' | 'error' | 'open', listener: () => void) => void) &
@@ -30,7 +49,10 @@ export interface RealtimeDictationDependencies {
   createSession: (signal: AbortSignal) => Promise<RealtimeAsrSessionResponse>;
   createWebSocket: (url: string) => RealtimeAsrWebSocket;
   editor: DictationEditorAdapter;
+  now?: () => number;
+  onTiming?: (timing: RealtimeDictationTiming) => void;
   requestMicrophone: () => Promise<MediaStream>;
+  wallClockNow?: () => number;
 }
 
 const IDLE_SNAPSHOT: RealtimeDictationSnapshot = {
@@ -40,6 +62,36 @@ const IDLE_SNAPSHOT: RealtimeDictationSnapshot = {
 
 const SOCKET_CONNECTING = 0;
 const SOCKET_OPEN = 1;
+const ADMISSION_EXPIRY_SAFETY_MS = 1000;
+
+const getMonotonicNow = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
+
+const clearPerformanceMarks = () => {
+  if (typeof performance === 'undefined' || typeof performance.clearMarks !== 'function') return;
+
+  try {
+    for (const mark of Object.values(REALTIME_DICTATION_PERFORMANCE_MARKS)) {
+      performance.clearMarks(mark);
+    }
+  } catch (error) {
+    void error;
+  }
+};
+
+const markPerformance = (stage: RealtimeDictationTimingStage | 'start') => {
+  if (typeof performance === 'undefined' || typeof performance.mark !== 'function') return;
+
+  const mark = REALTIME_DICTATION_PERFORMANCE_MARKS[stage];
+  try {
+    performance.mark(mark);
+  } catch (error) {
+    void error;
+  }
+};
+
+const stopMediaStream = (stream: MediaStream) => {
+  for (const track of stream.getTracks()) track.stop();
+};
 
 const toClientError = (error: unknown): RealtimeDictationError => {
   if (error instanceof RealtimeDictationError) return error;
@@ -70,11 +122,13 @@ export class RealtimeDictationClient {
   #editorFinalized = false;
   #finalTimer?: ReturnType<typeof setTimeout>;
   #lifecycleCleanup?: () => void;
+  #microphoneStream?: MediaStream;
   #queue?: BoundedWebSocketFrameQueue;
   #runId = 0;
   #session?: RealtimeAsrSessionResponse;
   #snapshot = IDLE_SNAPSHOT;
   #socket?: RealtimeAsrWebSocket;
+  #startedAt?: number;
   #terminalTransition = false;
   #transcript?: DictationTranscript;
 
@@ -92,7 +146,11 @@ export class RealtimeDictationClient {
   async start() {
     if (this.#snapshot.status !== 'idle' && this.#snapshot.status !== 'error') return;
 
+    const startedAt = this.#now();
+    clearPerformanceMarks();
+    markPerformance('start');
     await this.#releaseResources();
+    this.#startedAt = startedAt;
     const runId = ++this.#runId;
     this.#editorFinalized = false;
     this.#terminalTransition = false;
@@ -109,34 +167,21 @@ export class RealtimeDictationClient {
     this.#abortController = abortController;
 
     try {
-      const stream = await this.#dependencies.requestMicrophone();
-      if (runId !== this.#runId) {
-        for (const track of stream.getTracks()) track.stop();
-        return;
-      }
-
-      this.#setSnapshot({ retryable: false, status: 'connecting' });
-      const capturePromise = this.#dependencies.createCapture(stream).then(
-        async (capture) => {
-          if (runId === this.#runId) {
-            this.#capture = capture;
-          } else {
-            await capture.cancel().catch(() => undefined);
-          }
-          return capture;
-        },
-        (error) => {
-          abortController.abort();
-          throw error;
-        },
-      );
-      const [capture, session] = await Promise.all([
-        capturePromise,
-        this.#dependencies.createSession(abortController.signal),
-      ]);
+      const capturePromise = this.#prepareCapture(runId, abortController);
+      const admissionPromise = this.#createSession(runId, abortController.signal);
+      const [capture, initialSession] = await Promise.all([capturePromise, admissionPromise]);
       if (runId !== this.#runId) {
         await capture.cancel().catch(() => undefined);
         return;
+      }
+
+      let session = initialSession;
+      if (this.#isAdmissionExpiring(session)) {
+        session = await this.#createSession(runId, abortController.signal, 'admission_refresh');
+        if (runId !== this.#runId) return;
+        if (this.#isAdmissionExpiring(session)) {
+          throw new RealtimeDictationError('SESSION_EXPIRED', true);
+        }
       }
 
       this.#session = session;
@@ -179,10 +224,16 @@ export class RealtimeDictationClient {
   }
 
   async cancel(reason: DictationCancelReason = 'user_cancelled') {
-    if (this.#snapshot.status === 'idle') return;
+    const statusBeforeCancel = this.#snapshot.status;
+    if (statusBeforeCancel === 'idle') return;
 
     this.#finalizeEditor();
     this.#acceptingAudio = false;
+    if (statusBeforeCancel !== 'listening' && statusBeforeCancel !== 'finalizing') {
+      await this.#complete();
+      return;
+    }
+
     this.#setSnapshot({ retryable: false, status: 'finalizing' });
     await this.#capture?.cancel().catch(() => undefined);
     this.#queue?.dispose();
@@ -228,6 +279,7 @@ export class RealtimeDictationClient {
     switch (event.type) {
       case 'session.ready': {
         if (this.#snapshot.status !== 'connecting' || !this.#socket || !this.#session) return;
+        this.#recordTiming('ws_ready');
         if (this.#connectTimer) clearTimeout(this.#connectTimer);
         this.#connectTimer = undefined;
         this.#queue = new BoundedWebSocketFrameQueue(this.#socket, {
@@ -306,6 +358,70 @@ export class RealtimeDictationClient {
     this.#finalTimer = setTimeout(() => void this.#fail('FINAL_TIMEOUT', true), timeoutMs);
   }
 
+  async #createSession(
+    runId: number,
+    signal: AbortSignal,
+    timingStage: 'admission' | 'admission_refresh' = 'admission',
+  ) {
+    const session = await this.#dependencies.createSession(signal);
+    if (runId === this.#runId) this.#recordTiming(timingStage);
+    return session;
+  }
+
+  #isAdmissionExpiring(session: RealtimeAsrSessionResponse) {
+    const expiresAt = Date.parse(session.expiresAt);
+    const now = this.#dependencies.wallClockNow?.() ?? Date.now();
+    return !Number.isFinite(expiresAt) || expiresAt - now <= ADMISSION_EXPIRY_SAFETY_MS;
+  }
+
+  #now() {
+    return this.#dependencies.now?.() ?? getMonotonicNow();
+  }
+
+  async #prepareCapture(runId: number, abortController: AbortController) {
+    const stream = await this.#dependencies.requestMicrophone();
+    if (runId !== this.#runId) {
+      stopMediaStream(stream);
+      throw new Error('dictation_start_cancelled');
+    }
+
+    this.#microphoneStream = stream;
+    this.#recordTiming('permission');
+    this.#setSnapshot({ retryable: false, status: 'connecting' });
+
+    let capture: RealtimeAudioCapture;
+    try {
+      capture = await this.#dependencies.createCapture(stream);
+    } catch (error) {
+      abortController.abort();
+      throw error;
+    }
+
+    if (runId === this.#runId) {
+      this.#microphoneStream = undefined;
+      this.#capture = capture;
+      this.#recordTiming('capture');
+    } else {
+      await capture.cancel().catch(() => undefined);
+    }
+    return capture;
+  }
+
+  #recordTiming(stage: RealtimeDictationTimingStage) {
+    if (this.#startedAt === undefined) return;
+
+    markPerformance(stage);
+    const timing = {
+      durationMs: Math.max(0, Math.round(this.#now() - this.#startedAt)),
+      stage,
+    } satisfies RealtimeDictationTiming;
+    try {
+      this.#dependencies.onTiming?.(timing);
+    } catch (error) {
+      void error;
+    }
+  }
+
   async #fail(code: RealtimeDictationErrorCode, retryable: boolean) {
     if (this.#terminalTransition) return;
     this.#terminalTransition = true;
@@ -335,6 +451,8 @@ export class RealtimeDictationClient {
     this.#lifecycleCleanup = undefined;
     this.#queue?.dispose();
     this.#queue = undefined;
+    if (this.#microphoneStream) stopMediaStream(this.#microphoneStream);
+    this.#microphoneStream = undefined;
     await this.#capture?.cancel().catch(() => undefined);
     this.#capture = undefined;
     if (this.#socket) {
@@ -351,6 +469,7 @@ export class RealtimeDictationClient {
       this.#closingSocket = false;
     }
     this.#session = undefined;
+    this.#startedAt = undefined;
     this.#transcript = undefined;
   }
 

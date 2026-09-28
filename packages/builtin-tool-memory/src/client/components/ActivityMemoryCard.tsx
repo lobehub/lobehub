@@ -1,10 +1,10 @@
 'use client';
 
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Spin, Tag, Text } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import StreamingMarkdown from '@/components/StreamingMarkdown';
 
 import type { AddActivityMemoryParams } from '../../types';
@@ -62,7 +62,7 @@ export const ActivityMemoryCard = memo<ActivityMemoryCardProps>(({ data, loading
         </Flexbox>
         {activityType && <Tag>{activityType}</Tag>}
         {status && <Tag color={STATUS_COLORS[status] || 'default'}>{status.replace('_', ' ')}</Tag>}
-        {loading && <NeuralNetworkLoading size={20} />}
+        {loading && <Spin size="middle" variant="network" />}
       </Flexbox>
 
       {hasActivityContent ? (

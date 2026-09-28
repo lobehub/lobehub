@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskService } from '@/services/task';
+import { useUserStore } from '@/store/user';
 
 import { useTaskStore } from '../../store';
 
@@ -24,6 +25,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   useTaskStore.setState({
     activeTaskId: 'T-1',
+    listGroupBy: 'status',
+    listGroupExcludeStatuses: undefined,
     taskDetailMap: { 'T-1': { ...mockDetail } },
     taskGroups: [],
     tasks: [],
@@ -97,6 +100,28 @@ describe('TaskLifecycleSliceAction', () => {
       expect(taskService.updateStatus).toHaveBeenCalledWith('T-1', 'paused', undefined);
     });
 
+    it('drops the synthesized feed row when the transition AND the rollback refetch fail', async () => {
+      useUserStore.setState({
+        isSignedIn: true,
+        user: { avatar: null, fullName: 'Me', id: 'user_me' } as any,
+      });
+      useTaskStore.setState({ taskDetailMap: { 'T-1': { ...mockDetail, activities: [] } } });
+      vi.mocked(taskService.updateStatus).mockRejectedValue(new Error('offline'));
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(mutate).mockRejectedValue(new Error('still offline'));
+
+      try {
+        await expect(useTaskStore.getState().updateTaskStatus('T-1', 'paused')).rejects.toThrow(
+          'offline',
+        );
+
+        // The transition never happened, so nothing may keep saying it did.
+        expect(useTaskStore.getState().taskDetailMap['T-1'].activities).toEqual([]);
+      } finally {
+        vi.mocked(mutate).mockReset();
+      }
+    });
+
     it('should optimistically set status', async () => {
       vi.mocked(taskService.updateStatus).mockImplementation(async () => {
         expect(useTaskStore.getState().taskDetailMap['T-1'].status).toBe('paused');
@@ -127,6 +152,31 @@ describe('TaskLifecycleSliceAction', () => {
           total: 1,
         });
 
+        return { success: true } as any;
+      });
+
+      await useTaskStore.getState().updateTaskStatus('T-1', 'completed');
+    });
+
+    it('should preserve assignee grouping when a task status changes', async () => {
+      useTaskStore.setState({
+        listGroupBy: 'assignee',
+        taskGroups: [
+          {
+            assigneeAgentId: 'agent-1',
+            key: 'assignee:agent-1',
+            tasks: [{ assigneeAgentId: 'agent-1', identifier: 'T-1', status: 'backlog' }],
+            total: 1,
+          },
+        ] as any,
+        tasks: [{ assigneeAgentId: 'agent-1', identifier: 'T-1', status: 'backlog' }] as any,
+      });
+      vi.mocked(taskService.updateStatus).mockImplementation(async () => {
+        expect(useTaskStore.getState().taskGroups[0]).toMatchObject({
+          key: 'assignee:agent-1',
+          tasks: [expect.objectContaining({ identifier: 'T-1', status: 'completed' })],
+          total: 1,
+        });
         return { success: true } as any;
       });
 

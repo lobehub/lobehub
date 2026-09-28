@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import type { AiModelForSelect, EnabledAiModel, ModelSearchImplementType } from './aiModel';
+import type {
+  AiModelForSelect,
+  AiModelReasoningConfig,
+  EnabledAiModel,
+  ModelSearchImplementType,
+} from './aiModel';
 
 export type ResponseAnimationStyle = 'smooth' | 'fadeIn' | 'none';
 export type ResponseAnimation =
@@ -437,11 +442,22 @@ export interface AiProviderRuntimeState {
   /** False when the server could not resolve the current user's hidden-model policy. */
   hiddenBuiltinModelsResolved?: boolean;
   /**
+   * The user's saved per-model reasoning defaults (personal scope, shared across
+   * workspaces), keyed by `${providerId}/${modelId}`. When present it is
+   * complete: a missing key means nothing is saved for that model.
+   */
+  modelReasoningConfigs?: Record<string, AiModelReasoningConfig>;
+  /**
    * Retired `${providerId}/${modelId}` → successor model id (same provider).
    * Requests for a key are transparently served by its successor, so clients can
    * render "superseded by X" instead of "removed". Keys are provider-scoped so a
    * same-named model under an unrelated provider is never treated as redirected.
    */
   modelRedirects?: Record<string, string>;
+  /**
+   * Secret-free provider-binding capabilities resolved by the server.
+   * Renderer consumers use this instead of inspecting provider runtime config.
+   */
+  providerBindingAgentTypes?: Record<string, string[]>;
   runtimeConfig: Record<string, AiProviderRuntimeConfig>;
 }

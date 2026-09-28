@@ -6,6 +6,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveAppUrlBuilder } from './task/url';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -136,18 +137,29 @@ export function registerDocCommand(program: Command) {
       }) => {
         const content = readBodyContent(options);
         const client = await getTrpcClient();
+        const buildUrl = await resolveAppUrlBuilder(client);
 
         const result = await client.document.createDocument.mutate({
+          // The server builds the editor state from `content`; the CLI has no editor.
           content,
-          editorData: JSON.stringify({ content: content || '', type: 'doc' }),
           fileType: options.fileType,
           knowledgeBaseId: options.kb,
+          // Inside an agent run, credit the document to that run so it shows up
+          // as the run's deliverable (e.g. on a Goal) instead of a loose page.
+          ...(process.env.LOBEHUB_OPERATION_ID
+            ? { operationId: process.env.LOBEHUB_OPERATION_ID }
+            : {}),
           parentId: options.parent,
           slug: options.slug,
           title: options.title,
         });
+        const pathname = options.kb
+          ? `/resource/library/${encodeURIComponent(options.kb)}?file=${encodeURIComponent(result.id)}`
+          : `/page/${encodeURIComponent(result.id)}`;
+        const url = buildUrl(pathname);
 
         console.log(`${pc.green('✓')} Created document ${pc.bold(result.id)}`);
+        console.log(`${pc.bold('document')}: ${url}`);
       },
     );
 
@@ -180,10 +192,10 @@ export function registerDocCommand(program: Command) {
       }
 
       const client = await getTrpcClient();
+      const buildUrl = await resolveAppUrlBuilder(client);
 
       const items = documents.map((d) => ({
         content: d.content,
-        editorData: JSON.stringify({ content: d.content || '', type: 'doc' }),
         fileType: d.fileType,
         knowledgeBaseId: d.knowledgeBaseId,
         parentId: d.parentId,
@@ -193,9 +205,18 @@ export function registerDocCommand(program: Command) {
 
       const result = await client.document.createDocuments.mutate({ documents: items });
       const created = Array.isArray(result) ? result : [result];
+      const urls = await Promise.all(
+        created.map((document, index) => {
+          const source = items[index];
+          const pathname = source?.knowledgeBaseId
+            ? `/resource/library/${encodeURIComponent(source.knowledgeBaseId)}?file=${encodeURIComponent(document.id)}`
+            : `/page/${encodeURIComponent(document.id)}`;
+          return buildUrl(pathname);
+        }),
+      );
       console.log(`${pc.green('✓')} Created ${created.length} document(s)`);
-      for (const doc of created) {
-        console.log(`  ${pc.dim('•')} ${doc.id} — ${doc.title || 'Untitled'}`);
+      for (const [index, doc] of created.entries()) {
+        console.log(`  ${pc.dim('•')} ${doc.id} — ${doc.title || 'Untitled'} — ${urls[index]}`);
       }
     });
 
@@ -233,14 +254,14 @@ export function registerDocCommand(program: Command) {
 
         const params: Record<string, any> = { id };
         if (options.title) params.title = options.title;
-        if (content !== undefined) {
-          params.content = content;
-          params.editorData = JSON.stringify({ content, type: 'doc' });
-        }
+        // The server rebuilds the editor state from the new content.
+        if (content !== undefined) params.content = content;
         if (options.parent !== undefined) {
           params.parentId = options.parent || null;
         }
         if (options.fileType) params.fileType = options.fileType;
+        // Inside an agent run, an edit becomes a new version of that run's deliverable.
+        if (process.env.LOBEHUB_OPERATION_ID) params.operationId = process.env.LOBEHUB_OPERATION_ID;
 
         await client.document.updateDocument.mutate(params as any);
         console.log(`${pc.green('✓')} Updated document ${pc.bold(id)}`);
@@ -311,8 +332,8 @@ export function registerDocCommand(program: Command) {
     .action(async (docId: string, topicId: string) => {
       const client = await getTrpcClient();
 
-      // Create the document via notebook router which handles topic association
-      // First verify the document exists
+      // Attach the existing document; creating a copy here used to leave two
+      // documents (and two run deliverables) for a single link.
       const document = await client.document.getDocumentById.query({ id: docId });
       if (!document) {
         log.error(`Document not found: ${docId}`);
@@ -320,16 +341,10 @@ export function registerDocCommand(program: Command) {
         return;
       }
 
-      // Use notebook.createDocument to create a linked copy, associating with the topic
-      const result = await client.notebook.createDocument.mutate({
-        content: document.content || '',
-        description: document.description || '',
-        title: document.title || 'Untitled',
-        topicId,
-      });
+      const result = await client.notebook.associateDocument.mutate({ documentId: docId, topicId });
 
       console.log(
-        `${pc.green('✓')} Linked document ${pc.bold(result.id)} to topic ${pc.bold(topicId)}`,
+        `${pc.green('✓')} Linked document ${pc.bold(result.documentId)} to topic ${pc.bold(topicId)}`,
       );
     });
 

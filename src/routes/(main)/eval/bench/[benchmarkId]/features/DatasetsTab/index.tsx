@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
-import { Card, Skeleton } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Button, confirmModal, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
+import { Card } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -194,11 +194,11 @@ const DatasetsTab = memo<DatasetsTabProps>(
                   <div className={loadingStyles.header}>
                     <div className={loadingStyles.icon} />
                     <Flexbox flex={1} gap={8}>
-                      <Skeleton.Input active size="small" style={{ height: 16, width: 120 }} />
-                      <Skeleton.Input active size="small" style={{ height: 12, width: 200 }} />
+                      <Skeleton height={16} width={120} />
+                      <Skeleton height={12} width={200} />
                     </Flexbox>
-                    <Skeleton.Button active size="small" style={{ height: 36, width: 64 }} />
-                    <Skeleton.Button active size="small" style={{ height: 28, width: 64 }} />
+                    <Skeleton height={36} width={64} />
+                    <Skeleton height={28} width={64} />
                   </div>
                 </Card>
               ))}

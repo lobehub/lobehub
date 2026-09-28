@@ -13,6 +13,7 @@ import { parseBrowserLanguage } from '@/utils/locale';
 import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVariants';
 
 import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
+import { isShareSpaRoute } from '../shareRoutes';
 import { isAlwaysWorkbenchSpaRoute, isWorkbenchSpaRoute } from '../workbenchRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
 
@@ -56,6 +57,9 @@ export function defineConfig() {
     const url = new URL(request.url);
     logDefault('Processing request: %s %s', request.method, request.url);
 
+    // Public installation instructions must remain readable by coding agents.
+    if (url.pathname === '/acceptance/skill.md') return NextResponse.next();
+
     // skip all api requests
     if (backendApiEndpoints.some((path) => url.pathname.startsWith(path))) {
       logDefault('Skipping API request: %s', url.pathname);
@@ -90,18 +94,11 @@ export function defineConfig() {
       locale,
     });
 
-    // These pages are responsive on their own; always serve the desktop bundle
-    // so mobile UA does not land on mobile-specific routes.
-    const desktopOnlyPaths = ['/share'];
-    const isDesktopOnlyPath = desktopOnlyPaths.some(
-      (path) => url.pathname === path || url.pathname.startsWith(`${path}/`),
-    );
-
     const safeLocale = toSafeLocale(locale);
 
     // 2. Create normalized preference values
     const route = RouteVariants.serializeVariants({
-      isMobile: !isDesktopOnlyPath && device.type === 'mobile',
+      isMobile: device.type === 'mobile',
       locale: safeLocale,
     });
 
@@ -139,6 +136,19 @@ export function defineConfig() {
       const authSpaPath = `/spa-auth/${safeLocale}${url.pathname}`;
       logDefault('Auth SPA route, rewriting to: %s', authSpaPath);
       url.pathname = authSpaPath;
+
+      const response = NextResponse.rewrite(url);
+      persistLocaleCookie(response, request, explicitlyLocale);
+
+      return response;
+    }
+
+    // Share pages are responsive on their own, so they get one bundle for every
+    // device rather than a mobile variant.
+    if (isShareSpaRoute(url.pathname)) {
+      const sharePath = `/spa-share/${safeLocale}${url.pathname}`;
+      logDefault('Share SPA route, rewriting to: %s', sharePath);
+      url.pathname = sharePath;
 
       const response = NextResponse.rewrite(url);
       persistLocaleCookie(response, request, explicitlyLocale);
@@ -230,6 +240,14 @@ export function defineConfig() {
     '/oidc/handoff',
     '/oidc/device/auth',
     '/oidc/token',
+    // OIDC protocol endpoints a client reads before (or without) any browser
+    // session: discovery and JWKS are public by spec, and userinfo authenticates
+    // with the bearer access token the provider itself checks. Session-gating them
+    // redirects non-browser callers to the sign-in HTML, which is what a
+    // third-party app registered through Settings → OAuth Apps hits first.
+    '/oidc/.well-known/openid-configuration',
+    '/oidc/jwks',
+    '/oidc/me',
     // Interaction details for the consent/login page — must be reachable
     // before the user has a session, so it cannot be session-gated.
     '/oidc/interaction/(.*)',

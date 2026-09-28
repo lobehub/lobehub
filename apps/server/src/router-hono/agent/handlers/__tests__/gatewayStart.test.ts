@@ -9,10 +9,12 @@ const { mockEnsureRunning, mockStop } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/gateway', () => ({
-  GatewayService: vi.fn().mockImplementation(() => ({
-    ensureRunning: mockEnsureRunning,
-    stop: mockStop,
-  })),
+  GatewayService: vi.fn().mockImplementation(function () {
+    return {
+      ensureRunning: mockEnsureRunning,
+      stop: mockStop,
+    };
+  }),
 }));
 
 function buildContext(opts: { body?: unknown; jsonThrows?: boolean }) {

@@ -76,6 +76,7 @@ export enum SettingsTabs {
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
+  Integrations = 'integrations',
   Labels = 'labels',
   Labs = 'labs',
   LLM = 'llm',
@@ -96,6 +97,7 @@ export enum SettingsTabs {
   Stats = 'stats',
   Storage = 'storage',
   SystemTools = 'system-tools',
+  Tools = 'tools',
   /** @deprecated Use ServiceModel instead */
   TTS = 'tts',
   Usage = 'usage',
@@ -262,9 +264,16 @@ export interface SystemStatus {
    */
   modelDetailPanelCollapsedKeys?: ModelDetailPanelExpandedKey[];
   /**
-   * ModelSwitchPanel grouping mode
+   * ModelSwitchPanel grouping preference. Only ever written by the user's own
+   * switch; the store must not seed a default here, because
+   * `updateSystemStatus` persists the whole merged status and a seeded value
+   * is indistinguishable from a chosen one.
+   *
+   * Replaces the legacy `modelSwitchPanelGroupMode` key, which was seeded with
+   * `'byProvider'` and therefore sits in existing users' storage without them
+   * having picked it. That key is intentionally never read again.
    */
-  modelSwitchPanelGroupMode?: 'byModel' | 'byProvider';
+  modelSwitchPanelGroupBy?: 'byModel' | 'byProvider';
   /**
    * ModelSwitchPanel width
    */
@@ -342,6 +351,8 @@ export interface SystemStatus {
   showVerifyReportPanel?: boolean;
   showVideoPanel?: boolean;
   showVideoTopicPanel?: boolean;
+  /** Visibility of the lightweight chat overview card. Independent from the workspace panel. */
+  showWorkingOverview?: boolean;
   /**
    * Flat ordered list of sidebar items.
    */
@@ -373,14 +384,14 @@ export interface SystemStatus {
    */
   taskListViewMode?: TaskViewMode;
   taskListViewOptions?: {
-    groupBy: 'assignee' | 'none' | 'priority' | 'status';
+    groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
     hideCompleted: boolean;
     nestedSubTasks: boolean;
     orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
     orderCompletedByRecency: boolean;
     orderDirection: 'asc' | 'desc';
     showSubTasks: boolean;
-    subGroupBy: 'assignee' | 'none' | 'priority' | 'status';
+    subGroupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
   };
   /**
    * Height of the chat bottom terminal panel. Persisted so resizing survives remounts.
@@ -549,7 +560,6 @@ export const INITIAL_STATUS = {
   leftPanelWidth: 280,
   mobileShowTopic: false,
   modelDetailPanelCollapsedKeys: [],
-  modelSwitchPanelGroupMode: 'byProvider',
   modelSwitchPanelWidth: 460,
   noWideScreen: true,
   pageAgentPanelWidth: 360,

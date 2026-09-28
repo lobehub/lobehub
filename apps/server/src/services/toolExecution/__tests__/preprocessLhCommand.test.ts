@@ -88,6 +88,30 @@ describe('preprocessLhCommand', () => {
     expect(result.error).toBe('Failed to authenticate for CLI execution');
     expect(result.command).toBe('lh topic list');
   });
+
+  // Belt-and-braces guard: `serverRuntimes/cloudSandbox.ts` already
+  // short-circuits before ever calling this function for a share-visitor `lh`
+  // command, but this function must independently refuse too — the caller
+  // remembering to keep re-checking it must not be the only thing standing
+  // between a share visitor and the creator's own JWT.
+  it('should refuse and never sign a JWT when shareVisitorBlocked is set', async () => {
+    mockSignUserJWT.mockClear();
+
+    const result = await preprocessLhCommand('lh topic list', 'user-1', undefined, true);
+
+    expect(result.isLhCommand).toBe(true);
+    expect(result.error).toBe('The LobeHub CLI is unavailable in shared conversations.');
+    expect(result.command).toBe('lh topic list');
+    expect(mockSignUserJWT).not.toHaveBeenCalled();
+  });
+
+  it('should leave a non-lh command untouched even when shareVisitorBlocked is set', async () => {
+    const result = await preprocessLhCommand('echo hello', 'user-1', undefined, true);
+
+    expect(result.isLhCommand).toBe(false);
+    expect(result.error).toBeUndefined();
+    expect(result.command).toBe('echo hello');
+  });
 });
 
 describe('isLhCommand', () => {

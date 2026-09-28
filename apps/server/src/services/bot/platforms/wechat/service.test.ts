@@ -1,6 +1,22 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as PublicUrlFetchModule from '../publicUrlFetch';
+
+// These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
+// for real, which has nothing to do with what they assert. Its own behaviour is
+// covered in publicUrlFetch.test.ts.
+vi.mock('../publicUrlFetch', async () => ({
+  // Spread the real module: a full mock silently drops every export it
+  // does not name, so adding one to publicUrlFetch breaks suites that
+  // never cared about it.
+  ...(await vi.importActual<typeof PublicUrlFetchModule>('../publicUrlFetch')),
+  fetchPublicUrl: async (url: string, timeoutMs: number) => ({
+    dispose: async () => undefined,
+    response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+  }),
+}));
+
 const MessageItemType = vi.hoisted(() => ({
   FILE: 4,
   IMAGE: 1,
@@ -147,6 +163,47 @@ describe('WechatMessageService.sendMessage', () => {
     expect(api.sendMessage).not.toHaveBeenCalled();
     expect(api.uploadCdnMedia).toHaveBeenCalledTimes(1);
     expect(api.sendItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an attachment whose bytes could not be fetched instead of swallowing it', async () => {
+    // Regression: the runtime returned `success: true` while the file never
+    // left the server, so the model told the user "see attached".
+    const api = makeApi();
+    const service = new WechatMessageService(api as any, 'app-1');
+    const error = new TypeError('fetch failed');
+    (error as any).cause = new TypeError('Invalid IP address: undefined');
+    vi.mocked(fetch).mockRejectedValueOnce(error);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const result = await service.sendMessage({
+        attachments: [
+          { fetchUrl: 'https://app.example.com/f/file_1', name: 'report.docx', type: 'file' },
+        ],
+        channelId: 'user-3@im.wechat',
+        content: 'docx attached',
+        platform: 'wechat',
+      });
+
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+      expect(api.sendItem).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        attachmentFailures: [
+          {
+            detail: 'fetch failed: fetch failed (Invalid IP address: undefined)',
+            name: 'report.docx',
+            reason: 'source-unavailable',
+            type: 'file',
+          },
+        ],
+        attachmentsDelivered: 0,
+        channelId: 'user-3@im.wechat',
+        platform: 'wechat',
+      });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('report.docx'));
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('fetches attachments delivered as fetchUrl', async () => {

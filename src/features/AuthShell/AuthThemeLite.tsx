@@ -10,7 +10,6 @@ import * as m from 'motion/react-m';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 
-import AntdStaticMethods from '@/components/AntdStaticMethods';
 import { useIsDark } from '@/hooks/useIsDark';
 import Image from '@/libs/next/Image';
 import Link from '@/libs/next/Link';
@@ -24,32 +23,31 @@ const AuthThemeLite = memo<AuthThemeLiteProps>(({ children, globalCDN }) => {
   const currentAppearance = isDark ? 'dark' : 'light';
 
   return (
-    <ThemeProvider
-      appearance={currentAppearance}
-      className={'auth-layout'}
-      defaultAppearance={currentAppearance}
-      defaultThemeMode={currentAppearance}
-      style={{ height: '100%' }}
-      theme={{
-        cssVar: { key: 'lobe-vars' },
+    <ConfigProvider
+      motion={m}
+      config={{
+        aAs: Link,
+        imgAs: Image,
+        imgUnoptimized: true,
+        proxy: globalCDN ? 'unpkg' : undefined,
       }}
     >
-      <App style={{ height: '100%' }}>
-        <AntdStaticMethods />
-        <ConfigProvider
-          motion={m}
-          config={{
-            aAs: Link,
-            imgAs: Image,
-            imgUnoptimized: true,
-            proxy: globalCDN ? 'unpkg' : undefined,
-          }}
-        >
+      <ThemeProvider
+        appearance={currentAppearance}
+        className={'auth-layout'}
+        defaultAppearance={currentAppearance}
+        defaultThemeMode={currentAppearance}
+        style={{ height: '100%' }}
+        theme={{
+          cssVar: { key: 'lobe-vars' },
+        }}
+      >
+        <App style={{ height: '100%' }}>
           <LazyMotion features={domMax}>{children}</LazyMotion>
           <ToastHost />
-        </ConfigProvider>
-      </App>
-    </ThemeProvider>
+        </App>
+      </ThemeProvider>
+    </ConfigProvider>
   );
 });
 

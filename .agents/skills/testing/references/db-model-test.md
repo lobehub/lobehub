@@ -28,7 +28,7 @@ cd packages/database && TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' 
 ```
 
 Implication: client-db coverage **under-counts** any code that needs BM25 (e.g.
-`repositories/search/index.ts` reads near-0% locally but is fully covered in CI).
+`repositories/ftsSearch/index.ts` reads near-0% locally but is fully covered in CI).
 Don't chase those lines locally — confirm via CI/Codecov.
 
 ## BM25 / full-text search → `describe.skipIf(!isServerDB)`
@@ -47,7 +47,7 @@ describe.skipIf(!isServerDB)('queryByKeyword', () => {
 ```
 
 Convention already used in `session.test.ts`, `topic.query.test.ts`,
-`message.query.test.ts`, `home/index.test.ts`, `repositories/search/index.test.ts`.
+`message.query.test.ts`, `home/index.test.ts`, `repositories/ftsSearch/index.test.ts`.
 
 ## Setup boilerplate
 

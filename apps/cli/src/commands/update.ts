@@ -5,6 +5,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 import semver from 'semver';
 
+import { CLI_DISPLAY_NAME } from '../constants/identity';
 // Pull package metadata from the shared `src/pkg.ts` module (resolved at the
 // bundled entry's depth) rather than a local `require('../../package.json')`,
 // which would point outside the package once bundled into dist/index.js.
@@ -83,7 +84,8 @@ export function isNewerVersion(latest: string, current: string): boolean {
   return semver.gt(latestParsed, currentParsed);
 }
 
-async function fetchLatestVersion(name: string, tag: string): Promise<string> {
+/** Published version behind an npm dist-tag. Also used by `lh doctor`. */
+export async function fetchLatestVersion(name: string, tag: string): Promise<string> {
   const url = `https://registry.npmjs.org/${name}/${encodeURIComponent(tag)}`;
   const res = await fetch(url, { headers: { accept: 'application/json' } });
 
@@ -117,7 +119,7 @@ function runInstall(command: string, args: string[]): Promise<void> {
 export function registerUpdateCommand(program: Command) {
   program
     .command('update')
-    .description('Update the LobeHub CLI to the latest published version')
+    .description(`Update the ${CLI_DISPLAY_NAME} to the latest published version`)
     .option('--check', 'Only check for a newer version without installing')
     .option('--tag <tag>', 'npm dist-tag to update to', 'latest')
     .option(

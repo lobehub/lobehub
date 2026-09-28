@@ -47,30 +47,31 @@ export const compressContext =
     const { operationId, stepIndex, userId } = operation;
     const events: AgentEvent[] = [];
     const newState = structuredClone(state);
-    const topicId = state.metadata?.topicId ?? operation.topicId;
-    const workspaceId = state.metadata?.workspaceId ?? operation.workspaceId;
-    const agentId = operation.agentId ?? state.metadata?.agentId;
-    const groupId = operation.groupId ?? state.metadata?.groupId;
-    const threadId = operation.threadId ?? state.metadata?.threadId;
+    const topicId = state.origin?.topicId ?? operation.topicId;
+    const workspaceId = state.origin?.workspaceId ?? operation.workspaceId;
+    const agentId = operation.agentId ?? state.origin?.agentId;
+    const groupId = operation.groupId ?? state.origin?.groupId;
+    const threadId = operation.threadId ?? state.origin?.threadId;
     const compression = transports.compression;
     const llm = transports.llm;
-    const lastMessage = messages.at(-1);
-    const preservedMessages =
-      messages.length > 1 && lastMessage?.role === 'user' ? [lastMessage] : [];
+    // The latest user turn is the active contract even after assistant/tool steps have followed it.
+    // Keep it verbatim and re-inject it after the summary so compression can never demote a Task's
+    // Current Work instruction into historical prose or reactivate an older objective.
+    const latestUserMessage =
+      messages.length > 1 ? messages.findLast((message) => message.role === 'user') : undefined;
+    const preservedMessages = latestUserMessage ? [latestUserMessage] : [];
     const preservedMessageIds = new Set(
       preservedMessages.map((message) => message.id).filter((id): id is string => Boolean(id)),
     );
-    const messagesToCompress = preservedMessages.length > 0 ? messages.slice(0, -1) : messages;
-    const compressedMessagesFallback = [...messagesToCompress, ...preservedMessages];
-
+    const messagesToCompress = latestUserMessage
+      ? messages.filter((message) => message !== latestUserMessage)
+      : messages;
     const createNextContext = ({
-      compressedMessages,
       groupId,
       parentMessageId,
       skipped,
     }: GeneralAgentCompressionResultPayload) => ({
       payload: {
-        compressedMessages,
         groupId,
         parentMessageId,
         skipped,
@@ -88,7 +89,6 @@ export const compressContext =
       events,
       newState,
       nextContext: createNextContext({
-        compressedMessages: compressedMessagesFallback,
         groupId: '',
         parentMessageId,
         skipped: true,
@@ -109,7 +109,7 @@ export const compressContext =
         tokenCount: currentTokenCount,
         userId,
       } as AnyHookEvent,
-      state.metadata?._hooks,
+      state.host?.hooks,
     );
 
     let createdGroupId: string | undefined;
@@ -276,7 +276,7 @@ export const compressContext =
           summary: summaryResult.content.slice(0, 500),
           userId,
         } as AnyHookEvent,
-        state.metadata?._hooks,
+        state.host?.hooks,
       );
 
       return {
@@ -284,7 +284,6 @@ export const compressContext =
         newState,
         nextContext: {
           ...createNextContext({
-            compressedMessages,
             groupId: compressionResult.messageGroupId,
             parentMessageId,
           }),
@@ -323,7 +322,7 @@ export const compressContext =
           tokenCount: currentTokenCount,
           userId,
         } as AnyHookEvent,
-        state.metadata?._hooks,
+        state.host?.hooks,
       );
 
       events.push({ error, type: 'compression_error' });

@@ -11,6 +11,9 @@ import { viteMarkdownImport } from '../../plugins/vite/markdownImport';
 import { viteNodeModuleStub } from '../../plugins/vite/nodeModuleStub';
 import { vitePlatformResolve } from '../../plugins/vite/platformResolve';
 import { sharedRendererDefine } from '../../plugins/vite/sharedRendererConfig';
+import { shikiCdnUrl } from './app/stubs/shikiCdn';
+import { isShikiSource } from './app/stubs/shikiSource';
+import { reportStubSurfaceGaps } from './app/stubs/surface';
 import { antdStaticCssOptions, themeVarsCssOptions } from './staticCssOptions.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
@@ -21,6 +24,11 @@ const define = {
 };
 
 const { 'process.env': _processEnvFallback, ...ssrDefine } = define;
+
+const shikiSsrStub = path.resolve(import.meta.dirname, 'app/stubs/shiki.ts');
+const shikiVersion = JSON.parse(
+  readFileSync(path.resolve(repoRoot, 'node_modules/shiki/package.json'), 'utf8'),
+).version as string;
 
 const ssrStubs: Record<string, string> = {
   '@/libs/trpc/client': path.resolve(import.meta.dirname, 'app/stubs/trpcClient.ts'),
@@ -37,8 +45,9 @@ const workbenchSsrStubs = (): Plugin => ({
   applyToEnvironment: (environment) => environment.name === 'ssr',
   enforce: 'pre',
   name: 'workbench-ssr-stubs',
-  resolveId(source) {
-    return ssrStubs[source];
+  resolveId(source, importer) {
+    if (ssrStubs[source]) return ssrStubs[source];
+    if (isShikiSource(source, importer)) return shikiSsrStub;
   },
 });
 
@@ -48,6 +57,7 @@ const i18nClientStub = path.resolve(
 );
 
 const clientStubs: Record<string, string> = {
+  '@/libs/trpc/client': path.resolve(import.meta.dirname, 'app/stubs/trpcClient.client.ts'),
   '@/utils/i18n/loadI18nNamespaceModule': i18nClientStub,
 };
 
@@ -60,10 +70,31 @@ const workbenchClientStubs = (): Plugin => ({
   },
 });
 
+const workbenchClientShikiCdn = (): Plugin => ({
+  applyToEnvironment: (environment) => environment.name === 'client',
+  enforce: 'pre',
+  name: 'workbench-client-shiki-cdn',
+  resolveId(source) {
+    const url = shikiCdnUrl(source, shikiVersion);
+    if (!url) return;
+    return { external: true, id: url };
+  },
+});
+
 // Referenced in the client graph only from store tails that never execute in
 // workbench flows; requesting one at runtime degrades to raw keys instead of
-// bundling 18 locale files each.
-const I18N_DEAD_NS = new Set(['electron', 'file', 'modelProvider', 'setting', 'topic', 'video']);
+// bundling 18 locale files each. `agent` is pulled in by the agent-share
+// visitor upload branch of the chat upload store, a surface workbench has no
+// route for.
+const I18N_DEAD_NS = new Set([
+  'agent',
+  'electron',
+  'file',
+  'modelProvider',
+  'setting',
+  'topic',
+  'video',
+]);
 
 const I18N_NS_PATTERNS = [
   /useTranslation\(\s*['"]([A-Za-z]+)['"]/g,
@@ -71,6 +102,41 @@ const I18N_NS_PATTERNS = [
   /\bt\(\s*['"]([A-Za-z]+):/g,
 ];
 const I18N_NS_ARRAY_PATTERN = /useTranslation\(\s*\[([^\]]*)\]/g;
+
+const stubSurfaceGuard = (env: 'client' | 'ssr', stubs: Record<string, string>): Plugin => ({
+  apply: 'build',
+  applyToEnvironment: (environment) => environment.name === env,
+  buildEnd() {
+    const stubEntries = Object.entries(stubs).map(([specifier, file]) => ({
+      source: readFileSync(file, 'utf8'),
+      specifier,
+    }));
+    const files: Array<{ rel: string; source: string }> = [];
+    for (const id of this.getModuleIds()) {
+      if (!id.startsWith(repoRoot) || id.includes('/node_modules/') || id.includes('\0')) continue;
+      const file = id.split('?')[0]!;
+      if (!/\.[cm]?[jt]sx?$/.test(file)) continue;
+      const rel = path.relative(repoRoot, file);
+      if (rel.startsWith('apps/workbench/app/stubs/')) continue;
+      let source: string;
+      try {
+        source = readFileSync(file, 'utf8');
+      } catch {
+        continue;
+      }
+      files.push({ rel, source });
+    }
+    const lines = reportStubSurfaceGaps(files, stubEntries);
+    if (lines.length > 0) {
+      this.error(
+        `Workbench ${env} stub is missing APIs used by the module graph:\n${lines.join('\n')}\n` +
+          `Add the export/member to the matching file in app/stubs/ (empty state or reject), ` +
+          `or keep the importer off this graph.`,
+      );
+    }
+  },
+  name: `workbench-${env}-stub-surface-guard`,
+});
 
 const clientI18nNsGuard = (): Plugin => ({
   apply: 'build',
@@ -253,6 +319,9 @@ export default defineConfig({
       : undefined,
     workbenchSsrStubs(),
     workbenchClientStubs(),
+    workbenchClientShikiCdn(),
+    stubSurfaceGuard('ssr', ssrStubs),
+    stubSurfaceGuard('client', clientStubs),
     clientI18nNsGuard(),
     buildInputsManifest(),
     viteMarkdownImport(),
@@ -264,6 +333,9 @@ export default defineConfig({
     reactRouter(),
     ...lobeIconImports(),
   ],
+  optimizeDeps: {
+    exclude: ['shiki', '@shikijs/core', '@shikijs/stream', '@shikijs/transformers'],
+  },
   resolve: {
     tsconfigPaths: true,
   },

@@ -1,10 +1,11 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
-import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
+import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
+import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import {
   and,
@@ -33,6 +34,7 @@ import {
   agentLabelAssignments,
   agents,
   agentsFiles,
+  agentShares,
   agentsKnowledgeBases,
   agentsToSessions,
   briefs,
@@ -57,6 +59,7 @@ import {
   tasks,
   taskTopics,
   threads,
+  topicDocuments,
   topics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
@@ -64,8 +67,14 @@ import {
   collectBoundDeviceIds,
   sanitizeAgencyConfigsForWorkspace,
 } from '../utils/agencyConfigDevices';
-import { rehomeAgentConnectorsForRecipient } from '../utils/agentConnectors';
-import { rehomeAgentDocumentsForRecipient } from '../utils/agentDocumentsOwnership';
+import {
+  rehomeAgentConnectorsForRecipient,
+  rehomeAgentConnectorsForScopeTransfer,
+} from '../utils/agentConnectors';
+import {
+  moveAgentDocumentsForScopeTransfer,
+  rehomeAgentDocumentsForRecipient,
+} from '../utils/agentDocumentsOwnership';
 import { rehomeAgentExpertiseForRecipient } from '../utils/agentExpertise';
 import {
   detachAgentKnowledgeMountsForRecipient,
@@ -73,10 +82,13 @@ import {
 } from '../utils/agentKnowledgeMounts';
 import { rehomeAgentLabelsForRecipient } from '../utils/agentLabelsOwnership';
 import { rehomeAgentQuotaBindingsForRecipient } from '../utils/agentQuotaBindings';
+import { notFileBackedPlaceholder } from '../utils/fileBackedPlaceholder';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
+import { readOriginalCharCount } from '../utils/parsedDocument';
 import { sanitizeAgentApiConfig } from '../utils/sanitizeAgentApiConfig';
+import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import {
@@ -108,6 +120,10 @@ import {
  * not just the fields each historically happened to receive. Clients on builds older than
  * PR #16420 can still hit this path, so enforce it here (the single write chokepoint)
  * regardless of caller.
+ *
+ * Such a write is rejected, not silently trimmed: the writer is almost always aiming at a
+ * different agent (the one the builder is editing), and a trimmed write still reports
+ * success — the caller would believe the prompt/name landed when nothing changed.
  */
 const AGENT_BUILDER_PROTECTED_FIELDS = [
   'title',
@@ -119,6 +135,18 @@ const AGENT_BUILDER_PROTECTED_FIELDS = [
   'marketIdentifier',
   'systemRole',
 ] as const;
+
+const assertNoAgentBuilderProtectedFields = (data: Record<string, unknown>) => {
+  const fields = AGENT_BUILDER_PROTECTED_FIELDS.filter((field) => data[field] !== undefined);
+  if (fields.length === 0) return;
+
+  throw new TRPCError({
+    code: 'FORBIDDEN',
+    message:
+      `The Agent Builder's own ${fields.join(', ')} cannot be changed, so nothing was updated. ` +
+      'Target the agent being edited instead.',
+  });
+};
 
 /**
  * Fields that define a row's identity, scope and provisioning status. Every one of
@@ -198,6 +226,13 @@ export const AGENT_OWNED_BY_GROUP = 'AGENT_OWNED_BY_GROUP';
 export const AGENT_OWNERSHIP_STALE = 'AGENT_OWNERSHIP_STALE';
 
 /**
+ * A share binds its grants, billing scope and visitor history to the current
+ * agent owner and workspace. Transfers remain unsupported while any share row
+ * exists, including paused shares; disabling a link must not bypass the guard.
+ */
+export const AGENT_SHARED_TRANSFER_BLOCKED = 'AGENT_SHARED_TRANSFER_BLOCKED';
+
+/**
  * Refusal to move an agent that belongs to a chat group rather than to the
  * user. Carries the groups so the caller can say WHICH ones, the way the
  * existing visibility guards do — "cannot move this agent" with no reason is
@@ -208,6 +243,10 @@ export class AgentOwnedByGroupError extends Error {
     super(AGENT_OWNED_BY_GROUP);
     this.name = 'AgentOwnedByGroupError';
   }
+}
+
+interface AgentTransferOptions {
+  rejectForeignTopicCommentAuthors?: boolean;
 }
 
 export class AgentModel {
@@ -240,6 +279,14 @@ export class AgentModel {
    * Rank the user's agents by topic count (agent usage ranking). Counts topics
    * directly via `topics.agentId`, so it is agent-native — no sessionId. Mirrors
    * the recents filter: real agents plus the inbox, excluding other virtual agents.
+   *
+   * Share-visitor topics are excluded from the count: they carry the creator's
+   * `userId` (so the plain join would count them) but reflect visitor usage,
+   * not the creator's own — same rule as `TopicModel.rank` and every other
+   * creator-facing aggregate (see `notShareVisitorTopic`). Applied in the join
+   * condition rather than `where` so agents whose ONLY topics are visitor ones
+   * still drop out via the `count > 0` guard instead of being filtered away
+   * before grouping.
    */
   rank = async (limit: number = 10): Promise<AgentRankItem[]> => {
     const rows = await this.db
@@ -253,7 +300,7 @@ export class AgentModel {
         title: agents.title,
       })
       .from(agents)
-      .leftJoin(topics, eq(topics.agentId, agents.id))
+      .leftJoin(topics, and(eq(topics.agentId, agents.id), notShareVisitorTopic()))
       .where(and(this.ownership(), or(eq(agents.slug, INBOX_SESSION_ID), ne(agents.virtual, true))))
       .groupBy(agents.id)
       .having(({ count }) => gt(count, 0))
@@ -739,19 +786,34 @@ export class AgentModel {
       .filter((f) => f.enabled)
       .map((f) => f.id)
       .filter((id) => id !== undefined);
-    let files: Array<(typeof knowledge.files)[number] & { content?: string | null }> =
-      knowledge.files;
+    let files: Array<
+      (typeof knowledge.files)[number] & { content?: string | null; originalCharCount?: number }
+    > = knowledge.files;
 
     if (enabledFileIds.length > 0) {
       const documentsData = await this.db.query.documents.findMany({
-        where: and(this.documentsOwnership(), inArray(documents.fileId, enabledFileIds)),
+        // A file can own several documents; take the oldest, like `DocumentModel.findByFileId`
+        // (which `readAttachment` pages through), so the preview and its continuation agree.
+        orderBy: [asc(documents.createdAt), asc(documents.id)],
+        where: and(
+          this.documentsOwnership(),
+          inArray(documents.fileId, enabledFileIds),
+          notFileBackedPlaceholder(),
+        ),
       });
 
-      const documentMap = new Map(documentsData.map((doc) => [doc.fileId, doc.content]));
-      files = knowledge.files.map((file) => ({
-        ...file,
-        content: file.enabled && file.id ? documentMap.get(file.id) : undefined,
-      }));
+      const documentMap = new Map<string | null, (typeof documentsData)[number]>();
+      for (const doc of documentsData) {
+        if (!documentMap.has(doc.fileId)) documentMap.set(doc.fileId, doc);
+      }
+      files = knowledge.files.map((file) => {
+        const document = file.enabled && file.id ? documentMap.get(file.id) : undefined;
+        return {
+          ...file,
+          content: document?.content,
+          originalCharCount: readOriginalCharCount(document?.metadata),
+        };
+      });
     }
 
     return { ...normalizedAgent, ...knowledge, files };
@@ -1104,10 +1166,8 @@ export class AgentModel {
     const apiSafeData = Object.hasOwn(data, 'agencyConfig')
       ? { ...data, agencyConfig: sanitizeAgentApiConfig(data.agencyConfig) }
       : data;
-    const sanitizedData = await this.stripAgentBuilderProtectedFields(
-      agentId,
-      this.stripImmutableFields(apiSafeData),
-    );
+    const sanitizedData = this.stripImmutableFields(apiSafeData);
+    await this.assertNotAgentBuilderProtectedWrite(agentId, sanitizedData);
 
     return this.db
       .update(agents)
@@ -1116,27 +1176,22 @@ export class AgentModel {
   };
 
   /**
-   * Strip fields the Agent Builder's own row must never carry (see
+   * Reject a write of fields the Agent Builder's own row must never carry (see
    * {@link AGENT_BUILDER_PROTECTED_FIELDS}). Only looks up the target row's `slug` when the
    * incoming patch actually touches a protected field, so normal updates pay no extra query.
    */
-  private stripAgentBuilderProtectedFields = async <T extends Record<string, any>>(
+  private assertNotAgentBuilderProtectedWrite = async (
     agentId: string,
-    data: T,
-    protectedFields: readonly string[] = AGENT_BUILDER_PROTECTED_FIELDS,
-  ): Promise<T> => {
-    if (!protectedFields.some((field) => field in data)) return data;
+    data: Record<string, unknown>,
+  ) => {
+    if (!AGENT_BUILDER_PROTECTED_FIELDS.some((field) => data[field] !== undefined)) return;
 
     const agent = await this.db.query.agents.findFirst({
       columns: { slug: true },
       where: and(eq(agents.id, agentId), this.ownership()),
     });
 
-    if (agent?.slug !== BUILTIN_AGENT_SLUGS.agentBuilder) return data;
-
-    const sanitized = { ...data };
-    for (const field of protectedFields) delete sanitized[field];
-    return sanitized;
+    if (agent?.slug === BUILTIN_AGENT_SLUGS.agentBuilder) assertNoAgentBuilderProtectedFields(data);
   };
 
   /**
@@ -1209,6 +1264,34 @@ export class AgentModel {
    * creator, slug and current visibility, scoped by the ownership predicate
    * (other members' private agents resolve to `null`).
    */
+  /**
+   * The topic-share policy and creator of one agent.
+   *
+   * Deliberately scoped by workspace rather than by {@link ownership}: this
+   * answers "what did the author decide for this agent", which must not depend
+   * on whether the *caller* can see the row. A visibility-scoped miss would
+   * return `null` and fail open, handing a restricted agent's topics back to
+   * every member.
+   */
+  getTopicShareSubject = async (id: string): Promise<AgentTopicShareSubject | null> => {
+    const rows = await this.db
+      .select({
+        agencyConfig: agents.agencyConfig,
+        userId: agents.userId,
+        workspaceId: agents.workspaceId,
+      })
+      .from(agents)
+      .where(
+        and(
+          eq(agents.id, id),
+          this.workspaceId ? eq(agents.workspaceId, this.workspaceId) : this.ownership(),
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
+  };
+
   getAgentVisibilityMeta = async (
     id: string,
   ): Promise<{ slug: string | null; userId: string; visibility: 'private' | 'public' } | null> => {
@@ -1365,10 +1448,31 @@ export class AgentModel {
     // See AGENT_BUILDER_PROTECTED_FIELDS: some callers (e.g. the browser client's meta
     // editor) route title/avatar/etc. through updateConfig() rather than update().
     if (agent.slug === BUILTIN_AGENT_SLUGS.agentBuilder) {
-      for (const field of AGENT_BUILDER_PROTECTED_FIELDS) delete restData[field];
+      assertNoAgentBuilderProtectedFields(restData as Record<string, unknown>);
     }
 
+    // Only the columns this patch touches are written back. The row was read
+    // before the awaits above, so writing the whole merged row would restore
+    // any column another writer committed in between — e.g. a parallel
+    // `updatePrompt` losing its new systemRole to a concurrent config write.
+    const touchedColumns = new Set<string>(Object.keys(restData));
+    if (data.params) touchedColumns.add('params');
+
     const mergedValue = merge(agent, restData);
+
+    // API bindings follow updateConfig's partial deep-merge contract. A user-provider patch must
+    // only clear the deployment discriminator retained from a previous server-default binding.
+    const apiConfigPatch = toRecord(data.agencyConfig?.heterogeneousProvider?.apiConfig);
+    const mergedApiConfig = toRecord(mergedValue.agencyConfig?.heterogeneousProvider?.apiConfig);
+    if (
+      apiConfigPatch &&
+      apiConfigPatch.source !== 'server-default' &&
+      typeof apiConfigPatch.providerId === 'string' &&
+      mergedApiConfig
+    ) {
+      delete mergedApiConfig.source;
+    }
+
     mergedValue.agencyConfig = sanitizeAgentApiConfig(mergedValue.agencyConfig) ?? null;
 
     // The inbox is LobeHub's built-in default cloud agent; it must never be
@@ -1382,10 +1486,20 @@ export class AgentModel {
     if (agent.slug === INBOX_SESSION_ID) {
       if (mergedValue.agencyConfig?.heterogeneousProvider) {
         delete mergedValue.agencyConfig.heterogeneousProvider;
+        touchedColumns.add('agencyConfig');
       }
       if (isHeterogeneousAgentModelId(mergedValue.model)) {
         mergedValue.model = null;
+        touchedColumns.add('model');
       }
+    }
+
+    // A character sheet is authored as a whole: the studio reads the current
+    // profile and writes the version it wants. Deep-merging it would make a
+    // cleared trait or a removed artwork impossible to express, since a missing
+    // key reads as "leave it alone". Same reasoning as the graph below.
+    if (Object.hasOwn(data, 'profile')) {
+      mergedValue.profile = data.profile as AgentItem['profile'];
     }
 
     // A AgentGraph is a complete executable document, not a partial config
@@ -1402,6 +1516,7 @@ export class AgentModel {
       // ownership of the graph: drop the legacy chatConfig fields so the
       // runtime's `??` fallback cannot resurrect an old snapshot.
       if (mergedValue.chatConfig) {
+        touchedColumns.add('chatConfig');
         const {
           graph: _legacyGraph,
           enableGraphMode: _legacyEnableGraphMode,
@@ -1410,6 +1525,7 @@ export class AgentModel {
         mergedValue.chatConfig = restChatConfig as AgentItem['chatConfig'];
       }
     } else if (data.chatConfig && Object.hasOwn(data.chatConfig, 'graph')) {
+      touchedColumns.add('agencyConfig');
       const legacyChatConfig = data.chatConfig as Record<string, unknown>;
       mergedValue.agencyConfig = {
         ...mergedValue.agencyConfig,
@@ -1448,9 +1564,15 @@ export class AgentModel {
       }
     }
 
-    // Remove timestamp fields to let Drizzle's $onUpdate handle them automatically
+    // Timestamp fields are left to Drizzle's $onUpdate.
+    touchedColumns.delete('updatedAt');
+    touchedColumns.delete('accessedAt');
+    touchedColumns.delete('createdAt');
 
-    const { updatedAt: _, accessedAt: __, createdAt: ___, ...updateData } = mergedValue;
+    const updateData = Object.fromEntries(
+      Object.entries(mergedValue).filter(([column]) => touchedColumns.has(column)),
+    ) as Partial<typeof mergedValue>;
+    if (!Object.values(updateData).some((value) => value !== undefined)) return;
 
     return this.db
       .update(agents)
@@ -1978,7 +2100,7 @@ export class AgentModel {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
+    options: AgentTransferOptions = {},
   ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
     const [result] = await this.transferAgents(
       [agentId],
@@ -2001,7 +2123,7 @@ export class AgentModel {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
+    options: AgentTransferOptions = {},
   ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }[]> => {
     if (agentIds.length === 0) return [];
 
@@ -2050,6 +2172,16 @@ export class AgentModel {
       // against a caller that reaches the model directly.
       const ownedGroups = await this.findOwnedGroupMemberships(trx, agentIds);
       if (ownedGroups.length > 0) throw new AgentOwnedByGroupError(ownedGroups);
+
+      // 1d. Keep the share owner and tenancy stable. Check paused shares too:
+      // disabling a link retains its grants and visitor history. The Agent row
+      // lock also serializes this guard with AgentShareModel.create.
+      const [existingShare] = await trx
+        .select({ id: agentShares.id })
+        .from(agentShares)
+        .where(inArray(agentShares.agentId, agentIds))
+        .limit(1);
+      if (existingShare) throw new Error(AGENT_SHARED_TRANSFER_BLOCKED);
 
       // 2. Resolve slug conflicts in the target scope with a single query:
       //    fetch every existing slug that could collide (exact match or
@@ -2212,15 +2344,12 @@ export class AgentModel {
         .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
         .where(topicCondition!)
         .returning({ id: topics.id, updatedAt: topics.updatedAt });
+      const movedTopicIds = movedTopics.map((topic) => topic.id);
 
       // 6a. Topic comments denormalize the topic's workspaceId — move them
       // with the topic (or drop them when leaving workspace scope entirely),
       // otherwise workspace-filtered comment reads go stale. See the helper doc.
-      await syncTopicCommentsOnTopicTransfer(
-        trx,
-        movedTopics.map((topic) => topic.id),
-        targetWorkspaceId,
-      );
+      await syncTopicCommentsOnTopicTransfer(trx, movedTopicIds, targetWorkspaceId);
 
       // 7. Message scope rewrite — fast/slow split. Rewriting a message row
       // maintains every message index (incl. the multi-GB BM25 index), so a
@@ -2237,7 +2366,6 @@ export class AgentModel {
         sessionIds.length > 0
           ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
           : inArray(messages.agentId, agentIds);
-      const movedTopicIds = movedTopics.map((topic) => topic.id);
       const [{ affectedMessages }] = await trx
         .select({ affectedMessages: count() })
         .from(messages)
@@ -2313,10 +2441,6 @@ export class AgentModel {
           .update(taskDependencies)
           .set({ ...ownershipUpdate, ...visibilityUpdate })
           .where(inArray(taskDependencies.taskId, movedTaskIds));
-        await trx
-          .update(taskDocuments)
-          .set({ ...ownershipUpdate, ...visibilityUpdate })
-          .where(inArray(taskDocuments.taskId, movedTaskIds));
         await trx
           .update(taskTopics)
           .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: taskTopics.updatedAt })
@@ -2405,6 +2529,72 @@ export class AgentModel {
         .set({ ...ownershipUpdate, updatedAt: agentBotProviders.updatedAt })
         .where(inArray(agentBotProviders.agentId, agentIds));
 
+      // 14a. Agent-scoped connectors (custom plugins) ride along, or every
+      // custom tool the agent carries stops resolving in the target scope.
+      // Same-owner rows keep their credentials; a target owner change strips
+      // them to reauthorization shells (member-handover policy).
+      await rehomeAgentConnectorsForScopeTransfer(trx, {
+        agentIds,
+        targetUserId,
+        targetWorkspaceId,
+      });
+
+      // 14b. Agent documents (Skills / VFS files) ride along: dedicated
+      // agent-created documents move with binding + history, associated
+      // personal documents stay behind with their binding detached. Without
+      // this the agent's Documents list arrives empty and the files strand in
+      // the source scope's Resource list.
+      const movedDocumentIds = await moveAgentDocumentsForScopeTransfer(trx, {
+        agentIds,
+        movedTaskIds,
+        movedTopicIds,
+        targetUserId,
+        targetVisibility,
+        targetWorkspaceId,
+      });
+
+      // 14c. Topic- and task-document junction rows denormalize the owner
+      // scope, but a junction only resolves when BOTH it and its document pass
+      // the target predicate — `TopicDocumentModel.findByTopicId` and
+      // `TaskModel.getDocumentsPinnedSince` join the two. So the split can only
+      // be decided once 14b has said which documents actually moved: links
+      // whose document rode along follow their topic/task, and the rest are
+      // detached. Kept, they would be rows no scope can resolve — invisible in
+      // the target, orphaned in the source once their topic/task left it.
+      if (movedTopicIds.length > 0) {
+        const onMovedTopics = inArray(topicDocuments.topicId, movedTopicIds);
+        if (movedDocumentIds.length > 0) {
+          await trx
+            .update(topicDocuments)
+            .set(ownershipUpdate)
+            .where(and(onMovedTopics, inArray(topicDocuments.documentId, movedDocumentIds)));
+        }
+        await trx
+          .delete(topicDocuments)
+          .where(
+            movedDocumentIds.length > 0
+              ? and(onMovedTopics, notInArray(topicDocuments.documentId, movedDocumentIds))
+              : onMovedTopics,
+          );
+      }
+
+      if (movedTaskIds.length > 0) {
+        const onMovedTasks = inArray(taskDocuments.taskId, movedTaskIds);
+        if (movedDocumentIds.length > 0) {
+          await trx
+            .update(taskDocuments)
+            .set({ ...ownershipUpdate, ...visibilityUpdate })
+            .where(and(onMovedTasks, inArray(taskDocuments.documentId, movedDocumentIds)));
+        }
+        await trx
+          .delete(taskDocuments)
+          .where(
+            movedDocumentIds.length > 0
+              ? and(onMovedTasks, notInArray(taskDocuments.documentId, movedDocumentIds))
+              : onMovedTasks,
+          );
+      }
+
       // 15. Leave every chat group: a group belongs to the source scope, and a
       // roster row pointing at an agent that now lives elsewhere would render
       // as a member nobody in either scope can use. Guard 1c above has already
@@ -2468,6 +2658,14 @@ export class AgentModel {
     // handing it to another member would leave the group broken or headless.
     const ownedGroups = await this.findOwnedGroupMemberships(trx, [agentId]);
     if (ownedGroups.length > 0) throw new AgentOwnedByGroupError(ownedGroups);
+
+    /** Reject before mutation so the transfer request and share remain unchanged. */
+    const [existingShare] = await trx
+      .select({ id: agentShares.id })
+      .from(agentShares)
+      .where(eq(agentShares.agentId, agentId))
+      .limit(1);
+    if (existingShare) throw new Error(AGENT_SHARED_TRANSFER_BLOCKED);
 
     // A PRIVATE agent stops resolving for everyone but the recipient. Groups
     // that reference it and are NOT the recipient's would render a silent hole

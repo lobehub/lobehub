@@ -27,8 +27,10 @@ export const ImportFromMarketInspector = memo<
 
   if (isArgumentsStreaming && !identifier) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-skill-store.apiName.importFromMarket')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-skill-store.apiName.importFromMarket')}
+        </span>
       </div>
     );
   }
@@ -37,13 +39,10 @@ export const ImportFromMarketInspector = memo<
   const hasResult = pluginState?.success !== undefined;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-skill-store.apiName.importFromMarket')}:</span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-skill-store.apiName.importFromMarket')}:
+      </span>
       {displayName && <span className={highlightTextStyles.primary}>{displayName}</span>}
       {!isLoading &&
         hasResult &&

@@ -1,26 +1,35 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  isHeterogeneousProviderBindingSupported,
+  isRemoteHeterogeneousType,
+  isServerDefaultHeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Alert, Button, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { Wrench } from 'lucide-react';
+import { ChevronDown, Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ModelSelect from '@/features/ModelSelect';
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
+import { ModelIcon } from '@/components/LobeIcons';
+import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
+import ReasoningEffortSelect from '@/features/ModelSelect/ReasoningEffortSelect';
+import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
+import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
@@ -54,16 +63,27 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const ProfileEditor = memo(() => {
-  const { t } = useTranslation('setting');
+  const { t } = useTranslation(['setting', 'agent']);
   const { allowed: canEdit } = usePermission('edit_own_content');
   const agentId = useAgentStore((s) => s.activeAgentId || '');
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
+  const { isShared } = useAgentShareSupported(agentId);
+  const chatModels = useEnabledChatModels();
+  const enabledList =
+    isShared && AGENT_SHARE_ALLOWED_PROVIDERS
+      ? chatModels.filter((provider) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(provider.id))
+      : undefined;
+  const selectedModel = useAiInfraStore(
+    aiModelSelectors.getEnabledModelById(config?.model ?? '', config?.provider ?? ''),
+  );
   const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const heterogeneousProvider = config?.agencyConfig?.heterogeneousProvider;
-  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } =
-    useEffectiveAgencyConfig(agentId);
+  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } = useEffectiveAgencyConfig(
+    agentId,
+    { topicId: null },
+  );
 
   const updateHeterogeneousCommand = async (command: string) => {
     if (!canEdit) return;
@@ -85,11 +105,14 @@ const ProfileEditor = memo(() => {
     });
   };
 
-  const updateHeterogeneousAuthMode = async (authMode: HeterogeneousAuthMode) => {
+  const updateHeterogeneousAuthMode = async (
+    authMode: HeterogeneousAuthMode,
+    apiConfig?: HeterogeneousApiConfig,
+  ) => {
     if (!canEdit || !heterogeneousProvider) return;
     await updateAgentConfigById(agentId, {
       agencyConfig: {
-        heterogeneousProvider: { ...heterogeneousProvider, authMode },
+        heterogeneousProvider: { ...heterogeneousProvider, apiConfig, authMode },
       },
     });
   };
@@ -114,14 +137,51 @@ const ProfileEditor = memo(() => {
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
   const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
-  const apiModeLabEnabled = useUserStore(labPreferSelectors.enableClaudeCodeApiMode);
-  const apiModeAvailable =
+  const localDesktopAvailable =
     isDesktop &&
+    !!heterogeneousProvider &&
+    isHeterogeneousProviderBindingSupported(heterogeneousProvider.type) &&
     resolveExecutionTarget(effectiveAgencyConfig, {
       clientExecutionAvailable: true,
       isHetero: true,
       workspaceScoped,
     }) === 'local';
+  // Workspace agents are excluded even when the author could spawn them
+  // locally: the binding UI would list workspace-scoped providers, but Desktop
+  // main resolves the reference in the personal scope only (see
+  // `selectRuntimeType`'s personal-scope guard). The deployment-default API
+  // source is not a user-provider binding, so it stays available whenever
+  // local Desktop execution is available.
+  const apiModeAvailable = localDesktopAvailable && !isWorkspaceAgent;
+  const useFetchServerDefaultCapability = useAgentStore(
+    (s) => s.useFetchServerDefaultHeterogeneousCapability,
+  );
+  // The shared matrix owns which native drivers can reach the deployment relay;
+  // model/runtime compatibility continues to come from the server capability below.
+  const serverDefaultAgentType =
+    heterogeneousProvider && isServerDefaultHeterogeneousAgentType(heterogeneousProvider.type)
+      ? heterogeneousProvider.type
+      : undefined;
+  const serverCapabilityEnabled = localDesktopAvailable && !!serverDefaultAgentType;
+  const serverCapability = useFetchServerDefaultCapability(serverCapabilityEnabled);
+  const serverDefaultModels =
+    serverCapability.data?.enabled === true && serverDefaultAgentType
+      ? resolveServerDefaultAgentModels(serverCapability.data.models, serverDefaultAgentType)
+      : [];
+  const serverDefaultAvailable = serverCapabilityEnabled && serverDefaultModels.length > 0;
+  const serverDefaultUnavailableReason = !localDesktopAvailable
+    ? t('heterogeneousStatus.apiMode.localOnly')
+    : serverCapability.error
+      ? t('heterogeneousStatus.apiMode.serverDefault.loadFailed')
+      : serverCapability.data?.enabled === false
+        ? t(
+            serverCapability.data.reason === 'disabled'
+              ? 'heterogeneousStatus.apiMode.serverDefault.disabled'
+              : 'heterogeneousStatus.apiMode.serverDefault.invalidConfiguration',
+          )
+        : serverCapabilityEnabled && !serverCapability.isLoading && !serverDefaultAvailable
+          ? t('heterogeneousStatus.apiMode.serverDefault.unsupported')
+          : undefined;
   const heterogeneousTabItems: TabsItem[] = heterogeneousProvider
     ? [
         ...(showCloudHeterogeneousTab
@@ -145,11 +205,18 @@ const ProfileEditor = memo(() => {
           children: (
             <HeterogeneousAgentStatusCard
               apiModeAvailable={apiModeAvailable}
-              apiModeLabEnabled={apiModeLabEnabled}
+              apiModeWorkspaceBlocked={isWorkspaceAgent}
               provider={heterogeneousProvider}
+              serverDefaultAvailable={serverDefaultAvailable}
+              serverDefaultLoading={serverCapabilityEnabled && serverCapability.isLoading}
+              serverDefaultModels={serverDefaultModels}
+              serverDefaultUnavailableReason={serverDefaultUnavailableReason}
               onApiConfigChange={updateHeterogeneousApiConfig}
               onAuthModeChange={updateHeterogeneousAuthMode}
               onCommandChange={updateHeterogeneousCommand}
+              onServerDefaultRetry={() => {
+                void serverCapability.mutate();
+              }}
             />
           ),
         },
@@ -206,20 +273,42 @@ const ProfileEditor = memo(() => {
                 <RunPriorityHint agentId={agentId} />
               </Flexbox>
               <Flexbox horizontal align={'center'} gap={12} justify={'flex-start'} wrap={'wrap'}>
-                <ModelSelect
-                  initialWidth
-                  disabled={!canEdit}
-                  popupWidth={400}
-                  value={{
-                    model: config?.model,
-                    provider: config?.provider,
+                <ModelSwitchPanel
+                  enabledList={enabledList}
+                  model={config?.model}
+                  open={canEdit ? undefined : false}
+                  openOnHover={false}
+                  placement={'bottomLeft'}
+                  provider={config?.provider}
+                  notice={
+                    enabledList && (
+                      <Alert
+                        showIcon
+                        title={t('share.settings.modelRestriction.title', { ns: 'agent' })}
+                        type={'info'}
+                        description={t('share.settings.modelRestriction.description', {
+                          ns: 'agent',
+                        })}
+                      />
+                    )
+                  }
+                  onModelChange={async (value) => {
+                    if (canEdit) await updateAgentConfigById(agentId, value);
                   }}
-                  onChange={(value) => {
-                    if (!canEdit) return;
-
-                    void updateAgentConfigById(agentId, value);
-                  }}
-                />
+                >
+                  <Button disabled={!canEdit}>
+                    <ModelIcon model={config?.model} size={20} />
+                    {selectedModel?.displayName || config?.model}
+                    <ChevronDown size={14} />
+                  </Button>
+                </ModelSwitchPanel>
+                {config?.model && config.provider && (
+                  <ReasoningEffortSelect
+                    disabled={!canEdit}
+                    model={config.model}
+                    provider={config.provider}
+                  />
+                )}
               </Flexbox>
               <AgentTool />
             </Flexbox>

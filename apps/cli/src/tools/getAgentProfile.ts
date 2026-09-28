@@ -1,9 +1,10 @@
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import type { RemoteHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import type { RemotePlatformCommandRuntime } from '@lobechat/heterogeneous-agents/scanHost';
+import { resolveRemotePlatformRuntime } from '@lobechat/heterogeneous-agents/scanHost';
 
 export interface GetAgentProfileParams {
   /** Agent ID to query (openclaw only). Defaults to the default agent. */
@@ -48,13 +49,23 @@ interface OpenClawAgentEntry {
   workspace?: string;
 }
 
-function getOpenClawProfile(agentId?: string): AgentProfileResult {
+type AvailableRemotePlatformRuntime = Extract<RemotePlatformCommandRuntime, { available: true }>;
+
+async function runPlatformCommand(
+  runtime: AvailableRemotePlatformRuntime,
+  args: string[],
+): Promise<string> {
+  const { stdout } = await runtime.execute(args, { timeout: 5000 });
+  return stdout;
+}
+
+async function getOpenClawProfile(
+  runtime: AvailableRemotePlatformRuntime,
+  agentId?: string,
+): Promise<AgentProfileResult> {
   let output: string;
   try {
-    output = execFileSync('openclaw', ['agents', 'list', '--json'], {
-      encoding: 'utf8',
-      timeout: 5000,
-    });
+    output = await runPlatformCommand(runtime, ['agents', 'list', '--json']);
   } catch {
     return {};
   }
@@ -85,12 +96,11 @@ function getOpenClawProfile(agentId?: string): AgentProfileResult {
  * Read the active Hermes profile name from `hermes profile list` output.
  * The active profile is marked with ◆ in the first column.
  */
-function getActiveHermesProfileName(): string | undefined {
+async function getActiveHermesProfileName(
+  runtime: AvailableRemotePlatformRuntime,
+): Promise<string | undefined> {
   try {
-    const output = execFileSync('hermes', ['profile', 'list'], {
-      encoding: 'utf8',
-      timeout: 5000,
-    });
+    const output = await runPlatformCommand(runtime, ['profile', 'list']);
     const match = output.match(/◆(\S+)/);
     return match?.[1];
   } catch {
@@ -101,12 +111,12 @@ function getActiveHermesProfileName(): string | undefined {
 /**
  * Read the filesystem path of a Hermes profile from `hermes profile show <name>`.
  */
-function getHermesProfilePath(profileName: string): string | undefined {
+async function getHermesProfilePath(
+  runtime: AvailableRemotePlatformRuntime,
+  profileName: string,
+): Promise<string | undefined> {
   try {
-    const output = execFileSync('hermes', ['profile', 'show', profileName], {
-      encoding: 'utf8',
-      timeout: 5000,
-    });
+    const output = await runPlatformCommand(runtime, ['profile', 'show', profileName]);
     const match = output.match(/^Path:\s+(.+)/m);
     const raw = match?.[1]?.trim();
     // Expand leading `~` — Node does not auto-expand home-dir shorthands.
@@ -144,11 +154,13 @@ function readHermesSoulDescription(soulPath: string): string | undefined {
   }
 }
 
-function getHermesProfile(): AgentProfileResult {
-  const profileName = getActiveHermesProfileName();
+async function getHermesProfile(
+  runtime: AvailableRemotePlatformRuntime,
+): Promise<AgentProfileResult> {
+  const profileName = await getActiveHermesProfileName(runtime);
   if (!profileName) return {};
 
-  const profilePath = getHermesProfilePath(profileName);
+  const profilePath = await getHermesProfilePath(runtime, profileName);
   const description = profilePath
     ? readHermesSoulDescription(path.join(profilePath, 'SOUL.md'))
     : undefined;
@@ -170,13 +182,15 @@ function getHermesProfile(): AgentProfileResult {
  */
 export async function getAgentProfile(params: GetAgentProfileParams): Promise<AgentProfileResult> {
   const { platform, agentId } = params;
+  const runtime = await resolveRemotePlatformRuntime(platform);
+  if (!runtime.available) return {};
 
   if (platform === 'openclaw') {
-    return getOpenClawProfile(agentId);
+    return getOpenClawProfile(runtime, agentId);
   }
 
   if (platform === 'hermes') {
-    return getHermesProfile();
+    return getHermesProfile(runtime);
   }
 
   return {};

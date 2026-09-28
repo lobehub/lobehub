@@ -13,6 +13,11 @@ interface AgentArtworkGenerationJob {
   generationId?: string;
 }
 
+interface GenerateAgentArtworkInput extends AgentArtworkPromptInput {
+  /** False for companion artwork that is previewed without replacing the avatar or cover. */
+  persist?: boolean;
+}
+
 type Setter = StoreSetter<AgentStore>;
 
 export const createAgentArtworkSlice = (set: Setter, get: () => AgentStore, _api?: unknown) =>
@@ -56,7 +61,7 @@ export class AgentArtworkActionImpl {
     );
   };
 
-  generateAgentArtwork = async (input: AgentArtworkPromptInput): Promise<void> => {
+  generateAgentArtwork = async (input: GenerateAgentArtworkInput): Promise<string | undefined> => {
     if (this.#get().agentArtworkGenerationMap[input.id]?.status === 'generating') return;
 
     const job: AgentArtworkGenerationJob = { controller: new AbortController() };
@@ -66,6 +71,7 @@ export class AgentArtworkActionImpl {
     try {
       const url = await generateArtworkImage({
         buildPrompt: (references) => buildAgentArtworkPrompt({ ...input, ...references }),
+        composition: input.composition,
         kind: input.kind,
         onGenerationCreated: (generationId) => {
           job.generationId = generationId;
@@ -76,11 +82,14 @@ export class AgentArtworkActionImpl {
         topicTitle: input.kind === 'avatar' ? 'Agent avatar' : 'Agent background',
       });
 
-      await this.#get().updateAgentMetaById(
-        input.id,
-        input.kind === 'avatar' ? { avatar: url } : { backgroundColor: url },
-      );
+      if (input.persist !== false) {
+        await this.#get().updateAgentMetaById(
+          input.id,
+          input.kind === 'avatar' ? { avatar: url } : { backgroundColor: url },
+        );
+      }
       this.#setGenerationState(input.id, undefined);
+      return url;
     } catch (error) {
       if (job.controller.signal.aborted) return;
 

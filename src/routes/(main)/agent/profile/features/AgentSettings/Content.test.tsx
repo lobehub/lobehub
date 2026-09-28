@@ -46,10 +46,6 @@ vi.mock('@/features/AgentSetting', () => ({
   ),
 }));
 
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
-}));
-
 vi.mock('@/store/agent', () => {
   const useAgentStore = (selector: (state: typeof mocks.agentState) => unknown) =>
     selector(mocks.agentState);
@@ -74,12 +70,6 @@ vi.mock('@/store/serverConfig', () => ({
   featureFlagsSelectors: (state: typeof mocks.serverState) => state.featureFlags,
   useServerConfigStore: (selector: (state: typeof mocks.serverState) => unknown) =>
     selector(mocks.serverState),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 describe('AgentSettings Content', () => {

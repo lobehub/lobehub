@@ -1,6 +1,6 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { act, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
@@ -13,6 +13,7 @@ import { useChatStore } from '@/store/chat';
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 
 import { createStore } from '../../index';
+import { createEphemeralResetState } from '../../initialState';
 import { dataSelectors } from './selectors';
 
 // Mock conversation-flow parse function
@@ -31,6 +32,7 @@ vi.mock('@lobechat/conversation-flow', () => ({
 // Mock messageService
 vi.mock('@/services/message', () => ({
   messageService: {
+    getEarlierMessages: vi.fn(),
     getMessages: vi.fn(),
     updateMessageMetadata: vi.fn().mockResolvedValue({ success: true, messages: [] }),
   },
@@ -243,6 +245,167 @@ describe('DataSlice', () => {
       const metadata = state.displayMessages[0].metadata as any;
       expect(metadata?.expanded).toBe(true);
       expect(metadata?.someOtherField).toBe('preserved');
+    });
+  });
+
+  describe('loadEarlierMessages', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      clearMessageListClientCacheState();
+    });
+
+    const windowMessages: UIChatMessage[] = [
+      { id: 'u2', content: 'q2', role: 'user', createdAt: 1000, updatedAt: 1000 } as any,
+      { id: 'a2', content: 'a2', role: 'assistant', createdAt: 2000, updatedAt: 2000 } as any,
+    ];
+    const earlierPage: UIChatMessage[] = [
+      { id: 'u1', content: 'q1', role: 'user', createdAt: 100, updatedAt: 100 } as any,
+      { id: 'a1', content: 'a1', role: 'assistant', createdAt: 200, updatedAt: 200 } as any,
+    ];
+
+    it('prepends the fetched round page below the live window rows', async () => {
+      const store = createStore({
+        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-1', threadId: null },
+      });
+      store.getState().replaceMessages(windowMessages);
+      vi.mocked(messageService.getEarlierMessages).mockResolvedValueOnce(earlierPage);
+
+      await store.getState().loadEarlierMessages();
+
+      expect(messageService.getEarlierMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'agent-earlier', topicId: 'topic-earlier-1' }),
+        { createdAt: new Date(1000), id: 'u2' },
+      );
+      expect(store.getState().dbMessages.map((m) => m.id)).toEqual(['u1', 'a1', 'u2', 'a2']);
+      expect(store.getState().isLoadingEarlierMessages).toBe(false);
+    });
+
+    it('stops fetching once a page comes back empty (beginning reached)', async () => {
+      const store = createStore({
+        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-2', threadId: null },
+      });
+      store.getState().replaceMessages(windowMessages);
+      vi.mocked(messageService.getEarlierMessages).mockResolvedValue([]);
+
+      await store.getState().loadEarlierMessages();
+      await store.getState().loadEarlierMessages();
+
+      expect(messageService.getEarlierMessages).toHaveBeenCalledTimes(1);
+      expect(store.getState().dbMessages.map((m) => m.id)).toEqual(['u2', 'a2']);
+    });
+
+    it('drops a page that resolves after the store switched conversations', async () => {
+      const store = createStore({
+        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-3', threadId: null },
+      });
+      store.getState().replaceMessages(windowMessages);
+      vi.mocked(messageService.getEarlierMessages).mockImplementationOnce(async () => {
+        // Mimic the real switch path (StoreUpdater): ephemeral reset + context.
+        store.setState({
+          ...createEphemeralResetState(),
+          context: { agentId: 'agent-earlier', topicId: 'topic-earlier-other', threadId: null },
+        } as any);
+        return earlierPage;
+      });
+
+      await store.getState().loadEarlierMessages();
+
+      expect(store.getState().dbMessages.map((m) => m.id)).toEqual(['u2', 'a2']);
+      expect(store.getState().isLoadingEarlierMessages).toBe(false);
+    });
+
+    it('surfaces a failed page fetch as state and only retries on explicit request', async () => {
+      const store = createStore({
+        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-4', threadId: null },
+      });
+      store.getState().replaceMessages(windowMessages);
+      const failure = new Error('network down');
+      vi.mocked(messageService.getEarlierMessages)
+        .mockRejectedValueOnce(failure)
+        .mockResolvedValueOnce(earlierPage);
+
+      await expect(store.getState().loadEarlierMessages()).resolves.toBeUndefined();
+      expect(store.getState().isLoadingEarlierMessages).toBe(false);
+      expect(store.getState().earlierMessagesError).toBe(failure);
+
+      // Scroll gestures must not silently re-fire the failing request.
+      await store.getState().loadEarlierMessages();
+      expect(messageService.getEarlierMessages).toHaveBeenCalledTimes(1);
+
+      await store.getState().loadEarlierMessages({ retry: true });
+
+      expect(messageService.getEarlierMessages).toHaveBeenCalledTimes(2);
+      expect(store.getState().earlierMessagesError).toBeUndefined();
+      expect(store.getState().dbMessages.map((m) => m.id)).toEqual(['u1', 'a1', 'u2', 'a2']);
+    });
+
+    it('clears the failure on conversation switch', async () => {
+      const store = createStore({
+        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-6', threadId: null },
+      });
+      store.getState().replaceMessages(windowMessages);
+      vi.mocked(messageService.getEarlierMessages).mockRejectedValueOnce(new Error('boom'));
+
+      await store.getState().loadEarlierMessages();
+      expect(store.getState().earlierMessagesError).toBeDefined();
+
+      store.setState({
+        ...createEphemeralResetState(),
+        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-7', threadId: null },
+      } as any);
+      expect(store.getState().earlierMessagesError).toBeUndefined();
+    });
+
+    it('merges the page into messages that changed while it was in flight', async () => {
+      const store = createStore({
+        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-8', threadId: null },
+      });
+      store.getState().replaceMessages(windowMessages);
+      const streamed = {
+        id: 'a2',
+        content: 'a2 streamed',
+        role: 'assistant',
+        createdAt: 2000,
+        updatedAt: 2500,
+      } as any;
+      const appended = {
+        id: 'u3',
+        content: 'q3',
+        role: 'user',
+        createdAt: 3000,
+        updatedAt: 3000,
+      } as any;
+      vi.mocked(messageService.getEarlierMessages).mockImplementationOnce(async () => {
+        // Same conversation keeps updating: an edit/stream and a new message.
+        store.getState().replaceMessages([windowMessages[0], streamed, appended]);
+        return earlierPage;
+      });
+
+      await store.getState().loadEarlierMessages();
+
+      const { dbMessages } = store.getState();
+      expect(dbMessages.map((m) => m.id)).toEqual(['u1', 'a1', 'u2', 'a2', 'u3']);
+      expect(dbMessages.find((m) => m.id === 'a2')?.content).toBe('a2 streamed');
+    });
+
+    it('does not clear the loading flag of the next conversation on late settle', async () => {
+      const store = createStore({
+        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-5', threadId: null },
+      });
+      store.getState().replaceMessages(windowMessages);
+      vi.mocked(messageService.getEarlierMessages).mockImplementationOnce(async () => {
+        store.setState({
+          ...createEphemeralResetState(),
+          context: { agentId: 'agent-earlier', topicId: 'topic-earlier-next', threadId: null },
+        } as any);
+        // The next conversation starts its own page load while ours is in flight.
+        store.setState({ isLoadingEarlierMessages: true });
+        return earlierPage;
+      });
+
+      await store.getState().loadEarlierMessages();
+
+      expect(store.getState().isLoadingEarlierMessages).toBe(true);
     });
   });
 

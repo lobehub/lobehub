@@ -1,8 +1,9 @@
 'use client';
 
-import { Flexbox, Hotkey, Icon, KeyMapEnum, Text, TextArea } from '@lobehub/ui';
-import { Button, Tabs } from '@lobehub/ui/base-ui';
-import { Check, PenLine, Send, X } from 'lucide-react';
+import { Flexbox, Hotkey, Icon, KeyMapEnum, TextArea } from '@lobehub/ui';
+import { Button, Tabs, Text } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
+import { Check, PenLine, Replace, Send, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -11,6 +12,21 @@ import { formatRemaining, isQuestionAnswered } from './draft';
 import QuestionPanel from './QuestionPanel';
 import type { AskUserQuestionItem } from './types';
 import type { AskUserFormApi } from './useAskUserForm';
+
+const optionValue = (option: AskUserQuestionItem['options'][number]): string =>
+  option.id ?? option.label;
+
+const styles = createStaticStyles(({ css }) => ({
+  tabs: css`
+    [role='tablist'] {
+      width: 100%;
+
+      > [role='tab']:has([data-replace-all]) {
+        margin-inline-start: auto;
+      }
+    }
+  `,
+}));
 
 /**
  * A focused interactive control keeps its native key activation — hijacking
@@ -38,7 +54,17 @@ export interface AskUserQuestionLabels {
   recommendedTag: string;
   skip: string;
   submit: string;
+  supplementEnter: string;
+  supplementPlaceholder: string;
+  /** Shown once the timeout fallback has answered on the user's behalf. */
   timeExpired: string;
+  /**
+   * Shown when the clock ran out with no fallback answer — provider-owned
+   * option ids (consent is never inferred) or a card opened after the
+   * producer already stopped waiting. Promising "option 1 will be used" here
+   * would describe a submission that is never going to happen.
+   */
+  timeExpiredNoAnswer: string;
   timeRemaining: (time: string) => string;
 }
 
@@ -52,9 +78,9 @@ export interface AskUserQuestionViewProps extends AskUserFormApi {
 
 /**
  * The presentational shell for AskUserQuestion:
- * - a top tab strip (Q1, Q2, … + a trailing "Or type directly" escape tab) when
+ * - a top tab strip (Q1, Q2, … + additional-notes and replace-all tabs) when
  *   there is more than one question,
- * - the active `QuestionPanel` (or the whole-form escape TextArea), and
+ * - the active `QuestionPanel` (or the notes / replace-all TextArea), and
  * - a Skip/Submit footer with an optional countdown.
  *
  * All form state and handlers arrive via props (from `useAskUserForm`); the
@@ -66,6 +92,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     actionsPortalTarget,
     activeQuestion,
     activeTab,
+    autoSubmitted,
     custom,
     escapeActive,
     escapeText,
@@ -74,6 +101,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     handleEscapeTextChange,
     handleSkip,
     handleSubmit,
+    handleSupplementTextChange,
     handleToggle,
     isMulti,
     isSubmitDisabled,
@@ -81,10 +109,13 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     picks,
     questions,
     remainingMs,
-    setActiveTab,
     setEscapeMode,
+    setQuestionMode,
+    setSupplementMode,
     showCountdown,
     submitting,
+    supplementActive,
+    supplementText,
   } = props;
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -102,7 +133,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     if (stored != null) return stored;
     if (!activeQuestion.multiSelect) {
       const picked = picks[activeQuestion.question];
-      const idx = activeQuestion.options.findIndex((o) => o.label === picked);
+      const idx = activeQuestion.options.findIndex((option) => optionValue(option) === picked);
       if (idx >= 0) return idx;
     }
     return 0;
@@ -161,7 +192,13 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
       if (event.repeat && event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
 
       const q = activeQuestion;
-      const rowNavEnabled = !!q && !escapeActive && !submitting && !expired && q.options.length > 0;
+      const rowNavEnabled =
+        !!q &&
+        !escapeActive &&
+        !supplementActive &&
+        !submitting &&
+        !expired &&
+        q.options.length > 0;
 
       // Digit keys pick the matching numbered row directly; the row after the
       // last option is the "write your own" line, which focuses its textarea.
@@ -171,7 +208,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         if (idx < q.options.length) {
           event.preventDefault();
           setHighlight(q, idx);
-          handleToggle(q, q.options[idx].label, { submitOnComplete: true });
+          handleToggle(q, optionValue(q.options[idx]), { submitOnComplete: true });
         } else if (idx === q.options.length) {
           event.preventDefault();
           setHighlight(q, q.options.length);
@@ -195,7 +232,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         if (!rowNavEnabled || highlightedIndex == null || highlightedIndex >= q.options.length)
           return;
         event.preventDefault();
-        handleToggle(q, q.options[highlightedIndex].label);
+        handleToggle(q, optionValue(q.options[highlightedIndex]));
         return;
       }
 
@@ -213,10 +250,10 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
           highlightedIndex != null &&
           highlightedIndex < q.options.length &&
           !(custom[q.question] ?? '').trim() &&
-          picks[q.question] !== q.options[highlightedIndex].label
+          picks[q.question] !== optionValue(q.options[highlightedIndex])
         ) {
           event.preventDefault();
-          handleToggle(q, q.options[highlightedIndex].label, { submitOnComplete: true });
+          handleToggle(q, optionValue(q.options[highlightedIndex]), { submitOnComplete: true });
           return;
         }
         if (isSubmitDisabled) return;
@@ -254,7 +291,11 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     >
       {showCountdown && (
         <Text fontSize={12} type="secondary">
-          {expired ? labels.timeExpired : labels.timeRemaining(formatRemaining(remainingMs))}
+          {autoSubmitted
+            ? labels.timeExpired
+            : expired
+              ? labels.timeExpiredNoAnswer
+              : labels.timeRemaining(formatRemaining(remainingMs))}
         </Text>
       )}
       <Flexbox horizontal gap={8}>
@@ -278,9 +319,10 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
 
   return (
     <Flexbox gap={12} ref={rootRef}>
-      {isMulti && (
+      {questions.length > 0 && (
         <Tabs
-          activeKey={escapeActive ? 'escape' : activeTab}
+          activeKey={escapeActive ? 'escape' : supplementActive ? 'supplement' : activeTab}
+          className={styles.tabs}
           variant="square"
           items={[
             ...questions.map((q, idx) => {
@@ -295,38 +337,55 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
                 ),
               };
             }),
-            // The whole-form freeform sits as a visible peer to the questions —
-            // it replaces *all* of them, so it reads as a sibling choice, not a
-            // hidden mode toggle.
             {
-              key: 'escape',
+              key: 'supplement',
               label: (
                 <Flexbox horizontal align="center" gap={6}>
                   <Icon icon={PenLine} size={12} />
-                  <Text>{labels.escapeEnter}</Text>
+                  <Text>{labels.supplementEnter}</Text>
                 </Flexbox>
               ),
             },
+            ...(isMulti
+              ? [
+                  // Replace-all stays at the far right because it discards the
+                  // structured selections, unlike additional notes.
+                  {
+                    key: 'escape',
+                    label: (
+                      <Flexbox data-replace-all horizontal align="center" gap={6}>
+                        <Icon icon={Replace} size={12} />
+                        <Text>{labels.escapeEnter}</Text>
+                      </Flexbox>
+                    ),
+                  },
+                ]
+              : []),
           ]}
           onChange={(key: string) => {
             if (key === 'escape') {
               setEscapeMode(true);
+            } else if (key === 'supplement') {
+              setSupplementMode(true);
             } else {
-              setEscapeMode(false);
-              setActiveTab(key);
+              setQuestionMode(key);
             }
           }}
         />
       )}
 
-      {escapeActive ? (
+      {escapeActive || supplementActive ? (
         <TextArea
           autoSize={{ maxRows: 8, minRows: 3 }}
           disabled={expired || submitting}
-          placeholder={labels.escapePlaceholder}
-          value={escapeText}
+          placeholder={supplementActive ? labels.supplementPlaceholder : labels.escapePlaceholder}
+          value={supplementActive ? supplementText : escapeText}
           variant="filled"
-          onChange={(e) => handleEscapeTextChange(e.target.value)}
+          onChange={(e) =>
+            supplementActive
+              ? handleSupplementTextChange(e.target.value)
+              : handleEscapeTextChange(e.target.value)
+          }
           onKeyDown={(e) => {
             // Enter submits (Shift+Enter keeps inserting a newline); fall back
             // to the default newline while submit is unavailable. The IME guard

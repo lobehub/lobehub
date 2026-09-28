@@ -14,7 +14,12 @@ const targets = [
   { distDir: 'mobile', publicDir: 'public/_spa' },
   { distDir: 'auth', publicDir: 'public/_spa-auth' },
   { distDir: 'workbench', publicDir: 'public/_spa-workbench' },
+  { distDir: 'share', publicDir: 'public/_spa-share' },
 ] as const;
+
+export const spaPublicDirNames = [
+  ...new Set(targets.map(({ publicDir }) => publicDir.split('/')[1])),
+];
 
 export const copySpaBuild = (root = path.resolve(import.meta.dirname, '..')) => {
   for (const { distDir, publicDir } of targets) {

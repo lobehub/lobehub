@@ -24,14 +24,18 @@ const execParams = (): any => {
 };
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    existsById: existsByIdMock,
-    getBuiltinAgent: getBuiltinAgentMock,
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      existsById: existsByIdMock,
+      getBuiltinAgent: getBuiltinAgentMock,
+    };
+  }),
 }));
 // The runner dynamically imports AiAgentService to break a static cycle.
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({ execAgent: execAgentMock })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return { execAgent: execAgentMock };
+  }),
 }));
 vi.mock('../verifierTerminal', () => ({
   settleVerifierCheckFromTerminal: settleVerifierCheckFromTerminalMock,

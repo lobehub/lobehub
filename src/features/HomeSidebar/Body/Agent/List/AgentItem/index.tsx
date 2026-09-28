@@ -1,8 +1,8 @@
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { ActionIcon, Icon } from '@lobehub/ui';
+import { ActionIcon, Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2, PinIcon } from 'lucide-react';
+import { PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -146,13 +146,14 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
   // Memoize avatar icon (show loader when updating, running spinner or unread badge at bottom-right)
   const avatarIcon = useMemo(() => {
     if (isUpdating) {
-      return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={18} />;
+      return <Spin size="small" style={{ color: cssVar.colorTextDescription }} />;
     }
 
     const avatarNode = (
       <Avatar
         avatar={typeof avatar === 'string' ? avatar : undefined}
         avatarBackground={backgroundColor || undefined}
+        title={displayTitle}
       />
     );
 
@@ -161,7 +162,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
         <span className={styles.wrapper}>
           {avatarNode}
           <span className={styles.runningBadge}>
-            <Icon spin icon={Loader2} size={9} />
+            <Spin size={9} style={{ color: 'inherit' }} />
           </span>
         </span>
       );
@@ -177,7 +178,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     }
 
     return avatarNode;
-  }, [isUpdating, isLoading, avatar, backgroundColor, unreadCount]);
+  }, [isUpdating, isLoading, avatar, backgroundColor, displayTitle, unreadCount]);
 
   const dropdownMenu = useAgentDropdownMenu({
     anchor,

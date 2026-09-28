@@ -4,6 +4,8 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fileService } from '@/services/file';
+import { ragService } from '@/services/rag';
+import { shareChatService } from '@/services/shareChat';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useFileStore as useStore } from '../../store';
@@ -22,17 +24,28 @@ const mockAgentMode = ({
   vi.spyOn(agentByIdSelectors, 'isAgentHeterogeneousById').mockReturnValue(() => heterogeneous);
 };
 
-vi.mock('zustand/traditional');
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: {
-    error: vi.fn(),
-  },
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 vi.mock('@/services/rag', () => ({
   ragService: {
     parseFileContent: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+const { mockUploadShareVisitorFile } = vi.hoisted(() => ({
+  mockUploadShareVisitorFile: vi.fn(),
+}));
+vi.mock('./shareVisitorUpload', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  uploadShareVisitorFile: mockUploadShareVisitorFile,
+}));
+
+vi.mock('@/services/shareChat', () => ({
+  shareChatService: {
+    removeFile: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -294,7 +307,121 @@ describe('useFileStore:chat', () => {
     ]);
   });
 
+  describe('uploadChatFiles as an agent-share visitor', () => {
+    const SHARE_ID = 'share-1';
+
+    it('routes the upload through the share path, tags the draft with shareId, and skips the visitor-side parse', async () => {
+      // The visitor's agent store never holds the creator's agent, so the
+      // mode selectors would say "agent mode" here only by accident.
+      mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+      mockUploadShareVisitorFile.mockResolvedValue({ id: 'file-share', url: 'https://s3/doc' });
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi.spyOn(result.current, 'uploadWithProgress');
+      const file = new File(['test'], 'notes.pdf', { type: 'application/pdf' });
+
+      await act(async () => {
+        await result.current.uploadChatFiles([file], AGENT_ID, { shareId: SHARE_ID });
+      });
+
+      expect(mockUploadShareVisitorFile).toHaveBeenCalledWith(
+        expect.objectContaining({ file, shareId: SHARE_ID }),
+      );
+      expect(uploadWithProgress).not.toHaveBeenCalled();
+      // Creator-owned row: the visitor's `document.parseFileContent` could not
+      // reach it; the run parses it on the creator's account instead.
+      expect(ragService.parseFileContent).not.toHaveBeenCalled();
+      expect(result.current.chatUploadFileList).toEqual([
+        expect.objectContaining({ agentId: AGENT_ID, id: 'notes.pdf', shareId: SHARE_ID }),
+      ]);
+    });
+
+    it('always enforces the chat file-type whitelist on the share path', async () => {
+      mockAgentMode({ enableAgentMode: true, heterogeneous: true });
+      const { result } = renderHook(() => useStore());
+      const file = new File(['x'], 'tool.exe', { type: 'application/octet-stream' });
+
+      await act(async () => {
+        await result.current.uploadChatFiles([file], AGENT_ID, { shareId: SHARE_ID });
+      });
+
+      expect(mockUploadShareVisitorFile).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalled();
+      expect(result.current.chatUploadFileList).toEqual([]);
+    });
+
+    it('rejects a file over SHARE_VISITOR_MAX_FILE_SIZE before any request', async () => {
+      mockAgentMode({ enableAgentMode: false, heterogeneous: false });
+      const { result } = renderHook(() => useStore());
+      const big = new File([''], 'big.pdf', { type: 'application/pdf' });
+      Object.defineProperty(big, 'size', { value: 33 * 1024 * 1024 });
+
+      await act(async () => {
+        await result.current.uploadChatFiles([big], AGENT_ID, { shareId: SHARE_ID });
+      });
+
+      expect(mockUploadShareVisitorFile).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('share.visitor.upload.fileTooLarge');
+      expect(result.current.chatUploadFileList).toEqual([]);
+    });
+
+    it("surfaces the creator's storage block as share copy, not the visitor's own plan", async () => {
+      mockAgentMode({ enableAgentMode: false, heterogeneous: false });
+      mockUploadShareVisitorFile.mockRejectedValue(new Error('storage_block:upgrade_required'));
+      const { result } = renderHook(() => useStore());
+      const file = new File(['test'], 'notes.pdf', { type: 'application/pdf' });
+
+      await act(async () => {
+        await result.current.uploadChatFiles([file], AGENT_ID, { shareId: SHARE_ID });
+      });
+
+      expect(result.current.chatUploadFileList).toEqual([
+        expect.objectContaining({
+          error: 'share.visitor.upload.creatorStorageBlocked',
+          id: 'notes.pdf',
+          status: 'error',
+        }),
+      ]);
+    });
+  });
+
   describe('removeChatUploadFile', () => {
+    it('removes a share-uploaded draft through the share endpoint, not the visitor file API', async () => {
+      const removeFile = vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          chatUploadFileList: [{ id: 'file-1', shareId: 'share-1', status: 'success' }] as any,
+        });
+      });
+
+      await act(async () => {
+        await result.current.removeChatUploadFile('file-1');
+      });
+
+      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(shareChatService.removeFile).toHaveBeenCalledWith('share-1', 'file-1');
+      expect(removeFile).not.toHaveBeenCalled();
+    });
+
+    it('drops an unsettled share draft locally without calling the share endpoint', async () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        // Still keyed by file name: nothing exists server-side to delete.
+        useStore.setState({
+          chatUploadFileList: [{ id: 'cat.png', shareId: 'share-1', status: 'error' }] as any,
+        });
+      });
+
+      await act(async () => {
+        await result.current.removeChatUploadFile('cat.png');
+      });
+
+      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(shareChatService.removeFile).not.toHaveBeenCalled();
+    });
+
     it('deletes the underlying file for a normal uploaded item', async () => {
       const removeFile = vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
       const { result } = renderHook(() => useStore());

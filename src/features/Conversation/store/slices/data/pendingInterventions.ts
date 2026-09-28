@@ -1,4 +1,11 @@
-import type { ChatToolPayloadWithResult, ToolIntervention, UIChatMessage } from '@lobechat/types';
+import {
+  type ChatToolPayloadWithResult,
+  classifyToolInterventionPresentation,
+  isHeterogeneousInterventionExpired,
+  readHeterogeneousInterventionDeadline,
+  type ToolIntervention,
+  type UIChatMessage,
+} from '@lobechat/types';
 
 export interface PendingIntervention {
   apiName: string;
@@ -13,12 +20,37 @@ export interface PendingIntervention {
    * its own group rather than folding it in with the others.
    */
   assistantGroupId?: string;
+  batchId?: string;
+  /**
+   * Producer's wall-clock deadline (unix ms) when it stamped one. Carried so
+   * consumers can drop the card the moment it passes — the list itself is only
+   * recomputed when the store changes, and nothing changes at the deadline.
+   */
+  deadline?: number;
   identifier: string;
   intervention: ToolIntervention & { status: 'pending' };
+  operationId?: string;
   requestArgs: string;
   toolCallId: string;
   toolMessageId: string;
 }
+
+/**
+ * Equality for selector results. The selector builds fresh arrays on every
+ * store update; comparing by identity would re-render (and let interventions
+ * write back into the store) in a loop.
+ */
+export const isSamePendingInterventionList = (
+  a: PendingIntervention[],
+  b: PendingIntervention[],
+): boolean =>
+  a.length === b.length &&
+  a.every(
+    (item, i) =>
+      item.toolCallId === b[i].toolCallId &&
+      item.requestArgs === b[i].requestArgs &&
+      item.deadline === b[i].deadline,
+  );
 
 export const getPendingInterventions = (
   displayMessages: UIChatMessage[],
@@ -31,14 +63,21 @@ export const getPendingInterventions = (
       msg.role === 'tool' &&
       msg.pluginIntervention?.status === 'pending' &&
       msg.plugin &&
-      !msg.id.startsWith('tmp_')
+      !msg.id.startsWith('tmp_') &&
+      // Past the producer's own deadline nobody is waiting for this answer.
+      // Keeping it in the pending list would put an unanswerable card in front
+      // of the user on every surface that reads this list.
+      !isHeterogeneousInterventionExpired(msg.pluginState)
     ) {
       pending.push({
         apiName: msg.plugin.apiName,
         // A standalone tool row parents directly to its calling assistant.
         assistantGroupId: msg.parentId,
+        batchId: msg.pluginIntervention.batchId,
+        deadline: readHeterogeneousInterventionDeadline(msg.pluginState),
         identifier: msg.plugin.identifier,
         intervention: msg.pluginIntervention as ToolIntervention & { status: 'pending' },
+        operationId: msg.pluginIntervention.operationId,
         requestArgs: msg.plugin.arguments || '',
         toolCallId: msg.tool_call_id || msg.id,
         toolMessageId: msg.id,
@@ -76,9 +115,51 @@ export const getInterventionBatch = (
   active: PendingIntervention | undefined,
 ): PendingIntervention[] => {
   if (!active) return [];
+
+  if (active.operationId && active.batchId) {
+    return interventions.filter(
+      (item) => item.operationId === active.operationId && item.batchId === active.batchId,
+    );
+  }
+
+  // A partially stamped row is neither a trustworthy durable identity nor a
+  // legacy row. Keep it isolated so a rollout mismatch cannot broaden a bulk
+  // action to cards the server will reject as a different sealed batch.
+  if (active.operationId || active.batchId) return [active];
+
   const owner = active.assistantGroupId;
   if (!owner) return [active];
-  return interventions.filter((i) => i.assistantGroupId === owner);
+  return interventions.filter(
+    (item) => !item.operationId && !item.batchId && item.assistantGroupId === owner,
+  );
+};
+
+/**
+ * Approve-all is meaningful only for a fully binary same-turn batch. AskUser,
+ * marketplace, provider forms, and mixed batches each carry action-specific
+ * payloads and must be resolved card by card.
+ */
+export const canApproveInterventionBatch = (batch: PendingIntervention[]): boolean => {
+  if (batch.length <= 1) return false;
+
+  const hasDurableMember = batch.some(({ batchId, operationId }) => batchId || operationId);
+  if (
+    hasDurableMember &&
+    !batch.every(
+      ({ batchId, operationId }) =>
+        Boolean(batchId) &&
+        Boolean(operationId) &&
+        batchId === batch[0].batchId &&
+        operationId === batch[0].operationId,
+    )
+  ) {
+    return false;
+  }
+
+  return batch.every(
+    ({ apiName, identifier }) =>
+      classifyToolInterventionPresentation(identifier, apiName).surface === 'binary',
+  );
 };
 
 const collectPendingTools = (
@@ -90,13 +171,19 @@ const collectPendingTools = (
     if (
       tool.intervention?.status === 'pending' &&
       tool.result_msg_id &&
-      !tool.result_msg_id.startsWith('tmp_')
+      !tool.result_msg_id.startsWith('tmp_') &&
+      // Same rule as the standalone tool row; the folded entry mirrors the
+      // producer's deadline onto `result.state`.
+      !isHeterogeneousInterventionExpired(tool.result?.state)
     ) {
       pending.push({
         apiName: tool.apiName,
         assistantGroupId,
+        batchId: tool.intervention.batchId,
+        deadline: readHeterogeneousInterventionDeadline(tool.result?.state),
         identifier: tool.identifier,
         intervention: tool.intervention as ToolIntervention & { status: 'pending' },
+        operationId: tool.intervention.operationId,
         requestArgs: tool.arguments || '',
         toolCallId: tool.id,
         toolMessageId: tool.result_msg_id,

@@ -77,6 +77,7 @@ jobs:
     name: Check Release Version
     runs-on: ubuntu-latest
     outputs:
+      cloud_ref: ${{ steps.cloud-ref.outputs.cloud_ref }}
       is_stable: ${{ steps.check.outputs.is_stable }}
       version: ${{ steps.check.outputs.version }}
       is_manual: ${{ steps.check.outputs.is_manual }}
@@ -118,6 +119,23 @@ jobs:
             echo "is_stable=true" >> $GITHUB_OUTPUT
             echo "✅ Stable release detected: $version"
           fi
+
+      - name: Resolve Cloud revision
+        id: cloud-ref
+        if: steps.check.outputs.is_stable == 'true'
+        env:
+          CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
+          CLOUD_TOKEN: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${CLOUD_REPOSITORY:?OVERLAY_REPOSITORY repository variable is not set}"
+          # checkout persist-credentials extraheader would send GITHUB_TOKEN and 404 the private cloud repo
+          cloud_ref=$(git -c http.https://github.com/.extraheader= ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" HEAD | cut -f1)
+          if [[ ! "$cloud_ref" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Unable to resolve Cloud revision"
+            exit 1
+          fi
+          echo "cloud_ref=$cloud_ref" >> "$GITHUB_OUTPUT"
 
   # ============================================
   # 配置构建矩阵 (检查自托管 Runner)
@@ -175,15 +193,26 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.configure-build.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup build environment
+        id: setup
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-ref: ${{ needs.check-stable.outputs.cloud_ref }}
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Resolve core seq
+        id: core_seq
+        uses: ./.github/actions/desktop-core-seq
+        with:
+          channel: stable
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+
       - name: Set package version
+        id: app_version
         run: npm run workflow:set-desktop-version ${{ needs.check-stable.outputs.version }} stable
 
       # macOS 构建前清理 (修复 hdiutil 问题 https://github.com/electron-userland/electron-builder/issues/8415)
@@ -206,11 +235,14 @@ jobs:
 
       # macOS 构建
       - name: Build artifact on macOS
+        id: build_macos
         if: runner.os == 'macOS'
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -228,11 +260,14 @@ jobs:
 
       # Windows 构建
       - name: Build artifact on Windows
+        id: build_windows
         if: runner.os == 'Windows'
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -244,14 +279,14 @@ jobs:
 
       # Linux 构建
       - name: Build artifact on Linux
+        id: build_linux
         if: runner.os == 'Linux'
-        run: |
-          npm run desktop:package:app
-          test -d apps/desktop/dist/renderer
-          tar -czf apps/desktop/release/lobehub-renderer.tar.gz -C apps/desktop/dist/renderer .
+        run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -260,22 +295,34 @@ jobs:
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_STABLE_DESKTOP_BASE_URL }}
 
       - name: Upload artifacts
+        id: upload
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.name }}
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+          core-signing-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
+
+      - name: Preserve desktop build diagnostics
+        if: always()
+        uses: ./.github/actions/desktop-ota-diagnostics
+        with:
+          kind: build
+          channel: stable
+          steps-json: ${{ toJSON(steps) }}
+          job-status: ${{ job.status }}
 
   # ============================================
   # 合并 macOS 多架构文件
   # ============================================
   merge-mac-files:
-    needs: [build, check-stable]
+    needs: [build, check-stable, configure-build]
     name: Merge macOS Release Files
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -322,6 +369,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
       - name: Download merged artifacts
         uses: actions/download-artifact@v7
         with:
@@ -350,7 +403,7 @@ jobs:
             release/*.rpm*
             release/*.tar.gz*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   # ============================================
   # 发布到 S3 更新服务器
@@ -362,10 +415,19 @@ jobs:
     # 手动触发时可选择跳过
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_s3_upload) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/desktop-publish-s3
         with:
           channel: stable
+          cloud-ref: ${{ needs.check-stable.outputs.cloud_ref }}
           version: ${{ needs.check-stable.outputs.version }}
           aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}

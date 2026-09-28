@@ -114,18 +114,6 @@ describe('preferenceSelectors', () => {
       expect(labPreferSelectors.enableMessageTextSelectionActions(store)).toBe(true);
     });
 
-    it('keeps Claude Code API mode disabled by default', () => {
-      store.preference.lab = undefined;
-
-      expect(labPreferSelectors.enableClaudeCodeApiMode(store)).toBe(false);
-    });
-
-    it('returns the configured Claude Code API mode preference', () => {
-      store.preference.lab = { enableClaudeCodeApiMode: true };
-
-      expect(labPreferSelectors.enableClaudeCodeApiMode(store)).toBe(true);
-    });
-
     it('keeps OAuth app management hidden by default', () => {
       store.preference.lab = undefined;
 
@@ -136,6 +124,14 @@ describe('preferenceSelectors', () => {
       store.preference.lab = { enableOAuthApps: true };
 
       expect(labPreferSelectors.enableOAuthApps(store)).toBe(true);
+    });
+
+    it('hides Integrations unless the lab flag is on', () => {
+      store.preference.lab = undefined;
+      expect(labPreferSelectors.enableIntegrations(store)).toBe(false);
+
+      store.preference.lab = { enableIntegrations: true };
+      expect(labPreferSelectors.enableIntegrations(store)).toBe(true);
     });
   });
 });

@@ -1,12 +1,13 @@
 'use client';
 
 import { type SkillItem } from '@lobechat/types';
-import { Flexbox, Skeleton, Tag } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Tabs, Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
 import { DetailProvider } from '@/features/MCPPluginDetail/DetailProvider';
@@ -37,7 +38,6 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Schema = memo(() => {
   const { t } = useTranslation('discover');
-  const { t: ts } = useTranslation('setting');
   const { tools, toolsLoading, skillContent } = useDetailContext();
   const [activeKey, setActiveKey] = useState<string[]>([]);
   const [mode, setMode] = useState<ModeType>(ModeType.Docs);
@@ -52,7 +52,7 @@ const Schema = memo(() => {
   if (toolsLoading) {
     return (
       <Flexbox gap={16}>
-        <Skeleton active paragraph={{ rows: 4 }} />
+        <ArticleSkeleton rows={4} />
       </Flexbox>
     );
   }

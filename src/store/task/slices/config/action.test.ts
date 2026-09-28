@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskService } from '@/services/task';
+import { useUserStore } from '@/store/user';
 
 import { useTaskStore } from '../../store';
 
@@ -147,6 +148,33 @@ describe('TaskConfigSliceAction', () => {
         automationMode: 'heartbeat',
         heartbeatInterval: 600,
       });
+    });
+
+    it('should preserve the responsible assignee when enabling automation', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...useTaskStore.getState().taskDetailMap['T-1'],
+            heartbeat: { interval: 1800 },
+            userId: 'user_member_1',
+          },
+        },
+      });
+
+      await useTaskStore.getState().setAutomationMode('T-1', 'heartbeat');
+
+      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: 'heartbeat' });
+      expect(useTaskStore.getState().taskDetailMap['T-1'].userId).toBe('user_member_1');
+    });
+
+    it('should not touch the assignee when disabling automation', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().setAutomationMode('T-1', null);
+
+      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: null });
     });
 
     it('should preserve existing heartbeat interval when re-entering heartbeat mode', async () => {
@@ -304,6 +332,138 @@ describe('TaskConfigSliceAction', () => {
       const detail = useTaskStore.getState().taskDetailMap['T-1'];
       expect(detail.automationMode).toBe('schedule');
       expect(detail.heartbeat?.interval).toBeUndefined();
+    });
+  });
+
+  describe('activity feed rows', () => {
+    const signIn = () =>
+      useUserStore.setState({
+        isSignedIn: true,
+        user: { avatar: null, fullName: 'Me', id: 'user_me' } as any,
+      });
+    const rows = () =>
+      (useTaskStore.getState().taskDetailMap['T-1'].activities ?? []).map((a) => a.propertyChange);
+
+    it('shows an automation row for a schedule edit — this path never refetches', async () => {
+      signIn();
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...mockDetail,
+            activities: [],
+            automationMode: 'schedule',
+            schedule: { pattern: '0 9 * * *', timezone: 'UTC' },
+          },
+        },
+      });
+
+      await useTaskStore.getState().updateSchedule('T-1', {
+        maxExecutions: null,
+        pattern: '0 18 * * *',
+        timezone: 'Asia/Shanghai',
+      });
+
+      expect(rows()).toEqual([
+        {
+          field: 'automation',
+          from: {
+            heartbeatInterval: null,
+            maxExecutions: null,
+            mode: 'schedule',
+            schedulePattern: '0 9 * * *',
+            scheduleTimezone: 'UTC',
+          },
+          to: {
+            heartbeatInterval: null,
+            maxExecutions: null,
+            mode: 'schedule',
+            schedulePattern: '0 18 * * *',
+            scheduleTimezone: 'Asia/Shanghai',
+          },
+        },
+      ]);
+    });
+
+    it('logs a cap-only edit: the execution cap is part of the schedule', async () => {
+      signIn();
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...mockDetail,
+            activities: [],
+            automationMode: 'schedule',
+            schedule: { maxExecutions: null, pattern: '0 9 * * *', timezone: 'UTC' },
+          },
+        },
+      });
+
+      await useTaskStore.getState().updateSchedule('T-1', {
+        maxExecutions: 5,
+        pattern: '0 9 * * *',
+        timezone: 'UTC',
+      });
+
+      expect(rows()).toHaveLength(1);
+      expect(rows()[0]).toMatchObject({
+        from: expect.objectContaining({ maxExecutions: null }),
+        to: expect.objectContaining({ maxExecutions: 5 }),
+      });
+    });
+
+    it('does not log a schedule edit while automation is off — the server does not either', async () => {
+      signIn();
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      useTaskStore.setState({ taskDetailMap: { 'T-1': { ...mockDetail, activities: [] } } });
+
+      await useTaskStore.getState().updateSchedule('T-1', {
+        maxExecutions: null,
+        pattern: '0 18 * * *',
+        timezone: 'UTC',
+      });
+
+      expect(rows()).toEqual([]);
+    });
+
+    it('folds a burst of mode toggles the way the server will show it', async () => {
+      signIn();
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      // Both modes already configured, so toggling only moves `mode` — the
+      // same columns the server snapshots, so it folds the same way there.
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...mockDetail,
+            activities: [],
+            automationMode: 'heartbeat',
+            heartbeat: { interval: 600 },
+            schedule: { pattern: '0 9 * * *', timezone: 'UTC' },
+          },
+        },
+      });
+
+      const store = useTaskStore.getState();
+      await store.setAutomationMode('T-1', 'schedule');
+      await store.setAutomationMode('T-1', 'heartbeat');
+
+      // heartbeat → schedule → heartbeat is a net no-op: nothing to tell.
+      expect(rows()).toEqual([]);
+
+      await store.setAutomationMode('T-1', null);
+      expect(rows()).toEqual([
+        {
+          field: 'automation',
+          from: {
+            heartbeatInterval: 600,
+            maxExecutions: null,
+            mode: 'heartbeat',
+            schedulePattern: '0 9 * * *',
+            scheduleTimezone: 'UTC',
+          },
+          to: null,
+        },
+      ]);
     });
   });
 

@@ -1,8 +1,8 @@
 /**
  * @vitest-environment happy-dom
  */
+import { AccordionRoot } from '@lobehub/ui/base-ui';
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import GroupItem from './GroupItem';
@@ -18,64 +18,9 @@ vi.mock('react-router', () => ({
   useParams: () => routeParamsMock,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  AccordionItem: ({
-    action,
-    children,
-    title,
-  }: {
-    action?: ReactNode;
-    children?: ReactNode;
-    title?: ReactNode;
-  }) => (
-    <section>
-      <div>
-        {title}
-        {action}
-      </div>
-      {children}
-    </section>
-  ),
-  ActionIcon: ({
-    onClick,
-    title,
-  }: {
-    onClick?: (event: { stopPropagation: () => void }) => void;
-    title?: string;
-  }) => (
-    <button
-      aria-label={title}
-      type="button"
-      onClick={() => onClick?.({ stopPropagation: vi.fn() })}
-    />
-  ),
-  Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    addTopicAction: 'addTopicAction',
-    statusBadge: 'statusBadge',
-    statusBadgeError: 'statusBadgeError',
-    statusBadgeLoading: 'statusBadgeLoading',
-    statusBadgeWaiting: 'statusBadgeWaiting',
-    unreadDot: 'unreadDot',
-    unreadRipple: 'unreadRipple',
-    unreadWrapper: 'unreadWrapper',
-  }),
-  cssVar: {
-    colorError: '#f00',
-    colorInfo: '#00f',
-    colorTextSecondary: '#666',
-    colorTextTertiary: '#999',
-    colorWarning: '#fa0',
-  },
-  cx: (...classes: Array<string | undefined>) => classes.filter(Boolean).join(' '),
-  keyframes: () => 'keyframes',
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -163,14 +108,16 @@ describe('Project topic group item', () => {
     commitAgentDefaultMock.mockResolvedValue(undefined);
 
     render(
-      <GroupItem
-        expanded
-        group={{
-          children: [],
-          id: 'project:/Users/me/project',
-          title: 'project',
-        }}
-      />,
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [],
+            id: 'project:/Users/me/project',
+            title: 'project',
+          }}
+        />
+      </AccordionRoot>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'actions.addNewTopicInProject:project' }));
@@ -186,14 +133,16 @@ describe('Project topic group item', () => {
     commitAgentDefaultMock.mockResolvedValue(undefined);
 
     render(
-      <GroupItem
-        expanded
-        group={{
-          children: [],
-          id: 'project:/Users/me/project',
-          title: 'project',
-        }}
-      />,
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [],
+            id: 'project:/Users/me/project',
+            title: 'project',
+          }}
+        />
+      </AccordionRoot>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'actions.addNewTopicInProject:project' }));
@@ -207,14 +156,16 @@ describe('Project topic group item', () => {
     agentStoreStateMock.activeAgentId = undefined;
 
     render(
-      <GroupItem
-        expanded
-        group={{
-          children: [],
-          id: 'project:/Users/me/project',
-          title: 'project',
-        }}
-      />,
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [],
+            id: 'project:/Users/me/project',
+            title: 'project',
+          }}
+        />
+      </AccordionRoot>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'actions.addNewTopicInProject:project' }));

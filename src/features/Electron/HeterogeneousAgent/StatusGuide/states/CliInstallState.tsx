@@ -1,5 +1,6 @@
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
-import { Flexbox, Snippet, Text } from '@lobehub/ui';
+import { Flexbox, Snippet } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 
 import GuideActions from '../GuideActions';

@@ -1,10 +1,27 @@
-import { createStaticStyles, keyframes } from 'antd-style';
+import { textStyles } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cx } from 'antd-style';
+
+const localTextGroupStyles = createStaticStyles(({ css }) => ({
+  shinyGroup: css`
+    @supports (-webkit-mask-clip: text) {
+      & {
+        --shiny-origin: static;
+
+        position: relative;
+      }
+    }
+  `,
+}));
 
 /**
  * Inspector text style — ellipsis + secondary color + flex align
  */
 export const inspectorTextStyles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
+    /* Coordinate space for the shiny sweep: every shimmering span in the row
+     * resolves its overlay against this box, so they read as one wave. */
+    ${localTextGroupStyles.shinyGroup}
+
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -42,32 +59,27 @@ export const highlightTextStyles = createStaticStyles(({ css, cssVar }) => {
   };
 });
 
-const shine = keyframes`
-  0% {
-    background-position: 100%;
-  }
-
-  100% {
-    background-position: -100%;
-  }
-`;
-
 /**
- * Shiny loading text animation
+ * Shiny loading text animation, toned down to the secondary text color so a
+ * shimmering label sits at the same visual weight as the static text next to it.
  */
-export const shinyTextStyles = createStaticStyles(({ css, cssVar }) => ({
-  shinyText: css`
-    color: color-mix(in srgb, ${cssVar.colorText} 45%, transparent);
+const shinyToneStyles = createStaticStyles(({ css, cssVar }) => ({
+  secondary: css`
+    /* The upstream rest color is a 28% mix of --shiny-color, which reads far
+     * weaker than the static labels next to it. Pin the rest color to the
+     * neighbouring text color and let the sweep peak at full colorText. */
+    &&& {
+      --shiny-color: ${cssVar.colorText};
 
-    background: linear-gradient(
-      120deg,
-      color-mix(in srgb, ${cssVar.colorTextBase} 0%, transparent) 40%,
-      ${cssVar.colorTextSecondary} 50%,
-      color-mix(in srgb, ${cssVar.colorTextBase} 0%, transparent) 60%
-    );
-    background-clip: text;
-    background-size: 200% 100%;
-
-    animation: ${shine} 1.5s linear infinite;
+      color: ${cssVar.colorTextSecondary};
+    }
   `,
 }));
+
+export const shinyTextStyles = {
+  shinyText: cx(textStyles.shiny, shinyToneStyles.secondary),
+};
+
+export const shinyGroupStyles = {
+  shinyGroup: localTextGroupStyles.shinyGroup,
+};

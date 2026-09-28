@@ -1,6 +1,7 @@
 import type { RunCommandParams } from '@lobechat/electron-client-ipc';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox, Highlighter, Text } from '@lobehub/ui';
+import { Flexbox, Highlighter } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 const formatTimeout = (ms?: number) => {

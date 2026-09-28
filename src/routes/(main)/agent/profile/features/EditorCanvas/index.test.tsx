@@ -128,7 +128,8 @@ vi.mock('@/components/InfoTooltip', () => ({
   ),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: {
     error: (...args: unknown[]) => messageError(...args),
   },
@@ -177,10 +178,6 @@ vi.mock('./TypoBar', () => ({
 
 vi.mock('./useSlashItems', () => ({
   useSlashItems: () => [],
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 describe('Agent profile EditorCanvas', () => {

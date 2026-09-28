@@ -10,6 +10,11 @@ import {
 import { gatewayEnv } from '@/envs/gateway';
 import { redisEnv } from '@/envs/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import {
+  isAnyMessageGatewayEnabled,
+  isMessageGatewayHostConfigured,
+  resolveMessageGatewayHost,
+} from '@/server/services/gateway/MessageGatewayClient';
 
 const log = debug('lobe-server:messenger:config');
 
@@ -171,13 +176,22 @@ export const getMessengerDiscordConfig = async (): Promise<MessengerDiscordConfi
 };
 
 export const getMessengerWechatConfig = async (): Promise<MessengerWechatConfig | null> => {
-  // WeChat owns a long-polling connection in the Message Gateway, with Redis
+  // WeChat owns a long-polling connection in a message gateway, with Redis
   // backing its QR session and per-user connection state. Do not advertise an
   // enabled provider until the runtime can actually complete that lifecycle.
+  //
+  // Two conditions, and both are load-bearing: the runtime only enters gateway
+  // mode when the default host is configured (`isAnyMessageGatewayEnabled`),
+  // and WeChat's connection is only reachable if the host that OWNS WeChat is
+  // configured — which is the Node host once it is routed there. Checking only
+  // the second would advertise WeChat in a Node-only deployment, where the
+  // runtime stays in-process and nothing ever serves those links.
+  const gatewayReady =
+    isAnyMessageGatewayEnabled() &&
+    isMessageGatewayHostConfigured(resolveMessageGatewayHost('wechat'));
   if (
     gatewayEnv.MESSAGE_GATEWAY_ENABLED !== '1' ||
-    !gatewayEnv.MESSAGE_GATEWAY_URL ||
-    !gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN ||
+    !gatewayReady ||
     !redisEnv.REDIS_URL ||
     process.env.DISABLE_REDIS
   ) {

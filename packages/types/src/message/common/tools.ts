@@ -5,7 +5,17 @@ import type { LobeToolRenderType } from '../../tool';
 
 // ToolIntervention must be defined first to avoid circular dependency
 export interface ToolIntervention {
+  /** Stable sealed batch id, bound to one parked operation + assistant turn. */
+  batchId?: string;
+  /** Declaration order inside the sealed batch. */
+  itemIndex?: number;
+  /** Parked runtime operation this decision must resume or stop. */
+  operationId?: string;
   rejectedReason?: string;
+  /** Server-minted idempotency/rollback owner for an authoritative resolution. */
+  resolutionRequestId?: string;
+  /** User decision published, awaiting the blocked producer's ACK. */
+  resolving?: boolean;
   /**
    * The user skipped the interaction (e.g. AskUserQuestion) rather than
    * rejecting the tool call — still `status: 'rejected'` for the runtime, but
@@ -13,11 +23,18 @@ export interface ToolIntervention {
    */
   skipped?: boolean;
   status?: 'pending' | 'approved' | 'rejected' | 'aborted' | 'none';
+  stepIndex?: number;
 }
 
 export const ToolInterventionSchema = z.object({
+  batchId: z.string().optional(),
+  itemIndex: z.number().int().nonnegative().optional(),
+  operationId: z.string().optional(),
   rejectedReason: z.string().optional(),
+  resolving: z.boolean().optional(),
+  resolutionRequestId: z.string().optional(),
   skipped: z.boolean().optional(),
+  stepIndex: z.number().int().nonnegative().optional(),
   status: z.enum(['pending', 'approved', 'rejected', 'aborted', 'none']).optional(),
 });
 
@@ -64,6 +81,13 @@ export interface ChatToolPayload {
  */
 export interface ChatToolResult {
   content: string | null;
+  /**
+   * Length of the STORED result body, carried when the read path replaced
+   * `content` with a render-facing view model. Anything deciding "did this tool
+   * produce a result" must consult it — see `hasToolResultBody`; a bare
+   * `!!content` test reads a projected result as still running.
+   */
+  contentLength?: number;
   error?: any;
   id: string;
   state?: any;

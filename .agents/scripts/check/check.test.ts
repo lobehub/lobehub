@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { findNewComponentTestAdvisories } from './advisories';
+import { parseAlintJson } from './alint';
 import { diffStat, renderDiffsForStdout } from './autofix';
-import { hostRootFromGitdir } from './delegate';
 import { lobehubPipelines } from './pipelines';
 import {
   findVitestConfigDir,
@@ -183,17 +183,6 @@ describe('findVitestConfigDir', () => {
   });
 });
 
-describe('hostRootFromGitdir', () => {
-  it('extracts the superproject root from a submodule gitdir', () => {
-    expect(hostRootFromGitdir('/work/host/.git/modules/vendor/sub')).toBe('/work/host');
-  });
-
-  it('returns null for standalone clones and linked worktrees', () => {
-    expect(hostRootFromGitdir('/work/repo/.git')).toBeNull();
-    expect(hostRootFromGitdir('/work/repo/.git/worktrees/feature')).toBeNull();
-  });
-});
-
 describe('diffStat', () => {
   it('counts added/removed lines, ignoring file headers', () => {
     const diff = ['--- a/f', '+++ b/f', '@@ -1,2 +1,2 @@', '-old', '+new', '+extra'].join('\n');
@@ -240,5 +229,37 @@ describe('compactVitestOutput', () => {
   it('falls back to filtering noise when no failed-tests section exists', () => {
     const raw = [' RUN  v3.2.4 /repo', 'Error: config not found', '   Duration  1ms'].join('\n');
     expect(compactVitestOutput(raw)).toBe('Error: config not found');
+  });
+});
+
+describe('parseAlintJson', () => {
+  it('maps alint diagnostics to root-relative lint problems', () => {
+    const stdout = JSON.stringify({
+      diagnostics: [
+        {
+          evidence: { confidence: 'high' },
+          filePath: '/repo/apps/server/src/services/x.ts',
+          loc: { start: { column: 0, line: 12 } },
+          message: 'Promise.all fans out over rows\nSuggestion: use pMap',
+          ruleId: 'lobehub/pmap-over-promise-all',
+          severity: 'warn',
+        },
+      ],
+      execution: {},
+      usage: {},
+    });
+    expect(parseAlintJson(stdout, '/repo')).toEqual([
+      {
+        file: 'apps/server/src/services/x.ts',
+        line: 12,
+        message: 'Promise.all fans out over rows',
+        rule: 'lobehub/pmap-over-promise-all',
+        severity: 'warning',
+      },
+    ]);
+  });
+
+  it('returns null when stdout is not alint JSON', () => {
+    expect(parseAlintJson('alint: no .alint config', '/repo')).toBeNull();
   });
 });

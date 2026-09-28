@@ -1,0 +1,224 @@
+[
+  {
+    "version": 0,
+    "functions": [
+      {
+        "body": "BEGIN\n      INSERT INTO fts_search_sync_outbox (entity, document_id, priority)\n      SELECT DISTINCT p_entity, document_id, p_priority\n      FROM unnest(p_document_ids) AS document_id\n      WHERE document_id IS NOT NULL AND document_id <> ''\n      ORDER BY document_id\n      ON CONFLICT (entity, document_id) DO UPDATE SET\n        attempts = 0,\n        available_at = now(),\n        dead_at = NULL,\n        last_error = NULL,\n        locked_until = NULL,\n        priority = LEAST(fts_search_sync_outbox.priority, EXCLUDED.priority),\n        -- Allocate after locking the conflicting row so concurrent upserts preserve commit order.\n        revision = nextval('fts_search_sync_revision_seq'),\n        updated_at = now();\n    END;",
+        "identityArguments": "p_entity text, p_document_ids text[], p_priority smallint",
+        "name": "enqueue_fts_search_sync_outbox",
+        "result": "void"
+      },
+      {
+        "body": "DECLARE\n      field_name text;\n      old_row jsonb;\n      new_row jsonb;\n      priority smallint := CASE WHEN TG_OP = 'DELETE' THEN 0 ELSE 10 END;\n      row_id text;\n    BEGIN\n      IF TG_OP = 'UPDATE' AND TG_NARGS > 1 THEN\n        old_row := to_jsonb(OLD);\n        new_row := to_jsonb(NEW);\n        FOREACH field_name IN ARRAY TG_ARGV[1:TG_NARGS - 1] LOOP\n          IF old_row->field_name IS DISTINCT FROM new_row->field_name THEN\n            priority := 0;\n          END IF;\n        END LOOP;\n      END IF;\n\n      IF TG_OP = 'DELETE' THEN\n        row_id := OLD.id::text;\n      ELSE\n        row_id := NEW.id::text;\n      END IF;\n\n      PERFORM enqueue_fts_search_sync_outbox(TG_ARGV[0], ARRAY[row_id], priority);\n      RETURN COALESCE(NEW, OLD);\n    END;",
+        "identityArguments": "",
+        "name": "capture_fts_search_sync_change",
+        "result": "trigger"
+      },
+      {
+        "body": "-- Keep this fanout aligned with FtsSearchDocumentBuilder.resolveAffectedKeys.\n    DECLARE\n      memory_id text := COALESCE(NEW.id, OLD.id)::text;\n      priority smallint := CASE WHEN TG_OP = 'DELETE' THEN 0 ELSE 10 END;\n    BEGIN\n      PERFORM enqueue_fts_search_sync_outbox(\n        'memoryContexts',\n        ARRAY(SELECT id::text FROM user_memories_contexts WHERE user_memory_ids @> to_jsonb(ARRAY[memory_id]) ORDER BY id),\n        priority\n      );\n      PERFORM enqueue_fts_search_sync_outbox(\n        'memoryPreferences',\n        ARRAY(SELECT id::text FROM user_memories_preferences WHERE user_memory_id = memory_id ORDER BY id),\n        priority\n      );\n      PERFORM enqueue_fts_search_sync_outbox(\n        'memoryActivities',\n        ARRAY(SELECT id::text FROM user_memories_activities WHERE user_memory_id = memory_id ORDER BY id),\n        priority\n      );\n      PERFORM enqueue_fts_search_sync_outbox(\n        'memoryIdentities',\n        ARRAY(SELECT id::text FROM user_memories_identities WHERE user_memory_id = memory_id ORDER BY id),\n        priority\n      );\n      PERFORM enqueue_fts_search_sync_outbox(\n        'memoryExperiences',\n        ARRAY(SELECT id::text FROM user_memories_experiences WHERE user_memory_id = memory_id ORDER BY id),\n        priority\n      );\n\n      RETURN COALESCE(NEW, OLD);\n    END;",
+        "identityArguments": "",
+        "name": "capture_fts_search_sync_memory_fanout",
+        "result": "trigger"
+      },
+      {
+        "body": "-- Keep this fanout aligned with FtsSearchDocumentBuilder.resolveAffectedKeys.\n    DECLARE\n      file_ids text[] := ARRAY[\n        CASE WHEN TG_OP <> 'INSERT' THEN OLD.file_id::text END,\n        CASE WHEN TG_OP <> 'DELETE' THEN NEW.file_id::text END\n      ];\n    BEGIN\n      PERFORM enqueue_fts_search_sync_outbox('files', file_ids, 0::smallint);\n      PERFORM enqueue_fts_search_sync_outbox(\n        'documents',\n        ARRAY(SELECT id::text FROM documents WHERE file_id = ANY(file_ids) ORDER BY id),\n        0::smallint\n      );\n      RETURN COALESCE(NEW, OLD);\n    END;",
+        "identityArguments": "",
+        "name": "capture_fts_search_sync_knowledge_base_files",
+        "result": "trigger"
+      }
+    ],
+    "triggers": [
+      {
+        "name": "fts_search_sync_agents",
+        "table": "agents",
+        "definition": "CREATE TRIGGER fts_search_sync_agents AFTER INSERT OR DELETE OR UPDATE OF description, slug, system_role, tags, title, user_id, virtual, visibility, workspace_id ON public.agents FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('agents', 'user_id', 'visibility', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_topics",
+        "table": "topics",
+        "definition": "CREATE TRIGGER fts_search_sync_topics AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, description, group_id, session_id, status, title, user_id, workspace_id ON public.topics FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('topics', 'user_id', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_files",
+        "table": "files",
+        "definition": "CREATE TRIGGER fts_search_sync_files AFTER INSERT OR DELETE OR UPDATE OF file_type, name, size, source, user_id, visibility, workspace_id ON public.files FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('files', 'user_id', 'visibility', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_knowledge_bases",
+        "table": "knowledge_bases",
+        "definition": "CREATE TRIGGER fts_search_sync_knowledge_bases AFTER INSERT OR DELETE OR UPDATE OF description, is_public, name, type, user_id, visibility, workspace_id ON public.knowledge_bases FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('knowledgeBases', 'is_public', 'user_id', 'visibility', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_chat_groups",
+        "table": "chat_groups",
+        "definition": "CREATE TRIGGER fts_search_sync_chat_groups AFTER INSERT OR DELETE OR UPDATE OF content, description, group_id, title, user_id, visibility, workspace_id ON public.chat_groups FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('chatGroups', 'user_id', 'visibility', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_documents",
+        "table": "documents",
+        "definition": "CREATE TRIGGER fts_search_sync_documents AFTER INSERT OR DELETE OR UPDATE OF content, description, file_id, file_type, knowledge_base_id, parent_id, slug, source_type, title, total_char_count, user_id, visibility, workspace_id ON public.documents FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('documents', 'user_id', 'visibility', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_messages",
+        "table": "messages",
+        "definition": "CREATE TRIGGER fts_search_sync_messages AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, group_id, role, session_id, summary, thread_id, topic_id, user_id, workspace_id ON public.messages FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('messages', 'user_id', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_user_memories",
+        "table": "user_memories",
+        "definition": "CREATE TRIGGER fts_search_sync_user_memories AFTER INSERT OR DELETE OR UPDATE OF captured_at, details, memory_category, memory_layer, status, summary, tags, title, user_id ON public.user_memories FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('userMemories', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_user_memories_fanout",
+        "table": "user_memories",
+        "definition": "CREATE TRIGGER fts_search_sync_user_memories_fanout AFTER INSERT OR DELETE OR UPDATE OF captured_at, details, memory_category, memory_layer, status, summary, tags, title, user_id ON public.user_memories FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_memory_fanout()"
+      },
+      {
+        "name": "fts_search_sync_memory_contexts",
+        "table": "user_memories_contexts",
+        "definition": "CREATE TRIGGER fts_search_sync_memory_contexts AFTER INSERT OR DELETE OR UPDATE OF captured_at, current_status, description, tags, title, type, user_id, user_memory_ids ON public.user_memories_contexts FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('memoryContexts', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_memory_preferences",
+        "table": "user_memories_preferences",
+        "definition": "CREATE TRIGGER fts_search_sync_memory_preferences AFTER INSERT OR DELETE OR UPDATE OF captured_at, conclusion_directives, suggestions, tags, type, user_id, user_memory_id ON public.user_memories_preferences FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('memoryPreferences', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_memory_activities",
+        "table": "user_memories_activities",
+        "definition": "CREATE TRIGGER fts_search_sync_memory_activities AFTER INSERT OR DELETE OR UPDATE OF captured_at, ends_at, feedback, narrative, notes, starts_at, status, tags, type, user_id, user_memory_id ON public.user_memories_activities FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('memoryActivities', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_memory_identities",
+        "table": "user_memories_identities",
+        "definition": "CREATE TRIGGER fts_search_sync_memory_identities AFTER INSERT OR DELETE OR UPDATE OF captured_at, description, episodic_date, relationship, role, tags, type, user_id, user_memory_id ON public.user_memories_identities FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('memoryIdentities', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_memory_experiences",
+        "table": "user_memories_experiences",
+        "definition": "CREATE TRIGGER fts_search_sync_memory_experiences AFTER INSERT OR DELETE OR UPDATE OF action, captured_at, key_learning, possible_outcome, reasoning, situation, tags, type, user_id, user_memory_id ON public.user_memories_experiences FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('memoryExperiences', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_persona_documents",
+        "table": "user_memory_persona_documents",
+        "definition": "CREATE TRIGGER fts_search_sync_persona_documents AFTER INSERT OR DELETE OR UPDATE OF captured_at, persona, profile, tagline, user_id, version ON public.user_memory_persona_documents FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('personaDocuments', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_knowledge_base_files",
+        "table": "knowledge_base_files",
+        "definition": "CREATE TRIGGER fts_search_sync_knowledge_base_files AFTER INSERT OR DELETE OR UPDATE OF file_id, knowledge_base_id ON public.knowledge_base_files FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_knowledge_base_files()"
+      }
+    ]
+  },
+  {
+    "version": 1,
+    "functions": [
+      {
+        "body": "BEGIN\n      INSERT INTO fts_search_sync_outbox (entity, document_id, priority)\n      SELECT DISTINCT p_entity, document_id, p_priority\n      FROM unnest(p_document_ids) AS document_id\n      WHERE document_id IS NOT NULL AND document_id <> ''\n      ORDER BY document_id\n      ON CONFLICT (entity, document_id) DO UPDATE SET\n        attempts = 0,\n        available_at = now(),\n        dead_at = NULL,\n        last_error = NULL,\n        locked_until = NULL,\n        priority = LEAST(fts_search_sync_outbox.priority, EXCLUDED.priority),\n        -- Allocate after locking the conflicting row so concurrent upserts preserve commit order.\n        revision = nextval('fts_search_sync_revision_seq'),\n        updated_at = now();\n    END;",
+        "identityArguments": "p_entity text, p_document_ids text[], p_priority smallint",
+        "name": "enqueue_fts_search_sync_outbox",
+        "result": "void"
+      },
+      {
+        "body": "DECLARE\n      field_name text;\n      old_row jsonb;\n      new_row jsonb;\n      priority smallint := CASE WHEN TG_OP = 'DELETE' THEN 0 ELSE 10 END;\n      row_id text;\n    BEGIN\n      IF TG_OP = 'UPDATE' AND TG_NARGS > 1 THEN\n        old_row := to_jsonb(OLD);\n        new_row := to_jsonb(NEW);\n        FOREACH field_name IN ARRAY TG_ARGV[1:TG_NARGS - 1] LOOP\n          IF old_row->field_name IS DISTINCT FROM new_row->field_name THEN\n            priority := 0;\n          END IF;\n        END LOOP;\n      END IF;\n\n      IF TG_OP = 'DELETE' THEN\n        row_id := OLD.id::text;\n      ELSE\n        row_id := NEW.id::text;\n      END IF;\n\n      PERFORM enqueue_fts_search_sync_outbox(TG_ARGV[0], ARRAY[row_id], priority);\n      RETURN COALESCE(NEW, OLD);\n    END;",
+        "identityArguments": "",
+        "name": "capture_fts_search_sync_change",
+        "result": "trigger"
+      },
+      {
+        "body": "-- Keep this fanout aligned with FtsSearchDocumentBuilder.resolveAffectedKeys.\n    DECLARE\n      memory_id text := COALESCE(NEW.id, OLD.id)::text;\n      priority smallint := CASE WHEN TG_OP = 'DELETE' THEN 0 ELSE 10 END;\n    BEGIN\n      PERFORM enqueue_fts_search_sync_outbox(\n        'memoryContexts',\n        ARRAY(SELECT id::text FROM user_memories_contexts WHERE user_memory_ids @> to_jsonb(ARRAY[memory_id]) ORDER BY id),\n        priority\n      );\n      PERFORM enqueue_fts_search_sync_outbox(\n        'memoryPreferences',\n        ARRAY(SELECT id::text FROM user_memories_preferences WHERE user_memory_id = memory_id ORDER BY id),\n        priority\n      );\n      PERFORM enqueue_fts_search_sync_outbox(\n        'memoryActivities',\n        ARRAY(SELECT id::text FROM user_memories_activities WHERE user_memory_id = memory_id ORDER BY id),\n        priority\n      );\n      PERFORM enqueue_fts_search_sync_outbox(\n        'memoryIdentities',\n        ARRAY(SELECT id::text FROM user_memories_identities WHERE user_memory_id = memory_id ORDER BY id),\n        priority\n      );\n      PERFORM enqueue_fts_search_sync_outbox(\n        'memoryExperiences',\n        ARRAY(SELECT id::text FROM user_memories_experiences WHERE user_memory_id = memory_id ORDER BY id),\n        priority\n      );\n\n      RETURN COALESCE(NEW, OLD);\n    END;",
+        "identityArguments": "",
+        "name": "capture_fts_search_sync_memory_fanout",
+        "result": "trigger"
+      },
+      {
+        "body": "-- Keep this fanout aligned with FtsSearchDocumentBuilder.resolveAffectedKeys.\n    DECLARE\n      file_ids text[] := ARRAY[\n        CASE WHEN TG_OP <> 'INSERT' THEN OLD.file_id::text END,\n        CASE WHEN TG_OP <> 'DELETE' THEN NEW.file_id::text END\n      ];\n    BEGIN\n      PERFORM enqueue_fts_search_sync_outbox('files', file_ids, 0::smallint);\n      PERFORM enqueue_fts_search_sync_outbox(\n        'documents',\n        ARRAY(SELECT id::text FROM documents WHERE file_id = ANY(file_ids) ORDER BY id),\n        0::smallint\n      );\n      RETURN COALESCE(NEW, OLD);\n    END;",
+        "identityArguments": "",
+        "name": "capture_fts_search_sync_knowledge_base_files",
+        "result": "trigger"
+      }
+    ],
+    "triggers": [
+      {
+        "name": "fts_search_sync_agents",
+        "table": "agents",
+        "definition": "CREATE TRIGGER fts_search_sync_agents AFTER INSERT OR DELETE OR UPDATE OF description, slug, system_role, tags, title, updated_at, user_id, virtual, visibility, workspace_id ON public.agents FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('agents', 'user_id', 'visibility', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_topics",
+        "table": "topics",
+        "definition": "CREATE TRIGGER fts_search_sync_topics AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, description, group_id, session_id, status, title, updated_at, user_id, workspace_id ON public.topics FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('topics', 'user_id', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_files",
+        "table": "files",
+        "definition": "CREATE TRIGGER fts_search_sync_files AFTER INSERT OR DELETE OR UPDATE OF file_type, name, size, source, updated_at, user_id, visibility, workspace_id ON public.files FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('files', 'user_id', 'visibility', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_knowledge_bases",
+        "table": "knowledge_bases",
+        "definition": "CREATE TRIGGER fts_search_sync_knowledge_bases AFTER INSERT OR DELETE OR UPDATE OF description, is_public, name, type, updated_at, user_id, visibility, workspace_id ON public.knowledge_bases FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('knowledgeBases', 'is_public', 'user_id', 'visibility', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_chat_groups",
+        "table": "chat_groups",
+        "definition": "CREATE TRIGGER fts_search_sync_chat_groups AFTER INSERT OR DELETE OR UPDATE OF content, description, group_id, title, updated_at, user_id, visibility, workspace_id ON public.chat_groups FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('chatGroups', 'user_id', 'visibility', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_documents",
+        "table": "documents",
+        "definition": "CREATE TRIGGER fts_search_sync_documents AFTER INSERT OR DELETE OR UPDATE OF content, description, file_id, file_type, knowledge_base_id, parent_id, slug, source_type, title, total_char_count, updated_at, user_id, visibility, workspace_id ON public.documents FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('documents', 'user_id', 'visibility', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_messages",
+        "table": "messages",
+        "definition": "CREATE TRIGGER fts_search_sync_messages AFTER INSERT OR DELETE OR UPDATE OF agent_id, content, group_id, role, session_id, summary, thread_id, topic_id, updated_at, user_id, workspace_id ON public.messages FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('messages', 'user_id', 'workspace_id')"
+      },
+      {
+        "name": "fts_search_sync_user_memories",
+        "table": "user_memories",
+        "definition": "CREATE TRIGGER fts_search_sync_user_memories AFTER INSERT OR DELETE OR UPDATE OF captured_at, details, memory_category, memory_layer, status, summary, tags, title, updated_at, user_id ON public.user_memories FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('userMemories', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_user_memories_fanout",
+        "table": "user_memories",
+        "definition": "CREATE TRIGGER fts_search_sync_user_memories_fanout AFTER INSERT OR DELETE OR UPDATE OF captured_at, details, memory_category, memory_layer, status, summary, tags, title, user_id ON public.user_memories FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_memory_fanout()"
+      },
+      {
+        "name": "fts_search_sync_memory_contexts",
+        "table": "user_memories_contexts",
+        "definition": "CREATE TRIGGER fts_search_sync_memory_contexts AFTER INSERT OR DELETE OR UPDATE OF captured_at, current_status, description, tags, title, type, updated_at, user_id, user_memory_ids ON public.user_memories_contexts FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('memoryContexts', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_memory_preferences",
+        "table": "user_memories_preferences",
+        "definition": "CREATE TRIGGER fts_search_sync_memory_preferences AFTER INSERT OR DELETE OR UPDATE OF captured_at, conclusion_directives, suggestions, tags, type, updated_at, user_id, user_memory_id ON public.user_memories_preferences FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('memoryPreferences', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_memory_activities",
+        "table": "user_memories_activities",
+        "definition": "CREATE TRIGGER fts_search_sync_memory_activities AFTER INSERT OR DELETE OR UPDATE OF captured_at, ends_at, feedback, narrative, notes, starts_at, status, tags, type, updated_at, user_id, user_memory_id ON public.user_memories_activities FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('memoryActivities', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_memory_identities",
+        "table": "user_memories_identities",
+        "definition": "CREATE TRIGGER fts_search_sync_memory_identities AFTER INSERT OR DELETE OR UPDATE OF captured_at, description, episodic_date, relationship, role, tags, type, updated_at, user_id, user_memory_id ON public.user_memories_identities FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('memoryIdentities', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_memory_experiences",
+        "table": "user_memories_experiences",
+        "definition": "CREATE TRIGGER fts_search_sync_memory_experiences AFTER INSERT OR DELETE OR UPDATE OF action, captured_at, key_learning, possible_outcome, reasoning, situation, tags, type, updated_at, user_id, user_memory_id ON public.user_memories_experiences FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('memoryExperiences', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_persona_documents",
+        "table": "user_memory_persona_documents",
+        "definition": "CREATE TRIGGER fts_search_sync_persona_documents AFTER INSERT OR DELETE OR UPDATE OF captured_at, persona, profile, tagline, updated_at, user_id, version ON public.user_memory_persona_documents FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('personaDocuments', 'user_id')"
+      },
+      {
+        "name": "fts_search_sync_knowledge_base_files",
+        "table": "knowledge_base_files",
+        "definition": "CREATE TRIGGER fts_search_sync_knowledge_base_files AFTER INSERT OR DELETE OR UPDATE OF file_id, knowledge_base_id ON public.knowledge_base_files FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_knowledge_base_files()"
+      }
+    ]
+  }
+]

@@ -13,9 +13,6 @@ export default {
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
-  'features.claudeCodeApiMode.desc':
-    'Let Claude Code use a configured API provider and model on this desktop instead of a Claude subscription. Desktop local execution only.',
-  'features.claudeCodeApiMode.title': 'Claude Code API Provider',
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
@@ -27,6 +24,12 @@ export default {
   'features.desktopSplitView.title': 'Split Tab View',
   'features.heteroSessionImport.desc':
     'Add an "Import Local Agent Sessions" entry to the topic list menu: scan local Claude Code / Codex CLI transcripts and import them as topics, with incremental sync on re-import.',
+  'features.evalCapture.desc':
+    'Adds a message action that captures a conversation turn — its prior context, input and the answer it produced — as an evaluation test case.',
+  'features.evalCapture.title': 'Save a turn as an eval case',
+  'features.deviceTunnel.desc':
+    'Give a port on the working device a link, so a dev server running there can be opened from here. The link only works for people who can reach that device.',
+  'features.deviceTunnel.title': 'Remote Port Links',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
@@ -38,6 +41,9 @@ export default {
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
   'features.inputMarkdown.desc':
     'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
+  'features.integrations.desc':
+    'Show the Integrations settings page: connect the GitHub App so merged pull requests accept deliveries and failing checks or reviews reach the agent that opened them. Hidden by default.',
+  'features.integrations.title': 'Integrations',
   'features.inputMarkdown.title': 'Input Markdown Rendering',
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
@@ -49,8 +55,8 @@ export default {
     'Organize long-running goals into dedicated workspaces with their own agents, knowledge bases, and tasks.',
   'features.projects.title': 'Project Workspaces',
   'features.taskVerify.desc':
-    'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
-  'features.taskVerify.title': 'Task Delivery Acceptance',
+    'Add an Acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
+  'features.taskVerify.title': 'Acceptance',
   'features.selfLearning.desc':
     'Show what each agent has learned from real practice — its rule base, which rules actually get used, and which layers are still blank.',
   'features.selfLearning.title': 'Self-evolving',

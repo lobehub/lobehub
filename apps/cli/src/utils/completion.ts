@@ -1,7 +1,12 @@
 import type { Command, Option } from 'commander';
 import { InvalidArgumentError } from 'commander';
 
-const CLI_BIN_NAMES = ['lh', 'lobe', 'lobehub'] as const;
+import {
+  CLI_BIN_NAMES,
+  CLI_COMPLETION_CWORD_ENV,
+  CLI_COMPLETION_FUNCTION,
+} from '../constants/identity';
+
 const SUPPORTED_SHELLS = ['bash', 'zsh'] as const;
 
 type SupportedShell = (typeof SUPPORTED_SHELLS)[number];
@@ -133,25 +138,25 @@ export function renderCompletionScript(shell: SupportedShell) {
   if (shell === 'bash') {
     return [
       '# shellcheck shell=bash',
-      '_lobehub_completion() {',
+      `${CLI_COMPLETION_FUNCTION}() {`,
       "  local IFS=$'\\n'",
       '  local current_index=$((COMP_CWORD - 1))',
       '  local completions',
-      '  completions=$(LOBEHUB_COMP_CWORD="$current_index" "${COMP_WORDS[0]}" __complete "${COMP_WORDS[@]:1}")',
+      `  completions=$(${CLI_COMPLETION_CWORD_ENV}="$current_index" "\${COMP_WORDS[0]}" __complete "\${COMP_WORDS[@]:1}")`,
       '  COMPREPLY=($(printf \'%s\\n\' "$completions"))',
       '}',
-      `complete -o nosort -F _lobehub_completion ${CLI_BIN_NAMES.join(' ')}`,
+      `complete -o nosort -F ${CLI_COMPLETION_FUNCTION} ${CLI_BIN_NAMES.join(' ')}`,
     ].join('\n');
   }
 
   return [
     `#compdef ${CLI_BIN_NAMES.join(' ')}`,
-    '_lobehub_completion() {',
+    `${CLI_COMPLETION_FUNCTION}() {`,
     '  local -a completions',
     '  local current_index=$((CURRENT - 2))',
-    '  completions=("${(@f)$(LOBEHUB_COMP_CWORD="$current_index" "$words[1]" __complete "${(@)words[@]:1}")}")',
+    `  completions=("\${(@f)$(${CLI_COMPLETION_CWORD_ENV}="$current_index" "$words[1]" __complete "\${(@)words[@]:1}")}")`,
     "  _describe 'values' completions",
     '}',
-    `compdef _lobehub_completion ${CLI_BIN_NAMES.join(' ')}`,
+    `compdef ${CLI_COMPLETION_FUNCTION} ${CLI_BIN_NAMES.join(' ')}`,
   ].join('\n');
 }

@@ -1,3 +1,5 @@
+import type { UIChatMessage } from '@lobechat/types';
+
 // ─── Agent Stream Event (mirrors server StreamEvent) ───
 
 export type AgentStreamEventType =
@@ -39,6 +41,12 @@ export type AgentStreamEventType =
    * cancellation marker.
    */
   | 'agent_intervention_response'
+  /**
+   * Protocol-v2-only canonical conversation delta. Native server agent runs
+   * emit one after each durable step instead of repeating the whole topic on
+   * every `step_start` / `agent_runtime_end` boundary.
+   */
+  | 'message_patch'
   | 'step_start'
   | 'step_complete'
   /**
@@ -57,6 +65,22 @@ export interface AgentStreamEvent {
   stepIndex: number;
   timestamp: number;
   type: AgentStreamEventType;
+}
+
+export interface MessagePatchUpsert {
+  /** Immediate predecessor in the canonical top-level message list. */
+  afterId: string | null;
+  message: UIChatMessage;
+}
+
+/**
+ * Operation-local, monotonic patch carried only by Gateway mux / protocol v2.
+ * A missing revision is recovered with one normal message-list fetch.
+ */
+export interface MessagePatchData {
+  deletes: string[];
+  revision: number;
+  upserts: MessagePatchUpsert[];
 }
 
 export type StreamChunkType =
@@ -151,6 +175,7 @@ export interface ToolEndData {
 }
 
 export interface StepCompleteData {
+  /** Present only when the run opts into includeFinalState. */
   finalState?: unknown;
   phase: string;
   reason?: string;
@@ -183,6 +208,43 @@ export interface SubAgentProgressData extends StepCompleteData {
 }
 
 /**
+ * A heterogeneous CLI lease renewal carried by `step_complete` while the
+ * underlying process is alive but has no user-visible output. It deliberately
+ * uses a phase instead of a new event type so the out-of-repo gateway worker
+ * can treat the stream write as activity without a coordinated protocol
+ * rollout. UI and persistence consumers ignore this advisory event.
+ */
+export interface OperationHeartbeatData extends StepCompleteData {
+  phase: 'operation_heartbeat';
+}
+
+/** Semantic interaction shape, independent of the legacy tool renderer id. */
+export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question';
+
+/** Producer that owns the blocked interaction. */
+export type AgentInterventionProvider = 'claude-code' | 'cursor' | 'devin' | 'droid' | 'qoder';
+
+/** Whitelisted option surface that may be persisted for cold-start review. */
+export interface AgentInterventionRenderOption {
+  description?: string;
+  /** Required for provider-owned permission/plan choices. */
+  id?: string;
+  label: string;
+}
+
+/** Canonical AskUserQuestion surface shared by every supported provider. */
+export interface AgentInterventionRenderQuestion {
+  header: string;
+  multiSelect: boolean;
+  options: AgentInterventionRenderOption[];
+  question: string;
+}
+
+export interface AgentInterventionRenderArguments {
+  questions: AgentInterventionRenderQuestion[];
+}
+
+/**
  * Producer → consumer: structured-input request the user must answer
  * directly (no tool execution involved). The producer's tool handler stays
  * blocked until a matching `agent_intervention_response` (correlated by
@@ -197,6 +259,17 @@ export interface AgentInterventionRequestData {
   deadline: number;
   /** Tool plugin identifier (e.g. `'claude-code'`). */
   identifier: string;
+  /**
+   * Semantic interaction shape. Optional only for older wire producers; all
+   * current producers stamp it explicitly so consumers never infer behavior
+   * from `identifier`.
+   */
+  interactionKind?: AgentInterventionInteractionKind;
+  /**
+   * Agent provider that owns the blocked request. Optional for backward wire
+   * compatibility; current producers always include it.
+   */
+  provider?: AgentInterventionProvider;
   /** Correlation key. Stable for the lifetime of the intervention. */
   toolCallId: string;
 }
@@ -210,6 +283,13 @@ export interface AgentInterventionResponseData {
   cancelled?: boolean;
   /** When `cancelled`, optional reason for telemetry/logging. */
   cancelReason?: 'timeout' | 'user_cancelled' | 'session_ended';
+  /** True only on the producer's post-resolution echo (durable ACK boundary). */
+  producerAck?: boolean;
+  /**
+   * Client-minted idempotency key. Present on user-driven responses and echoed
+   * unchanged by the producer so durable storage can cross the ACK boundary.
+   */
+  resolutionRequestId?: string;
   /** User-supplied answer (JSON-serializable). Absent when cancelled. */
   result?: unknown;
   toolCallId: string;
@@ -276,10 +356,6 @@ export interface HeartbeatMessage {
   type: 'heartbeat';
 }
 
-export interface InterruptMessage {
-  type: 'interrupt';
-}
-
 /**
  * Client → Server: tool execution result, correlated by toolCallId.
  */
@@ -303,8 +379,13 @@ export interface ToolResultMessage {
   workRegistration?: any;
 }
 
-export type ClientMessage =
-  AuthMessage | HeartbeatMessage | InterruptMessage | ResumeMessage | ToolResultMessage;
+/**
+ * The gateway also accepts an `interrupt` frame, but its op DO ignores it and
+ * a stop needs server-side work the socket cannot do (cancelling device/hetero
+ * processes, settling the operation and topic rows). Cancellation therefore
+ * goes through `aiAgent.interruptTask`, and no client here ever sends one.
+ */
+export type ClientMessage = AuthMessage | HeartbeatMessage | ResumeMessage | ToolResultMessage;
 
 // Server → Client
 export interface AuthSuccessMessage {
@@ -346,6 +427,30 @@ export interface SessionCompleteMessage {
  */
 export type SessionStatus =
   'running' | 'waiting_input' | 'waiting_confirmation' | 'completed' | 'error' | 'interrupted';
+
+export type TerminalSessionStatus = Extract<SessionStatus, 'completed' | 'error' | 'interrupted'>;
+
+/**
+ * Provenance for a terminal session signal emitted by AgentStreamClient (v1)
+ * or a mux `OperationSubscription` (v2). v1 only ever emits the first two.
+ */
+export type AgentStreamSessionCompletion =
+  | {
+      source: 'raw_session_complete';
+    }
+  | {
+      source: 'resume_status';
+      status: TerminalSessionStatus;
+    }
+  /** v2: this op's own `agent_runtime_end` / `error` agent event. */
+  | {
+      source: 'agent_event';
+    }
+  /** v2: hub `status_change` carrying a terminal status (e.g. watchdog). */
+  | {
+      source: 'status_change';
+      status: TerminalSessionStatus;
+    };
 
 /**
  * Server → Client: sent right after a `resume` replay, carrying the DO's
@@ -389,7 +494,7 @@ export interface AgentStreamClientEvents {
   disconnected: () => void;
   error: (error: Error) => void;
   reconnecting: (delay: number) => void;
-  session_complete: () => void;
+  session_complete: (completion: AgentStreamSessionCompletion) => void;
   status_changed: (status: ConnectionStatus) => void;
 }
 
@@ -400,6 +505,15 @@ export interface AgentStreamClientOptions {
   autoReconnect?: boolean;
   /** Gateway WebSocket URL base (e.g. https://gateway.lobehub.com) */
   gatewayUrl: string;
+  /**
+   * Last event id this operation has already applied, when the stream is being
+   * picked up from another transport (the v1 fallback after the multiplexed
+   * socket gave up). Both protocols read ids from the same per-operation
+   * sequence, so the first `resume` replays only what came after it — events
+   * the client already consumed, `tool_execute` included, are not delivered
+   * twice. Absent ⇒ replay from the beginning.
+   */
+  lastEventId?: string;
   /** Operation ID to subscribe to */
   operationId: string;
   /**

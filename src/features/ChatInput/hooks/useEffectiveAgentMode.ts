@@ -1,9 +1,9 @@
-import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { useUserStore } from '@/store/user';
+
+import { useEffectiveAgentModePreference } from './effectiveAgentModePreference';
 
 export type ChatInputMode = 'agent' | 'chat';
 
@@ -45,30 +45,18 @@ export const resolveEffectiveAgentMode = ({
 };
 
 export const useEffectiveAgentMode = (agentId: string) => {
-  const [sharedEnableAgentMode, model, provider, agent] = useAgentStore((s) => [
-    agentByIdSelectors.getAgentEnableModeById(agentId)(s),
+  const [model, provider] = useAgentStore((s) => [
     agentByIdSelectors.getAgentModelById(agentId)(s),
     agentByIdSelectors.getAgentModelProviderById(agentId)(s),
-    agentByIdSelectors.getAgentById(agentId)(s),
   ]);
-  const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
-  const usesWorkspaceMemberMode =
-    !!agent?.workspaceId && agent.visibility !== 'private' && !canManageAgent;
-  const storePreference = useUserStore((s) => s.workspaceUserPreference);
-  const { data: fetchedPreference, isLoading } = useUserStore(
-    (s) => s.useFetchWorkspaceUserPreference,
-  )();
-  const preference = fetchedPreference === undefined ? storePreference : (fetchedPreference ?? {});
-  const memberModeOverride = usesWorkspaceMemberMode
-    ? preference.agentModeOverrides?.[agentId]
-    : undefined;
-  const enableAgentMode = memberModeOverride ?? sharedEnableAgentMode;
+  const { enableAgentMode, isPreferenceLoading, usesWorkspaceMemberMode } =
+    useEffectiveAgentModePreference(agentId);
   const supportToolUse = useModelSupportToolUse(model, provider);
   const isModelListReady = useAiInfraStore(aiProviderSelectors.isInitAiProviderRuntimeState);
 
   return {
     ...resolveEffectiveAgentMode({ enableAgentMode, isModelListReady, supportToolUse }),
-    isPreferenceLoading: isAccessLoading || (usesWorkspaceMemberMode && isLoading),
+    isPreferenceLoading,
     usesWorkspaceMemberMode,
   };
 };

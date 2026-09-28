@@ -190,6 +190,9 @@ const createSessionOptions = (
   ...overrides,
 });
 
+const createCursorBridge = () =>
+  new AskUserBridge('operation-1', { identifier: 'claude-code', provider: 'cursor' });
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -327,7 +330,7 @@ describe('CursorAcpSession', () => {
     const fake = createAcpProcess({ askQuestion: true });
     spawnMock.mockReturnValue(fake.child);
     vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const bridge = new AskUserBridge('operation-1');
+    const bridge = createCursorBridge();
     const options = createSessionOptions({ askUserBridge: bridge });
     const events: AgentStreamEvent[] = [];
     options.onEvents = (batch) => {
@@ -366,7 +369,7 @@ describe('CursorAcpSession', () => {
     const fake = createAcpProcess({ askQuestion: true });
     spawnMock.mockReturnValue(fake.child);
     vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const bridge = new AskUserBridge('operation-1');
+    const bridge = createCursorBridge();
     const options = createSessionOptions({ askUserBridge: bridge });
     const events: AgentStreamEvent[] = [];
     options.onEvents = (batch) => {
@@ -379,6 +382,8 @@ describe('CursorAcpSession', () => {
     expect(intervention.value).toMatchObject({
       data: {
         apiName: 'askUserQuestion',
+        interactionKind: 'question',
+        provider: 'cursor',
         toolCallId: 'cursor-question-1',
       },
       type: 'agent_intervention_request',
@@ -388,7 +393,10 @@ describe('CursorAcpSession', () => {
         {
           header: 'Scope',
           multiSelect: false,
-          options: [{ label: 'Narrow' }, { label: 'Full' }],
+          options: [
+            { id: 'narrow', label: 'Narrow' },
+            { id: 'full', label: 'Full' },
+          ],
           question: 'How broad should the fix be?',
         },
       ],
@@ -435,7 +443,7 @@ describe('CursorAcpSession', () => {
       const fake = createAcpProcess({ askQuestion: true });
       spawnMock.mockReturnValue(fake.child);
       vi.spyOn(process, 'kill').mockImplementation(() => true);
-      const bridge = new AskUserBridge('operation-1');
+      const bridge = createCursorBridge();
       const options = createSessionOptions({ askUserBridge: bridge });
       const eventIterator = bridge.events()[Symbol.asyncIterator]();
       const run = new CursorAcpSession(options).run();
@@ -468,7 +476,7 @@ describe('CursorAcpSession', () => {
     });
     spawnMock.mockReturnValue(fake.child);
     vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const bridge = new AskUserBridge('operation-1');
+    const bridge = createCursorBridge();
     const events: AgentStreamEvent[] = [];
     const sessionOptions = createSessionOptions({ askUserBridge: bridge });
     sessionOptions.onEvents = (batch) => {
@@ -479,12 +487,20 @@ describe('CursorAcpSession', () => {
 
     const intervention = await eventIterator.next();
     expect(intervention.value!.data.toolCallId).toBe('cursor-permission-permission-1-tool-1');
+    expect(intervention.value!.data).toMatchObject({
+      interactionKind: 'permission',
+      provider: 'cursor',
+    });
     expect(JSON.parse(intervention.value!.data.arguments)).toEqual({
       questions: [
         {
           header: 'Permission required',
           multiSelect: false,
-          options: [{ label: 'Allow once' }, { label: 'Always allow' }, { label: 'Reject' }],
+          options: [
+            { id: 'allow-once', label: 'Allow once' },
+            { id: 'allow-always', label: 'Always allow' },
+            { id: 'reject-once', label: 'Reject' },
+          ],
           question: 'Run the test suite',
         },
       ],
@@ -502,7 +518,7 @@ describe('CursorAcpSession', () => {
       }),
     );
     bridge.resolve(intervention.value!.data.toolCallId, {
-      result: { 'Run the test suite': 'Allow once' },
+      result: { 'Run the test suite': 'allow-once' },
     });
     await run;
 
@@ -524,6 +540,7 @@ describe('CursorAcpSession', () => {
       undefined,
       { cancelReason: 'user_cancelled', cancelled: true } as const,
       { result: { 'Run the test suite': 'Allow everything' } },
+      { result: { 'Run the test suite': 'Always allow' } },
     ]) {
       const fake = createAcpProcess({
         serverRequest: {
@@ -541,7 +558,7 @@ describe('CursorAcpSession', () => {
       });
       spawnMock.mockReturnValue(fake.child);
       vi.spyOn(process, 'kill').mockImplementation(() => true);
-      const bridge = bridgeAnswer ? new AskUserBridge('operation-1') : undefined;
+      const bridge = bridgeAnswer ? createCursorBridge() : undefined;
       const run = new CursorAcpSession(createSessionOptions({ askUserBridge: bridge })).run();
 
       if (bridge) {
@@ -554,6 +571,40 @@ describe('CursorAcpSession', () => {
         outcome: { outcome: 'cancelled' },
       });
     }
+  });
+
+  it('uses exact option ids when provider permission labels are duplicated', async () => {
+    const fake = createAcpProcess({
+      serverRequest: {
+        id: 'permission-duplicate-labels',
+        method: 'session/request_permission',
+        params: {
+          options: [
+            { kind: 'allow_once', name: 'Continue', optionId: 'allow-once' },
+            { kind: 'reject_once', name: 'Continue', optionId: 'reject-once' },
+          ],
+          toolCall: { title: 'Edit README', toolCallId: 'tool-duplicate-labels' },
+        },
+      },
+    });
+    spawnMock.mockReturnValue(fake.child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const bridge = createCursorBridge();
+    const run = new CursorAcpSession(createSessionOptions({ askUserBridge: bridge })).run();
+
+    const intervention = await bridge.events()[Symbol.asyncIterator]().next();
+    expect(JSON.parse(intervention.value!.data.arguments).questions[0].options).toEqual([
+      { id: 'allow-once', label: 'Continue' },
+      { id: 'reject-once', label: 'Continue' },
+    ]);
+    bridge.resolve(intervention.value!.data.toolCallId, {
+      result: { 'Edit README': 'reject-once' },
+    });
+    await run;
+
+    expect(fake.requests.find(({ id }) => id === 'permission-duplicate-labels')?.result).toEqual({
+      outcome: { optionId: 'reject-once', outcome: 'selected' },
+    });
   });
 
   it.each([
@@ -575,7 +626,7 @@ describe('CursorAcpSession', () => {
     });
     spawnMock.mockReturnValue(fake.child);
     vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const bridge = new AskUserBridge('operation-1');
+    const bridge = createCursorBridge();
     const eventIterator = bridge.events()[Symbol.asyncIterator]();
     const run = new CursorAcpSession(createSessionOptions({ askUserBridge: bridge })).run();
 
@@ -585,14 +636,18 @@ describe('CursorAcpSession', () => {
         {
           header: 'Fix approvals',
           multiSelect: false,
-          options: [{ label: 'Accept' }, { label: 'Reject' }],
+          options: [
+            { id: 'accepted', label: 'Accept' },
+            { id: 'rejected', label: 'Reject' },
+          ],
           question: 'Require an explicit decision.\n\n1. Show the plan.\n2. Wait for the user.',
         },
       ],
     });
     bridge.resolve(intervention.value!.data.toolCallId, {
       result: {
-        'Require an explicit decision.\n\n1. Show the plan.\n2. Wait for the user.': selection,
+        'Require an explicit decision.\n\n1. Show the plan.\n2. Wait for the user.':
+          selection === 'Accept' ? 'accepted' : 'rejected',
       },
     });
     await run;
@@ -613,7 +668,7 @@ describe('CursorAcpSession', () => {
       });
       spawnMock.mockReturnValue(fake.child);
       vi.spyOn(process, 'kill').mockImplementation(() => true);
-      const bridge = withBridge ? new AskUserBridge('operation-1') : undefined;
+      const bridge = withBridge ? createCursorBridge() : undefined;
       const run = new CursorAcpSession(createSessionOptions({ askUserBridge: bridge })).run();
 
       if (bridge) {
@@ -639,7 +694,7 @@ describe('CursorAcpSession', () => {
     });
     spawnMock.mockReturnValue(fake.child);
     vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const bridge = new AskUserBridge('operation-1');
+    const bridge = createCursorBridge();
     const eventIterator = bridge.events()[Symbol.asyncIterator]();
     const run = new CursorAcpSession(createSessionOptions({ askUserBridge: bridge })).run();
 

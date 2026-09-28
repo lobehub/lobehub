@@ -27,28 +27,40 @@ const {
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    ensureForOperation: ensureForOperationMock,
-    confirmPlan: confirmPlanMock,
-    setPlan: setPlanMock,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      ensureForOperation: ensureForOperationMock,
+      confirmPlan: confirmPlanMock,
+      setPlan: setPlanMock,
+    };
+  }),
 }));
 vi.mock('@/database/models/verifyRubric', () => ({
-  VerifyRubricModel: vi.fn(() => ({
-    create: createRubricMock,
-    getCriteria: getCriteriaMock,
-    setCriteria: setCriteriaMock,
-  })),
+  VerifyRubricModel: vi.fn(function () {
+    return {
+      create: createRubricMock,
+      getCriteria: getCriteriaMock,
+      setCriteria: setCriteriaMock,
+    };
+  }),
 }));
 vi.mock('@/database/models/verifyCriterion', () => ({
-  VerifyCriterionModel: vi.fn(() => ({
-    create: createCriterionMock,
-    findByIds: findByIdsMock,
-  })),
+  VerifyCriterionModel: vi.fn(function () {
+    return {
+      create: createCriterionMock,
+      findByIds: findByIdsMock,
+    };
+  }),
 }));
-vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn(() => ({})) }));
+vi.mock('@/database/models/document', () => ({
+  DocumentModel: vi.fn(function () {
+    return {};
+  }),
+}));
 vi.mock('@/server/services/aiGeneration', () => ({
-  AiGenerationService: vi.fn(() => ({ generateObject: generateObjectMock })),
+  AiGenerationService: vi.fn(function () {
+    return { generateObject: generateObjectMock };
+  }),
 }));
 
 const db = {} as any;
@@ -151,7 +163,7 @@ describe('generateDraftPlan — holistic fallback', () => {
 });
 
 describe('generateCriteria tracing', () => {
-  it('uses the createGoal criteria scenario instead of the run-time plan scenario', async () => {
+  it('keeps generic task criteria generation on the verify-plan scenario', async () => {
     generateObjectMock.mockResolvedValue({ criteria: [] });
 
     await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({
@@ -162,7 +174,7 @@ describe('generateCriteria tracing', () => {
     expect(generateObjectMock).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
-        tracing: expect.objectContaining({ scenario: 'goal_criteria_gen' }),
+        tracing: expect.objectContaining({ scenario: 'verify_plan_gen' }),
       }),
     );
   });

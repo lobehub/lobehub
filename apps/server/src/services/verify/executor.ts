@@ -16,6 +16,7 @@ import type {
   VerifyCheckResultStatus,
   VerifyVerdict,
 } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { AiModelModel } from '@/database/models/aiModel';
@@ -30,6 +31,7 @@ import { FileService } from '@/server/services/file';
 
 import { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
 import { planEvidenceVerification } from './evidencePlanner';
+import { resolveModelReadableFrameUrl } from './modelFrames';
 import { planItemToPendingResult } from './resultSnapshot';
 import { BatchVerdictSchema, type SingleVerdict, SingleVerdictSchema } from './schema';
 import { VerifyStatusService } from './statusService';
@@ -114,6 +116,8 @@ export class VerifyExecutorService {
    * body lives in its linked document (the single source of truth).
    */
   private async resolveInstruction(item: VerifyCheckItem): Promise<string | undefined> {
+    if (item.definition || item.resourceSnapshot)
+      return JSON.stringify({ definition: item.definition, resources: item.resourceSnapshot });
     if (!item.documentId) return undefined;
     const doc = await this.documentModel.findById(item.documentId);
     return doc?.content ?? undefined;
@@ -206,14 +210,18 @@ export class VerifyExecutorService {
   /** Load a run's evidence rows grouped by the plan item id they back. */
   private async loadEvidence(verifyRunId: string): Promise<EvidenceByItem> {
     const rows = await this.evidenceModel.listByRun(verifyRunId);
+    const documentIds = [
+      ...new Set(rows.flatMap((row) => (row.documentId ? [row.documentId] : []))),
+    ];
+    const documents = await this.documentModel.findByIds(documentIds);
+    const documentContent = new Map(documents.map((document) => [document.id, document.content]));
     const byItem: EvidenceByItem = new Map();
     for (const row of rows) {
       const list = byItem.get(row.checkItemId) ?? [];
-      // Keep `fileId` so the planner can route file-only text to an agent and
-      // agent verifiers can attach the actual artifact.
       list.push({
-        content: row.content,
+        content: row.documentId ? documentContent.get(row.documentId) : row.content,
         description: row.description,
+        documentId: row.documentId,
         fileId: row.fileId,
         type: row.type,
       });
@@ -228,10 +236,7 @@ export class VerifyExecutorService {
         if (!item.fileId || (item.type !== 'screenshot' && item.type !== 'gif')) return item;
         const file = await this.fileModel.findById(item.fileId);
         if (!file) return item;
-        return {
-          ...item,
-          accessUrl: await this.fileService.getFileAccessUrl({ id: file.id, url: file.url }),
-        };
+        return { ...item, accessUrl: await resolveModelReadableFrameUrl(this.fileService, file) };
       }),
     );
   }
@@ -446,6 +451,7 @@ export class VerifyExecutorService {
         schema: BATCH_VERDICT_JSON_SCHEMA,
       },
       {
+        metadata: { trigger: RequestTrigger.Verify },
         tracing: {
           ...({
             promptVersion: VERIFY_JUDGE_PROMPT_VERSION,
@@ -523,6 +529,7 @@ export class VerifyExecutorService {
         schema: SINGLE_VERDICT_JSON_SCHEMA,
       },
       {
+        metadata: { trigger: RequestTrigger.Verify },
         tracing: {
           ...({
             promptVersion: VERIFY_JUDGE_PROMPT_VERSION,

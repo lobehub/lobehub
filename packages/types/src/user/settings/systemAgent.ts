@@ -12,10 +12,18 @@ export interface PromptRewriteSystemAgent extends Omit<SystemAgentItem, 'enabled
 
 export interface UserSystemAgentConfig {
   agentMeta: SystemAgentItem;
+  /**
+   * Speech-to-text model that transcribes voice messages for runtimes that only take text
+   * (heterogeneous agents). Empty `model`/`provider` means unconfigured: voice input that
+   * depends on transcription stays hidden.
+   */
+  asr: SystemAgentItem;
   /** Model used to draft expertise domains and extract reusable experience from conversations. */
   expertise: SystemAgentItem;
   followUpAction: SystemAgentItem;
   generationTopic: SystemAgentItem;
+  /** Model used to turn a persistent goal into its standing acceptance criteria. */
+  goal: SystemAgentItem;
   historyCompress: SystemAgentItem;
   inputCompletion: SystemAgentItem;
   /** Model used to turn onboarding evidence into background-safe task recommendations. */

@@ -122,6 +122,12 @@ export const userMemoryRouter = router({
     await ctx.userMemoryModel.deleteAll();
     await ctx.personaModel.deletePersona();
 
+    // Reset all topics' userMemoryExtractStatus so they can be re-extracted
+    // after memories are purged. Without this, isTopicExtracted() skips them
+    // forever because the status remains 'completed' even though the memories
+    // no longer exist. Fixes #18498
+    await ctx.topicModel.resetMemoryExtractStatus();
+
     return { success: true };
   }),
 

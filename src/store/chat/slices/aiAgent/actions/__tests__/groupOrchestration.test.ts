@@ -5,8 +5,6 @@ import { useClientDataSWR } from '@/libs/swr';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat/store';
 
-// Keep zustand mock as it's needed globally
-vi.mock('zustand/traditional');
 vi.mock('@/libs/swr', () => ({
   useClientDataSWR: vi.fn(),
 }));

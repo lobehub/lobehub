@@ -340,7 +340,13 @@ const MCPManifestForm = ({
                 rules={[{ message: t('dev.mcp.command.required'), required: true }]}
                 tag={'command'}
               >
-                <MCPStdioCommandInput placeholder={t('dev.mcp.command.placeholder')} />
+                <MCPStdioCommandInput
+                  placeholder={t('dev.mcp.command.placeholder')}
+                  onParsedArgs={(args) => {
+                    const existing: string[] = form.getFieldValue(STDIO_ARGS) ?? [];
+                    form.setFieldValue(STDIO_ARGS, [...args, ...existing.filter(Boolean)]);
+                  }}
+                />
               </FormItem>
               <FormItem
                 desc={t('dev.mcp.args.desc')}

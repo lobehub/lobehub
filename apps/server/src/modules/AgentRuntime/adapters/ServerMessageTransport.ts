@@ -82,7 +82,20 @@ export class ServerMessageTransport implements MessageTransport {
   }
 
   async deleteMessage(id: string): Promise<void> {
-    await this.messageModel.deleteMessage(id);
+    // Runtime cleanup path (orphaned placeholders / approval teardown). Agent-share
+    // visitor turns run under the creator's identity, so the runtime must be able to
+    // delete rows the creator-facing delete guard fails closed on.
+    await this.messageModel.deleteMessage(id, { includeShareVisitor: true });
+  }
+
+  async findToolMessageIdByToolCallId(
+    toolCallId: string,
+    parentMessageId: string,
+  ): Promise<string | undefined> {
+    // Indexed on `message_plugins_tool_call_id_idx`; the model already uses this
+    // lookup for card updates, so the abort path adds no new access pattern.
+    const id = await this.messageModel.findToolMessageIdByToolCallId(toolCallId, parentMessageId);
+    return id ?? undefined;
   }
 
   async findById(id: string): Promise<RuntimeMessageRef | undefined> {
@@ -107,6 +120,12 @@ export class ServerMessageTransport implements MessageTransport {
     options?: QueryMessagesOptions,
   ): Promise<UIChatMessage[]> {
     const messages = await this.messageModel.query(params, {
+      // Executors only ever read the operation's own, already-authorized topic.
+      // An agent-share visitor run executes under the CREATOR's identity, so
+      // without this opt-in `query()`'s creator-facing agent-share exclusion
+      // would blank the visitor's conversation mid-run (see `tool.ts`, which
+      // re-reads `state.messages` from the DB after every tool call).
+      allowShareVisitor: true,
       postProcessUrl: options?.resolveAssetUrls ? this.options.postProcessUrl : undefined,
     });
 

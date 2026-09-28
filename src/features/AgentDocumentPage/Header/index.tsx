@@ -1,8 +1,8 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { DropdownMenu } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { MoreHorizontal } from 'lucide-react';
 import { memo } from 'react';
@@ -23,6 +23,8 @@ interface HeaderProps {
   agentDocumentId?: string;
   agentId: string;
   documentId: string;
+  /** Hide editor-only actions for original uploaded files. */
+  fileBacked?: boolean;
   itemError?: unknown;
   onBack: () => void;
   onDeleted: () => void;
@@ -31,7 +33,17 @@ interface HeaderProps {
 }
 
 const Header = memo<HeaderProps>(
-  ({ agentId, agentDocumentId, documentId, itemError, onBack, onDeleted, title, updatedAt }) => {
+  ({
+    agentId,
+    agentDocumentId,
+    documentId,
+    fileBacked,
+    itemError,
+    onBack,
+    onDeleted,
+    title,
+    updatedAt,
+  }) => {
     const { t } = useTranslation(['file', 'chat']);
     const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
     const showTitleError = !!itemError && !title;
@@ -43,6 +55,7 @@ const Header = memo<HeaderProps>(
       agentId,
       documentId,
       onDeleted,
+      fileBacked,
       title,
       updatedAt,
     });
@@ -82,8 +95,8 @@ const Header = memo<HeaderProps>(
         }
         right={
           <Flexbox horizontal align={'center'} gap={4}>
-            {documentId && <AutoSaveHint documentId={documentId} />}
-            {documentId && <ShareButton documentId={documentId} />}
+            {documentId && !fileBacked && <AutoSaveHint documentId={documentId} />}
+            {documentId && !fileBacked && <ShareButton documentId={documentId} />}
             <ToggleRightPanelButton hideWhenExpanded />
           </Flexbox>
         }

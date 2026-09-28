@@ -1,3 +1,5 @@
+import type { RouterRuntimeRequestContext } from '@lobechat/types';
+
 interface RouterInstance {
   apiType: string;
   models?: string[];
@@ -16,7 +18,7 @@ interface RouterInstance {
 
 interface LobehubRouterRuntimeOptions {
   id: string;
-  routers: (options: any, runtimeContext: { model?: string }) => Promise<RouterInstance[]>;
+  routers: (options: any, runtimeContext: RouterRuntimeRequestContext) => Promise<RouterInstance[]>;
 }
 
 export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {

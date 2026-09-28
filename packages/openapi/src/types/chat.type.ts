@@ -137,7 +137,15 @@ export const MessageGenerationParamsSchema = z.object({
 // ==================== Configuration Types ====================
 
 /**
- * Supported AI providers
+ * A hand-written sample of provider ids, kept only because it is exported.
+ *
+ * It is not the set of providers this service accepts and never was: the
+ * request field beside it is `provider?: string`, validated as
+ * `z.string().max(64)`, and the runtime resolves whatever id arrives against
+ * the `ai_providers` table — including custom providers, which by definition
+ * cannot appear in any list written here.
+ *
+ * @deprecated Provider ids are open. Use `string`.
  */
 export type AIProvider = 'openai' | 'anthropic' | 'google' | 'groq' | 'vertexai';
 
@@ -146,6 +154,15 @@ export type AIProvider = 'openai' | 'anthropic' | 'google' | 'groq' | 'vertexai'
  */
 export interface ChatServiceConfig {
   defaultModel?: string;
-  defaultProvider?: AIProvider;
+  /**
+   * Deliberately `string`, matching `ChatServiceParams['provider']`.
+   *
+   * Typing this as {@link AIProvider} said a request may name any provider
+   * while the default may only be one of five built-ins — a distinction with
+   * nothing behind it, since both end up in the same lookup. It also made
+   * `DEFAULT_PROVIDER` unassignable: the product's own default is `deepseek`,
+   * which that list never included.
+   */
+  defaultProvider?: string;
   timeout?: number;
 }

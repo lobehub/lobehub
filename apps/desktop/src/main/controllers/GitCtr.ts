@@ -9,6 +9,11 @@ import type {
   GitDeleteBranchResult,
   GitFileRevertResult,
   GitLinkedPullRequestResult,
+  GitPullRequestAction,
+  GitPullRequestActionResult,
+  GitPullRequestActivity,
+  GitPullRequestDetailResult,
+  GitPullRequestMergeContext,
   GitPullResult,
   GitPushResult,
   GitRemoteBranchListItem,
@@ -61,6 +66,47 @@ export default class GitController extends ControllerModule {
   }): Promise<GitLinkedPullRequestResult> {
     const { getLinkedPullRequest: computeLinkedPullRequest } = await loadGit();
     return computeLinkedPullRequest(payload);
+  }
+
+  @IpcMethod()
+  async getPullRequestDetail(payload: {
+    coreOnly?: boolean;
+    number: number;
+    path: string;
+  }): Promise<GitPullRequestDetailResult> {
+    const { getPullRequestDetail: computePullRequestDetail } = await loadGit();
+    return computePullRequestDetail(payload);
+  }
+
+  @IpcMethod()
+  async getPullRequestActivity(payload: {
+    number: number;
+    path: string;
+  }): Promise<GitPullRequestActivity> {
+    const { getPullRequestActivity: computePullRequestActivity } = await loadGit();
+    return computePullRequestActivity(payload);
+  }
+
+  @IpcMethod()
+  async getPullRequestMergeContext(payload: {
+    baseRefName: string;
+    headRefOid: string;
+    number: number;
+    path: string;
+    repo: { name: string; owner: string };
+  }): Promise<GitPullRequestMergeContext> {
+    const { getPullRequestMergeContext: computeMergeContext } = await loadGit();
+    return computeMergeContext(payload);
+  }
+
+  @IpcMethod()
+  async runPullRequestAction(payload: {
+    action: GitPullRequestAction;
+    number: number;
+    path: string;
+  }): Promise<GitPullRequestActionResult> {
+    const { runPullRequestAction: runPullRequestActionRpc } = await loadGit();
+    return runPullRequestActionRpc(payload);
   }
 
   @IpcMethod()

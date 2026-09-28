@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+
+import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
 import debug from 'debug';
 
 import type { MessengerPlatform } from '@/config/messenger';
@@ -15,6 +18,7 @@ import { messengerPlatformRegistry } from '@/server/services/messenger/platforms
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
+import { runDeferredReplay, scheduleDeferredReplay } from './deferredReplay';
 import type {
   BotMessageAttachment,
   BotReplyLocale,
@@ -25,8 +29,11 @@ import type {
 import {
   getBotReplyLocale,
   getStepReactionEmoji,
+  normalizeBotReactionMode,
+  platformFromThreadId,
   platformRegistry,
   resolveBotProviderConfig,
+  shouldApplyReaction,
 } from './platforms';
 import { clearReactionState, getReactionState, saveReactionState } from './reactionState';
 import {
@@ -84,6 +91,15 @@ export interface BotCallbackBody {
    * lifecycle event.
    */
   errorAttribution?: string;
+  /**
+   * Which spending allowance ran out, and by how much, when the run failed on
+   * an insufficient-credits code. Lets the reply name the exhausted allowance
+   * instead of the generic personal-credits copy (the figures themselves are
+   * never rendered — they belong to the billed owner, not the recipient).
+   * Forwarded verbatim from the agent lifecycle event.
+   */
+  errorBudget?: ChatErrorBudgetContext;
+  errorHeterogeneous?: ChatErrorHeterogeneousContext;
   errorMessage?: string;
   errorType?: string;
   executionTimeMs?: number;
@@ -153,7 +169,7 @@ export class BotCallbackService {
       messengerInstallationKey,
       userId,
     } = body;
-    const platform = platformThreadId.split(':')[0];
+    const platform = platformFromThreadId(platformThreadId);
 
     const { client, connectionId, messenger, charLimit, settings, workspaceId } =
       await this.createMessenger({
@@ -168,6 +184,7 @@ export class BotCallbackService {
     const entry = platformRegistry.getPlatform(platform);
     const canEdit = entry?.supportsMessageEdit !== false;
     const replyLocale = getBotReplyLocale(platform);
+    const reactionMode = normalizeBotReactionMode(settings.reactionMode);
 
     if (type === 'step') {
       if (canEdit && progressMessageId && settings.displayToolCalls === true) {
@@ -175,8 +192,12 @@ export class BotCallbackService {
       }
       // Swap the user-message reaction to match the current step type (tool
       // call vs. LLM reasoning). Runs regardless of `displayToolCalls` because
-      // the progress-message edit and the reaction are separate UX channels.
-      await this.swapStepReaction(body, client, platform);
+      // the progress-message edit and the reaction are separate UX channels —
+      // but only under the `full` reaction mode: every swap is a platform
+      // notification for users with message alerts on.
+      if (shouldApplyReaction(reactionMode, 'step')) {
+        await this.swapStepReaction(body, client, platform);
+      }
       // Only renew typing when more steps are expected. The final step
       // (shouldContinue=false) may arrive after the completion callback
       // via async delivery (QStash), which would restart typing after stop.
@@ -199,7 +220,13 @@ export class BotCallbackService {
         options?.deliveredChunkCount,
         options?.onChunkDelivered,
       );
-      await this.clearStepReaction(body, client, platform);
+      // Cleanup follows what was actually applied, not the current setting: a
+      // run that placed a reaction must still remove it after the bot is
+      // switched to `none` mid-run. The setting only decides whether to fall
+      // back to the legacy 👀 when nothing was tracked.
+      await this.clearStepReaction(body, client, platform, {
+        fallbackToReceived: shouldApplyReaction(reactionMode, 'clear'),
+      });
       // Clear the active thread tracker so the thread can accept new messages.
       // In queue mode, the bridge handler's finally block skips this cleanup
       // to keep the thread marked active while the agent runs on the job queue.
@@ -208,6 +235,42 @@ export class BotCallbackService {
         { ...body, workspaceId: body.workspaceId ?? workspaceId ?? undefined },
         messenger,
       );
+      // The topic is idle now — replay any follow-up the bridge parked while
+      // this run was executing (WeChat "one image + one sentence" arrives as
+      // two messages; the second used to fail the topic-start reservation).
+      await this.replayDeferredMessages(
+        platform,
+        applicationId,
+        platformThreadId,
+        messengerInstallationKey,
+        body.operationId ?? randomUUID(),
+      );
+    }
+  }
+
+  private async replayDeferredMessages(
+    platform: string,
+    applicationId: string,
+    platformThreadId: string,
+    messengerInstallationKey: string | undefined,
+    replayId: string,
+  ): Promise<void> {
+    const target = { applicationId, messengerInstallationKey, platform, platformThreadId };
+    try {
+      await runDeferredReplay(target);
+    } catch (error) {
+      log('replayDeferredMessages failed for thread=%s: %O', platformThreadId, error);
+      // Only the replay job retries. Redelivering this completion would post
+      // the already-delivered final response again.
+      try {
+        await scheduleDeferredReplay(target, replayId);
+      } catch (scheduleError) {
+        log(
+          'Could not schedule deferred replay for thread=%s: %O',
+          platformThreadId,
+          scheduleError,
+        );
+      }
     }
   }
 
@@ -424,6 +487,8 @@ export class BotCallbackService {
       reason,
       lastAssistantContent,
       errorAttribution,
+      errorBudget,
+      errorHeterogeneous,
       errorMessage,
       errorType,
       operationId,
@@ -443,6 +508,8 @@ export class BotCallbackService {
         operationId,
         replyLocale,
         errorAttribution,
+        errorBudget,
+        errorHeterogeneous,
       );
       const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
       if (deliveredChunkCount < 1) {
@@ -640,17 +707,21 @@ export class BotCallbackService {
   /**
    * Remove whatever emoji was last applied to the user message and clear the
    * tracking state. Falls back to the legacy `👀` when no state is recorded
-   * so pre-feature runs (or runs against a Redis-less setup) still clean up.
+   * so pre-feature runs (or runs against a Redis-less setup) still clean up,
+   * unless `fallbackToReceived` is off (reaction mode `none`).
    */
   private async clearStepReaction(
     body: BotCallbackBody,
     client: PlatformClient,
     platform: string,
+    { fallbackToReceived }: { fallbackToReceived: boolean },
   ): Promise<void> {
     const { userMessageId, applicationId, platformThreadId } = body;
     if (!userMessageId) return;
 
     const state = await getReactionState(platform, applicationId, userMessageId);
+    // Nothing tracked and reactions are off: there is nothing to remove.
+    if (!state && !fallbackToReceived) return;
     const emoji = state?.emoji ?? '👀';
 
     // Thread-starter messages may live in the parent channel (e.g. Discord),
@@ -679,7 +750,7 @@ export class BotCallbackService {
    */
   private renewGatewayTyping(connectionId: string, platformThreadId: string): void {
     if (!connectionId) return;
-    const client = getMessageGatewayClient();
+    const client = getMessageGatewayClient(platformFromThreadId(platformThreadId));
     if (!client.isEnabled) return;
 
     client.startTyping(connectionId, platformThreadId).catch((err) => {
@@ -689,7 +760,7 @@ export class BotCallbackService {
 
   private stopGatewayTyping(connectionId: string, platformThreadId: string): void {
     if (!connectionId) return;
-    const client = getMessageGatewayClient();
+    const client = getMessageGatewayClient(platformFromThreadId(platformThreadId));
     if (!client.isEnabled) return;
 
     client.stopTyping(connectionId, platformThreadId).catch((err) => {
@@ -734,6 +805,7 @@ export class BotCallbackService {
         const systemAgent = new SystemAgentService(this.db, userId, body.workspaceId ?? undefined);
         const title = await systemAgent.generateTopicTitle({
           lastAssistantContent,
+          topicId,
           userPrompt,
         });
         if (!title) return;

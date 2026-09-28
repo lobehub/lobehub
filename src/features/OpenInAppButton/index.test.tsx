@@ -30,7 +30,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   DropdownMenu: ({
     children,
     items,
@@ -69,38 +70,6 @@ vi.mock('@lobehub/ui', () => ({
       {children}
     </div>
   ),
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    dropdownItem: 'dropdownItem',
-    leftButton: 'leftButton',
-    rightButton: 'rightButton',
-    root: 'root',
-  }),
-  cssVar: new Proxy({}, { get: () => 'var(--placeholder)' }),
-}));
-
-vi.mock('lucide-react', () => {
-  const Stub = () => null;
-  return {
-    AppleIcon: Stub,
-    ChevronDownIcon: Stub,
-    CodeIcon: Stub,
-    CodeXmlIcon: Stub,
-    FolderIcon: Stub,
-    FolderOpenIcon: Stub,
-    GhostIcon: Stub,
-    HammerIcon: Stub,
-    SquareTerminalIcon: Stub,
-    TerminalIcon: Stub,
-  };
-});
-
-vi.mock('@lobehub/icons', () => ({
-  Cursor: function Cursor() {
-    return null;
-  },
 }));
 
 beforeEach(() => {

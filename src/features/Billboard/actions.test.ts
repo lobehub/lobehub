@@ -98,6 +98,12 @@ describe('resolveBillboardAction', () => {
     }
   });
 
+  it('should resolve resetOnboarding on the lobehub.com web origin', () => {
+    window.location.href = 'https://lobehub.com/';
+
+    expect(resolveBillboardAction('resetOnboarding')).toBe('resetOnboarding');
+  });
+
   it('should not resolve resetOnboarding on a self-hosted web origin', () => {
     window.location.href = 'https://chat.example.com/';
 
@@ -119,6 +125,21 @@ describe('resolveBillboardAction', () => {
       const desktopActions = await importDesktopActions();
       expect(desktopActions.resolveBillboardAction('resetOnboarding')).toBeNull();
       expect(desktopActions.resolveBillboardAction('openChangelog')).toBe('openChangelog');
+    } finally {
+      restoreDesktopMock();
+    }
+  });
+
+  it('should resolve resetOnboarding on desktop synced to a lobehub.com self-host url', async () => {
+    electronState.dataSyncConfig = {
+      active: true,
+      remoteServerUrl: 'https://lobehub.com',
+      storageMode: 'selfHost',
+    };
+
+    try {
+      const desktopActions = await importDesktopActions();
+      expect(desktopActions.resolveBillboardAction('resetOnboarding')).toBe('resetOnboarding');
     } finally {
       restoreDesktopMock();
     }

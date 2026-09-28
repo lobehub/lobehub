@@ -4,6 +4,7 @@ import { OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
 import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AiModelModel } from '@/database/models/aiModel';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { getServerGlobalConfig } from '@/server/globalConfig';
@@ -22,6 +23,7 @@ vi.mock('@/business/server/aiProvider', () => ({
 vi.mock('@/server/globalConfig');
 vi.mock('@/server/modules/KeyVaultsEncrypt');
 vi.mock('@/database/repositories/aiInfra');
+vi.mock('@/database/models/aiModel');
 vi.mock('@/database/models/aiProvider');
 vi.mock('@/database/models/user');
 vi.mock('@/server/modules/ModelRuntime', () => ({
@@ -70,6 +72,8 @@ describe('aiProviderRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetHiddenBuiltinModelsForUser.mockResolvedValue([]);
+    // Keep the automock default (no configs) so a per-test override doesn't leak
+    vi.mocked(AiModelModel).prototype.getAllModelReasoningConfigs = vi.fn();
 
     vi.mocked(getServerGlobalConfig).mockReturnValue({
       aiProvider: {},
@@ -171,8 +175,28 @@ describe('aiProviderRouter', () => {
       const caller = aiProviderRouter.createCaller(createMockContext());
       const result = await caller.getAiProviderRuntimeState({});
 
-      expect(result).toEqual({ ...mockRuntimeState, hiddenBuiltinModels: [], modelRedirects: {} });
+      expect(result).toEqual({
+        ...mockRuntimeState,
+        hiddenBuiltinModels: [],
+        modelRedirects: {},
+        providerBindingAgentTypes: {},
+      });
       expect(mockGetState).toHaveBeenCalledWith(KeyVaultsGateKeeper.getUserKeyVaults);
+    });
+
+    it('returns the personal reasoning configs alongside the runtime state', async () => {
+      vi.mocked(AiInfraRepos).prototype.getAiProviderRuntimeState = vi
+        .fn()
+        .mockResolvedValue(mockRuntimeState);
+      const modelReasoningConfigs = { 'openai/gpt-5.6-sol': { gpt5_6ReasoningEffort: 'high' } };
+      vi.mocked(AiModelModel).prototype.getAllModelReasoningConfigs = vi
+        .fn()
+        .mockResolvedValue(modelReasoningConfigs);
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.getAiProviderRuntimeState({});
+
+      expect(result.modelReasoningConfigs).toEqual(modelReasoningConfigs);
     });
 
     it('should append user-scoped hidden builtin models without changing runtime state loading', async () => {
@@ -184,9 +208,48 @@ describe('aiProviderRouter', () => {
       const caller = aiProviderRouter.createCaller(createMockContext());
       const result = await caller.getAiProviderRuntimeState({});
 
-      expect(result).toEqual({ ...mockRuntimeState, hiddenBuiltinModels, modelRedirects: {} });
+      expect(result).toEqual({
+        ...mockRuntimeState,
+        hiddenBuiltinModels,
+        modelRedirects: {},
+        providerBindingAgentTypes: {},
+      });
       expect(mockGetHiddenBuiltinModelsForUser).toHaveBeenCalledWith(mockUserId);
       expect(mockGetState).toHaveBeenCalledWith(KeyVaultsGateKeeper.getUserKeyVaults);
+    });
+
+    it('derives a secret-free provider binding capability map on the server', async () => {
+      const anthropicProvider = { id: 'anthropic-custom', source: 'custom' as const };
+      const openaiProvider = { id: 'openai', source: 'builtin' as const };
+      vi.mocked(AiInfraRepos).prototype.getAiProviderRuntimeState = vi.fn().mockResolvedValue({
+        ...mockRuntimeState,
+        enabledAiProviders: [anthropicProvider, openaiProvider],
+        runtimeConfig: {
+          'anthropic-custom': {
+            config: {},
+            keyVaults: {
+              apiKey: 'anthropic-secret',
+              baseURL: 'https://anthropic.example.com',
+            },
+            settings: { sdkType: 'anthropic' },
+          },
+          'openai': {
+            config: {},
+            keyVaults: { apiKey: 'openai-secret' },
+            settings: { sdkType: 'openai' },
+          },
+        },
+      });
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.getAiProviderRuntimeState({});
+
+      expect(result.providerBindingAgentTypes).toEqual({
+        'anthropic-custom': ['claude-code', 'grok-build', 'kimi-code', 'pi'],
+        'openai': ['codex', 'grok-build', 'kimi-code', 'pi', 'trae'],
+      });
+      expect(JSON.stringify(result.providerBindingAgentTypes)).not.toContain('secret');
+      expect(JSON.stringify(result.providerBindingAgentTypes)).not.toContain('example.com');
     });
 
     it('should remove hidden models and providers from the runtime state', async () => {
@@ -234,6 +297,86 @@ describe('aiProviderRouter', () => {
       expect(result.enabledAiModels).toEqual([visibleChatModel, visibleImageModel]);
       expect(result.enabledChatAiProviders).toEqual([lobehubProvider]);
       expect(result.enabledImageAiProviders).toEqual([openaiProvider]);
+    });
+  });
+
+  describe('getProviderBindingRuntime', () => {
+    it('returns credentials for only the selected enabled provider', async () => {
+      const selectedRuntime = {
+        config: {},
+        keyVaults: { apiKey: 'selected-secret' },
+        settings: { sdkType: 'anthropic' as const },
+      };
+      const otherRuntime = {
+        config: {},
+        keyVaults: { apiKey: 'other-secret' },
+        settings: { sdkType: 'openai' as const },
+      };
+      vi.mocked(AiInfraRepos).prototype.getAiProviderRuntimeState = vi.fn().mockResolvedValue({
+        ...mockRuntimeState,
+        enabledAiProviders: [{ id: mockProviderId, source: 'custom' }],
+        runtimeConfig: {
+          [mockProviderId]: selectedRuntime,
+          other: otherRuntime,
+        },
+      });
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.getProviderBindingRuntime({ id: mockProviderId });
+
+      expect(result).toEqual({ enabled: true, enabledModels: [], runtimeConfig: selectedRuntime });
+      expect(JSON.stringify(result)).not.toContain('other-secret');
+    });
+
+    it('returns only the selected provider enabled models so Desktop main can validate the bound model', async () => {
+      vi.mocked(AiInfraRepos).prototype.getAiProviderRuntimeState = vi.fn().mockResolvedValue({
+        ...mockRuntimeState,
+        enabledAiModels: [
+          {
+            abilities: { reasoning: true, vision: true },
+            contextWindowTokens: 200_000,
+            displayName: 'Claude Test',
+            id: 'claude-test',
+            maxOutput: 32_000,
+            providerId: mockProviderId,
+            type: 'chat',
+          },
+          { abilities: {}, id: 'embed-test', providerId: mockProviderId, type: 'embedding' },
+          { abilities: {}, id: 'gpt-test', providerId: 'other', type: 'chat' },
+        ],
+        enabledAiProviders: [{ id: mockProviderId, source: 'custom' }],
+        runtimeConfig: {
+          [mockProviderId]: {
+            config: {},
+            keyVaults: { apiKey: 'selected-secret' },
+            settings: { sdkType: 'anthropic' as const },
+          },
+        },
+      });
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.getProviderBindingRuntime({ id: mockProviderId });
+
+      expect(result.enabledModels).toEqual([
+        {
+          abilities: { reasoning: true, vision: true },
+          contextWindowTokens: 200_000,
+          displayName: 'Claude Test',
+          id: 'claude-test',
+          maxOutput: 32_000,
+          providerId: mockProviderId,
+          type: 'chat',
+        },
+        {
+          abilities: { reasoning: undefined, vision: undefined },
+          contextWindowTokens: undefined,
+          displayName: undefined,
+          id: 'embed-test',
+          maxOutput: undefined,
+          providerId: mockProviderId,
+          type: 'embedding',
+        },
+      ]);
     });
   });
 

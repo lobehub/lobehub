@@ -13,12 +13,17 @@ export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['d
  * Personal mode hides the chip and treats every entry as 'all'.
  */
 export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
+export type TaskKanbanGroupBy = 'assignee' | 'member' | 'priority' | 'status';
 
 export interface TaskListSliceState {
-  isScheduledTaskListInit: boolean;
+  groupListQueryAutomated?: boolean;
   isTaskGroupListInit: boolean;
   isTaskListInit: boolean;
   listAgentId?: string;
+  /** Grouping dimension of the task data currently stored in `taskGroups`. */
+  listGroupBy: TaskKanbanGroupBy;
+  /** Excluded statuses of the current grouped query, as a sorted signature. */
+  listGroupExcludeStatuses?: string;
   /**
    * Automation filter of the task data currently stored in `tasks` — `false`
    * for Home's recent block (live schedules excluded server-side), undefined
@@ -27,6 +32,13 @@ export interface TaskListSliceState {
    * surface's filter.
    */
   listQueryAutomated?: boolean;
+  /**
+   * Whether the data in `tasks` is the complete list (every page walked) or
+   * a single server page. Tracked for the same scope-reset reason as
+   * `listQueryAutomated`: flipping list ↔ kanban must not render the other
+   * variant's rows under the new variant's expectations.
+   */
+  listQueryComplete?: boolean;
   /**
    * Status narrowing of the data in `tasks`, as an order-insensitive signature
    * (sorted, comma-joined) — undefined when the query is unnarrowed. Tracked
@@ -38,22 +50,19 @@ export interface TaskListSliceState {
   /** Defaults to 'all' so the Tasks top entry shows every visible task
    *  (private + workspace-shared) without narrowing. */
   listVisibility: TaskListVisibilityFilter;
-  /** Tasks driven by a schedule or heartbeat — a separate query from `tasks`. */
-  scheduledTasks: TaskListItem[];
-  scheduledTasksTotal: number;
   taskGroups: TaskGroupItem[];
   tasks: TaskListItem[];
   tasksTotal: number;
 }
 
 export const initialTaskListSliceState: TaskListSliceState = {
-  isScheduledTaskListInit: false,
+  groupListQueryAutomated: undefined,
   isTaskGroupListInit: false,
   isTaskListInit: false,
+  listGroupBy: 'status',
+  listQueryComplete: false,
   listQueryVisibility: 'all',
   listVisibility: 'all',
-  scheduledTasks: [],
-  scheduledTasksTotal: 0,
   taskGroups: [],
   tasks: [],
   tasksTotal: 0,

@@ -1,9 +1,19 @@
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  type MockInstance,
+  vi,
+} from 'vitest';
 
 import {
   buildConnectorPayloadFromLegacy,
   executeLegacyMigrationSave,
+  type MigrationSaveDeps,
 } from './legacyPluginMigration';
 
 /**
@@ -386,29 +396,29 @@ describe('executeLegacyMigrationSave', () => {
       type: 'customPlugin',
     }) as LobeToolCustomPlugin;
 
-  let createConnector: ReturnType<typeof vi.fn>;
-  let deleteConnector: ReturnType<typeof vi.fn>;
-  let hasExistingConnector: ReturnType<typeof vi.fn>;
-  let syncConnectorTools: ReturnType<typeof vi.fn>;
-  let uninstallCustomPlugin: ReturnType<typeof vi.fn>;
+  let createConnector: Mock<MigrationSaveDeps['createConnector']>;
+  let deleteConnector: Mock<MigrationSaveDeps['deleteConnector']>;
+  let hasExistingConnector: Mock<MigrationSaveDeps['hasExistingConnector']>;
+  let syncConnectorTools: Mock<MigrationSaveDeps['syncConnectorTools']>;
+  let uninstallCustomPlugin: Mock<MigrationSaveDeps['uninstallCustomPlugin']>;
   let calls: string[];
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  let consoleErrorSpy: MockInstance<typeof console.error>;
 
   beforeEach(() => {
     calls = [];
-    createConnector = vi.fn(async () => {
+    createConnector = vi.fn<MigrationSaveDeps['createConnector']>(async () => {
       calls.push('createConnector');
       return 'new-conn-id';
     });
-    deleteConnector = vi.fn(async () => {
+    deleteConnector = vi.fn<MigrationSaveDeps['deleteConnector']>(async () => {
       calls.push('deleteConnector');
     });
     // Default: no pre-existing connector (the common fresh-migration case).
-    hasExistingConnector = vi.fn(() => false);
-    syncConnectorTools = vi.fn(async () => {
+    hasExistingConnector = vi.fn<MigrationSaveDeps['hasExistingConnector']>(() => false);
+    syncConnectorTools = vi.fn<MigrationSaveDeps['syncConnectorTools']>(async () => {
       calls.push('syncConnectorTools');
     });
-    uninstallCustomPlugin = vi.fn(async () => {
+    uninstallCustomPlugin = vi.fn<MigrationSaveDeps['uninstallCustomPlugin']>(async () => {
       calls.push('uninstallCustomPlugin');
     });
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

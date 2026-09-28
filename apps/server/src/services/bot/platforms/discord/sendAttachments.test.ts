@@ -1,11 +1,26 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as PublicUrlFetchModule from '../publicUrlFetch';
 import {
   batchDiscordFiles,
   DISCORD_MAX_ATTACHMENTS_PER_MESSAGE,
   materializeAttachmentsForDiscord,
 } from './sendAttachments';
+
+// These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
+// for real, which has nothing to do with what they assert. Its own behaviour is
+// covered in publicUrlFetch.test.ts.
+vi.mock('../publicUrlFetch', async () => ({
+  // Spread the real module: a full mock silently drops every export it
+  // does not name, so adding one to publicUrlFetch breaks suites that
+  // never cared about it.
+  ...(await vi.importActual<typeof PublicUrlFetchModule>('../publicUrlFetch')),
+  fetchPublicUrl: async (url: string, timeoutMs: number) => ({
+    dispose: async () => undefined,
+    response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+  }),
+}));
 
 describe('materializeAttachmentsForDiscord', () => {
   beforeEach(() => {
@@ -13,7 +28,7 @@ describe('materializeAttachmentsForDiscord', () => {
   });
 
   it('decodes base64 data into a Buffer with the explicit filename', async () => {
-    const files = await materializeAttachmentsForDiscord([
+    const { files } = await materializeAttachmentsForDiscord([
       {
         data: Buffer.from('hello').toString('base64'),
         mimeType: 'image/png',
@@ -38,7 +53,7 @@ describe('materializeAttachmentsForDiscord', () => {
       }) as any,
     );
 
-    const files = await materializeAttachmentsForDiscord([
+    const { files } = await materializeAttachmentsForDiscord([
       { fetchUrl: 'https://cdn.example.com/pic.png', type: 'image' },
     ]);
 
@@ -51,17 +66,20 @@ describe('materializeAttachmentsForDiscord', () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 500 }) as any);
 
-    const files = await materializeAttachmentsForDiscord([
+    const { failures, files } = await materializeAttachmentsForDiscord([
       { fetchUrl: 'https://cdn.example.com/broken.png', type: 'image' },
       { data: Buffer.from('ok').toString('base64'), name: 'ok.txt', type: 'file' },
     ]);
 
     expect(files).toHaveLength(1);
     expect(files[0].name).toBe('ok.txt');
+    expect(failures).toEqual([
+      { detail: 'HTTP 500', name: undefined, reason: 'source-unavailable', type: 'image' },
+    ]);
   });
 
   it('falls back to a generic filename when name is missing', async () => {
-    const files = await materializeAttachmentsForDiscord([
+    const { files } = await materializeAttachmentsForDiscord([
       { data: Buffer.from('a').toString('base64'), mimeType: 'image/png', type: 'image' },
       { data: Buffer.from('b').toString('base64'), mimeType: 'application/pdf', type: 'file' },
     ]);

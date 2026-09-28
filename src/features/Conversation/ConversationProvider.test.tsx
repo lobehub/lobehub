@@ -23,26 +23,6 @@ const chatListMocks = vi.hoisted(() => ({
   useFetchAgentConfig: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} onClick={onClick}>
-      {children}
-    </button>
-  ),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/features/Conversation/ChatList/components/AgentSignalReceiptList', () => ({
   default: () => null,
 }));

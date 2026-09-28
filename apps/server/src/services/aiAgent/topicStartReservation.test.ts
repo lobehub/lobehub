@@ -53,12 +53,12 @@ describe('acquireTopicStartReservation', () => {
       topicModel,
     });
 
-    expect(tryReserveTaskCallback).toHaveBeenCalledWith(
-      'topic-1',
-      'new-start',
-      undefined,
-      'old-operation',
-    );
+    expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'new-start', {
+      allowRunningOperationId: undefined,
+      allowSameReservationReentry: undefined,
+      ignoreRunningOperation: undefined,
+      replacesOperationId: 'old-operation',
+    });
   });
 
   it('passes the parent operation ownership through for in-group children', async () => {
@@ -74,11 +74,50 @@ describe('acquireTopicStartReservation', () => {
       }),
     ).resolves.toBe(true);
 
-    expect(tryReserveTaskCallback).toHaveBeenCalledWith(
-      'topic-1',
-      'child-operation',
-      'parent-operation',
-      undefined,
-    );
+    expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'child-operation', {
+      allowRunningOperationId: 'parent-operation',
+      allowSameReservationReentry: undefined,
+      ignoreRunningOperation: undefined,
+      replacesOperationId: undefined,
+    });
+  });
+
+  it('forwards the interactive bypass so a composer send never waits on a run', async () => {
+    const tryReserveTaskCallback = vi.fn().mockResolvedValue(true);
+    const topicModel = { tryReserveTaskCallback } as unknown as TopicModel;
+
+    await acquireTopicStartReservation({
+      ignoreRunningOperation: true,
+      reservationId: 'composer-send',
+      topicId: 'topic-1',
+      topicModel,
+    });
+
+    expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'composer-send', {
+      allowRunningOperationId: undefined,
+      allowSameReservationReentry: undefined,
+      ignoreRunningOperation: true,
+      replacesOperationId: undefined,
+    });
+  });
+
+  it('forwards the non-reentrant intervention initializer fence', async () => {
+    const tryReserveTaskCallback = vi.fn().mockResolvedValue(true);
+    const topicModel = { tryReserveTaskCallback } as unknown as TopicModel;
+
+    await acquireTopicStartReservation({
+      allowSameReservationReentry: false,
+      ignoreRunningOperation: true,
+      reservationId: 'op-intervention',
+      topicId: 'topic-1',
+      topicModel,
+    });
+
+    expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'op-intervention', {
+      allowRunningOperationId: undefined,
+      allowSameReservationReentry: false,
+      ignoreRunningOperation: true,
+      replacesOperationId: undefined,
+    });
   });
 });

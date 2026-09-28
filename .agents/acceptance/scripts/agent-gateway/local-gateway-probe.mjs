@@ -25,18 +25,44 @@ import { importJWK, SignJWT } from 'jose';
 
 const WS_BASE = process.env.GATEWAY_WS || 'ws://localhost:8787';
 
+// A dotenv-style `KEY=value` line. Only usable when the value is unquoted JSON.
 const fromFile = (p) => {
   if (!p || !existsSync(p)) return '';
-  const m = readFileSync(p, 'utf8').match(/^JWKS_KEY=(.*)$/m);
-  return m ? m[1].trim().replaceAll(/^['"]|['"]$/g, '') : '';
+  const m = readFileSync(p, 'utf8').match(/^(?:export\s+)?JWKS_KEY=(.*)$/m);
+  const raw = m ? m[1].trim().replaceAll(/^['"]|['"]$/g, '') : '';
+  // `init-dev-env.sh write` emits `export KEY=%q`, i.e. SHELL-escaped JSON.
+  // Regex-lifting that yields a string JSON.parse cannot read, so reject it
+  // here and let the raw-JWKS source below answer instead — a crash inside
+  // JSON.parse reads as a broken probe rather than a wrong key source.
+  try {
+    JSON.parse(raw);
+    return raw;
+  } catch {
+    return '';
+  }
 };
+// The managed agent-testing flow persists the key as raw JSON, not as an env
+// line; that file is the only source in this flow that survives a round trip.
+const fromJwksFile = (p) => {
+  if (!p || !existsSync(p)) return '';
+  const raw = readFileSync(p, 'utf8').trim();
+  try {
+    JSON.parse(raw);
+    return raw;
+  } catch {
+    return '';
+  }
+};
+const repoFile = (rel) => new URL(`../../../../${rel}`, import.meta.url).pathname;
 const jwksRaw =
   process.env.JWKS_KEY?.trim() ||
   fromFile(process.env.JWKS_SOURCE) ||
-  fromFile(new URL('../../../../.records/env/gateway.env', import.meta.url).pathname);
+  fromJwksFile(process.env.JWKS_SOURCE) ||
+  fromJwksFile(repoFile('.records/env/agent-testing-jwks.json')) ||
+  fromFile(repoFile('.records/env/gateway.env'));
 if (!jwksRaw) {
   console.error(
-    '❌ no JWKS_KEY found — export JWKS_KEY, or set JWKS_SOURCE=<env file>, or create .records/env/gateway.env',
+    '❌ no JWKS_KEY found — export JWKS_KEY, or set JWKS_SOURCE=<env file | jwks json>, or run `init-dev-env.sh env` to generate .records/env/agent-testing-jwks.json',
   );
   process.exit(1);
 }

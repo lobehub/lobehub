@@ -1,12 +1,10 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { useUserStore } from '@/store/user';
 import type { LobeUser } from '@/types/user';
 
 import { useResolvedInterestKeys } from './useResolvedInterestKeys';
-
-vi.mock('zustand/traditional');
 
 describe('useResolvedInterestKeys', () => {
   it('returns null before auth loads', () => {

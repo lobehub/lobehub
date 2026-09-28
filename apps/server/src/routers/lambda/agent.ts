@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
 import type { KnowledgeItem } from '@lobechat/types';
-import { CreateAgentSchema, KnowledgeType } from '@lobechat/types';
+import { AGENT_PERMISSION_POLICY_KEYS, CreateAgentSchema, KnowledgeType } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -13,7 +13,11 @@ import {
 import { notifyResourceTransfer } from '@/business/server/resource-transfer/notify';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { AgentModel, AgentOwnedByGroupError } from '@/database/models/agent';
+import {
+  AGENT_SHARED_TRANSFER_BLOCKED,
+  AgentModel,
+  AgentOwnedByGroupError,
+} from '@/database/models/agent';
 import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
 import {
   AGENT_TRANSFER_IN_PROGRESS,
@@ -63,11 +67,6 @@ import {
 } from './_helpers/knowledgeBaseAccess';
 import { getResourceConfigAccess, redactAgentConfig } from './_helpers/resourceConfigGuard';
 
-const AGENT_PERMISSION_POLICY_KEYS = [
-  'executionTargetSelectionPolicy',
-  'modelSelectionPolicy',
-] as const;
-
 const getAgentPermissionPolicyPatch = (value: Record<string, unknown>) => {
   const agencyConfig = value.agencyConfig;
 
@@ -83,6 +82,7 @@ const stripAgentPermissionPolicies = (value: Record<string, unknown>) => {
   const {
     executionTargetSelectionPolicy: _executionTargetSelectionPolicy,
     modelSelectionPolicy: _modelSelectionPolicy,
+    topicSharePolicy: _topicSharePolicy,
     ...safeAgencyConfig
   } = policyPatch;
 
@@ -115,6 +115,18 @@ const protectAgentConfig = async <T extends Record<string, any>>(
   if (access === 'none') return null;
   return access === 'profile' ? redactAgentConfig(config) : config;
 };
+
+/** What a `/agent/:slugOrId` param resolves to — see `resolveAgentRoute`. */
+export interface AgentRouteResolution {
+  /** The resolved agent id. Present for `own` routes. */
+  agentId?: string;
+  /**
+   * `own`: one of the caller's agents (by id or by agent slug).
+   * `notFound`: no agent of the caller's claims the param — the caller sees
+   *   the agent not-found surface.
+   */
+  kind: 'own' | 'notFound';
+}
 
 const agentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -1123,7 +1135,9 @@ export const agentRouter = router({
           input.targetWorkspaceId,
           ctx.userId,
           input.targetVisibility,
-          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+          {
+            rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx),
+          },
         );
       } catch (error) {
         if (
@@ -1157,6 +1171,14 @@ export const agentRouter = router({
             cause: { data: { code: TransferErrorCode.TransferInProgress } },
             code: 'CONFLICT',
             message: 'A previous transfer of this agent is still migrating its history',
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_SHARED_TRANSFER_BLOCKED) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
+            code: 'PRECONDITION_FAILED',
+            message:
+              'This agent cannot be transferred while a share link exists, including paused links.',
           });
         }
         throw error;
@@ -1300,7 +1322,9 @@ export const agentRouter = router({
           input.targetWorkspaceId,
           ctx.userId,
           input.targetVisibility,
-          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+          {
+            rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx),
+          },
         );
       } catch (error) {
         if (
@@ -1332,6 +1356,14 @@ export const agentRouter = router({
             cause: { data: { code: TransferErrorCode.TransferInProgress } },
             code: 'CONFLICT',
             message: 'A previous transfer of these agents is still migrating their history',
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_SHARED_TRANSFER_BLOCKED) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
+            code: 'PRECONDITION_FAILED',
+            message:
+              'These agents cannot be transferred while a share link exists, including paused links.',
           });
         }
         throw error;
@@ -1388,7 +1420,7 @@ export const agentRouter = router({
 
       let safeValue = input.value;
 
-      // Model / execution-environment selection policies govern every member.
+      // Model / execution-environment / topic-share policies govern every member.
       // Only the creator or workspace primary owner may write them; other
       // collaborators send a fully merged agencyConfig, so strip the protected
       // keys instead of comparing and later merging stale values over a newer
@@ -1437,6 +1469,37 @@ export const agentRouter = router({
     .query(async ({ input, ctx }) => {
       const agentId = await ctx.agentModel.resolveIdBySlug(input.slug);
       return { agentId };
+    }),
+
+  /**
+   * Compatibility endpoint for released clients that still resolve their
+   * agent routes here. Keep ownership-scoped lookup behavior so those clients
+   * can open their own agents without restoring share-link routing.
+   *
+   * @deprecated New clients resolve slugs with `resolveAgentIdBySlug`.
+   *
+   * Resolution order, cheapest first:
+   * 1. an id-shaped param is always an own-agent route (no query at all);
+   * 2. an ownership-scoped agent-slug lookup;
+   * 3. otherwise `notFound`.
+   *
+   * The slug lookup is ownership-scoped on purpose: a stranger's slug reads as
+   * `notFound`, so this resolver cannot be used to probe which slugs exist.
+   */
+  resolveAgentRoute: agentProcedure
+    .input(z.object({ slugOrId: z.string().trim().min(1) }))
+    .query(async ({ input, ctx }): Promise<AgentRouteResolution> => {
+      const { slugOrId } = input;
+
+      // Every generated agent id carries an underscore (`agt_…`) and no
+      // generated slug does, so the shape alone settles this case. A bogus
+      // id still routes to the own-agent shell, which owns the not-found UI.
+      if (slugOrId.includes('_')) return { agentId: slugOrId, kind: 'own' };
+
+      const agentId = await ctx.agentModel.resolveIdBySlug(slugOrId);
+      if (agentId) return { agentId, kind: 'own' };
+
+      return { kind: 'notFound' };
     }),
 
   /**

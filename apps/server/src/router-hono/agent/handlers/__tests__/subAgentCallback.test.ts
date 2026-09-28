@@ -8,16 +8,18 @@ const mockGetOperationMetadata = vi.fn();
 const mockAiAgentService = vi.fn();
 
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation((...args: any[]) => {
+  AiAgentService: vi.fn().mockImplementation(function (...args: any[]) {
     mockAiAgentService(...args);
     return { completeSubAgentBridge: mockCompleteSubAgentBridge };
   }),
 }));
 
 vi.mock('@/server/modules/AgentRuntime', () => ({
-  AgentRuntimeCoordinator: vi.fn().mockImplementation(() => ({
-    getOperationMetadata: mockGetOperationMetadata,
-  })),
+  AgentRuntimeCoordinator: vi.fn().mockImplementation(function () {
+    return {
+      getOperationMetadata: mockGetOperationMetadata,
+    };
+  }),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -113,9 +115,31 @@ describe('subAgentCallback handler', () => {
     });
     // Workspace-scoped like the /run step worker — a personal-scoped runtime
     // would miss workspace rows in the backfill / barrier queries.
-    expect(mockAiAgentService).toHaveBeenCalledWith(expect.anything(), 'user-1', {
-      workspaceId: 'ws-1',
+    expect(mockAiAgentService).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      expect.objectContaining({ includeShareVisitor: false, workspaceId: 'ws-1' }),
+    );
+  });
+
+  it('forwards the abandon reason so the parent sees why the sub-agent failed', async () => {
+    mockCompleteSubAgentBridge.mockResolvedValue(true);
+    const { ctx } = buildContext({
+      body: {
+        ...validBody,
+        errorMessage: 'Operation abandoned: inactivity_watchdog',
+        reason: 'error',
+      },
     });
+
+    await subAgentCallback(ctx);
+
+    expect(mockCompleteSubAgentBridge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorMessage: 'Operation abandoned: inactivity_watchdog',
+        reason: 'error',
+      }),
+    );
   });
 
   it('defaults reason to done and threadId to empty string when absent', async () => {

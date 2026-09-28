@@ -98,7 +98,7 @@ describe('Claude Code Desktop-local direct binding', () => {
     expect(buildClaudeCodeDirectEnv({ keyVaults, model, sdkType }).error).toMatch(error);
   });
 
-  it('removes stale model flags in both supported CLI forms', () => {
+  it('removes stale model and resume flags from a host-authoritative binding', () => {
     expect(
       sanitizeClaudeCodeDirectArgs([
         '--effort',
@@ -106,6 +106,13 @@ describe('Claude Code Desktop-local direct binding', () => {
         '--model',
         'subscription-model',
         '--model=other-model',
+        '--resume',
+        'subscription-session',
+        '--resume=other-session',
+        '--continue',
+        '-c',
+        '--session-id',
+        'forced-session',
         '--verbose',
       ]),
     ).toEqual(['--effort', 'high', '--verbose']);

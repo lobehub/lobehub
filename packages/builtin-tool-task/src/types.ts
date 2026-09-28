@@ -25,6 +25,9 @@ export const TaskApiName = {
   /** List tasks with optional filters */
   listTasks: 'listTasks',
 
+  /** List workspace members that can be assigned tasks (resolves names → user ids) */
+  listWorkspaceMembers: 'listWorkspaceMembers',
+
   /** Trigger an async run of a single task (real execution, not just status) */
   runTask: 'runTask',
 
@@ -53,6 +56,8 @@ export type TaskApiNameType = (typeof TaskApiName)[keyof typeof TaskApiName];
 
 export interface CreateTaskParams {
   assigneeAgentId?: string;
+  /** Workspace member (user id) who owns the task outcome; coexists with `assigneeAgentId` (the executing agent). */
+  assigneeUserId?: string;
   instruction: string;
   name: string;
   parentIdentifier?: string;
@@ -89,6 +94,8 @@ export interface GoalCriterionDraft {
 
 export interface CreateGoalParams {
   criteria: GoalCriterionDraft[];
+  /** ISO-8601 calendar-time budget; past it the coordinator stops dispatching. */
+  deadline?: string | null;
   instruction: string;
   maxIterations?: number | null;
   maxTotalCost?: number | null;
@@ -96,13 +103,13 @@ export interface CreateGoalParams {
 }
 
 export interface CreateGoalState {
-  identifier?: string;
+  /** The `goals` row the Goal Graph was created as — what the card opens. */
+  goalId?: string;
   name?: string;
-  operationId?: string;
   startedAt?: string;
   success: boolean;
+  /** The responsible task the first coordinator tick dispatched, when it got that far. */
   taskId?: string;
-  topicId?: string;
 }
 
 // ==================== createTasks (batch) ====================
@@ -142,6 +149,24 @@ export interface ListTasksState {
   count: number;
   success: boolean;
   total?: number;
+}
+
+// ==================== listWorkspaceMembers ====================
+
+export interface ListWorkspaceMembersParams {
+  /** Cap on the members returned (default 50, max 100). */
+  limit?: number;
+  /** Case-insensitive match on name, @handle, email, linked IM identity, or an exact user id. */
+  query?: string;
+}
+
+export interface ListWorkspaceMembersState {
+  /** Members actually returned (after `query` and `limit`). */
+  count: number;
+  query?: string;
+  success: boolean;
+  /** Members matching `query` before the `limit` cap. */
+  total: number;
 }
 
 // ==================== viewTask ====================
@@ -192,6 +217,8 @@ export interface DeleteTaskCommentState {
 export interface EditTaskParams {
   addDependencies?: string[];
   assigneeAgentId?: string | null;
+  /** Workspace member (user id) to assign the task to; `null` clears the human assignee. */
+  assigneeUserId?: string | null;
   description?: string;
   identifier: string;
   instruction?: string;

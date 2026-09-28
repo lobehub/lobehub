@@ -1,6 +1,6 @@
+import type { AiFullModelCard } from 'model-bank';
 import type { PartialDeep } from 'type-fest';
 
-import type { ChatModelCard } from './llm';
 import type {
   GlobalLLMProviderKey,
   UserDefaultAgent,
@@ -20,9 +20,20 @@ import type {
 export type IFeatureFlagsState = {
   enableAgentOnboarding: boolean | undefined;
   enableAgentSelfIteration: boolean | undefined;
+  /**
+   * Agent Share capability: may this user publish an Agent as a shared link AND
+   * open/chat on an already-live shared agent. One allowlist gates both sides.
+   */
+  enableAgentShare: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   enableDevDock: boolean | undefined;
+  /**
+   * Rollout gate for the multiplexed gateway socket. Necessary but not
+   * sufficient: the transport also requires
+   * `GlobalServerConfig.agentGatewayProtocol === 2`.
+   */
+  enableGatewayMux: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
@@ -80,12 +91,23 @@ export interface ServerModelProviderConfig {
   /**
    * the model lists defined in server
    */
-  serverModelLists?: ChatModelCard[];
+  serverModelLists?: AiFullModelCard[];
 }
 
 export type ServerLanguageModel = Partial<Record<GlobalLLMProviderKey, ServerModelProviderConfig>>;
 
 export interface GlobalServerConfig {
+  /**
+   * Which Agent Gateway wire protocol this deployment's gateway can serve:
+   * `2` when it exposes the per-user multiplexed socket (`/v2/ws`), `1` when
+   * it only has the per-operation one (`/ws`). Absent ⇒ 1.
+   *
+   * A capability, not a rollout switch: the client may only pick the
+   * multiplexed transport where the server says it exists, and there is no
+   * negotiation on the socket itself — dialing `/v2/ws` on a gateway without
+   * it is a 404 with nothing to fall back to until the client gives up.
+   */
+  agentGatewayProtocol?: 1 | 2;
   /**
    * Agent Gateway URL for WebSocket-based agent execution.
    * When set, the SPA can offload agent execution to the server and receive

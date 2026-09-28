@@ -7,6 +7,33 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+interface MultimodalUnderstandingMediaAbilityInput {
+  enableMultimodalUnderstanding: boolean;
+  fallbackConfigured: boolean;
+  fallbackModelAbilities?: {
+    audio?: boolean;
+    video?: boolean;
+    vision?: boolean;
+  };
+  supportToolUse: boolean;
+}
+
+export const getMultimodalUnderstandingMediaAbility = ({
+  enableMultimodalUnderstanding,
+  fallbackConfigured,
+  fallbackModelAbilities,
+  supportToolUse,
+}: MultimodalUnderstandingMediaAbilityInput) => {
+  const canUseMultimodalUnderstanding =
+    enableMultimodalUnderstanding && fallbackConfigured && supportToolUse;
+
+  return {
+    audio: canUseMultimodalUnderstanding && fallbackModelAbilities?.audio !== false,
+    video: canUseMultimodalUnderstanding && fallbackModelAbilities?.video !== false,
+    vision: canUseMultimodalUnderstanding && fallbackModelAbilities?.vision !== false,
+  };
+};
+
 export const useMediaUploadAbility = (model: string, provider: string, agentId?: string) => {
   const supportVision = useModelSupportVision(model, provider);
   const supportVideo = useModelSupportVideo(model, provider);
@@ -25,16 +52,12 @@ export const useMediaUploadAbility = (model: string, provider: string, agentId?:
     ),
   );
   const fallbackConfigured = !!(multimodalUnderstanding?.model && multimodalUnderstanding.provider);
-  const fallbackSupportAudio = fallbackConfigured && fallbackModel?.abilities?.audio !== false;
-  const fallbackSupportVision = fallbackConfigured && fallbackModel?.abilities?.vision !== false;
-  const fallbackSupportVideo = fallbackConfigured && fallbackModel?.abilities?.video !== false;
-  const canUseMultimodalUnderstanding = enableMultimodalUnderstanding && supportToolUse;
-
-  const heterogeneousAgentType = useAgentStore((s) =>
-    agentId
-      ? agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type
-      : undefined,
-  );
+  const fallbackAbility = getMultimodalUnderstandingMediaAbility({
+    enableMultimodalUnderstanding,
+    fallbackConfigured,
+    fallbackModelAbilities: fallbackModel?.abilities,
+    supportToolUse,
+  });
 
   // In agent mode (tool calls) or heterogeneous agents (Claude Code / Codex, etc.) the agent
   // can parse any file via scripts/terminal, so the upload should not be gated on the model's
@@ -51,16 +74,14 @@ export const useMediaUploadAbility = (model: string, provider: string, agentId?:
   if (bypassMediaGate) {
     return {
       canUploadAudio: true,
-      // Kimi's one-shot `--prompt` mode has no attachment argument, and ReadMediaFile is only
-      // registered for vision-capable local models, which LobeHub cannot determine beforehand.
-      canUploadImage: heterogeneousAgentType !== 'kimi-code',
+      canUploadImage: true,
       canUploadVideo: true,
     };
   }
 
   return {
-    canUploadAudio: supportAudio || (canUseMultimodalUnderstanding && fallbackSupportAudio),
-    canUploadImage: supportVision || (canUseMultimodalUnderstanding && fallbackSupportVision),
-    canUploadVideo: supportVideo || (canUseMultimodalUnderstanding && fallbackSupportVideo),
+    canUploadAudio: supportAudio || fallbackAbility.audio,
+    canUploadImage: supportVision || fallbackAbility.vision,
+    canUploadVideo: supportVideo || fallbackAbility.video,
   };
 };

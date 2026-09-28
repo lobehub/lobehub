@@ -1,5 +1,6 @@
-import { getValidToken } from '../auth/refresh';
-import { CLI_API_KEY_ENV } from '../constants/auth';
+import { describeTokenLookup, getValidToken } from '../auth/refresh';
+import { CLI_API_KEY_ENV, readCliApiKeyEnv } from '../constants/auth';
+import { CLI_PRIMARY_BIN } from '../constants/identity';
 import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
 import { withWorkspaceHeader } from './workspace';
@@ -29,19 +30,24 @@ export async function getAuthInfo(workspaceId?: string): Promise<AuthInfo> {
   }
 
   const result = await getValidToken();
-  if (!result) {
-    if (process.env[CLI_API_KEY_ENV]) {
+  if (result.status !== 'ok') {
+    if (readCliApiKeyEnv()) {
       log.error(
         `API key auth from ${CLI_API_KEY_ENV} is not supported for /webapi/* routes. Run OIDC login instead.`,
       );
       process.exit(1);
     }
 
-    log.error("No authentication found. Run 'lh login' first.");
+    const report = describeTokenLookup(result);
+    log.error(
+      report
+        ? `${report.detail} ${report.fix}`
+        : `No authentication found. Run '${CLI_PRIMARY_BIN} login' first.`,
+    );
     process.exit(1);
   }
 
-  const accessToken = result!.credentials.accessToken;
+  const accessToken = result.credentials.accessToken;
 
   return {
     accessToken,
@@ -87,7 +93,7 @@ export async function getAgentStreamAuthInfo(workspaceId?: string): Promise<Agen
     };
   }
 
-  const envApiKey = process.env[CLI_API_KEY_ENV];
+  const envApiKey = readCliApiKeyEnv();
   if (envApiKey) {
     return {
       headers: withWorkspaceHeader({ 'X-API-Key': envApiKey }, workspaceId),
@@ -98,8 +104,13 @@ export async function getAgentStreamAuthInfo(workspaceId?: string): Promise<Agen
   }
 
   const result = await getValidToken();
-  if (!result) {
-    log.error(`No authentication found. Run 'lh login' first, or set ${CLI_API_KEY_ENV}.`);
+  if (result.status !== 'ok') {
+    const report = describeTokenLookup(result);
+    log.error(
+      report
+        ? `${report.detail} ${report.fix}`
+        : `No authentication found. Run '${CLI_PRIMARY_BIN} login' first, or set ${CLI_API_KEY_ENV}.`,
+    );
     process.exit(1);
 
     return {

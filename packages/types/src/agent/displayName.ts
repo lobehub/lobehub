@@ -51,11 +51,32 @@ export function agentDisplayName(
  * renders its title as the primary label, so repeating it would be noise. This
  * is deliberately uniform across every kind of agent, including runtime-backed
  * (heterogeneous) ones: they show their own role rather than their runtime.
+ *
+ * A role the primary label already spells out is suppressed for the same
+ * reason: a heterogeneous agent defaults to "Max 的 Kimi Code", and tagging it
+ * "Kimi Code" again says nothing. Rename it to something that no longer echoes
+ * the role and the tag comes back.
+ *
+ * "Spells out" means the role is the name's whole suffix behind a word
+ * boundary — the shape the generated "{owner} 的 {product}" / "{owner}'s
+ * {product}" default produces. A name that merely contains the role as a
+ * substring ("Arthur" / "Art", "MozArt" / "Art") keeps its tag: that overlap
+ * is coincidence, not repetition.
  */
 export const agentSecondaryDisplayName = (
   agent: AgentNameFields | null | undefined,
 ): string | undefined => {
   const role = firstNonBlank(agent?.name) ? firstNonBlank(agent?.title) : undefined;
+  if (!role) return undefined;
 
-  return role === agentDisplayName(agent) ? undefined : role;
+  const primary = agentDisplayName(agent);
+  if (!primary) return role;
+  if (primary === role) return undefined;
+
+  if (primary.endsWith(role)) {
+    const boundary = primary[primary.length - role.length - 1];
+    if (!/[\p{L}\p{N}]/u.test(boundary)) return undefined;
+  }
+
+  return role;
 };

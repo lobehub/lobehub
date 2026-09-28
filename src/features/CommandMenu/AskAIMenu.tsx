@@ -1,12 +1,12 @@
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { Command } from 'cmdk';
 import { Bot, Image } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
@@ -96,6 +96,7 @@ const AskAIMenu = memo(() => {
             <Avatar
               emojiScaleWithBackground
               avatar={typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
+              name={agentDisplayName(agent, t('defaultAgent'))}
               shape="square"
               size={18}
             />

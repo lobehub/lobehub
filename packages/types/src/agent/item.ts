@@ -40,20 +40,20 @@ export interface LobeAgentConfig {
    * Used to save the complete state of the rich text editor, including special nodes like mention
    */
   editorData?: any;
+
   fewShots?: FewShots;
   files?: FileItem[];
   id?: string;
-
   /**
    * knowledge bases
    */
   knowledgeBases?: KnowledgeBaseItem[];
+
   /**
    * Language model used by the agent
    * @default gpt-4o-mini
    */
   model: string;
-
   /**
    * The agent's personal name (e.g. "Alice", "小艾") — the identity it is
    * addressed by. Distinct from {@link LobeAgentConfig.title}, which describes
@@ -66,15 +66,16 @@ export interface LobeAgentConfig {
    * Opening message
    */
   openingMessage?: string;
+
   /**
    * Opening questions
    */
   openingQuestions?: string[];
-
   /**
    * Language model parameters
    */
   params: LLMParams;
+
   /**
    * Enabled plugins. Each entry is either a legacy bare identifier string
    * (implicit pinned) or a tri-state `{ identifier, mode }` object — see
@@ -83,6 +84,8 @@ export interface LobeAgentConfig {
    * `getPluginMode`) over reading this field directly.
    */
   plugins?: AgentPluginEntry[];
+  /** Character sheet — traits and artwork; see {@link AgentProfile}. */
+  profile?: AgentProfile | null;
 
   /**
    *  Model provider

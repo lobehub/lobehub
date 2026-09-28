@@ -2,9 +2,9 @@
 
 import type { EvalThreadResult } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { Badge, Input, Table, Tooltip } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Badge, Select, Tag, Tooltip } from '@lobehub/ui/base-ui';
+import { Input, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Footprints, Play, RotateCcw } from 'lucide-react';

@@ -7,14 +7,21 @@ vi.mock('@/business/client/trpc-headers', () => ({
   getBusinessTrpcHeaders: vi.fn().mockResolvedValue({ 'X-Test-Scope': 'scope-1' }),
 }));
 
+const SESSION_ID = '00000000-0000-4000-8000-000000000001';
+const TEST_JWT = [
+  'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9',
+  'eyJzdWIiOiJ1c2VyLTEifQ',
+  'c2lnbmF0dXJl',
+].join('.');
+
 const responseBody = {
   audio: REALTIME_ASR_AUDIO,
   expiresAt: '2026-08-10T04:00:00.000Z',
   limits: REALTIME_ASR_LIMITS,
   protocolVersion: 1,
-  sessionId: 'session-1',
-  token: 'a'.repeat(43),
-  websocketUrl: 'wss://asr.example.test/v1/session',
+  sessionId: SESSION_ID,
+  token: TEST_JWT,
+  websocketUrl: `wss://asr.example.test/api/v1/realtime/ws?sessionId=${SESSION_ID}`,
 };
 
 describe('createRealtimeAsrSession', () => {
@@ -56,9 +63,25 @@ describe('createRealtimeAsrSession', () => {
     ).rejects.toMatchObject({ code: 'PROTOCOL_ERROR', retryable: false });
   });
 
+  it('reports a malformed Admission token as a non-retryable protocol error', async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ...responseBody, token: 'a'.repeat(43) }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      }),
+    );
+
+    await expect(
+      createRealtimeAsrSession(new AbortController().signal, fetcher),
+    ).rejects.toMatchObject({ code: 'PROTOCOL_ERROR', retryable: false });
+  });
+
   it.each([
+    [400, 'SESSION_CREATE_FAILED', false],
     [401, 'AUTH_FAILED', false],
     [402, 'PROVIDER_BILLING_BLOCKED', false],
+    [403, 'AUTH_FAILED', false],
+    [404, 'PROVIDER_NOT_CONFIGURED', false],
     [429, 'SESSION_LIMIT_EXCEEDED', true],
     [503, 'PROVIDER_UNAVAILABLE', true],
   ])('maps HTTP %i to stable error %s', async (status, code, retryable) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import type { AgentModelSelectionPolicy } from '@lobechat/types';
+import type { AgentModelSelectionPolicy, AgentTopicSharePolicy } from '@lobechat/types';
 
 import { useAgentSelectionPolicies } from '@/features/ResourcePermission/useAgentSelectionPolicies';
 import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
@@ -14,6 +14,12 @@ export interface AgentPermissionState {
   accessLoading: boolean;
   /** Only the creator or a workspace owner may change member selection policies. */
   canEditConfig: boolean;
+  /**
+   * Whether the viewer may write the three policy rows. Narrower than
+   * {@link AgentPermissionState.canEditConfig} — see
+   * `AgentSelectionPoliciesState.canEditPolicies`.
+   */
+  canEditPolicies: boolean;
   /** Members can be assigned a target only if one is actually resolvable. */
   canFixExecutionTarget: boolean;
   /** Only the creator or a workspace owner may re-level members. */
@@ -26,6 +32,9 @@ export interface AgentPermissionState {
   setAccessLevel: (level: ResourceAccessLevel) => void;
   setExecutionTargetPolicy: (policy: AgentModelSelectionPolicy) => void;
   setModelPolicy: (policy: AgentModelSelectionPolicy) => void;
+  setTopicSharePolicy: (policy: AgentTopicSharePolicy) => void;
+  /** Whether members may publish share links for the topics held here. */
+  topicSharePolicy: AgentTopicSharePolicy;
 }
 
 /**

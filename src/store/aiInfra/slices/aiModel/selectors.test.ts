@@ -75,6 +75,7 @@ describe('aiModelSelectors', () => {
     isInitAiProviderRuntimeState: false,
     modelReasoningConfigMap: {},
     modelReasoningConfigUpdatingKeys: [],
+    providerBindingAgentTypes: {},
   };
 
   describe('aiProviderChatModelListIds', () => {

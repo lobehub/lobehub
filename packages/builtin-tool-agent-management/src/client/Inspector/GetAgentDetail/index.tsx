@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Avatar, Flexbox, Tooltip } from '@lobehub/ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,20 +38,17 @@ export const GetAgentDetailInspector = memo<
 
   if (isArgumentsStreaming && !agentId) {
     return (
-      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-agent-management.apiName.getAgentDetail')}</span>
+      <div className={styles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-agent-management.apiName.getAgentDetail')}
+        </span>
       </div>
     );
   }
 
   return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-      gap={8}
-    >
-      <span className={styles.title}>
+    <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+      <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
         {t('builtins.lobe-agent-management.inspector.getAgentDetail.title')}
       </span>
       {title ? (

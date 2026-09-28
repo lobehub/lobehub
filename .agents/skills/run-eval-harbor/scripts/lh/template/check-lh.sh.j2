@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MAX_ATTEMPTS="${LH_LOCAL_DEVICE_READY_ATTEMPTS:-30}"
+STATUS_PATH="$HOME/.lobehub/daemon.status.json"
+
+[[ "${1:-}" == "--" ]] && shift
+[[ "$#" -gt 0 ]] || { echo "Usage: check-lh.sh -- <lh-command>" >&2; exit 2; }
+CLI_COMMAND=("$@")
+
+for ((attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)); do
+  if device_id="$(node - "$STATUS_PATH" <<'NODE'
+const fs = require('node:fs');
+try {
+  const status = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  if (status.connectionStatus !== 'connected' || !status.deviceId) process.exit(1);
+  process.stdout.write(status.deviceId);
+} catch {
+  process.exit(1);
+}
+NODE
+  )" && [[ -n "$device_id" ]]; then
+    if "${CLI_COMMAND[@]}" device list --json deviceId,online 2>/dev/null \
+      | LOCAL_DEVICE_ID="$device_id" node -e '
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => { input += chunk; });
+process.stdin.on("end", () => {
+  try {
+    const devices = JSON.parse(input);
+    process.exit(Array.isArray(devices) && devices.some(
+      (device) => device.deviceId === process.env.LOCAL_DEVICE_ID && device.online === true,
+    ) ? 0 : 1);
+  } catch { process.exit(1); }
+});'; then
+      echo "Local device ${device_id} is online in the gateway registry."
+      exit 0
+    fi
+  fi
+  sleep 1
+done
+
+echo "lh local device never became connected and online." >&2
+"${CLI_COMMAND[@]}" connect logs --lines 200 >&2 || true
+exit 1

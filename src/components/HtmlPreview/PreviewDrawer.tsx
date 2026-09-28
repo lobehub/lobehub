@@ -1,4 +1,5 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
+import { extractHtmlTitle } from '@lobechat/html-artifact';
 import { exportFile } from '@lobechat/utils/client';
 import { Block, Flexbox, Highlighter, HtmlPreview } from '@lobehub/ui';
 import { Button, Drawer, Tabs } from '@lobehub/ui/base-ui';
@@ -8,8 +9,6 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
-
-import { extractHtmlTitle } from './htmlTagScanner';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`

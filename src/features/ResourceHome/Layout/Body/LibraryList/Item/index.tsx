@@ -1,6 +1,5 @@
-import { Icon } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Loader2Icon } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
 
@@ -87,7 +86,7 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
     // active-library header and its switcher.
     const icon = useMemo(() => {
       if (isLoading) {
-        return <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={18} />;
+        return <Spin size="small" style={{ color: cssVar.colorTextDescription }} />;
       }
 
       return (

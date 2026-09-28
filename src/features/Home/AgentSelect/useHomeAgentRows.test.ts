@@ -26,10 +26,6 @@ const mocks = vi.hoisted(() => ({
   sidebarVisibilityOverrides: {} as Record<string, boolean>,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));

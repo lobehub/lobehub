@@ -21,7 +21,9 @@ const {
   mockFindLinkById,
   mockFindLinkByIdWithCredentials,
   mockFindByPlatformUser,
+  mockFindFileById,
   mockGetBotRuntimeStatus,
+  mockGetFileAccessUrl,
   mockGetBuiltinAgent,
   mockGetAgentRuntimeRedisClient,
   mockGetServerDB,
@@ -40,6 +42,7 @@ const {
   mockPeekLinkToken,
   mockPollQrStatus,
   mockReleaseWechatQrFinalizeLock,
+  mockSendMessengerPush,
   mockSlackAuthTest,
   mockUpsertForPlatform,
 } = vi.hoisted(() => ({
@@ -56,7 +59,9 @@ const {
   mockFindLinkById: vi.fn(),
   mockFindLinkByIdWithCredentials: vi.fn(),
   mockFindByPlatformUser: vi.fn(),
+  mockFindFileById: vi.fn(),
   mockGetBotRuntimeStatus: vi.fn(),
+  mockGetFileAccessUrl: vi.fn(),
   mockGetBuiltinAgent: vi.fn(),
   mockGetAgentRuntimeRedisClient: vi.fn(),
   mockGetServerDB: vi.fn(),
@@ -75,6 +80,7 @@ const {
   mockPeekLinkToken: vi.fn(),
   mockPollQrStatus: vi.fn(),
   mockReleaseWechatQrFinalizeLock: vi.fn(),
+  mockSendMessengerPush: vi.fn(),
   mockSlackAuthTest: vi.fn(),
   mockUpsertForPlatform: vi.fn(),
 }));
@@ -87,7 +93,9 @@ vi.mock('@lobechat/chat-adapter-wechat', () => ({
 
 vi.mock('@/business/server/bot/featureAccess', () => ({
   assertBotFeatureAccess: mockAssertBotFeatureAccess,
-  withBotPlatformAccessMeta: vi.fn((platforms) => platforms),
+  withBotPlatformAccessMeta: vi.fn(function (platforms) {
+    return platforms;
+  }),
 }));
 
 vi.mock('@/config/messenger', () => ({
@@ -169,9 +177,11 @@ vi.mock('@/server/services/messenger', () => ({
     listSerializedPlatforms: vi.fn().mockReturnValue([]),
   },
   MessengerSlackBinder: vi.fn(),
-  MessengerTelegramBinder: vi.fn().mockImplementation(() => ({
-    notifyLinkSuccess: mockNotifyTelegramLinkSuccess,
-  })),
+  MessengerTelegramBinder: vi.fn().mockImplementation(function () {
+    return {
+      notifyLinkSuccess: mockNotifyTelegramLinkSuccess,
+    };
+  }),
   peekWechatQrSession: mockPeekWechatQrSession,
   peekConsumedLinkToken: mockPeekConsumedLinkToken,
   peekLinkToken: mockPeekLinkToken,
@@ -195,9 +205,29 @@ vi.mock('@/server/services/messenger/installations', () => ({
 
 vi.mock('@/server/services/bot/platforms/slack/api', () => ({
   SLACK_API_BASE: 'https://slack.com/api',
-  SlackApi: vi.fn().mockImplementation(() => ({
-    authTest: mockSlackAuthTest,
-  })),
+  SlackApi: vi.fn().mockImplementation(function () {
+    return {
+      authTest: mockSlackAuthTest,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/file', () => ({
+  FileModel: class {
+    findById = mockFindFileById;
+  },
+}));
+
+vi.mock('@/server/services/file', () => ({
+  FileService: class {
+    getFileAccessUrl = mockGetFileAccessUrl;
+  },
+}));
+
+vi.mock('@/server/services/messenger/push', () => ({
+  getMessengerPushWindow: vi.fn(),
+  MESSENGER_PUSH_PLATFORMS: ['telegram', 'slack', 'discord', 'wechat'],
+  sendMessengerPush: mockSendMessengerPush,
 }));
 
 const createCaller = createCallerFactory(messengerRouter);
@@ -232,9 +262,13 @@ const buildTelegramLink = () => ({
 
 const createSelectBuilder = <T>(result: T) => {
   const builder = {
-    from: vi.fn(() => builder),
+    from: vi.fn(function () {
+      return builder;
+    }),
     limit: vi.fn().mockResolvedValue(result),
-    where: vi.fn(() => builder),
+    where: vi.fn(function () {
+      return builder;
+    }),
   };
 
   return builder;
@@ -242,9 +276,13 @@ const createSelectBuilder = <T>(result: T) => {
 
 const createAgentListBuilder = <T>(result: T) => {
   const builder = {
-    from: vi.fn(() => builder),
+    from: vi.fn(function () {
+      return builder;
+    }),
     orderBy: vi.fn().mockResolvedValue(result),
-    where: vi.fn(() => builder),
+    where: vi.fn(function () {
+      return builder;
+    }),
   };
 
   return builder;
@@ -393,7 +431,9 @@ describe('messengerRouter.pollWechatQrSession', () => {
       { id: 'agent-inbox', title: 'LobeAI', userId: 'user-1', workspaceId: null },
     ]);
     const serverDB = {
-      select: vi.fn(() => selectBuilder),
+      select: vi.fn(function () {
+        return selectBuilder;
+      }),
       transaction: vi.fn(),
     };
     serverDB.transaction.mockImplementation(async (callback: (tx: typeof serverDB) => unknown) =>
@@ -473,7 +513,9 @@ describe('messengerRouter.pollWechatQrSession', () => {
       { id: 'agent-inbox', title: 'LobeAI', userId: 'user-1', workspaceId: null },
     ]);
     const serverDB = {
-      select: vi.fn(() => selectBuilder),
+      select: vi.fn(function () {
+        return selectBuilder;
+      }),
       transaction: vi.fn(),
     };
     serverDB.transaction.mockImplementation(async (callback: (tx: typeof serverDB) => unknown) =>
@@ -519,7 +561,9 @@ describe('messengerRouter.pollWechatQrSession', () => {
       { id: 'agent-inbox', title: 'LobeAI', userId: 'user-1', workspaceId: null },
     ]);
     const serverDB = {
-      select: vi.fn(() => selectBuilder),
+      select: vi.fn(function () {
+        return selectBuilder;
+      }),
       transaction: vi.fn(),
     };
     serverDB.transaction.mockImplementation(async (callback: (tx: typeof serverDB) => unknown) =>
@@ -587,7 +631,11 @@ describe('messengerRouter.peekLinkToken', () => {
 
   it('returns status:active with payload when the token is live', async () => {
     const selectBuilder = createSelectBuilder([]);
-    const serverDB = { select: vi.fn(() => selectBuilder) };
+    const serverDB = {
+      select: vi.fn(function () {
+        return selectBuilder;
+      }),
+    };
     mockGetServerDB.mockResolvedValue(serverDB);
     mockPeekLinkToken.mockResolvedValue({
       platform: 'slack',
@@ -652,7 +700,11 @@ describe('messengerRouter.confirmLink', () => {
 
   it('blocks linking a different Telegram account when the user already has one', async () => {
     const selectBuilder = createSelectBuilder([{ id: 'agent-1', title: 'Agent 1' }]);
-    const serverDB = { select: vi.fn(() => selectBuilder) };
+    const serverDB = {
+      select: vi.fn(function () {
+        return selectBuilder;
+      }),
+    };
 
     mockGetServerDB.mockResolvedValue(serverDB);
     mockPeekLinkToken.mockResolvedValue({
@@ -682,7 +734,11 @@ describe('messengerRouter.confirmLink', () => {
 
   it('blocks linking a different Discord account when the user already has one', async () => {
     const selectBuilder = createSelectBuilder([{ id: 'agent-1', title: 'Agent 1' }]);
-    const serverDB = { select: vi.fn(() => selectBuilder) };
+    const serverDB = {
+      select: vi.fn(function () {
+        return selectBuilder;
+      }),
+    };
 
     mockGetServerDB.mockResolvedValue(serverDB);
     mockPeekLinkToken.mockResolvedValue({
@@ -712,7 +768,11 @@ describe('messengerRouter.confirmLink', () => {
 
   it('blocks linking a different Slack account in the same workspace when the user already has one', async () => {
     const selectBuilder = createSelectBuilder([{ id: 'agent-1', title: 'Agent 1' }]);
-    const serverDB = { select: vi.fn(() => selectBuilder) };
+    const serverDB = {
+      select: vi.fn(function () {
+        return selectBuilder;
+      }),
+    };
 
     mockGetServerDB.mockResolvedValue(serverDB);
     mockPeekLinkToken.mockResolvedValue({
@@ -744,7 +804,11 @@ describe('messengerRouter.confirmLink', () => {
     const selectBuilder = createSelectBuilder([
       { id: 'agent-1', title: 'Agent 1', userId: 'user-1', workspaceId: null },
     ]);
-    const serverDB = { select: vi.fn(() => selectBuilder) };
+    const serverDB = {
+      select: vi.fn(function () {
+        return selectBuilder;
+      }),
+    };
     const linkPayload = {
       platform: 'telegram',
       platformUserId: 'tg-same',
@@ -787,7 +851,11 @@ describe('messengerRouter.confirmLink', () => {
         workspaceId: 'workspace-1',
       },
     ]);
-    const serverDB = { select: vi.fn(() => selectBuilder) };
+    const serverDB = {
+      select: vi.fn(function () {
+        return selectBuilder;
+      }),
+    };
     const linkPayload = {
       platform: 'telegram',
       platformUserId: 'tg-same',
@@ -843,7 +911,11 @@ describe('messengerRouter.listAgentsForBinding', () => {
 
   it('rejects workspace-scoped agent listing when workspace feature is disabled', async () => {
     const selectBuilder = createAgentListBuilder([]);
-    const serverDB = { select: vi.fn(() => selectBuilder) };
+    const serverDB = {
+      select: vi.fn(function () {
+        return selectBuilder;
+      }),
+    };
 
     mockGetServerDB.mockResolvedValue(serverDB);
     mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: false });
@@ -859,5 +931,96 @@ describe('messengerRouter.listAgentsForBinding', () => {
     );
 
     expect(mockListUserWorkspaces).not.toHaveBeenCalled();
+  });
+});
+
+describe('messengerRouter.sendMessengerPush', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendMessengerPush.mockResolvedValue({ status: 'sent' });
+    mockGetFileAccessUrl.mockResolvedValue('https://app.lobehub.com/f/file-1');
+    mockFindFileById.mockResolvedValue({
+      fileType: 'application/pdf',
+      id: 'file-1',
+      name: 'report.pdf',
+      size: 123_456,
+      url: 's3://bucket/report.pdf',
+    });
+  });
+
+  const caller = async () => createCaller(await createContextInner({ userId: 'user-1' }));
+
+  it('resolves an attachment to the stable access URL of the owned file row', async () => {
+    await (
+      await caller()
+    ).sendMessengerPush({
+      attachments: [{ fileId: 'file-1', type: 'file' }],
+      content: 'here you go',
+      platform: 'telegram',
+    });
+
+    expect(mockFindFileById).toHaveBeenCalledWith('file-1');
+    expect(mockSendMessengerPush).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          {
+            fetchUrl: 'https://app.lobehub.com/f/file-1',
+            mimeType: 'application/pdf',
+            name: 'report.pdf',
+            size: 123_456,
+            // Server-generated from a row this caller owns, which is what lets
+            // the outbound guard accept our own private origins for it.
+            trustedUrl: true,
+            type: 'file',
+          },
+        ],
+        content: 'here you go',
+        platform: 'telegram',
+        userId: 'user-1',
+      }),
+    );
+  });
+
+  // The platform senders materialize `fetchUrl` with a server-side `fetch`, so
+  // a caller-supplied URL would be an SSRF primitive. The schema must reject
+  // the field outright rather than relying on the resolver to overwrite it.
+  it('rejects a caller-supplied fetchUrl or inline data', async () => {
+    const call = await caller();
+
+    await expect(
+      call.sendMessengerPush({
+        attachments: [
+          { fetchUrl: 'http://169.254.169.254/latest/meta-data/', type: 'file' } as never,
+        ],
+        platform: 'telegram',
+      }),
+    ).rejects.toThrow();
+
+    await expect(
+      call.sendMessengerPush({
+        attachments: [{ data: 'ZmFrZQ==', type: 'file' } as never],
+        platform: 'telegram',
+      }),
+    ).rejects.toThrow();
+
+    expect(mockSendMessengerPush).not.toHaveBeenCalled();
+  });
+
+  it('refuses to attach a file the caller does not own', async () => {
+    mockFindFileById.mockResolvedValue(undefined);
+
+    await expect(
+      (await caller()).sendMessengerPush({
+        attachments: [{ fileId: 'someone-elses-file', type: 'image' }],
+        platform: 'slack',
+      }),
+    ).rejects.toThrow('File not found');
+
+    expect(mockSendMessengerPush).not.toHaveBeenCalled();
+  });
+
+  it('requires either content or attachments', async () => {
+    await expect((await caller()).sendMessengerPush({ platform: 'telegram' })).rejects.toThrow();
+    expect(mockSendMessengerPush).not.toHaveBeenCalled();
   });
 });

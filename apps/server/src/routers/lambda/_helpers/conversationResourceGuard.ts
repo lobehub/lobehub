@@ -28,7 +28,7 @@ export interface CreateMessageTarget extends ConversationTarget {
   topicId?: string | null;
 }
 
-interface ResolvedConversationTarget {
+export interface ResolvedConversationTarget {
   meta: NonNullable<Awaited<ReturnType<typeof getResourceMeta>>>;
   resourceId: string;
   resourceType: 'agent' | 'agentGroup';
@@ -98,9 +98,9 @@ const assertCanAccessConversationTargets = async (
   ctx: ConversationGuardCtx,
   targets: ConversationTarget[],
   action: 'use' | 'view',
-): Promise<void> => {
+): Promise<ResolvedConversationTarget[]> => {
   const workspaceId = ctx.workspaceId ?? undefined;
-  if (!workspaceId) return;
+  if (!workspaceId) return [];
 
   const resolved = await resolveConversationTargets(ctx, targets);
   for (const { meta, resourceId, resourceType } of resolved) {
@@ -115,12 +115,25 @@ const assertCanAccessConversationTargets = async (
       workspaceId,
     });
   }
+  return resolved;
 };
 
 export const assertCanUseConversationTargets = async (
   ctx: ConversationGuardCtx,
   targets: ConversationTarget[],
-): Promise<void> => assertCanAccessConversationTargets(ctx, targets, 'use');
+): Promise<ResolvedConversationTarget[]> => assertCanAccessConversationTargets(ctx, targets, 'use');
+
+/**
+ * Assert read-only access to authoritative agent/group context and return the
+ * resources that were actually checked. An empty workspace result is a
+ * vacuous pass, not authorization; token/operation callers must fail closed or
+ * fall back to an independently resolved topic resource.
+ */
+export const assertCanViewConversationTargets = async (
+  ctx: ConversationGuardCtx,
+  targets: ConversationTarget[],
+): Promise<ResolvedConversationTarget[]> =>
+  assertCanAccessConversationTargets(ctx, targets, 'view');
 
 /**
  * Resolve message ids to their owning agent/group from the DB rows (client
@@ -148,6 +161,37 @@ export const assertCanUseMessageTargets = async (
   await assertCanUseConversationTargets(ctx, targets);
   if (fallbackTopicIds.size > 0) {
     await assertCanUseTopicTargets(ctx, [...fallbackTopicIds]);
+  }
+};
+
+/**
+ * Read-only counterpart used by source-locator Review. Message ids locate the
+ * authoritative conversation resource but never grant access themselves.
+ * Missing rows are intentionally not treated as authorization; the durable
+ * business lookup must require an all-or-none source match and fail closed on
+ * partial/mismatched batches.
+ */
+export const assertCanViewMessageTargets = async (
+  ctx: ConversationGuardCtx,
+  messageIds: string[],
+): Promise<void> => {
+  if (!ctx.workspaceId || messageIds.length === 0) return;
+
+  const rows = await ctx.db
+    .select({ agentId: messages.agentId, groupId: messages.groupId, topicId: messages.topicId })
+    .from(messages)
+    .where(inArray(messages.id, messageIds));
+
+  const targets: ConversationTarget[] = [];
+  const fallbackTopicIds = new Set<string>();
+  for (const row of rows) {
+    if (row.agentId || row.groupId) targets.push(row);
+    else if (row.topicId) fallbackTopicIds.add(row.topicId);
+  }
+
+  await assertCanViewConversationTargets(ctx, targets);
+  if (fallbackTopicIds.size > 0) {
+    await assertCanViewTopicTargets(ctx, [...fallbackTopicIds]);
   }
 };
 
@@ -187,9 +231,9 @@ const assertCanAccessTopicTargets = async (
   ctx: ConversationGuardCtx,
   topicIds: string[],
   action: 'use' | 'view',
-): Promise<void> => {
+): Promise<ResolvedConversationTarget[]> => {
   const workspaceId = ctx.workspaceId ?? undefined;
-  if (!workspaceId) return;
+  if (!workspaceId) return [];
 
   const resolved = await resolveTopicTargets(ctx, topicIds);
   for (const { meta, resourceId, resourceType } of resolved) {
@@ -204,19 +248,29 @@ const assertCanAccessTopicTargets = async (
       workspaceId,
     });
   }
+
+  return resolved;
 };
 
-/** Resolve topic ids to their owning agent/group and assert `use` access. */
+/**
+ * Resolve topic ids to their owning agent/group and assert `use` access.
+ *
+ * Returns the conversation resources it actually checked. An EMPTY result is
+ * not an approval: a topic with no agent, group or resolvable session backs no
+ * resource, so there was nothing to gate on. Callers whose mutation reaches
+ * beyond the conversation — publishing a share link, say — must fail closed on
+ * that instead of reading the vacuous pass as authorization.
+ */
 export const assertCanUseTopicTargets = async (
   ctx: ConversationGuardCtx,
   topicIds: string[],
-): Promise<void> => assertCanAccessTopicTargets(ctx, topicIds, 'use');
+): Promise<ResolvedConversationTarget[]> => assertCanAccessTopicTargets(ctx, topicIds, 'use');
 
 /** Resolve topic ids to their owning agent/group and assert `view` access. */
 export const assertCanViewTopicTargets = async (
   ctx: ConversationGuardCtx,
   topicIds: string[],
-): Promise<void> => assertCanAccessTopicTargets(ctx, topicIds, 'view');
+): Promise<ResolvedConversationTarget[]> => assertCanAccessTopicTargets(ctx, topicIds, 'view');
 
 /**
  * Resolve one set of topic resources, then evaluate every active recipient

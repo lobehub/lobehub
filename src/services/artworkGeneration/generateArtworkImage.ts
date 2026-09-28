@@ -1,4 +1,4 @@
-import type { AgentArtworkKind } from '@lobechat/prompts';
+import type { AgentArtworkComposition, AgentArtworkKind } from '@lobechat/prompts';
 
 import { generationService } from '@/services/generation';
 import { generationTopicService } from '@/services/generationTopic';
@@ -7,7 +7,11 @@ import { getAiInfraStoreState } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 
+import type { AttachedArtworkReferences } from './referenceImages';
+import { resolveArtworkReferences } from './referenceImages';
 import { selectAgentArtworkModel } from './selectModel';
+
+export type { AttachedArtworkReferences } from './referenceImages';
 
 const POLL_INTERVAL = 1500;
 const POLL_LIMIT = 120;
@@ -54,18 +58,9 @@ const pollGeneratedImageUrl = async (
   throw new Error('Image generation timed out');
 };
 
-/**
- * References that actually survived the chosen model's capabilities — the
- * prompt has to describe exactly what got attached, or the wording promises
- * the model an image it never received.
- */
-export interface AttachedArtworkReferences {
-  referenceImageUrl?: string;
-  styleReferenceImageUrls: string[];
-}
-
 export interface GenerateArtworkImageOptions {
   buildPrompt: (references: AttachedArtworkReferences) => string;
+  composition?: AgentArtworkComposition;
   kind: AgentArtworkKind;
   /**
    * Fires as soon as the remote generation exists, so a caller that owns the
@@ -89,6 +84,7 @@ export interface GenerateArtworkImageOptions {
  */
 export const generateArtworkImage = async ({
   buildPrompt,
+  composition,
   kind,
   onGenerationCreated,
   referenceImageUrl,
@@ -105,38 +101,34 @@ export const generateArtworkImage = async ({
   const imageInputLimit = supportsImageInput
     ? (model.parameters?.imageUrls?.maxCount ?? Number.POSITIVE_INFINITY)
     : 0;
-  // Style references win over the counterpart-artwork reference; the prompt
-  // builders apply the same precedence so wording matches attachments.
-  const attachedStyleReferences = (styleReferenceImageUrls ?? [])
-    .map((url) => url.trim())
-    .filter(Boolean)
-    .slice(0, imageInputLimit);
-  const counterpartReferenceUrl =
-    attachedStyleReferences.length > 0 ? undefined : referenceImageUrl?.trim();
-  const supportsReferenceImage = !!counterpartReferenceUrl && supportsImageInput;
-  const imageUrls =
-    attachedStyleReferences.length > 0
-      ? attachedStyleReferences
-      : supportsReferenceImage
-        ? [counterpartReferenceUrl]
-        : undefined;
+  // Style references win over the counterpart artwork after invalid values are
+  // removed, and the prompt sees exactly the references attached to the model.
+  const {
+    imageUrls,
+    referenceImageUrl: attachedReferenceImageUrl,
+    styleReferenceImageUrls: attachedStyleReferences,
+  } = resolveArtworkReferences({ imageInputLimit, referenceImageUrl, styleReferenceImageUrls });
   const supportedSizes =
     model.parameters && 'size' in model.parameters ? model.parameters.size?.enum : undefined;
   const preferredSizes =
-    kind === 'avatar' ? ['1024x1024', '2048x2048'] : ['2048x1152', '1536x1024', '3840x2160'];
+    kind === 'background'
+      ? ['2048x1152', '1536x1024', '3840x2160']
+      : composition === 'fullBody'
+        ? ['1024x1536', '2048x3072', '1440x2560', '2160x3840']
+        : ['1024x1024', '2048x2048'];
   const size = preferredSizes.find((item) => supportedSizes?.includes(item));
   const generationTopicId = await generationTopicService.createTopic(
     'image',
     'private',
     topicTitle,
   );
-  const aspectRatio = kind === 'avatar' ? '1:1' : '16:9';
+  const aspectRatio = kind === 'background' ? '16:9' : composition === 'fullBody' ? '3:4' : '1:1';
   const params = {
     ...(model.parameters && 'aspectRatio' in model.parameters ? { aspectRatio } : {}),
     ...(imageUrls ? { imageUrls } : {}),
     ...(size ? { size } : {}),
     prompt: buildPrompt({
-      referenceImageUrl: supportsReferenceImage ? counterpartReferenceUrl : undefined,
+      referenceImageUrl: attachedReferenceImageUrl,
       styleReferenceImageUrls: attachedStyleReferences,
     }),
   };

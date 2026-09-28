@@ -201,6 +201,7 @@ describe('cliSpawn', () => {
     platformMock.mockReturnValue('win32');
     const shimPath = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\example-cli.cmd';
     const nodePath = 'C:\\Program Files\\nodejs\\node.exe';
+    const recoveredEnv = { ...process.env, PATH: 'C:\\Program Files\\nodejs;C:\\Windows' };
     const scriptPath =
       'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\node_modules\\example-cli\\bin\\cli.js';
     existingPaths(shimPath, scriptPath);
@@ -208,10 +209,11 @@ describe('cliSpawn', () => {
     readFileMock.mockResolvedValue('node "%dp0%\\node_modules\\example-cli\\bin\\cli.js" %*\r\n');
 
     const { resolveCliSpawnPlan } = await import('./cliSpawn');
-    await expect(resolveCliSpawnPlan(shimPath, ['--help'])).resolves.toEqual({
+    await expect(resolveCliSpawnPlan(shimPath, ['--help'], recoveredEnv)).resolves.toEqual({
       args: [scriptPath, '--help'],
       command: nodePath,
     });
+    expect(execFileMock.mock.calls[0]![2]).toMatchObject({ env: recoveredEnv });
   });
 
   it('resolves the npm generated %_prog% .cmd shim form used by Codex and Gemini', async () => {

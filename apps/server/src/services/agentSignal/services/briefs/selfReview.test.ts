@@ -35,17 +35,23 @@ const mockTryDedupe = vi.hoisted(() => vi.fn());
 const mockWriteWindow = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/models/brief', () => ({
-  BriefModel: vi.fn().mockImplementation(() => mockBriefModel),
+  BriefModel: vi.fn().mockImplementation(function () {
+    return mockBriefModel;
+  }),
 }));
 
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn().mockImplementation(() => mockTaskModel),
+  TaskModel: vi.fn().mockImplementation(function () {
+    return mockTaskModel;
+  }),
 }));
 
 vi.mock('@/database/models/agentSignal/reviewContext', () => ({
-  AgentSignalReviewContextModel: vi.fn().mockImplementation(() => ({
-    canAgentRunSelfIteration: mockCanAgentRunSelfIteration,
-  })),
+  AgentSignalReviewContextModel: vi.fn().mockImplementation(function () {
+    return {
+      canAgentRunSelfIteration: mockCanAgentRunSelfIteration,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentSignal/featureGate', () => ({
@@ -53,7 +59,9 @@ vi.mock('@/server/services/agentSignal/featureGate', () => ({
 }));
 
 vi.mock('@/server/services/agentSignal/services/receiptService', () => ({
-  createSelfReviewReceipts: vi.fn(() => []),
+  createSelfReviewReceipts: vi.fn(function () {
+    return [];
+  }),
   persistAgentSignalReceipts: mockPersistAgentSignalReceipts,
 }));
 
@@ -66,13 +74,17 @@ vi.mock('@/server/services/agentSignal/store/adapters/redis/sourceEventStore', (
 }));
 
 vi.mock('@/server/services/skillManagement/SkillManagementDocumentService', () => ({
-  SkillManagementDocumentService: vi.fn().mockImplementation(() => mockSkillDocumentService),
+  SkillManagementDocumentService: vi.fn().mockImplementation(function () {
+    return mockSkillDocumentService;
+  }),
 }));
 
 vi.mock('@/server/services/taskRunner', () => ({
-  TaskRunnerService: vi.fn().mockImplementation(() => ({
-    cascadeOnCompletion: vi.fn().mockResolvedValue({ failed: [], paused: [], started: [] }),
-  })),
+  TaskRunnerService: vi.fn().mockImplementation(function () {
+    return {
+      cascadeOnCompletion: vi.fn().mockResolvedValue({ failed: [], paused: [], started: [] }),
+    };
+  }),
 }));
 
 describe('AgentSignalSelfReviewBriefService', () => {
@@ -108,7 +120,9 @@ describe('AgentSignalSelfReviewBriefService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (BriefModel as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockBriefModel);
+    (BriefModel as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+      return mockBriefModel;
+    });
     mockTaskModel.getUnlockedTasks.mockResolvedValue([]);
     mockBriefModel.findById.mockResolvedValue(null);
     mockCanAgentRunSelfIteration.mockResolvedValue(true);

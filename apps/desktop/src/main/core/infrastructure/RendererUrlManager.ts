@@ -17,14 +17,16 @@ const logger = createLogger('core:RendererUrlManager');
 
 // Vite build with root=monorepo preserves input path structure,
 // so index.html / overlay.html / popup.html end up under apps/desktop/ in outDir.
-const SPA_ENTRY_HTML = path.join(rendererDir, 'apps', 'desktop', 'index.html');
-const OVERLAY_ENTRY_HTML = path.join(rendererDir, 'apps', 'desktop', 'overlay.html');
-const POPUP_ENTRY_HTML = path.join(rendererDir, 'apps', 'desktop', 'popup.html');
+const SPA_ENTRY_HTML = path.join('apps', 'desktop', 'index.html');
+const OVERLAY_ENTRY_HTML = path.join('apps', 'desktop', 'overlay.html');
+const POPUP_ENTRY_HTML = path.join('apps', 'desktop', 'popup.html');
 
 export class RendererUrlManager {
   private readonly rendererProtocolManager: RendererProtocolManager;
   private readonly rendererStaticOverride = getDesktopEnv().DESKTOP_RENDERER_STATIC;
   private readonly rendererLoadedUrl: string;
+  private activeRendererDir = rendererDir;
+  private previousRendererDir: string | null = null;
 
   constructor() {
     this.rendererProtocolManager = new RendererProtocolManager({
@@ -40,6 +42,27 @@ export class RendererUrlManager {
 
   addRequestInterceptor(interceptor: RendererRequestInterceptor) {
     this.rendererProtocolManager.addRequestInterceptor(interceptor);
+  }
+
+  /**
+   * Point the static renderer at an OTA version dir (or back to the builtin
+   * bundle with `null`). Only takes effect between window reloads — requests
+   * read the field per resolution, no in-flight swap.
+   */
+  setActiveRendererDir(dir: string | null) {
+    const next = dir ?? rendererDir;
+    if (next !== rendererDir && !existsSync(path.join(next, SPA_ENTRY_HTML))) {
+      logger.warn(`OTA renderer dir missing entry html, falling back to builtin: ${next}`);
+      this.activeRendererDir = rendererDir;
+      return;
+    }
+    logger.info(`Renderer serving root: ${next}`);
+    if (next !== this.activeRendererDir) this.previousRendererDir = this.activeRendererDir;
+    this.activeRendererDir = next;
+  }
+
+  getActiveRendererDir() {
+    return this.activeRendererDir;
   }
 
   /**
@@ -72,25 +95,30 @@ export class RendererUrlManager {
    */
   resolveRendererFilePath = async (url: URL): Promise<string | null> => {
     const pathname = url.pathname;
+    const root = this.activeRendererDir;
 
     // Static assets: direct file mapping
     if (pathname.startsWith('/assets/') || path.extname(pathname)) {
-      const filePath = path.join(rendererDir, pathname);
-      return existsSync(filePath) ? filePath : null;
+      const filePath = path.join(root, pathname);
+      if (existsSync(filePath)) return filePath;
+      // Windows that cancelled the OTA reload via beforeunload still lazy-load
+      // hash-named chunks from the previous tree.
+      const previous = this.previousRendererDir && path.join(this.previousRendererDir, pathname);
+      return previous && pathname.startsWith('/assets/') && existsSync(previous) ? previous : null;
     }
 
     // Overlay entry (separate MPA page)
     if (pathname === '/overlay' || pathname === '/overlay.html') {
-      return OVERLAY_ENTRY_HTML;
+      return path.join(root, OVERLAY_ENTRY_HTML);
     }
 
     // Topic popup window has its own SPA bundle.
     if (pathname === '/popup' || pathname.startsWith('/popup/')) {
-      return POPUP_ENTRY_HTML;
+      return path.join(root, POPUP_ENTRY_HTML);
     }
 
     // All other routes fallback to index.html (SPA)
-    return SPA_ENTRY_HTML;
+    return path.join(root, SPA_ENTRY_HTML);
   };
 
   private pickFallback() {

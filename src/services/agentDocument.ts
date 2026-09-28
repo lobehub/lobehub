@@ -91,11 +91,24 @@ class AgentDocumentService {
     return result;
   };
 
+  importFile = async (params: { agentId: string; fileId: string; parentId?: string | null }) => {
+    const result = await lambdaClient.agentDocument.importFile.mutate(params);
+    await invalidateDocumentMutation({
+      agentDocumentId: getAgentDocumentId(result),
+      agentId: params.agentId,
+      cause: 'agent-document',
+      documentId: getDocumentId(result),
+    });
+
+    return result;
+  };
+
   createDocument = async (
     params: {
       agentId: string;
       content: string;
       hintIsSkill?: boolean;
+      parentId?: string;
       title: string;
     } & AgentDocumentToolTriggerInput,
   ) => {
@@ -115,6 +128,7 @@ class AgentDocumentService {
       agentId: string;
       content: string;
       hintIsSkill?: boolean;
+      parentId?: string;
       title: string;
       topicId: string;
     } & AgentDocumentToolTriggerInput,

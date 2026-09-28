@@ -5,12 +5,12 @@ import {
   groupTopicsByProject,
   groupTopicsByUpdatedTime,
 } from '@lobechat/utils/client/topic';
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import SurfaceSkeleton from '@/components/Skeleton/Surface';
+import TopicsSkeleton from '@/components/Skeleton/Topics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { shinyTextStyles } from '@/styles/loading';
@@ -24,7 +24,9 @@ import Toolbar from './Toolbar';
 import TopicGrid from './TopicGrid';
 import TopicListView from './TopicListView';
 import {
+  buildBotChannelOptions,
   getProjectFilterLabel,
+  matchesBotChannel,
   matchesGroup,
   matchesStatus,
   matchesTimeRange,
@@ -59,6 +61,7 @@ const AgentTopicManager = memo(() => {
   const status = useTopicsViewStore((s) => s.status);
   const groupIds = useTopicsViewStore((s) => s.groupIds);
   const triggers = useTopicsViewStore((s) => s.triggers);
+  const botChannels = useTopicsViewStore((s) => s.botChannels);
   const timeRange = useTopicsViewStore((s) => s.timeRange);
   const sortBy = useTopicsViewStore((s) => s.sortBy);
   const groupBy = useTopicsViewStore((s) => s.groupBy);
@@ -66,6 +69,7 @@ const AgentTopicManager = memo(() => {
   const setStatus = useTopicsViewStore((s) => s.setStatus);
   const setGroupIds = useTopicsViewStore((s) => s.setGroupIds);
   const setTriggers = useTopicsViewStore((s) => s.setTriggers);
+  const setBotChannels = useTopicsViewStore((s) => s.setBotChannels);
   const setTimeRange = useTopicsViewStore((s) => s.setTimeRange);
   const setSearch = useTopicsViewStore((s) => s.setSearch);
 
@@ -108,9 +112,10 @@ const AgentTopicManager = memo(() => {
         (t) =>
           matchesGroup(t, groupIds) &&
           matchesTrigger(t, triggers) &&
-          matchesTimeRange(t, timeRange),
+          matchesTimeRange(t, timeRange) &&
+          matchesBotChannel(t, botChannels),
       ),
-    [baseTopics, groupIds, triggers, timeRange],
+    [baseTopics, groupIds, triggers, timeRange, botChannels],
   );
 
   const filtered = useMemo(() => {
@@ -156,12 +161,15 @@ const AgentTopicManager = memo(() => {
     return Array.from(map, ([value, label]) => ({ label, value }));
   }, [baseTopics]);
 
+  const botChannelOptions = useMemo(() => buildBotChannelOptions(baseTopics), [baseTopics]);
+
   const totalAfterFilter = filtered.length;
   // 'active' is the default tab, so it doesn't count as a user-applied filter
   const hasActiveFilters =
     (status !== 'active' && status !== 'all') ||
     groupIds.length > 0 ||
     triggers.length > 0 ||
+    botChannels.length > 0 ||
     timeRange !== 'all' ||
     trimmedSearch.length > 0;
 
@@ -172,6 +180,7 @@ const AgentTopicManager = memo(() => {
     setStatus('all');
     setGroupIds([]);
     setTriggers([]);
+    setBotChannels([]);
     setTimeRange('all');
     setSearch('');
   };
@@ -200,7 +209,7 @@ const AgentTopicManager = memo(() => {
     return () => observer.disconnect();
   }, [hasMore, isLoadingMore, isSearchMode, loadMoreAgentTopicsView, loadMoreError]);
 
-  if (!activeAgentId) return <SurfaceSkeleton variant={'list'} />;
+  if (!activeAgentId) return <TopicsSkeleton />;
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
@@ -224,7 +233,11 @@ const AgentTopicManager = memo(() => {
             width: '100%',
           }}
         >
-          <Toolbar projects={projects} statusCounts={statusCounts} />
+          <Toolbar
+            botChannelOptions={botChannelOptions}
+            projects={projects}
+            statusCounts={statusCounts}
+          />
           <BulkActionBar />
           {!isSearchMode && error && !isLoading && baseTopics.length === 0 ? (
             <AsyncError
@@ -235,7 +248,7 @@ const AgentTopicManager = memo(() => {
               }}
             />
           ) : isLoading && baseTopics.length === 0 ? (
-            <Skeleton active paragraph={{ rows: 6 }} title={false} />
+            <TopicsSkeleton chrome={'body'} />
           ) : totalAfterFilter === 0 ? (
             <EmptyState
               agentId={activeAgentId}

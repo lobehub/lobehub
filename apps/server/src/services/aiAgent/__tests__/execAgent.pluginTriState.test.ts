@@ -41,80 +41,104 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
-    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-    query: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn(),
-    queryAgents: vi.fn().mockResolvedValue([]),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn(),
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({ getAgentConfig: mockGetAgentConfig })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return { getAgentConfig: mockGetAgentConfig };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({ query: mockPluginQuery })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return { query: mockPluginQuery };
+  }),
 }));
 
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi.fn().mockImplementation(() => ({
-    queryByIdentifiers: mockConnectorQueryByIdentifiers,
-    resolveByIdentifiers: mockConnectorQueryByIdentifiers,
-  })),
+  ConnectorModel: vi.fn().mockImplementation(function () {
+    return {
+      queryByIdentifiers: mockConnectorQueryByIdentifiers,
+      resolveByIdentifiers: mockConnectorQueryByIdentifiers,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn().mockImplementation(() => ({
-    queryAllByConnectorIds: mockConnectorToolQueryAll,
-    queryByConnector: vi.fn().mockResolvedValue([]),
-    queryByConnectorIds: vi.fn().mockResolvedValue([]),
-  })),
+  ConnectorToolModel: vi.fn().mockImplementation(function () {
+    return {
+      queryAllByConnectorIds: mockConnectorToolQueryAll,
+      queryByConnector: vi.fn().mockResolvedValue([]),
+      queryByConnectorIds: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
-    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: vi.fn().mockResolvedValue(null),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: vi.fn().mockResolvedValue(null),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({ createOperation: mockCreateOperation })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return { createOperation: mockCreateOperation };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: mockGetLobehubSkillManifests,
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: mockGetLobehubSkillManifests,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: mockGetComposioManifests,
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: mockGetComposioManifests,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({ uploadFromUrl: vi.fn() })),
+  FileService: vi.fn().mockImplementation(function () {
+    return { uploadFromUrl: vi.fn() };
+  }),
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({
@@ -158,6 +182,9 @@ const agentConfigPluginsArg = () =>
 
 const disabledPluginIdsArg = () =>
   mockCreateServerAgentToolsEngine.mock.calls[0][1].disabledPluginIds as string[];
+
+const generateToolsArg = () =>
+  mockCreateServerAgentToolsEngine.mock.results[0].value.generateToolsDetailed.mock.calls[0][0];
 
 const toolManifestMapArg = () =>
   mockCreateOperation.mock.calls[0][0].toolSet.manifestMap as Record<string, unknown>;
@@ -235,6 +262,29 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
     const installed = installedPluginsArg().map((p) => p.identifier);
     expect(installed).toEqual(['plugin-a', 'plugin-b', 'plugin-c']);
     expect(agentConfigPluginsArg()).toEqual(['plugin-a']);
+  });
+
+  it('restricts an orchestration turn to the exclusive plugin set', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: ['plugin-a'],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      exclusivePluginIds: ['evidence-only'],
+      prompt: 'Submit evidence',
+    } as any);
+
+    expect(agentConfigPluginsArg()).toEqual(['evidence-only']);
+    expect(generateToolsArg()).toMatchObject({
+      skipDefaultTools: true,
+      toolIds: ['evidence-only'],
+    });
   });
 
   it('excludes a disabled composio/lobehub-skill manifest from the activator-discovery toolManifestMap', async () => {

@@ -3,6 +3,7 @@ import { debounce } from 'es-toolkit/compat';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { getDraftEntry, removeDraftIfUnchanged, saveDraft } from '../draftStorage';
+import { canSerialize, writeDocument } from '../editorDocument';
 import { useStoreApi } from '../store';
 
 const SAVE_DEBOUNCE_MS = 500;
@@ -19,7 +20,9 @@ export const useChatInputDraft = () => {
   const persistDraftFor = useCallback(
     (draftKey: string, removeEmpty = true) => {
       const { editor, getMarkdownContent, getJSONState } = storeApi.getState();
-      if (!editor) return;
+      // A composer that can no longer serialize reads as empty, and an empty read
+      // under a key transition removes the draft the user actually typed.
+      if (!canSerialize(editor)) return;
 
       if (getMarkdownContent().trim().length === 0) {
         const loadedDraft = loadedDraftRef.current;
@@ -69,12 +72,14 @@ export const useChatInputDraft = () => {
       const { draftKey } = storeApi.getState();
       if (!draftKey) return;
 
+      if (!canSerialize(editor)) return;
+
       const draft = getDraftEntry(draftKey);
       loadedDraftRef.current = { draftKey, updatedAt: draft?.updatedAt };
 
       if (!editor.isEmpty) return;
 
-      if (draft) editor.setDocument('json', draft.json);
+      if (draft) writeDocument(editor, 'json', draft.json);
     },
     [storeApi],
   );
@@ -94,10 +99,10 @@ export const useChatInputDraft = () => {
         if (prevState.draftKey) persistDraftFor(prevState.draftKey);
 
         const { editor } = state;
-        if (!editor) return;
-        editor.cleanDocument();
-        restoreDraft(editor);
-        if (!state.mobile) editor.focus();
+        if (!canSerialize(editor)) return;
+        editor!.cleanDocument();
+        restoreDraft(editor!);
+        if (!state.mobile) editor!.focus();
       }),
     [persistDraftFor, restoreDraft, saveDraftDebounced, storeApi],
   );

@@ -7,7 +7,9 @@ import {
   defaultGetProjectFileIndex,
   defaultSearchProjectFiles,
   type DeviceControlDeps,
+  DeviceMetricsSampler,
   executeDeviceRpc,
+  pushMetrics,
 } from '@lobechat/device-control';
 import type {
   AgentRunRequestMessage,
@@ -24,6 +26,12 @@ import type { Command } from 'commander';
 import { createLambdaClient } from '../api/client';
 import { resolveToken } from '../auth/resolveToken';
 import { CLI_API_KEY_ENV } from '../constants/auth';
+import {
+  CLI_CONFIG_DIR_NAME,
+  CLI_CONNECT_SERVICE_NAME,
+  CLI_DISPLAY_NAME,
+  CLI_PRIMARY_BIN,
+} from '../constants/identity';
 import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
 import {
   appendLog,
@@ -32,6 +40,7 @@ import {
   readStatus,
   removePid,
   removeStatus,
+  reportDaemonStartupReady,
   spawnDaemon,
   stopDaemon,
   writeStatus,
@@ -59,13 +68,17 @@ import {
   loadWorkspaceEnrollments,
   normalizeUrl,
   removeWorkspaceEnrollment,
+  resolveDeviceMetricsBacklogPath,
   saveSettings,
 } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
+import { sweepLocalTraces } from '../utils/traceMaintenance';
 
-const CONNECT_SERVICE_NAME = 'lobehub-connect.service';
+/** Longest a clean stop waits to push pending device health samples. */
+const SHUTDOWN_METRICS_FLUSH_MS = 3000;
+const CONNECT_SERVICE_NAME = CLI_CONNECT_SERVICE_NAME;
 
 interface ConnectOptions {
   daemon?: boolean;
@@ -170,12 +183,12 @@ export function registerConnectCommand(program: Command) {
     .option('--gateway <url>', 'Device gateway URL')
     .option('--device-id <id>', 'Device ID')
     .option('-v, --verbose', 'Enable verbose logging')
-    .action((options: ConnectOptions) => {
+    .action(async (options: ConnectOptions) => {
       const wasStopped = stopDaemon();
       if (wasStopped) {
         log.info('Stopped existing daemon.');
       }
-      handleDaemonStart({ ...options, daemon: true });
+      await handleDaemonStart({ ...options, daemon: true });
     });
 
   const serviceCmd = connectCmd
@@ -276,7 +289,7 @@ function handleStop() {
   }
 }
 
-function handleDaemonStart(options: ConnectOptions) {
+async function handleDaemonStart(options: ConnectOptions) {
   const existingPid = getRunningDaemonPid();
   if (existingPid !== null) {
     log.error(`Daemon is already running (PID ${existingPid}).`);
@@ -286,7 +299,7 @@ function handleDaemonStart(options: ConnectOptions) {
 
   // Build args to re-run with --daemon-child
   const args = buildDaemonArgs(options);
-  const pid = spawnDaemon(args);
+  const pid = await spawnDaemon(args);
 
   log.info(`Daemon started (PID ${pid}).`);
   log.info(`  Logs: ${getLogPath()}`);
@@ -394,7 +407,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   };
 
   // Print device info
-  info('─── LobeHub CLI ───');
+  info(`─── ${CLI_DISPLAY_NAME} ───`);
   info(`  Device ID : ${client.currentDeviceId}`);
   info(`  Hostname  : ${os.hostname()}`);
   info(`  Platform  : ${process.platform}`);
@@ -416,6 +429,16 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   const startedAt = new Date();
   updateStatus('connecting');
+
+  // Housekeeping for the local trace store: partials left behind by killed
+  // agent processes become `interrupted` snapshots (so `lh trace op list` shows
+  // the crashed runs), and aged-out snapshots are deleted. Fire-and-forget —
+  // it must never delay the gateway connection.
+  void sweepLocalTraces().then(({ deleted, reconciled }) => {
+    if (reconciled > 0 || deleted > 0) {
+      info(`  Traces    : ${reconciled} interrupted run(s) closed, ${deleted} expired removed`);
+    }
+  });
 
   // Platform handlers for the shared `@lobechat/device-control` dispatcher.
   // File preview / index use the package's portable defaults (no
@@ -447,8 +470,29 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // shared with the workspace-share connections opened via `enrollWorkspace`.
   bindGatewayClientHandlers(client, handlerContext, workspaceId);
 
+  // Machine health (CPU / memory / load) for the device page. Samples go to
+  // the device gateway over this socket (the gateway is their only store);
+  // they keep accruing while disconnected and upload once the connection is
+  // back, so the stretch around a drop is visible afterwards. Each batch is
+  // mirrored to this machine's workspace-share connections so a shared
+  // device's workspace row has the same history.
+  const metricsSampler = identity
+    ? new DeviceMetricsSampler({
+        isConnected: () => client.connectionStatus === 'connected',
+        logger: { warn: (msg) => info(msg) },
+        storagePath: resolveDeviceMetricsBacklogPath(identity.deviceId),
+        upload: (samples) =>
+          pushMetrics(
+            client,
+            [...workspaceConnections.values()].map((entry) => entry.client),
+            samples,
+          ),
+      })
+    : undefined;
+
   client.on('connected', () => {
     updateStatus('connected');
+    void metricsSampler?.flush();
   });
 
   client.on('disconnected', () => {
@@ -693,7 +737,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
     error(`Authentication failed: ${reason}`);
     error(
-      `Run 'lh login', or set ${CLI_API_KEY_ENV} and run 'lh login --server <url>' to configure API key authentication.`,
+      `Run '${CLI_PRIMARY_BIN} login', or set ${CLI_API_KEY_ENV} and run '${CLI_PRIMARY_BIN} login --server <url>' to configure API key authentication.`,
     );
     cleanup();
     process.exit(1);
@@ -739,6 +783,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     // Close share connections but keep the persisted enrollments — the next
     // startup restores them (or clears them if revoked meanwhile).
     for (const wsId of workspaceConnections.keys()) closeWorkspaceConnection(wsId);
+    void metricsSampler?.stop();
     client.disconnect();
     removeStatus();
     if (isDaemonChild) {
@@ -746,15 +791,17 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     }
   };
 
-  process.on('SIGINT', () => {
+  // A clean stop pushes the health samples taken since the last upload
+  // (bounded) before the socket closes, so the device page doesn't show the
+  // final minutes as "not running".
+  const shutdown = async () => {
+    await metricsSampler?.stop({ flushTimeoutMs: SHUTDOWN_METRICS_FLUSH_MS });
     cleanup();
     process.exit(0);
-  });
+  };
 
-  process.on('SIGTERM', () => {
-    cleanup();
-    process.exit(0);
-  });
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 
   // Register this device in the server registry before opening the WS, so the
   // row exists by the time the gateway reports it online. `lh login` already
@@ -789,6 +836,10 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       error(`Device registration failed (non-fatal): ${(err as Error).message}`);
     }
   }
+
+  await reportDaemonStartupReady();
+
+  await metricsSampler?.start();
 
   // Connect
   await client.connect();
@@ -842,11 +893,16 @@ function bindGatewayClientHandlers(
       log.toolCall(toolCall.apiName, requestId, toolCall.arguments, operationId);
     }
 
+    // Timed on the DEVICE's clock. The server can only see the whole dispatch
+    // round trip, so reporting this back is what separates a slow tool from
+    // slow transport.
+    const startedAt = performance.now();
     const result = await executeToolCall(toolCall.apiName, toolCall.arguments, timeout);
+    const executionTimeMs = Math.round(performance.now() - startedAt);
 
     if (isDaemonChild) {
       appendLog(
-        `[RESULT] ${result.success ? 'OK' : 'FAIL'}${operationId ? ` op=${operationId}` : ''} (${requestId})`,
+        `[RESULT] ${result.success ? 'OK' : 'FAIL'} ${executionTimeMs}ms${operationId ? ` op=${operationId}` : ''} (${requestId})`,
       );
     } else {
       log.toolResult(requestId, result.success, result.content, operationId);
@@ -857,6 +913,7 @@ function bindGatewayClientHandlers(
       result: {
         content: result.content,
         error: result.error,
+        executionTimeMs,
         state: result.state,
         success: result.success,
       },
@@ -1022,7 +1079,7 @@ function collectSystemInfo(): DeviceSystemInfo {
     homePath: home,
     musicPath: path.join(home, 'Music'),
     picturesPath: path.join(home, 'Pictures'),
-    userDataPath: path.join(home, '.lobehub'),
+    userDataPath: path.join(home, CLI_CONFIG_DIR_NAME),
     videosPath: path.join(home, videosDir),
     workingDirectory: process.cwd(),
   };

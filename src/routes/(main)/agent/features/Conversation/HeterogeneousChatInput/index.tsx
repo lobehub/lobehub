@@ -11,25 +11,22 @@ import { useTranslation } from 'react-i18next';
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
 import { isDesktop } from '@/const/version';
 import { type ActionKeys } from '@/features/ChatInput';
+import HeteroControlBar from '@/features/ChatInput/ControlBar/HeteroControlBar';
 import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
-import { useClaudeCodeApiBindingValidation } from '@/features/HeterogeneousAgent/hooks/useClaudeCodeCompatibleProviders';
-import WideScreenContainer from '@/features/WideScreenContainer';
+import { useProviderBindingValidation } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { resolveClaudeCodeApiBindingGuard } from '@/helpers/claudeCodeApiBinding';
 import {
   isHeterogeneousSandboxExecutionAvailable,
   resolveExecutionTarget,
 } from '@/helpers/executionTarget';
+import { resolveProviderBindingGuard } from '@/helpers/providerBinding';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
 import { useChatStore } from '@/store/chat';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import ApiModeModelBar from './ApiModeModelBar';
-import HeteroControlBar from './HeteroControlBar';
 import HeteroPlus from './HeteroPlus';
 import ScheduledSendChip from './ScheduledSendChip';
 import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
@@ -41,6 +38,10 @@ import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
 // selector. Both sit in the input's bottom-left corner, where the agent composer
 // puts its `+` and model picker, rather than off in the control-bar strip below.
 const leftActions: ActionKeys[] = [];
+// Voice messages are transcribed before they reach the CLI, so they sit beside Send like on the
+// agent composer. Hidden while the input is blocked: a recording could not be sent anyway.
+const rightActions: ActionKeys[] = ['voiceMessage'];
+const blockedRightActions: ActionKeys[] = [];
 
 /**
  * GuardBanner
@@ -49,24 +50,25 @@ const leftActions: ActionKeys[] = [];
  * fold the headline and the hint onto one line (no separate `description`
  * block, no oversized 24px icon) so the guard stays a compact strip instead of
  * eating a chunk of the conversation area.
+ *
+ * Rendered through `ChatInput`'s `notices` slot, which places it at the top of
+ * the composer's floating stack: above the run-status tray, and with no inline
+ * padding or width cap of its own so its edges land on the input's edges.
  */
 const GuardBanner = memo<{ action?: ReactNode; hint?: string; title: string }>(
   ({ title, hint, action }) => (
-    <WideScreenContainer>
-      <Flexbox align={'center'} paddingBlock={'0 8px'} paddingInline={12}>
-        <Alert
-          action={action}
-          style={{ maxWidth: 880, width: '100%' }}
-          type={'warning'}
-          title={
-            <Flexbox horizontal align={'baseline'} gap={6} style={{ flexWrap: 'wrap' }}>
-              <span>{title}</span>
-              {hint && <span style={{ fontWeight: 400, opacity: 0.75 }}>{hint}</span>}
-            </Flexbox>
-          }
-        />
-      </Flexbox>
-    </WideScreenContainer>
+    <Flexbox paddingBlock={'0 8px'}>
+      <Alert
+        action={action}
+        type={'warning'}
+        title={
+          <Flexbox horizontal align={'baseline'} gap={6} style={{ flexWrap: 'wrap' }}>
+            <span>{title}</span>
+            {hint && <span style={{ fontWeight: 400, opacity: 0.75 }}>{hint}</span>}
+          </Flexbox>
+        }
+      />
+    </Flexbox>
   ),
 );
 
@@ -102,16 +104,21 @@ const HeterogeneousChatInput = memo(() => {
   const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
   const providerType = heterogeneousProvider?.type;
-  const enableClaudeCodeApiMode = useUserStore(labPreferSelectors.enableClaudeCodeApiMode);
-  const isApiAuth = providerType === 'claude-code' && heterogeneousProvider?.authMode === 'api';
-  const isApiModeActive = isApiAuth && enableClaudeCodeApiMode;
+  const isApiAuth = heterogeneousProvider?.authMode === 'api';
+  const providerApiConfig =
+    isApiAuth &&
+    heterogeneousProvider.apiConfig &&
+    heterogeneousProvider.apiConfig.source !== 'server-default'
+      ? heterogeneousProvider.apiConfig
+      : undefined;
+  const apiConfigMissing = isApiAuth && !heterogeneousProvider.apiConfig;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
     workspaceScoped,
   });
   const { error: apiBindingValidationError, isReady: isApiBindingStateReady } =
-    useClaudeCodeApiBindingValidation(heterogeneousProvider?.apiConfig);
+    useProviderBindingValidation(providerType, providerApiConfig);
   const deviceSelectionRequired =
     !!providerType &&
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
@@ -126,13 +133,13 @@ const HeterogeneousChatInput = memo(() => {
       isDesktopClient: isDesktop,
       providerType,
     });
-  const showApiModeModel = !!agentId && isApiModeActive && executionTarget === 'local';
-  const apiModeLabDisabled = isApiAuth && !enableClaudeCodeApiMode;
-  const apiModeTargetUnsupported = isApiModeActive && executionTarget !== 'local';
-  const isLocalApiMode = isApiModeActive && executionTarget === 'local';
+  const showApiModeModel = !!agentId && isApiAuth && executionTarget === 'local';
+  const apiModeTargetUnsupported = isApiAuth && executionTarget !== 'local';
+  const validateProviderBinding =
+    (apiConfigMissing || !!providerApiConfig) && executionTarget === 'local';
   const { blocked: apiModeBindingBlocked, error: apiModeBindingError } =
-    resolveClaudeCodeApiBindingGuard({
-      active: isLocalApiMode,
+    resolveProviderBindingGuard({
+      active: validateProviderBinding,
       error: apiBindingValidationError,
       isReady: isApiBindingStateReady,
     });
@@ -217,7 +224,6 @@ const HeterogeneousChatInput = memo(() => {
     // Until the override loads, `isDeviceExecution` may be a false negative —
     // don't flash the cloud-config prompt for what turns out to be a device run.
     if (
-      apiModeLabDisabled ||
       apiModeTargetUnsupported ||
       isPreferenceLoading ||
       deviceSelectionRequired ||
@@ -234,22 +240,6 @@ const HeterogeneousChatInput = memo(() => {
         action={
           <Button size={'small'} type={'primary'} onClick={goToConfig}>
             {t('heteroAgent.cloudNotConfigured.action')}
-          </Button>
-        }
-      />
-    );
-  };
-
-  const renderApiModeLabGuard = () => {
-    if (!apiModeLabDisabled) return null;
-
-    return (
-      <GuardBanner
-        hint={t('heteroAgent.apiMode.labDisabled.desc')}
-        title={t('heteroAgent.apiMode.labDisabled.title')}
-        action={
-          <Button size={'small'} type={'primary'} onClick={() => navigate('/settings/labs')}>
-            {t('heteroAgent.apiMode.labDisabled.action')}
           </Button>
         }
       />
@@ -278,7 +268,9 @@ const HeterogeneousChatInput = memo(() => {
     const title =
       apiModeBindingError.code === 'configMissing'
         ? t('heteroAgent.apiMode.configMissing')
-        : t(`heteroAgent.apiMode.${apiModeBindingError.code}`, apiModeBindingError);
+        : apiModeBindingError.code === 'agentUnsupported'
+          ? t('heteroAgent.apiMode.agentUnsupported', { name: providerType })
+          : t(`heteroAgent.apiMode.${apiModeBindingError.code}`, apiModeBindingError);
 
     return (
       <GuardBanner
@@ -310,7 +302,6 @@ const HeterogeneousChatInput = memo(() => {
   // workspace preference loads, keep send disabled: the effective target isn't
   // known yet, so neither guard can vouch for the run.
   const inputDisabled =
-    apiModeLabDisabled ||
     apiModeTargetUnsupported ||
     apiModeBindingBlocked ||
     isPreferenceLoading ||
@@ -318,29 +309,37 @@ const HeterogeneousChatInput = memo(() => {
     (!isConfigured && !isDeviceExecution) ||
     deviceBlocked;
   const hasGuard =
-    apiModeLabDisabled ||
     apiModeTargetUnsupported ||
     !!apiModeBindingError ||
     deviceSelectionRequired ||
     deviceBlocked ||
     (!isConfigured && !isDeviceExecution);
 
-  return (
-    <Flexbox>
-      {renderApiModeLabGuard()}
+  // The guards go through `notices` rather than as siblings above `ChatInput`:
+  // the running-status / queue trays float above this column, so a sibling
+  // guard would sit underneath them. The slot puts it on top of that stack.
+  const notices = hasGuard ? (
+    <>
       {renderApiModeTargetGuard()}
       {renderApiModeBindingGuard()}
       {renderDeviceSelectionGuard()}
       {renderCloudConfigGuard()}
       {renderDeviceGuard()}
+    </>
+  ) : undefined;
+
+  return (
+    <Flexbox>
       <ChatInput
+        skipScrollMarginWithList
         allowExpand={false}
         controlBarSlot={<HeteroControlBar />}
         extraActionItems={extraActionItems}
         leftActions={leftActions}
+        notices={notices}
+        rightActions={inputDisabled ? blockedRightActions : rightActions}
         sendAreaPrefix={sendAreaPrefix}
         sendButtonProps={{ disabled: inputDisabled, shape: 'round' }}
-        skipScrollMarginWithList={!hasGuard}
         onEditorReady={(instance) => {
           // Sync to global ChatStore for compatibility with other features
           useChatStore.setState({ mainInputEditor: instance });

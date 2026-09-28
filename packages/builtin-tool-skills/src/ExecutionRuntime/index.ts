@@ -1,5 +1,9 @@
 import { AGENT_SKILLS_IDENTIFIER_PREFIX } from '@lobechat/const';
-import { formatCommandResult, resourcesTreePrompt } from '@lobechat/prompts';
+import {
+  formatCommandResult,
+  formatSandboxRecreation,
+  resourcesTreePrompt,
+} from '@lobechat/prompts';
 import type {
   BuiltinServerRuntimeOutput,
   BuiltinSkill,
@@ -30,6 +34,8 @@ export interface SkillImportServiceResult {
 }
 
 export interface ExportFileResult {
+  /** Preserve upstream failures for the outer tool error classifier. */
+  error?: unknown;
   fileId?: string;
   filename: string;
   mimeType?: string;
@@ -250,6 +256,7 @@ export class SkillsExecutionRuntime {
       if (!result.success) {
         return {
           content: `Failed to export file: ${filename}`,
+          error: result.error,
           success: false,
         };
       }
@@ -525,9 +532,11 @@ export class SkillsExecutionRuntime {
     });
 
     return {
-      content,
+      content: formatSandboxRecreation(content, result.sessionExpiredAndRecreated),
+      error: result.error,
       state: {
         command,
+        ...(result.sessionExpiredAndRecreated && { sessionExpiredAndRecreated: true }),
         ...(result.executionEnv && { executionEnv: result.executionEnv }),
         exitCode: result.exitCode,
         ...(result.outputFiles && { outputFiles: result.outputFiles }),

@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +10,7 @@ import ApiKey from './ApiKey';
 import ScopeSelector from './ApiKeyModal/ScopeSelector';
 
 const hoisted = vi.hoisted(() => ({
+  confirmModal: vi.fn((opts: { onOk?: () => void }) => opts.onOk?.()),
   createApiKeyModal: vi.fn(),
   state: {
     activeWorkspaceId: null as string | null,
@@ -29,77 +29,28 @@ const hoisted = vi.hoisted(() => ({
   toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  // Menu items surface as plain buttons so row actions are reachable in jsdom.
+  DropdownMenu: ({
+    children,
+    items,
+  }: {
+    children?: React.ReactNode;
+    items: { disabled?: boolean; key: string; label: string; onClick?: () => void }[];
+  }) => (
+    <span>
+      {children}
+      {items.map((item) => (
+        <button disabled={item.disabled} key={item.key} type="button" onClick={item.onClick}>
+          {item.label}
+        </button>
+      ))}
+    </span>
+  ),
+  confirmModal: hoisted.confirmModal,
+  toast: hoisted.toast,
 }));
-
-vi.mock('@lobehub/ui/base-ui', () => {
-  return {
-    Button: ({ children, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) => (
-      <button {...props}>{children}</button>
-    ),
-    Checkbox: ({
-      checked,
-      children,
-      disabled,
-      onChange,
-    }: {
-      checked?: boolean;
-      children?: ReactNode;
-      disabled?: boolean;
-      onChange?: (checked: boolean) => void;
-    }) => (
-      <label>
-        <input
-          checked={checked}
-          disabled={disabled}
-          type="checkbox"
-          onChange={(event) => onChange?.(event.currentTarget.checked)}
-        />
-        {children}
-      </label>
-    ),
-    Drawer: ({
-      children,
-      onClose,
-      open,
-      title,
-    }: {
-      children?: ReactNode;
-      onClose?: () => void;
-      open?: boolean;
-      title?: ReactNode;
-    }) =>
-      open ? (
-        <div role="dialog">
-          <div>{title}</div>
-          <button type="button" onClick={onClose}>
-            close-drawer
-          </button>
-          {children}
-        </div>
-      ) : null,
-    Switch: ({
-      checked,
-      disabled,
-      onChange,
-    }: {
-      checked?: boolean;
-      disabled?: boolean;
-      onChange?: (checked: boolean) => void;
-      children?: ReactNode;
-    }) => (
-      <input
-        checked={checked}
-        disabled={disabled}
-        role="switch"
-        type="checkbox"
-        onChange={(event) => onChange?.(event.currentTarget.checked)}
-      />
-    ),
-    toast: hoisted.toast,
-  };
-});
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => hoisted.state.activeWorkspaceId,
@@ -341,7 +292,11 @@ describe('ApiKey', () => {
     const dialog = await openDetail('My Key');
     fireEvent.click(within(dialog).getByRole('switch'));
 
-    await waitFor(() => expect(hoisted.toast.error).toHaveBeenCalledWith('manageOnlyCreator'));
+    await waitFor(() =>
+      expect(hoisted.toast.error).toHaveBeenCalledWith(
+        'Only the creator or a workspace owner can do this',
+      ),
+    );
     expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(1);
   });
 
@@ -353,7 +308,9 @@ describe('ApiKey', () => {
     const dialog = await openDetail('My Key');
     fireEvent.click(within(dialog).getByRole('switch'));
 
-    await waitFor(() => expect(hoisted.toast.error).toHaveBeenCalledWith('operationFailed'));
+    await waitFor(() =>
+      expect(hoisted.toast.error).toHaveBeenCalledWith('Operation failed, please try again'),
+    );
     expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(1);
   });
 
@@ -364,6 +321,10 @@ describe('ApiKey', () => {
     await screen.findByText('My Key');
 
     expect(screen.getByRole('button', { name: 'apikey.list.actions.create' })).toBeDisabled();
+
+    // the row menu's destructive action is gated too
+    const row = screen.getByText('My Key').closest('tr')!;
+    expect(within(row).getByRole('button', { name: 'apikey.list.actions.delete' })).toBeDisabled();
 
     // the drawer carries the whole management surface, so it must be gated
     const dialog = await openDetail('My Key');
@@ -386,6 +347,10 @@ describe('ApiKey', () => {
 
     const otherRow = screen.getByText('Other Key').closest('tr')!;
     expect(within(otherRow).getByText(`sk-lh-${'*'.repeat(12)}`)).toBeInTheDocument();
+    // central revocation is one row-menu click away for an admin
+    expect(
+      within(otherRow).getByRole('button', { name: 'apikey.list.actions.delete' }),
+    ).toBeEnabled();
 
     // an admin can centrally revoke another member's key, but only its creator
     // can rename, disable, or edit the grants.
@@ -471,15 +436,43 @@ describe('ApiKey', () => {
     expect(screen.queryByRole('columnheader', { name: 'apikey.list.columns.creator' })).toBeNull();
   });
 
-  it('keeps scopes out of the list — they live in the detail drawer', async () => {
-    hoisted.trpc.getApiKeys.mockResolvedValue([makeItem({ scopes: ['agent:read'] })]);
+  it('summarises scopes as a compact tag — the full grant list stays in the drawer', async () => {
+    hoisted.trpc.getApiKeys.mockResolvedValue([
+      makeItem({ scopes: ['agent:read', 'mcp:read'] }),
+      makeItem({ id: 'key-2', name: 'Full Key' }),
+    ]);
     renderPage();
     await screen.findByText('My Key');
 
-    expect(screen.queryByRole('columnheader', { name: 'apikey.list.columns.scopes' })).toBeNull();
-    expect(screen.getByText('My Key').closest('tr')!.textContent).not.toContain(
-      'apikey.scopes.groups.agent',
-    );
+    const scopedRow = screen.getByText('My Key').closest('tr')!;
+    expect(within(scopedRow).getByText('apikey.scopes.count')).toBeInTheDocument();
+    expect(scopedRow.textContent).not.toContain('apikey.scopes.groups.agent');
+
+    // scopes absent = legacy full access, same badge as an explicit `['*']`
+    const fullRow = screen.getByText('Full Key').closest('tr')!;
+    expect(within(fullRow).getByText('apikey.scopes.fullAccess')).toBeInTheDocument();
+  });
+
+  it('deletes a key from the row menu after confirmation', async () => {
+    renderPage();
+    await screen.findByText('My Key');
+
+    const row = screen.getByText('My Key').closest('tr')!;
+    fireEvent.click(within(row).getByRole('button', { name: 'apikey.list.actions.delete' }));
+
+    expect(hoisted.confirmModal).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(hoisted.trpc.deleteApiKey).toHaveBeenCalledWith({ id: 'key-1' }));
+    await waitFor(() => expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(2));
+  });
+
+  it('opens the detail drawer from the row menu', async () => {
+    renderPage();
+    await screen.findByText('My Key');
+
+    const row = screen.getByText('My Key').closest('tr')!;
+    fireEvent.click(within(row).getByRole('button', { name: 'apikey.list.actions.viewDetails' }));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
   it('opens the detail drawer on row click listing only the granted scopes', async () => {
@@ -527,9 +520,16 @@ describe('ApiKey', () => {
 
     const dialog = await openDetail('My Key');
     fireEvent.click(within(dialog).getByRole('button', { name: 'apikey.detail.permissions.edit' }));
-    const scopeCheckboxes = within(dialog).getAllByRole('checkbox');
-    fireEvent.click(scopeCheckboxes[0]);
-    fireEvent.click(scopeCheckboxes[2]);
+    const toggleScope = async (groupKey: string) => {
+      const group = within(dialog).getByText(`apikey.scopes.groups.${groupKey}`).parentElement!;
+      const checkbox = within(group).getByRole('checkbox', { name: 'apikey.scopes.read' });
+      // base-ui >= 1.8 ignores synthetic Space keyDown/keyUp and a bare click
+      // on the `role=checkbox` span inside a dialog; clicking the wrapping
+      // <label> is what toggles it, and is what a real pointer hits anyway.
+      fireEvent.click(checkbox.closest('label')!);
+    };
+    await toggleScope('agent');
+    await toggleScope('chat');
     fireEvent.click(within(dialog).getByRole('button', { name: 'apikey.detail.permissions.save' }));
 
     await waitFor(() =>

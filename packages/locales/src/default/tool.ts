@@ -1,4 +1,12 @@
 export default {
+  'askUserQuestion.submitting': 'Submitting your response…',
+  'askUserQuestion.checking': 'Checking submission status…',
+  'askUserQuestion.uncertain':
+    'We couldn’t confirm whether your response was received. Check its status before trying again.',
+  'askUserQuestion.checkStatus': 'Check submission status',
+  'askUserQuestion.submitFailed':
+    'Your response hasn’t been confirmed. Your answers are saved; please try again.',
+
   'agentGroupManagement.executeTask.agent': 'Execute Agent',
   'agentGroupManagement.executeTask.cancelled': 'Cancelled',
   'agentGroupManagement.executeTask.completed': 'Task Completed',
@@ -45,21 +53,27 @@ export default {
   'agentMarketplace.picker.summary': '{{filtered}} / {{total}} templates available.',
   'askUserQuestion.customOption.placeholder': 'Or write your own…',
   'askUserQuestion.escape.back': 'Back to options',
-  'askUserQuestion.escape.enter': 'Or type directly',
+  'askUserQuestion.escape.enter': 'Replace all',
   'askUserQuestion.escape.placeholder': 'Type your answer here…',
+  'askUserQuestion.supplement.enter': 'Additional notes',
+  'askUserQuestion.supplement.placeholder': 'Add context to your selected answers…',
   'askUserQuestion.multiSelectTag': '(multi-select)',
   'askUserQuestion.recommendedTag': 'Recommended',
   'askUserQuestion.skip': 'Skip',
   'askUserQuestion.submit': 'Submit',
   'claudeCode.askUserQuestion.customOption.placeholder': 'Or write your own…',
   'claudeCode.askUserQuestion.escape.back': 'Back to options',
-  'claudeCode.askUserQuestion.escape.enter': 'Or type directly',
+  'claudeCode.askUserQuestion.escape.enter': 'Replace all',
   'claudeCode.askUserQuestion.escape.placeholder': 'Type your answer here…',
+  'claudeCode.askUserQuestion.supplement.enter': 'Additional notes',
+  'claudeCode.askUserQuestion.supplement.placeholder': 'Add context to your selected answers…',
   'claudeCode.askUserQuestion.multiSelectTag': '(multi-select)',
   'claudeCode.askUserQuestion.recommendedTag': 'Recommended',
   'claudeCode.askUserQuestion.skip': 'Skip',
   'claudeCode.askUserQuestion.submit': 'Submit',
   'claudeCode.askUserQuestion.timeExpired': 'Time expired — using option 1 of each question.',
+  'claudeCode.askUserQuestion.timeExpiredNoAnswer':
+    'Time expired — this question can no longer be answered.',
   'claudeCode.askUserQuestion.timeRemaining':
     'Time remaining: {{time}} · unanswered questions default to option 1 on timeout.',
   'codeInterpreter-legacy.error': 'Execution Error',
@@ -137,7 +151,9 @@ export default {
   'localFiles.editFile.newString': 'Replace with',
   'localFiles.editFile.oldString': 'Find',
   'localFiles.editFile.replaceAll': 'Replace all occurrences',
-  'localFiles.editFile.replaceFirst': 'Replace first occurrence only',
+  'localFiles.editFile.ambiguous':
+    'This text appears {{times}} times in the file. The edit will be refused — it needs enough surrounding context to identify one occurrence, or "replace all".',
+  'localFiles.editFile.replaceFirst': 'Replace the single occurrence',
   'localFiles.file': 'File',
   'localFiles.folder': 'Folder',
   'localFiles.globFiles.pattern': 'Pattern',
@@ -154,6 +170,7 @@ export default {
   'localFiles.open': 'Open',
   'localFiles.openFile': 'Open File',
   'localFiles.openFolder': 'Open Folder',
+  'localFiles.openInPanel': 'Open in side panel',
   'localFiles.outOfScope.requestedPaths': 'Requested Paths',
   'localFiles.outOfScope.warning':
     'Warning: The following path(s) are outside the configured working directory. Please confirm you want to allow access.',

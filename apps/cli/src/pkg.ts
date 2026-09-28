@@ -10,7 +10,13 @@ import { createRequire } from 'node:module';
  * the path outside the package once everything is bundled into a single file.
  */
 const require = createRequire(import.meta.url);
-const pkg = require('../package.json') as { name: string; version: string };
+const pkg = require('../package.json') as {
+  engines?: { node?: string };
+  name: string;
+  version: string;
+};
 
 export const cliPackageName = pkg.name;
 export const cliVersion = pkg.version;
+/** The node range this build is published for, e.g. `>=22.15`. */
+export const cliNodeEngine = pkg.engines?.node;

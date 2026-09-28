@@ -5,6 +5,7 @@ import {
   habitTier,
   layerLabel,
   passRateSeries,
+  previewSections,
   profileWord,
   recentPassRate,
   zeroViolationStreak,
@@ -75,5 +76,27 @@ describe('reliability series', () => {
     expect(recentPassRate(s, 2)).toBe(1);
     expect(earlyPassRate(s, 2)).toBeCloseTo((0.5 + 0.75) / 2);
     expect(recentPassRate([])).toBeNull();
+  });
+});
+
+describe('previewSections', () => {
+  it('drops the rule section, which only restates the title the card already shows', () => {
+    expect(
+      previewSections([
+        { body: '分离运行执行面与观测访问面', key: 'rule' },
+        { body: '两个面的故障域不同', key: 'why' },
+      ]).map((section) => section.key),
+    ).toEqual(['why']);
+  });
+
+  it('never renders a labelled blank row', () => {
+    expect(previewSections([{ body: '   ', key: 'why' }])).toEqual([]);
+    expect(previewSections()).toEqual([]);
+  });
+
+  it('carries the label key so every surface names a section the same way', () => {
+    expect(previewSections([{ body: '补齐文档后通过', key: 'how' }])).toEqual([
+      { body: '补齐文档后通过', key: 'how', label: 'rules.section.how' },
+    ]);
   });
 });

@@ -9,15 +9,21 @@ export async function appendStepToPartial(
   store: ISnapshotStore,
   operationId: string,
   step: StepSnapshot,
-  metadata?: { model?: string; provider?: string },
+  metadata?: { agentId?: string; model?: string; provider?: string; topicId?: string },
 ): Promise<void> {
   const partial = (await store.loadPartial(operationId)) ?? { steps: [] };
 
   if (!partial.startedAt) {
     partial.startedAt = Date.now();
-    partial.model = metadata?.model;
-    partial.provider = metadata?.provider;
+    partial.agentId = metadata?.agentId;
+    partial.topicId = metadata?.topicId;
   }
+
+  // Model / provider are only known once the first LLM turn reports them, which
+  // for a CLI-wrapped agent is several steps in — so they are filled on the
+  // first step that carries them, not only on the header-creating step.
+  if (!partial.model && metadata?.model) partial.model = metadata.model;
+  if (!partial.provider && metadata?.provider) partial.provider = metadata.provider;
 
   if (!partial.steps) partial.steps = [];
   partial.steps.push(step);
@@ -44,6 +50,7 @@ export async function finalizeSnapshot(
   if (!partial) return;
 
   const snapshot: ExecutionSnapshot = {
+    agentId: partial.agentId,
     completedAt: Date.now(),
     completionReason: completion.reason as ExecutionSnapshot['completionReason'],
     error: completion.error,
@@ -52,10 +59,12 @@ export async function finalizeSnapshot(
     provider: partial.provider,
     startedAt: partial.startedAt ?? Date.now(),
     steps: (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex),
+    topicId: partial.topicId,
     totalCost: completion.totalCost,
     totalSteps: completion.totalSteps,
     totalTokens: completion.totalTokens,
     traceId: operationId,
+    userId: partial.userId,
   };
 
   await store.save(snapshot);

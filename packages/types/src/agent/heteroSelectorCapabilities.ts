@@ -55,13 +55,30 @@ export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_LEVELS)[number
 
 export const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 
+/**
+ * Non-OpenAI models explicitly supported through a model-specific Codex catalog
+ * and the deployment-owned server-default relay. Keep this list explicit: tool
+ * support alone does not prove that Codex's request and continuation behavior
+ * is compatible.
+ */
+export const CODEX_SERVER_DEFAULT_CUSTOM_MODELS = [
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
+  'glm-5.2',
+] as const;
+
+export type CodexServerDefaultCustomModel = (typeof CODEX_SERVER_DEFAULT_CUSTOM_MODELS)[number];
+
+const CODEX_DEEPSEEK_V4_REASONING_EFFORT_LEVELS = ['low', 'high', 'max'] as const;
+const CODEX_GLM_5_2_REASONING_EFFORT_LEVELS = ['high', 'max'] as const;
+
 const CODEX_MAX_REASONING_EFFORT_LEVELS = [
   ...CODEX_COMMON_REASONING_EFFORT_LEVELS,
   'max',
 ] as const satisfies readonly CodexReasoningEffort[];
 
 const CODEX_ULTRA_REASONING_MODELS = ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra'] as const;
-const CODEX_MAX_REASONING_MODELS = ['gpt-5.6-luna'] as const;
+const CODEX_MAX_REASONING_MODELS = ['gpt-6-astra', 'gpt-5.6-luna'] as const;
 
 /**
  * Qoder reasoning-effort levels, mirrored 1:1 with the CLI's
@@ -126,6 +143,11 @@ export const isClaudeCodeReasoningEffort = (
 export const isCodexReasoningEffort = (value: string | undefined): value is CodexReasoningEffort =>
   !!value && CODEX_REASONING_EFFORT_LEVELS.includes(value as CodexReasoningEffort);
 
+export const isCodexServerDefaultCustomModel = (
+  model: string,
+): model is CodexServerDefaultCustomModel =>
+  CODEX_SERVER_DEFAULT_CUSTOM_MODELS.includes(model as CodexServerDefaultCustomModel);
+
 export const isGrokBuildReasoningEffort = (
   value: string | undefined,
 ): value is GrokBuildReasoningEffort =>
@@ -144,6 +166,12 @@ export const isCodexFastServiceTier = (value: string | undefined): boolean =>
  * cannot be known until the CLI resolves the model.
  */
 export const getCodexReasoningEffortLevels = (model: string): readonly CodexReasoningEffort[] => {
+  if (model === 'deepseek-v4-flash' || model === 'deepseek-v4-pro') {
+    return CODEX_DEEPSEEK_V4_REASONING_EFFORT_LEVELS;
+  }
+
+  if (model === 'glm-5.2') return CODEX_GLM_5_2_REASONING_EFFORT_LEVELS;
+
   if (
     CODEX_ULTRA_REASONING_MODELS.includes(model as (typeof CODEX_ULTRA_REASONING_MODELS)[number])
   ) {
@@ -379,6 +407,16 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       source: 'catalog',
     },
   },
+  'droid': {
+    model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
+  },
+  'devin': {
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
+    },
+  },
   'grok-build': {
     effort: {
       encodings: [{ flags: GROK_BUILD_REASONING_EFFORT_FLAGS, kind: 'flag' }],
@@ -391,7 +429,9 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       source: 'catalog',
     },
   },
-  'kimi-code': {},
+  'kimi-code': {
+    model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
+  },
   'opencode': {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
   },

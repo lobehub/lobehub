@@ -1,0 +1,133 @@
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { getTestDB } from '@/database/core/getTestDB';
+import { AcceptanceModel } from '@/database/models/acceptance';
+import { BriefModel } from '@/database/models/brief';
+import { GoalModel } from '@/database/models/goal';
+import { GoalGraphModel } from '@/database/models/goalGraph';
+import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
+import { VerifyRunModel } from '@/database/models/verifyRun';
+import {
+  acceptances,
+  goalEdges,
+  goalEvents,
+  goalNodes,
+  goals,
+  tasks,
+  users,
+} from '@/database/schemas';
+
+import { buildTaskPrompt } from './buildTaskPrompt';
+
+const db = await getTestDB();
+const userId = 'goal-work-prompt-test-user';
+
+beforeEach(async () => {
+  await db.insert(users).values({ id: userId }).onConflictDoNothing();
+});
+
+afterEach(async () => {
+  await db.delete(acceptances);
+  await db.delete(goalEdges);
+  await db.delete(goalEvents);
+  await db.delete(goalNodes);
+  await db.delete(goals);
+  await db.delete(tasks);
+  await db.delete(users);
+});
+
+describe('buildTaskPrompt Goal loop context', () => {
+  it('uses the per-Task attempt budget for a Goal Graph Task', async () => {
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({
+      instruction: 'Close the remaining acceptance gap.',
+    });
+    await taskModel.update(task.id, { totalTopics: 1 });
+    const goal = await new GoalModel(db, userId).create({
+      config: { recovery: { maxAttemptsPerTask: 2 } },
+      maxRounds: 20,
+      subjectType: 'standalone',
+      title: 'Graph-managed work budget',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const taskNode = await graphModel.createNode(goal.id, {
+      kind: 'task',
+      title: 'Close acceptance gap',
+    });
+    await graphModel.bindTask(goal.id, taskNode!.id, task.id);
+    const acceptance = await new AcceptanceModel(db, userId).create({
+      subjectType: 'task',
+      subjectId: task.id,
+    });
+    await new VerifyRunModel(db, userId).create({
+      acceptanceId: acceptance.id,
+      roundIndex: 1,
+      metadata: {
+        goalReview: {
+          status: 'rejected',
+          predictionIds: ['prediction-1'],
+          feedback:
+            'The exported document is missing its table. Restore the table and submit fresh evidence.',
+        },
+      },
+    });
+    const currentTask = await taskModel.findById(task.id);
+
+    const result = await buildTaskPrompt(currentTask!, {
+      briefModel: new BriefModel(db, userId),
+      db,
+      taskModel,
+      taskTopicModel: new TaskTopicModel(db, userId),
+      userId,
+    });
+
+    expect(result.prompt).toContain('Automatic Acceptance review:');
+    expect(result.prompt).toContain('Review feedback on the last delivery');
+    expect(result.prompt).not.toContain('User feedback on the last delivery');
+    expect(result.prompt).toContain('Restore the table and submit fresh evidence.');
+    expect(result.prompt).toContain('Goal loop — round 2 of 2');
+    expect(result.prompt).not.toContain('round 2 of 20');
+  });
+});
+
+describe('buildTaskPrompt delivery acceptance', () => {
+  const buildFor = async (taskId: string) => {
+    const taskModel = new TaskModel(db, userId);
+    const currentTask = await taskModel.findById(taskId);
+    return buildTaskPrompt(currentTask!, {
+      briefModel: new BriefModel(db, userId),
+      db,
+      taskModel,
+      taskTopicModel: new TaskTopicModel(db, userId),
+      userId,
+    });
+  };
+
+  it('renders the acceptance section for a plain task with a verify config', async () => {
+    const task = await new TaskModel(db, userId).create({
+      config: { verify: { enabled: true, requirement: 'The report is delivered as a document.' } },
+      instruction: 'Write the report.',
+    });
+
+    const result = await buildFor(task.id);
+
+    expect(result.prompt).toContain('Verify — delivery acceptance');
+  });
+
+  it('omits the acceptance section for a recurring task', async () => {
+    // A recurring task never gets a verify plan instantiated, so its per-tick
+    // prompt must not ask the builder to self-evidence acceptance criteria.
+    const task = await new TaskModel(db, userId).create({
+      automationMode: 'schedule',
+      config: { verify: { enabled: true, requirement: 'The report is delivered as a document.' } },
+      instruction: 'Send the daily report.',
+      schedulePattern: '0 9 * * *',
+    });
+
+    const result = await buildFor(task.id);
+
+    expect(result.prompt).not.toContain('Verify — delivery acceptance');
+  });
+});

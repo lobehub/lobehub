@@ -9,12 +9,14 @@ import { buildSchemaSample, humanize, single, type ToolsetFixtureModule } from '
 import claudeCode from './claude-code';
 import codex from './codex';
 import github from './github';
+import kimiCode from './kimi-code';
 import linear from './linear';
 import lobeActivator from './lobe-activator';
 import lobeAgent from './lobe-agent';
 import lobeAgentBuilder from './lobe-agent-builder';
 import lobeAgentDocuments from './lobe-agent-documents';
 import lobeAgentManagement from './lobe-agent-management';
+import lobeBrowser from './lobe-browser';
 import lobeCloudSandbox from './lobe-cloud-sandbox';
 import lobeGroupAgentBuilder from './lobe-group-agent-builder';
 import lobeGroupManagement from './lobe-group-management';
@@ -30,6 +32,7 @@ import lobeUserInteraction from './lobe-user-interaction';
 import lobeUserMemory from './lobe-user-memory';
 import lobeWebBrowsing from './lobe-web-browsing';
 import lobeWebOnboarding from './lobe-web-onboarding';
+import { lobeAuv } from './lobeAuv';
 
 export type { ToolRenderFixture, ToolRenderFixtureVariant } from '../lifecycleMode';
 
@@ -83,12 +86,15 @@ const toolsetModules: ToolsetFixtureModule[] = [
   claudeCode,
   codex,
   github,
+  kimiCode,
   linear,
   lobeActivator,
   lobeAgent,
   lobeAgentBuilder,
   lobeAgentDocuments,
   lobeAgentManagement,
+  lobeAuv,
+  lobeBrowser,
   lobeCloudSandbox,
   lobeGroupAgentBuilder,
   lobeGroupManagement,

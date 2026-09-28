@@ -17,6 +17,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { agents, messagePlugins, messages, topics, users, userSettings } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
+import { notShareVisitorMessage } from '../../utils/shareVisitor';
 
 /** Restores the cursor timestamp inside PostgreSQL so workflow JSON never truncates its precision. */
 const cursorUsers = alias(users, 'nightly_review_cursor_users');
@@ -43,6 +44,15 @@ export interface ListAgentSignalNightlyReviewUsersCursor {
 
 /** Options for listing users eligible for AgentSignal nightly review scheduling. */
 export interface ListAgentSignalNightlyReviewUsersOptions {
+  /**
+   * Coarse activity floor. Only users with at least one non-workspace message at or after
+   * this instant are candidates.
+   *
+   * This is deliberately a superset of every per-user review window: the precise window is
+   * still applied by {@link AgentSignalNightlyReviewModel.listActiveAgentTargets}, so a
+   * generous floor here can only cost a skipped dispatch, never a missed review.
+   */
+  activeSince?: Date;
   /** Cursor returned by the previous page. */
   cursor?: ListAgentSignalNightlyReviewUsersCursor;
   /** Maximum users to return. */
@@ -124,6 +134,8 @@ export class AgentSignalNightlyReviewModel {
    * Expects:
    * - Global feature gates are checked by the service layer
    * - Missing user timezone falls back to UTC
+   * - `activeSince` is supplied by the scheduler; it is a superset of the per-user review
+   *   window re-applied downstream, and it is skipped for whitelist runs
    *
    * Returns:
    * - Users sorted by `createdAt, id` for deterministic pagination
@@ -145,13 +157,36 @@ export class AgentSignalNightlyReviewModel {
         ? inArray(users.id, options.whitelist)
         : undefined;
 
-    const query = this.db
+    // A whitelist is an explicit, already-bounded target list for backfills and manual runs;
+    // narrowing it further would silently drop the very rows the caller asked for.
+    const narrow = !whitelistCondition;
+
+    // Driving the activity filter from a `created_at` range keeps this on
+    // `messages_created_at_idx`; a per-user `EXISTS` would fall back to `messages_user_id_idx`
+    // and re-scan a heavy user's entire history on every page.
+    const activeUsers =
+      narrow && options.activeSince
+        ? this.db
+            .selectDistinct({ userId: messages.userId })
+            .from(messages)
+            .where(and(gte(messages.createdAt, options.activeSince), isNull(messages.workspaceId)))
+            .as('nightly_review_active_users')
+        : undefined;
+
+    let query = this.db
       .select({
         createdAt: users.createdAt,
         id: users.id,
         timezone: sql<string>`COALESCE(${userSettings.general}->>'timezone', 'UTC')`,
       })
       .from(users)
+      .$dynamic();
+
+    if (activeUsers) {
+      query = query.innerJoin(activeUsers, eq(activeUsers.userId, users.id));
+    }
+
+    query = query
       .leftJoin(userSettings, eq(users.id, userSettings.id))
       .where(and(cursorCondition, whitelistCondition))
       .orderBy(asc(users.createdAt), asc(users.id));
@@ -219,6 +254,9 @@ export class AgentSignalNightlyReviewModel {
         and(
           eq(messages.userId, userId),
           isNull(messages.workspaceId),
+          // Share-visitor traffic bills to the creator but is not the
+          // creator's own activity — keep it out of the nightly digest.
+          notShareVisitorMessage(),
           agentFilter,
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),

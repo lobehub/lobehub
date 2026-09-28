@@ -1,3 +1,4 @@
+import type { EvalCaseEnvironment } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentEvalRunTopicModel } from '@/database/models/agentEval';
@@ -7,7 +8,7 @@ import { workflowClient } from '@/libs/qstash';
 const log = debug('lobe-server:workflows:agent-eval-run');
 
 // Workflow paths
-const WORKFLOW_PATHS = {
+export const WORKFLOW_PATHS = {
   executeTestCase: '/api/workflows/agent-eval-run/execute-test-case',
   finalizeRun: '/api/workflows/agent-eval-run/finalize-run',
   onThreadComplete: '/api/workflows/agent-eval-run/on-thread-complete',
@@ -49,6 +50,8 @@ export interface RunAgentTrajectoryPayload {
 
 export interface ResumeAgentTrajectoryPayload {
   appContext: { topicId: string };
+  caseId?: string;
+  environment?: EvalCaseEnvironment;
   envPrompt?: string;
   maxSteps?: number;
   parentMessageId: string;
@@ -91,6 +94,8 @@ export interface RunThreadTrajectoryPayload {
 
 export interface ResumeThreadTrajectoryPayload {
   appContext: { threadId: string; topicId: string };
+  caseId?: string;
+  environment?: EvalCaseEnvironment;
   envPrompt?: string;
   maxSteps?: number;
   parentMessageId: string;

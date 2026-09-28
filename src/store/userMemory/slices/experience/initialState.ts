@@ -6,6 +6,7 @@ export interface ExperienceSliceState {
   experiencesInit: boolean;
   experiencesPage: number;
   experiencesQuery?: string;
+  experiencesSearchError?: unknown;
   experiencesSearchLoading?: boolean;
   experiencesSort?: 'capturedAt' | 'scoreConfidence';
   experiencesTotal: number;
@@ -17,6 +18,8 @@ export const experienceInitialState: ExperienceSliceState = {
   experiencesInit: false,
   experiencesPage: 1,
   experiencesQuery: undefined,
+  experiencesSearchError: undefined,
+  experiencesSearchLoading: undefined,
   experiencesSort: undefined,
   experiencesTotal: 0,
 };

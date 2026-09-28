@@ -63,7 +63,9 @@ describe('getResourceConfigAccess', () => {
   it('completes missing builtin markers from a partial knownMeta', async () => {
     const partialMeta = { userId: 'creator', visibility: 'public', workspaceId: 'ws-1' };
     getResourceMetaMock.mockResolvedValue({ ...partialMeta, slug: 'inbox', virtual: true });
-    isBuiltinMock.mockImplementation((_type, m: any) => m.slug === 'inbox' && m.virtual === true);
+    isBuiltinMock.mockImplementation(function (_type, m: any) {
+      return m.slug === 'inbox' && m.virtual === true;
+    });
     getParentGroupIdsMock.mockResolvedValue(['group-1']);
     canPerformMock.mockResolvedValue(true);
 
@@ -148,6 +150,7 @@ describe('config redaction', () => {
         executionTargetSelectionPolicy: 'fixed',
         heterogeneousProvider: { env: { SECRET: 'value' }, type: 'codex' },
         modelSelectionPolicy: 'fixed',
+        topicSharePolicy: 'restricted',
       },
       avatar: 'avatar.png',
       chatConfig: { enableAgentMode: false, runtimeEnv: { SECRET: 'value' } },
@@ -170,6 +173,9 @@ describe('config redaction', () => {
         executionTargetSelectionPolicy: 'fixed',
         heterogeneousProvider: { type: 'codex' },
         modelSelectionPolicy: 'fixed',
+        // Authorization metadata: without it a use-level member's share button
+        // would offer a link the server then refuses.
+        topicSharePolicy: 'restricted',
       },
       avatar: 'avatar.png',
       chatConfig: { enableAgentMode: false },

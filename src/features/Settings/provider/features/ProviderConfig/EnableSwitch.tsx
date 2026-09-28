@@ -1,4 +1,5 @@
-import { Skeleton, Tooltip } from '@lobehub/ui';
+import { Tooltip } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 
@@ -28,7 +29,7 @@ const Switch = ({ id, Component }: SwitchProps) => {
   ]);
   const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
 
-  if (isLoading) return <Skeleton.Button active className={styles.switchLoading} />;
+  if (isLoading) return <Skeleton className={styles.switchLoading} height={36} />;
 
   // slot for cloud
   if (Component) return <Component id={id} />;

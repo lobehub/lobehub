@@ -1,0 +1,106 @@
+import debug from 'debug';
+import type { Context } from 'hono';
+
+import { AgentEvalRunModel } from '@/database/models/agentEval';
+import { getServerDB } from '@/database/server';
+import { AgentEvalRunService } from '@/server/services/agentEvalRun';
+import {
+  AgentEvalRunWorkflow,
+  type OnTrajectoryCompletePayload,
+} from '@/server/workflows/agentEvalRun';
+import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
+
+const log = debug('lobe-server:workflows:on-trajectory-complete');
+
+/**
+ * On-trajectory-complete webhook handler
+ *
+ * Receives a POST from the AgentRuntimeService completion webhook after an
+ * agent operation finishes (success or error). Checks whether all test cases
+ * for the run are done and, if so, triggers the finalize-run workflow.
+ *
+ * This is a plain webhook receiver (NOT an Upstash workflow / serve()).
+ */
+export const onTrajectoryComplete = async (c: Context) => {
+  try {
+    const body = (await c.req.json()) as OnTrajectoryCompletePayload;
+    const {
+      runId,
+      testCaseId,
+      userId,
+      operationId,
+      reason,
+      status,
+      cost,
+      duration,
+      errorDetail,
+      errorMessage,
+      llmCalls,
+      steps,
+      toolCalls,
+      totalTokens,
+    } = body;
+
+    if (!runId || !testCaseId || !userId) {
+      return c.json({ error: 'Missing required fields' }, 400);
+    }
+
+    log(
+      'Received: runId=%s testCaseId=%s operationId=%s reason=%s status=%s cost=%s duration=%s steps=%s totalTokens=%s',
+      runId,
+      testCaseId,
+      operationId,
+      reason,
+      status,
+      cost,
+      duration,
+      steps,
+      totalTokens,
+    );
+
+    const db = await getServerDB();
+    const wsId = await resolveAgentEvalRunWorkspace(db, runId);
+
+    // Check if run was aborted — skip processing to avoid overwriting abort state
+    const runModel = new AgentEvalRunModel(db, userId, wsId);
+    const run = await runModel.findById(runId);
+    if (run?.status === 'aborted') {
+      log('Run aborted, skipping: runId=%s testCaseId=%s', runId, testCaseId);
+      return c.json({ cancelled: true });
+    }
+
+    const service = new AgentEvalRunService(db, userId, wsId);
+
+    const { allDone, completedCount } = await service.recordTrajectoryCompletion({
+      runId,
+      status,
+      telemetry: {
+        completionReason: reason,
+        cost,
+        duration,
+        errorDetail,
+        errorMessage,
+        llmCalls,
+        steps,
+        toolCalls,
+        totalTokens,
+      },
+      testCaseId,
+    });
+
+    log('Completion check: %d completed, allDone=%s', completedCount, allDone);
+
+    if (allDone) {
+      console.info(
+        '[on-trajectory-complete] All test cases done for run %s, triggering finalize',
+        runId,
+      );
+      await AgentEvalRunWorkflow.triggerFinalizeRun({ runId, userId });
+    }
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('[on-trajectory-complete] Error:', error);
+    return c.json({ error: error instanceof Error ? error.message : 'Internal error' }, 500);
+  }
+};

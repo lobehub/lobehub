@@ -15,7 +15,8 @@ vi.mock('react-router', () => ({
   useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: { error: mockMessageError, success: vi.fn() },
 }));
 
@@ -25,6 +26,7 @@ vi.mock('@/libs/better-auth/auth-client', () => ({
 
 vi.mock('@lobechat/business-const', () => ({
   BRANDING_NAME: 'LobeHub',
+  ORG_NAME: 'LobeHub',
 }));
 
 vi.mock('@/business/client/hooks/useBusinessSignup', () => ({
@@ -38,7 +40,7 @@ vi.mock('@/business/client/hooks/useBusinessSignup', () => ({
 
 let mockEnableEmailVerification = false;
 let mockEnableBusinessFeatures = false;
-vi.mock('@/features/AuthShell', () => ({
+vi.mock('@/features/AuthShell/AuthServerConfigProvider', () => ({
   useAuthServerConfigStore: (selector: (s: any) => any) =>
     selector({
       serverConfig: {
@@ -60,7 +62,7 @@ describe('useSignUp', () => {
     mockEnableEmailVerification = false;
     Object.defineProperty(window, 'location', {
       configurable: true,
-      value: { ...originalLocation, href: '' },
+      value: { ...originalLocation, href: '', origin: originalLocation.origin },
       writable: true,
     });
   });
@@ -147,7 +149,9 @@ describe('useSignUp', () => {
       });
 
       expect(mockSignUpEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ callbackURL: '/onboarding?callbackUrl=%2Fdashboard' }),
+        expect.objectContaining({
+          callbackURL: `${originalLocation.origin}/onboarding?callbackUrl=%2Fdashboard`,
+        }),
       );
       expect(window.location.href).toBe('/onboarding?callbackUrl=%2Fdashboard');
     });

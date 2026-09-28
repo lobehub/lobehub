@@ -5,14 +5,14 @@ import debug from 'debug';
 import type { AiFullModelCard, AiModelType } from 'model-bank';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 import type { ClientOptions } from 'openai';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import { ErrorClassifier, refineErrorCode } from '../../errors';
 import {
-  isGPT5ProResponsesModel,
+  isGPTProResponsesModel,
   isResponsesAPIModel,
-  supportsGPT5ResponsesReasoningEffortNone,
+  supportsGPTResponsesReasoningEffortNone,
 } from '../../providers/openai/modelId';
 import type {
   ASROptions,
@@ -40,10 +40,11 @@ import type {
 } from '../../types/image';
 import type {
   CreateVideoPayload,
-  CreateVideoResponse,
+  CreateVideoResult,
   HandleCreateVideoWebhookPayload,
   HandleCreateVideoWebhookResult,
   PollVideoStatusResult,
+  VideoGenerationCapabilities,
 } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugPayload, debugResponse, debugStream } from '../../utils/debugStream';
@@ -74,7 +75,12 @@ import { resolveModelSamplingParameters } from '../parameterResolver';
 import type { OpenAIStreamOptions } from '../streams';
 import { OpenAIResponsesStream, OpenAIStream } from '../streams';
 import { type ChatPayloadForTransformStream, readableFromAsyncIterable } from '../streams/protocol';
-import { convertOpenAIResponseUsage, convertOpenAIUsage } from '../usageConverters/openai';
+import {
+  convertOpenAIResponseUsage,
+  convertOpenAITranscriptionUsage,
+  convertOpenAIUsage,
+} from '../usageConverters/openai';
+import { OpenAICompatibleClient } from './client';
 import { createOpenAICompatibleImage } from './createImage';
 import { createOpenAICompatibleVideo, pollOpenAICompatibleVideoStatus } from './createVideo';
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
@@ -164,12 +170,12 @@ const getGenerateObjectResponsesReasoningParams = ({
   reasoning_effort,
   thinking,
 }: GenerateObjectReasoningParams & { model: string }) => {
-  if (isGPT5ProResponsesModel(model)) {
+  if (isGPTProResponsesModel(model)) {
     return reasoning_effort && reasoning_effort !== 'max' ? { reasoning: { effort: 'high' } } : {};
   }
 
   if (thinking?.type === 'disabled') {
-    return supportsGPT5ResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
+    return supportsGPTResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
   }
 
   return reasoning_effort && reasoning_effort !== 'max'
@@ -261,7 +267,7 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
   createVideo?: (
     payload: CreateVideoPayload,
     options: CreateVideoOptions,
-  ) => Promise<CreateVideoResponse>;
+  ) => Promise<CreateVideoResult>;
   customClient?: CustomClientOptions<T>;
   debug?: {
     chatCompletion: () => boolean;
@@ -330,6 +336,8 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
       payload: ResponseCreateParamsWithPromptCacheKey;
     };
   };
+  videoGenerationCapabilities?:
+    VideoGenerationCapabilities | ((model: string) => VideoGenerationCapabilities);
 }
 
 export const createOpenAICompatibleRuntime = <T extends Record<string, any> = any>({
@@ -346,6 +354,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
   promptCacheKeyModels,
   createImage: customCreateImage,
   createVideo: customCreateVideo,
+  videoGenerationCapabilities,
   handleCreateVideoWebhook: customHandleCreateVideoWebhook,
   handlePollVideoStatus: customHandlePollVideoStatus,
   generateObject: generateObjectConfig,
@@ -365,6 +374,14 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
     baseURL!: string;
     protected _options: ConstructorOptions<T>;
+
+    getVideoGenerationCapabilities(model: string): VideoGenerationCapabilities {
+      const requestModel = resolveMappedModelId(model, this.modelIdMappingOptions);
+
+      return typeof videoGenerationCapabilities === 'function'
+        ? videoGenerationCapabilities(requestModel)
+        : (videoGenerationCapabilities ?? { completionModes: ['polling'] });
+    }
 
     constructor(options: LobeClientOptions & Record<string, any> = {}) {
       const { modelIdMapping, ...inputOptions } = options as LobeClientOptions &
@@ -387,7 +404,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       if (customClient?.createClient) {
         this.client = customClient.createClient(initOptions as any);
       } else {
-        this.client = new OpenAI(initOptions);
+        this.client = new OpenAICompatibleClient(initOptions);
       }
 
       this.baseURL = baseURL || this.client.baseURL;
@@ -710,7 +727,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           if (customClient?.createClient) {
             this.client = customClient.createClient(initOptions);
           } else {
-            this.client = new OpenAI(initOptions);
+            this.client = new OpenAICompatibleClient(initOptions);
           }
 
           this.baseURL = targetBaseURL;
@@ -939,7 +956,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       });
     }
 
-    async createVideo(payload: CreateVideoPayload) {
+    async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResult> {
       const log = debug(`${this.logPrefix}:createVideo`);
 
       if (customCreateVideo) {
@@ -1187,9 +1204,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (shouldUseResponses) {
           log('calling responses.create for structured output');
+          // Chat Completions content parts are not valid Responses input: a `text` part must
+          // become `input_text` and an `image_url` part `input_image`, or the API rejects the
+          // whole request. String content survives untouched, which is why text-only callers
+          // never hit this.
+          const input = await convertOpenAIResponseInputs(messages as any, {
+            forceImageBase64: chatCompletion?.forceImageBase64,
+            forceVideoBase64: chatCompletion?.forceVideoBase64,
+            provider: this.id,
+            strictToolPairing: true,
+          });
           const preparedRequest = this.prepareResponsesRequest(
             {
-              input: messages,
+              input,
               model,
               ...getGenerateObjectResponsesReasoningParams(payload),
               ...this.resolvePromptCacheKeyParams(model, options?.user),
@@ -1342,6 +1369,14 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       }
     }
 
+    /**
+     * Client used for `audio.transcriptions`. Providers whose transcription
+     * endpoint differs from their chat base URL (e.g. Azure deployments) override it.
+     */
+    protected getTranscriptionClient(): OpenAI {
+      return this.client;
+    }
+
     async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
       const log = debug(`${this.logPrefix}:transcribe`);
       const { file, fileName, model, language, prompt, responseFormat, temperature } = payload;
@@ -1354,7 +1389,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         const uploadFile =
           file instanceof File ? file : new File([file], fileName || 'audio', { type: file.type });
 
-        const transcription = await this.client.audio.transcriptions.create(
+        const transcription = await this.getTranscriptionClient().audio.transcriptions.create(
           {
             file: uploadFile,
             language,
@@ -1369,6 +1404,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         const text =
           typeof transcription === 'string' ? transcription : ((transcription as any).text ?? '');
         log('transcription completed, text length: %d', text.length);
+
+        if (options?.onUsage && typeof transcription !== 'string') {
+          const pricing = await getModelPricing(payload.model, this.id, options.pricingContext);
+          const usage = convertOpenAITranscriptionUsage((transcription as any).usage, pricing);
+          if (usage) await options.onUsage(usage);
+        }
 
         return { text };
       } catch (error) {
@@ -1423,6 +1464,15 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
               endpoint: desensitizedEndpoint,
               error: error as any,
               errorType: ErrorType.invalidAPIKey,
+              provider: this.id,
+            });
+          }
+
+          case 413: {
+            return AgentRuntimeError.chat({
+              endpoint: desensitizedEndpoint,
+              error: error as any,
+              errorType: AgentRuntimeErrorType.RequestBodyTooLarge,
               provider: this.id,
             });
           }

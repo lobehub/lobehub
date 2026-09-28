@@ -5,11 +5,12 @@ import {
 } from '@lobechat/builtin-tool-activator';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { safeParseJSON } from '@lobechat/utils';
-import { ActionIcon, Avatar, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronRight, Edit3Icon } from 'lucide-react';
-import { memo, Suspense, useCallback, useMemo, useState } from 'react';
+import { memo, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -18,7 +19,7 @@ import { toolSelectors } from '@/store/tool/selectors';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 
-import { useConversationStore } from '../../../../../store';
+import { dataSelectors, useConversationStore } from '../../../../../store';
 import Arguments from '../Arguments';
 import ApprovalActions from './ApprovalActions';
 import KeyValueEditor from './KeyValueEditor';
@@ -74,6 +75,14 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
     const [isEditing, setIsEditing] = useState(false);
     const [showArgs, setShowArgs] = useState(false);
     const updatePluginArguments = useConversationStore((s) => s.updatePluginArguments);
+    const message = useConversationStore((s) => dataSelectors.getDbMessageById(id)(s));
+    const usesDurableServerClaim = Boolean(
+      message?.pluginIntervention?.operationId && message.pluginIntervention.batchId,
+    );
+    const [pendingEditedArguments, setPendingEditedArguments] = useState<
+      Record<string, unknown> | undefined
+    >();
+    const pendingEditedArgumentsRef = useRef<Record<string, unknown> | undefined>(undefined);
 
     const pluginMeta = useToolStore(toolSelectors.getMetaById(identifier));
     const isBuiltin = builtinToolIdentifiers.includes(identifier);
@@ -86,7 +95,15 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
       ? t(`builtins.${identifier}.apiName.${apiName}`, { defaultValue: apiName, ns: 'plugin' })
       : apiName;
 
-    const parsedArgs = useMemo(() => safeParseJSON(requestArgs || '') ?? {}, [requestArgs]);
+    const parsedArgs = useMemo(
+      () => pendingEditedArguments ?? safeParseJSON(requestArgs || '') ?? {},
+      [pendingEditedArguments, requestArgs],
+    );
+    const renderedArgs = useMemo(
+      () =>
+        pendingEditedArguments ? JSON.stringify(pendingEditedArguments, null, 2) : requestArgs,
+      [pendingEditedArguments, requestArgs],
+    );
     const argCount = typeof parsedArgs === 'object' ? Object.keys(parsedArgs).length : 0;
     const isActivateToolsIntervention =
       identifier === LobeActivatorIdentifier && apiName === ActivatorApiName.activateTools;
@@ -130,21 +147,26 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
           const newArgsString = JSON.stringify(editedObject, null, 2);
 
           if (newArgsString !== requestArgs) {
-            await updatePluginArguments(toolCallId, editedObject, true);
+            if (usesDurableServerClaim) {
+              pendingEditedArgumentsRef.current = editedObject;
+              setPendingEditedArguments(editedObject);
+            } else {
+              await updatePluginArguments(toolCallId, editedObject, true);
+            }
           }
           setIsEditing(false);
         } catch (error) {
           console.error('Error stringifying arguments:', error);
         }
       },
-      [requestArgs, toolCallId, updatePluginArguments],
+      [requestArgs, toolCallId, updatePluginArguments, usesDurableServerClaim],
     );
 
     if (isEditing)
       return (
-        <Suspense fallback={<Arguments arguments={requestArgs} />}>
+        <Suspense fallback={<Arguments arguments={renderedArgs} />}>
           <KeyValueEditor
-            initialValue={safeParseJSON(requestArgs || '')}
+            initialValue={parsedArgs}
             onCancel={handleCancel}
             onFinish={handleFinish}
           />
@@ -160,6 +182,7 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
           identifier={identifier}
           messageId={id}
           toolCallId={toolCallId}
+          onBeforeApprove={() => pendingEditedArgumentsRef.current}
         />
       </Flexbox>
     );
@@ -212,7 +235,7 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
                 />
               )}
             </Flexbox>
-            {showArgs && <Arguments arguments={requestArgs} />}
+            {showArgs && <Arguments arguments={renderedArgs} />}
           </>
         )}
 

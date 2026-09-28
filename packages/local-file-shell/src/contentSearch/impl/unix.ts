@@ -1,4 +1,3 @@
-import { stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { execa } from 'execa';
@@ -99,6 +98,12 @@ export abstract class UnixContentSearch extends BaseContentSearch {
   async grep(params: GrepContentParams): Promise<GrepContentResult> {
     const { tool: preferredTool } = params;
     const logPrefix = `[grepContent: ${params.pattern}]`;
+
+    const missingScope = await this.missingScopeResult(params);
+    if (missingScope) {
+      logger.warn(`${logPrefix} ${missingScope.error}`);
+      return missingScope;
+    }
 
     try {
       if (preferredTool && ['rg', 'ag', 'grep'].includes(preferredTool)) {
@@ -257,19 +262,6 @@ export abstract class UnixContentSearch extends BaseContentSearch {
       logger.info(`Falling back to: ${next} (for this call)`);
       return this.grepWithTool(next, params);
     }
-  }
-
-  private async isFile(target: string): Promise<boolean> {
-    try {
-      return (await stat(target)).isFile();
-    } catch {
-      return false;
-    }
-  }
-
-  /** `.` for a directory search; the file's own name when `scope` names a file. */
-  private searchTarget(searchPath: string, searchRoot: string): string {
-    return searchPath === searchRoot ? '.' : `./${path.basename(searchPath)}`;
   }
 
   /**

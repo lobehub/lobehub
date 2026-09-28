@@ -19,8 +19,19 @@ function sheetToMarkdownTable(jsonData: Record<string, any>[]): string {
     return '*Sheet is empty or contains no data.*';
   }
 
-  // Ensure all rows have the same keys based on the first row, handle potentially sparse data
-  const headers = Object.keys(jsonData[0] || {});
+  const toCell = (value: unknown) =>
+    // Handle null/undefined and escape pipe characters within cells
+    value === null || value === undefined ? '' : String(value).replaceAll('|', '\\|').trim();
+
+  /**
+   * Keep only columns that hold a value in some row, and rows with at least one value.
+   * Formatting or stray edits can stretch a sheet's used range across thousands of blank columns
+   * and rows (the headers show up as `__EMPTY_n`); rendering every blank cell turned a 200 KB
+   * workbook into 60+ MB of `|  |  |` text.
+   */
+  const headers = Object.keys(jsonData[0] || {}).filter(
+    (header) => !header.startsWith('__EMPTY') || jsonData.some((row) => toCell(row[header]) !== ''),
+  );
   log('Sheet headers:', headers);
   if (headers.length === 0) {
     log('Sheet has no headers, returning placeholder message');
@@ -32,16 +43,9 @@ function sheetToMarkdownTable(jsonData: Record<string, any>[]): string {
 
   log('Building data rows for Markdown table');
   const dataRows = jsonData
-    .map((row) => {
-      const cells = headers.map((header) => {
-        const value = row[header];
-        // Handle null/undefined and escape pipe characters within cells
-        const cellContent =
-          value === null || value === undefined ? '' : String(value).replaceAll('|', '\\|');
-        return cellContent.trim(); // Trim whitespace from cells
-      });
-      return `| ${cells.join(' | ')} |`;
-    })
+    .map((row) => headers.map((header) => toCell(row[header])))
+    .filter((cells) => cells.some((cell) => cell !== ''))
+    .map((cells) => `| ${cells.join(' | ')} |`)
     .join('\n');
 
   const result = `${headerRow}\n${separatorRow}\n${dataRows}`;

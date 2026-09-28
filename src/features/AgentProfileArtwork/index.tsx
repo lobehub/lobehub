@@ -5,19 +5,29 @@ import {
   type AgentArtworkStyle,
   DEFAULT_AGENT_ARTWORK_STYLE,
 } from '@lobechat/prompts';
-import { ActionIcon, Avatar, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  type DropdownItem,
+  DropdownMenu,
+  Spin,
+  Text,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Check, ImageIcon, MoreHorizontal, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
 import { memo, useCallback, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   openAgentArtworkStudio,
   styleReferencesForArtworkStyle,
 } from '@/features/AgentArtworkStudio';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { resolveArtworkReferenceSource } from '@/services/artworkGeneration';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -192,6 +202,7 @@ interface AgentProfileArtworkProps {
   name?: string | null;
   onAvatarChange: (avatar: string | null) => void;
   onBackgroundChange: (background: string | null) => void;
+  storedAvatar?: string | null;
   systemRole?: string | null;
   title?: string | null;
 }
@@ -205,12 +216,14 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     description,
     locale,
     name,
+    storedAvatar,
     systemRole,
     title,
     onAvatarChange,
     onBackgroundChange,
   }) => {
     const { t } = useTranslation('setting');
+    const appOrigin = useAppOrigin();
     const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
     const canGenerate = useAiInfraStore(
       (state) => aiProviderSelectors.enabledImageModelList(state).length > 0,
@@ -265,15 +278,21 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       async (kind: 'avatar' | 'background', style: AgentArtworkStyle) => {
         if (!canEdit || !canGenerate) return;
 
+        const avatarSource = resolveArtworkReferenceSource(storedAvatar, appOrigin);
+        const backgroundSource = resolveArtworkReferenceSource(background, appOrigin);
+
         try {
           await generateAgentArtwork({
+            avatarIdentity: avatarSource.text,
+            backgroundIdentity: backgroundSource.text,
             description,
             id: agentId,
             kind,
             name,
-            referenceImageUrl: kind === 'background' ? avatar : backgroundUrl,
+            referenceImageUrl:
+              kind === 'background' ? avatarSource.imageUrl : backgroundSource.imageUrl,
             style,
-            styleReferenceImageUrls: styleReferencesForArtworkStyle(style),
+            styleReferenceImageUrls: styleReferencesForArtworkStyle(style, appOrigin),
             systemRole,
             title,
           });
@@ -283,13 +302,14 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       },
       [
         agentId,
-        avatar,
-        backgroundUrl,
+        appOrigin,
+        background,
         canEdit,
         canGenerate,
         description,
         generateAgentArtwork,
         name,
+        storedAvatar,
         systemRole,
         title,
       ],
@@ -367,7 +387,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           {generating === 'background' ? (
             <Center className={styles.generationFeedback}>
               <Flexbox align={'center'} gap={10}>
-                <NeuralNetworkLoading size={32} />
+                <Spin size="large" variant="network" />
                 <Flexbox align={'center'} gap={4}>
                   <Text className={styles.generationTitle}>
                     {t('settingAgent.artwork.background.generating')}
@@ -523,7 +543,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           />
           {generating === 'avatar' ? (
             <Center className={styles.avatarGenerating}>
-              <NeuralNetworkLoading size={28} />
+              <Spin size="middle" variant="network" />
             </Center>
           ) : null}
           {/* Hover-revealed corner badge as the direct studio entry. */}

@@ -35,6 +35,60 @@ describe('active conversation coordinate', () => {
     expect(coordinate.threadId).toBeNull();
   });
 
+  it('resolves group routes and keeps subsequent topic navigation in the group route', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { gid: 'group-a', topicId: 'topic-a' },
+      url: '/team/group/group-a/topic-a?thread=thread-a',
+    });
+
+    expect(coordinate).toMatchObject({
+      groupBasePath: '/team/group/group-a',
+      groupId: 'group-a',
+      isConversation: true,
+      threadId: 'thread-a',
+      topicId: 'topic-a',
+    });
+    expect(buildActiveConversationUrl(coordinate, 'topic-b', null)).toBe(
+      '/team/group/group-a/topic-b',
+    );
+  });
+
+  it('keeps the resolved agent id on an agent subpage', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { aid: 'friendly-name' },
+      resolvedAgentId: 'agt_persisted',
+      url: '/agent/friendly-name/profile',
+    });
+
+    expect(coordinate).toMatchObject({
+      agentId: 'agt_persisted',
+      isConversation: false,
+      routeAgentId: 'friendly-name',
+    });
+  });
+
+  it('retains the group id on a group subpage', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { gid: 'group-a' },
+      url: '/group/group-a/profile',
+    });
+
+    expect(coordinate).toMatchObject({
+      groupId: 'group-a',
+      isConversation: false,
+    });
+  });
+
+  it('does not treat an agent named group as a group route', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { aid: 'group', topicId: 'topic-a' },
+      url: '/agent/group/topic-a',
+    });
+
+    expect(coordinate.groupBasePath).toBeUndefined();
+    expect(buildActiveConversationUrl(coordinate, 'topic-b', null)).toBe('/agent/group/topic-b');
+  });
+
   it('ignores non-agent routes even when another segment is named agent', () => {
     const coordinate = resolveActiveConversationCoordinate({
       params: {},

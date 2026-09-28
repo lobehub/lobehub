@@ -6,7 +6,6 @@ import { memo } from 'react';
 const styles = createStaticStyles(({ css }) => ({
   segment: css`
     height: 100%;
-
     transition: width 0.3s ease;
 
     @media (prefers-reduced-motion: reduce) {
@@ -14,8 +13,8 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   track: css`
-    display: flex;
     overflow: hidden;
+    display: flex;
 
     width: 100%;
     border-radius: 999px;

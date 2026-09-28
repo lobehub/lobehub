@@ -1,4 +1,18 @@
 export default {
+  'workingDirectory.addFolderFailed': 'Could not add this folder. Please try again.',
+  'workingDirectory.browseDescription': 'Choose a folder on the connected device.',
+  'workingDirectory.browseFolders': 'Browse folders',
+  'workingDirectory.enterPathManually': 'Enter path manually',
+  'workingDirectory.folderUnreadable': 'No permission to open this folder',
+  'workingDirectory.foldersEmpty': 'No subfolders. You can select this folder.',
+  'workingDirectory.foldersLoadFailed':
+    'Could not load folders. Check the device connection and folder permissions, then retry or enter a path manually.',
+  'workingDirectory.foldersLoading': 'Loading folders…',
+  'workingDirectory.home': 'Home folder',
+  'workingDirectory.loadMoreFolders': 'Load more folders',
+  'workingDirectory.openPath': 'Open',
+  'workingDirectory.parentFolder': 'Parent folder',
+  'workingDirectory.useFolder': 'Use this folder',
   'workingDirectory.addFolder': 'Add folder…',
   'workingDirectory.addFolderDesc':
     'Enter an absolute path on the target device, e.g. /Users/name/projects',
@@ -82,6 +96,7 @@ export default {
   'workingDirectory.staleWorktreeSnapshot':
     'The worktree “{{name}}” recorded for this conversation no longer exists — showing the Git snapshot saved on the topic.',
   'workingDirectory.title': 'Working Directory',
+  'workingDirectory.unselected': 'Not selected',
   'workingDirectory.undo': 'Undo',
   'workingDirectory.topicDescription': 'Override Agent default for this conversation only',
   'workingDirectory.topicLevel': 'Conversation override',

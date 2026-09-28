@@ -32,15 +32,6 @@ const AutoScrollShadow = memo<AutoScrollShadowProps>(({ children, content, strea
     <ScrollArea
       scrollFade
       style={{ background: 'transparent', borderRadius: 0 }}
-      contentProps={{
-        style: {
-          color: 'inherit',
-          display: 'block',
-          fontSize: 'inherit',
-          gap: 0,
-          lineHeight: 'inherit',
-        },
-      }}
       viewportProps={{
         ref: ref as RefObject<HTMLDivElement>,
         style: { height: 'max(33vh, 480px)' },

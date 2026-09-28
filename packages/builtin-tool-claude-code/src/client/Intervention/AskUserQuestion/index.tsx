@@ -32,13 +32,24 @@ import { useChatStore } from '@/store/chat';
  */
 const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestionArgs>>((props) => {
   const { t } = useTranslation('tool');
-  const { actionsPortalTarget, args, messageId, onInteractionAction } = props;
+  const { actionsPortalTarget, args, disabled, messageId, onInteractionAction } = props;
 
   // Persisted draft — read from the tool message's pluginState so the form
   // stays where the user left it across unmount / HMR / refresh.
   const persistedDraft = useConversationStore((s) => {
     const msg = dataSelectors.getDbMessageById(messageId)(s);
     return (msg?.pluginState as { [DRAFT_PLUGIN_STATE_KEY]?: unknown })?.[DRAFT_PLUGIN_STATE_KEY];
+  });
+  // The producer stamps its own ask-user deadline onto the durable tool row.
+  // Hand it to the form so the countdown tracks the clock that actually
+  // decides when the answer stops being deliverable, instead of restarting on
+  // every remount and outliving the blocked producer.
+  const deadlineAt = useConversationStore((s) => {
+    const msg = dataSelectors.getDbMessageById(messageId)(s);
+    const stored = (
+      msg?.pluginState as { heterogeneousIntervention?: { deadline?: unknown } } | undefined
+    )?.heterogeneousIntervention?.deadline;
+    return typeof stored === 'number' ? stored : undefined;
   });
   const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
   const writeDraft = useCallback(
@@ -49,6 +60,8 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
   const form = useAskUserForm({
     args,
     countdownMs: DEFAULT_COUNTDOWN_MS,
+    deadlineAt,
+    disabled,
     onInteractionAction,
     persistedDraft,
     writeDraft,
@@ -63,7 +76,10 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     recommendedTag: t('claudeCode.askUserQuestion.recommendedTag'),
     skip: t('claudeCode.askUserQuestion.skip'),
     submit: t('claudeCode.askUserQuestion.submit'),
+    supplementEnter: t('claudeCode.askUserQuestion.supplement.enter'),
+    supplementPlaceholder: t('claudeCode.askUserQuestion.supplement.placeholder'),
     timeExpired: t('claudeCode.askUserQuestion.timeExpired'),
+    timeExpiredNoAnswer: t('claudeCode.askUserQuestion.timeExpiredNoAnswer'),
     timeRemaining: (time: string) => t('claudeCode.askUserQuestion.timeRemaining', { time }),
   };
 

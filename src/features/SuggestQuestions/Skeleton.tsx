@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Skeleton as LobeSkeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Skeleton as LobeSkeleton } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 interface SkeletonProps {
@@ -11,14 +12,7 @@ const Skeleton = memo<SkeletonProps>(({ count = 3 }) => {
   return (
     <Flexbox gap={8}>
       {Array.from({ length: count }).map((_, index) => (
-        <LobeSkeleton.Button
-          active
-          key={index}
-          style={{
-            height: 68,
-            width: '100%',
-          }}
-        />
+        <LobeSkeleton height={68} key={index} />
       ))}
     </Flexbox>
   );

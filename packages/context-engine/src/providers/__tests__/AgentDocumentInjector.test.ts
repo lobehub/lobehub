@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
+import type { AgentContextDocument } from '../AgentDocumentInjector';
 import {
   AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
@@ -215,7 +216,7 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        2 user-created docs. Use readDocument(id) for full content.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
 
         TITLE                     ID                                    SIZE  UPDATED
         Daily Brief 提取框架          2af6eb88-8bdb-468f-887f-620baa394efa  35    2026-04-27
@@ -225,11 +226,121 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).not.toContain('Full content that should NOT appear');
     });
 
+    // The index is rebuilt every step, so a doc the agent created earlier in the
+    // same run showed up as if it already existed and was read as "overwritten".
+    it('marks docs created after the latest user message in the progressive index', async () => {
+      const runStartedAt = new Date('2026-09-23T22:57:30.000Z').getTime();
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          {
+            createdAt: new Date('2026-09-23T22:57:58.000Z'),
+            filename: 'fase-g-2c.md',
+            id: 'ce2c4f3a',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'FASE G-2C',
+            updatedAt: new Date('2026-09-23T22:57:58.000Z'),
+          },
+          {
+            createdAt: new Date('2026-09-21T23:12:00.000Z'),
+            filename: 'fase-g-2b.md',
+            id: '452eea73',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'FASE G-2B',
+            updatedAt: new Date('2026-09-21T23:12:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([
+        { content: 'earlier', createdAt: runStartedAt - 3_600_000, id: 'user-0', role: 'user' },
+        { content: 'ok', createdAt: runStartedAt - 3_500_000, id: 'a-0', role: 'assistant' },
+        { content: 'Write the G-2C report', createdAt: runStartedAt, id: 'user-1', role: 'user' },
+      ]);
+      const result = await provider.process(context);
+
+      expect(result.messages[0].content).toMatchInlineSnapshot(`
+        "<agent_documents_index>
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
+        Docs marked (new since last user message) (or counted that way in a folder row) were created after the user's latest message — by you or elsewhere (another topic, or the user). A marked doc you created was new; creating it did not overwrite an existing doc.
+
+        TITLE                                    ID        SIZE   UPDATED
+        FASE G-2C (new since last user message)  ce2c4f3a  empty  2026-09-23
+        FASE G-2B                                452eea73  empty  2026-09-21
+        </agent_documents_index>"
+      `);
+    });
+
+    it('counts docs created after the latest user message inside collapsed folders', async () => {
+      const runStartedAt = new Date('2026-09-23T22:57:30.000Z').getTime();
+      const inFolder = (id: string, createdAt: string) => ({
+        createdAt: new Date(createdAt),
+        filename: `${id}.md`,
+        folderTitle: 'Reports',
+        id,
+        loadPosition: 'before-first-user' as const,
+        loadRules: { rule: 'always' as const },
+        parentId: 'folder-1',
+        policyLoad: 'progressive' as const,
+        title: id,
+        updatedAt: new Date(createdAt),
+      });
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          inFolder('new-report', '2026-09-23T22:57:58.000Z'),
+          inFolder('old-report', '2026-09-21T23:12:00.000Z'),
+        ],
+      });
+
+      const result = await provider.process(
+        createContext([{ content: 'go', createdAt: runStartedAt, id: 'user-1', role: 'user' }]),
+      );
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain("were created after the user's latest message");
+      expect(content).toMatch(/📁 Reports\s+folder-1\s+2 docs \(1 new since last user message\)/);
+    });
+
+    // The document query is agent-scoped, so a doc created after the latest
+    // user message may come from another topic or tab: the marker must state the
+    // known timestamp fact instead of claiming the current run created it.
+    it('does not attribute docs created after the latest user message to the current run', async () => {
+      const lastUserMessageAt = new Date('2026-09-23T22:57:30.000Z').getTime();
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          {
+            createdAt: new Date('2026-09-23T22:58:10.000Z'),
+            filename: 'other-topic.md',
+            id: 'other-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'Created in another topic',
+            updatedAt: new Date('2026-09-23T22:58:10.000Z'),
+          },
+        ],
+      });
+
+      const result = await provider.process(
+        createContext([
+          { content: 'go', createdAt: lastUserMessageAt, id: 'user-1', role: 'user' },
+        ]),
+      );
+      const content = result.messages[0].content as string;
+
+      expect(content).not.toContain('this run');
+      expect(content).not.toContain('you created them');
+      expect(content).toContain('Created in another topic (new since last user message)');
+    });
+
     // https://github.com/lobehub/lobehub/issues/15624 — relative times ("15m ago")
     // in the index changed the prompt prefix every minute and broke provider-side
     // prompt caching. The index must stay byte-identical as wall-clock time passes.
     it('should render a time-stable index so the prompt cache prefix survives', async () => {
-      const documents = [
+      const documents: AgentContextDocument[] = [
         {
           content: 'note',
           filename: 'note.md',
@@ -241,7 +352,7 @@ describe('AgentDocumentInjector', () => {
           title: 'Note',
           updatedAt: new Date('2026-04-28T23:59:00.000Z'),
         },
-      ];
+      ] satisfies AgentContextDocument[];
       const renderAt = async (currentTime: Date) => {
         const provider = new AgentDocumentContextInjector({ currentTime, documents });
         const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
@@ -283,42 +394,43 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).not.toContain('empty');
     });
 
-    it('should hide web-crawled docs from the index and surface the count', async () => {
+    it('should hide web-crawled docs behind a stable index hint', async () => {
+      const documents = [
+        {
+          content: 'user note',
+          filename: 'daily-brief.txt',
+          id: '2af6eb88-8bdb-468f-887f-620baa394efa',
+          loadPosition: 'before-first-user',
+          loadRules: { rule: 'always' },
+          policyLoad: 'progressive',
+          sourceType: 'file',
+          title: 'Daily Brief',
+          updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+        },
+        {
+          content: 'gold price page',
+          filename: 'gold-price-1.html',
+          id: 'web-1',
+          loadPosition: 'before-first-user',
+          loadRules: { rule: 'always' },
+          policyLoad: 'progressive',
+          sourceType: 'web',
+          title: 'Gold price',
+        },
+        {
+          content: 'gold news',
+          filename: 'gold-news.html',
+          id: 'web-2',
+          loadPosition: 'before-first-user',
+          loadRules: { rule: 'always' },
+          policyLoad: 'progressive',
+          sourceType: 'web',
+          title: 'Gold news',
+        },
+      ] satisfies AgentContextDocument[];
       const provider = new AgentDocumentContextInjector({
         currentTime: new Date('2026-04-29T00:00:00.000Z'),
-        documents: [
-          {
-            content: 'user note',
-            filename: 'daily-brief.txt',
-            id: '2af6eb88-8bdb-468f-887f-620baa394efa',
-            loadPosition: 'before-first-user',
-            loadRules: { rule: 'always' },
-            policyLoad: 'progressive',
-            sourceType: 'file',
-            title: 'Daily Brief',
-            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
-          },
-          {
-            content: 'gold price page',
-            filename: 'gold-price-1.html',
-            id: 'web-1',
-            loadPosition: 'before-first-user',
-            loadRules: { rule: 'always' },
-            policyLoad: 'progressive',
-            sourceType: 'web',
-            title: 'Gold price',
-          },
-          {
-            content: 'gold news',
-            filename: 'gold-news.html',
-            id: 'web-2',
-            loadPosition: 'before-first-user',
-            loadRules: { rule: 'always' },
-            policyLoad: 'progressive',
-            sourceType: 'web',
-            title: 'Gold news',
-          },
-        ],
+        documents,
       });
 
       const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
@@ -326,8 +438,8 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        1 user-created doc. Use readDocument(id) for full content.
-        2 web-crawled docs hidden — call listDocuments(sourceType='web') to see them.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
+        Web-crawled docs are available but omitted here — call listDocuments(sourceType='web') to discover them.
 
         TITLE        ID                                    SIZE  UPDATED
         Daily Brief  2af6eb88-8bdb-468f-887f-620baa394efa  9     2026-04-27
@@ -335,6 +447,18 @@ describe('AgentDocumentInjector', () => {
       `);
       expect(result.messages[0].content).not.toContain('Gold price');
       expect(result.messages[0].content).not.toContain('Gold news');
+      const injectedContent = result.messages[0].content;
+      expect(typeof injectedContent).toBe('string');
+      if (typeof injectedContent !== 'string') throw new TypeError('Expected string content');
+      expect(injectedContent.split("listDocuments(sourceType='web')")).toHaveLength(2);
+
+      const oneWebDocumentProvider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: documents.slice(0, 2),
+      });
+      const oneWebDocumentResult = await oneWebDocumentProvider.process(context);
+
+      expect(oneWebDocumentResult.messages[0].content).toBe(result.messages[0].content);
     });
 
     it('should collapse same-folder docs into a summary row and keep root docs flat', async () => {
@@ -399,7 +523,7 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        4 user-created docs. Use readDocument(id) for full content.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
         1 folder collapsed (📁) — call listDocuments(parentId=<id>) to list a folder's docs.
 
         TITLE      ID      SIZE  UPDATED
@@ -466,7 +590,7 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        1 user-created doc. Use readDocument(id) for full content.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
 
         TITLE      ID                                    SIZE   UPDATED
         周报与平台对话分析  d14dca54-7b38-44d5-9bdb-f3fed8c5f947  empty  2026-04-16

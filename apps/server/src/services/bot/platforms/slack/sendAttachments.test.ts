@@ -1,7 +1,22 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as PublicUrlFetchModule from '../publicUrlFetch';
 import { sendSlackAttachments } from './sendAttachments';
+
+// These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
+// for real, which has nothing to do with what they assert. Its own behaviour is
+// covered in publicUrlFetch.test.ts.
+vi.mock('../publicUrlFetch', async () => ({
+  // Spread the real module: a full mock silently drops every export it
+  // does not name, so adding one to publicUrlFetch breaks suites that
+  // never cared about it.
+  ...(await vi.importActual<typeof PublicUrlFetchModule>('../publicUrlFetch')),
+  fetchPublicUrl: async (url: string, timeoutMs: number) => ({
+    dispose: async () => undefined,
+    response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+  }),
+}));
 
 const makeApi = () => ({
   completeFileUpload: vi.fn().mockResolvedValue(undefined),
@@ -35,7 +50,7 @@ describe('sendSlackAttachments', () => {
       threadTs: '123.456',
     });
 
-    expect(n).toBe(1);
+    expect(n.delivered).toBe(1);
     expect(api.getFileUploadUrl).toHaveBeenCalledWith({
       filename: 'foo.png',
       length: Buffer.from('hello').length,
@@ -64,7 +79,7 @@ describe('sendSlackAttachments', () => {
       channelId: 'C1',
     });
 
-    expect(n).toBe(1);
+    expect(n.delivered).toBe(1);
     expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.com/pic.png', expect.any(Object));
     expect(api.getFileUploadUrl).toHaveBeenCalled();
     expect(api.putFileBytes).toHaveBeenCalled();
@@ -86,7 +101,7 @@ describe('sendSlackAttachments', () => {
       channelId: 'C1',
     });
 
-    expect(n).toBe(1);
+    expect(n.delivered).toBe(1);
     expect(api.completeFileUpload).toHaveBeenCalledWith(
       expect.objectContaining({ files: [{ id: 'F999', title: 'b.png' }] }),
     );
@@ -101,7 +116,7 @@ describe('sendSlackAttachments', () => {
       channelId: 'C1',
     });
 
-    expect(n).toBe(0);
+    expect(n.delivered).toBe(0);
     expect(api.completeFileUpload).not.toHaveBeenCalled();
   });
 
@@ -114,6 +129,40 @@ describe('sendSlackAttachments', () => {
       channelId: 'C1',
     });
 
-    expect(n).toBe(0);
+    expect(n.delivered).toBe(0);
+    // The bytes are on Slack's servers but never reached the channel — from
+    // the user's point of view that upload failed.
+    expect(n.failures).toEqual([
+      {
+        detail: 'completeUploadExternal failed: slack down',
+        name: 'x.png',
+        reason: 'upload-failed',
+        type: 'image',
+      },
+    ]);
+  });
+
+  it('reports why each attachment was lost', async () => {
+    const api = makeApi();
+    api.getFileUploadUrl.mockRejectedValueOnce(new Error('slack 429'));
+
+    const n = await sendSlackAttachments(api as any, {
+      attachments: [
+        { data: Buffer.from('a').toString('base64'), name: 'a.png', type: 'image' },
+        { name: 'nothing.txt', type: 'file' } as any,
+      ],
+      channelId: 'C1',
+    });
+
+    expect(n.delivered).toBe(0);
+    expect(n.failures).toEqual([
+      { detail: 'slack 429', name: 'a.png', reason: 'upload-failed', type: 'image' },
+      {
+        detail: 'attachment carries neither data nor fetchUrl',
+        name: 'nothing.txt',
+        reason: 'source-unavailable',
+        type: 'file',
+      },
+    ]);
   });
 });

@@ -1,9 +1,18 @@
+import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+
+import { acceptanceSubjectTypes } from '@lobechat/const/verify';
+import type { AcceptanceAttachment, AcceptanceCheckGroup } from '@lobechat/types';
 import type { Command } from 'commander';
+import { InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { resolveServerUrl } from '../settings';
 import { outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { collectCommentFeedback } from './acceptanceCommentFeedback';
+import { attachAcceptanceFlowCommands } from './acceptanceFlow';
 import { attachAcceptanceRunCommands } from './acceptanceRun';
 import type { ReviewAnnotationRegion } from './verifyHelpers';
 import { formatAnnotationRegion, parseSubjectRef } from './verifyHelpers';
@@ -65,6 +74,90 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
         ? 'Deprecated alias — use `lh acceptance`'
         : 'Delivery acceptances: the cross-round review loop (checks, feedback, decision)',
     );
+
+  attachAcceptanceFlowCommands(acceptance);
+
+  acceptance
+    .command('create')
+    .description('Create or reuse an acceptance without creating a verification round or results')
+    .requiredOption(
+      '--requirement <text>',
+      'Durable business goal (preserved when reusing a subject)',
+    )
+    .option('-t, --title <text>', 'Display title for a standalone acceptance')
+    .option(
+      '--subject <type:id>',
+      'Reuse or create for task/topic/document/standalone; omit for a new standalone acceptance',
+    )
+    .option(
+      '--json [fields]',
+      'Output JSON, optionally select fields (acceptanceId, acceptanceUrl, requirement, status, subject)',
+    )
+    .action(
+      async (options: {
+        json?: boolean | string;
+        requirement: string;
+        subject?: string;
+        title?: string;
+      }) => {
+        const requirement = options.requirement.trim();
+        const title = options.title?.trim();
+        if (!requirement) throw new InvalidArgumentError('--requirement must not be empty');
+        if (title === '') throw new InvalidArgumentError('--title must not be empty');
+
+        const subject =
+          options.subject === undefined
+            ? { subjectId: randomUUID(), subjectType: 'standalone' as const }
+            : parseSubjectRef(options.subject);
+        if (!subject) {
+          throw new InvalidArgumentError(
+            `--subject must be one of ${acceptanceSubjectTypes.map((type) => `${type}:<id>`).join(' | ')}`,
+          );
+        }
+
+        const client = await getTrpcClient();
+        const result = await client.acceptance.ensure.mutate({ ...subject, requirement, title });
+        const acceptanceUrl = new URL(
+          `/acceptance/${encodeURIComponent(result.id)}`,
+          resolveServerUrl(),
+        ).toString();
+
+        if (options.json !== undefined) {
+          outputJson(
+            {
+              acceptanceId: result.id,
+              acceptanceUrl,
+              requirement: result.requirement,
+              status: result.status,
+              subject: { subjectId: result.subjectId, subjectType: result.subjectType },
+            },
+            typeof options.json === 'string' ? options.json : undefined,
+          );
+          return;
+        }
+
+        console.log(`${pc.bold('acceptance')}: ${result.id} (${result.status})`);
+        console.log(`${pc.bold('open acceptance')}: ${acceptanceUrl}`);
+        console.log(
+          pc.dim(
+            'No verification round or results created. Use `lh acceptance flow publish` to add a plan.',
+          ),
+        );
+      },
+    );
+
+  acceptance
+    .command('regroup <idOrSubject>')
+    .description('Change checklist business groups while preserving checks, evidence and history')
+    .requiredOption('--file <path>', 'JSON: expectedVersion and groups [{ title, checkItemIds }]')
+    .action(async (ref: string, options: { file: string }) => {
+      const id = await resolveAcceptanceId(ref);
+      const input: { expectedVersion: number; groups: AcceptanceCheckGroup[] } = JSON.parse(
+        await readFile(options.file, 'utf8'),
+      );
+      const client = await getTrpcClient();
+      outputJson(await client.acceptance.regroupChecks.mutate({ ...input, id }));
+    });
 
   acceptance
     .command('list')
@@ -178,7 +271,7 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
   acceptance
     .command('feedback <idOrSubject>')
     .description(
-      "The user's review feedback — check rejects (with region notes & attachments) plus group-scoped notes",
+      "The user's review feedback — unresolved comments, region notes, attachments and rejection decisions",
     )
     .option('--actionable', 'Only standing feedback the next repair round must act on')
     .option('--json [fields]', 'Output JSON')
@@ -186,7 +279,10 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       async (idOrSubject: string, options: { actionable?: boolean; json?: boolean | string }) => {
         const id = await resolveAcceptanceId(idOrSubject);
         const client = await getTrpcClient();
-        const bundle = await client.acceptance.getBundle.query({ id });
+        const [bundle, comments] = await Promise.all([
+          client.acceptance.getBundle.query({ id }),
+          client.acceptanceComment.list.query({ acceptanceId: id }),
+        ]);
 
         const currentRoundIndex = bundle.rounds.at(-1)?.run.roundIndex ?? 0;
 
@@ -198,13 +294,15 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
            * screenshot — the location is the actionable half of a region.
            */
           annotations?: (ReviewAnnotationRegion & { region?: string })[];
+          attachments?: AcceptanceAttachment[];
           category?: string;
           checkId?: string;
           checkSeq?: number;
           comment: string;
+          commentId?: string;
           createdAt?: string;
           fileIds?: string[];
-          kind: 'check' | 'group';
+          kind: 'check' | 'group' | 'flow' | 'comment' | 'decision';
           roundIndex: number;
           title?: string;
         }
@@ -230,9 +328,16 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
         }
 
         const entries: FeedbackEntry[] = [];
+        const flowResultIds = new Set(
+          (bundle.flows ?? []).flatMap((flow) =>
+            flow.versions.flatMap((version) =>
+              version.runs.flatMap((run) => run.attempts.map((attempt) => attempt.checkResultId)),
+            ),
+          ),
+        );
         for (const check of bundle.checks) {
           for (const review of check.reviews) {
-            if (review.action !== 'reject') continue;
+            if (review.action !== 'reject' || flowResultIds.has(review.id)) continue;
             // Standing = this reject is the check's latest verdict and no newer
             // round has consumed it yet.
             const standing = Boolean(
@@ -258,9 +363,53 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
             });
           }
         }
+        for (const flow of bundle.flows ?? []) {
+          for (const version of flow.versions) {
+            for (const run of version.runs) {
+              const latest = new Map(
+                run.attempts.map((attempt) => [attempt.checkItemId, attempt.id]),
+              );
+              for (const attempt of run.attempts) {
+                if (attempt.review !== 'rejected') continue;
+                for (const evidence of attempt.evidence) {
+                  if (evidence.description) evidenceLabels.set(evidence.id, evidence.description);
+                }
+                entries.push({
+                  actionable:
+                    version.id === flow.versions[0]?.id &&
+                    run.id === version.runs[0]?.id &&
+                    latest.get(attempt.checkItemId) === attempt.id,
+                  annotations: attempt.reviewDetail?.annotations?.map((a) => ({
+                    ...a,
+                    region: formatAnnotationRegion(a, evidenceLabels),
+                  })),
+                  checkId: attempt.checkItemId,
+                  comment: attempt.reviewComment ?? '',
+                  createdAt: attempt.reviewDetail?.decidedAt,
+                  fileIds: attempt.reviewDetail?.fileIds,
+                  kind: 'flow',
+                  roundIndex:
+                    bundle.rounds.find((round) => round.run.id === run.verifyRunId)?.run
+                      .roundIndex ?? 0,
+                  title: `${version.nodes.find((node) => node.id === attempt.nodeId)?.title ?? ''} · #${attempt.sequence}`,
+                });
+              }
+            }
+          }
+        }
         for (const round of bundle.rounds) {
+          const { decisionDetail, userDecision } = round.run;
+          const roundIndex = round.run.roundIndex ?? 0;
+          if (userDecision === 'reject' && decisionDetail?.comment?.trim()) {
+            entries.push({
+              actionable: roundIndex >= currentRoundIndex,
+              comment: decisionDetail.comment,
+              createdAt: decisionDetail.decidedAt,
+              kind: 'decision',
+              roundIndex,
+            });
+          }
           for (const entry of round.run.decisionDetail?.groupFeedback ?? []) {
-            const roundIndex = round.run.roundIndex ?? 0;
             entries.push({
               actionable: roundIndex >= currentRoundIndex,
               category: entry.category,
@@ -272,6 +421,7 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
             });
           }
         }
+        entries.push(...collectCommentFeedback(comments.items, bundle.checks, evidenceLabels));
         entries.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
 
         const shown = options.actionable ? entries.filter((entry) => entry.actionable) : entries;
@@ -291,17 +441,28 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
         for (const entry of shown) {
           const marker = entry.actionable ? pc.red('▶ actionable') : pc.dim('· addressed');
           const label =
-            entry.kind === 'check'
-              ? `C${entry.checkSeq} ${truncate(entry.title ?? '', 60)}`
-              : `group · ${entry.category || 'overall'}`;
+            entry.kind === 'decision'
+              ? 'overall rejection'
+              : entry.kind === 'comment'
+                ? `comment ${entry.commentId} · ${entry.checkSeq === undefined ? 'overall' : `C${entry.checkSeq} ${truncate(entry.title ?? '', 60)}`}`
+                : entry.kind === 'check'
+                  ? `C${entry.checkSeq} ${truncate(entry.title ?? '', 60)}`
+                  : entry.kind === 'flow'
+                    ? `flow · ${entry.title}`
+                    : `group · ${entry.category || 'overall'}`;
           console.log(`${marker} ${label} ${pc.dim(`(r${entry.roundIndex})`)}`);
           if (entry.comment) console.log(`    ${entry.comment}`);
           for (const annotation of entry.annotations ?? []) {
-            if (annotation.comment) console.log(`    ${pc.dim('region:')} ${annotation.comment}`);
+            if (annotation.comment && annotation.comment !== entry.comment)
+              console.log(`    ${pc.dim('region:')} ${annotation.comment}`);
             if (annotation.region) console.log(`      ${pc.dim(`└ ${annotation.region}`)}`);
           }
           if (entry.fileIds?.length)
             console.log(`    ${pc.dim(`attachments: ${entry.fileIds.join(', ')}`)}`);
+          for (const attachment of entry.attachments ?? []) {
+            if (attachment.url)
+              console.log(`      ${attachment.name ?? attachment.id}: ${attachment.url}`);
+          }
         }
       },
     );
@@ -338,6 +499,28 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
         return;
       }
       console.log(`${pc.red('✗')} Delivery rejected (${result.id}) — next round re-opens it`);
+      const dispatch = result.repairDispatch;
+      if (dispatch?.dispatched) {
+        console.log(
+          `${pc.green('↻')} Sent back to agent ${dispatch.agentId} in topic ${dispatch.topicId} (operation ${dispatch.operationId})`,
+        );
+      } else if (dispatch?.reason === 'failed') {
+        console.log(
+          `${pc.yellow('!')} Repair dispatch failed: ${dispatch.error ?? 'unknown error'}`,
+        );
+      } else if (dispatch?.reason === 'goal_coordinator') {
+        console.log(pc.dim('Goal task — its coordinator starts the next attempt.'));
+      } else {
+        const why =
+          dispatch?.reason === 'forbidden'
+            ? 'Not allowed to run the source agent'
+            : 'No source agent to send it back to';
+        console.log(
+          pc.dim(
+            `${why} — hand the repair over with: lh acceptance feedback ${result.id} --actionable`,
+          ),
+        );
+      }
     });
 
   // The canonical `lh acceptance init` + `lh acceptance run …` tree hangs off the

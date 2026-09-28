@@ -10,8 +10,6 @@ import { withSWR } from '~test-utils';
 
 import { useKnowledgeBaseStore } from '../../store';
 
-vi.mock('zustand/traditional');
-
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: null as string | null,
 }));

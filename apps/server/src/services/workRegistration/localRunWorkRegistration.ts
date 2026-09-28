@@ -33,7 +33,7 @@ export interface LocalRunShellWorksResult {
  * Those runs never reach `registerWorksForOperation` — the sole caller of the
  * shell scan — because they create no server operation and never call
  * `heteroFinish`; their `gh pr create` output lands as plain persisted tool
- * messages that nothing inspects (LOBE-12514). The client executor therefore
+ * messages that nothing inspects. The client executor therefore
  * reports the run's persisted tool message ids at clean completion, and this
  * service replays the SAME scan engine over those rows:
  *

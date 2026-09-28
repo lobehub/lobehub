@@ -1,0 +1,360 @@
+name: Release Desktop Core OTA
+
+# ============================================
+# core-only 发布（壳不变，只发 main/preload/renderer/cli）
+# ============================================
+# 门禁: HEAD 的 shellAbi 必须等于 <channel>/shell.json 的 shellAbi，
+#       否则 requires_full_release=true，由调用方走全量发版。
+# 产物: cas/objects/<sha>.zst, cas/patches/<from>-<to>.zst      跨平台共享，immutable
+#       <channel>/core/<platform>/packs/<sha>.zip                全量 zip（fallback）
+#       <channel>/core/<platform>/versions/<version>.json        签名快照
+#       <channel>/core/<platform>/latest.json                    签名 manifest（no-store）
+# ============================================
+
+on:
+  workflow_call:
+    inputs:
+      channel:
+        description: 'Update channel'
+        required: true
+        type: string
+      rollout:
+        description: 'Rollout ratio 0-1'
+        required: false
+        type: string
+        default: '1'
+    outputs:
+      requires_full_release:
+        description: 'Whether the caller must publish a full desktop release'
+        value: ${{ jobs.gate.outputs.requires_full_release }}
+      skipped:
+        description: 'Whether every platform produced an empty release'
+        value: ${{ jobs.publish.outputs.skipped }}
+      published:
+        description: 'Whether a core release was uploaded'
+        value: ${{ jobs.publish.outputs.published }}
+      version:
+        description: 'Published core version'
+        value: ${{ jobs.gate.outputs.version }}
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Update channel'
+        required: true
+        type: choice
+        options:
+          - canary
+          - beta
+          - stable
+        default: canary
+      rollout:
+        description: 'Rollout ratio 0-1'
+        required: false
+        type: string
+        default: '1'
+
+concurrency:
+  group: desktop-core-ota-${{ inputs.channel }}
+  cancel-in-progress: false
+
+permissions: read-all
+
+env:
+  NODE_VERSION: '24.11.1'
+
+jobs:
+  gate:
+    name: Shell ABI gate (${{ inputs.channel }})
+    runs-on: ubuntu-latest
+    outputs:
+      app_version: ${{ steps.base.outputs.app_version }}
+      cloud_ref: ${{ steps.cloud-ref.outputs.cloud_ref }}
+      feed_base_url: ${{ steps.server.outputs.feed_base_url }}
+      requires_full_release: ${{ steps.gate.outputs.requires_full_release }}
+      seq: ${{ steps.version.outputs.seq }}
+      shell_abi: ${{ steps.gate.outputs.shell_abi }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        id: checkout
+
+      - name: Resolve update server base URL
+        id: server
+        env:
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+        run: |
+          set -euo pipefail
+          BASE="${UPDATE_SERVER_URL%/}"
+          case "$BASE" in
+            */stable|*/nightly|*/canary|*/beta) BASE="${BASE%/*}" ;;
+          esac
+          echo "feed_base_url=$BASE" >> "$GITHUB_OUTPUT"
+
+      - name: Load shipped shell
+        id: base
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          FEED_BASE_URL: ${{ steps.server.outputs.feed_base_url }}
+        run: |
+          set -euo pipefail
+          HTTP_STATUS=$(curl -sS --connect-timeout 10 --max-time 30 \
+            -o "$RUNNER_TEMP/shell.json" -w '%{http_code}' "$FEED_BASE_URL/$CHANNEL/shell.json")
+          echo "shell.json HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" = "404" ]; then
+            echo "::warning::no shell.json for $CHANNEL; run a full release first"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "reason=base-missing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::shell.json fetch failed: HTTP $HTTP_STATUS"
+            echo "reason=base-invalid" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          SHELL_ABI=$(jq -er '.shellAbi | select(type == "string" and test("^[0-9a-f]{64}$"))' "$RUNNER_TEMP/shell.json")
+          APP_VERSION=$(jq -er '.shellVersion | select(type == "string" and test("^[0-9A-Za-z.+-]+$"))' "$RUNNER_TEMP/shell.json")
+          {
+            echo "found=true"
+            echo "reason=base-found"
+            echo "shell_abi=$SHELL_ABI"
+            echo "app_version=$APP_VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Gate on shellAbi
+        id: gate
+        env:
+          BASE_SHELL_ABI: ${{ steps.base.outputs.shell_abi }}
+          FOUND: ${{ steps.base.outputs.found }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          SHELL_ABI=$(node apps/desktop/scripts/shellAbi.mjs)
+          echo "shell_abi=$SHELL_ABI" >> "$GITHUB_OUTPUT"
+          echo "HEAD shellAbi:    $SHELL_ABI"
+          echo "Shipped shellAbi: ${BASE_SHELL_ABI:-<none>}"
+          if [ "$FOUND" != "true" ] || [ "$SHELL_ABI" != "$BASE_SHELL_ABI" ]; then
+            echo "::warning::shell changed since last full release — core-only release is not allowed"
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "reason=abi-changed" >> "$GITHUB_OUTPUT"
+            echo "requires_full_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            echo "requires_full_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve next core seq
+        id: seq
+        if: steps.gate.outputs.allowed == 'true'
+        uses: ./.github/actions/desktop-core-seq
+        with:
+          channel: ${{ inputs.channel }}
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+
+      - name: Determine core version
+        id: version
+        if: steps.gate.outputs.allowed == 'true'
+        env:
+          APP_VERSION: ${{ steps.base.outputs.app_version }}
+          SEQ: ${{ steps.seq.outputs.seq }}
+        run: |
+          set -euo pipefail
+          echo "seq=$SEQ" >> "$GITHUB_OUTPUT"
+          echo "version=$APP_VERSION-core.$SEQ" >> "$GITHUB_OUTPUT"
+          echo "Next core: $APP_VERSION-core.$SEQ (seq $SEQ)"
+
+      - name: Resolve Cloud revision
+        id: cloud-ref
+        if: steps.gate.outputs.allowed == 'true'
+        env:
+          CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
+          CLOUD_TOKEN: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${CLOUD_REPOSITORY:?OVERLAY_REPOSITORY repository variable is not set}"
+          cloud_ref=$(git -c http.https://github.com/.extraheader= ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" HEAD | cut -f1)
+          if [[ ! "$cloud_ref" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Unable to resolve Cloud revision"
+            exit 1
+          fi
+          echo "cloud_ref=$cloud_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Report gate result
+        if: always()
+        uses: ./.github/actions/desktop-ota-diagnostics
+        with:
+          kind: gate
+          channel: ${{ inputs.channel }}
+          steps-json: ${{ toJSON(steps) }}
+          job-status: ${{ job.status }}
+
+  build-core:
+    name: Build core (${{ matrix.platform }})
+    needs: [gate]
+    if: needs.gate.outputs.requires_full_release == 'false'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [darwin, win32, linux]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup build environment
+        id: setup
+        uses: ./.github/actions/desktop-build-setup
+        with:
+          cloud-ref: ${{ needs.gate.outputs.cloud_ref }}
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
+          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set package version
+        id: app_version
+        run: npm run workflow:set-desktop-version ${{ needs.gate.outputs.app_version }} ${{ inputs.channel }}
+
+      # ponytail: renderer is platform-independent but rebuilt per platform; share one renderer build if this queue gets slow.
+      - name: Build core
+        id: build
+        run: npm_config_platform=${{ matrix.platform }} pnpm -C apps/desktop run build:main
+        env:
+          UPDATE_CHANNEL: ${{ inputs.channel }}
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID || secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_BASE_URL || secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
+
+      - name: Load previous core manifest
+        id: previous
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          FEED_BASE_URL: ${{ needs.gate.outputs.feed_base_url }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          HTTP_STATUS=$(curl -sS --connect-timeout 10 --max-time 30 \
+            -o "$RUNNER_TEMP/previous-core.json" -w '%{http_code}' "$FEED_BASE_URL/$CHANNEL/core/$PLATFORM/latest.json")
+          case "$HTTP_STATUS" in
+            200)
+              echo "Previous core: $(jq -er '.version' "$RUNNER_TEMP/previous-core.json")"
+              echo "args=--previous-manifest=$RUNNER_TEMP/previous-core.json" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "::warning::no previous core manifest for $PLATFORM; publishing without patches"
+              echo "args=" >> "$GITHUB_OUTPUT"
+              ;;
+            *) echo "::error::previous latest.json fetch failed: HTTP $HTTP_STATUS"; exit 1 ;;
+          esac
+
+      - name: Build core release
+        id: core
+        working-directory: apps/desktop
+        env:
+          RENDERER_OTA_PRIVATE_KEY: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
+          CHANNEL: ${{ inputs.channel }}
+          FEED_BASE_URL: ${{ needs.gate.outputs.feed_base_url }}
+          PLATFORM: ${{ matrix.platform }}
+          PREVIOUS_ARGS: ${{ steps.previous.outputs.args }}
+          ROLLOUT: ${{ inputs.rollout }}
+          SEQ: ${{ needs.gate.outputs.seq }}
+          SHELL_ABI: ${{ needs.gate.outputs.shell_abi }}
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          set +e
+          # shellcheck disable=SC2086
+          node scripts/buildCore.mjs \
+            --core=core-dist \
+            --platform="$PLATFORM" \
+            --channel="$CHANNEL" \
+            --version="$VERSION" \
+            --seq="$SEQ" \
+            --rollout="$ROLLOUT" \
+            --shell-abi="$SHELL_ABI" \
+            --objects-base-url="$FEED_BASE_URL/cas" \
+            --out=release/core-ota \
+            $PREVIOUS_ARGS
+          STATUS=$?
+          set -e
+          if [ "$STATUS" = "3" ]; then
+            echo "::notice::core for $PLATFORM is unchanged; nothing to publish"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [ "$STATUS" = "0" ] || exit "$STATUS"
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+      - name: Upload core release
+        id: upload
+        if: steps.core.outputs.skipped == 'false'
+        uses: actions/upload-artifact@v6
+        with:
+          name: core-ota-${{ matrix.platform }}
+          path: apps/desktop/release/core-ota
+          retention-days: 3
+
+      - name: Report core build result
+        if: always()
+        uses: ./.github/actions/desktop-ota-diagnostics
+        with:
+          kind: core-build
+          channel: ${{ inputs.channel }}
+          suffix: ${{ matrix.platform }}
+          steps-json: ${{ toJSON(steps) }}
+          job-status: ${{ job.status }}
+
+  publish:
+    name: Publish core (${{ inputs.channel }})
+    needs: [gate, build-core]
+    if: needs.gate.outputs.requires_full_release == 'false'
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+      skipped: ${{ steps.collect.outputs.skipped }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download core releases
+        uses: actions/download-artifact@v7
+        with:
+          path: release/core-ota
+          pattern: core-ota-*
+          merge-multiple: true
+
+      - name: Collect platforms
+        id: collect
+        run: |
+          set -euo pipefail
+          if [ -d release/core-ota/core ] && [ -n "$(ls -A release/core-ota/core)" ]; then
+            echo "Platforms: $(ls release/core-ota/core | tr '\n' ' ')"
+            echo "skipped=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::every platform was unchanged; nothing to publish"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload to S3
+        id: publish
+        if: steps.collect.outputs.skipped == 'false'
+        uses: ./.github/actions/desktop-publish-core-ota
+        with:
+          channel: ${{ inputs.channel }}
+          release-dir: release/core-ota
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
+
+      - name: Report core publish result
+        if: always()
+        uses: ./.github/actions/desktop-ota-diagnostics
+        env:
+          APP_VERSION: ${{ needs.gate.outputs.version }}
+        with:
+          kind: core-publish
+          channel: ${{ inputs.channel }}
+          steps-json: ${{ toJSON(steps) }}
+          job-status: ${{ job.status }}

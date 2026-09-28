@@ -7,6 +7,7 @@ import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
+import { resolveAppUrlBuilder } from './task/url';
 
 function formatFileType(fileType: string): string {
   if (!fileType) return '';
@@ -150,6 +151,7 @@ export function registerKbCommand(program: Command) {
     .option('--avatar <url>', 'Avatar URL')
     .action(async (options: { avatar?: string; description?: string; name: string }) => {
       const client = await getTrpcClient();
+      const buildUrl = await resolveAppUrlBuilder(client);
 
       const input: { avatar?: string; description?: string; name: string } = {
         name: options.name,
@@ -158,7 +160,9 @@ export function registerKbCommand(program: Command) {
       if (options.avatar) input.avatar = options.avatar;
 
       const id = await client.knowledgeBase.createKnowledgeBase.mutate(input);
+      const url = buildUrl(`/resource/library/${encodeURIComponent(String(id))}`);
       console.log(`${pc.green('✓')} Created knowledge base ${pc.bold(String(id))}`);
+      console.log(`${pc.bold('knowledge base')}: ${url}`);
     });
 
   // ── edit ──────────────────────────────────────────────
@@ -284,15 +288,19 @@ export function registerKbCommand(program: Command) {
         options: { content?: string; parent?: string; title: string },
       ) => {
         const client = await getTrpcClient();
+        const buildUrl = await resolveAppUrlBuilder(client);
         const result = await client.document.createDocument.mutate({
           content: options.content,
-          editorData: JSON.stringify({}),
           fileType: 'custom/document',
           knowledgeBaseId,
           parentId: options.parent,
           title: options.title,
         });
+        const url = buildUrl(
+          `/resource/library/${encodeURIComponent(knowledgeBaseId)}?file=${encodeURIComponent((result as any).id)}`,
+        );
         console.log(`${pc.green('✓')} Created document ${pc.bold((result as any).id)}`);
+        console.log(`${pc.bold('document')}: ${url}`);
       },
     );
 

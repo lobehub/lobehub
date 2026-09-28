@@ -3,8 +3,8 @@ import type { AgentDocumentPolicyLoad } from '@lobechat/types';
 import type {
   AgentDocumentLoadRule,
   AgentDocumentLoadRules,
-} from '../../../../database/src/models/agentDocuments';
-import { matchesLoadRules } from '../../../../database/src/models/agentDocuments';
+} from '../../../../database/src/models/agentDocuments/policy/loadPolicy';
+import { matchesLoadRules } from '../../../../database/src/models/agentDocuments/policy/loadPolicy';
 
 export type { AgentDocumentLoadRule, AgentDocumentLoadRules };
 export type { AgentDocumentPolicyLoad };
@@ -29,6 +29,7 @@ export type AgentDocumentSourceType = 'agent' | 'agent-signal' | 'api' | 'file' 
 export interface AgentContextDocument {
   content?: string;
   contentCharCount?: number;
+  createdAt?: Date | string;
   description?: string;
   filename: string;
   /**
@@ -58,7 +59,38 @@ export interface AgentContextDocument {
 export interface AgentDocumentFilterContext {
   currentTime?: Date;
   currentUserMessage?: string;
+  /**
+   * When the current run started (the latest user message by default). Documents
+   * created at or after it are marked in the progressive index; the index is
+   * rebuilt every step, so without a marker a document the agent just created
+   * looks like one that already existed. Documents are listed per agent, not per
+   * topic or run, so the marker only states the timestamp fact: a marked doc may
+   * also come from another topic or tab.
+   */
+  runStartedAt?: Date | number | string;
   truncateContent?: (content: string, maxTokens: number) => string;
+}
+
+const toTime = (value: Date | number | string | undefined): number | undefined => {
+  if (value === undefined) return undefined;
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isNaN(time) ? undefined : time;
+};
+
+/**
+ * Anchor the run to the latest user message: documents created after it are
+ * marked as new. An explicit `runStartedAt` wins.
+ */
+export function withRunStartedAt<T extends AgentDocumentFilterContext>(
+  context: T,
+  messages: { createdAt?: Date | number | string; role: string }[],
+): T {
+  if (context.runStartedAt !== undefined) return context;
+
+  const lastUserMessage = messages.findLast((message) => message.role === 'user');
+  return lastUserMessage?.createdAt === undefined
+    ? context
+    : { ...context, runStartedAt: lastUserMessage.createdAt };
 }
 
 /**
@@ -166,19 +198,37 @@ function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
+const NEW_SINCE_USER_MESSAGE_MARK = '(new since last user message)';
+
+/** Collapsed folders hide their rows, so the folder summary carries the count instead. */
+const withNewSinceUserMessageCount = (summary: string, count: number) =>
+  count > 0 ? `${summary} (${count} new since last user message)` : summary;
+
+function isNewSinceUserMessage(doc: AgentContextDocument, context: AgentDocumentFilterContext) {
+  const runStartedAt = toTime(context.runStartedAt);
+  const createdAt = toTime(doc.createdAt);
+  return runStartedAt !== undefined && createdAt !== undefined && createdAt >= runStartedAt;
+}
+
 /**
  * Render a list of progressive docs as a fixed-width table:
  *
  *   TITLE                ID                                    SIZE    UPDATED
  *   daily-brief.txt      2af6eb88-8bdb-468f-887f-620baa394efa  1.4k    2026-04-27
  */
-function buildIndexTable(docs: AgentContextDocument[]): string {
-  const rows = docs.map((d) => ({
-    id: d.id ?? '',
-    size: formatSize(d),
-    title: truncate(pickRowTitle(d), TITLE_MAX_WIDTH),
-    updated: formatUpdatedDate(d.updatedAt),
-  }));
+function buildIndexTable(
+  docs: AgentContextDocument[],
+  context: AgentDocumentFilterContext,
+): string {
+  const rows = docs.map((d) => {
+    const title = truncate(pickRowTitle(d), TITLE_MAX_WIDTH);
+    return {
+      id: d.id ?? '',
+      size: formatSize(d),
+      title: isNewSinceUserMessage(d, context) ? `${title} ${NEW_SINCE_USER_MESSAGE_MARK}` : title,
+      updated: formatUpdatedDate(d.updatedAt),
+    };
+  });
 
   const titleWidth = Math.max('TITLE'.length, ...rows.map((r) => r.title.length));
   const idWidth = Math.max('ID'.length, ...rows.map((r) => r.id.length));
@@ -275,11 +325,14 @@ function formatFolderSummary(docs: AgentContextDocument[]): string {
  * The ID column is the folder's `documentId` — the value the model passes to
  * `listDocuments(parentId=…)` to expand the folder on demand.
  */
-function buildFolderTable(folders: FolderGroup[]): string {
+function buildFolderTable(folders: FolderGroup[], context: AgentDocumentFilterContext): string {
   const rows = folders
     .map((f) => ({
       id: f.parentId,
-      summary: formatFolderSummary(f.docs),
+      summary: withNewSinceUserMessageCount(
+        formatFolderSummary(f.docs),
+        f.docs.filter((doc) => isNewSinceUserMessage(doc, context)).length,
+      ),
       time: newestTime(f.docs),
       title: `${FOLDER_ICON} ${truncate(f.title, TITLE_MAX_WIDTH)}`,
     }))
@@ -321,7 +374,7 @@ function sortByRecency(docs: AgentContextDocument[]): AgentContextDocument[] {
 /**
  * Combine multiple documents into a single string.
  * Progressive documents are grouped into an `<agent_documents_index>` block
- * (web-crawled docs are hidden behind a count and surfaced via listDocuments);
+ * (web-crawled docs are hidden behind a stable hint and surfaced via listDocuments);
  * full-content documents are formatted individually.
  */
 export function combineDocuments(
@@ -346,18 +399,23 @@ export function combineDocuments(
 
   if (progressiveDocs.length > 0) {
     const userDocs = progressiveDocs.filter((d) => d.sourceType !== 'web');
-    const hiddenWebCount = progressiveDocs.length - userDocs.length;
+    const hasHiddenWebDocs = progressiveDocs.length > userDocs.length;
 
     // Loose docs render as flat rows; docs sharing a folder (≥2) collapse into
     // one summary row so archive-heavy agents don't spend tokens on every entry.
     const { flat, folders } = partitionFolders(userDocs);
 
     const headerLines: string[] = [
-      `${userDocs.length} user-created doc${userDocs.length === 1 ? '' : 's'}. Use readDocument(id) for full content.`,
+      'User-created docs, when present, are listed below — use readDocument(id) for full content.',
     ];
-    if (hiddenWebCount > 0) {
+    if (hasHiddenWebDocs) {
       headerLines.push(
-        `${hiddenWebCount} web-crawled doc${hiddenWebCount === 1 ? '' : 's'} hidden — call listDocuments(sourceType='web') to see them.`,
+        `Web-crawled docs are available but omitted here — call listDocuments(sourceType='web') to discover them.`,
+      );
+    }
+    if (userDocs.some((doc) => isNewSinceUserMessage(doc, context))) {
+      headerLines.push(
+        `Docs marked ${NEW_SINCE_USER_MESSAGE_MARK} (or counted that way in a folder row) were created after the user's latest message — by you or elsewhere (another topic, or the user). A marked doc you created was new; creating it did not overwrite an existing doc.`,
       );
     }
     if (folders.length > 0) {
@@ -367,8 +425,8 @@ export function combineDocuments(
     }
 
     const bodyBlocks: string[] = [];
-    if (flat.length > 0) bodyBlocks.push(buildIndexTable(sortByRecency(flat)));
-    if (folders.length > 0) bodyBlocks.push(buildFolderTable(folders));
+    if (flat.length > 0) bodyBlocks.push(buildIndexTable(sortByRecency(flat), context));
+    if (folders.length > 0) bodyBlocks.push(buildFolderTable(folders, context));
     const tableBlock = bodyBlocks.length > 0 ? `\n\n${bodyBlocks.join('\n\n')}` : '';
 
     parts.push(

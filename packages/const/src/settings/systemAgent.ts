@@ -1,4 +1,6 @@
 import {
+  DEFAULT_ASR_MODEL,
+  DEFAULT_ASR_PROVIDER,
   DEFAULT_EMBEDDING_PROVIDER,
   DEFAULT_MINI_PROVIDER,
   DEFAULT_PROVIDER,
@@ -48,6 +50,14 @@ export const DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   enabled: false,
 };
 
+// Speech-to-text is only usable where the provider implements transcription, so the default
+// counts only once that provider is enabled (see the voice-message capability check).
+// Deployments can repoint it with `SYSTEM_AGENT=asr=<provider>/<model>`.
+export const DEFAULT_ASR_SYSTEM_AGENT_ITEM: SystemAgentItem = {
+  model: DEFAULT_ASR_MODEL,
+  provider: DEFAULT_ASR_PROVIDER,
+};
+
 export const DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   model: DEFAULT_EMBEDDING_MODEL,
   provider: DEFAULT_EMBEDDING_PROVIDER,
@@ -55,9 +65,11 @@ export const DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM: SystemAgentItem = 
 
 export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   agentMeta: DEFAULT_SYSTEM_AGENT_ITEM,
+  asr: DEFAULT_ASR_SYSTEM_AGENT_ITEM,
   expertise: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   followUpAction: DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM,
   generationTopic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  goal: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   historyCompress: DEFAULT_SYSTEM_AGENT_ITEM,
   inputCompletion: DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM,
   memoryAnalysisAgentConfig: DEFAULT_MINI_SYSTEM_AGENT_ITEM,

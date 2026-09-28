@@ -7,7 +7,9 @@ import { type StateCreator } from 'zustand/vanilla';
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
 import {
+  getEarlierHistoryStatus,
   getMessageListFetchPolicy,
+  loadEarlierMessagePage,
   messageListKey,
   runMessageListQuery,
 } from '@/services/message/cache';
@@ -74,6 +76,19 @@ export interface DataAction {
    * This method updates the frontend state without persisting to database
    */
   internal_dispatchMessage: (payload: MessageDispatch) => void;
+
+  /**
+   * Load one round-aligned page of history older than the server's
+   * newest-first window (LOBE-13716) and prepend it to the transcript.
+   * Self-guarding: no-ops while a page is in flight, once the beginning has
+   * been reached, or when the conversation has no server-backed messages yet.
+   *
+   * Never rejects: a failure is kept in `earlierMessagesError` for the inline
+   * error row. While that error stands, gesture-driven calls no-op so scrolling
+   * does not silently re-fire a failing request; pass `{ retry: true }` from the
+   * explicit Retry action to try again.
+   */
+  loadEarlierMessages: (options?: { retry?: boolean }) => Promise<void>;
 
   /**
    * Replace all messages with new data
@@ -186,6 +201,66 @@ export const dataSlice: StateCreator<
 
     // Sync changes to external store (ChatStore)
     get().onMessagesChange?.(newDbMessages, get().context);
+  },
+
+  loadEarlierMessages: async (options) => {
+    const context = get().context;
+    if (!context.agentId || !context.topicId) return;
+    if (get().earlierMessagesError !== undefined && !options?.retry) return;
+    const status = getEarlierHistoryStatus(context);
+    if (status.loading || status.exhausted) return;
+
+    set(
+      { earlierMessagesError: undefined, isLoadingEarlierMessages: true },
+      false,
+      'loadEarlierMessages/start',
+    );
+    try {
+      const merged = await loadEarlierMessagePage(
+        context,
+        // Read on demand: the cursor comes from the transcript at request time,
+        // while the merge runs against the transcript at completion — a stream
+        // or edit may have changed it meanwhile. A conversation switch yields
+        // `undefined` so the other conversation's rows are never merged.
+        () => (isSameConversationContext(context, get().context) ? get().dbMessages : undefined),
+        (before) =>
+          messageService.getEarlierMessages(
+            {
+              agentId: context.agentId,
+              agentShareId: context.agentShareId,
+              groupId: context.groupId,
+              threadId: context.threadId,
+              topicId: context.topicId,
+              topicShareId: context.topicShareId,
+            },
+            before,
+          ),
+      );
+      // `undefined` → nothing to prepend (no cursor, already loading, the
+      // beginning was reached, or the request went stale while in flight).
+      if (!merged) return;
+
+      log(
+        '[loadEarlierMessages] prepended | contextKey=%s | mergedCount=%d',
+        messageMapKey(context),
+        merged.length,
+      );
+      get().replaceMessages(merged, { expectedContext: context });
+    } catch (error) {
+      log('[loadEarlierMessages] failed | contextKey=%s | %O', messageMapKey(context), error);
+      // The list fires this without awaiting, so the failure is surfaced
+      // through state (inline error row with Retry) instead of a rejection.
+      if (isSameConversationContext(context, get().context)) {
+        set({ earlierMessagesError: error }, false, 'loadEarlierMessages/error');
+      }
+    } finally {
+      // The flag is conversation-wide state: after a context switch it belongs
+      // to the new conversation (reset by createEphemeralResetState), so a
+      // late settle from the previous one must not clear it.
+      if (isSameConversationContext(context, get().context)) {
+        set({ isLoadingEarlierMessages: false }, false, 'loadEarlierMessages/end');
+      }
+    }
   },
 
   replaceMessages: (messages, options) => {

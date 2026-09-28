@@ -43,7 +43,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     padding-block: 8px;
     padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   headerMeta: css`
     overflow: hidden;
@@ -52,20 +51,26 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   headerSubtitle: css`
     overflow: hidden;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
 
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    span {
+      font-size: 14px;
+      font-weight: 500;
+      color: ${cssVar.colorText};
+    }
   `,
   headerTitle: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 16px;
+    font-weight: 600;
     color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   `,
   // "+N more pending" hint shown when several conversations are waiting; only
   // the top card is actionable at once.
@@ -118,16 +123,14 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   // Rendered with the same Markdown component as the User chat bubble, so
   // formatting / skill tags read consistently. A long request scrolls inside a
   // capped body rather than hard-truncating, so the full context stays reachable.
-  userRequest: css`
+  requestContext: css`
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 8px;
 
-    padding-block: 8px;
+    padding-block: 4px 12px;
     padding-inline: 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
   `,
   userRequestBody: css`
     overflow-y: auto;
@@ -141,11 +144,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     p:last-child {
       margin-block-end: 0;
     }
-  `,
-  userRequestLabel: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
   `,
   // Top-center fixed wrapper. The wrapper ignores pointer events so it never
   // blocks the page; only the cards / pill re-enable them.

@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -44,6 +44,9 @@ jobs:
           if gh run download "${{ steps.base.outputs.run_id }}" --repo "${{ github.repository }}" \
             -n workbench-build-inputs -D /tmp/workbench-manifest; then
             echo "path=/tmp/workbench-manifest/build-inputs.txt" >> "$GITHUB_OUTPUT"
+            if [ -f /tmp/workbench-manifest/output-hash.txt ]; then
+              echo "output_hash=/tmp/workbench-manifest/output-hash.txt" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "no manifest artifact on last successful run"
           fi
@@ -81,6 +84,8 @@ jobs:
           ASSET_S3_PUBLIC_DOMAIN: ${{ secrets.ASSET_S3_PUBLIC_DOMAIN }}
           ASSET_S3_REGION: ${{ secrets.ASSET_S3_REGION }}
           ASSET_S3_SECRET_ACCESS_KEY: ${{ secrets.ASSET_S3_SECRET_ACCESS_KEY }}
+          # Unset on manual dispatch, which always deploys.
+          WORKBENCH_PREVIOUS_OUTPUT_HASH_FILE: ${{ steps.manifest.outputs.output_hash }}
         run: bun run deploy
         working-directory: apps/workbench
 
@@ -89,7 +94,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: workbench-build-inputs
-          path: apps/workbench/build-inputs.txt
+          path: |
+            apps/workbench/build-inputs.txt
+            apps/workbench/output-hash.txt
           retention-days: 90
 
       - name: Carry forward previous manifest
@@ -97,5 +104,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: workbench-build-inputs
-          path: ${{ steps.manifest.outputs.path }}
+          path: /tmp/workbench-manifest/
           retention-days: 90

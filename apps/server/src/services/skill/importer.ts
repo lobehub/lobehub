@@ -381,7 +381,9 @@ export class SkillImporter {
         // Handle ZIP file
         log('importFromUrl: detected ZIP file, parsing as package...');
         zipBuffer = Buffer.from(await response.arrayBuffer());
-        const parsed = await this.parser.parseZipPackage(zipBuffer);
+        const parsed = await this.parser.parseZipPackage(zipBuffer, {
+          fallbackName: options?.identifier,
+        });
         manifest = parsed.manifest;
         skillContent = parsed.content;
         zipHash = parsed.zipHash;
@@ -391,7 +393,7 @@ export class SkillImporter {
         // Handle plain SKILL.md
         log('importFromUrl: detected SKILL.md, parsing as markdown...');
         const content = await response.text();
-        const parsed = this.parser.parseSkillMd(content);
+        const parsed = this.parser.parseSkillMd(content, { fallbackName: options?.identifier });
         manifest = parsed.manifest;
         skillContent = parsed.content;
         log('importFromUrl: parsed SKILL.md, manifest=%o', manifest);

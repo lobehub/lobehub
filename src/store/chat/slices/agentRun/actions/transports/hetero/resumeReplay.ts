@@ -1,6 +1,21 @@
 import type { HeteroSessionImportMessage, UIChatMessage } from '@lobechat/types';
 
 /**
+ * Is a restored transcript worth paying for on this adapter?
+ *
+ * Main consumes `resumeReplayMessages` in exactly one place —
+ * `HeterogeneousAgentImpl`'s `ensureClaudeCodeResumeTranscript` — which is
+ * gated on `agentType === 'claude-code'`. Every other adapter is handed the
+ * replay and ignores it, so restoring bodies for them would spend one
+ * authenticated round trip per historical tool, on every turn, for nothing.
+ *
+ * Keep this in step with that call site if another adapter starts rebuilding a
+ * transcript.
+ */
+export const shouldHydrateResumeReplay = (providerType?: string): boolean =>
+  providerType === 'claude-code';
+
+/**
  * Map the topic's chat messages into the normalized shape
  * `buildClaudeCodeTranscript` consumes, so a GC'd Claude Code session can be
  * rebuilt on disk before `--resume`.

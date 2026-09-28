@@ -4,7 +4,7 @@ import { Flexbox, Form } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank';
+import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -29,6 +29,7 @@ import EffortSlider from './EffortSlider';
 import GLM52ReasoningEffortSlider from './GLM52ReasoningEffortSlider';
 import GLM53ReasoningEffortSlider from './GLM53ReasoningEffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
+import { GPT6ReasoningEffortSlider } from './GPT6ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
 import GPT52ReasoningEffortSlider from './GPT52ReasoningEffortSlider';
@@ -36,6 +37,7 @@ import { GPT56ReasoningEffortSlider } from './GPT56ReasoningEffortSlider';
 import Grok43ReasoningEffortSlider from './Grok43ReasoningEffortSlider';
 import Grok45ReasoningEffortSlider from './Grok45ReasoningEffortSlider';
 import Grok46ReasoningEffortSlider from './Grok46ReasoningEffortSlider';
+import Grok47ReasoningEffortSlider from './Grok47ReasoningEffortSlider';
 import Grok420ReasoningEffortSlider from './Grok420ReasoningEffortSlider';
 import Hy3ReasoningEffortSlider from './Hy3ReasoningEffortSlider';
 import ImageAspectRatio2Select from './ImageAspectRatio2Select';
@@ -44,6 +46,7 @@ import ImageResolution2Slider from './ImageResolution2Slider';
 import ImageResolutionSlider from './ImageResolutionSlider';
 import { KimiK3ReasoningEffortSlider } from './KimiK3ReasoningEffortSlider';
 import Opus47EffortSlider from './Opus47EffortSlider';
+import Qwen38ReasoningEffortSlider from './Qwen38ReasoningEffortSlider';
 import ReasoningEffortSlider from './ReasoningEffortSlider';
 import ReasoningModeSegmented from './ReasoningModeSegmented';
 import ReasoningTokenSlider from './ReasoningTokenSlider';
@@ -272,6 +275,16 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
+        children: <Qwen38ReasoningEffortSlider />,
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'qwen38ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
         children: <ReasoningEffortSlider />,
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
@@ -355,6 +368,16 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
+        children: <GPT6ReasoningEffortSlider />,
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'gpt6ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
         children: <GPT52ProReasoningEffortSlider />,
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
@@ -420,6 +443,16 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'vertical',
         minWidth: undefined,
         name: 'grok4_6ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
+        children: <Grok47ReasoningEffortSlider />,
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'grok4_7ReasoningEffort',
         style: {
           paddingBottom: 0,
         },

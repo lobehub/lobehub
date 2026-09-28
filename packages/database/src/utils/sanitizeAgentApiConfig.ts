@@ -12,18 +12,18 @@ export const sanitizeAgentApiConfig = (
 
   const rawApiConfig = heterogeneousProvider.apiConfig;
   let apiConfig: HeterogeneousApiConfig | undefined;
-  if (
-    isRecord(rawApiConfig) &&
-    typeof rawApiConfig.model === 'string' &&
-    typeof rawApiConfig.providerId === 'string'
-  ) {
-    apiConfig = {
-      model: rawApiConfig.model,
-      providerId: rawApiConfig.providerId,
-      ...(typeof rawApiConfig.smallFastModel === 'string' || rawApiConfig.smallFastModel === null
-        ? { smallFastModel: rawApiConfig.smallFastModel }
-        : {}),
-    };
+  if (isRecord(rawApiConfig) && typeof rawApiConfig.model === 'string') {
+    if (rawApiConfig.source === 'server-default') {
+      apiConfig = { model: rawApiConfig.model, source: 'server-default' };
+    } else if (typeof rawApiConfig.providerId === 'string') {
+      apiConfig = {
+        model: rawApiConfig.model,
+        providerId: rawApiConfig.providerId,
+        ...(typeof rawApiConfig.smallFastModel === 'string' || rawApiConfig.smallFastModel === null
+          ? { smallFastModel: rawApiConfig.smallFastModel }
+          : {}),
+      };
+    }
   }
 
   return {

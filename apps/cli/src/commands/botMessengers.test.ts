@@ -23,11 +23,6 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 // `confirm` always answers yes — we test uninstall/unlink under the explicit
 // `--yes` flag too, but for the prompt path we want a deterministic answer.
 vi.mock('../utils/format', async () => {

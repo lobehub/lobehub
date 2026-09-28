@@ -12,12 +12,14 @@ vi.mock('@/business/server/bot/featureAccess', () => ({
 }));
 
 vi.mock('@/server/services/gateway', () => ({
-  GatewayService: vi.fn(() => ({
-    stopClient: mockStopClient,
-    get useMessageGateway() {
-      return gatewayState.useMessageGateway;
-    },
-  })),
+  GatewayService: vi.fn(function () {
+    return {
+      stopClient: mockStopClient,
+      get useMessageGateway() {
+        return gatewayState.useMessageGateway;
+      },
+    };
+  }),
 }));
 
 vi.mock('../BotMessageRouter', () => ({
