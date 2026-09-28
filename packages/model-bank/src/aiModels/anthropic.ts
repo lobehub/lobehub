@@ -24,7 +24,12 @@ const anthropicChatModels: AIChatModelCard[] = [
         { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 8, '5m': 5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-09-22',
@@ -33,7 +38,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     // https://platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5#breaking-changes
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'opus47Effort'],
+      extendParams: ['contextCachingTTL', 'disableContextCaching', 'opus47Effort'],
       searchImpl: 'params',
     },
     type: 'chat',

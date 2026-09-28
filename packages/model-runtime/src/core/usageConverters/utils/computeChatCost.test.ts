@@ -1714,6 +1714,7 @@ describe('Anthropic lookup cache-write pricing', () => {
     (anthropicChatModels as { id: string; pricing?: Pricing }[]).find((m) => m.id === id)?.pricing;
 
   it.each([
+    { id: 'claude-opus-5-5', rate1h: 8, rate5m: 5 },
     { id: 'claude-fable-5-1', rate1h: 20, rate5m: 12.5 },
     { id: 'claude-fable-5', rate1h: 20, rate5m: 12.5 },
     { id: 'claude-opus-5', rate1h: 10, rate5m: 6.25 },
