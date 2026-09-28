@@ -62,22 +62,27 @@ export const reviewGoalDelivery = async (
     // draft, or one a CLI-driven verification was appended past — and its
     // result-less items would otherwise each read as missing evidence and turn a
     // passing delivery into a rejection.
-    const required = buildAcceptanceCheckUnion(
-      runs
-        .filter((round) => !isDraftVerifyRun(round))
-        .map((round) => ({
-          results: results.filter((result) => result.verifyRunId === round.id),
-          run: round,
-        })),
-    ).filter((check) => check.required);
-    // A result filed under an id no round ever planned surfaces as its own row,
-    // required by default. No later round plans it, so the builder is never
+    const confirmed = runs.filter((round) => !isDraftVerifyRun(round));
+    // A result filed under an id its round never planned surfaces as a row of its
+    // own, required by default. No later round plans it, so the builder is never
     // asked to re-answer it and it is never flagged as carried forward — its
-    // stale evidence was re-judged on every attempt until the budget ran out.
-    // The planned checklist is the contract; only a plan-less Acceptance is
-    // judged on its results alone.
-    const planned = required.filter((check) => check.planItem);
-    const checks = planned.length ? planned : required;
+    // stale evidence was re-judged on every attempt until the budget ran out. The
+    // planned checklist is the contract, so each round keeps only the results that
+    // answer its own plan items, matched on the exact id: the union keys planned
+    // rows by `sourceCriterionId`, which an off-plan id could otherwise collide
+    // with. Only a plan-less Acceptance is judged on its results alone.
+    const hasPlan = confirmed.some((round) => (round.plan ?? []).length > 0);
+    const checks = buildAcceptanceCheckUnion(
+      confirmed.map((round) => {
+        const roundResults = results.filter((result) => result.verifyRunId === round.id);
+        if (!hasPlan) return { results: roundResults, run: round };
+        const planIds = new Set(((round.plan ?? []) as { id: string }[]).map((item) => item.id));
+        return {
+          results: roundResults.filter((result) => planIds.has(result.checkItemId)),
+          run: round,
+        };
+      }),
+    ).filter((check) => check.required);
     if (!checks.length) throw new Error(REVIEW_BLOCKERS.noRequiredChecks);
 
     const evidenceModel = new VerifyEvidenceModel(db, userId, workspaceId);
