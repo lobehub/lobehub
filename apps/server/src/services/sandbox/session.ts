@@ -7,6 +7,7 @@ import {
   type SandboxWorkspaceClaim,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { EnvironmentConfiguration } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
@@ -14,6 +15,7 @@ import { EnvironmentInstanceModel } from '@/database/models/environmentInstance'
 import { TopicModel } from '@/database/models/topic';
 
 import { resolveSandboxWorkspaceClaim } from './entitlement';
+import type { SandboxSessionSpecification } from './types';
 
 const log = debug('lobe-server:sandbox:session');
 
@@ -43,6 +45,19 @@ export interface SandboxSessionConfig {
   environment?: string;
   mode: SandboxMode;
   /**
+   * What the instance was built from, for the execution plane to act on while
+   * the session runs. Absent on an ephemeral run, which has no instance and
+   * therefore no definition to honour.
+   *
+   * The instance's own snapshot of the definition, not the environment's
+   * current one — the same object its build used. So the variables a command
+   * sees are the ones its packages were installed under, and the digest the
+   * execution plane records for a session matches the digest of the build it
+   * restored. Editing the environment therefore takes effect on rebuild, which
+   * is the same rule the checkout and the installed packages already follow.
+   */
+  specification?: SandboxSessionSpecification;
+  /**
    * Where commands run, when that is not {@link cwd}: the sandbox's local
    * disk, for an instance that has been built from a repository. The checkout
    * lives there and installs only work there; {@link cwd} stays the
@@ -52,6 +67,37 @@ export interface SandboxSessionConfig {
    */
   workingDir?: string;
 }
+
+/**
+ * The run-time half of a stored definition, named field by field.
+ *
+ * Everything this omits is either not the execution plane's business during a
+ * session or has no business leaving the server at all; see
+ * {@link SandboxSessionSpecification}. Absent when the pick is empty, so a
+ * definition that says nothing sends nothing rather than an empty object the
+ * runtime would still adopt.
+ */
+const toSessionSpecification = (
+  configuration: EnvironmentConfiguration | null | undefined,
+): SandboxSessionSpecification | undefined => {
+  if (!configuration) return undefined;
+
+  const specification: SandboxSessionSpecification = {
+    ...(configuration.bootstrapCommand && { bootstrapCommand: configuration.bootstrapCommand }),
+    ...(configuration.env &&
+      Object.keys(configuration.env).length > 0 && { env: configuration.env }),
+    ...(configuration.excludePaths?.length && { excludePaths: configuration.excludePaths }),
+    ...(configuration.internetAccess !== undefined && {
+      internetAccess: configuration.internetAccess,
+    }),
+    ...(configuration.maintenanceCommand && {
+      maintenanceCommand: configuration.maintenanceCommand,
+    }),
+    ...(configuration.sources?.length && { sources: configuration.sources }),
+  };
+
+  return Object.keys(specification).length > 0 ? specification : undefined;
+};
 
 /**
  * Whether an instance's checkout is on the sandbox's local disk: it has been
@@ -205,11 +251,14 @@ export const resolveSandboxSessionConfig = async ({
 
     log('Persistent for topic %s: instance=%s cwd=%o', topicId, id, workingDirectory);
 
+    const specification = toSessionSpecification(instance.configurationSnapshot);
+
     return {
       claim,
       cwd: workingDirectory,
       environment: id,
       mode: 'persistent',
+      ...(specification && { specification }),
       ...(hasLocalCheckout(instance) && { workingDir: SANDBOX_LOCAL_WORK_ROOT }),
     };
   } catch (error) {

@@ -320,6 +320,7 @@ const execInSandboxHandler = async ({
       sandboxCwd: sandbox.cwd,
       sandboxEnvironment: sandbox.environment,
       sandboxMode: sandbox.mode,
+      sandboxSpecification: sandbox.specification,
       sandboxWorkingDir: sandbox.workingDir,
       serverDB: ctx.serverDB,
       topicId,

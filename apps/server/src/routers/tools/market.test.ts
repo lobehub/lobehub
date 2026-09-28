@@ -144,6 +144,41 @@ describe('tools marketRouter', () => {
     );
   });
 
+  // Regression: the same route, and the same reason as above. The environment's
+  // definition is what exports its variables, runs its maintenance command and
+  // cuts its network — all of it inert for a conversation that reaches the
+  // sandbox through here, which is every run not dispatched server-side.
+  it('opens the session with the definition the instance was built from', async () => {
+    const caller = marketRouter.createCaller({
+      serverDB: {},
+      userId: 'caller-user',
+      workspaceId: 'ws-1',
+    } as any);
+    const specification = {
+      env: { NODE_ENV: 'production' },
+      internetAccess: false,
+      maintenanceCommand: 'git pull --ff-only',
+    };
+    mockResolveSandboxSessionConfig.mockResolvedValueOnce({
+      claim: { key: 'ws-org-ws-1', quotaBytes: 1024 },
+      cwd: 'lobehub-dev',
+      environment: 'env-1',
+      mode: 'persistent',
+      specification,
+    } as never);
+    mockSandboxCallTool.mockResolvedValue({ result: { ok: true }, success: true });
+
+    await caller.execInSandbox({
+      params: { command: 'env' },
+      toolName: 'runCommand',
+      topicId: 'topic-1',
+    });
+
+    expect(mockCreateSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxSpecification: specification }),
+    );
+  });
+
   // Regression: `input.userId` used to override `ctx.userId`, so any
   // authenticated caller could make the server mint another user's JWT into a
   // sandbox command they control (and read their skills/files).

@@ -41,6 +41,7 @@ import {
   createSandboxService,
   normalizeSandboxCommandResult,
   resolveSandboxSessionConfig,
+  type SandboxSessionSpecification,
 } from '@/server/services/sandbox';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
@@ -148,6 +149,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private sandboxWorkingDir?: string;
   private sandboxEnvironment?: string;
   private sandboxMode?: SandboxMode;
+  private sandboxSpecification?: SandboxSessionSpecification;
   private device?: SkillDeviceExecution;
   private disabledSkillIds: Set<string>;
   private isSkillGranted?: (identifier: string) => boolean;
@@ -183,6 +185,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     sandboxCwd?: string;
     sandboxEnvironment?: string;
     sandboxMode?: SandboxMode;
+    sandboxSpecification?: SandboxSessionSpecification;
     sandboxWorkingDir?: string;
     serverDB: LobeChatDatabase;
     /** Agent Share only: `lh` must not mint a creator-scoped token for a visitor. */
@@ -206,6 +209,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.sandboxWorkingDir = options.sandboxWorkingDir;
     this.sandboxEnvironment = options.sandboxEnvironment;
     this.sandboxMode = options.sandboxMode;
+    this.sandboxSpecification = options.sandboxSpecification;
     this.device = options.device;
     this.disabledSkillIds = options.disabledSkillIds ?? new Set();
     this.isSkillGranted = options.isSkillGranted;
@@ -342,6 +346,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         sandboxCwd: this.sandboxCwd,
         sandboxEnvironment: this.sandboxEnvironment,
         sandboxMode: this.sandboxMode,
+        sandboxSpecification: this.sandboxSpecification,
         sandboxWorkingDir: this.sandboxWorkingDir,
         serverDB: this.serverDB,
         topicId: this.topicId,
@@ -699,6 +704,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         sandboxCwd: this.sandboxCwd,
         sandboxEnvironment: this.sandboxEnvironment,
         sandboxMode: this.sandboxMode,
+        sandboxSpecification: this.sandboxSpecification,
         sandboxWorkingDir: this.sandboxWorkingDir,
         serverDB: this.serverDB,
         topicId: this.topicId,
@@ -761,6 +767,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         sandboxCwd: this.sandboxCwd,
         sandboxEnvironment: this.sandboxEnvironment,
         sandboxMode: this.sandboxMode,
+        sandboxSpecification: this.sandboxSpecification,
         sandboxWorkingDir: this.sandboxWorkingDir,
         topicId: this.topicId,
         userId: this.userId,
@@ -934,6 +941,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       sandboxCwd: sandbox.cwd,
       sandboxEnvironment: sandbox.environment,
       sandboxMode: sandbox.mode,
+      sandboxSpecification: sandbox.specification,
       sandboxWorkingDir: sandbox.workingDir,
       serverDB: context.serverDB,
       shareVisitorBlocked: !!shareVisitor,

@@ -97,8 +97,72 @@ describe('resolveSandboxSessionConfig', () => {
       cwd: 'projects/atlas',
       environment: INSTANCE_ID,
       mode: 'persistent',
+      specification: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
       workingDir: '/root/work',
     });
+  });
+
+  // Regression (LOBE-14442): the definition never reached a conversation, so
+  // the declared variables were missing from the agent's shell, the
+  // maintenance command never ran once, and the environment's network switch
+  // could not cut anything. All three are the execution plane acting on this
+  // object, and it only ever received it for a build.
+  it('carries the definition the instance was built from', async () => {
+    findInstanceById.mockResolvedValue({
+      configurationSnapshot: {
+        env: { API_URL: 'https://example.com', NODE_ENV: 'production' },
+        excludePaths: ['node_modules'],
+        internetAccess: false,
+        maintenanceCommand: 'git pull --ff-only',
+      },
+      id: INSTANCE_ID,
+      workingDirectory: 'projects/atlas',
+    });
+
+    await expect(resolve()).resolves.toMatchObject({
+      specification: {
+        env: { API_URL: 'https://example.com', NODE_ENV: 'production' },
+        excludePaths: ['node_modules'],
+        internetAccess: false,
+        maintenanceCommand: 'git pull --ff-only',
+      },
+    });
+  });
+
+  // The column is `jsonb`: its type says "no credentials", but it holds
+  // whatever was written to it, and this object now leaves the server on every
+  // tool call. So the pick is by name — a key nobody here chose does not
+  // travel just because it turned up in the row.
+  it('sends only the named fields, whatever else the row holds', async () => {
+    findInstanceById.mockResolvedValue({
+      configurationSnapshot: {
+        credentials: [{ headers: { Authorization: 'Bearer nope' }, host: 'github.com' }],
+        env: { NODE_ENV: 'production' },
+        requirements: { memoryGiB: 8 },
+      },
+      id: INSTANCE_ID,
+      workingDirectory: 'projects/atlas',
+    });
+
+    const { specification } = await resolve();
+    expect(specification).toEqual({ env: { NODE_ENV: 'production' } });
+  });
+
+  // An empty pick is not an empty object: the runtime adopts whatever it is
+  // handed, so a definition with nothing to say must send nothing and leave
+  // the session's own defaults alone.
+  it.each([
+    ['no definition at all', undefined],
+    ['a definition with nothing this session acts on', { requirements: { cpu: 2 } }],
+    ['an empty variable map', { env: {} }],
+  ])('sends no specification for %s', async (_, configurationSnapshot) => {
+    findInstanceById.mockResolvedValue({
+      configurationSnapshot,
+      id: INSTANCE_ID,
+      workingDirectory: 'projects/atlas',
+    });
+
+    expect(await resolve()).not.toHaveProperty('specification');
   });
 
   it.each([

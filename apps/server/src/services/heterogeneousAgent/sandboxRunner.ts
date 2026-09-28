@@ -247,6 +247,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     sandboxCwd: sandbox?.cwd,
     sandboxEnvironment: sandbox?.environment,
     sandboxMode: sandbox?.mode,
+    sandboxSpecification: sandbox?.specification,
     sandboxWorkingDir: sandbox?.workingDir,
     topicId,
     userId,
