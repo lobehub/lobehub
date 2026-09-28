@@ -57,7 +57,7 @@ describe('AgentDocumentsExecutionRuntime', () => {
       // "Document not found: undefined" for documents that existed.
       const readDocument = vi.fn().mockResolvedValue({
         content: 'Working notes',
-        documentId: 'docs_cfVhhihil1B2eMGG',
+        documentId: 'docs_test_read',
         id: '905d1809-b765-48bc-890e-84e82d9986e7',
         title: 'Notes',
       });
@@ -79,7 +79,7 @@ describe('AgentDocumentsExecutionRuntime', () => {
 
     it('mutates by the binding id when given a backing `docs_` id', async () => {
       const readDocument = vi.fn().mockResolvedValue({
-        documentId: 'docs_OEyZeRFLrr7Od57X',
+        documentId: 'docs_test_write',
         id: '6740f044-b58b-47eb-bdc0-21ade6c85eb2',
         title: 'Design Directives',
       });
@@ -87,7 +87,7 @@ describe('AgentDocumentsExecutionRuntime', () => {
       const runtime = createRuntime({ readDocument, replaceDocumentContent });
 
       const result = await runtime.replaceDocumentContent(
-        { content: 'new body', documentId: 'docs_OEyZeRFLrr7Od57X' } as any,
+        { content: 'new body', documentId: 'docs_test_write' } as any,
         { agentId: 'agent-1' },
       );
 
@@ -99,7 +99,7 @@ describe('AgentDocumentsExecutionRuntime', () => {
 
     it('copies and updates load rules by the binding id when given a backing `docs_` id', async () => {
       const readDocument = vi.fn().mockResolvedValue({
-        documentId: 'docs_OEyZeRFLrr7Od57X',
+        documentId: 'docs_test_write',
         id: '6740f044-b58b-47eb-bdc0-21ade6c85eb2',
         title: 'Design Directives',
       });
@@ -109,16 +109,16 @@ describe('AgentDocumentsExecutionRuntime', () => {
         title: 'Design Directives (copy)',
       });
       const updateLoadRule = vi.fn().mockResolvedValue({
-        documentId: 'docs_OEyZeRFLrr7Od57X',
+        documentId: 'docs_test_write',
         title: 'Design Directives',
       });
       const runtime = createRuntime({ copyDocument, readDocument, updateLoadRule });
 
-      await runtime.copyDocument({ documentId: 'docs_OEyZeRFLrr7Od57X' } as any, {
+      await runtime.copyDocument({ documentId: 'docs_test_write' } as any, {
         agentId: 'agent-1',
       });
       await runtime.updateLoadRule(
-        { documentId: 'docs_OEyZeRFLrr7Od57X', rule: { rule: 'always' } } as any,
+        { documentId: 'docs_test_write', rule: { rule: 'always' } } as any,
         { agentId: 'agent-1' },
       );
 
