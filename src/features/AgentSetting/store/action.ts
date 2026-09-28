@@ -260,8 +260,10 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
       try {
         await get().onConfigChange?.(nextConfig);
         get().updateSaveStatus('saved');
-      } catch (error: any) {
-        if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+      } catch (error) {
+        const name = error instanceof Error ? error.name : 'Error';
+        const msg = error instanceof Error ? error.message : '';
+        if (name === 'AbortError' || msg.includes('aborted')) {
           get().updateSaveStatus('idle');
         } else {
           console.error('[AgentSettings] Failed to save config:', error);
@@ -280,8 +282,10 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
       try {
         await get().onMetaChange?.(nextValue);
         get().updateSaveStatus('saved');
-      } catch (error: any) {
-        if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+      } catch (error) {
+        const name = error instanceof Error ? error.name : 'Error';
+        const msg = error instanceof Error ? error.message : '';
+        if (name === 'AbortError' || msg.includes('aborted')) {
           get().updateSaveStatus('idle');
         } else {
           console.error('[AgentSettings] Failed to save meta:', error);

@@ -31,11 +31,11 @@ const handler = async (req: Request, { jwtPayload }: { jwtPayload?: any }) => {
     });
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error) {
     console.error('[ComfyUI WebAPI] Error:', error);
 
     // Extract AgentRuntimeError from TRPCError's cause
-    const agentError = error?.cause;
+    const agentError = error instanceof Error ? error.cause : undefined;
 
     // If we have an AgentRuntimeError in the cause, return it
     if (agentError && typeof agentError === 'object' && 'errorType' in agentError) {

@@ -89,7 +89,7 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
       form.resetFields();
       setScreenshotUrl(null);
       close();
-    } catch (error: any) {
+    } catch (error) {
       console.error('[FeedbackModal] Submission failed:', error);
       toast.error(t('feedback.errors.submitFailed'));
     } finally {

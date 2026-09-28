@@ -23,7 +23,7 @@ const CliTestSection = memo(() => {
     try {
       const result = await electronSystemService.runCliCommand(args);
       setResults((prev) => [...prev, { args, ...result }]);
-    } catch (error: any) {
+    } catch (error) {
       setResults((prev) => [...prev, { args, exitCode: -1, stderr: String(error), stdout: '' }]);
     } finally {
       setRunning(false);
