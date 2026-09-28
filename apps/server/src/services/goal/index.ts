@@ -1491,24 +1491,42 @@ export class GoalService {
         } catch (error) {
           throw notClosed(error);
         }
-      }
-      // An interrupted Task goes back to `backlog`, as in `restart`: left
-      // `paused` it would read as parked on a person, and a reopened goal would
-      // wait on it instead of running it again. Compare-and-swap for the same
-      // reason as there — never yank a row a concurrent tick just moved.
-      const interrupted = [...new Set(runningTopics.map((topic) => topic.taskId))];
-      for (const task of interrupted.length > 0
-        ? await this.taskModel.findByIds(interrupted)
-        : []) {
-        if (task.status === 'completed') continue;
-        await this.taskModel.updateStatusIfCurrent(task.id, task.status, 'backlog', {
-          error: null,
-        });
+        // Reset right after its own interruption, as in `restart`: left `paused`
+        // it reads as parked on a person and a reopened goal waits on it. Doing
+        // it per run means a later failed interruption cannot strand the ones
+        // already stopped — a retry no longer sees them as running. CAS so a
+        // row a concurrent tick just moved is never yanked.
+        const task = await this.taskModel.findById(topic.taskId);
+        if (task && task.status !== 'completed') {
+          await this.taskModel.updateStatusIfCurrent(task.id, task.status, 'backlog', {
+            error: null,
+          });
+        }
       }
     }
-    await this.setPauseReason(goalId, undefined);
+    // Commit under the same lock the fence took, and only if the fence still
+    // holds: a resume from another tab during the interruption pass lets an
+    // advance claim work this pass never saw, and ending the goal over it
+    // would leave that run spending on a goal reading "ended".
     const reason = to === 'achieved' ? 'marked achieved by user' : 'canceled by user';
-    const goal = await this.transitionStatus(graph.goal, to, reason, 'user');
+    const goal = await this.db.transaction(async (db) => {
+      const model = new GoalModel(db, this.userId, this.workspaceId);
+      const current = await model.lockById(goalId);
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      if (!['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'The goal was resumed while it was being closed, so it was not closed.',
+        });
+      }
+      await model.updatePauseReason(goalId, undefined);
+      if (current.status === to) return current;
+      const updated = await model.updateStatus(goalId, to);
+      await new GoalGraphModel(db, this.userId, this.workspaceId)
+        .recordGoalStatus(goalId, current.status, to, reason)
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+      return updated;
+    });
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     return goal;
   };
