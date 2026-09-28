@@ -11,6 +11,8 @@ import type { InternalExecAgentParams } from '../types';
 /** Bridge params persisted on a group member run's serialized `group-member-bridge` hook. */
 export interface GroupMemberBridgeParams {
   anchorMessageId: string;
+  /** Member deadline (epoch ms); absent when the member runs without a timeout. */
+  deadlineAt?: number;
   expectedMembers: number;
   groupToolMessageId: string;
   mode: GroupActionMemberMode;

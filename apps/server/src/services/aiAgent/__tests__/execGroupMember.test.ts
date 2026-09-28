@@ -246,4 +246,83 @@ describe('AiAgentService.execGroupMember', () => {
 
     expect(result).toMatchObject({ groupMemberContinuation: true });
   });
+
+  // Codex P1 on #20093: an approval continuation retires the parked member op,
+  // which disarmed the member's timeout watchdog.
+  describe('member deadline across an approval continuation', () => {
+    const continueMember = async (deadlineAt?: number) => {
+      mockFindMessagePlugin.mockResolvedValue({
+        intervention: { operationId: 'op-carol', status: 'pending' },
+      });
+      mockLoadGroupMemberBridge.mockResolvedValue({
+        agentId: 'agt_carol',
+        bridge: {
+          anchorMessageId: 'msg-task',
+          ...(deadlineAt && { deadlineAt }),
+          expectedMembers: 1,
+          groupToolMessageId: 'msg-task',
+          mode: 'isolated',
+          onComplete: 'resume',
+          parentOperationId: 'op-sup',
+        },
+        groupId: 'group-1',
+        topicId: 'topic-1',
+      });
+      const original = service.execAgent.bind(service);
+      vi.spyOn(service, 'execAgent')
+        .mockImplementationOnce(original)
+        .mockResolvedValueOnce({ ...execAgentResult, operationId: 'op-carol-continued' });
+
+      await service.execAgent({
+        agentId: 'agt_sup',
+        appContext: { groupId: 'group-1', topicId: 'topic-1' },
+        prompt: '',
+        resumeApproval: { decision: 'approved', parentMessageId: 'msg-tool', toolCallId: 'call-1' },
+      } as any);
+    };
+
+    it('re-arms the remaining time on the continuation', async () => {
+      await continueMember(Date.now() + 60_000);
+
+      expect(mockScheduleGroupMemberTimeout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          memberOperationId: 'op-carol-continued',
+          mode: 'isolated',
+          parentOperationId: 'op-sup',
+        }),
+        expect.any(Number),
+      );
+      const [, delayMs] = mockScheduleGroupMemberTimeout.mock.calls[0];
+      expect(delayMs).toBeGreaterThan(55_000);
+      expect(delayMs).toBeLessThanOrEqual(60_000);
+    });
+
+    it("records an isolated member's absolute deadline in its bridge", async () => {
+      const execAgentSpy = vi.spyOn(service, 'execAgent').mockResolvedValue(execAgentResult);
+      const before = Date.now();
+
+      await service.execGroupMember(memberParams({ mode: 'isolated', timeout: 30_000 }));
+
+      const hooks = execAgentSpy.mock.calls[0][0].hooks ?? [];
+      const body = hooks.find((hook) => hook.id === 'group-member-bridge')?.webhook?.body as
+        { deadlineAt?: number } | undefined;
+      expect(body?.deadlineAt).toBeGreaterThanOrEqual(before + 30_000);
+      expect(body?.deadlineAt).toBeLessThanOrEqual(Date.now() + 30_000);
+    });
+
+    it('fires at once when the deadline passed while the approval waited', async () => {
+      await continueMember(Date.now() - 1000);
+
+      expect(mockScheduleGroupMemberTimeout).toHaveBeenCalledWith(
+        expect.objectContaining({ memberOperationId: 'op-carol-continued' }),
+        1,
+      );
+    });
+
+    it('arms nothing for a member without a timeout', async () => {
+      await continueMember();
+
+      expect(mockScheduleGroupMemberTimeout).not.toHaveBeenCalled();
+    });
+  });
 });

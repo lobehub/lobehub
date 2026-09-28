@@ -62,7 +62,10 @@ import {
 import { InterventionController } from './intervention/InterventionController';
 import type { ApprovalClaimState } from './pipeline/approvalResume';
 import { claimApprovalResume, tryReuseInterventionContinuation } from './pipeline/approvalResume';
-import { resolveGroupMemberApprovalContinuation } from './pipeline/groupMemberApproval';
+import {
+  type GroupMemberBridgeParams,
+  resolveGroupMemberApprovalContinuation,
+} from './pipeline/groupMemberApproval';
 import { dispatchHeteroAgent } from './pipeline/heteroDispatch';
 import { buildOperationInitRequest, runOperationInit } from './pipeline/operationInit';
 import { createHistoryMessagesLoader } from './pipeline/operationPrep';
@@ -550,8 +553,10 @@ export class AiAgentService {
         memberContinuation.agentId,
         memberContinuation.parentOperationId,
       );
+      const continuation = await this.execAgent(memberContinuation);
+      await this.rearmGroupMemberDeadline(memberContinuation, continuation);
       return {
-        ...(await this.execAgent(memberContinuation)),
+        ...continuation,
         groupMemberContinuation: true,
         supervisorOperationId: memberContinuation.parentOperationId,
       };
@@ -1546,6 +1551,33 @@ export class AiAgentService {
     });
 
   /**
+   * An approval continuation retires the parked member op, which silently
+   * disarms the timeout watchdog scheduled for it. Re-arm the same absolute
+   * deadline on the continuation (immediately when it has already passed).
+   */
+  private rearmGroupMemberDeadline = async (
+    continuationParams: InternalExecAgentParams,
+    continuation: ExecAgentResult,
+  ): Promise<void> => {
+    const bridge = continuationParams.hooks?.find((hook) => hook.id === 'group-member-bridge')
+      ?.webhook?.body as GroupMemberBridgeParams | undefined;
+    if (!bridge?.deadlineAt || !continuation.success || !continuation.operationId) return;
+
+    await this.agentRuntimeService.scheduleGroupMemberTimeout(
+      {
+        anchorMessageId: bridge.anchorMessageId,
+        expectedMembers: bridge.expectedMembers,
+        groupToolMessageId: bridge.groupToolMessageId,
+        memberOperationId: continuation.operationId,
+        mode: bridge.mode,
+        onComplete: bridge.onComplete,
+        parentOperationId: bridge.parentOperationId,
+      },
+      Math.max(1, bridge.deadlineAt - Date.now()),
+    );
+  };
+
+  /**
    * Fork a single group member ("call agent member") under a `lobe-group-management`
    * tool call. Dispatches to the in-group (non-isolated, shared group session)
    * or isolated (own thread) path, installing the group-action member completion
@@ -1558,6 +1590,8 @@ export class AiAgentService {
     if (params.mode === 'isolated') {
       // Isolated members reuse the sub-agent isolation-thread machinery, swapping
       // in the group-action member bridge (K=N barrier + resume/finish).
+      const deadlineAt =
+        params.timeout && params.timeout > 0 ? Date.now() + params.timeout : undefined;
       const result = await execAgentThreadRun(
         this.subAgentRunDeps,
         {
@@ -1574,6 +1608,7 @@ export class AiAgentService {
           bridgeHookFactory: (threadId) =>
             createGroupActionMemberBridgeHook(this.agentRuntimeService, {
               anchorMessageId: params.anchorMessageId,
+              deadlineAt,
               expectedMembers: params.expectedMembers,
               groupToolMessageId: params.groupToolMessageId,
               mode: 'isolated',
