@@ -553,6 +553,52 @@ describe('GatewayClient', () => {
     });
   });
 
+  describe('reportMetrics', () => {
+    const samples = [{ observedAt: 1 }] as any;
+
+    const connectAndAuth = async () => {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+      (client as any).handleMessage(JSON.stringify({ type: 'auth_success' }));
+      return (client as any).ws;
+    };
+
+    it('rejects when not connected', async () => {
+      await expect(client.reportMetrics(samples)).rejects.toThrow('not connected');
+    });
+
+    it('resolves on the matching ack', async () => {
+      const ws = await connectAndAuth();
+      const pending = client.reportMetrics(samples);
+
+      const sent = JSON.parse(ws.send.mock.calls.at(-1)[0]);
+      expect(sent).toMatchObject({ samples, type: 'device_metrics' });
+      (client as any).handleMessage(
+        JSON.stringify({ accepted: 1, batchId: sent.batchId, type: 'device_metrics_ack' }),
+      );
+
+      await expect(pending).resolves.toBeUndefined();
+    });
+
+    it('rejects when no ack arrives in time', async () => {
+      await connectAndAuth();
+      const pending = client.reportMetrics(samples);
+      const assertion = expect(pending).rejects.toThrow('Timed out');
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      await assertion;
+    });
+
+    it('rejects in-flight batches when the socket goes away', async () => {
+      await connectAndAuth();
+      const pending = client.reportMetrics(samples);
+      const assertion = expect(pending).rejects.toThrow('closed');
+
+      await client.disconnect();
+      await assertion;
+    });
+  });
+
   describe('tunnel serving', () => {
     it('forwards tunnel frames to the tunnel host', async () => {
       client.connect();

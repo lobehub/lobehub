@@ -222,6 +222,13 @@ export const buildServerVirtualSubAgentRunner = (
   state: AgentState,
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
+  /**
+   * The row this tool call already owns — set when the call went through human
+   * approval, whose intervention row is then executed in place. The sub-agent
+   * must report into that row: a second placeholder left the approved row empty
+   * forever, so the parent's barrier never cleared and it was never resumed.
+   */
+  existingToolMessageId?: string,
 ): ServerSubAgentRunner | undefined => {
   // Share-visitor runs never get a sub-agent runner: the child run spawned
   // here does not thread the parent's shareGate, so it would execute with the
@@ -271,25 +278,31 @@ export const buildServerVirtualSubAgentRunner = (
         ? undefined
         : getSubAgentChatConfigOverride(parentAgentConfig?.agencyConfig?.subagent);
 
-      // 1. Create the pending placeholder tool message (mirrors the normal
+      // 1. Create (or, after approval, reuse) the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
       //    and renders a loading state until the bridge backfills it.
-      const placeholder = await ctx.messageModel.create({
-        agentId,
-        content: '',
-        groupId: state.origin?.groupId ?? undefined,
-        parentId: parentMessageId,
-        plugin: chatToolPayload as any,
-        // A continued sub-agent already has its thread, so the card can link to
-        // it while the new turn is still running.
-        pluginState: subAgentId
-          ? { status: 'pending', threadId: subAgentId }
-          : { status: 'pending' },
-        role: 'tool',
-        threadId: state.origin?.threadId,
-        tool_call_id: chatToolPayload.id,
-        topicId,
-      });
+      const pendingState = subAgentId
+        ? { status: 'pending', threadId: subAgentId }
+        : { status: 'pending' };
+      if (existingToolMessageId) {
+        await ctx.messageModel.updatePluginState(existingToolMessageId, pendingState);
+      }
+      const placeholder = existingToolMessageId
+        ? { id: existingToolMessageId }
+        : await ctx.messageModel.create({
+            agentId,
+            content: '',
+            groupId: state.origin?.groupId ?? undefined,
+            parentId: parentMessageId,
+            plugin: chatToolPayload as any,
+            // A continued sub-agent already has its thread, so the card can link to
+            // it while the new turn is still running.
+            pluginState: pendingState,
+            role: 'tool',
+            threadId: state.origin?.threadId,
+            tool_call_id: chatToolPayload.id,
+            topicId,
+          });
 
       // 2. Fork the virtual child op anchored to the placeholder. The virtual
       //    entry marks the child as `isSubAgent` and registers the completion
@@ -317,6 +330,16 @@ export const buildServerVirtualSubAgentRunner = (
       //    `started: false` (with the underlying reason) so callSubAgent surfaces
       //    an inline tool error instead.
       if (!result?.success) {
+        // A reused approval row is the call's own result slot: the runtime writes
+        // this failure into it, so it must not be deleted.
+        if (existingToolMessageId) {
+          return {
+            error: result?.error,
+            started: false,
+            subOperationId: result?.operationId,
+            threadId: '',
+          };
+        }
         try {
           // Runtime placeholder cleanup — also valid inside an agent-share
           // visitor topic, hence the explicit opt-in.

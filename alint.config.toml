@@ -5,6 +5,10 @@
 #
 # Scope rules with group `files`; never with `includeFiles` inside a rule
 # (it only filters reports, doubles the jobs, and disables the cache).
+#
+# Severity: `error` is reserved for rules measured at zero false positives on
+# real PRs; an error turns the ALint check red. Everything else stays `warn`.
+# Fixture groups stay `warn` so a rule PR does not fail on its own bad fixtures.
 
 [[config.group]]
 ignores = [
@@ -28,7 +32,7 @@ ignores = [ "**/*.test.ts", "**/__tests__/**", "**/migrations/**" ]
 lobehub = "./packages/alint/rules"
 
 [config.group.rules]
-"lobehub/pmap-over-promise-all" = "warn"
+"lobehub/pmap-over-promise-all" = "error"
 "lobehub/no-dynamic-import-in-server" = "warn"
 
 # Database models layer: cross-table write transactions belong in repositories.
@@ -40,7 +44,7 @@ ignores = [ "**/*.test.ts", "**/__tests__/**" ]
 lobehub = "./packages/alint/rules"
 
 [config.group.rules]
-"lobehub/no-transactions-in-models" = "warn"
+"lobehub/no-transactions-in-models" = "error"
 
 # Web client components.
 [[config.group]]
@@ -51,24 +55,9 @@ ignores = [ "**/*.test.tsx" ]
 lobehub = "./packages/alint/rules"
 
 [config.group.rules]
-"lobehub/no-effect-fetching" = "warn"
+"lobehub/no-effect-fetching" = "error"
 "lobehub/no-mode-flags" = "warn"
 
-# Vitest files, wherever they live: the SPA, every app, and every package.
-# Naming only `apps/server` here silently skipped the ~230 tests under
-# `apps/cli` and `apps/desktop`, which is where this rule earns its keep.
-[[config.group]]
-files = [
-  "src/**/*.test.{ts,tsx}",
-  "apps/*/src/**/*.test.{ts,tsx}",
-  "packages/*/src/**/*.test.{ts,tsx}",
-]
-
-[config.group.plugins]
-lobehub = "./packages/alint/rules"
-
-[config.group.rules]
-"lobehub/test-the-exit-not-the-entry" = "warn"
 
 # Calibration fixtures: one group per rule so a fixture only meets its own rule.
 [[config.group]]
@@ -105,10 +94,3 @@ files = [ "packages/alint/fixtures/no-transactions-in-models/**" ]
 lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-transactions-in-models" = "warn"
-
-[[config.group]]
-files = [ "packages/alint/fixtures/test-the-exit-not-the-entry/**" ]
-[config.group.plugins]
-lobehub = "./packages/alint/rules"
-[config.group.rules]
-"lobehub/test-the-exit-not-the-entry" = "warn"

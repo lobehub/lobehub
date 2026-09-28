@@ -20,6 +20,12 @@ export {
   type ListListeningPortsResult,
 } from './listeningPorts';
 export {
+  deviceMetricsBacklogFileName,
+  DeviceMetricsSampler,
+  type DeviceMetricsSamplerOptions,
+  pushMetrics,
+} from './metrics';
+export {
   defaultGetProjectFileIndex,
   defaultListProjectDirectory,
   defaultSearchProjectFiles,

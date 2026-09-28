@@ -194,6 +194,41 @@ describe('AgentModel', () => {
       expect(result!.files[0].content).toBe('parse cache');
     });
 
+    it('should skip an agent-document upload placeholder in favor of the parse cache', async () => {
+      const agentId = 'test-agent-with-placeholder';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      // Older empty row written by `AgentDocumentsService.importFile`; bytes live in the file.
+      await serverDB.insert(documents).values({
+        content: '',
+        createdAt: new Date('2026-01-01'),
+        fileId: '1',
+        fileType: 'text/markdown',
+        id: 'doc-placeholder',
+        source: 'notes.md',
+        sourceType: 'file',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      });
+      await serverDB.insert(documents).values({
+        content: 'parsed notes',
+        createdAt: new Date('2026-02-01'),
+        fileId: '1',
+        fileType: 'custom/document',
+        id: 'doc-parsed',
+        source: 'notes.md',
+        sourceType: 'file',
+        totalCharCount: 12,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      expect(result!.files[0].content).toBe('parsed notes');
+    });
+
     it('should not include content for disabled files', async () => {
       const agentId = 'test-agent-disabled-file';
       await serverDB.insert(agents).values({ id: agentId, userId });

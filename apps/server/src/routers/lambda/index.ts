@@ -50,6 +50,7 @@ import { composioRouter } from './composio';
 import { configRouter } from './config';
 import { connectorRouter } from './connector';
 import { deviceRouter } from './device';
+import { deviceMetricRouter } from './deviceMetric';
 import { documentRouter } from './document';
 import { documentCommentRouter } from './documentComment';
 import { documentLikeRouter } from './documentLike';
@@ -134,6 +135,7 @@ export const lambdaRouter = router({
   config: configRouter,
   connector: connectorRouter,
   device: deviceRouter,
+  deviceMetric: deviceMetricRouter,
   document: documentRouter,
   documentComment: documentCommentRouter,
   documentLike: documentLikeRouter,

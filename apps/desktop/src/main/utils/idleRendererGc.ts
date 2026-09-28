@@ -1,6 +1,7 @@
 import type { WebContents } from 'electron';
-import { app, BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron';
 
+import { getSharedAppMetrics } from '@/utils/appMetrics';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('utils:idleRendererGc');
@@ -34,7 +35,7 @@ const defaultDeps: IdleRendererGcDeps = {
   collect: collectRendererGarbage,
   getFocusedWindow: () => BrowserWindow.getFocusedWindow(),
   getResidentBytes: () =>
-    new Map(app.getAppMetrics().map((m) => [m.pid, m.memory.workingSetSize * 1024])),
+    new Map(getSharedAppMetrics().map((m) => [m.pid, m.memory.workingSetSize * 1024])),
   getWindows: () => BrowserWindow.getAllWindows(),
   now: Date.now,
 };

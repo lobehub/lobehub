@@ -228,10 +228,21 @@ export interface ListDocumentsArgs {
    * (the folder's `documentId`). The progressive index collapses folders and
    * surfaces this id so the model can expand a folder on demand.
    */
+  /** Page size; defaults to {@link LIST_DOCUMENTS_DEFAULT_LIMIT}. */
+  limit?: number;
+  /** Number of documents to skip, for paging past the first page. */
+  offset?: number;
   parentId?: string;
   scope?: 'agent' | 'currentTopic';
   sourceType?: 'all' | 'file' | 'web';
 }
+
+/**
+ * An agent can own thousands of documents (mostly web-crawled pages); listing
+ * them all in one result blew past the model's context window.
+ */
+export const LIST_DOCUMENTS_DEFAULT_LIMIT = 50;
+export const LIST_DOCUMENTS_MAX_LIMIT = 200;
 
 export interface ListDocumentsState {
   /**

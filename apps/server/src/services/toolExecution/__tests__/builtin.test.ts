@@ -2,6 +2,7 @@ import type { ChatToolPayload } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BuiltinToolsExecutor } from '../builtin';
+import { hasServerRuntime } from '../serverRuntimes';
 import type { ToolExecutionContext } from '../types';
 
 const mocks = vi.hoisted(() => ({
@@ -681,5 +682,51 @@ describe('BuiltinToolsExecutor share-visitor gate', () => {
       },
     });
     expect(write.error?.code).toBe('SHARE_GATE_BLOCKED');
+  });
+});
+
+describe('BuiltinToolsExecutor Composio app without an active connection', () => {
+  const executor = new BuiltinToolsExecutor({} as any, 'user-1');
+
+  // Only an ACTIVE Composio connection is routed with `source: 'composio'`. A
+  // stale activation (or a resumed run whose toolset predates a status change)
+  // lands here without that source — the model must learn the app is not
+  // connected, not that the tool "is not implemented".
+  it('returns COMPOSIO_NOT_CONNECTED instead of throwing "not implemented"', async () => {
+    vi.mocked(hasServerRuntime).mockReturnValueOnce(false);
+
+    const result = await executor.execute(
+      {
+        apiName: 'GMAIL_FETCH_EMAILS',
+        arguments: '{"query":"newer_than:3d"}',
+        id: 'call-gmail',
+        identifier: 'gmail',
+        type: 'default' as any,
+      },
+      context,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('COMPOSIO_NOT_CONNECTED');
+    expect(result.content).toContain('Gmail is not connected');
+    expect(result.content).toContain('Settings → Connectors');
+    expect(result.content).not.toMatch(/not implemented/);
+  });
+
+  it('still reports an unknown non-Composio builtin as not implemented', async () => {
+    vi.mocked(hasServerRuntime).mockReturnValueOnce(false);
+
+    await expect(
+      executor.execute(
+        {
+          apiName: 'doThing',
+          arguments: '{}',
+          id: 'call-x',
+          identifier: 'lobe-missing-tool',
+          type: 'default' as any,
+        },
+        context,
+      ),
+    ).rejects.toThrow('Builtin tool "lobe-missing-tool" is not implemented');
   });
 });

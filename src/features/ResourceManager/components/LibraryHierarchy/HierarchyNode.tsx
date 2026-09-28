@@ -322,7 +322,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             {flat ? (
               <div style={{ width: 20 }} />
             ) : isLoading ? (
-              <Center style={{ width: 20 }}>
+              <Center flex={'none'} width={20}>
                 <Spin size={'small'} />
               </Center>
             ) : (

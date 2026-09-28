@@ -259,7 +259,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
         style={{ padding: 12 }}
       >
         <div className={localStyles.loadingState}>
-          <Spin size={'large'} />
+          <Spin size={24} />
           <div className={localStyles.loadingText}>{t('shareModal.generatingPdf')}</div>
         </div>
       </div>

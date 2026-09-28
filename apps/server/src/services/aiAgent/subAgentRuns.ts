@@ -112,7 +112,9 @@ const claimSubAgentThread = async (
     thread.topicId !== topicId ||
     thread.agentId !== agentId
   ) {
-    return { error: `Sub-agent "${threadId}" was not found in this conversation.` };
+    return {
+      error: `Sub-agent "${threadId}" was not found in this conversation. subAgentId only takes the id from an earlier <sub_agent id="..." /> tag; leave it empty to start a new sub-agent.`,
+    };
   }
 
   const sourcePlugin = thread.sourceMessageId

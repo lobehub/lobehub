@@ -36,6 +36,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { documentMatchesAccessScope } from '../utils/documentVisibility';
+import { notFileBackedPlaceholder } from '../utils/fileBackedPlaceholder';
 import {
   fileReferenceMatchesAccessScope,
   notAgentShareFileReference,
@@ -363,10 +364,13 @@ export class DocumentModel {
       // Pick the oldest one explicitly instead of leaving the choice to the
       // query plan, so repeated lookups keep returning the same content.
       // `created_at` carries no uniqueness guarantee, so `id` breaks ties.
+      // An agent-document upload's empty placeholder row holds no text, so it is
+      // never the file's parse result; skipping it lets `parseFile` run.
       .where(
         and(
           this.ownership(),
           eq(documents.fileId, fileId),
+          notFileBackedPlaceholder(),
           fileReferenceMatchesAccessScope(this.db, documents.fileId, accessScope),
         ),
       )

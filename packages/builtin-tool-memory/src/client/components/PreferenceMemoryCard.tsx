@@ -160,7 +160,6 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
           {/* Collapsed Summary */}
           {(summary || safeTags.length > 0) && (
             <Accordion
-              defaultValue={['summary']}
               gap={0}
               items={[
                 {
@@ -244,7 +243,6 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
           {hasAppContext && (
             <Accordion
               className={styles.section}
-              defaultValue={['appContext']}
               gap={0}
               items={[
                 {

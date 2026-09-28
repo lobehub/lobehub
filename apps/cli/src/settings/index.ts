@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { deviceMetricsBacklogFileName } from '@lobechat/device-control/metrics';
+
 import { resolveCliDirName } from '../constants/identity';
 import { OFFICIAL_AGENT_GATEWAY_URL, OFFICIAL_SERVER_URL } from '../constants/urls';
 import { log } from '../utils/logger';
@@ -68,6 +70,15 @@ export function saveSettings(settings: StoredSettings): void {
 
   fs.mkdirSync(SETTINGS_DIR, { mode: 0o700, recursive: true });
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(normalized, null, 2), { mode: 0o600 });
+}
+
+/**
+ * Machine health samples not yet uploaded, one file per device identity so a
+ * personal and a workspace connection on the same machine keep separate
+ * backlogs.
+ */
+export function resolveDeviceMetricsBacklogPath(deviceId: string): string {
+  return path.join(SETTINGS_DIR, 'device-metrics', deviceMetricsBacklogFileName(deviceId));
 }
 
 /**

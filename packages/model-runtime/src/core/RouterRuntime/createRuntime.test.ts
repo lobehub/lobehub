@@ -203,6 +203,39 @@ describe('createRouterRuntime', () => {
       expect(mockChat).not.toHaveBeenCalled();
     });
 
+    it('should forward transcribe metadata so lobehub route attempts carry the trigger', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      const mockTranscribe = vi.fn().mockResolvedValue({ text: 'hello' });
+
+      class MockRuntime implements LobeRuntimeAI {
+        transcribe = mockTranscribe;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'lobehub',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['gpt-4o-transcribe'],
+            options: { id: 'channel-1' },
+            runtime: MockRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime({ userId: 'user-1' });
+      const metadata: Record<string, unknown> = { trigger: RequestTrigger.Asr };
+
+      await expect(
+        runtime.transcribe(
+          { file: new Blob(['audio']), model: 'gpt-4o-transcribe' },
+          { metadata, user: 'user-1' },
+        ),
+      ).resolves.toEqual({ text: 'hello' });
+      expect(mockTranscribe).toHaveBeenCalled();
+      expect(metadata.routeAttempt).toEqual(expect.objectContaining({ success: true }));
+    });
+
     it('should throw in development when lobehub route attempt is missing user', async () => {
       vi.stubEnv('NODE_ENV', 'development');
       const mockChat = vi.fn().mockResolvedValue('chat-response');

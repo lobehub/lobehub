@@ -737,6 +737,46 @@ describe('LocalSystemExecutionRuntime.executeToolCall — dispatch', () => {
   });
 });
 
+describe('LocalSystemExecutionRuntime shell session lookups', () => {
+  // Regression: a shell_id that reaches a device process which never issued it
+  // (app restarted, or two device processes for one machine) came back as
+  // "[UNKNOWN_EXEC_ERROR] Tool execution failed" — the service's reason was
+  // dropped, so the model could not tell a lost session from a failed command.
+  const notFound =
+    'Shell ID sh-1a2b3c-4 not found in this device process. It may have been started by a different or restarted process; its output is not available here.';
+
+  it('surfaces the not-found reason for getCommandOutput', async () => {
+    const service = createService({
+      getCommandOutput: vi.fn().mockResolvedValue({
+        error: notFound,
+        output: '',
+        running: false,
+        stderr: '',
+        stdout: '',
+        success: false,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.executeToolCall('getCommandOutput', { shell_id: 'sh-1a2b3c-4' });
+
+    expect(output?.success).toBe(false);
+    expect(output?.content).toBe(notFound);
+  });
+
+  it('surfaces the not-found reason for killCommand', async () => {
+    const service = createService({
+      killCommand: vi.fn().mockResolvedValue({ error: notFound, success: false }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.executeToolCall('killCommand', { shell_id: 'sh-1a2b3c-4' });
+
+    expect(output?.success).toBe(false);
+    expect(output?.content).toBe(notFound);
+  });
+});
+
 describe('LocalSystemExecutionRuntime.runCommand', () => {
   it('surfaces a pre-spawn failure reason instead of UNKNOWN_EXEC_ERROR', async () => {
     // A command that never starts has no process, so no stderr and no exit

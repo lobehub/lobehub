@@ -15,7 +15,6 @@ import {
   FolderTreeIcon,
   FoldVerticalIcon,
   GitCompareArrowsIcon,
-  ListFilterIcon,
   RotateCwIcon,
   SearchIcon,
   XIcon,
@@ -370,19 +369,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     [data?.source, t, viewMode],
   );
 
-  const filterItems = useMemo(
-    () => [
-      {
-        checked: hideIgnored,
-        key: 'hide-ignored',
-        label: t('workingPanel.files.filters.hideIgnored'),
-        onCheckedChange: setHideIgnored,
-        type: 'checkbox' as const,
-      },
-    ],
-    [hideIgnored, t],
-  );
-
   useEffect(() => {
     if (!isFiltering) return;
     treeRef.current?.setExpanded(defaultExpandedIds);
@@ -433,7 +419,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   });
 
   // Tree-level actions live behind "…" so the header keeps room: creating at
-  // the project root, then refresh.
+  // the project root, refresh, then the ignored-files filter.
   const moreItems = useMemo(
     () => [
       {
@@ -456,8 +442,16 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
         label: t('workingPanel.files.actions.refresh'),
         onClick: () => void actions.refresh(),
       },
+      { key: 'divider-filters', type: 'divider' as const },
+      {
+        checked: hideIgnored,
+        key: 'hide-ignored',
+        label: t('workingPanel.files.filters.hideIgnored'),
+        onCheckedChange: setHideIgnored,
+        type: 'checkbox' as const,
+      },
     ],
-    [actions, t],
+    [actions, hideIgnored, t],
   );
 
   const isEmpty = displayEntries.length === 0;
@@ -486,7 +480,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
               <Button
                 icon={viewMode === 'project' ? FolderTreeIcon : GitCompareArrowsIcon}
                 size={'small'}
-                style={{ maxWidth: 'calc(100% - 108px)' }}
+                style={{ maxWidth: 'calc(100% - 84px)' }}
                 title={t('workingPanel.files.views.title')}
                 type={'text'}
               >
@@ -509,14 +503,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
             onClick={() => setSearchExpanded(true)}
           />
         )}
-        <DropdownMenu items={filterItems} placement={'bottomRight'}>
-          <ActionIcon
-            active={hideIgnored}
-            icon={ListFilterIcon}
-            size={'small'}
-            title={t('workingPanel.files.filters.title')}
-          />
-        </DropdownMenu>
         <ActionIcon
           disabled={nodes.length === 0}
           icon={FoldVerticalIcon}
@@ -526,6 +512,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
         />
         <DropdownMenu items={moreItems} placement={'bottomRight'}>
           <ActionIcon
+            active={hideIgnored}
             icon={EllipsisIcon}
             loading={actions.refreshing}
             size={'small'}

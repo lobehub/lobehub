@@ -122,7 +122,6 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
           {/* Collapsed Summary */}
           {(summary || safeTags.length > 0) && (
             <Accordion
-              defaultValue={['summary']}
               gap={0}
               items={[
                 {

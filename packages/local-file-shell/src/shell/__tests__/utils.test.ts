@@ -46,7 +46,8 @@ const decodeEncodedCommand = (encoded: string): string =>
 /** UTF-8 console setup prepended to every PowerShell script (see getShellConfig). */
 const ENCODING_PREAMBLE =
   'try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}' +
-  '\n$OutputEncoding = [System.Text.Encoding]::UTF8\n';
+  '\n$OutputEncoding = [System.Text.Encoding]::UTF8' +
+  "\n$ProgressPreference = 'SilentlyContinue'\n";
 
 const EXIT_CODE_GUARD =
   '\n$__lobeExecOk = $?' +
@@ -100,6 +101,25 @@ describe('getShellConfig', () => {
     expect(decodeEncodedCommand(config.args[3])).toBe(
       `${ENCODING_PREAMBLE}Get-ChildItem "C:\\Program Files"${EXIT_CODE_GUARD}`,
     );
+  });
+
+  it('silences progress records before the command runs', async () => {
+    // Redirected progress lands in the saved stderr log as raw CLIXML
+    // ("Preparing modules for first use."), which the model then reads back.
+    setPlatform('win32');
+    process.env.PATH = 'C:\\Tools';
+    process.env.SystemRoot = 'C:\\Windows';
+    mockExisting(
+      path.join('C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+    );
+
+    const script = decodeEncodedCommand(
+      (await getShellConfig('Get-Module -ListAvailable')).args[3],
+    );
+
+    const silence = script.indexOf("$ProgressPreference = 'SilentlyContinue'");
+    expect(silence).toBeGreaterThanOrEqual(0);
+    expect(silence).toBeLessThan(script.indexOf('Get-Module -ListAvailable'));
   });
 
   it('should fall back to Windows PowerShell 5.1 when only powershell.exe exists', async () => {

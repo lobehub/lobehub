@@ -457,11 +457,21 @@ export class EditorRuntime {
     // reporting it: the editor drops operations with unknown ids (or that it
     // cannot apply) without an error.
     // A step may apply only part of one operation (a split `modify`), so an
-    // operation succeeds only when none of its steps failed.
+    // operation succeeds only when none of its steps failed. Once a step of an
+    // operation fails, its remaining steps are skipped; a failure after an
+    // earlier step of the same operation applied is reported as partial.
     for (const step of planLiteXMLEditSteps(operations, indexLiteXMLDocument(readLiteXML()))) {
+      if (step.indexes.some((index) => results[index].error)) continue;
+
       const fail = (error: string) => {
         for (const index of step.indexes) {
-          results[index] = { ...results[index], error, success: false };
+          const partiallyApplied = results[index].success;
+          results[index] = {
+            ...results[index],
+            error,
+            success: false,
+            ...(partiallyApplied && { partiallyApplied }),
+          };
         }
       };
 

@@ -6,3 +6,4 @@ export * from './resolveManifest';
 export * from './subAgentReference';
 export * from './systemRole';
 export * from './types';
+export * from './vent';

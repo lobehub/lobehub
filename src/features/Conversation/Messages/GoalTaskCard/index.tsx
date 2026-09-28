@@ -3,8 +3,9 @@
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRightIcon, TargetIcon } from 'lucide-react';
+import { ChevronRightIcon, CornerDownRightIcon, TargetIcon } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import RingLoadingIcon from '@/components/RingLoading';
 import { useChatStore } from '@/store/chat';
@@ -13,6 +14,7 @@ import type { OperationGoal } from './deriveOperationGoals';
 import GoalElapsedTime from './GoalElapsedTime';
 import GoalStatusLine from './GoalStatusLine';
 import type { GoalTaskPhase } from './goalTaskProgress';
+import { getGoalStepPointer } from './goalTaskProgress';
 import { useGoalTaskStatus } from './useGoalTaskStatus';
 
 const ACTIVE_PHASES = new Set<GoalTaskPhase>(['repairing', 'running', 'verifying']);
@@ -48,6 +50,13 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
+  stepIcon: css`
+    flex-shrink: 0;
+  `,
+  stepLine: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
   title: css`
     min-width: 0;
     font-size: 14px;
@@ -56,12 +65,14 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
+  const { t } = useTranslation('chat');
   const openGoalPortal = useChatStore((s) => s.openGoal);
-  const { progress, startedAt, title } = useGoalTaskStatus({
+  const { progress, startedAt, steps, title } = useGoalTaskStatus({
     criteriaCount: goal.criteriaCount,
     goalId: goal.goalId,
   });
   const isActive = ACTIVE_PHASES.has(progress.phase);
+  const stepPointer = getGoalStepPointer(steps, progress.phase);
   // Same destination as the tool card: the goal's progress beside the chat.
   const openGoal = () => openGoalPortal(goal.goalId);
 
@@ -95,7 +106,25 @@ const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
         <Text ellipsis className={styles.title}>
           {title ?? goal.name}
         </Text>
-        <GoalStatusLine {...progress} />
+        <GoalStatusLine
+          passed={progress.passed}
+          phase={progress.phase}
+          statuses={steps.map((step) => step.status)}
+          total={progress.total}
+        />
+        {stepPointer && (
+          <Flexbox horizontal align={'center'} gap={4}>
+            <Icon
+              className={styles.stepIcon}
+              color={cssVar.colorTextTertiary}
+              icon={CornerDownRightIcon}
+              size={12}
+            />
+            <Text ellipsis className={styles.stepLine}>
+              {t(`goalTask.${stepPointer.kind}Step`, { title: stepPointer.title })}
+            </Text>
+          </Flexbox>
+        )}
       </Flexbox>
       {isActive && <GoalElapsedTime startedAt={startedAt} />}
       <ChevronRightIcon className={styles.chevron} size={16} />

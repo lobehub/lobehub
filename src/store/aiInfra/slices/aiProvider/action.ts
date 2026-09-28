@@ -246,6 +246,8 @@ export const getEmbeddingModelList = createProviderModelCollector(
   normalizeEmbeddingModel,
 );
 
+export const getAsrModelList = createProviderModelCollector('asr', normalizeEmbeddingModel);
+
 export const getImageModelList = createProviderModelCollector('image', normalizeImageModel);
 
 export const getVideoModelList = createProviderModelCollector('video', normalizeVideoModel);
@@ -292,6 +294,14 @@ const buildEmbeddingProviderModelLists = async (
 ) => buildProviderModelLists(providers, enabledAiModels, getEmbeddingModelList);
 
 /**
+ * Build speech-to-text provider model lists with proper async handling
+ */
+const buildAsrProviderModelLists = async (
+  providers: EnabledProvider[],
+  enabledAiModels: EnabledAiModel[],
+) => buildProviderModelLists(providers, enabledAiModels, getAsrModelList);
+
+/**
  * Build video provider model lists with proper async handling
  */
 const buildVideoProviderModelLists = async (
@@ -307,6 +317,7 @@ enum AiProviderSwrKey {
 
 type AiProviderRuntimeStateWithBuiltinModels = AiProviderRuntimeState & {
   builtinAiModelList: LobeDefaultAiModelListItem[];
+  enabledAsrModelList?: EnabledProviderWithModels[];
   enabledChatModelList?: EnabledProviderWithModels[];
   enabledEmbeddingModelList?: EnabledProviderWithModels[];
   enabledImageModelList?: EnabledProviderWithModels[];
@@ -596,6 +607,11 @@ export class AiProviderActionImpl {
             enabledAiModels,
             'embedding',
           );
+          const enabledAsrAiProviders = filterEnabledProvidersByModelType(
+            data.enabledAiProviders,
+            enabledAiModels,
+            'asr',
+          );
           const enabledImageAiProviders = filterEnabledProvidersByModelType(
             data.enabledImageAiProviders,
             enabledAiModels,
@@ -611,11 +627,13 @@ export class AiProviderActionImpl {
           const [
             enabledChatModelList,
             enabledEmbeddingModelList,
+            enabledAsrModelList,
             enabledImageModelList,
             enabledVideoModelList,
           ] = await Promise.all([
             buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
             buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
+            buildAsrProviderModelLists(enabledAsrAiProviders, enabledAiModels),
             buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
             buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
           ]);
@@ -624,6 +642,7 @@ export class AiProviderActionImpl {
             ...data,
             builtinAiModelList,
             enabledAiModels,
+            enabledAsrModelList,
             enabledChatAiProviders,
             enabledChatModelList,
             enabledEmbeddingModelList,
@@ -675,14 +694,21 @@ export class AiProviderActionImpl {
 
         // Build model lists for non-login state as well
         const enabledAiModels = builtinAiModelList.filter((m) => m.enabled);
+        const enabledAsrAiProviders = filterEnabledProvidersByModelType(
+          enabledAiProviders,
+          enabledAiModels,
+          'asr',
+        );
         const [
           enabledChatModelList,
           enabledEmbeddingModelList,
+          enabledAsrModelList,
           enabledImageModelList,
           enabledVideoModelList,
         ] = await Promise.all([
           buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
           buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
+          buildAsrProviderModelLists(enabledAsrAiProviders, enabledAiModels),
           buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
           buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
         ]);
@@ -691,6 +717,7 @@ export class AiProviderActionImpl {
           builtinAiModelList,
           enabledAiModels,
           enabledAiProviders,
+          enabledAsrModelList,
           enabledChatAiProviders,
           enabledChatModelList,
           enabledEmbeddingModelList,
@@ -717,6 +744,7 @@ export class AiProviderActionImpl {
               builtinAiModelList: data.builtinAiModelList,
               enabledAiModels: data.enabledAiModels,
               enabledAiProviders: data.enabledAiProviders,
+              enabledAsrModelList: data.enabledAsrModelList || [],
               enabledChatModelList: data.enabledChatModelList || [],
               enabledEmbeddingModelList: data.enabledEmbeddingModelList || [],
               enabledImageModelList: data.enabledImageModelList || [],

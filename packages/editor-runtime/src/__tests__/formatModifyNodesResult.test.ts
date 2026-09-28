@@ -33,4 +33,22 @@ describe('formatModifyNodesResult', () => {
       Call getPageContent to get the current node ids before retrying the failed operations."
     `);
   });
+
+  it('flags an operation that failed after part of it was applied', () => {
+    const content = formatModifyNodesResult({
+      results: [
+        {
+          action: 'modify',
+          error: 'node "zzzz" not found in the document',
+          partiallyApplied: true,
+          success: false,
+        },
+      ],
+      successCount: 0,
+      totalCount: 1,
+    });
+
+    expect(content).toContain('except those marked PARTIALLY APPLIED');
+    expect(content).toContain('- Operation 1 (modify): PARTIALLY APPLIED');
+  });
 });

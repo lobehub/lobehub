@@ -3,6 +3,7 @@ import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
   HeterogeneousToolResultImage,
+  PostRunUsage,
   ToolCallPayload,
   ToolResultData,
 } from '../types';
@@ -98,6 +99,25 @@ export class KimiCodeAdapter implements AgentEventAdapter {
     if (event.role === 'assistant') return this.handleAssistant(event);
     if (event.role === 'tool') return this.handleToolResult(event);
     return [];
+  }
+
+  /**
+   * Kimi Code's stream-json stdout carries no usage; the session wire log
+   * does, and the spawn pipeline reads it after exit. Emit the total as
+   * `turn_metadata` — the phase the executor persists (its `result_usage`
+   * grand-total phase is intentionally ignored), stamped on the last step.
+   */
+  buildPostRunUsageEvents(result: PostRunUsage): HeterogeneousAgentEvent[] {
+    return [
+      this.makeEvent('step_complete', {
+        // `model` lets the per-message Usage footer render (it requires a
+        // model for local heterogeneous types); `usage` carries the totals.
+        ...(result.model ? { model: result.model } : {}),
+        phase: 'turn_metadata',
+        provider: KIMI_CODE_IDENTIFIER,
+        usage: result.usage,
+      }),
+    ];
   }
 
   flush(): HeterogeneousAgentEvent[] {

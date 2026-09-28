@@ -1123,6 +1123,78 @@ Document content here.
     });
   });
 
+  describe('Provider-reused tool_call ids', () => {
+    it('should send each step its own stored result when every step reuses `<tool>:0`', async () => {
+      // Stored shape of a Kimi (zeabur / nvidia / moonshot) run: every step's
+      // call id is `lobe-local-system____runCommand:0`, and every step succeeded.
+      const reusedId = 'lobe-local-system____runCommand:0';
+      const step = (n: number): UIChatMessage[] => [
+        {
+          content: '',
+          createdAt: Date.now(),
+          id: `assistant-${n}`,
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'runCommand',
+              arguments: `{"command":"echo ok-${n}"}`,
+              id: reusedId,
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: `Command completed successfully.\n\nStdout: ok-${n}`,
+          createdAt: Date.now(),
+          id: `tool-${n}`,
+          plugin: {
+            apiName: 'runCommand',
+            arguments: `{"command":"echo ok-${n}"}`,
+            identifier: 'lobe-local-system',
+            type: 'builtin',
+          },
+          role: 'tool',
+          tool_call_id: reusedId,
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const engine = new MessagesEngine(
+        createBasicParams({
+          messages: [
+            {
+              content: 'run three commands',
+              createdAt: Date.now(),
+              id: 'user-1',
+              role: 'user',
+              updatedAt: Date.now(),
+            } as UIChatMessage,
+            ...step(1),
+            ...step(2),
+            ...step(3),
+          ],
+        }),
+      );
+
+      const result = await engine.process();
+      const toolMessages = result.messages.filter((m) => m.role === 'tool');
+      const callIds = result.messages
+        .filter((m) => m.role === 'assistant')
+        .flatMap((m) => (m as any).tool_calls.map((call: { id: string }) => call.id));
+
+      expect(toolMessages.map((m) => m.content)).toEqual([
+        'Command completed successfully.\n\nStdout: ok-1',
+        'Command completed successfully.\n\nStdout: ok-2',
+        'Command completed successfully.\n\nStdout: ok-3',
+      ]);
+      expect(new Set(callIds).size).toBe(3);
+      expect(toolMessages.map((m) => (m as any).tool_call_id)).toEqual(callIds);
+      expect(result.metadata.toolMessageReorder?.removedInvalidTools).toBe(0);
+    });
+  });
+
   describe('Page Selections', () => {
     it('should inject page selections to each user message that has them', async () => {
       const messages: UIChatMessage[] = [

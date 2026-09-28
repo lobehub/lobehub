@@ -185,6 +185,14 @@ export class StaleHeteroOperationError extends Error {
 }
 
 export interface HeterogeneousPersistenceHandlerDeps {
+  /**
+   * Liveness probe against the operation row, used only when the topic has lost
+   * its `runningOperation` marker: it answers whether this operation is still
+   * `running` and still owns this topic, i.e. whether the producer behind the
+   * batch is alive. Optional so standalone/test callers keep the marker-only
+   * behaviour.
+   */
+  isOperationLiveOnTopic?: (operationId: string, topicId: string) => Promise<boolean>;
   messageModel: MessageModel;
   threadModel: ThreadModel;
   topicModel: TopicModel;
@@ -553,16 +561,35 @@ export class HeterogeneousPersistenceHandler {
         ? marker
         : marker?.childOperations?.find((child) => child.operationId === operationId);
 
-    if (!running && !(allowMissingRunningOperation && seedAssistantMessageId)) {
-      throw new StaleHeteroOperationError(
-        `Stale hetero operation ${operationId} on topic ${topicId}; no active runningOperation`,
-      );
-    }
+    if (!running) {
+      // Two different fates were collapsed into one refusal here.
+      //
+      // A marker naming ANOTHER operation means a newer run owns the topic:
+      // this batch is genuinely late and has to be dropped, or it would keep
+      // mutating a turn the conversation has already moved past.
+      //
+      // NO marker at all is a different story. The marker is a best-effort
+      // rendering pointer that a client can settle on nothing more than a
+      // transport signal — a raw `session_complete`, or one multiplexed socket
+      // failing auth for every operation on the tab — while the producer is
+      // still running and streaming. Refusing there throws away the whole
+      // remaining output of a live CLI, which then burns minutes of work
+      // nobody stores. The operation row is the authority on liveness, so ask
+      // it: still `running`, still bound to THIS topic ⇒ keep persisting
+      // without a marker. The turn's own pointers (`heteroCurrentMsgId`, the
+      // seeded assistant message) carry the rest.
+      const producerStillOwnsTopic =
+        !marker && (await this.deps.isOperationLiveOnTopic?.(operationId, topicId));
 
-    if (!running && !(allowMissingRunningOperation && seedAssistantMessageId)) {
-      throw new StaleHeteroOperationError(
-        `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${marker?.operationId ?? 'unknown'}`,
-      );
+      if (producerStillOwnsTopic) {
+        log('marker missing but operation still running op=%s topic=%s', operationId, topicId);
+      } else if (!(allowMissingRunningOperation && seedAssistantMessageId)) {
+        throw new StaleHeteroOperationError(
+          marker
+            ? `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${marker.operationId}`
+            : `Stale hetero operation ${operationId} on topic ${topicId}; no active runningOperation`,
+        );
+      }
     }
 
     // Prefer the assistantMessageId forwarded in the ingest payload (sandbox path).
@@ -572,7 +599,15 @@ export class HeterogeneousPersistenceHandler {
     // runningOperation binding to match `operationId`, otherwise late/retried
     // batches after finish could keep mutating a completed turn.
     // Fall back to topic.metadata for desktop / old-CLI callers that lack the field.
-    const baseAssistantMessageId = seedAssistantMessageId ?? running?.assistantMessageId;
+    // `heteroCurrentMsgId` is the last resort and is scoped to this operation:
+    // it is the only pointer left once a marker has been cleared out from under
+    // a still-running producer (see the liveness check above).
+    const currentMsgIdForOperation =
+      topic?.metadata?.heteroCurrentMsgId?.operationId === operationId
+        ? topic?.metadata?.heteroCurrentMsgId?.msgId
+        : undefined;
+    const baseAssistantMessageId =
+      seedAssistantMessageId ?? running?.assistantMessageId ?? currentMsgIdForOperation;
 
     if (!baseAssistantMessageId) {
       throw new Error(`runningOperation on topic ${topicId} is missing assistantMessageId`);
@@ -1003,7 +1038,16 @@ export class HeterogeneousPersistenceHandler {
         ? marker
         : marker?.childOperations?.find((child) => child.operationId === state.operationId);
 
-    if (!running) {
+    // Same split as `loadOrCreateState`: another operation on the marker means
+    // this run has been superseded and must stop writing, while a marker that
+    // is simply gone can be a live producer whose topic was settled by a
+    // transport signal. In the latter case `heteroCurrentMsgId` — repointed by
+    // this operation's own ingest — is a complete substitute for the pointer
+    // this sync would have read off the marker.
+    if (
+      !running &&
+      (marker || !(await this.deps.isOperationLiveOnTopic?.(state.operationId, state.topicId)))
+    ) {
       throw new StaleHeteroOperationError(
         `Stale hetero operation ${state.operationId} on topic ${state.topicId}; current operation is ${marker?.operationId ?? 'unknown'}`,
       );

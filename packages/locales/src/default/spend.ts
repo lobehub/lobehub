@@ -18,6 +18,7 @@ export default {
   'table.columns.trigger.enums.agent_share': 'Agent Share',
   'table.columns.trigger.enums.agent_signal': 'Agent Signal',
   'table.columns.trigger.enums.api': 'API Call',
+  'table.columns.trigger.enums.asr': 'Voice Transcription',
   'table.columns.trigger.enums.bot': 'Bot Message',
   'table.columns.trigger.enums.builder_suggestion': 'Builder Suggestions',
   'table.columns.trigger.enums.chat': 'Chat Message',

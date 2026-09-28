@@ -264,7 +264,7 @@ const TotalScore = memo<TotalScoreProps>(({ scoreResult, scoreItems = [], isVali
             percent={Math.round(percentage)}
             showInfo={false}
             size={8}
-            strokeColor={SEGMENT_COLORS.A_COLOR}
+            strokeColor={getGradeColor(grade)}
           />
         </Popover>
 
