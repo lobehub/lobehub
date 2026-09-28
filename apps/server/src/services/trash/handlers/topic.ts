@@ -29,21 +29,27 @@ export const topicCascades = (topics: TopicItem[], removeFiles?: boolean): Trash
 
 export const topicHandler: TrashHandler = {
   purge: async (ctx, root) => {
-    // `removeFiles` was requested at delete time: drop the attachments only
+    // `removeFiles` was requested at delete time: collect the attachments only
     // this topic still references (same reference-safe set the hard delete
-    // used), then their storage objects. Computed now, not at trash time, so a
-    // file that got attached elsewhere meanwhile is kept.
-    if (root.meta?.removeFiles) {
-      const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);
-      const fileIds = await fileModel.findDeletableFilesByTopicId(root.resourceId);
-      if (fileIds.length > 0) {
-        const removed = await fileModel.deleteMany(fileIds, serverDBEnv.REMOVE_GLOBAL_FILE);
-        if (removed && removed.length > 0) {
-          await ctx.fileService.deleteFiles(removed.map((file) => file.url!));
-        }
-      }
+    // used). Computed now, not at trash time, so a file that got attached
+    // elsewhere meanwhile is kept — and before the delete, because the lookup
+    // joins the messages the delete cascades away.
+    const fileModel = new FileModel(ctx.db, ctx.userId, ctx.workspaceId);
+    const fileIds = root.meta?.removeFiles
+      ? await fileModel.findDeletableFilesByTopicId(root.resourceId)
+      : [];
+
+    const purged = await new TopicModel(ctx.db, ctx.userId, ctx.workspaceId).purge([
+      root.resourceId,
+    ]);
+    // Nothing deleted means the topic was restored in the meantime: leave its
+    // attachments alone too.
+    if (purged.length === 0 || fileIds.length === 0) return;
+
+    const removed = await fileModel.deleteMany(fileIds, serverDBEnv.REMOVE_GLOBAL_FILE);
+    if (removed && removed.length > 0) {
+      await ctx.fileService.deleteFiles(removed.map((file) => file.url!));
     }
-    await new TopicModel(ctx.db, ctx.userId, ctx.workspaceId).purge([root.resourceId]);
   },
   restore: async (ctx: TrashHandlerContext, root) => {
     const topicModel = new TopicModel(ctx.db, ctx.userId, ctx.workspaceId);

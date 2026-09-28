@@ -81,7 +81,7 @@ const TrashList = () => {
   const isEmpty = useTrashStore(trashSelectors.isEmpty);
   const total = useTrashStore(trashSelectors.totalCount);
 
-  const { isLoading } = useFetchTrash(true, activeType);
+  const { error, isLoading, isValidating, mutate: retry } = useFetchTrash(true, activeType);
   useFetchTrashCount(true);
 
   const typeLabel = (type: TrashResourceType) => t(`trash.type.${type}` as const);
@@ -256,14 +256,26 @@ const TrashList = () => {
         rowKey={(item) => item.id}
         emptyText={
           <Center height={240} width={'100%'}>
-            <Empty
-              title={activeType ? undefined : t('trash.empty.title')}
-              description={
-                activeType
-                  ? t('trash.emptyType.desc', { type: typeLabel(activeType) })
-                  : t('trash.empty.desc', { days: TRASH_RETENTION_DAYS })
-              }
-            />
+            {error ? (
+              <Empty
+                description={t('trash.loadFailed.desc')}
+                title={t('trash.loadFailed.title')}
+                action={
+                  <Button loading={isValidating} size={'small'} onClick={() => retry()}>
+                    {tc('retry')}
+                  </Button>
+                }
+              />
+            ) : (
+              <Empty
+                title={activeType ? undefined : t('trash.empty.title')}
+                description={
+                  activeType
+                    ? t('trash.emptyType.desc', { type: typeLabel(activeType) })
+                    : t('trash.empty.desc', { days: TRASH_RETENTION_DAYS })
+                }
+              />
+            )}
           </Center>
         }
       />

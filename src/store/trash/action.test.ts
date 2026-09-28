@@ -104,12 +104,22 @@ describe('TrashAction', () => {
     });
 
     it('emptyTrash honours the active type filter and clears the list', async () => {
-      vi.spyOn(trashService, 'emptyTrash').mockResolvedValue({ purged: 2 });
+      vi.spyOn(trashService, 'emptyTrash').mockResolvedValue({ hasMore: false, purged: 2 });
       useTrashStore.setState({ activeType: 'topic' });
       await useTrashStore.getState().emptyTrash();
       expect(trashService.emptyTrash).toHaveBeenCalledWith('topic');
       expect(useTrashStore.getState().items).toEqual([]);
       expect(mutate).toHaveBeenCalledWith(['trash:list', 'topic']);
+    });
+
+    it('emptyTrash keeps calling while the server reports more batches', async () => {
+      vi.spyOn(trashService, 'emptyTrash')
+        .mockResolvedValueOnce({ hasMore: true, purged: 50 })
+        .mockResolvedValueOnce({ hasMore: true, purged: 50 })
+        .mockResolvedValueOnce({ hasMore: false, purged: 7 });
+      await useTrashStore.getState().emptyTrash();
+      expect(trashService.emptyTrash).toHaveBeenCalledTimes(3);
+      expect(useTrashStore.getState().items).toEqual([]);
     });
   });
 

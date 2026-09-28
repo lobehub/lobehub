@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { TRASH_EMPTY_BATCH_SIZE } from '@lobechat/const';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -132,6 +133,34 @@ describe('TrashService', () => {
       expect(await serverDB.select().from(topics)).toHaveLength(0);
     });
 
+    it('emptyTrash purges one bounded batch per call and says when more remain', async () => {
+      const created = await Promise.all(
+        Array.from({ length: TRASH_EMPTY_BATCH_SIZE + 3 }, (_, i) =>
+          topicModel.create({ title: `t${i}` }),
+        ),
+      );
+      await service.trashTopics(created.map((t) => t.id));
+
+      const first = await service.emptyTrash();
+      expect(first).toEqual({ hasMore: true, purged: TRASH_EMPTY_BATCH_SIZE });
+      expect((await service.countByType()).topic).toBe(3);
+
+      const second = await service.emptyTrash();
+      expect(second).toEqual({ hasMore: false, purged: 3 });
+      expect(await serverDB.select().from(topics)).toHaveLength(0);
+    });
+
+    it('a purge that lands after a concurrent restore leaves the restored topic alone', async () => {
+      const topic = await topicModel.create({ title: 'raced' });
+      const [root] = await service.trashTopics([topic.id]);
+      // The restore commits between the purge's registry read and its delete:
+      // the registry row is still there, but the topic is live again.
+      await topicModel.restore([topic.id]);
+
+      await service.purge([root.id]);
+      expect(await topicModel.findById(topic.id)).toBeTruthy();
+    });
+
     it('emptyTrash scoped to an actor clears every one of their roots, not just a first page', async () => {
       // A workspace non-owner may only empty what they trashed themselves. The
       // filter has to live in the query: applying it to one page of results
@@ -155,9 +184,10 @@ describe('TrashService', () => {
       const theirTopic = await theirTopics.create({ title: 'theirs' });
       await theirs.trashTopics([theirTopic.id]);
 
-      const { purged } = await mine.emptyTrash({ deletedByUserId: userId });
+      const { hasMore, purged } = await mine.emptyTrash({ deletedByUserId: userId });
 
       expect(purged).toBe(3);
+      expect(hasMore).toBe(false);
       // the teammate's row is untouched and still listed workspace-wide
       const left = await mine.list();
       expect(left.items.map((item) => item.resourceId)).toEqual([theirTopic.id]);

@@ -1766,6 +1766,8 @@
   "trash.expiresIn.days": "{{count}} 天后",
   "trash.expiresIn.soon": "一天内",
   "trash.filter.all": "全部",
+  "trash.loadFailed.desc": "请检查网络连接后重试。",
+  "trash.loadFailed.title": "回收站加载失败",
   "trash.meta.children": "内含 {{count}} 项",
   "trash.purge.success": "已永久删除",
   "trash.purgeConfirm.content": "永久删除「{{title}}」？此操作无法撤销。",

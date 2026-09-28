@@ -85,6 +85,34 @@ describe('TrashModel', () => {
     });
   });
 
+  describe('registerMany', () => {
+    it('registers many roots with their children in one call, in input order', async () => {
+      const cascades = Array.from({ length: 3 }, (_, i) => ({
+        children: [{ resourceId: `msg_${i}`, resourceType: 'message' as const }],
+        root: { resourceId: `tpc_${i}`, resourceType: 'topic' as const, title: `t${i}` },
+      }));
+      const roots = await model.registerMany({
+        cascades,
+        deletedAt: at('2026-08-01T00:00:00Z'),
+      });
+
+      expect(roots.map((r) => r.resourceId)).toEqual(['tpc_0', 'tpc_1', 'tpc_2']);
+      expect(roots.every((r) => r.rootId === null)).toBe(true);
+      for (const [i, root] of roots.entries()) {
+        const children = await model.findChildren(root.id);
+        expect(children.map((c) => c.resourceId)).toEqual([`msg_${i}`]);
+      }
+
+      // re-registering converges on the existing rows instead of failing
+      const again = await model.registerMany({
+        cascades: cascades.slice(0, 1),
+        deletedAt: at('2026-08-02T00:00:00Z'),
+      });
+      expect(again[0].id).toBe(roots[0].id);
+      expect(again[0].deletedAt).toEqual(at('2026-08-02T00:00:00Z'));
+    });
+  });
+
   describe('list / countByType', () => {
     it('lists roots only, newest first, scoped to the caller, with type filter and keyset paging', async () => {
       for (let i = 0; i < 5; i++) {

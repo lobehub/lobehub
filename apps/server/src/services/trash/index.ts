@@ -1,4 +1,4 @@
-import { TRASH_PURGE_BATCH_SIZE } from '@lobechat/const';
+import { TRASH_EMPTY_BATCH_SIZE, TRASH_PURGE_BATCH_SIZE } from '@lobechat/const';
 import type {
   TrashCountByType,
   TrashItem,
@@ -108,16 +108,13 @@ export class TrashService {
       const cascades = (Array.isArray(produced) ? produced : produced ? [produced] : []).filter(
         Boolean,
       );
-      const registry = new TrashModel(db, this.userId, this.workspaceId);
-      const roots: TrashItemRow[] = [];
-      for (const cascade of cascades) {
-        roots.push(
-          await registry.register(
-            { children: cascade.children, deletedAt, root: cascade.root },
-            tx,
-          ),
-        );
-      }
+      // One chunked bulk write for the whole batch: a "clear all topics" over
+      // hundreds of rows must not hold the transaction open for one registry
+      // round trip per topic.
+      const roots = await new TrashModel(db, this.userId, this.workspaceId).registerMany(
+        { cascades, deletedAt },
+        tx,
+      );
       log(
         'trashed %d root(s): %o',
         roots.length,
@@ -255,7 +252,12 @@ export class TrashService {
     return { purged };
   };
 
-  /** Permanently delete every root in the caller's bin, optionally one type only. */
+  /**
+   * Permanently delete one bounded batch of roots from the caller's bin
+   * (optionally one type only). Each purge is serial and may call storage, so
+   * a bin of thousands must not ride a single HTTP request: the caller repeats
+   * while `hasMore` is true, and every call commits only what it finished.
+   */
   emptyTrash = async (options?: {
     /**
      * Restrict the sweep to roots this user trashed. A workspace non-owner may
@@ -264,18 +266,15 @@ export class TrashService {
      */
     deletedByUserId?: string;
     resourceType?: TrashResourceType;
-  }): Promise<{ purged: number }> => {
-    let purged = 0;
-    // Page through: purging shrinks the set, so re-listing until empty is the
-    // simplest way to stay correct under concurrent deletes.
-    for (;;) {
-      const ids = await this.trashModel.listAllRootIds(options);
-      if (ids.length === 0) break;
-      const result = await this.purge(ids.slice(0, TRASH_PURGE_BATCH_SIZE));
-      purged += result.purged;
-      if (result.purged === 0) break;
-    }
-    return { purged };
+  }): Promise<{ hasMore: boolean; purged: number }> => {
+    const ids = await this.trashModel.listAllRootIds({
+      ...options,
+      limit: TRASH_EMPTY_BATCH_SIZE + 1,
+    });
+    const { purged } = await this.purge(ids.slice(0, TRASH_EMPTY_BATCH_SIZE));
+    // `purged === 0` with rows left means nothing in reach could be purged;
+    // stop instead of letting the client spin.
+    return { hasMore: ids.length > TRASH_EMPTY_BATCH_SIZE && purged > 0, purged };
   };
 
   private purgeRoot = async (root: TrashItemRow) => {

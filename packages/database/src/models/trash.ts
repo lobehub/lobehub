@@ -14,6 +14,9 @@ import { agents, messages, topics, trashItems } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
+/** Rows per multi-row registry insert — well under Postgres' bind-parameter cap. */
+const REGISTER_CHUNK_SIZE = 500;
+
 export interface TrashRegisterEntry {
   meta?: TrashItemMeta | null;
   resourceId: string;
@@ -85,63 +88,96 @@ export class TrashModel {
    * of failing the unique index, so a retried request converges.
    */
   register = async (params: TrashRegisterParams, trx?: Transaction): Promise<TrashItemRow> => {
+    const [root] = await this.registerMany(
+      {
+        cascades: [{ children: params.children, root: params.root }],
+        deletedAt: params.deletedAt,
+        expiresAt: params.expiresAt,
+      },
+      trx,
+    );
+    return root;
+  };
+
+  /**
+   * Register many roots (each with its cascaded children) sharing one stamp.
+   * Rows are written in chunked multi-row statements, so a bulk "clear topics"
+   * over hundreds of rows is a handful of round trips instead of one per root
+   * inside the caller's transaction. Returns the root rows in input order.
+   */
+  registerMany = async (
+    params: {
+      cascades: Pick<TrashRegisterParams, 'children' | 'root'>[];
+      deletedAt: Date;
+      expiresAt?: Date;
+    },
+    trx?: Transaction,
+  ): Promise<TrashItemRow[]> => {
+    if (params.cascades.length === 0) return [];
     const run = async (tx: Transaction | LobeChatDatabase) => {
       const expiresAt =
         params.expiresAt ?? new Date(params.deletedAt.getTime() + TRASH_RETENTION_MS);
-      const scope = { userId: this.userId, workspaceId: this.workspaceId ?? null };
+      const stamp = {
+        deletedAt: params.deletedAt,
+        deletedByUserId: this.userId,
+        expiresAt,
+        userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
+      };
+      const key = (type: string, id: string) => `${type}:${id}`;
 
-      const [root] = await tx
-        .insert(trashItems)
-        .values({
-          ...scope,
-          deletedAt: params.deletedAt,
-          deletedByUserId: this.userId,
-          expiresAt,
-          meta: params.root.meta ?? null,
-          resourceId: params.root.resourceId,
-          resourceType: params.root.resourceType,
-          rootId: null,
-          title: params.root.title ?? null,
-        })
-        .onConflictDoUpdate({
-          set: {
-            deletedAt: params.deletedAt,
-            deletedByUserId: this.userId,
-            expiresAt,
-            meta: params.root.meta ?? null,
-            rootId: null,
-            title: params.root.title ?? null,
-          },
-          target: [trashItems.resourceType, trashItems.resourceId],
-        })
-        .returning();
+      const rootValues: NewTrashItemRow[] = params.cascades.map(({ root }) => ({
+        ...stamp,
+        meta: root.meta ?? null,
+        resourceId: root.resourceId,
+        resourceType: root.resourceType,
+        rootId: null,
+        title: root.title ?? null,
+      }));
+      const rootsByKey = new Map<string, TrashItemRow>();
+      for (let i = 0; i < rootValues.length; i += REGISTER_CHUNK_SIZE) {
+        const rows = await tx
+          .insert(trashItems)
+          .values(rootValues.slice(i, i + REGISTER_CHUNK_SIZE))
+          .onConflictDoUpdate({
+            set: {
+              deletedAt: sql`excluded.deleted_at`,
+              deletedByUserId: sql`excluded.deleted_by_user_id`,
+              expiresAt: sql`excluded.expires_at`,
+              meta: sql`excluded.meta`,
+              rootId: sql`NULL`,
+              title: sql`excluded.title`,
+            },
+            target: [trashItems.resourceType, trashItems.resourceId],
+          })
+          .returning();
+        for (const row of rows) rootsByKey.set(key(row.resourceType, row.resourceId), row);
+      }
 
-      const children = params.children ?? [];
-      if (children.length > 0) {
-        const values: NewTrashItemRow[] = children.map((child) => ({
-          ...scope,
-          deletedAt: params.deletedAt,
-          deletedByUserId: this.userId,
-          expiresAt,
+      const childValues: NewTrashItemRow[] = params.cascades.flatMap(({ children, root }) => {
+        const rootRow = rootsByKey.get(key(root.resourceType, root.resourceId))!;
+        return (children ?? []).map((child) => ({
+          ...stamp,
           meta: child.meta ?? null,
           resourceId: child.resourceId,
           resourceType: child.resourceType,
-          rootId: root.id,
+          rootId: rootRow.id,
           title: child.title ?? null,
         }));
-
-        // A child that already has its own registry row (trashed earlier on
-        // its own) keeps it: it was in the bin before the root and must stay
-        // there after the root is restored. `DO NOTHING` preserves that.
-        for (let i = 0; i < values.length; i += 500) {
-          await tx
-            .insert(trashItems)
-            .values(values.slice(i, i + 500))
-            .onConflictDoNothing({ target: [trashItems.resourceType, trashItems.resourceId] });
-        }
+      });
+      // A child that already has its own registry row (trashed earlier on
+      // its own) keeps it: it was in the bin before the root and must stay
+      // there after the root is restored. `DO NOTHING` preserves that.
+      for (let i = 0; i < childValues.length; i += REGISTER_CHUNK_SIZE) {
+        await tx
+          .insert(trashItems)
+          .values(childValues.slice(i, i + REGISTER_CHUNK_SIZE))
+          .onConflictDoNothing({ target: [trashItems.resourceType, trashItems.resourceId] });
       }
 
-      return root;
+      return params.cascades.map(({ root }) =>
+        rootsByKey.get(key(root.resourceType, root.resourceId))!,
+      );
     };
 
     return trx ? run(trx) : run(this.db);
@@ -268,9 +304,11 @@ export class TrashModel {
   listAllRootIds = async (options?: {
     /** Restrict to roots this user trashed — a workspace non-owner may only empty their own. */
     deletedByUserId?: string;
+    /** Cap the ids returned — empty-trash works one bounded batch per request. */
+    limit?: number;
     resourceType?: TrashResourceType;
   }): Promise<string[]> => {
-    const rows = await this.db
+    const query = this.db
       .select({ id: trashItems.id })
       .from(trashItems)
       .where(
@@ -282,7 +320,9 @@ export class TrashModel {
             ? eq(trashItems.deletedByUserId, options.deletedByUserId)
             : undefined,
         ),
-      );
+      )
+      .orderBy(asc(trashItems.deletedAt), asc(trashItems.id));
+    const rows = await (options?.limit ? query.limit(options.limit) : query);
     return rows.map((row) => row.id);
   };
 

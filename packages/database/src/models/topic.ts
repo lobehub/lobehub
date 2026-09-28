@@ -1946,9 +1946,15 @@ export class TopicModel {
    * trashed row (invisible to `delete`) can actually be removed. FK cascades
    * take messages, threads and the rest with it.
    */
-  purge = async (ids: string[]) => {
-    if (ids.length === 0) return;
-    return this.db.delete(topics).where(and(inArray(topics.id, ids), this.trashScope()));
+  purge = async (ids: string[]): Promise<string[]> => {
+    if (ids.length === 0) return [];
+    // Only rows still stamped: a restore that commits between the registry
+    // read and this delete must win, not be hard-deleted as a stale purge.
+    const rows = await this.db
+      .delete(topics)
+      .where(and(inArray(topics.id, ids), this.trashScope(), isTrashed(topics.isDeleted)))
+      .returning({ id: topics.id });
+    return rows.map((row) => row.id);
   };
 
   // **************** Update *************** //

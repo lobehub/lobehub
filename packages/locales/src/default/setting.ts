@@ -1829,6 +1829,8 @@ When I am ___, I need ___
   'trash.expiresIn.days': 'in {{count}} days',
   'trash.expiresIn.soon': 'within a day',
   'trash.filter.all': 'All',
+  'trash.loadFailed.desc': 'Check your connection and try again.',
+  'trash.loadFailed.title': 'Could not load the trash',
   'trash.meta.children': '{{count}} items inside',
   'trash.purgeConfirm.content': 'Permanently delete "{{title}}"? This cannot be undone.',
   'trash.purgeConfirm.title': 'Delete forever',

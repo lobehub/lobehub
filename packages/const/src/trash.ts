@@ -10,5 +10,12 @@ export const TRASH_RETENTION_MS = TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 /** Page size the recycle bin UI asks for; keeps the first paint cheap. */
 export const TRASH_LIST_PAGE_SIZE = 50;
 
+/**
+ * Roots one "empty trash" request purges before handing control back to the
+ * client, which repeats while more remain. Each purge is serial and may call
+ * storage, so this keeps a single request well inside its time budget.
+ */
+export const TRASH_EMPTY_BATCH_SIZE = 50;
+
 /** Roots the purge sweep hard-deletes per invocation. Bounded so one cron tick never runs away. */
 export const TRASH_PURGE_BATCH_SIZE = 200;

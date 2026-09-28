@@ -139,7 +139,12 @@ export class TrashActionImpl {
     await this.#withLoading(
       items.map((item) => item.id),
       async () => {
-        await trashService.emptyTrash(activeType);
+        // The server purges one bounded batch per call so no single request
+        // runs away on a large bin; keep going until it reports nothing left.
+        for (;;) {
+          const { hasMore } = await trashService.emptyTrash(activeType);
+          if (!hasMore) break;
+        }
         this.#set({ items: [], nextCursor: null }, false, 'emptyTrash');
       },
     );
