@@ -3,12 +3,32 @@ import path from 'node:path';
 
 import { MAX_SYNC_BATCH, type MessageSyncOperation, type MessageSyncSink } from './messageSync';
 
+/** Owner-only: the log holds raw conversation content until it is replicated. */
+const FILE_MODE = 0o600;
+const DIR_MODE = 0o700;
+
 const FLUSH_INTERVAL_MS = 250;
 const MAX_RETRIES = 5;
 const INITIAL_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 8_000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Narrow an existing artifact's permissions, ignoring one that is not there.
+ *
+ * Only ever tightens: a caller that has deliberately widened the directory is
+ * not the case being defended against, but leaving a legacy world-readable log
+ * in place is.
+ */
+const restrictMode = async (target: string, mode: number): Promise<void> => {
+  try {
+    const stat = await fs.stat(target);
+    if ((stat.mode & 0o777) !== mode) await fs.chmod(target, mode);
+  } catch {
+    // Not created yet — `mkdir`/`appendFile` will apply the mode themselves.
+  }
+};
 
 export interface MessageWriteQueueOptions {
   /** First retry delay; doubles up to {@link MAX_BACKOFF_MS}. Injectable so tests
@@ -236,8 +256,24 @@ export class MessageWriteQueue {
     if (!logPath) return;
 
     this.logWrites = this.logWrites.then(async () => {
-      await fs.mkdir(path.dirname(logPath), { recursive: true });
-      await fs.appendFile(logPath, `${JSON.stringify(operation)}\n`, 'utf8');
+      const logDir = path.dirname(logPath);
+      await fs.mkdir(logDir, { mode: DIR_MODE, recursive: true });
+      // `mode` on mkdir/appendFile only applies when the artifact is CREATED.
+      // A log or directory left by an earlier version keeps its old, permissive
+      // mode indefinitely — and it holds unreplicated conversation content, so
+      // "until the next successful confirmation" is not a bound worth relying
+      // on. Tighten whatever is already there.
+      await restrictMode(logDir, DIR_MODE);
+      await restrictMode(logPath, FILE_MODE);
+      // Owner-only. Every pending operation carries raw conversation content,
+      // and a create may carry tool arguments and whatever they contain. The
+      // default (0o666 less the umask, so usually 0o644) leaves that readable
+      // by every other user on a shared host. `mode` applies on creation, so
+      // this is set on the first append.
+      await fs.appendFile(logPath, `${JSON.stringify(operation)}\n`, {
+        encoding: 'utf8',
+        mode: FILE_MODE,
+      });
     });
 
     try {
@@ -253,7 +289,10 @@ export class MessageWriteQueue {
   private async writeAtomic(filePath: string, content: string): Promise<void> {
     const tmp = `${filePath}.${process.pid}.tmp`;
     try {
-      await fs.writeFile(tmp, content, 'utf8');
+      // Same restriction as the append path — the rewrite replaces the log with
+      // a fresh file, so creating it world-readable would undo it every time a
+      // batch is confirmed.
+      await fs.writeFile(tmp, content, { encoding: 'utf8', mode: FILE_MODE });
       await fs.rename(tmp, filePath);
     } catch (error) {
       await fs.rm(tmp, { force: true }).catch(() => {});
