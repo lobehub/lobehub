@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { env } from 'node:process';
 
+import type { ContextManager, TextMapPropagator } from '@opentelemetry/api';
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
@@ -11,6 +12,8 @@ import type { DetectedResourceAttributes } from '@opentelemetry/resources';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { AggregationType, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
+import type { Sampler, SpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
 /**
@@ -100,9 +103,10 @@ function debugLogLevelFromString(level?: string | null): DiagLogLevel | undefine
   }
 }
 
-export function register(options?: {
+export interface RegisterOptions {
   autoDetectResources?: boolean;
   autoInstrumentations?: boolean;
+  contextManager?: ContextManager;
   debug?: true | DiagLogLevel;
   environment?: string;
   histogramViews?: {
@@ -111,8 +115,13 @@ export function register(options?: {
     meterName?: string;
   }[];
   name?: string;
+  sampler?: Sampler;
+  spanProcessors?: SpanProcessor[];
+  textMapPropagator?: TextMapPropagator;
   version?: string;
-}) {
+}
+
+export function register(options?: RegisterOptions) {
   const attributes = attributesCommon();
 
   if (typeof options?.environment !== 'undefined') {
@@ -143,6 +152,7 @@ export function register(options?: {
 
   const sdk = new NodeSDK({
     autoDetectResources: options?.autoDetectResources,
+    contextManager: options?.contextManager,
     instrumentations:
       options?.autoInstrumentations === false
         ? []
@@ -154,7 +164,12 @@ export function register(options?: {
       }),
     ],
     resource: resourceFromAttributes(attributes),
-    traceExporter: new OTLPTraceExporter(),
+    sampler: options?.sampler,
+    spanProcessors: [
+      ...(options?.spanProcessors ?? []),
+      new BatchSpanProcessor(new OTLPTraceExporter()),
+    ],
+    textMapPropagator: options?.textMapPropagator,
     views: options?.histogramViews?.map(({ boundaries, instrumentName, meterName }) => ({
       aggregation: {
         options: { boundaries: [...boundaries] },

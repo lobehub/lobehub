@@ -4,8 +4,9 @@ import superjson from 'superjson';
 import type { LambdaRouter } from '@/server/routers/lambda';
 import type { ToolsRouter } from '@/server/routers/tools';
 
-import { getValidToken } from '../auth/refresh';
-import { CLI_API_KEY_ENV, readCliApiKeyEnv } from '../constants/auth';
+import { describeTokenLookup, getValidToken } from '../auth/refresh';
+import { pickAuthSource } from '../auth/source';
+import { CLI_API_KEY_ENV } from '../constants/auth';
 import { CLI_PRIMARY_BIN } from '../constants/identity';
 import { cliPackageName } from '../pkg';
 import { resolveServerUrl } from '../settings';
@@ -19,40 +20,51 @@ const PERSONAL_KEY = '__personal__';
 const _clients = new Map<string, TrpcClient>();
 const _toolsClients = new Map<string, ToolsTrpcClient>();
 
-async function getAuthAndServer(): Promise<{ headers: Record<string, string>; serverUrl: string }> {
+async function getAuthAndServer(): Promise<{
+  headers: () => Record<string, string>;
+  serverUrl: string;
+}> {
+  // Precedence lives in `pickAuthSource`, shared with `resolveToken` and
+  // `lh doctor` so all three agree on which credential wins.
+  const source = pickAuthSource();
+
   // LOBEHUB_JWT + LOBEHUB_SERVER env vars (used by server-side sandbox execution)
-  const envJwt = process.env.LOBEHUB_JWT;
-  if (envJwt) {
+  if (source.kind === 'env-jwt') {
     const serverUrl = resolveServerUrl();
 
     return {
-      headers: { 'Oidc-Auth': envJwt },
+      // Read per request: `hetero exec` renews its operation token in place, and
+      // its clients live for the whole run.
+      headers: () => ({ 'Oidc-Auth': process.env.LOBEHUB_JWT || source.token! }),
       serverUrl,
     };
   }
 
-  const envApiKey = readCliApiKeyEnv();
-  if (envApiKey) {
+  if (source.kind === 'env-api-key') {
     const serverUrl = resolveServerUrl();
 
     return {
-      headers: { 'X-API-Key': envApiKey },
+      headers: () => ({ 'X-API-Key': source.token! }),
       serverUrl,
     };
   }
 
   const result = await getValidToken();
-  if (!result) {
+  if (result.status !== 'ok') {
+    const report = describeTokenLookup(result);
     log.error(
-      `No authentication found. Run '${CLI_PRIMARY_BIN} login' (or 'npx -y ${cliPackageName} login') first, or set ${CLI_API_KEY_ENV}.`,
+      report
+        ? `${report.detail} ${report.fix}`
+        : `No authentication found. Run '${CLI_PRIMARY_BIN} login' (or 'npx -y ${cliPackageName} login') first, or set ${CLI_API_KEY_ENV}.`,
     );
     process.exit(1);
   }
 
   const serverUrl = resolveServerUrl();
+  const { accessToken } = result.credentials;
 
   return {
-    headers: { 'Oidc-Auth': result.credentials.accessToken },
+    headers: () => ({ 'Oidc-Auth': accessToken }),
     serverUrl,
   };
 }
@@ -67,7 +79,7 @@ export async function getTrpcClient(workspaceId?: string): Promise<TrpcClient> {
   const client = createTRPCClient<LambdaRouter>({
     links: [
       httpLink({
-        headers: withWorkspaceHeader(headers, wsId),
+        headers: () => withWorkspaceHeader(headers(), wsId),
         transformer: superjson,
         url: `${serverUrl}/trpc/lambda`,
       }),
@@ -125,7 +137,7 @@ export async function getToolsTrpcClient(workspaceId?: string): Promise<ToolsTrp
   const client = createTRPCClient<ToolsRouter>({
     links: [
       httpLink({
-        headers: withWorkspaceHeader(headers, wsId),
+        headers: () => withWorkspaceHeader(headers(), wsId),
         transformer: superjson,
         url: `${serverUrl}/trpc/tools`,
       }),

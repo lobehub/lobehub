@@ -28,25 +28,31 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    attachToAcceptance: mocks.attachToAcceptance,
-    listByAcceptance: mocks.listByAcceptance,
-    update: mocks.runUpdate,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      attachToAcceptance: mocks.attachToAcceptance,
+      listByAcceptance: mocks.listByAcceptance,
+      update: mocks.runUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn(() => ({
-    listByRuns: mocks.listByRuns,
-    update: mocks.resultUpdate,
-  })),
+  VerifyCheckResultModel: vi.fn(function () {
+    return {
+      listByRuns: mocks.listByRuns,
+      update: mocks.resultUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/acceptance', () => ({
-  AcceptanceModel: vi.fn(() => ({
-    delete: mocks.acceptanceDelete,
-    update: mocks.acceptanceUpdate,
-  })),
+  AcceptanceModel: vi.fn(function () {
+    return {
+      delete: mocks.acceptanceDelete,
+      update: mocks.acceptanceUpdate,
+    };
+  }),
 }));
 
 const planItem = (id: string, overrides: Partial<VerifyCheckItem> = {}): VerifyCheckItem => ({

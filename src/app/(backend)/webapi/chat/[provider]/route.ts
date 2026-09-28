@@ -1,3 +1,4 @@
+import { REQUEST_TOPIC_ID_HEADER } from '@lobechat/const';
 import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { AGENT_RUNTIME_ERROR_SET } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
@@ -38,6 +39,7 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
     return await modelRuntime.chat(data, {
       user: userId,
       ...traceOptions,
+      metadata: { topicId: req.headers.get(REQUEST_TOPIC_ID_HEADER) ?? undefined },
       signal: req.signal,
     });
   } catch (e) {

@@ -12,6 +12,53 @@ export interface HeteroQuotaWindow {
   windowMinutes: number;
 }
 
+export type CodexQuotaWindow = HeteroQuotaWindow;
+
+export interface CodexRateLimitSnapshot {
+  /** Canonical metered limit identifier, for example `codex` or `codex_other`. */
+  limitId: string;
+  limitName: string | null;
+  primary: CodexQuotaWindow | null;
+  secondary: CodexQuotaWindow | null;
+}
+
+export interface CodexRateLimitResetCredit {
+  expiresAt: number | null;
+  grantedAt: number | null;
+  /** Opaque backend identifier used only when redeeming this specific credit. */
+  id: string | null;
+  redeemedAt?: number | null;
+  redeemStartedAt?: number | null;
+  resetType: string | null;
+  status: string;
+  title: string | null;
+}
+
+export interface CodexRateLimitResetCredits {
+  availableCount: number;
+  /** Detailed rows when supported by the installed Codex CLI/backend. */
+  credits?: CodexRateLimitResetCredit[];
+  nextExpiresAt?: number | null;
+  totalEarnedCount?: number;
+}
+
+export interface CodexQuotaSnapshot {
+  error: string | null;
+  identity?: QuotaAccountIdentity | null;
+  provider: 'codex';
+  rateLimitResetCredits?: CodexRateLimitResetCredits | null;
+  /** Complete multi-bucket view when supported by the installed Codex app-server. */
+  rateLimits?: CodexRateLimitSnapshot[];
+  readings?: QuotaLimitReading[];
+  session: CodexQuotaWindow | null;
+  status: 'error' | 'ok' | 'unavailable';
+  updatedAt: number;
+  weekly: CodexQuotaWindow | null;
+}
+
+export type CodexRateLimitResetOutcome =
+  'alreadyRedeemed' | 'noCredit' | 'nothingToReset' | 'reset';
+
 /**
  * Why the quota can't be shown. `external-auth` means the agent is configured
  * with an API key / custom base url, so subscription quota does not apply;
@@ -45,5 +92,36 @@ export interface ClaudeCodeQuotaSnapshot {
   session: HeteroQuotaWindow | null;
   status: 'error' | 'ok' | 'unavailable';
   updatedAt: number;
+  weekly: HeteroQuotaWindow | null;
+}
+
+/** Booster-wallet top-up balance reported alongside the Kimi Code rate limits. */
+export interface KimiCodeExtraUsage {
+  balanceCents: number;
+  currency: string;
+  monthlyChargeLimitCents: number;
+  monthlyChargeLimitEnabled: boolean;
+  monthlyUsedCents: number;
+  totalCents: number;
+}
+
+export type KimiCodeQuotaUnavailableReason = 'credentials-expired' | 'credentials-not-found';
+
+export interface KimiCodeQuotaSnapshot {
+  error: string | null;
+  extraUsage: KimiCodeExtraUsage | null;
+  identity?: QuotaAccountIdentity | null;
+  /** `limit_month_total` (windowMinutes 43200). */
+  monthly: HeteroQuotaWindow | null;
+  /** `limit_month_code` (windowMinutes 43200). */
+  monthlyCode: HeteroQuotaWindow | null;
+  provider: 'kimi-code';
+  readings?: QuotaLimitReading[];
+  reason?: KimiCodeQuotaUnavailableReason;
+  /** `limit_5h` (windowMinutes 300). */
+  session: HeteroQuotaWindow | null;
+  status: 'error' | 'ok' | 'unavailable';
+  updatedAt: number;
+  /** `limit_7d` (windowMinutes 10080). */
   weekly: HeteroQuotaWindow | null;
 }

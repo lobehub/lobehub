@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# report-init.sh — scaffold a structured test report under .records/reports/.
+# report-init.sh — scaffold a structured test report under the report root
+# ($ACCEPTANCE_REPORT_ROOT, default ${TMPDIR:-/tmp}/lobe-acceptance/reports).
 #
 # Format spec and evidence rules: ../references/report.md
 #
@@ -8,12 +9,12 @@
 #
 # With --subject (task:<id> | topic:<id> | document:<id>) the run is grouped
 # under its acceptance:
-#   .records/reports/<type>-<id>/<YYYYMMDD-HHMMSS>-<slug>/
+#   <report-root>/<type>-<id>/<YYYYMMDD-HHMMSS>-<slug>/
 # and the group directory gets an acceptance.json marker. The subject is also
 # pre-filled into result.json so acceptance run ingest attaches the run automatically.
 #
-# Run this from the CONSUMER repo root — the report is created relative to the
-# current working directory, not relative to this script's own location.
+# Run this from the CONSUMER repo root — branch/commit provenance is read from
+# the current working directory, not from this script's own location.
 #
 # Prints the report directory path (capture it: DIR=$(report-init.sh my-test)).
 
@@ -39,6 +40,7 @@ json_escape() {
 }
 
 REPO_ROOT="$(pwd)"
+REPORT_ROOT="${ACCEPTANCE_REPORT_ROOT:-${TMPDIR:-/tmp}/lobe-acceptance/reports}"
 TS="$(date +%Y%m%d-%H%M%S)"
 
 SUBJECT_JSON="null"
@@ -48,11 +50,11 @@ if [[ -n "$SUBJECT" ]]; then
     exit 1
   fi
   SUBJECT_KEY="${SUBJECT/:/-}"
-  GROUP_DIR="$REPO_ROOT/.records/reports/$SUBJECT_KEY"
+  GROUP_DIR="$REPORT_ROOT/$SUBJECT_KEY"
   DIR="$GROUP_DIR/$TS-$SLUG"
   SUBJECT_JSON="\"$(json_escape "$SUBJECT")\""
 else
-  DIR="$REPO_ROOT/.records/reports/$TS-$SLUG"
+  DIR="$REPORT_ROOT/$TS-$SLUG"
 fi
 mkdir -p "$DIR/assets"
 

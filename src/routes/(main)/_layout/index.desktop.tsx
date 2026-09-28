@@ -15,6 +15,7 @@ import DesktopLayoutContainer from '@/features/DesktopLayoutContainer';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
 import ActiveConversationBridge from '@/features/Electron/ActiveConversationBridge';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
+import HeteroRestartRecovery from '@/features/Electron/HeterogeneousAgent/RestartRecovery';
 import OverlayCaptureUploader from '@/features/Electron/ScreenCapture/OverlayCaptureUploader';
 import OverlayMessageDispatcher from '@/features/Electron/ScreenCapture/OverlayMessageDispatcher';
 import OverlaySnapshotPublisher from '@/features/Electron/ScreenCapture/OverlaySnapshotPublisher';
@@ -36,6 +37,7 @@ import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
+import GatewayMuxWarmup from './GatewayMuxWarmup';
 import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
@@ -55,11 +57,12 @@ const Layout: FC = () => {
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
+      <DesktopAutoOidcOnFirstOpen />
+      <AuthRequiredModal />
       <WorkspaceContextSlot>
         <ActiveConversationBridge />
         <TabCacheBridges />
         <Suspense fallback={null}>
-          <DesktopAutoOidcOnFirstOpen />
           <DesktopNavigationBridge />
           <DesktopFileMenuBridge />
           <DesktopBrowserGatewayBridge />
@@ -68,7 +71,6 @@ const Layout: FC = () => {
           <OverlayMessageDispatcher />
           {showCloudPromotion && <CloudBanner />}
         </Suspense>
-        <AuthRequiredModal />
         <ZoomHUD />
 
         <Suspense fallback={null}>
@@ -91,6 +93,8 @@ const Layout: FC = () => {
         </DndContextWrapper>
         <Suspense fallback={null}>
           <HotkeyHelperPanel />
+          <GatewayMuxWarmup />
+          <HeteroRestartRecovery />
           <RegisterHotkeys />
           <CmdkLazy />
           <GlobalApprovalNotification />

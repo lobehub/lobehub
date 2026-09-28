@@ -1,6 +1,6 @@
-import { Center, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Center, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
 import { Input } from 'antd';
-import { FileText, FolderIcon } from 'lucide-react';
+import { FileText, FolderIcon, LockIcon } from 'lucide-react';
 
 import FileIcon from '@/components/FileIcon';
 
@@ -14,11 +14,18 @@ interface FileListItemNameProps {
   inputRef: any;
   isFolder: boolean;
   isPage: boolean;
+  /**
+   * Private to its creator, so no other workspace member can open it. A library
+   * mixes both scopes (the Resources mode filter is deliberately skipped inside
+   * one), which is exactly where the distinction needs to be visible.
+   */
+  isPrivate?: boolean;
   isRenaming: boolean;
   name: string;
   onRenameCancel: () => void;
   onRenameConfirm: () => void;
   onRenamingValueChange: (value: string) => void;
+  privateTooltip: string;
   renamingValue: string;
 }
 
@@ -29,11 +36,13 @@ const FileListItemName = ({
   inputRef,
   isFolder,
   isPage,
+  isPrivate,
   isRenaming,
   name,
   onRenameCancel,
   onRenameConfirm,
   onRenamingValueChange,
+  privateTooltip,
   renamingValue,
 }: FileListItemNameProps) => (
   <Flexbox horizontal align={'center'} className={styles.nameContainer}>
@@ -42,7 +51,13 @@ const FileListItemName = ({
       justify={'center'}
       style={{ fontSize: 24, marginInline: 8, width: 24 }}
     >
-      {isFolder ? (
+      {isPrivate ? (
+        <Tooltip title={privateTooltip}>
+          <Center height={24} width={24}>
+            <Icon icon={LockIcon} size={24} />
+          </Center>
+        </Tooltip>
+      ) : isFolder ? (
         <Icon icon={FolderIcon} size={24} />
       ) : isPage ? (
         emoji ? (

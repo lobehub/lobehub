@@ -7,6 +7,7 @@ import type { PluginOption, UserConfig, ViteDevServer } from 'vite';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
+import { devLoadingProgress } from '../../plugins/vite/devLoadingProgress';
 import {
   createSharedRolldownOutput,
   sharedModulePreload,
@@ -234,7 +235,7 @@ export default defineConfig(async (env) => {
           overlay: path.resolve(__dirname, 'overlay.html'),
           popup: path.resolve(__dirname, 'popup.html'),
         },
-        output: createSharedRolldownOutput({ strictExecutionOrder: true }),
+        output: createSharedRolldownOutput({ splitInitial: false, strictExecutionOrder: true }),
       },
       sourcemap: false,
       target: RENDERER_CHROME_TARGET,
@@ -250,6 +251,7 @@ export default defineConfig(async (env) => {
       isCloudDesktop && cloudTsconfigPathsPlugin(),
       isCloudDesktop && cloudDesktopBusinessConstPlugin(),
       electronDesktopHtmlPlugin(),
+      devLoadingProgress(),
       reactDevtoolsPlugin(),
       excludeWebSpaBuildArtifactsPlugin(),
       vanillaExtractPlugin(),

@@ -1,18 +1,22 @@
 import type { DeviceGitWorktreeListItem } from '@lobechat/types';
-import { Icon, Input, Tooltip } from '@lobehub/ui';
+import { copyToClipboard, Icon, Input, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
+  DropdownMenuFooter,
+  DropdownMenuHeader,
   DropdownMenuItem,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
   DropdownMenuRoot,
+  DropdownMenuScrollViewport,
   DropdownMenuTrigger,
   toast,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
+  CopyIcon,
   GitBranchIcon,
   GitBranchPlusIcon,
   GitForkIcon,
@@ -54,22 +58,21 @@ const styles = createStaticStyles(({ css }) => ({
     display: inline-flex;
     flex: none;
   `,
-  container: css`
+  /* See WorktreeSwitcher.triggerFill — keeps a full-row custom trigger's hover
+     background aligned with the popup-open background. */
+  triggerFill: css`
     display: flex;
-    flex-direction: column;
+    width: 100%;
 
-    width: 300px;
-    height: 360px;
-
-    /* Cancel DropdownMenuPopup's default 4px padding so our sections align edge-to-edge */
-    margin: -4px;
+    > * {
+      flex: 1;
+    }
   `,
-  createItemWrapper: css`
-    padding: 4px;
+  footer: css`
     border-block-start: 1px solid ${cssVar.colorSplit};
   `,
-  createItem: css`
-    border-radius: calc(${cssVar.borderRadius} - 4px);
+  header: css`
+    padding: 0;
   `,
   emptyState: css`
     padding-block: 12px;
@@ -152,10 +155,12 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   list: css`
-    overflow-y: auto;
     flex: 1;
-    padding-block: 2px;
-    padding-inline: 4px;
+    min-height: 0;
+  `,
+  popup: css`
+    width: 300px;
+    height: 360px;
   `,
   searchBar: css`
     padding-block: 4px;
@@ -232,6 +237,8 @@ interface BranchSwitcherProps {
   onOptimisticCheckout?: (branch: string) => void;
   open: boolean;
   path: string;
+  /** Dropdown placement — the runtime bar opens upward, embedding panels open downward. */
+  placement?: 'topLeft' | 'bottomLeft' | 'bottomRight';
   /** The repo the conversation is anchored to (worktrees hang off it). */
   sourcePath: string;
   /** Used to route a checkout into the worktree that already holds the branch. */
@@ -250,6 +257,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     onAfterCheckout,
     onExternalRefresh,
     onOptimisticCheckout,
+    placement = 'topLeft',
     sourcePath,
     worktrees,
     children,
@@ -269,7 +277,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     } = useSWR(
       open ? deviceKeys.gitBranches(deviceId ?? 'local', path) : null,
       () => gitService.listGitBranches({ deviceId, path }),
-      { revalidateOnFocus: false, shouldRetryOnError: false },
+      { keepPreviousData: true, revalidateOnFocus: false, shouldRetryOnError: false },
     );
     const { data: workingStatus, mutate: mutateWorkingStatus } = useFetchGitWorkingTreeStatus(
       deviceId,
@@ -434,6 +442,19 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       [deviceId, onAfterCheckout, onOpenChange, path, t],
     );
 
+    const handleCopy = useCallback(
+      async (event: MouseEvent, branch: string) => {
+        event.stopPropagation();
+        try {
+          await copyToClipboard(branch);
+          toast.success(tCommon('copySuccess'));
+        } catch {
+          toast.error(tCommon('copyFail'));
+        }
+      },
+      [tCommon],
+    );
+
     // Delete a branch behind a destructive confirm. git rejects deleting the
     // checked-out branch, so the action is hidden for the current branch.
     const handleDelete = useCallback(
@@ -461,12 +482,12 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     return (
       <DropdownMenuRoot open={open} onOpenChange={onOpenChange}>
         <DropdownMenuTrigger className={styles.triggerAnchor}>
-          <div>{children}</div>
+          <div className={styles.triggerFill}>{children}</div>
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
-            <DropdownMenuPopup>
-              <div className={styles.container}>
+          <DropdownMenuPositioner placement={placement} sideOffset={8}>
+            <DropdownMenuPopup className={styles.popup}>
+              <DropdownMenuHeader className={styles.header}>
                 <div className={styles.searchBar}>
                   <Input
                     autoFocus
@@ -479,37 +500,35 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                     onKeyDown={(e) => e.stopPropagation()}
                   />
                 </div>
-
-                <div className={styles.list}>
-                  <div className={styles.sectionRow}>
-                    <div className={styles.section}>{t('workingDirectory.branchesHeading')}</div>
-                    <div className={styles.refreshButton} role="button" onClick={handleRefresh}>
-                      <Icon
-                        className={cx(isRefreshing && styles.spinning)}
-                        icon={RefreshCwIcon}
-                        size={12}
-                      />
-                    </div>
+                <div className={styles.sectionRow}>
+                  <div className={styles.section}>{t('workingDirectory.branchesHeading')}</div>
+                  <div className={styles.refreshButton} role="button" onClick={handleRefresh}>
+                    <Icon
+                      className={cx(isRefreshing && styles.spinning)}
+                      icon={RefreshCwIcon}
+                      size={12}
+                    />
                   </div>
+                </div>
+              </DropdownMenuHeader>
 
-                  {isLoading && branches.length === 0 && (
-                    <div className={styles.emptyState}>{t('workingDirectory.branchesLoading')}</div>
-                  )}
-
-                  {!isLoading && branchesError && (
-                    <div className={styles.emptyState}>
-                      {t('workingDirectory.branchesLoadFailed')}
-                    </div>
-                  )}
-
-                  {!isLoading && !branchesError && filtered.length === 0 && (
-                    <div className={styles.emptyState}>
-                      {search.trim()
-                        ? t('workingDirectory.branchesNoMatch')
-                        : t('workingDirectory.branchesEmpty')}
-                    </div>
-                  )}
-
+              {isLoading && branches.length === 0 ? (
+                <div className={styles.emptyState}>{t('workingDirectory.branchesLoading')}</div>
+              ) : !isLoading && branchesError ? (
+                <div className={styles.emptyState}>{t('workingDirectory.branchesLoadFailed')}</div>
+              ) : filtered.length === 0 ? (
+                <div className={styles.emptyState}>
+                  {search.trim()
+                    ? t('workingDirectory.branchesNoMatch')
+                    : t('workingDirectory.branchesEmpty')}
+                </div>
+              ) : (
+                <DropdownMenuScrollViewport
+                  virtual
+                  className={styles.list}
+                  getItemLabel={(_, index) => filtered[index]?.name}
+                  listItemHeight={32}
+                >
                   {filtered.map((branch) => {
                     const isCurrent = branch.name === currentBranch;
                     const isBusy = busyBranch === branch.name;
@@ -554,6 +573,16 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                           />
                         )}
                         <div className={cx('branch-row-actions', styles.rowActions)}>
+                          <Tooltip title={tCommon('copy')}>
+                            <div
+                              aria-label={tCommon('copy')}
+                              className={styles.rowAction}
+                              role="button"
+                              onClick={(e) => void handleCopy(e, branch.name)}
+                            >
+                              <Icon icon={CopyIcon} size={13} />
+                            </div>
+                          </Tooltip>
                           <Tooltip title={t('workingDirectory.renameBranchAction')}>
                             <div
                               className={styles.rowAction}
@@ -578,20 +607,15 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                       </DropdownMenuItem>
                     );
                   })}
-                </div>
+                </DropdownMenuScrollViewport>
+              )}
 
-                <div className={styles.createItemWrapper}>
-                  <DropdownMenuItem
-                    className={cx(styles.item, styles.createItem)}
-                    onClick={openCreateBranch}
-                  >
-                    <Icon className={styles.itemIcon} icon={GitBranchPlusIcon} size={14} />
-                    <div className={styles.itemMain}>
-                      {t('workingDirectory.createBranchAction')}
-                    </div>
-                  </DropdownMenuItem>
-                </div>
-              </div>
+              <DropdownMenuFooter className={styles.footer}>
+                <DropdownMenuItem className={styles.item} onClick={openCreateBranch}>
+                  <Icon className={styles.itemIcon} icon={GitBranchPlusIcon} size={14} />
+                  <div className={styles.itemMain}>{t('workingDirectory.createBranchAction')}</div>
+                </DropdownMenuItem>
+              </DropdownMenuFooter>
             </DropdownMenuPopup>
           </DropdownMenuPositioner>
         </DropdownMenuPortal>

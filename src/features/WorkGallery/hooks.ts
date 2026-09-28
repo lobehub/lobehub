@@ -69,6 +69,8 @@ export const useWorkspaceWorksInfinite = (galleryKey: WorkGalleryKey) => {
     setSize(1);
   }, [galleryKey, setSize, visibility]);
 
+  useEffect(() => workService.registerWorkspaceListRefresh(() => mutate()), [mutate]);
+
   const loadMore = useCallback(() => {
     void setSize((s) => s + 1);
   }, [setSize]);

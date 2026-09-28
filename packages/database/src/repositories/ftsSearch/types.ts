@@ -168,21 +168,24 @@ export interface FtsSearchOptions {
 }
 
 /** Entities implemented by the current product search repository contract. */
-export type FtsSearchBackendEntity =
-  | 'agents'
-  | 'chatGroups'
-  | 'documents'
-  | 'files'
-  | 'knowledgeBases'
-  | 'memoryActivities'
-  | 'memoryContexts'
-  | 'memoryExperiences'
-  | 'memoryIdentities'
-  | 'memoryPreferences'
-  | 'messages'
-  | 'personaDocuments'
-  | 'topics'
-  | 'userMemories';
+export const FTS_SEARCH_BACKEND_ENTITIES = [
+  'agents',
+  'chatGroups',
+  'documents',
+  'files',
+  'knowledgeBases',
+  'memoryActivities',
+  'memoryContexts',
+  'memoryExperiences',
+  'memoryIdentities',
+  'memoryPreferences',
+  'messages',
+  'personaDocuments',
+  'topics',
+  'userMemories',
+] as const;
+
+export type FtsSearchBackendEntity = (typeof FTS_SEARCH_BACKEND_ENTITIES)[number];
 
 export interface FtsSearchBackendScope {
   /** Visibility of the agent initiating a KB search, when applicable. */

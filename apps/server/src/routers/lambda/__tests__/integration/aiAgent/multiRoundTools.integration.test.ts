@@ -27,14 +27,20 @@ process.env.OPENAI_API_KEY = 'sk-test-fake-api-key-for-testing';
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 // Mock FileService to avoid S3 environment variable requirements
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: vi.fn().mockImplementation((path: string) => (path ? `/files${path}` : null)),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn().mockImplementation(function (path: string) {
+        return path ? `/files${path}` : null;
+      }),
+    };
+  }),
 }));
 
 let mockResponsesCreate: any;
@@ -254,158 +260,166 @@ describe('Multi-Round Tool Execution', () => {
    *
    * Expected: 4 tool messages total (2 from round 1 + 2 from round 2), no duplicates
    */
-  it('should not duplicate tool messages across multiple LLM rounds with batch tool execution', async () => {
-    let callCount = 0;
-    mockResponsesCreate.mockImplementation(() => {
-      callCount++;
-      if (callCount === 1) {
-        return Promise.resolve(createMockResponseWithMultipleTools(1) as any);
-      } else if (callCount === 2) {
-        return Promise.resolve(createMockResponseWithMultipleTools(2) as any);
-      }
-      return Promise.resolve(createMockFinalResponse() as any);
-    });
+  it(
+    'should not duplicate tool messages across multiple LLM rounds with batch tool execution',
+    async () => {
+      let callCount = 0;
+      mockResponsesCreate.mockImplementation(function () {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve(createMockResponseWithMultipleTools(1) as any);
+        } else if (callCount === 2) {
+          return Promise.resolve(createMockResponseWithMultipleTools(2) as any);
+        }
+        return Promise.resolve(createMockFinalResponse() as any);
+      });
 
-    const mockExecuteTool = vi.spyOn(ToolExecutionService.prototype, 'executeTool');
-    mockExecuteTool.mockImplementation(async (toolCall) => {
-      const isSearch = toolCall.apiName === 'search';
-      return {
-        content: JSON.stringify({
-          result: isSearch ? 'Search results' : 'Crawled content',
-          tool: toolCall.apiName,
-          id: toolCall.id,
-        }),
+      const mockExecuteTool = vi.spyOn(ToolExecutionService.prototype, 'executeTool');
+      mockExecuteTool.mockImplementation(async (toolCall) => {
+        const isSearch = toolCall.apiName === 'search';
+        return {
+          content: JSON.stringify({
+            result: isSearch ? 'Search results' : 'Crawled content',
+            tool: toolCall.apiName,
+            id: toolCall.id,
+          }),
+          error: null,
+          executionTime: 100,
+          state: {},
+          success: true,
+        };
+      });
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      const createResult = await caller.execAgent({
+        agentId: testAgentWithToolsId,
+        prompt: 'Please search and crawl multiple pages for comprehensive research',
+      });
+
+      expect(createResult.success).toBe(true);
+
+      // Wait for async execution to complete
+      const finalState = await waitForOperationComplete(
+        inMemoryAgentStateManager,
+        createResult.operationId,
+      );
+
+      expect(finalState.status).toBe('done');
+
+      const allMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.agentId, testAgentWithToolsId));
+
+      const toolMessages = allMessages.filter((m) => m.role === 'tool');
+      expect(toolMessages).toHaveLength(4);
+
+      const toolCallIdsFromContent = toolMessages
+        .map((m) => {
+          try {
+            const parsed = JSON.parse(m.content || '{}');
+            return parsed.id;
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      const uniqueToolCallIds = [...new Set(toolCallIdsFromContent)];
+      expect(toolCallIdsFromContent.length).toBe(uniqueToolCallIds.length);
+
+      expect(toolCallIdsFromContent.sort()).toEqual([
+        'call_crawl_round1',
+        'call_crawl_round2',
+        'call_search_round1',
+        'call_search_round2',
+      ]);
+
+      expect(allMessages).toHaveLength(8);
+
+      const assistantMessages = allMessages.filter((m) => m.role === 'assistant');
+      expect(assistantMessages).toHaveLength(3);
+
+      expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
+
+      mockExecuteTool.mockRestore();
+    },
+    MULTI_ROUND_AGENT_TEST_TIMEOUT,
+  );
+
+  it(
+    'should maintain correct state.messages structure in AgentState across tool rounds',
+    async () => {
+      let callCount = 0;
+      mockResponsesCreate.mockImplementation(function () {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve(createMockResponseWithMultipleTools(1) as any);
+        } else if (callCount === 2) {
+          return Promise.resolve(createMockResponseWithMultipleTools(2) as any);
+        }
+        return Promise.resolve(createMockFinalResponse() as any);
+      });
+
+      const mockExecuteTool = vi.spyOn(ToolExecutionService.prototype, 'executeTool');
+      mockExecuteTool.mockResolvedValue({
+        content: JSON.stringify({ result: 'Tool executed' }),
         error: null,
         executionTime: 100,
         state: {},
         success: true,
-      };
-    });
+      });
 
-    const caller = aiAgentRouter.createCaller(createTestContext());
+      const caller = aiAgentRouter.createCaller(createTestContext());
 
-    const createResult = await caller.execAgent({
-      agentId: testAgentWithToolsId,
-      prompt: 'Please search and crawl multiple pages for comprehensive research',
-    });
+      const createResult = await caller.execAgent({
+        agentId: testAgentWithToolsId,
+        prompt: 'Multi-round tool test',
+      });
 
-    expect(createResult.success).toBe(true);
+      // Wait for async execution to complete
+      const finalState = await waitForOperationComplete(
+        inMemoryAgentStateManager,
+        createResult.operationId,
+      );
 
-    // Wait for async execution to complete
-    const finalState = await waitForOperationComplete(
-      inMemoryAgentStateManager,
-      createResult.operationId,
-    );
+      expect(finalState.status).toBe('done');
 
-    expect(finalState.status).toBe('done');
+      // After state.messages stores parse-processed UIChatMessage[]
+      // Tool messages are wrapped in virtual 'assistantGroup' nodes by conversation-flow parse()
+      // The chain detector combines consecutive assistant+tool rounds into a single assistantGroup
+      expect(finalState.messages.length).toBeGreaterThan(0);
 
-    const allMessages = await serverDB
-      .select()
-      .from(messages)
-      .where(eq(messages.agentId, testAgentWithToolsId));
+      // After state.messages stores parse-processed UIChatMessage[]
+      // Tool messages are wrapped in virtual 'assistantGroup' nodes by conversation-flow parse()
+      // The chain detector combines consecutive assistant+tool rounds into a single assistantGroup
+      expect(finalState.messages.length).toBeGreaterThan(0);
 
-    const toolMessages = allMessages.filter((m) => m.role === 'tool');
-    expect(toolMessages).toHaveLength(4);
+      // parse() combines the multi-round assistant+tool chain into one assistantGroup
+      const assistantGroupMessages = finalState.messages.filter(
+        (m: { role: string }) => m.role === 'assistantGroup',
+      );
+      expect(assistantGroupMessages).toHaveLength(1);
 
-    const toolCallIdsFromContent = toolMessages
-      .map((m) => {
-        try {
-          const parsed = JSON.parse(m.content || '{}');
-          return parsed.id;
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
+      // The assistantGroup children are assistant messages, each with a tools array
+      // containing the tool calls for that round. `state.messages` is now rehydrated
+      // from the DB on every step (DB is the single source of truth), so the final
+      // state reflects the complete conversation: the two tool-call rounds plus the
+      // final text answer — all consecutive assistant messages fold into one group.
+      const group = assistantGroupMessages[0] as any;
+      expect(group.children).toHaveLength(3); // 2 tool-call rounds + final text answer
 
-    const uniqueToolCallIds = [...new Set(toolCallIdsFromContent)];
-    expect(toolCallIdsFromContent.length).toBe(uniqueToolCallIds.length);
+      // Each child should have 2 tools (search + crawl per round); the final text
+      // answer carries none, so the total across all rounds is still 4.
+      const totalToolCalls = group.children.reduce(
+        (sum: number, child: any) => sum + (child.tools?.length ?? 0),
+        0,
+      );
+      expect(totalToolCalls).toBe(4);
 
-    expect(toolCallIdsFromContent.sort()).toEqual([
-      'call_crawl_round1',
-      'call_crawl_round2',
-      'call_search_round1',
-      'call_search_round2',
-    ]);
-
-    expect(allMessages).toHaveLength(8);
-
-    const assistantMessages = allMessages.filter((m) => m.role === 'assistant');
-    expect(assistantMessages).toHaveLength(3);
-
-    expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
-
-    mockExecuteTool.mockRestore();
-  }, MULTI_ROUND_AGENT_TEST_TIMEOUT);
-
-  it('should maintain correct state.messages structure in AgentState across tool rounds', async () => {
-    let callCount = 0;
-    mockResponsesCreate.mockImplementation(() => {
-      callCount++;
-      if (callCount === 1) {
-        return Promise.resolve(createMockResponseWithMultipleTools(1) as any);
-      } else if (callCount === 2) {
-        return Promise.resolve(createMockResponseWithMultipleTools(2) as any);
-      }
-      return Promise.resolve(createMockFinalResponse() as any);
-    });
-
-    const mockExecuteTool = vi.spyOn(ToolExecutionService.prototype, 'executeTool');
-    mockExecuteTool.mockResolvedValue({
-      content: JSON.stringify({ result: 'Tool executed' }),
-      error: null,
-      executionTime: 100,
-      state: {},
-      success: true,
-    });
-
-    const caller = aiAgentRouter.createCaller(createTestContext());
-
-    const createResult = await caller.execAgent({
-      agentId: testAgentWithToolsId,
-      prompt: 'Multi-round tool test',
-    });
-
-    // Wait for async execution to complete
-    const finalState = await waitForOperationComplete(
-      inMemoryAgentStateManager,
-      createResult.operationId,
-    );
-
-    expect(finalState.status).toBe('done');
-
-    // After state.messages stores parse-processed UIChatMessage[]
-    // Tool messages are wrapped in virtual 'assistantGroup' nodes by conversation-flow parse()
-    // The chain detector combines consecutive assistant+tool rounds into a single assistantGroup
-    expect(finalState.messages.length).toBeGreaterThan(0);
-
-    // After state.messages stores parse-processed UIChatMessage[]
-    // Tool messages are wrapped in virtual 'assistantGroup' nodes by conversation-flow parse()
-    // The chain detector combines consecutive assistant+tool rounds into a single assistantGroup
-    expect(finalState.messages.length).toBeGreaterThan(0);
-
-    // parse() combines the multi-round assistant+tool chain into one assistantGroup
-    const assistantGroupMessages = finalState.messages.filter(
-      (m: { role: string }) => m.role === 'assistantGroup',
-    );
-    expect(assistantGroupMessages).toHaveLength(1);
-
-    // The assistantGroup children are assistant messages, each with a tools array
-    // containing the tool calls for that round. `state.messages` is now rehydrated
-    // from the DB on every step (DB is the single source of truth), so the final
-    // state reflects the complete conversation: the two tool-call rounds plus the
-    // final text answer — all consecutive assistant messages fold into one group.
-    const group = assistantGroupMessages[0] as any;
-    expect(group.children).toHaveLength(3); // 2 tool-call rounds + final text answer
-
-    // Each child should have 2 tools (search + crawl per round); the final text
-    // answer carries none, so the total across all rounds is still 4.
-    const totalToolCalls = group.children.reduce(
-      (sum: number, child: any) => sum + (child.tools?.length ?? 0),
-      0,
-    );
-    expect(totalToolCalls).toBe(4);
-
-    mockExecuteTool.mockRestore();
-  }, MULTI_ROUND_AGENT_TEST_TIMEOUT);
+      mockExecuteTool.mockRestore();
+    },
+    MULTI_ROUND_AGENT_TEST_TIMEOUT,
+  );
 });

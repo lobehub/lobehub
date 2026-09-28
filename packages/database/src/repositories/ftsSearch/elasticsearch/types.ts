@@ -17,8 +17,12 @@ import type { ElasticsearchFtsSearchEntity } from './query-fields';
 export interface ElasticsearchFtsSearchInput {
   body: Record<string, unknown>;
   entity: ElasticsearchFtsSearchEntity;
+  executedQueryChars: number;
   index: string;
+  originalQueryChars: number;
   pagination: 'bounded' | 'unbounded';
+  queryFieldCount: number;
+  truncated: boolean;
 }
 
 export interface ElasticsearchFtsSearchResponse {

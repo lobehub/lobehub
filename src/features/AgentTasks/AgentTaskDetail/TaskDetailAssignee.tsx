@@ -1,8 +1,7 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, Icon, Tooltip } from '@lobehub/ui';
+import { Block, Tooltip } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { cssVar, useThemeMode } from 'antd-style';
-import { UserCircle2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,23 +13,16 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
-import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
+import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
-import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 
 const TaskDetailAssignee = memo(() => {
   const { t } = useTranslation('chat');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
   const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
-  const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
   const visibility = useTaskStore(taskDetailSelectors.activeTaskVisibility);
-  const createdByUserId = useTaskStore(taskDetailSelectors.activeTaskCreatedByUserId);
-  const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
-  // An agent assignee wins the display when both ids are set (only external
-  // writers can produce that combination — the picker keeps them exclusive).
-  const memberMeta = useUserDisplayMeta(assigneeAgentId ? undefined : assigneeUserId);
   // Same source as the home list so the runtime tag stays consistent.
   const assigneeHeterogeneousType = useHomeStore(
     (s) => homeAgentListSelectors.getAgentById(assigneeAgentId ?? '')(s)?.heterogeneousType,
@@ -39,19 +31,14 @@ const TaskDetailAssignee = memo(() => {
 
   if (!taskId) return null;
 
-  const hasAssignee = Boolean(assigneeAgentId || assigneeUserId);
-
   return (
     <AssigneeAgentSelector
       currentAgentId={assigneeAgentId}
-      currentUserId={assigneeUserId}
       disabled={status === 'running'}
-      hideMembers={Boolean(automationMode)}
-      taskCreatorId={createdByUserId}
       taskIdentifier={taskId}
       taskVisibility={visibility}
     >
-      <Tooltip title={hasAssignee ? undefined : t('taskList.unassignedHint')}>
+      <Tooltip title={assigneeAgentId ? undefined : t('taskList.unassignedAgentHint')}>
         <Block
           clickable
           horizontal
@@ -59,9 +46,6 @@ const TaskDetailAssignee = memo(() => {
           gap={8}
           paddingBlock={4}
           paddingInline={11}
-          // `flex: none` keeps the chip at its content width so a narrow column
-          // wraps the row instead of squeezing the name to one character per
-          // line; `maxWidth` + the label's ellipsis then bound a very long name.
           style={{ flex: 'none', maxWidth: '100%', minHeight: 32 }}
           variant={isDarkMode ? 'filled' : 'outlined'}
         >
@@ -73,18 +57,11 @@ const TaskDetailAssignee = memo(() => {
               </Text>
               <HeterogeneousTag type={assigneeHeterogeneousType} />
             </>
-          ) : assigneeUserId ? (
-            <>
-              <AssigneeUserAvatar size={20} userId={assigneeUserId} />
-              <Text ellipsis weight={500}>
-                {memberMeta?.title}
-              </Text>
-            </>
           ) : (
             <>
-              <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={18} />
+              <UnassignedAssigneeIcon kind={'agent'} />
               <Text style={{ color: cssVar.colorTextDescription }} weight={500}>
-                {t('taskList.unassigned')}
+                {t('createTask.assignee')}
               </Text>
             </>
           )}

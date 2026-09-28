@@ -51,6 +51,21 @@ describe('runFtsSearchReindexCommand', () => {
     expect(events).toEqual(['install', 'create-or-resume']);
   });
 
+  it('installs capture before a startup run even when no generation needs backfill', async () => {
+    const events: string[] = [];
+    await runFtsSearchReindexCommand({
+      command: 'startup',
+      installCaptureInfrastructure: async () => {
+        events.push('install');
+      },
+      run: async () => {
+        events.push('run');
+      },
+      runWithLockRetry: async (operation) => operation(),
+    });
+    expect(events).toEqual(['install', 'run']);
+  });
+
   it('stops before the checkpoint when capture installation fails', async () => {
     const error = new Error('capture install failed');
     const installCaptureInfrastructure = vi.fn<() => Promise<void>>().mockRejectedValue(error);

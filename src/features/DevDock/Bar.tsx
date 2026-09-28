@@ -27,6 +27,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 11px;
     color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
   `,
   center: css`
     display: flex;
@@ -44,6 +45,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: inline-flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: center;
 
@@ -92,11 +94,12 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: inline-flex;
-    gap: 5px;
+    flex-shrink: 0;
+    gap: 4px;
     align-items: center;
 
     height: 20px;
-    padding-inline: 8px;
+    padding-inline: 6px;
     border: none;
     border-radius: 4px;
 
@@ -179,7 +182,7 @@ const Bar = memo(() => {
   const { center, right, tabs } = selectBarLayout(items, pinOverrides, activePanelId);
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.bar} gap={8}>
+    <Flexbox horizontal align={'center'} className={styles.bar} gap={3}>
       <button
         className={styles.iconButton}
         title={'Collapse DevDock'}

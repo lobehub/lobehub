@@ -56,10 +56,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface DocumentCardProps {
   content: string;
   documentId?: string;
+  readonly?: boolean;
   title: string;
 }
 
-const DocumentCard = memo<DocumentCardProps>(({ content, documentId, title }) => {
+const DocumentCard = memo<DocumentCardProps>(({ content, documentId, readonly, title }) => {
   const { t } = useTranslation('plugin');
   const [portalDocumentId, openDocument, closeDocument] = useChatStore((s) => [
     chatPortalSelectors.portalDocumentId(s),
@@ -92,7 +93,7 @@ const DocumentCard = memo<DocumentCardProps>(({ content, documentId, title }) =>
               size={'small'}
               title={t('builtins.lobe-notebook.actions.copy')}
             />
-            {documentId && (
+            {documentId && !readonly && (
               <ActionIcon
                 icon={PencilLine}
                 size={'small'}
@@ -109,7 +110,7 @@ const DocumentCard = memo<DocumentCardProps>(({ content, documentId, title }) =>
         </Markdown>
       </ScrollShadow>
 
-      {documentId && (
+      {documentId && !readonly && (
         <Button
           className={styles.expandButton}
           icon={isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}

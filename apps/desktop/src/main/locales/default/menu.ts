@@ -58,6 +58,7 @@ const menu = {
   'help.openConfigDir': 'Open Config Directory',
   'help.openHeteroAgentDir': 'Open HeteroAgent Directory',
   'help.openLogsDir': 'Open Logs Directory',
+  'help.processExplorer': 'Open Process Explorer',
   'help.reportIssue': 'Send Feedback',
   'help.title': 'Help',
   'help.toggleHeteroTracing': 'Record Agent CLI Trace Logs',

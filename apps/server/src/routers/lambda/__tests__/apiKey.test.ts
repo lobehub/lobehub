@@ -12,6 +12,7 @@ const {
 } = vi.hoisted(() => {
   const apiKeyModel = {
     create: vi.fn(),
+    createWithPlaintext: vi.fn(),
     delete: vi.fn(),
     deleteAll: vi.fn(),
     findById: vi.fn(),
@@ -23,7 +24,9 @@ const {
 
   return {
     mockApiKeyModel: apiKeyModel,
-    mockApiKeyModelConstructor: vi.fn(() => apiKeyModel),
+    mockApiKeyModelConstructor: vi.fn(function () {
+      return apiKeyModel;
+    }),
     mockAuditCreate: vi.fn(),
     mockCanUseWorkspaceApiKeys: vi.fn(),
     mockGetApiKeyMemberCreation: vi.fn(),
@@ -31,7 +34,9 @@ const {
 });
 
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withScopedPermission: vi.fn(() => (opts: any) => opts.next({ ctx: opts.ctx })),
+  withScopedPermission: vi.fn(function () {
+    return (opts: any) => opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
@@ -48,15 +53,21 @@ vi.mock('@/database/models/apiKey', () => ({
 }));
 
 vi.mock('@/database/models/workspace', () => ({
-  WorkspaceModel: vi.fn(() => ({ getApiKeyMemberCreation: mockGetApiKeyMemberCreation })),
+  WorkspaceModel: vi.fn(function () {
+    return { getApiKeyMemberCreation: mockGetApiKeyMemberCreation };
+  }),
 }));
 
 vi.mock('@/database/models/workspaceAuditLog', () => ({
-  WorkspaceAuditLogModel: vi.fn(() => ({ create: mockAuditCreate })),
+  WorkspaceAuditLogModel: vi.fn(function () {
+    return { create: mockAuditCreate };
+  }),
 }));
 
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
-  serverDatabase: vi.fn((opts: any) => opts.next({ ctx: opts.ctx })),
+  serverDatabase: vi.fn(function (opts: any) {
+    return opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 const createCaller = (workspaceRole: 'admin' | 'member' | 'owner' = 'member') =>
@@ -74,10 +85,11 @@ describe('apiKeyRouter workspace member access', () => {
     mockCanUseWorkspaceApiKeys.mockResolvedValue(true);
     mockGetApiKeyMemberCreation.mockResolvedValue('all_members');
     mockAuditCreate.mockResolvedValue(undefined);
-    mockApiKeyModel.create.mockResolvedValue({
+    mockApiKeyModel.createWithPlaintext.mockResolvedValue({
       enabled: true,
       expiresAt: null,
       id: 'key-1',
+      key: 'sk-lh-plaintext',
       name: 'Member integration',
       scopes: ['*'],
       userId: 'member-user',
@@ -107,13 +119,15 @@ describe('apiKeyRouter workspace member access', () => {
   });
 
   it('allows members to create full-access keys when the workspace policy allows members', async () => {
-    await createCaller('member').createApiKey({
+    const created = await createCaller('member').createApiKey({
       expiresAt: null,
       name: 'Member integration',
       scopes: ['*'],
     });
 
-    expect(mockApiKeyModel.create).toHaveBeenCalledWith({
+    // The creation response is the one-time plaintext reveal for the UI.
+    expect(created.key).toBe('sk-lh-plaintext');
+    expect(mockApiKeyModel.createWithPlaintext).toHaveBeenCalledWith({
       expiresAt: null,
       name: 'Member integration',
       scopes: ['*'],
@@ -133,7 +147,7 @@ describe('apiKeyRouter workspace member access', () => {
     await expect(
       createCaller('member').createApiKey({ name: 'Blocked', scopes: ['agent:read'] }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    expect(mockApiKeyModel.create).not.toHaveBeenCalled();
+    expect(mockApiKeyModel.createWithPlaintext).not.toHaveBeenCalled();
   });
 
   it('lets the creator edit scopes in place and records before/after grants', async () => {

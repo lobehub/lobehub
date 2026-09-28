@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeErrorType } from '../../types/error';
+import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import { LobeAzureAI } from './index';
 
 describe('LobeAzureAI', () => {
@@ -64,15 +65,25 @@ describe('LobeAzureAI', () => {
         post: mockPost,
       } as any);
 
-      const result = await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'gpt-4',
-        stream: false,
-      });
+      const diagnostics: ModelRuntimeDiagnostics = {};
+      const result = await instance.chat(
+        {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          stream: false,
+        },
+        { diagnostics },
+      );
 
       expect(result).toBeDefined();
       expect(instance.client.path).toHaveBeenCalledWith('/chat/completions');
       expect(mockPost).toHaveBeenCalled();
+      expect(diagnostics.providerResponse).toMatchObject({
+        apiMode: 'azure_ai_chat_completions',
+        eventCount: 1,
+        rawEvents: [mockResponse],
+        terminalEventReceived: true,
+      });
     });
 
     it('should handle generic errors', async () => {

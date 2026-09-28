@@ -1321,6 +1321,67 @@ describe('AgentInterventionModel', () => {
     ).rejects.toThrow(AGENT_INTERVENTION_INVALID_ACTION);
   });
 
+  it('accepts a typed answer inside a multi-select question that allows custom answers', async () => {
+    const multiRows = await createQuestionBatch({
+      batchId: 'multi-custom-answer-batch',
+      items: [
+        questionItem({
+          sanitizedRequest: {
+            answerPolicy: { allowFreeform: true, allowSupplement: true },
+            apiName: 'askUserQuestion',
+            questions: [
+              {
+                allowCustomAnswer: true,
+                id: 'modules',
+                multiSelect: true,
+                options: [
+                  { id: 'chaos', label: 'Chaos engineering' },
+                  { id: 'harness', label: 'Harness proof' },
+                ],
+                question: 'Which modules?',
+              },
+            ],
+          },
+          toolCallId: 'multi-custom-answer-tool',
+        }),
+      ],
+    });
+    expect(
+      (
+        await claim(multiRows, {
+          answers: { modules: ['chaos', 'one I typed myself'] },
+          type: 'submit_answers',
+        })
+      ).outcome,
+    ).toBe('applied');
+
+    const strictRows = await createQuestionBatch({
+      batchId: 'multi-strict-answer-batch',
+      items: [
+        questionItem({
+          sanitizedRequest: {
+            apiName: 'askUserQuestion',
+            questions: [
+              {
+                id: 'modules',
+                multiSelect: true,
+                options: [
+                  { id: 'chaos', label: 'Chaos engineering' },
+                  { id: 'harness', label: 'Harness proof' },
+                ],
+                question: 'Which modules?',
+              },
+            ],
+          },
+          toolCallId: 'multi-strict-answer-tool',
+        }),
+      ],
+    });
+    await expect(
+      claim(strictRows, { answers: { modules: ['chaos', 'forged'] }, type: 'submit_answers' }),
+    ).rejects.toThrow(AGENT_INTERVENTION_INVALID_ACTION);
+  });
+
   it('validates exact provider option ids and only producer ACK completes heterogeneous rows', async () => {
     const rows = await model.createBatch({
       activityKey: 'provider-activity',

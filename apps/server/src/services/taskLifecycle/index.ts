@@ -27,7 +27,7 @@ import type {
   TaskSchedulerContext,
   TaskTopicHandoff,
 } from '@lobechat/types';
-import { ChatErrorType, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
+import { ChatErrorType, DEFAULT_BRIEF_ACTIONS, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -199,13 +199,13 @@ export class TaskLifecycleService {
       //    The agent-driven `createBrief` tool path stays the default until
       //    the GrowthBook flag flips. See for the rollout plan.
       //
-      //    Goal Work rounds are deliberately silent. The coordinator can run
-      //    many attempts on one Work before it converges, and a card per round
+      //    Goal Task rounds are deliberately silent. The coordinator can run
+      //    many attempts on one Task before it converges, and a card per round
       //    buries the one moment that actually needs the user — the decision
       //    gate the coordinator opens when the attempt budget runs out.
       const isGoalLoopRound =
         !!currentTask &&
-        !!(await new GoalModel(this.db, this.userId, this.workspaceId).findByWorkTask(
+        !!(await new GoalModel(this.db, this.userId, this.workspaceId).findByGraphTask(
           currentTask.id,
         ));
       if (
@@ -319,6 +319,7 @@ export class TaskLifecycleService {
       //    heartbeat ticks stay silent to avoid flooding the inbox.
       if (currentTask?.automationMode === 'schedule' && params.runTrigger === 'schedule') {
         void notifyScheduledTaskCompleted({
+          agentId: currentTask.assigneeAgentId ?? undefined,
           lastAssistantContent,
           operationId: params.operationId,
           taskId,
@@ -490,6 +491,7 @@ export class TaskLifecycleService {
         (runTrigger === 'schedule' || pausedByFuse)
       ) {
         void notifyScheduledTaskFailed({
+          agentId: currentTask.assigneeAgentId ?? undefined,
           consecutiveFailures: scheduleConsecutiveFailures,
           errorCode,
           operationId: params.operationId,
@@ -803,7 +805,7 @@ export class TaskLifecycleService {
           schema: { name: TASK_TOPIC_HANDOFF_SCHEMA_NAME, schema: TASK_TOPIC_HANDOFF_SCHEMA },
         },
         {
-          metadata: { trigger: 'task_handoff' },
+          metadata: { trigger: RequestTrigger.Task },
           tracing: {
             promptVersion: TASK_TOPIC_HANDOFF_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TaskHandoff,
@@ -917,7 +919,7 @@ export class TaskLifecycleService {
             schema: { name: JUDGE_BRIEF_EMIT_SCHEMA_NAME, schema: JUDGE_BRIEF_EMIT_SCHEMA },
           },
           {
-            metadata: { trigger: 'task_brief_judge' },
+            metadata: { trigger: RequestTrigger.Task },
             tracing: {
               promptVersion: JUDGE_BRIEF_EMIT_PROMPT_VERSION,
               scenario: TRACING_SCENARIOS.TaskBriefJudge,
@@ -982,7 +984,7 @@ export class TaskLifecycleService {
           schema: { name: GENERATE_BRIEF_SCHEMA_NAME, schema: GENERATE_BRIEF_SCHEMA },
         },
         {
-          metadata: { trigger: 'task_brief' },
+          metadata: { trigger: RequestTrigger.Task },
           tracing: {
             promptVersion: GENERATE_BRIEF_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TaskBrief,

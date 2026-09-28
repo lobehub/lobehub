@@ -1,3 +1,5 @@
+import type { SpendOrigin } from '@lobechat/types';
+
 import type { NewGeneration, NewGenerationBatch } from '@/database/schemas';
 import type { CreateVideoServicePayload } from '@/server/routers/lambda/video';
 
@@ -6,6 +8,8 @@ interface ChargeParams {
   model: string;
   params: CreateVideoServicePayload['params'];
   provider: string;
+  /** Origin of the request, preserved for deferred video spend attribution. */
+  spendOrigin?: SpendOrigin;
   userId: string;
   workspaceId?: string;
 }

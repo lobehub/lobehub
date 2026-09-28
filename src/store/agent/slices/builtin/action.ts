@@ -1,9 +1,11 @@
 import { type AgentItem, type LobeAgentConfig } from '@lobechat/types';
+import { useLayoutEffect } from 'react';
 import { type SWRResponse } from 'swr';
 import { type PartialDeep } from 'type-fest';
 
-import { useOnlyFetchOnceSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { builtinAgentKeys } from '@/libs/swr/keys';
+import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
 import { agentService } from '@/services/agent';
 import { type StoreSetter } from '@/store/types';
 
@@ -37,10 +39,11 @@ export class BuiltinAgentSliceActionImpl {
   }
 
   refreshBuiltinAgent = async (slug: string): Promise<void> => {
+    const scope = getCacheScope();
     const data = await agentService.getBuiltinAgent(slug);
-    if (data?.id) {
+    if (data?.id && scope === getCacheScope()) {
       this.#get().internal_dispatchAgentMap(data.id, data as PartialDeep<LobeAgentConfig>);
-      // Mirror useInitBuiltinAgent's onSuccess: keep builtinAgentIdMap in sync
+      // Mirror useInitBuiltinAgent's hydration: keep builtinAgentIdMap in sync
       // so callers can rely on this as a real "ensure" path instead of just a
       // post-init refresh.
       this.#set(
@@ -48,6 +51,7 @@ export class BuiltinAgentSliceActionImpl {
         false,
         `refreshBuiltinAgent/${slug}`,
       );
+      await mutate(builtinAgentKeys.init(slug, scope), data, { revalidate: false });
     }
   };
 
@@ -55,30 +59,39 @@ export class BuiltinAgentSliceActionImpl {
     slug: string,
     context?: UseInitBuiltinAgentContext,
   ): SWRResponse<AgentItem | null> => {
-    return useOnlyFetchOnceSWR(
-      context?.isLogin === false ? null : builtinAgentKeys.init(slug),
+    const scope = useCacheScope();
+    const response = useClientDataSWR<AgentItem | null>(
+      context?.isLogin === false ? null : builtinAgentKeys.init(slug, scope),
       async () => {
         const data = await agentService.getBuiltinAgent(slug);
 
-        return data as AgentItem | null;
+        return scope === getCacheScope() ? (data as AgentItem | null) : null;
       },
       {
-        onSuccess: (data: AgentItem | null) => {
-          if (data?.id) {
-            // Update builtinAgentIdMap with the agent id
-            // Update agentMap with the agent config
-            // AgentItem contains all fields needed for LobeAgentConfig
-            this.#get().internal_dispatchAgentMap(data.id, data as PartialDeep<LobeAgentConfig>);
-
-            this.#set(
-              { builtinAgentIdMap: { ...this.#get().builtinAgentIdMap, [slug]: data.id } },
-              false,
-              `useInitBuiltinAgent/${slug}`,
-            );
-          }
-        },
+        dedupingInterval: 2000,
+        revalidateOnFocus: false,
+        revalidateOnReconnect: false,
       },
     );
+
+    const { data } = response;
+    /**
+     * Cache hits do not invoke SWR's onSuccess. Restore the identity and artwork
+     * before paint as well as after revalidation, so a reload does not briefly
+     * display the default chief. Ignore responses from an obsolete identity scope.
+     */
+    useLayoutEffect(() => {
+      if (context?.isLogin === false || !data?.id || scope !== getCacheScope()) return;
+
+      this.#get().internal_dispatchAgentMap(data.id, data as PartialDeep<LobeAgentConfig>);
+      this.#set(
+        { builtinAgentIdMap: { ...this.#get().builtinAgentIdMap, [slug]: data.id } },
+        false,
+        `useInitBuiltinAgent/${slug}`,
+      );
+    }, [data, slug, scope, context?.isLogin]);
+
+    return response;
   };
 }
 

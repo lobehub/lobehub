@@ -3,10 +3,10 @@ import path from 'node:path';
 import { defineConfig, type UserConfig } from 'vite';
 import zodCompiler from 'zod-compiler/vite';
 
+import { viteCompletionSounds } from '../../plugins/vite/completionSounds';
 import { viteOsPlatformResolve } from '../../plugins/vite/osPlatformResolve';
 import { externalRuntimeModules } from './external-runtime-deps.config.mjs';
 import { getNativeExternalDependencies } from './native-deps.config.mjs';
-import { rendererMainHashArtifact, resolveMainHash } from './scripts/mainHash.mjs';
 import {
   applyDesktopViteConfigExtension,
   isCloudDesktopBuild,
@@ -24,7 +24,6 @@ export default defineConfig(async (env) => {
   const isDev = mode === 'development';
   const updateChannel = process.env.UPDATE_CHANNEL;
   const isCloudDesktop = isCloudDesktopBuild();
-  const mainHash = resolveMainHash();
   const externalNavigationHosts =
     process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS ?? (isCloudDesktop ? 'stripe.com' : '');
 
@@ -57,6 +56,11 @@ export default defineConfig(async (env) => {
         ],
         output: {
           assetFileNames: 'chunks/[name]-[hash].[ext]',
+          dynamicImportInCjs: false,
+          // Rolldown hoists chunk requires above any entry statement, so the V8
+          // compile cache has to be switched on from a banner to cover `main-app`.
+          banner: (chunk) =>
+            chunk.isEntry ? 'require("node:module").enableCompileCache?.();' : '',
           // Keep Electron's side-effectful entry as a tiny bootstrap and put the
           // application graph in a normal CommonJS chunk. Electron evaluates its entry
           // outside the usual CJS cache path; when a deferred chunk back-references
@@ -113,15 +117,19 @@ export default defineConfig(async (env) => {
     define: {
       ...processEnvDefine,
       'process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS': JSON.stringify(externalNavigationHosts),
-      'process.env.MAIN_HASH': JSON.stringify(mainHash),
       'process.env.RENDERER_OTA_PUBLIC_KEY': JSON.stringify(process.env.RENDERER_OTA_PUBLIC_KEY),
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),
       'process.env.UPDATE_SERVER_URL': JSON.stringify(process.env.UPDATE_SERVER_URL),
     },
-    plugins: [viteOsPlatformResolve(), zodCompiler(), rendererMainHashArtifact(mainHash)],
+    plugins: [
+      viteOsPlatformResolve(),
+      zodCompiler(),
+      viteCompletionSounds({ aiffDir: path.resolve(__dirname, 'resources/sounds') }),
+    ],
     publicDir: false,
     resolve: {
       alias: mainProcessAlias,
+      dedupe: ['@sentry/electron'],
       conditions: ['node'],
       mainFields: ['module', 'jsnext:main', 'jsnext'],
     },

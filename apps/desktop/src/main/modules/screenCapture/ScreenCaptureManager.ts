@@ -94,11 +94,11 @@ export class ScreenCaptureManager {
     return this.overlayWindow !== null && !this.overlayWindow.isDestroyed();
   }
 
+  /**
+   * Open the composer overlay. Screenshots are opt-in, so the permission check
+   * and window enumeration are deferred to `beginCapture`.
+   */
   async startSession(): Promise<void> {
-    if (!(await this.ensureScreenCaptureAccess())) {
-      return;
-    }
-
     if (this.isActive) {
       logger.warn('Capture session already active');
       this.close();
@@ -109,19 +109,48 @@ export class ScreenCaptureManager {
     const { bounds, scaleFactor } = display;
 
     logger.info(
-      `Starting capture session on display ${display.id} (${bounds.width}x${bounds.height} @${scaleFactor}x)`,
+      `Starting composer session on display ${display.id} (${bounds.width}x${bounds.height} @${scaleFactor}x)`,
     );
-
-    const windows = await enumerateWindows(bounds, scaleFactor);
 
     this.session = {
       displayBounds: bounds,
       scaleFactor,
-      windows,
+      windows: [],
       ...this.snapshot,
     };
 
     await this.createOverlayWindow(bounds);
+  }
+
+  /**
+   * Switch the active session into capture mode: verify Screen Recording
+   * access, then enumerate on-screen windows for hover hit-testing.
+   * Resolves `false` when capture cannot start.
+   */
+  async beginCapture(): Promise<boolean> {
+    if (!this.session) return false;
+
+    const status = this.resolveScreenCaptureStatus();
+    if (status !== 'granted') {
+      // The overlay sits at screen-saver level and would cover the dialog.
+      this.close();
+      await this.promptScreenCaptureAccess(status);
+      return false;
+    }
+
+    const { displayBounds, scaleFactor } = this.session;
+    const windows = await enumerateWindows(displayBounds, scaleFactor);
+    // The overlay may have been closed while windows were being enumerated.
+    if (!this.session) return false;
+
+    this.session = { ...this.session, windows };
+    logger.info(`Capture mode started with ${windows.length} windows`);
+
+    if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
+      this.overlayWindow.webContents.send('screenCaptureSession', this.session);
+    }
+
+    return true;
   }
 
   async handlePreviewWindow(windowId: number): Promise<CapturePreviewResult> {
@@ -289,17 +318,17 @@ export class ScreenCaptureManager {
     });
   }
 
-  private async ensureScreenCaptureAccess(): Promise<boolean> {
-    if (!isMac || this.screenCaptureGranted) {
-      return true;
-    }
+  private resolveScreenCaptureStatus(): ReturnType<typeof getScreenCaptureStatus> {
+    if (!isMac || this.screenCaptureGranted) return 'granted';
 
     const status = getScreenCaptureStatus();
-    if (status === 'granted') {
-      this.screenCaptureGranted = true;
-      return true;
-    }
+    if (status === 'granted') this.screenCaptureGranted = true;
+    return status;
+  }
 
+  private async promptScreenCaptureAccess(
+    status: ReturnType<typeof getScreenCaptureStatus>,
+  ): Promise<void> {
     const t = this.app.i18n.ns('dialog');
     const mainWindow = this.app.browserManager.getMainWindow();
     const parentWindow = mainWindow?.browserWindow?.isVisible?.() ? mainWindow.browserWindow : null;
@@ -320,13 +349,11 @@ export class ScreenCaptureManager {
 
     if (result.response !== 0) {
       logger.info(`Screen capture permission prompt dismissed; status=${status}`);
-      return false;
+      return;
     }
 
     logger.info(`Opening screen capture permission settings; status=${status}`);
     await requestScreenCaptureAccess();
-
-    return false;
   }
 
   private async createOverlayWindow(bounds: Electron.Rectangle): Promise<void> {

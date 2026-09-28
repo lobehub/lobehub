@@ -25,7 +25,7 @@ const searchRuntime = new WebBrowsingExecutionRuntime({ searchService });
 const createDocumentService = (ctx: BuiltinToolContext): WebBrowsingDocumentService => ({
   associateDocument: async (documentId) => {
     if (!ctx.agentId) return;
-    await agentDocumentService.associateDocument({ agentId: ctx.agentId, documentId });
+    return agentDocumentService.associateDocument({ agentId: ctx.agentId, documentId });
   },
   createDocument: async ({ content, description, title, url }) =>
     webBrowsingService.upsertCrawledDocument({

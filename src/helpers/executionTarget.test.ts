@@ -3,10 +3,12 @@ import { RequestTrigger } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyTopicDeviceBinding,
   canExecutionTargetReadLocalPaths,
   type ExecutionPlan,
   executionPlanToManifestExecutionEnv,
   executionTargetToRuntimeMode,
+  getTopicBoundDeviceId,
   isDeviceLockedPlan,
   isHeterogeneousSandboxExecutionAvailable,
   isLocalSandboxEnabled,
@@ -27,6 +29,10 @@ const codeBuddyCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgenc
 });
 const cursorCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
   heterogeneousProvider: { command: 'agent', type: 'cursor' },
+  ...over,
+});
+const droidCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'droid', type: 'droid' },
   ...over,
 });
 const kimiCodeCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
@@ -57,6 +63,8 @@ describe('isHeterogeneousSandboxExecutionAvailable', () => {
   });
 
   it('keeps local-only CLIs on local or connected devices', () => {
+    expect(isHeterogeneousSandboxExecutionAvailable('droid')).toBe(false);
+    expect(isHeterogeneousSandboxExecutionAvailable('devin')).toBe(false);
     expect(isHeterogeneousSandboxExecutionAvailable('qoder')).toBe(false);
     expect(isHeterogeneousSandboxExecutionAvailable('trae')).toBe(false);
   });
@@ -204,6 +212,7 @@ describe('resolveExecutionTarget', () => {
       ['Amp', ampCfg],
       ['CodeBuddy', codeBuddyCfg],
       ['Cursor', cursorCfg],
+      ['Droid', droidCfg],
       ['Kimi Code', kimiCodeCfg],
       ['OpenCode', openCodeCfg],
       ['Pi', piCfg],
@@ -1100,6 +1109,60 @@ describe('resolveExecutionPlan', () => {
     });
   });
 
+  // Agent Share visitors: `canUseDevice` is always false and the creator may
+  // have granted `lobe-cloud-sandbox` — the grant is honoured via the sandbox
+  // instead of being dropped with `none`.
+  describe('sandboxFallback — device-denied runs resolve to the sandbox', () => {
+    it('sends a denied device-capable target to the sandbox', () => {
+      for (const executionTarget of ['local', 'device', 'auto'] as const) {
+        expect(
+          resolveExecutionPlan({
+            agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
+            canUseDevice: false,
+            clientExecutionAvailable: true,
+            onlineDeviceIds: ['device-a'],
+            sandboxFallback: true,
+          }),
+        ).toEqual({ kind: 'sandbox', target: 'sandbox' });
+      }
+    });
+
+    it('is a no-op without the flag — the denied run still degrades to none', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          canUseDevice: false,
+          clientExecutionAvailable: true,
+          sandboxFallback: false,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+    });
+
+    it('never overrides chat mode — chat means no tools, not no device', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          canUseDevice: false,
+          chatConfig: { enableAgentMode: false },
+          clientExecutionAvailable: true,
+          sandboxFallback: true,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+    });
+
+    it('does not resurrect device routing when the device is allowed', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
+          canUseDevice: true,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ['device-a'],
+          sandboxFallback: true,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
+    });
+  });
+
   describe('onlineDeviceIds=undefined — hetero dispatch semantics', () => {
     it('trusts the binding without online checks and never auto-activates', () => {
       expect(
@@ -1269,5 +1332,108 @@ describe('canExecutionTargetReadLocalPaths', () => {
     expect(canExecutionTargetReadLocalPaths('sandbox', config, 'device-1')).toBe(false);
     expect(canExecutionTargetReadLocalPaths('auto', config, 'device-1')).toBe(false);
     expect(canExecutionTargetReadLocalPaths('none', config, 'device-1')).toBe(false);
+  });
+});
+
+describe('getTopicBoundDeviceId', () => {
+  it('returns the machine an agent topic is pinned to', () => {
+    expect(
+      getTopicBoundDeviceId({ agentId: 'agt', metadata: { boundDeviceId: 'dev-a' } }, 'agt'),
+    ).toBe('dev-a');
+  });
+
+  it('ignores another agent topic and a group topic owned by someone else', () => {
+    expect(
+      getTopicBoundDeviceId({ agentId: 'other', metadata: { boundDeviceId: 'dev-a' } }, 'agt'),
+    ).toBeUndefined();
+    expect(
+      getTopicBoundDeviceId({ groupId: 'grp', metadata: { boundDeviceId: 'dev-a' } }, 'agt'),
+    ).toBeUndefined();
+  });
+
+  it('returns nothing for an unbound topic', () => {
+    expect(getTopicBoundDeviceId({ agentId: 'agt', metadata: {} }, 'agt')).toBeUndefined();
+    expect(getTopicBoundDeviceId(undefined, 'agt')).toBeUndefined();
+  });
+});
+
+describe('applyTopicDeviceBinding', () => {
+  it('keeps a topic on its remote device after the agent default moved elsewhere', () => {
+    const result = applyTopicDeviceBinding(
+      {
+        agencyConfig: cfg({ boundDeviceId: 'dev-b', executionTarget: 'device' }),
+        workspaceScoped: false,
+      },
+      'dev-a',
+      'this-desktop',
+    );
+
+    expect(result.agencyConfig).toMatchObject({
+      boundDeviceId: 'dev-a',
+      executionTarget: 'device',
+    });
+  });
+
+  it('runs a topic pinned to this desktop in-process even when the agent default is the sandbox', () => {
+    const result = applyTopicDeviceBinding(
+      { agencyConfig: cfg({ executionTarget: 'sandbox' }), workspaceScoped: true },
+      'this-desktop',
+      'this-desktop',
+    );
+
+    expect(result).toEqual({
+      agencyConfig: { boundDeviceId: 'this-desktop', executionTarget: 'local' },
+      workspaceScoped: false,
+    });
+  });
+
+  it('keeps the agent config when it already targets the topic machine', () => {
+    const gateway = cfg({ boundDeviceId: 'this-desktop', executionTarget: 'device' });
+    const local = cfg({ boundDeviceId: 'this-desktop', executionTarget: 'local' });
+
+    expect(
+      applyTopicDeviceBinding(
+        { agencyConfig: gateway, workspaceScoped: false },
+        'this-desktop',
+        'this-desktop',
+      ).agencyConfig,
+    ).toBe(gateway);
+    expect(
+      applyTopicDeviceBinding(
+        { agencyConfig: local, workspaceScoped: false },
+        'this-desktop',
+        undefined,
+      ).agencyConfig,
+    ).toBe(local);
+  });
+
+  it('never overrides a fixed workspace target', () => {
+    const fixed = cfg({
+      boundDeviceId: 'dev-b',
+      executionTarget: 'device',
+      executionTargetSelectionPolicy: 'fixed',
+    });
+
+    expect(
+      applyTopicDeviceBinding({ agencyConfig: fixed, workspaceScoped: true }, 'dev-a', undefined),
+    ).toEqual({ agencyConfig: fixed, workspaceScoped: true });
+  });
+
+  it('leaves an auto agent to pick a fresh device', () => {
+    const auto = cfg({ executionTarget: 'auto' });
+
+    expect(
+      applyTopicDeviceBinding({ agencyConfig: auto, workspaceScoped: false }, 'dev-a', undefined)
+        .agencyConfig,
+    ).toBe(auto);
+  });
+
+  it('leaves an unbound topic on the agent default', () => {
+    const agent = cfg({ executionTarget: 'sandbox' });
+
+    expect(
+      applyTopicDeviceBinding({ agencyConfig: agent, workspaceScoped: false }, undefined, 'x')
+        .agencyConfig,
+    ).toBe(agent);
   });
 });

@@ -30,14 +30,18 @@ const configDir = path.dirname(fileURLToPath(import.meta.url));
 function getTargetPlatform() {
   return process.env.npm_config_platform || os.platform();
 }
-const isDarwin = getTargetPlatform() === 'darwin';
+const targetPlatform = getTargetPlatform();
+const isDarwin = targetPlatform === 'darwin';
 
 // The packaged macOS runtime invokes get-windows' native helper directly.
 // Its optional dependencies are build/install tooling and the Windows loader
 // chain, neither of which is required in a macOS application artifact.
-export const dependencyOptions = isDarwin
-  ? { skipOptionalDependenciesFor: new Set(['get-windows']) }
-  : {};
+// Platform prebuild packages (`@lydell/node-pty-win32-*`, `node-screenshots-linux-*`)
+// declare `os` in package.json; only the target platform's are packaged.
+export const dependencyOptions = {
+  targetPlatform,
+  ...(isDarwin ? { skipOptionalDependenciesFor: new Set(['get-windows']) } : {}),
+};
 
 /**
  * First-party native addon packages are discovered instead of being listed by

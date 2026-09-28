@@ -1,5 +1,5 @@
 import { type RuntimeImageGenParams, type RuntimeImageGenParamsKeys } from 'model-bank';
-import { DEFAULT_ASPECT_RATIO, PRESET_ASPECT_RATIOS } from 'model-bank';
+import { DEFAULT_ASPECT_RATIO, PRESET_ASPECT_RATIOS } from 'model-bank/standardParameters';
 import { useCallback, useMemo } from 'react';
 
 import { useImageStore } from '../../store';

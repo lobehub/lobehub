@@ -1,18 +1,12 @@
 import { copyToClipboard, Icon } from '@lobehub/ui';
-import {
-  ActionIcon,
-  confirmModal,
-  type DropdownItem,
-  DropdownMenu,
-  toast,
-} from '@lobehub/ui/base-ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { CopyIcon, LinkIcon, MoreHorizontalIcon, TrashIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { useGoalStore } from '@/store/goal';
+
+import { useConfirmDeleteGoal, useGoalShareUrl } from './useGoalActions';
 
 interface GoalDetailActionsProps {
   /** Absent for a goal with no responsible agent — e.g. one created from a project. */
@@ -23,9 +17,9 @@ interface GoalDetailActionsProps {
 
 const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId, projectId }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask } = usePermission('create_content');
-  const deleteGoal = useGoalStore((s) => s.deleteGoal);
+  const shareUrl = useGoalShareUrl({ agentId, goalId });
+  const confirmDelete = useConfirmDeleteGoal({ agentId, goalId, projectId });
 
   const items = useMemo<DropdownItem[]>(
     () => [
@@ -39,11 +33,13 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId, proje
         },
       },
       {
+        disabled: !shareUrl,
         icon: <Icon icon={LinkIcon} />,
         key: 'copyLink',
         label: t('taskList.contextMenu.copyLink'),
         onClick: async () => {
-          await copyToClipboard(window.location.href);
+          if (!shareUrl) return;
+          await copyToClipboard(shareUrl);
           toast.success(t('taskList.contextMenu.copyLinkSuccess'));
         },
       },
@@ -54,29 +50,10 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId, proje
         icon: <Icon icon={TrashIcon} />,
         key: 'delete',
         label: t('delete', { ns: 'common' }),
-        onClick: () => {
-          confirmModal({
-            content: t('goalDetail.deleteConfirm.content'),
-            okButtonProps: { danger: true },
-            okText: t('goalDetail.deleteConfirm.ok'),
-            onOk: async () => {
-              // Mirrors the list scope the goal was rendered under, so the page
-              // the user lands on is the one whose cache was just refreshed.
-              await deleteGoal(agentId, goalId, projectId ? `project:${projectId}` : undefined);
-              navigate(
-                agentId
-                  ? `/agent/${agentId}/goals`
-                  : projectId
-                    ? `/project/${projectId}/goals`
-                    : '/',
-              );
-            },
-            title: t('goalDetail.deleteConfirm.title'),
-          });
-        },
+        onClick: confirmDelete,
       },
     ],
-    [agentId, canEditTask, deleteGoal, goalId, navigate, projectId, t],
+    [canEditTask, confirmDelete, goalId, shareUrl, t],
   );
 
   return (

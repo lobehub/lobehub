@@ -17,7 +17,14 @@ const CreateDocument = memo<CreateDocumentRenderProps>(({ args, pluginState }) =
 
   if (!title || !content) return null;
 
-  return <DocumentCard content={content} documentId={pluginState?.documentId} title={title} />;
+  return (
+    <DocumentCard
+      content={content}
+      documentId={pluginState?.documentId}
+      readonly={pluginState?.readonly}
+      title={title}
+    />
+  );
 });
 
 export default CreateDocument;

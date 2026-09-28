@@ -64,8 +64,10 @@ export const UpdateAgentPromptInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !agentId) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-group-agent-builder.apiName.updateAgentPrompt')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-group-agent-builder.apiName.updateAgentPrompt')}
+        </span>
       </div>
     );
   }
@@ -80,13 +82,15 @@ export const UpdateAgentPromptInspector = memo<
     : 'builtins.lobe-group-agent-builder.apiName.updateAgentPrompt';
 
   return (
-    <Flexbox
-      horizontal
-      align="center"
-      className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
-      gap={6}
-    >
-      <span className={styles.label}>{t(labelKey)}</span>
+    <Flexbox horizontal align="center" className={styles.root} gap={6}>
+      <span
+        className={cx(
+          styles.label,
+          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+        )}
+      >
+        {t(labelKey)}
+      </span>
       {/* Only show avatar and title for non-supervisor agents */}
       {agent && !isSupervisor && (
         <>

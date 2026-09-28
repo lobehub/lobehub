@@ -1,4 +1,4 @@
-import { findAttribute, findOpeningTag } from './htmlTagScanner';
+import { findAttribute, findOpeningTag } from '@lobechat/html-artifact';
 
 const escapeHtmlAttribute = (value: string): string =>
   value.replaceAll('&', '&amp;').replaceAll('"', '&quot;');

@@ -69,10 +69,16 @@ export const createVerifierAgentRunner = (params: {
 
   return async ({ checkItem, evidence, goal, operationId }) => {
     // The detailed instruction is the criterion's rule body, stored in a document.
-    const instruction = checkItem.documentId
-      ? ((await new DocumentModel(db, userId, workspaceId).findById(checkItem.documentId))
-          ?.content ?? undefined)
-      : undefined;
+    const instruction =
+      checkItem.definition || checkItem.resourceSnapshot
+        ? JSON.stringify({
+            definition: checkItem.definition,
+            resources: checkItem.resourceSnapshot,
+          })
+        : checkItem.documentId
+          ? ((await new DocumentModel(db, userId, workspaceId).findById(checkItem.documentId))
+              ?.content ?? undefined)
+          : undefined;
 
     const agentModel = new AgentModel(db, userId, workspaceId);
 

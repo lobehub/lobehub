@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   chainExpertiseDomainDraft,
+  chainExpertiseRejectionIngestion,
   chainExpertiseTopicIngestion,
   EXPERTISE_DOMAIN_DRAFT_JSON_SCHEMA,
   EXPERTISE_DOMAIN_DRAFT_PROMPT_VERSION,
+  EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA,
   EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
   EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
 } from './expertise';
@@ -66,5 +68,94 @@ describe('chainExpertiseTopicIngestion', () => {
     );
     expect(result.messages[1].content).toContain('"id":"domain-1"');
     expect(result.messages[1].content).toContain('[user] 帮我修改这段比喻');
+  });
+});
+
+describe('chainExpertiseRejectionIngestion', () => {
+  it('declares no nullable unions, which the pinned model answers with `{}`', () => {
+    // A live replay against gemini-3.6-flash returned `"existingLessonCode": {}` for every
+    // `['string', 'null']` field under a strict json_schema, and the parse took the whole round
+    // down with it. Empty string is the contract now; this test is the tripwire.
+    const properties =
+      EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA.schema.properties.domains.items.properties
+        .observations.items.properties;
+
+    for (const [name, definition] of Object.entries(properties)) {
+      expect(`${name}:${JSON.stringify((definition as { type: unknown }).type)}`).not.toContain(
+        'null',
+      );
+    }
+  });
+
+  it('attaches the circled frames and names what it withheld', () => {
+    const result = chainExpertiseRejectionIngestion({
+      domains: [{ domainFilter: '交付标准', id: 'domain-1' }],
+      rejections: '[R1] promised: 讨论区\n  circled on frame 1 at 17%,35%: 这个顺序反了',
+      visuals: [{ accessUrl: 'data:image/png;base64,AAAA', label: 'R1 (circled) — 讨论区' }],
+      withheldEvidence: '2 further screenshot(s) from this round were not attached.',
+    });
+
+    const [system, user] = result.messages;
+    expect(system.content).toContain('Most of these rejections are visual');
+    expect(Array.isArray(user.content)).toBe(true);
+    const blocks = user.content as { image_url?: { url: string }; text?: string; type: string }[];
+    expect(blocks.filter((block) => block.type === 'image_url')).toHaveLength(1);
+    expect(blocks[0].text).toContain('[frame 1] R1 (circled)');
+    // Without this line the model reads a missing frame as proof that nothing was wrong there.
+    expect(blocks[0].text).toContain('WITHHELD FROM THIS REQUEST');
+  });
+
+  it('falls back to a plain text message when no frame could be resolved', () => {
+    const result = chainExpertiseRejectionIngestion({
+      domains: [],
+      rejections: '[R1] promised: 后端接口\n  said: 这个字段不对',
+    });
+
+    expect(typeof result.messages[1].content).toBe('string');
+    expect(result.messages[1].content).toContain('(none)');
+  });
+});
+
+describe('chainExpertiseRejectionIngestion reason provenance', () => {
+  it('lets a standard admit it is taste instead of fabricating a mechanism', () => {
+    // Not every standard has a mechanism under it. Forced to find one, the model returns a synonym
+    // of the objection — "visual noise" for "untidy" — which reads as objective and would be
+    // enforced as if it were. Turning that failure into the detector split the same replayed round
+    // into 4 mechanism / 3 taste, and the 3 are exactly the ones that used to fake a mechanism.
+    const system = chainExpertiseRejectionIngestion({ domains: [], rejections: '' }).messages[0]
+      .content as string;
+
+    expect(system).toContain('Use your own failure as the detector');
+    expect(system).toContain('A fabricated mechanism is worse than an admitted preference');
+    // A taste reason still has to tell the next delivery what to do instead.
+    expect(system).toContain(
+      'State the preference plainly and in a form the next delivery can act on',
+    );
+  });
+
+  it('judges a reason by whether it can settle a case the round never described', () => {
+    // "Harms visual tidiness" is the objection in nicer words — tidiness is the judgement under
+    // review, so it settles nothing. Naming the transfer test moved 5 of 7 reasons from verdict
+    // to mechanism on replay ("must click to enlarge", "retries a network error that never was").
+    const system = chainExpertiseRejectionIngestion({ domains: [], rejections: '' }).messages[0]
+      .content as string;
+
+    expect(system).toContain('could someone facing a situation this round never described settle');
+    expect(system).toContain('verdicts wearing a reason');
+    expect(system).toContain('which property of the delivery causes what concrete consequence');
+  });
+
+  it('gives reasonSource a test the model can run, not a judgement call', () => {
+    // Asking for "did the reviewer say why" produced 3 of 7 marked `reviewer` on rejections that
+    // were pure instructions ("put it in one row", "there's an extra line here"). Naming the
+    // observable — a stated consequence or cause — fixed all three, so the wording is the fix.
+    const system = chainExpertiseRejectionIngestion({ domains: [], rejections: '' }).messages[0]
+      .content as string;
+
+    expect(system).toContain("does the reviewer's own text state a consequence or a cause");
+    expect(system).toContain('When in doubt answer "inferred"');
+    // The mechanism must still be written even when the reviewer only pointed — a reason-free
+    // lesson cannot transfer to a screen nobody has built yet.
+    expect(system).toContain('Write the mechanism even when the reviewer only pointed');
   });
 });

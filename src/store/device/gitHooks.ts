@@ -5,6 +5,10 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import type {
   DeviceGitAheadBehind,
+  DeviceGitPullRequestActivity,
+  DeviceGitPullRequestDetail,
+  DeviceGitPullRequestDetailResult,
+  DeviceGitPullRequestMergeContext,
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
 } from '@lobechat/types';
@@ -17,6 +21,7 @@ export type ReviewMode = 'unstaged' | 'branch';
 
 const UNSTAGED_REVIEW_REFRESH_INTERVAL = 10 * 1000;
 const BRANCH_REVIEW_REFRESH_INTERVAL = 30 * 1000;
+const PULL_REQUEST_DETAIL_REFRESH_INTERVAL = 30 * 1000;
 
 export interface ReviewPatchesData {
   baseRef?: string;
@@ -196,6 +201,104 @@ export const useFetchGitWorktrees = (deviceId: string | undefined, path?: string
     isEnabled(deviceId, path) ? deviceKeys.gitWorktrees(deviceId ?? 'local', path) : null,
     () => gitService.listGitWorktrees({ deviceId, path: path! }),
     { focusThrottleInterval: 5 * 1000, revalidateOnFocus: true, shouldRetryOnError: false },
+  );
+
+export const pullRequestDetailRefreshInterval = (
+  detail: DeviceGitPullRequestDetailResult | undefined,
+  active: boolean,
+): number => {
+  if (!active || !detail?.detail || detail.detail.state !== 'open') return 0;
+  const isPending =
+    !!detail.detail.autoMerge ||
+    detail.detail.reviewDecision === 'REVIEW_REQUIRED' ||
+    detail.detail.reviewDecision === 'CHANGES_REQUESTED' ||
+    detail.detail.mergeStateStatus === 'BLOCKED' ||
+    detail.detail.mergeable === 'UNKNOWN' ||
+    detail.detail.checks.some((c) => c.status === 'pending');
+  return isPending ? PULL_REQUEST_DETAIL_REFRESH_INTERVAL : 0;
+};
+
+/**
+ * Full pull request detail for the Working Sidebar's Pull Request tab. Polls
+ * every 30s while checks, reviews, auto-merge, or mergeability haven't resolved
+ * yet, and stops once the PR settles into a steady state.
+ */
+export const useFetchGitPullRequestDetail = (
+  deviceId: string | undefined,
+  path: string | undefined,
+  number: number | undefined,
+  { active = true }: { active?: boolean } = {},
+) =>
+  useClientDataSWR<DeviceGitPullRequestDetailResult | undefined>(
+    number !== undefined && isEnabled(deviceId, path)
+      ? deviceKeys.gitPullRequestDetail(deviceId ?? 'local', path, number)
+      : null,
+    () =>
+      gitService.getPullRequestDetail({ coreOnly: true, deviceId, number: number!, path: path! }),
+    {
+      dedupingInterval: 30_000,
+      focusThrottleInterval: 60 * 1000,
+      refreshInterval: (detail) => pullRequestDetailRefreshInterval(detail, active),
+      revalidateOnFocus: true,
+      shouldRetryOnError: false,
+    },
+  );
+
+/** Activity starts once core data can paint; its failure never hides the PR. */
+export const useFetchGitPullRequestActivity = (
+  deviceId: string | undefined,
+  path: string | undefined,
+  number: number | undefined,
+  active = true,
+) =>
+  useClientDataSWR<DeviceGitPullRequestActivity>(
+    number !== undefined && isEnabled(deviceId, path)
+      ? deviceKeys.gitPullRequestActivity(deviceId ?? 'local', path, number)
+      : null,
+    () => gitService.getPullRequestActivity({ deviceId, number: number!, path: path! }),
+    {
+      dedupingInterval: 30_000,
+      focusThrottleInterval: 60_000,
+      refreshInterval: active ? 30_000 : 0,
+      shouldRetryOnError: false,
+    },
+  );
+
+/**
+ * Slow merge context (permission, branch protection, base drift), keyed on the
+ * PR head so a push refetches it. Runs after the detail so the pane paints first.
+ */
+export const useFetchGitPullRequestMergeContext = (
+  deviceId: string | undefined,
+  path: string | undefined,
+  detail:
+    Pick<DeviceGitPullRequestDetail, 'baseRefName' | 'headRefOid' | 'number' | 'repo'> | undefined,
+) =>
+  useClientDataSWR<DeviceGitPullRequestMergeContext | null | undefined>(
+    detail && isEnabled(deviceId, path)
+      ? deviceKeys.gitPullRequestMergeContext(
+          deviceId ?? 'local',
+          path,
+          detail.number,
+          detail.headRefOid,
+          detail.baseRefName,
+        )
+      : null,
+    () =>
+      gitService.getPullRequestMergeContext({
+        baseRefName: detail!.baseRefName,
+        deviceId,
+        headRefOid: detail!.headRefOid,
+        number: detail!.number,
+        path: path!,
+        repo: detail!.repo,
+      }),
+    {
+      dedupingInterval: 30_000,
+      focusThrottleInterval: 60 * 1000,
+      revalidateOnFocus: true,
+      shouldRetryOnError: false,
+    },
   );
 
 /**

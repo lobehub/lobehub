@@ -298,7 +298,7 @@ describe('completion skill synthesis end-to-end (emit -> handler, no operation-m
         messages,
         // Operation-level metadata only — no per-turn assistantMessageId, exactly
         // as a server execAgent turn persists it.
-        metadata: { agentId: 'agent_1', topicId: TOPIC_ID, userId: 'user_1' },
+        origin: { agentId: 'agent_1', topicId: TOPIC_ID, userId: 'user_1' },
         stepCount: 3,
         status: 'done',
       },

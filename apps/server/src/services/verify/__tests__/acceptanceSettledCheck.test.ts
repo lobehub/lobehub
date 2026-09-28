@@ -10,29 +10,41 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/acceptance', () => ({
-  AcceptanceModel: vi.fn(() => ({
-    findById: mocks.acceptanceFindById,
-    findPolicyById: mocks.acceptanceFindById,
-    update: vi.fn(),
-    updatePolicyStatus: vi.fn(),
-  })),
+  AcceptanceModel: vi.fn(function () {
+    return {
+      findById: mocks.acceptanceFindById,
+      findPolicyById: mocks.acceptanceFindById,
+      update: vi.fn(),
+      updatePolicyStatus: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    attachToAcceptance: mocks.attachToAcceptance,
-    findById: mocks.runFindById,
-    listByAcceptance: mocks.listByAcceptance,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      attachToAcceptance: mocks.attachToAcceptance,
+      findById: mocks.runFindById,
+      listByAcceptance: mocks.listByAcceptance,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn(() => ({ listByRuns: mocks.listByRuns })),
+  VerifyCheckResultModel: vi.fn(function () {
+    return { listByRuns: mocks.listByRuns };
+  }),
 }));
 
-vi.mock('@/database/models/verifyEvidence', () => ({ VerifyEvidenceModel: vi.fn(() => ({})) }));
+vi.mock('@/database/models/verifyEvidence', () => ({
+  VerifyEvidenceModel: vi.fn(function () {
+    return {};
+  }),
+}));
 vi.mock('@/database/models/verifyReport', () => ({
-  VerifyReportModel: vi.fn(() => ({ findByRun: vi.fn().mockResolvedValue(null) })),
+  VerifyReportModel: vi.fn(function () {
+    return { findByRun: vi.fn().mockResolvedValue(null) };
+  }),
 }));
 
 const { AcceptanceService } = await import('../acceptanceService');

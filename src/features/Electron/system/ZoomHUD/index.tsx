@@ -2,7 +2,8 @@
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { AnimatePresence, m } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
+import * as m from 'motion/react-m';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

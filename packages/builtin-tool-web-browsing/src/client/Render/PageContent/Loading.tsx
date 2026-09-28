@@ -1,6 +1,7 @@
 'use client';
 
-import { CopyButton, Flexbox, Skeleton } from '@lobehub/ui';
+import { CopyButton, Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,8 +50,8 @@ const LoadingCard = memo<{ url: string }>(({ url }) => {
         <CopyButton content={url} size={'small'} />
       </Flexbox>
       <Flexbox gap={4} paddingInline={16}>
-        <Skeleton.Block active style={{ height: 14, width: '95%' }} />
-        <Skeleton.Block active style={{ height: 14, width: '40%' }} />
+        <Skeleton height={14} width={'95%'} />
+        <Skeleton height={14} width={'40%'} />
       </Flexbox>
 
       <div className={styles.footer}>{t('search.crawPages.crawling')}</div>

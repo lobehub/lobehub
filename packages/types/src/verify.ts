@@ -1,3 +1,4 @@
+import type { VerifyCheckDefinition } from './acceptanceFlow';
 /**
  * Verify (delivery checker) domain types — the shared vocabulary, frozen-item
  * shape, Toulmin narrative, and rubric run-policy config. Kept here (not in the
@@ -157,9 +158,17 @@ export interface AcceptanceGroupFeedback {
 /** One group-scoped feedback entry as stored on a round's decision detail. */
 export type VerifyRunGroupFeedbackEntry = Omit<AcceptanceGroupFeedback, 'roundIndex'>;
 
+/** A presentation group of stable acceptance-union check IDs, independent of execution flows. */
+export interface AcceptanceCheckGroup {
+  checkItemIds: string[];
+  title: string;
+}
+
 /** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
 export interface AcceptanceMetadata {
   [key: string]: unknown;
+  /** Current checklist organization; frozen plans, results and reviews keep their original IDs. */
+  checkGrouping?: { groups: AcceptanceCheckGroup[]; version: number };
   /** User-set display-title override for the acceptance (sidebar rename). */
   title?: string;
 }
@@ -183,8 +192,10 @@ export type AcceptanceCheckReviewAction = 'accept' | 'ignore' | 'reject';
 export type AcceptanceRejectIntent = 'unmet' | 'new-idea' | 'no-evidence';
 
 /** What an automated reviewer proposes for a check — never `ignore`, which is a
- *  statement about the reviewer's priorities rather than about the delivery. */
-export type ReviewPredictionAction = 'accept' | 'reject';
+ *  statement about the reviewer's priorities rather than about the delivery.
+ *  `unjudgeable` means no capture could settle the criterion from the reviewer's
+ *  side; see `reviewPredictionActions` in `@lobechat/const/verify`. */
+export type ReviewPredictionAction = 'accept' | 'reject' | 'unjudgeable';
 
 /**
  * How a review attempt ended — see `@lobechat/const/verify` for why this is
@@ -364,6 +375,19 @@ export type VerifyEvidenceCapturedBy =
  * `verify_runs.user_decision` verb stays the queryable field.
  */
 export interface VerifyRunDecisionDetail {
+  /**
+   * The provider change request whose merge made this decision, when
+   * `source` is `scm_merge`. Lets the board and the verifier-training
+   * pipeline tell a human verdict apart from a merge-driven one.
+   */
+  changeRequest?: {
+    /** Provider user id of whoever merged; resolves through the SCM identities. */
+    mergedByExternalId?: string;
+    number: number;
+    provider: string;
+    repoFullName: string;
+    url: string;
+  };
   /** Free-form reason, e.g. the reject note that seeds the next repair round. */
   comment?: string;
   /** When the decision was made (ISO 8601). */
@@ -380,6 +404,12 @@ export interface VerifyRunDecisionDetail {
    * staleness falls out of the round chain.
    */
   groupFeedback?: VerifyRunGroupFeedbackEntry[];
+  /**
+   * What made the decision. Absent means a human clicked accept / reject;
+   * `scm_merge` means the linked pull request was merged, which LobeHub
+   * treats as the strongest possible acceptance signal.
+   */
+  source?: 'scm_merge';
 }
 
 /**
@@ -554,6 +584,18 @@ export interface VerifyRubricConfig {
  */
 export interface VerifyRunMetadata {
   [key: string]: unknown;
+  /** Autonomous Goal review, kept separate from human decisions and verifier verdicts. */
+  goalReview?: {
+    feedback: string;
+    predictionIds: string[];
+    /**
+     * `unjudgeable` is separate from `rejected` on purpose: it means the review
+     * could not decide from evidence, not that the delivery fell short. Folding
+     * it into `rejected` both sent the builder off to fix nothing and made the
+     * two indistinguishable in the agreement statistics.
+     */
+    status: 'passed' | 'rejected' | 'errored' | 'unjudgeable';
+  };
   interactionCost?: VerifyInteractionCost;
   /**
    * Per-run override for the repair-round cap, taking precedence over the
@@ -574,6 +616,12 @@ export interface VerifyRunMetadata {
    * run that *authored* the report — and is many-to-one.
    */
   origin?: VerifyRunOrigin;
+  /**
+   * The round this one replays (`flow plan --from-run`). A replay is pinned to
+   * the source round's frozen definition, so it never follows later graph edits
+   * and never absorbs another flow, even while it holds no results yet.
+   */
+  replayOfRunId?: string;
 }
 
 export type VerifyVisualizationValue = boolean | null | number | string;
@@ -700,6 +748,7 @@ export interface VerifyCheckItem {
    * checks without one fall back to surface grouping.
    */
   category?: string;
+  definition?: VerifyCheckDefinition;
   /** One-sentence summary of what this check verifies. */
   description?: string;
   /** The document holding the detailed judging instruction / rule body, if any. */
@@ -712,8 +761,14 @@ export interface VerifyCheckItem {
   onFail: VerifyOnFailStrategy;
   /** Whether failing this item blocks delivery (snapshot may override the source default). */
   required: boolean;
+  resourceSnapshot?: {
+    documentContent?: string;
+    fixtures: { fixtureId: string; content?: string; fileHash?: string; url?: string }[];
+  };
   /** Provenance: the criterion this item was instantiated from, or null when agent-generated. */
   sourceCriterionId?: string | null;
+  /** Immutable reusable flow definition instantiated for this verification round. */
+  sourceFlowNode?: { flowId: string; nodeId: string; incomingEdgeId?: string };
   /** Provenance: the rubric (group) this item came in through, or null. */
   sourceRubricId?: string | null;
   /**

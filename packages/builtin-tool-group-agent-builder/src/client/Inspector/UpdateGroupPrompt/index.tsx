@@ -53,8 +53,10 @@ export const UpdateGroupPromptInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !prompt) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-group-agent-builder.apiName.updateGroupPrompt')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-group-agent-builder.apiName.updateGroupPrompt')}
+        </span>
       </div>
     );
   }
@@ -62,13 +64,13 @@ export const UpdateGroupPromptInspector = memo<
   const streamingLength = prompt?.length ?? 0;
 
   return (
-    <Flexbox
-      horizontal
-      align="center"
-      className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
-      gap={6}
-    >
-      <span className={styles.label}>
+    <Flexbox horizontal align="center" className={styles.root} gap={6}>
+      <span
+        className={cx(
+          styles.label,
+          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+        )}
+      >
         {t('builtins.lobe-group-agent-builder.apiName.updateGroupPrompt')}
       </span>
       {/* Show length diff when completed */}

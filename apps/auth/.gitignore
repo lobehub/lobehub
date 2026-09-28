@@ -1,0 +1,6 @@
+.react-router/
+!app/lib/
+.wrangler/
+build/
+build-*/
+build-inputs.txt

@@ -13,6 +13,24 @@ export default defineConfig({
   entry: ['src/index.ts'],
   fixedExtension: false,
   format: ['esm'],
+  inputOptions(options) {
+    // Rolldown downgrades an unresolvable import to an external dependency and
+    // still reports a successful build, so a workspace package that fails to
+    // resolve (a broken `node_modules` link, a renamed package) silently ships
+    // a bundle that dies at startup with ERR_MODULE_NOT_FOUND. Nothing the CLI
+    // imports is expected to be external, so treat it as a build failure.
+    options.onLog = (level, log, defaultHandler) => {
+      if (log.code === 'UNRESOLVED_IMPORT') {
+        throw new Error(
+          `Unresolved import in the CLI bundle: ${log.message}. The embedded CLI has no node_modules at runtime, so every import must be bundled.`,
+        );
+      }
+
+      defaultHandler(level, log);
+    };
+
+    return options;
+  },
   minify: !!process.env.MINIFY,
   outputOptions: {
     codeSplitting: false,

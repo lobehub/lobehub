@@ -1,3 +1,4 @@
+import { toast } from '@lobehub/ui/base-ui';
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -120,7 +121,7 @@ describe('useSelectExecutionTarget', () => {
     it('pins the given deviceId when switching to a specific device', async () => {
       const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
 
-      await result.current('device', 'device-2');
+      await expect(result.current('device', 'device-2')).resolves.toBe(true);
 
       expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
         'agent-id',
@@ -306,6 +307,29 @@ describe('useSelectExecutionTarget', () => {
         },
       });
       expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+    });
+
+    it('reports an explicit workspace preference save failure without leaking a rejection', async () => {
+      testState.user.updateWorkspaceUserPreference = vi
+        .fn()
+        .mockRejectedValue(new Error('save failed'));
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await expect(result.current('sandbox')).resolves.toBe(false);
+
+      expect(toast.error).toHaveBeenCalledWith('saveAgentConfigFail');
+      expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+    });
+
+    it('keeps an automatic workspace preference save failure silent', async () => {
+      testState.user.updateWorkspaceUserPreference = vi
+        .fn()
+        .mockRejectedValue(new Error('save failed'));
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await expect(result.current('sandbox', undefined, { silent: true })).resolves.toBe(false);
+
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('does not write a member override while the shared execution target is fixed', async () => {

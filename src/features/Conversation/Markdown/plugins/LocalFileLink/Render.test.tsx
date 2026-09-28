@@ -30,9 +30,13 @@ const createRenderProps = (
   type: 'element',
 });
 
+const platform = vi.hoisted(() => ({ isDesktop: true }));
+
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  isDesktop: true,
+  get isDesktop() {
+    return platform.isDesktop;
+  },
 }));
 
 vi.mock('@/components/FileIcon', () => ({
@@ -57,7 +61,38 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
 
 describe('LocalFileLink Render', () => {
   afterEach(() => {
+    platform.isDesktop = true;
     useChatStore.setState(useChatStore.getInitialState());
+  });
+
+  it.each(['/home/ubuntu/workspace/src/client.ts:391', './src/client.ts:391'])(
+    'renders %s as a non-navigable file reference on web',
+    (href) => {
+      platform.isDesktop = false;
+      const { container } = render(
+        <Render {...createRenderProps({ linkHref: href, linkLabel: 'client.ts' })} />,
+      );
+
+      expect(screen.queryByRole('link')).toBeNull();
+      expect(container.querySelector('[href]')).toBeNull();
+      expect(screen.getByTestId('file-icon')).toHaveAttribute('data-file-name', 'client.ts');
+      fireEvent.click(screen.getByText('client.ts'));
+      fireEvent.click(screen.getByText('client.ts'), { metaKey: true });
+      fireEvent(
+        screen.getByText('client.ts'),
+        new MouseEvent('auxclick', { bubbles: true, button: 1 }),
+      );
+      expect(useChatStore.getState().openLocalFiles).toEqual([]);
+    },
+  );
+
+  it('keeps unresolved relative references non-navigable on desktop', () => {
+    const { container } = render(
+      <Render {...createRenderProps({ linkHref: './client.ts', linkLabel: 'client.ts' })} />,
+    );
+    expect(container.querySelector('[href]')).toBeNull();
+    fireEvent.click(screen.getByText('client.ts'));
+    expect(useChatStore.getState().openLocalFiles).toEqual([]);
   });
 
   it('opens local file links in the right-side local file portal', () => {

@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mutate } from '@/libs/swr';
 import { projectService } from '@/services/project';
 
 import type { ProjectDetail, ProjectListItem } from './store';
@@ -8,7 +9,12 @@ import { useCurrentProjectDetail, useCurrentProjectList, useProjectStore } from 
 
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: null as string | null,
-  swrConfigs: [] as Array<{ onSuccess: (response: unknown) => void }>,
+  cacheScope: 'user-1:personal',
+  currentCacheScope: 'user-1:personal',
+  swrData: undefined as unknown,
+  swrDataByKey: {} as Record<string, unknown>,
+  swrConfigs: [] as Array<{ onSuccess?: (response: unknown) => void }>,
+  swrKeys: [] as unknown[],
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -16,36 +22,113 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
 
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  getCacheScope: () => mocks.currentCacheScope,
+  useCacheScope: () => mocks.cacheScope,
+}));
+
 vi.mock('@/libs/swr', () => ({
   mutate: vi.fn(),
   useClientDataSWR: vi.fn(
-    (_key: unknown, _fetcher: unknown, config: { onSuccess: (response: unknown) => void }) => {
+    (key: unknown, _fetcher: unknown, config: { onSuccess?: (response: unknown) => void } = {}) => {
       mocks.swrConfigs.push(config);
-      return {};
+      mocks.swrKeys.push(key);
+      const serializedKey = JSON.stringify(key);
+      return {
+        data:
+          serializedKey in mocks.swrDataByKey ? mocks.swrDataByKey[serializedKey] : mocks.swrData,
+      };
     },
   ),
 }));
 
-describe('project store workspace scope', () => {
+describe('project store cache scope', () => {
   beforeEach(() => {
     mocks.activeWorkspaceId = null;
+    mocks.cacheScope = 'user-1:personal';
+    mocks.currentCacheScope = 'user-1:personal';
+    mocks.swrData = undefined;
+    mocks.swrDataByKey = {};
     mocks.swrConfigs = [];
+    mocks.swrKeys = [];
     useProjectStore.setState({ projectDetails: {}, projectLists: {} });
+  });
+
+  it('restores a persisted project list into the store before the first paint', () => {
+    const cachedProject = { id: 'cached-project', name: 'Cached project' } as ProjectListItem;
+    mocks.swrData = { data: [cachedProject], message: 'cached', success: true };
+
+    renderHook(() => useProjectStore.getState().useFetchProjectList());
+
+    expect(useProjectStore.getState().projectLists['user-1:personal']).toEqual([cachedProject]);
+  });
+
+  it('ignores a project response from a workspace that is no longer active', () => {
+    const staleProject = { id: 'stale-project' } as ProjectListItem;
+    mocks.swrData = { data: [staleProject], message: 'stale', success: true };
+    mocks.cacheScope = 'user-1:personal';
+    mocks.currentCacheScope = 'user-1:workspace-1';
+
+    renderHook(() => useProjectStore.getState().useFetchProjectList());
+
+    expect(useProjectStore.getState().projectLists['user-1:personal']).toBeUndefined();
+    expect(useProjectStore.getState().projectLists['user-1:workspace-1']).toBeUndefined();
+  });
+
+  it('hides the previous account project list while old SWR data is still present', () => {
+    const previousProject = { id: 'previous-project', name: 'Previous account' } as ProjectListItem;
+    const previousResponse = { data: [previousProject], success: true };
+    // Simulate the old shared key remaining populated until Query reloads the new scope.
+    mocks.swrDataByKey = {
+      [JSON.stringify('project/list')]: previousResponse,
+      [JSON.stringify(['project/list', 'user-1:personal'])]: previousResponse,
+    };
+    const { rerender } = renderHook(() => useProjectStore.getState().useFetchProjectList());
+
+    mocks.cacheScope = 'user-2:personal';
+    mocks.currentCacheScope = 'user-2:personal';
+    rerender();
+
+    expect(mocks.swrKeys).toEqual([
+      ['project/list', 'user-1:personal'],
+      ['project/list', 'user-2:personal'],
+    ]);
+    expect(renderHook(() => useCurrentProjectList()).result.current).toEqual([]);
+  });
+
+  it('hides the previous account project detail after switching accounts', () => {
+    const previousDetail = {
+      project: { id: 'shared-id', name: 'Previous account' },
+    } as ProjectDetail;
+    const { rerender } = renderHook(() =>
+      useProjectStore.getState().useFetchProjectDetail('shared-id'),
+    );
+
+    act(() => mocks.swrConfigs.at(-1)?.onSuccess?.({ data: previousDetail, success: true }));
+    mocks.cacheScope = 'user-2:personal';
+    mocks.currentCacheScope = 'user-2:personal';
+    rerender();
+
+    expect(renderHook(() => useCurrentProjectDetail('shared-id')).result.current).toBeUndefined();
   });
 
   it('keeps project lists isolated between personal and workspace contexts', () => {
     const personalProject = { id: 'personal-project' } as ProjectListItem;
     const workspaceProject = { id: 'workspace-project' } as ProjectListItem;
+    mocks.swrData = { data: [personalProject], success: true };
     const { rerender } = renderHook(() => useProjectStore.getState().useFetchProjectList());
 
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess({ data: [personalProject], success: true }));
     mocks.activeWorkspaceId = 'workspace-1';
+    mocks.cacheScope = 'user-1:workspace-1';
+    mocks.currentCacheScope = 'user-1:workspace-1';
+    mocks.swrData = { data: [workspaceProject], success: true };
     rerender();
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess({ data: [workspaceProject], success: true }));
 
     expect(renderHook(() => useCurrentProjectList()).result.current).toEqual([workspaceProject]);
 
     mocks.activeWorkspaceId = null;
+    mocks.cacheScope = 'user-1:personal';
+    mocks.currentCacheScope = 'user-1:personal';
     expect(renderHook(() => useCurrentProjectList()).result.current).toEqual([personalProject]);
   });
 
@@ -56,15 +139,23 @@ describe('project store workspace scope', () => {
       useProjectStore.getState().useFetchProjectDetail('shared-id'),
     );
 
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess({ data: personalDetail, success: true }));
+    act(() => mocks.swrConfigs.at(-1)?.onSuccess?.({ data: personalDetail, success: true }));
     mocks.activeWorkspaceId = 'workspace-1';
+    mocks.cacheScope = 'user-1:workspace-1';
+    mocks.currentCacheScope = 'user-1:workspace-1';
     rerender();
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess({ data: workspaceDetail, success: true }));
+    act(() => mocks.swrConfigs.at(-1)?.onSuccess?.({ data: workspaceDetail, success: true }));
 
+    expect(mocks.swrKeys).toEqual([
+      ['project/detail', 'user-1:personal', 'shared-id'],
+      ['project/detail', 'user-1:workspace-1', 'shared-id'],
+    ]);
     expect(renderHook(() => useCurrentProjectDetail('shared-id')).result.current).toBe(
       workspaceDetail,
     );
     mocks.activeWorkspaceId = null;
+    mocks.cacheScope = 'user-1:personal';
+    mocks.currentCacheScope = 'user-1:personal';
     expect(renderHook(() => useCurrentProjectDetail('shared-id')).result.current).toBe(
       personalDetail,
     );
@@ -92,18 +183,17 @@ describe('project store workspace scope', () => {
   });
 
   it('refreshes the project list after deletion', async () => {
-    const refreshProjectList = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(mutate).mockClear();
     vi.spyOn(projectService, 'delete').mockResolvedValue({
       data: { id: 'project-1' } as ProjectListItem,
       message: 'Project deleted',
       success: true,
     });
-    useProjectStore.setState({ refreshProjectList });
 
     await useProjectStore.getState().deleteProject('project-1');
 
     expect(projectService.delete).toHaveBeenCalledWith('project-1');
-    expect(refreshProjectList).toHaveBeenCalledOnce();
+    expect(mutate).toHaveBeenCalledWith(['project/list', 'user-1:personal']);
   });
 
   it('updates project list and detail caches after renaming', async () => {
@@ -117,15 +207,17 @@ describe('project store workspace scope', () => {
       success: true,
     });
     useProjectStore.setState({
-      projectDetails: { personal: { launch: detail } },
-      projectLists: { personal: [project] },
+      projectDetails: { 'user-1:personal': { launch: detail } },
+      projectLists: { 'user-1:personal': [project] },
       refreshProjectList,
     });
 
     await useProjectStore.getState().updateProject('project-1', { name: 'Renamed' });
 
-    expect(useProjectStore.getState().projectLists.personal[0].name).toBe('Renamed');
-    expect(useProjectStore.getState().projectDetails.personal.launch.project.name).toBe('Renamed');
+    expect(useProjectStore.getState().projectLists['user-1:personal'][0].name).toBe('Renamed');
+    expect(useProjectStore.getState().projectDetails['user-1:personal'].launch.project.name).toBe(
+      'Renamed',
+    );
     expect(refreshProjectList).toHaveBeenCalledOnce();
   });
 });

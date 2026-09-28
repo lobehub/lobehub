@@ -74,21 +74,19 @@ export const CreateTaskInspector = memo<BuiltinInspectorProps<CreateTaskParams, 
 
     if (isArgumentsStreaming && !name) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-task.apiName.createTask')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-task.apiName.createTask')}
+          </span>
         </div>
       );
     }
 
     return (
-      <div
-        style={{ flexWrap: 'wrap', gap: 4 }}
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{t('builtins.lobe-task.apiName.createTask')}</span>
+      <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-task.apiName.createTask')}
+        </span>
         {identifier && (
           <span className={styles.identifierChip} style={{ marginInlineStart: 6 }}>
             {identifier}

@@ -1,6 +1,6 @@
 ---
 name: agent-tracing
-description: 'Agent tracing CLI for execution snapshots. Use for agent-tracing, traces, snapshots, LLM call inspection, context engine data, agent step analysis, execution debugging, or pulling remote/production traces ("拉线上 tracing") by operation id. Also the first stop for debugging agent tool calls — wrong or missing tool_calls, unexpected tool arguments or results, which tools were available at a step, or why a tool ran where it did.'
+description: 'Use for agent traces by operation ID (拉线上 tracing): failed tools, arguments/results, available tools, execution location, LLM calls and context.'
 user-invocable: false
 ---
 
@@ -14,7 +14,7 @@ In `NODE_ENV=development`, `AgentRuntimeService.executeStep()` automatically rec
 
 **Data flow**: executeStep loop -> build `StepPresentationData` -> write partial snapshot to disk -> on completion, finalize to `.agent-tracing/{timestamp}_{traceId}.json`
 
-**Context engine capture**: In `RuntimeExecutors.ts`, the `call_llm` executor calls `ctx.tracingContextEngine(input, output)` after `serverMessagesEngine()` processes messages. `AgentRuntimeService.executeStep` buffers the call per step and forwards it to `OperationTraceRecorder.appendStep` as the typed `contextEngine` field. CE flows through this side channel rather than the `events` array so its heavy payload (agentDocuments, systemRole, …) never enters the Redis state pipeline (LOBE-9110).
+**Context engine capture**: In `RuntimeExecutors.ts`, the `call_llm` executor calls `ctx.tracingContextEngine(input, output, metadata)` after `serverMessagesEngine()` processes messages. `AgentRuntimeService.executeStep` buffers the call per step and forwards it to `OperationTraceRecorder.appendStep` as the typed `contextEngine` field. CE flows through this side channel rather than the `events` array so its heavy payload (agentDocuments, systemRole, …) never enters the Redis state pipeline (LOBE-9110). `metadata` carries the pipeline's per-request decision records (trim stats, cache-warmth gates, truncation counts).
 
 ## Package Location
 
@@ -74,6 +74,31 @@ SELECT id, trace_s3_key FROM agent_operations WHERE topic_id = 'tpc_xxx';
 Either way the snapshot is cached to `.agent-tracing/_remote/<opId>.json`, and every `inspect` flag works the same as for local traces.
 
 Implementation: `packages/agent-tracing/src/store/loadSnapshot.ts` (resolution order: local store → `_remote/` cache → injected `resolveDownloadUrl` → `TRACING_BASE_URL`) and `store/remote-store.ts` (URL built as `{base}/{agentId}/{topicId}/{opId}.json.zst`). Reading a compressed snapshot needs Node >= 22.15.
+
+## Goal Trajectories
+
+A goal is one complete _goal_ execution the way an operation is one complete agent execution, so it gets the same trace format one level up: `GoalTrajectory : AdvanceSnapshot` mirrors `ExecutionSnapshot : StepSnapshot`. There is no table of advances, exactly as there is no `agent_steps` table — `goal_traces` holds one rollup row per goal plus the object key, and the detail lives in the object.
+
+The leaves join back down: an advance records the `operationId`s it put in flight (on `tick.effects[].operationId`), so `lh trace op inspect <opId>` continues from where the goal trace stops.
+
+```bash
+agent-tracing goal               # list local goal trajectories
+agent-tracing goal goal_xxx      # the run: triggers, outcomes, graph, gates, ops
+agent-tracing goal goal_xxx -a 3 # one advance in full, with the frontier it ranked
+agent-tracing goal goal_xxx -j   # raw JSON
+```
+
+What each tick records is the **decision input**, not just the result: the graph it read (as a delta against the previous tick), the budget it evaluated, the responsible task's state, and every eligible work node **including the ones it passed over**. Without the losers a trace cannot answer "why not that node".
+
+**Storage** follows the operation switch, so a deployment that keeps one keeps the other:
+
+- Completed: `goal-traces/{goalId}.json.zst`
+- In progress: `goal-traces/_partial/{goalId}.json.zst` (an unfinished long-horizon goal is the normal thing to inspect)
+- Dev: `.goal-tracing/{goalId}.json`
+
+**Replay.** `replayGoalAgainstCurrentCoordinator(trajectory)` re-runs the real `decideNextMove` over the recorded inputs and reports `{advanceSeq, tickIndex, field, recorded, replayed}` wherever the current coordinator would now choose differently. This reproduces the coordinator's _decisions_ exactly; it says nothing about whether the dispatched work would have gone the same way.
+
+Implementation: `packages/agent-tracing/src/goal/`, recorded through `apps/server/src/services/goal/advanceGoal.ts` (the single funnel every advance passes through) via the `onDecision` side channel on `GoalService.tick`.
 
 ## CLI Commands
 
@@ -332,6 +357,7 @@ interface StepSnapshot {
   contextEngine?: {
     input?: unknown; // contextEngineInput minus messages + toolsConfig (reconstructible from baseline)
     output?: unknown; // processed messages array (final LLM payload)
+    metadata?: unknown; // pipeline decision records (trim stats, cache gates, truncation counts)
   };
 }
 ```
@@ -347,5 +373,5 @@ When using `--messages`, the output shows three sections (if context engine data
 ## Integration Points
 
 - **Recording**: `apps/server/src/services/agentRuntime/AgentRuntimeService.ts` — in the `executeStep()` method, after building `stepPresentationData`, writes partial snapshot in dev mode
-- **Context engine capture**: `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts` — in `call_llm` executor, after `serverMessagesEngine()` returns, calls `ctx.tracingContextEngine(input, output)`. `AgentRuntimeService.executeStep` buffers it per step and passes it to `traceRecorder.appendStep` as the typed `contextEngine` field (kept off the `events` array to stay out of Redis state).
+- **Context engine capture**: `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts` — in `call_llm` executor, after `serverMessagesEngine()` returns, calls `ctx.tracingContextEngine(input, output, metadata)`. `AgentRuntimeService.executeStep` buffers it per step and passes it to `traceRecorder.appendStep` as the typed `contextEngine` field (kept off the `events` array to stay out of Redis state).
 - **Store**: `FileSnapshotStore` reads/writes to `.agent-tracing/` relative to `process.cwd()`

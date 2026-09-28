@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Progress, Text } from '@lobehub/ui/base-ui';
 import { cssVar, useResponsive } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -55,7 +54,6 @@ const RatingOverview = memo<RatingOverviewProps>(
                   showInfo={false}
                   size={'small'}
                   strokeColor={cssVar.colorWarning}
-                  strokeWidth={8}
                   style={{ flex: 1, marginBottom: 0 }}
                 />
               </Flexbox>

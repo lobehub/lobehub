@@ -1,22 +1,9 @@
-import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
-import {
-  BUILTIN_AGENT_SLUGS,
-  getAgentRuntimeConfig,
-  isCollaborativeBuiltinAgentRow,
-} from '@lobechat/builtin-agents';
-import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
-import { TaskIdentifier } from '@lobechat/builtin-tool-task';
-import { type LobeToolManifest } from '@lobechat/context-engine';
-import {
-  type ChatCompletionTool,
-  getActivePluginIds,
-  type LobeAgentChatConfig,
-  type LobeAgentConfig,
-  type MessageMapScope,
-  resolveAgentModelConfig,
-} from '@lobechat/types';
-import debug from 'debug';
-import { produce } from 'immer';
+import type {
+  AgentConfigResolverContext,
+  AgentConfigSnapshot,
+  ResolvedAgentConfig,
+} from '@lobechat/mecha';
+import { resolveAgentConfig as resolveFromSnapshot } from '@lobechat/mecha';
 
 import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
 import { getAgentStoreState } from '@/store/agent';
@@ -31,522 +18,60 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { isDev } from '@/utils/env';
 
-const log = debug('mecha:agentConfigResolver');
+export type { AgentConfigResolverContext, ResolvedAgentConfig };
 
 /**
- * Set of valid builtin agent slugs for O(1) lookup
- */
-const VALID_BUILTIN_SLUGS = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
-
-/**
- * Check if a slug is a valid builtin agent slug
- */
-const isBuiltinAgentSlug = (slug: string): slug is BuiltinAgentSlug => {
-  return VALID_BUILTIN_SLUGS.has(slug);
-};
-
-/**
- * Applies params adjustments based on chatConfig settings.
+ * Read everything the resolution rules need out of the client stores.
  *
- * This function handles the conditional enabling/disabling of certain params:
- * - max_tokens: Only included if chatConfig.enableMaxTokens is true
- * - reasoning_effort: Only included if chatConfig.enableReasoningEffort is true
- *
- * Uses immer to create a new object without mutating the original.
+ * This is the whole of what made the rules browser-specific. They now live in
+ * `@lobechat/mecha` — the shared home for this layer, which the server and a
+ * device reach by gathering this value from their own sources rather than
+ * re-implementing the rules against them.
  */
-const applyParamsFromChatConfig = (
-  agentConfig: LobeAgentConfig,
-  chatConfig: LobeAgentChatConfig,
-): LobeAgentConfig => {
-  // If params is not defined, return agentConfig as-is
-  if (!agentConfig?.params) {
-    return agentConfig;
-  }
-
-  return produce(agentConfig, (draft) => {
-    // Only include max_tokens if enableMaxTokens is true
-    draft.params.max_tokens = chatConfig.enableMaxTokens ? draft.params.max_tokens : undefined;
-
-    // Only include reasoning_effort if enableReasoningEffort is true
-    draft.params.reasoning_effort = chatConfig.enableReasoningEffort
-      ? draft.params.reasoning_effort
-      : undefined;
-  });
-};
-
-/**
- * Runtime context for resolving agent config
- */
-export interface AgentConfigResolverContext {
-  /** Agent ID to resolve config for */
-  agentId: string;
-
-  /**
-   * Whether to disable all tools for this agent execution.
-   * When true, returns empty plugins array (used for broadcast scenarios).
-   */
-  disableTools?: boolean;
-
-  // Builtin agent specific context
-  /** Document content for page-agent */
-  documentContent?: string;
-
-  /**
-   * Group ID for supervisor detection.
-   * When provided, used for direct lookup instead of iterating all groups.
-   */
-  groupId?: string;
-
-  /**
-   * Whether this is a sub-agent execution.
-   * When true, filters out the lobe-agent tool (which owns the sub-agent
-   * dispatch APIs) to prevent nested sub-agent creation.
-   */
-  isSubAgent?: boolean;
-
-  /** Current model being used (for template variables) */
-  model?: string;
-  /** Plugins enabled for the agent */
-  plugins?: string[];
-
-  /** Current provider */
-  provider?: string;
-
-  /** Message map scope (e.g., 'page', 'main', 'thread') */
-  scope?: MessageMapScope;
-  /** Target agent config for agent-builder */
-  targetAgentConfig?: LobeAgentConfig;
-}
-
-/**
- * Resolved agent config with runtime values merged
- */
-export interface ResolvedAgentConfig {
-  /** The resolved agent config */
-  agentConfig: LobeAgentConfig;
-  /** The chat config */
-  chatConfig: LobeAgentChatConfig;
-  /** Enabled manifests for context engineering (populated by internal_createAgentState) */
-  enabledManifests?: LobeToolManifest[];
-  /** Enabled tool IDs after filtering (populated by internal_createAgentState) */
-  enabledToolIds?: string[];
-  /** Whether this is a builtin agent */
-  isBuiltinAgent: boolean;
-  /**
-   * Final merged plugins for the agent
-   * For builtin agents: runtime plugins (if any) or fallback to agent config plugins
-   * For regular agents: agent config plugins
-   */
-  plugins: string[];
-  /** The agent's slug (if builtin) */
-  slug?: string;
-  /**
-   * The raw sub-agent chatConfig override (`agencyConfig.subagent.chatConfig`).
-   * `chatConfig` above already has it merged in for non-migrated fields; this
-   * copy lets the model-params resolver re-apply the user's explicit sub-agent
-   * reasoning choices on top of the model-instance defaults.
-   */
-  subAgentChatConfigOverride?: Partial<LobeAgentChatConfig>;
-  /** Pre-generated tools array (populated by internal_createAgentState, undefined means tools disabled) */
-  tools?: ChatCompletionTool[];
-}
-
-/**
- * Resolves the agent config, merging runtime config for builtin agents
- *
- * For builtin agents (identified by slug), this will:
- * 1. Get the base config from the agent store
- * 2. Get the runtime config from @lobechat/builtin-agents
- * 3. Merge the runtime systemRole into the agent config
- *
- * For regular agents, this simply returns the config from the store.
- */
-export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAgentConfig => {
-  const { agentId, model, documentContent, plugins, targetAgentConfig, isSubAgent, disableTools } =
-    ctx;
-
-  log(
-    'resolveAgentConfig called with agentId: %s, scope: %s, isSubAgent: %s, disableTools: %s',
-    agentId,
-    ctx.scope,
-    isSubAgent,
-    disableTools,
-  );
-
-  // Helper to apply plugin filters:
-  // 1. If disableTools is true, return empty array (for broadcast scenarios)
-  // 2. Drop page-agent outside page scope.
-  //
-  // lobe-agent's context trimming (hide `callSubAgent` in group / sub-agent runs)
-  // now lives in its manifest resolver (resolveLobeAgentManifest), applied at
-  // tools-engine build time. That keeps lobe-agent's plan / todo / media-analysis
-  // available to sub-agents — only the nested dispatch API is removed — instead of
-  // dropping the whole tool here.
-  const applyPluginFilters = (pluginIds: string[]) => {
-    if (disableTools) {
-      log('disableTools is true, returning empty plugins');
-      return [];
-    }
-
-    let nextPluginIds = pluginIds;
-
-    if (ctx.scope !== 'page') {
-      nextPluginIds = nextPluginIds.filter((id) => id !== PageAgentIdentifier);
-    }
-
-    return nextPluginIds;
-  };
-
+const collectSnapshot = (ctx: AgentConfigResolverContext): AgentConfigSnapshot => {
   const agentStoreState = getAgentStoreState();
+  const userState = useUserStore.getState();
+  const { agentId } = ctx;
 
-  // Get base config from store
-  const sharedAgentConfig = agentSelectors.getAgentConfigById(agentId)(agentStoreState);
   const agent = agentByIdSelectors.getAgentById(agentId)(agentStoreState);
-  const currentUserId = userProfileSelectors.userId(useUserStore.getState());
-  // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and the
-  // server (`isResourceAuthorOrAdmin`) — an admin reads the shared row like
-  // the author does, so client and gateway execution resolve the same config.
-  const canManage = getRuntimeCanManageAgent({
-    agentId,
-    agentUserId: agent?.userId,
-    currentUserId,
-  });
-  const isPublicWorkspaceAgent = !!agent?.workspaceId && agent.visibility !== 'private';
-  // A collaborative builtin has no real author (the row is provisioned by
-  // whoever opened the feature first), so its *model* stays personal even for
-  // that member — see `AgentModelConfig.personalModelSelection`. Chat/Agent mode
-  // keeps the ordinary author rule.
-  const personalModelSelection = isCollaborativeBuiltinAgentRow(agent ?? {});
-  const usesWorkspaceMemberSelection = isPublicWorkspaceAgent && !canManage;
-  const memberModelOverride =
-    isPublicWorkspaceAgent && (personalModelSelection || !canManage)
-      ? useUserStore.getState().workspaceUserPreference.agentModelOverrides?.[agentId]
+  const currentUserId = userProfileSelectors.userId(userState);
+
+  // Group rows are only read in group scope or for the supervisor, but both
+  // branches key off `ctx.groupId`, so one lookup up front covers them.
+  const groupStoreState = ctx.groupId ? getChatGroupStoreState() : undefined;
+  const group =
+    ctx.groupId && groupStoreState
+      ? agentGroupByIdSelectors.groupById(ctx.groupId)(groupStoreState)
       : undefined;
-  const memberModeOverride = usesWorkspaceMemberSelection
-    ? useUserStore.getState().workspaceUserPreference.agentModeOverrides?.[agentId]
-    : undefined;
-  const agentConfig = {
-    ...sharedAgentConfig,
-    ...resolveAgentModelConfig(
-      {
-        ...sharedAgentConfig,
-        canManage,
-        personalModelSelection,
-        visibility: agent?.visibility,
-        workspaceId: agent?.workspaceId,
-      },
-      memberModelOverride,
-    ),
-  };
-  const sharedChatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState);
-  const chatConfig =
-    memberModeOverride === undefined
-      ? sharedChatConfig
-      : { ...sharedChatConfig, enableAgentMode: memberModeOverride };
-
-  // Base plugins from agent config (pinned identifiers only — disabled entries excluded)
-  const basePlugins = getActivePluginIds(agentConfig?.plugins);
-
-  // Check if this is a builtin agent
-  // Priority: supervisor check (when in group scope) > agent store slug
-  let slug: string | undefined;
-
-  // IMPORTANT: When in group scope with groupId, check if this agent is the group's supervisor FIRST
-  // This takes priority because supervisor needs special group-supervisor behavior,
-  // even if the agent has its own slug
-  if (ctx.groupId && ctx.scope === 'group') {
-    const groupStoreState = getChatGroupStoreState();
-    const group = agentGroupByIdSelectors.groupById(ctx.groupId)(groupStoreState);
-
-    log(
-      'checking supervisor FIRST (scope=group): groupId=%s, group=%O, agentId=%s',
-      ctx.groupId,
-      group
-        ? {
-            groupId: group.id,
-            supervisorAgentId: group.supervisorAgentId,
-            title: group.title,
-          }
-        : null,
-      agentId,
-    );
-
-    // Check if this agent is the supervisor of the specified group
-    if (group?.supervisorAgentId === agentId) {
-      slug = BUILTIN_AGENT_SLUGS.groupSupervisor;
-      log(
-        'agentId %s identified as group supervisor for group %s, assigned slug: %s',
-        agentId,
-        ctx.groupId,
-        slug,
-      );
-    }
-  }
-
-  // If not identified as supervisor, check agent store for slug
-  if (!slug) {
-    const storeSlug = agentSelectors.getAgentSlugById(agentId)(agentStoreState) ?? undefined;
-    log('slug from agentStore: %s (agentId: %s)', storeSlug, agentId);
-
-    // Only use the slug if it's a valid builtin agent slug
-    // Regular agents may have random slugs that should be ignored
-    if (storeSlug && isBuiltinAgentSlug(storeSlug)) {
-      slug = storeSlug;
-    } else if (storeSlug) {
-      log('slug %s is not a valid builtin agent slug, treating as regular agent', storeSlug);
-    }
-  }
-
-  if (!slug) {
-    log('agentId %s is not a builtin agent (no valid builtin slug found)', agentId);
-    // Regular agent - use provided plugins if available, fallback to agent's plugins
-    const finalPlugins = plugins && plugins.length > 0 ? plugins : basePlugins;
-
-    // Inject response language preference into system role for regular agents
-    const userLocale = userGeneralSettingsSelectors.currentResponseLanguage(
-      useUserStore.getState(),
-    );
-    const localeInstruction = userLocale
-      ? `Preferred reply language: ${userLocale}. Use this language unless the user explicitly asks to switch.`
-      : '';
-    const systemRoleWithLocale = localeInstruction
-      ? agentConfig.systemRole
-        ? `${agentConfig.systemRole}\n\n${localeInstruction}`
-        : localeInstruction
-      : agentConfig.systemRole;
-
-    // Apply params adjustments based on chatConfig
-    let finalAgentConfig = applyParamsFromChatConfig(
-      { ...agentConfig, systemRole: systemRoleWithLocale },
-      chatConfig,
-    );
-    let finalChatConfig = chatConfig;
-
-    // === Page Editor Auto-Injection ===
-    // When custom agent is used in page editor (scope === 'page'),
-    // automatically inject page-agent tools and system role
-    if (ctx.scope === 'page') {
-      // 1. Inject page-agent tool if not already present
-      const pageAgentPlugins = finalPlugins.includes(PageAgentIdentifier)
-        ? finalPlugins
-        : [PageAgentIdentifier, ...finalPlugins];
-
-      // 2. Get page-agent system prompt from builtin agent runtime
-      const pageAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.pageAgent, {});
-      const pageAgentSystemRole = pageAgentRuntime?.systemRole || '';
-
-      // 3. Merge system roles: custom agent's role (with locale) + page-agent role
-      // Only append page-agent role if it exists
-      const mergedSystemRole = pageAgentSystemRole
-        ? systemRoleWithLocale
-          ? `${systemRoleWithLocale}\n\n${pageAgentSystemRole}`
-          : pageAgentSystemRole
-        : systemRoleWithLocale || '';
-
-      finalAgentConfig = {
-        ...finalAgentConfig,
-        systemRole: mergedSystemRole,
-      };
-
-      // 4. Apply chatConfig overrides (same as builtin page-copilot)
-      finalChatConfig = {
-        ...chatConfig,
-        enableHistoryCount: false, // Disable history truncation for full document context
-      };
-
-      return {
-        agentConfig: finalAgentConfig,
-        chatConfig: finalChatConfig,
-        isBuiltinAgent: false,
-        plugins: applyPluginFilters(pageAgentPlugins),
-      };
-    }
-
-    if (ctx.scope === 'task') {
-      const taskAgentPlugins = finalPlugins.includes(TaskIdentifier)
-        ? finalPlugins
-        : [TaskIdentifier, ...finalPlugins];
-      const taskAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.taskAgent, {});
-      const taskAgentSystemRole = taskAgentRuntime?.systemRole || '';
-      const mergedSystemRole = taskAgentSystemRole
-        ? systemRoleWithLocale
-          ? `${systemRoleWithLocale}\n\n${taskAgentSystemRole}`
-          : taskAgentSystemRole
-        : systemRoleWithLocale || '';
-
-      finalAgentConfig = {
-        ...finalAgentConfig,
-        systemRole: mergedSystemRole,
-      };
-
-      return {
-        agentConfig: finalAgentConfig,
-        chatConfig: finalChatConfig,
-        isBuiltinAgent: false,
-        plugins: applyPluginFilters(taskAgentPlugins),
-      };
-    }
-
-    // Not in page scope - return standard config
-    return {
-      agentConfig: finalAgentConfig,
-      chatConfig: finalChatConfig,
-      isBuiltinAgent: false,
-      plugins: applyPluginFilters(finalPlugins),
-    };
-  }
-
-  // Build groupSupervisorContext if this is a group-supervisor agent
-  // Use groupId for direct lookup instead of reverse lookup by supervisorAgentId
-  let groupSupervisorContext;
-  if (slug === BUILTIN_AGENT_SLUGS.groupSupervisor && ctx.groupId) {
-    log('building groupSupervisorContext for agentId: %s, groupId: %s', agentId, ctx.groupId);
-    const groupStoreState = getChatGroupStoreState();
-    // Direct lookup using groupId
-    const group = agentGroupByIdSelectors.groupById(ctx.groupId)(groupStoreState);
-
-    log(
-      'groupById result for %s: %o',
-      ctx.groupId,
-      group
-        ? {
-            agentsCount: group.agents?.length,
-            groupId: group.id,
-            supervisorAgentId: group.supervisorAgentId,
-            title: group.title,
-          }
-        : null,
-    );
-
-    if (group) {
-      const groupMembers = agentGroupSelectors.getGroupMembers(group.id)(groupStoreState);
-      log(
-        'groupMembers for groupId %s: %o',
-        group.id,
-        groupMembers.map((m) => ({ id: m.id, isSupervisor: m.isSupervisor, title: m.title })),
-      );
-
-      groupSupervisorContext = {
-        availableAgents: groupMembers.map((agent) => ({ id: agent.id, title: agent.title })),
-        groupId: group.id,
-        groupTitle: group.title || 'Group Chat',
-        systemPrompt: agentConfig.systemRole,
-      };
-      log('groupSupervisorContext built: %o', {
-        availableAgentsCount: groupSupervisorContext.availableAgents.length,
-        groupId: groupSupervisorContext.groupId,
-        groupTitle: groupSupervisorContext.groupTitle,
-        hasSystemPrompt: !!groupSupervisorContext.systemPrompt,
-      });
-    } else {
-      log('WARNING: group not found for groupId: %s', ctx.groupId);
-    }
-  }
-
-  // Builtin agent - merge runtime config
-  // Use basePlugins as fallback when ctx.plugins is not provided
-  // This ensures builtin agents (e.g., INBOX) receive user-configured plugins for merging
-  const runtimeConfig = getAgentRuntimeConfig(slug, {
-    documentContent,
-    groupSupervisorContext,
-    isDev,
-    model,
-    plugins: plugins || basePlugins,
-    targetAgentConfig,
-    userLocale: userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
-  });
-
-  // Merge runtime systemRole into agent config
-  let resolvedSystemRole = runtimeConfig?.systemRole ?? agentConfig.systemRole;
-
-  // Merge plugins: runtime plugins take priority, fallback to base plugins
-  let finalPlugins =
-    runtimeConfig?.plugins && runtimeConfig.plugins.length > 0
-      ? runtimeConfig.plugins
-      : basePlugins;
-
-  // Merge chatConfig: runtime chatConfig overrides base chatConfig
-  let resolvedChatConfig: LobeAgentChatConfig = {
-    ...chatConfig,
-    ...runtimeConfig?.chatConfig,
-  };
-  const resolvedAgencyConfig = runtimeConfig?.agencyConfig
-    ? {
-        ...agentConfig.agencyConfig,
-        ...runtimeConfig.agencyConfig,
-      }
-    : agentConfig.agencyConfig;
-
-  // === Page Editor Auto-Injection for Builtin Agents ===
-  // When a builtin agent (other than page-agent itself) is used in page editor,
-  // inject page-agent tools and system role
-  if (ctx.scope === 'page' && slug !== BUILTIN_AGENT_SLUGS.pageAgent) {
-    // 1. Inject page-agent tool if not already present
-    if (!finalPlugins.includes(PageAgentIdentifier)) {
-      finalPlugins = [PageAgentIdentifier, ...finalPlugins];
-    }
-
-    // 2. Get page-agent system prompt
-    const pageAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.pageAgent, {});
-    const pageAgentSystemRole = pageAgentRuntime?.systemRole || '';
-
-    // 3. Merge system roles: builtin agent's role + page-agent role
-    if (pageAgentSystemRole) {
-      resolvedSystemRole = resolvedSystemRole
-        ? `${resolvedSystemRole}\n\n${pageAgentSystemRole}`
-        : pageAgentSystemRole;
-    }
-
-    // 4. Apply chatConfig overrides
-    resolvedChatConfig = {
-      ...resolvedChatConfig,
-      enableHistoryCount: false,
-    };
-  }
-
-  if (ctx.scope === 'task' && slug !== BUILTIN_AGENT_SLUGS.taskAgent) {
-    if (!finalPlugins.includes(TaskIdentifier)) {
-      finalPlugins = [TaskIdentifier, ...finalPlugins];
-    }
-
-    const taskAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.taskAgent, {});
-    const taskAgentSystemRole = taskAgentRuntime?.systemRole || '';
-
-    if (taskAgentSystemRole) {
-      resolvedSystemRole = resolvedSystemRole
-        ? `${resolvedSystemRole}\n\n${taskAgentSystemRole}`
-        : taskAgentSystemRole;
-    }
-  }
-
-  // Merge runtime systemRole into agent config
-  const resolvedAgentConfig: LobeAgentConfig = {
-    ...agentConfig,
-    ...(resolvedAgencyConfig ? { agencyConfig: resolvedAgencyConfig } : {}),
-    systemRole: resolvedSystemRole,
-  };
-
-  // Apply params adjustments based on chatConfig
-  const finalAgentConfig = applyParamsFromChatConfig(resolvedAgentConfig, resolvedChatConfig);
-
-  log('resolveAgentConfig completed for agentId: %s, result: %o', agentId, {
-    isBuiltinAgent: true,
-    pluginsCount: finalPlugins.length,
-    slug,
-  });
 
   return {
-    agentConfig: finalAgentConfig,
-    chatConfig: resolvedChatConfig,
-    isBuiltinAgent: true,
-    plugins: applyPluginFilters(finalPlugins),
-    slug,
+    agent,
+    agentConfig: agentSelectors.getAgentConfigById(agentId)(agentStoreState),
+    // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and the
+    // server (`isResourceAuthorOrAdmin`) — an admin reads the shared row like
+    // the author does, so client and gateway execution resolve the same config.
+    canManage: getRuntimeCanManageAgent({
+      agentId,
+      agentUserId: agent?.userId,
+      currentUserId,
+    }),
+    chatConfig: chatConfigByIdSelectors.getChatConfigById(agentId)(agentStoreState),
+    group,
+    groupMembers:
+      group && groupStoreState
+        ? agentGroupSelectors.getGroupMembers(group.id)(groupStoreState)
+        : undefined,
+    isDev,
+    memberModeOverride: userState.workspaceUserPreference.agentModeOverrides?.[agentId],
+    memberModelOverride: userState.workspaceUserPreference.agentModelOverrides?.[agentId],
+    slug: agentSelectors.getAgentSlugById(agentId)(agentStoreState) ?? undefined,
+    userLocale: userGeneralSettingsSelectors.currentResponseLanguage(userState),
   };
 };
 
-/**
- * Get the target agent ID, falling back to active agent if not provided
- */
+export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAgentConfig =>
+  resolveFromSnapshot(ctx, collectSnapshot(ctx));
+
 export const getTargetAgentId = (agentId?: string): string => {
   const agentStoreState = getAgentStoreState();
   return agentId || agentStoreState.activeAgentId || '';

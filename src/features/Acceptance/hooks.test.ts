@@ -10,6 +10,7 @@ import { verifyService } from '@/services/verify';
 import {
   getAcceptanceBySubjectRefreshInterval,
   useAcceptanceBySubject,
+  useAcceptanceList,
   useRubrics,
   useVerifyReportBundle,
   useVerifyReportSummariesInfinite,
@@ -70,6 +71,22 @@ describe('Verify data hooks', () => {
 
     await waitFor(() => expect(result.current.data).toEqual({ id: 'acceptance-1' }));
     expect(getAcceptanceBySubject).toHaveBeenCalledWith('task', 'T-231');
+  });
+
+  it('forwards the project scope to the acceptance list service', async () => {
+    const listAcceptances = vi.spyOn(verifyService, 'listAcceptances').mockResolvedValue([]);
+
+    renderHook(() => useAcceptanceList(true, { filter: 'all', projectId: 'project-1' }), {
+      wrapper: createSWRWrapper(new Map()),
+    });
+
+    await waitFor(() => expect(listAcceptances).toHaveBeenCalledOnce());
+    expect(listAcceptances).toHaveBeenCalledWith({
+      filter: 'all',
+      limit: undefined,
+      projectId: 'project-1',
+      q: undefined,
+    });
   });
 
   it('polls fastest before an acceptance exists, then keeps it live until it settles', () => {

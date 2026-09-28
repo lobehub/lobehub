@@ -1,9 +1,9 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
@@ -12,6 +12,8 @@ import { type BriefItem } from '@/features/DailyBrief/types';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useBriefStore } from '@/store/brief';
+
+const Markdown = lazy(() => import('@lobehub/ui/es/Markdown/index'));
 
 const AVATAR_SIZE = 20;
 const ROW_GAP = 10;
@@ -73,6 +75,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface NewsItemProps {
   bare?: boolean;
   brief: BriefItem;
+  showTime: boolean;
 }
 
 /**
@@ -80,7 +83,7 @@ interface NewsItemProps {
  * it leads the row; opening it reads it (there is nothing to decide) and drops
  * the finding's detail inline.
  */
-const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
+const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
   const markBriefRead = useBriefStore((s) => s.markBriefRead);
 
   const [expanded, setExpanded] = useState(false);
@@ -130,7 +133,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
           >
             {brief.title}
           </Text>
-          <Time date={brief.createdAt} />
+          {showTime && <Time date={brief.createdAt} />}
           <Icon
             color={cssVar.colorTextQuaternary}
             icon={expanded ? ChevronDownIcon : ChevronRightIcon}
@@ -142,9 +145,11 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
       {expanded && (brief.summary || brief.artifacts) && (
         <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
           {brief.summary && (
-            <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
-              {brief.summary}
-            </Markdown>
+            <Suspense fallback={null}>
+              <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
+                {brief.summary}
+              </Markdown>
+            </Suspense>
           )}
           <BriefCardArtifacts artifacts={brief.artifacts} />
         </Flexbox>
@@ -157,6 +162,8 @@ interface NewsListProps {
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
   news: BriefItem[];
+  /** Relative time is useful within today's feed, but redundant under a dated historical heading. */
+  showTime: boolean;
 }
 
 /**
@@ -164,7 +171,7 @@ interface NewsListProps {
  * recurring run, but there is nothing to decide. One line each — the detail
  * lives behind the click, so a week of findings still fits on screen.
  */
-const NewsList = memo<NewsListProps>(({ bare, news }) => {
+const NewsList = memo<NewsListProps>(({ bare, news, showTime }) => {
   const { t } = useTranslation('home');
   const [expanded, setExpanded] = useState(false);
 
@@ -178,7 +185,7 @@ const NewsList = memo<NewsListProps>(({ bare, news }) => {
   return (
     <Flexbox className={bare ? styles.bareList : styles.list}>
       {shown.map((brief) => (
-        <NewsItem bare={bare} brief={brief} key={brief.id} />
+        <NewsItem bare={bare} brief={brief} key={brief.id} showTime={showTime} />
       ))}
       {collapsed && (
         <Button

@@ -206,4 +206,64 @@ describe('TopicModel - Stats', () => {
       expect(result).toHaveLength(1);
     });
   });
+  describe('countShareVisitors', () => {
+    beforeEach(async () => {
+      await serverDB.insert(agents).values([
+        { id: 'share-agent-1', title: 'Shared', userId },
+        { id: 'share-agent-2', title: 'Other shared', userId },
+        { id: 'share-agent-foreign', title: 'Someone else', userId: userId2 },
+      ]);
+    });
+
+    it('counts visitor conversations and distinct visitors for one shared agent', async () => {
+      await serverDB.insert(topics).values([
+        // two conversations from the same visitor + one from another visitor
+        { agentId: 'share-agent-1', id: 'sv-1', senderId: 'visitor-a', userId },
+        { agentId: 'share-agent-1', id: 'sv-2', senderId: 'visitor-a', userId },
+        { agentId: 'share-agent-1', id: 'sv-3', senderId: 'visitor-b', userId },
+        // a different shared agent must not leak in
+        { agentId: 'share-agent-2', id: 'sv-4', senderId: 'visitor-c', userId },
+      ]);
+
+      await expect(topicModel.countShareVisitors({ agentId: 'share-agent-1' })).resolves.toEqual({
+        topicCount: 3,
+        visitorCount: 2,
+      });
+    });
+
+    it("excludes the creator's own conversations with the same agent", async () => {
+      await serverDB.insert(topics).values([
+        { agentId: 'share-agent-1', id: 'sv-own-1', userId },
+        { agentId: 'share-agent-1', id: 'sv-own-2', userId },
+        { agentId: 'share-agent-1', id: 'sv-visitor', senderId: 'visitor-a', userId },
+      ]);
+
+      await expect(topicModel.countShareVisitors({ agentId: 'share-agent-1' })).resolves.toEqual({
+        topicCount: 1,
+        visitorCount: 1,
+      });
+    });
+
+    it('never counts rows owned by another user', async () => {
+      await serverDB.insert(topics).values([
+        {
+          agentId: 'share-agent-foreign',
+          id: 'sv-foreign',
+          senderId: 'visitor-a',
+          userId: userId2,
+        },
+      ]);
+
+      await expect(
+        topicModel.countShareVisitors({ agentId: 'share-agent-foreign' }),
+      ).resolves.toEqual({ topicCount: 0, visitorCount: 0 });
+    });
+
+    it('returns zeroes when the agent has no visitor conversations', async () => {
+      await expect(topicModel.countShareVisitors({ agentId: 'share-agent-1' })).resolves.toEqual({
+        topicCount: 0,
+        visitorCount: 0,
+      });
+    });
+  });
 });

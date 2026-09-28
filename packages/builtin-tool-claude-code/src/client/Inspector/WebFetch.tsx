@@ -61,8 +61,10 @@ export const WebFetchInspector = memo<BuiltinInspectorProps<WebFetchArgs>>(
     const isShiny = isArgumentsStreaming || isLoading;
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span>{url ? `${label}:` : label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isShiny && shinyTextStyles.shinyText)}>
+          {url ? `${label}:` : label}
+        </span>
         {url && (
           <span className={styles.chip}>
             <Globe className={styles.icon} size={14} />

@@ -1,4 +1,4 @@
-import type { FtsSearchDocumentSourceMap } from '../schema';
+import type { FtsSearchDocumentSourceMap } from '../zodSchema';
 
 const createdAt = '2026-01-01T00:00:00.000Z';
 const updatedAt = '2026-01-02T00:00:00.000Z';

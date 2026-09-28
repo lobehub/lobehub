@@ -1,5 +1,9 @@
-import type { DocumentCommentItem as DocumentCommentDTO } from '@lobechat/types';
-import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
+import type {
+  DocumentCommentAnchorList,
+  DocumentCommentDetail,
+  DocumentCommentItem as DocumentCommentDTO,
+} from '@lobechat/types';
+import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -17,13 +21,14 @@ import { documentComments, users, workspaceMembers } from '@/database/schemas';
 import type { DocumentCommentItem } from '@/database/schemas/documentComment';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { canViewDocumentContent } from '@/server/services/documentAccess';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import {
   assertCanPerformResourceAction,
-  canPerformResourceAction,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
+import { validateMentionedUserIds as validateCommentMentionedUserIds } from '@/server/utils/commentMentions';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 const MAX_EDITOR_DATA_BYTES = 128 * 1024;
@@ -33,6 +38,24 @@ const editorDataSchema = z
   .json()
   .refine((value) => Buffer.byteLength(JSON.stringify(value), 'utf8') <= MAX_EDITOR_DATA_BYTES, {
     message: 'editorData must not exceed 128 KiB',
+  });
+/** Generous enough for a paragraph-sized selection, short enough to stay an excerpt. */
+const ANCHOR_QUOTE_MAX = 2000;
+const ANCHOR_CONTEXT_MAX = 100;
+const selectionAnchorSchema = z
+  .object({
+    end: z.number().int().min(0),
+    prefix: z.string().max(ANCHOR_CONTEXT_MAX).optional(),
+    quote: z.string().min(1).max(ANCHOR_QUOTE_MAX),
+    start: z.number().int().min(0),
+    suffix: z.string().max(ANCHOR_CONTEXT_MAX).optional(),
+  })
+  // The offsets are only a hint for re-location — the quote is what actually
+  // finds the run — but an inconsistent pair means the client measured against
+  // something other than the text it sent, so reject it rather than store a
+  // hint that will mis-rank every candidate.
+  .refine(({ end, quote, start }) => end === start + quote.length, {
+    message: 'selectionAnchor end must equal start + quote.length',
   });
 const pageSchema = z.object({
   cursor: z.string().min(1).optional(),
@@ -85,27 +108,6 @@ const validateCommentBody = (
       path: ['content'],
     });
   }
-};
-
-const extractMentionedUserIds = (editorData: unknown): string[] => {
-  const root = toRecord(editorData)?.root;
-  const pending: unknown[] = root === undefined ? [] : [root];
-  const userIds = new Set<string>();
-
-  while (pending.length > 0) {
-    const node = toRecord(pending.pop());
-    if (!node) continue;
-
-    const metadata = toRecord(node.metadata);
-    if (node.type === 'mention' && metadata?.type === 'member') {
-      const userId = pickNonEmptyString(metadata.id);
-      if (userId) userIds.add(userId);
-    }
-
-    if (Array.isArray(node.children)) pending.push(...node.children);
-  }
-
-  return [...userIds];
 };
 
 const documentCommentProcedure = wsProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
@@ -182,26 +184,12 @@ const assertDocumentView = async (
     workspaceId: ctx.workspaceId,
   });
 
-const validateMentionedUserIds = async (
-  ctx: PermissionContext,
-  editorData: unknown,
-): Promise<string[]> => {
-  const candidateIds = extractMentionedUserIds(editorData).filter((id) => id !== ctx.userId);
-  if (candidateIds.length === 0) return [];
-
-  const activeMemberships = await ctx.serverDB
-    .select({ userId: workspaceMembers.userId })
-    .from(workspaceMembers)
-    .where(
-      and(
-        eq(workspaceMembers.workspaceId, ctx.workspaceId),
-        inArray(workspaceMembers.userId, candidateIds),
-        isNull(workspaceMembers.deletedAt),
-      ),
-    );
-  const activeUserIds = new Set(activeMemberships.map(({ userId }) => userId));
-  return candidateIds.filter((id) => activeUserIds.has(id));
-};
+const validateMentionedUserIds = (ctx: PermissionContext, editorData: unknown) =>
+  validateCommentMentionedUserIds(
+    ctx.serverDB,
+    { actorUserId: ctx.userId, workspaceId: ctx.workspaceId },
+    editorData,
+  );
 
 const notifyActivitiesBestEffort = (
   ctx: PermissionContext,
@@ -232,14 +220,11 @@ const notifyActivitiesBestEffort = (
               const grantedPermissions = permissionsByUserId.get(userId);
               if (!grantedPermissions) return null;
 
-              const canView = await canPerformResourceAction({
-                action: 'view',
+              const canView = await canViewDocumentContent({
                 db: ctx.serverDB,
-                effectiveAccessLevel: 'view',
                 grantedPermissions,
                 meta,
                 resourceId: documentId,
-                resourceType: 'document',
                 userId,
                 workspaceId: ctx.workspaceId,
               });
@@ -409,8 +394,19 @@ export const documentCommentRouter = router({
           documentId: idSchema,
           editorData: editorDataSchema.optional(),
           parentCommentId: idSchema.optional(),
+          selectionAnchor: selectionAnchorSchema.optional(),
         })
-        .superRefine(validateCommentBody),
+        .superRefine(validateCommentBody)
+        .superRefine((value, ctx) => {
+          // A reply belongs to its thread's anchor; accepting a second one
+          // would split a thread across two runs of the body.
+          if (!value.parentCommentId || !value.selectionAnchor) return;
+          ctx.addIssue({
+            code: 'custom',
+            message: 'A reply cannot carry its own selectionAnchor',
+            path: ['selectionAnchor'],
+          });
+        }),
     )
     .mutation(async ({ ctx, input }) => {
       const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_CREATE');
@@ -419,19 +415,23 @@ export const documentCommentRouter = router({
         const mentionedUserIds = await validateMentionedUserIds(ctx, input.editorData);
         const result = await ctx.documentCommentModel.create({ ...input, mentionedUserIds });
         if (!result.isDuplicate) {
+          // Later entries win, so the order encodes precedence:
+          // thread participant < direct target / document author < mention.
           const recipientsByUserId = new Map<string, NotifyDocumentCommentActivityParams['kind']>();
-          const recipientUserId = input.parentCommentId
-            ? result.parentAuthorUserId
-            : result.documentAuthorUserId;
-          if (recipientUserId && recipientUserId !== ctx.userId) {
-            recipientsByUserId.set(
-              recipientUserId,
-              input.parentCommentId ? 'replied' : 'commented',
-            );
+          if (input.parentCommentId) {
+            for (const userId of result.threadParticipantUserIds) {
+              recipientsByUserId.set(userId, 'thread');
+            }
+            if (result.parentAuthorUserId) {
+              recipientsByUserId.set(result.parentAuthorUserId, 'replied');
+            }
+          } else if (result.documentAuthorUserId) {
+            recipientsByUserId.set(result.documentAuthorUserId, 'commented');
           }
           for (const userId of result.addedMentionUserIds) {
             recipientsByUserId.set(userId, 'mentioned');
           }
+          recipientsByUserId.delete(ctx.userId);
 
           notifyActivitiesBestEffort(
             ctx,
@@ -485,8 +485,23 @@ export const documentCommentRouter = router({
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Document comment not found' });
     }
     await assertDocumentView(ctx, comment.documentId, grantedPermissions);
-    return (await enrich(ctx, [comment]))[0];
+    // Roots carry their live reply count so a deep link can render the thread on its own.
+    const [enriched, replyCount] = await Promise.all([
+      enrich(ctx, [comment]),
+      comment.parentCommentId ? 0 : ctx.documentCommentModel.countLiveReplies(comment.id),
+    ]);
+    return { ...enriched[0], replyCount } satisfies DocumentCommentDetail;
   }),
+
+  listAnchors: documentCommentProcedure
+    .input(z.object({ documentId: idSchema }))
+    .query(async ({ ctx, input }) => {
+      const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_READ');
+      await assertDocumentView(ctx, input.documentId, grantedPermissions);
+      return {
+        items: await ctx.documentCommentModel.listAnchors(input.documentId),
+      } satisfies DocumentCommentAnchorList;
+    }),
 
   listReplies: documentCommentProcedure
     .input(pageSchema.extend({ rootCommentId: idSchema }))
@@ -502,7 +517,7 @@ export const documentCommentRouter = router({
     }),
 
   listThreads: documentCommentProcedure
-    .input(pageSchema.extend({ documentId: idSchema }))
+    .input(pageSchema.extend({ anchored: z.boolean().optional(), documentId: idSchema }))
     .query(async ({ ctx, input }) => {
       const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_READ');
       await assertDocumentView(ctx, input.documentId, grantedPermissions);

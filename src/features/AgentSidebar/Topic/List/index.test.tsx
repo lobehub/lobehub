@@ -56,6 +56,10 @@ vi.mock('@/hooks/useFetchChatTopics', () => ({
   useFetchChatTopics: vi.fn(),
 }));
 
+vi.mock('@/hooks/useFetchActiveTopicDetail', () => ({
+  useFetchActiveTopicDetail: vi.fn(),
+}));
+
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: (action: 'create_content') => ({
     allowed: permissionMock[action],

@@ -6,7 +6,7 @@ import { truncateToolResult, truncateToolResultWithState } from '../truncateTool
 const validEmoji = '\uD83D\uDC1B';
 const familyEmoji = '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67\u200D\uD83D\uDC66';
 
-const getTruncatedPortion = (value: string) => value.split('\n\n[Content truncated')[0];
+const getTruncatedPortion = (value: string) => value.split('\n[Showing lines')[0];
 const endsWithHighSurrogate = (value: string) => {
   const lastCharCode = value.charCodeAt(value.length - 1);
 
@@ -21,8 +21,17 @@ describe('truncateToolResult', () => {
   it('truncates and appends a notice when over the limit', () => {
     const result = truncateToolResult('0123456789', 5);
 
-    expect(result.startsWith('01234')).toBe(true);
-    expect(result).toContain('Content truncated');
+    expect(result).toBe(
+      '01234\n[Showing lines 1-1 of 1 lines, 10 characters. Line 1 is 10 characters long and was cut at 5; the rest of that line cannot be paged.]',
+    );
+  });
+
+  it('keeps whole leading lines and reports the lines left out', () => {
+    const result = truncateToolResult('line 1\nline 2\nline 3', 14);
+
+    expect(result).toBe(
+      'line 1\nline 2\n[Showing lines 1-2 of 3 lines, 20 characters. Lines 3-3 were left out.]',
+    );
   });
 
   it('does not leave a lone high surrogate when the cutoff splits an emoji', () => {
@@ -31,7 +40,7 @@ describe('truncateToolResult', () => {
     const result = truncateToolResult(content, limit);
     const truncatedPortion = getTruncatedPortion(result);
 
-    expect(result).toContain('[Content truncated:');
+    expect(result).toContain('was cut at');
     expect(truncatedPortion).toBe(`prefix ${'a'.repeat(10)}`);
     expect(endsWithHighSurrogate(truncatedPortion)).toBe(false);
     expect(JSON.stringify(result)).not.toContain('\\ud83d"');
@@ -43,7 +52,7 @@ describe('truncateToolResult', () => {
     const result = truncateToolResult(content, limit);
 
     expect(result).toContain(validEmoji);
-    expect(result).toContain('[Content truncated:');
+    expect(result).toContain('[Showing lines 1-1 of 1 lines');
   });
 
   it('never leaves a lone high surrogate inside a ZWJ-composed emoji at any cutoff', () => {

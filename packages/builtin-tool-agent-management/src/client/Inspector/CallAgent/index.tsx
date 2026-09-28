@@ -43,8 +43,10 @@ export const CallAgentInspector = memo<BuiltinInspectorProps<CallAgentParams>>(
 
     if (isArgumentsStreaming && !agentId) {
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-agent-management.apiName.callAgent')}</span>
+        <div className={styles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-agent-management.apiName.callAgent')}
+          </span>
         </div>
       );
     }
@@ -56,13 +58,10 @@ export const CallAgentInspector = memo<BuiltinInspectorProps<CallAgentParams>>(
     const agentName = agentMeta?.title || agentId;
 
     return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-        gap={8}
-      >
-        <span className={styles.title}>{t(titleKey)}</span>
+      <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+          {t(titleKey)}
+        </span>
         {agentMeta && (
           <Avatar
             avatar={agentMeta.avatar || DEFAULT_AVATAR}

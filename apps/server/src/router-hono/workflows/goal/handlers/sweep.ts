@@ -58,6 +58,7 @@ export async function sweep(c: Context) {
     const advanced = await fanout(
       stalled.map((goal) => ({
         goalId: goal.id,
+        trigger: 'sweep' as const,
         userId: goal.userId,
         workspaceId: goal.workspaceId ?? undefined,
       })),
@@ -72,6 +73,7 @@ export async function sweep(c: Context) {
 
 interface StalledGoal {
   goalId: string;
+  trigger: 'sweep';
   userId: string;
   workspaceId?: string;
 }

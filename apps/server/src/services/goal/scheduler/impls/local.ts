@@ -14,14 +14,14 @@ export class LocalGoalScheduler implements GoalSchedulerImpl {
   private pending = new Map<string, NodeJS.Timeout>();
 
   async scheduleAdvance(params: ScheduleGoalAdvanceParams): Promise<string> {
-    const { delay = 0, goalId, userId, workspaceId } = params;
+    const { delay = 0, goalId, trigger, userId, workspaceId } = params;
     const scheduleId = `local-goal-${goalId}-${Date.now()}`;
 
     log('scheduling advance for goal %s (delay: %ds)', goalId, delay);
     const timer = setTimeout(async () => {
       this.pending.delete(scheduleId);
       try {
-        await advanceGoal({ goalId, userId, workspaceId });
+        await advanceGoal({ goalId, trigger, userId, workspaceId });
       } catch (error) {
         // Never surface: an advance is best-effort, and the sweep retries.
         log('advance failed for goal %s: %O', goalId, error);

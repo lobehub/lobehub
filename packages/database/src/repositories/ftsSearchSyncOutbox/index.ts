@@ -3,12 +3,14 @@ import { sql } from 'drizzle-orm';
 import type { LobeChatDatabase } from '../../type';
 import type { FtsSearchDocumentEntity } from '../ftsSearchDocument';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '../ftsSearchDocument';
+import captureHistory from './captureHistory.json';
 import {
   FTS_SEARCH_SYNC_CAPTURE_FINGERPRINT,
   FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS,
   FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS,
   FTS_SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS,
   FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
+  getFtsSearchSyncCaptureSourceTables,
   normalizeFtsSearchSyncCaptureDefinition,
 } from './captureInfrastructure';
 
@@ -45,12 +47,9 @@ export interface FtsSearchSyncOutboxStats extends FtsSearchSyncOutboxEntityStats
 /** Approximately one day of durable retries when the exponential delay is capped at one hour. */
 export const FTS_SEARCH_SYNC_MAX_ATTEMPTS = 36;
 
-const FTS_SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS = sql.join(
-  [...new Set(FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(({ table }) => table))].map(
-    (table) => sql`${sql.identifier('public')}.${sql.identifier(table)}`,
-  ),
-  sql`, `,
-);
+const ACKNOWLEDGEMENT_DEADLOCK_MAX_ATTEMPTS = 3;
+const ACKNOWLEDGEMENT_DEADLOCK_RETRY_BASE_DELAY_MS = 10;
+const POSTGRES_DEADLOCK_DETECTED = '40P01';
 
 type FtsSearchSyncExecutor = Pick<LobeChatDatabase, 'execute'>;
 type FtsSearchSyncDatabase = Pick<LobeChatDatabase, 'execute' | 'transaction'>;
@@ -70,8 +69,19 @@ const rowsOf = <Row>(result: unknown): Row[] => {
 interface CaptureInfrastructureState {
   absent: boolean;
   mismatches: string[];
-  upgradeable: boolean;
+  persisted: boolean;
+  version: number | null;
 }
+
+const CURRENT_CAPTURE_VERSION = 2;
+const CAPTURE_VERSIONS = [
+  ...captureHistory,
+  {
+    functions: FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS,
+    triggers: FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
+    version: CURRENT_CAPTURE_VERSION,
+  },
+];
 
 const assertCaptureGinIndex = async (db: FtsSearchSyncExecutor): Promise<void> => {
   const indexResult = await db.execute(sql`
@@ -166,67 +176,94 @@ const readCaptureInfrastructureState = async (
     table_name: string;
   }>(triggerResult);
 
-  const mismatches: string[] = [];
-  let functionsMatch = functions.length === FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS.length;
-  if (!functionsMatch) {
-    mismatches.push(
-      `functions ${functions.length}/${FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS.length}`,
-    );
-  }
-  for (const expected of FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS) {
-    const actual = functions.find(
-      ({ identity_arguments: identityArguments, name }) =>
-        name === expected.name && identityArguments === expected.identityArguments,
-    );
-    if (
-      !actual ||
-      actual.function_body.trim() !== expected.body ||
-      actual.function_result !== expected.result ||
-      actual.language !== 'plpgsql'
-    ) {
-      functionsMatch = false;
-      mismatches.push(`function ${expected.name}`);
+  const versionResult = await db.execute(sql`
+    SELECT id, version FROM fts_search_sync_capture_version ORDER BY id
+  `);
+  const versionRows = rowsOf<{ id: string; version: number }>(versionResult);
+  const persisted = versionRows.length === 1 && versionRows[0].id === 'capture';
+  const markedVersion = persisted ? versionRows[0].version : null;
+  const absent = functions.length === 0 && triggers.length === 0 && versionRows.length === 0;
+
+  const compare = (version: (typeof CAPTURE_VERSIONS)[number]) => {
+    const mismatches: string[] = [];
+    if (functions.length !== version.functions.length) {
+      mismatches.push(`functions ${functions.length}/${version.functions.length}`);
     }
+    for (const expected of version.functions) {
+      const actual = functions.find(
+        ({ identity_arguments: identityArguments, name }) =>
+          name === expected.name && identityArguments === expected.identityArguments,
+      );
+      if (
+        !actual ||
+        actual.function_body.trim() !== expected.body ||
+        actual.function_result !== expected.result ||
+        actual.language !== 'plpgsql'
+      ) {
+        mismatches.push(`function ${expected.name}`);
+      }
+    }
+
+    if (triggers.length !== version.triggers.length) {
+      mismatches.push(`triggers ${triggers.length}/${version.triggers.length}`);
+    }
+    for (const expected of version.triggers) {
+      const actual = triggers.find(
+        ({ name, table_name: table }) => name === expected.name && table === expected.table,
+      );
+      if (
+        !actual ||
+        !['A', 'O'].includes(actual.enabled) ||
+        normalizeFtsSearchSyncCaptureDefinition(actual.definition) !== expected.definition
+      ) {
+        mismatches.push(`trigger ${expected.name}`);
+      }
+    }
+    return mismatches;
+  };
+
+  if (absent) return { absent: true, mismatches: [], persisted: false, version: null };
+  if (versionRows.length > 0 && !persisted) {
+    return {
+      absent: false,
+      mismatches: ['capture version marker'],
+      persisted: false,
+      version: null,
+    };
+  }
+  if (persisted) {
+    const expected = CAPTURE_VERSIONS.find(({ version }) => version === markedVersion);
+    return {
+      absent: false,
+      mismatches: expected ? compare(expected) : [`unknown capture version ${markedVersion}`],
+      persisted: true,
+      version: markedVersion,
+    };
   }
 
-  let triggersMatchKnownVersion =
-    triggers.length === FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length;
-  if (!triggersMatchKnownVersion) {
-    mismatches.push(
-      `triggers ${triggers.length}/${FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length}`,
-    );
-  }
-  for (const expected of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
-    const actual = triggers.find(
-      ({ name, table_name: table }) => name === expected.name && table === expected.table,
-    );
-    const actualDefinition = actual
-      ? normalizeFtsSearchSyncCaptureDefinition(actual.definition)
-      : undefined;
-    const enabled = actual ? ['A', 'O'].includes(actual.enabled) : false;
-    const current = enabled && actualDefinition === expected.definition;
-    const previous =
-      enabled &&
-      actualDefinition !== undefined &&
-      expected.previousDefinitions.includes(actualDefinition);
-    if (!current) {
-      mismatches.push(`trigger ${expected.name}`);
+  // Unversioned installations are recognized only when every live definition is an exact snapshot.
+  for (const historical of [...captureHistory].reverse()) {
+    if (compare(historical).length === 0) {
+      return { absent: false, mismatches: [], persisted: false, version: historical.version };
     }
-    if (!current && !previous) triggersMatchKnownVersion = false;
   }
-
   return {
-    absent: functions.length === 0 && triggers.length === 0,
-    mismatches,
-    upgradeable: functionsMatch && triggersMatchKnownVersion && mismatches.length > 0,
+    absent: false,
+    mismatches: [...compare(CAPTURE_VERSIONS.at(-1)!), 'capture version marker'],
+    persisted: false,
+    version: null,
   };
 };
 
 const assertCaptureDefinitions = async (db: FtsSearchSyncExecutor): Promise<void> => {
   const state = await readCaptureInfrastructureState(db);
-  if (state.mismatches.length > 0) {
+  if (
+    !state.persisted ||
+    state.version !== CURRENT_CAPTURE_VERSION ||
+    state.mismatches.length > 0
+  ) {
     throw new Error(
-      `FTS search sync capture infrastructure does not match the expected definition: ${state.mismatches.join(', ')}`,
+      `FTS search sync capture infrastructure does not match the expected definition: ${[...state.mismatches, !state.persisted || state.version !== CURRENT_CAPTURE_VERSION ? 'capture version' : ''].filter(Boolean).join(', ')}`,
     );
   }
 };
@@ -241,6 +278,26 @@ const toWork = (row: FtsSearchSyncRow): FtsSearchSyncWork => ({
 const errorMessage = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).slice(0, 2000);
 
+const postgresErrorCode = (error: unknown): string | undefined => {
+  let current = error;
+
+  for (let depth = 0; depth < 5 && current && typeof current === 'object'; depth++) {
+    const code = (current as Record<string, unknown>).code;
+    if (typeof code === 'string') return code;
+
+    current = (current as { cause?: unknown }).cause;
+  }
+};
+
+const waitForAcknowledgementDeadlockRetry = async (attempt: number): Promise<void> => {
+  const jitter = Math.floor(Math.random() * ACKNOWLEDGEMENT_DEADLOCK_RETRY_BASE_DELAY_MS);
+  const delay = ACKNOWLEDGEMENT_DEADLOCK_RETRY_BASE_DELAY_MS * attempt + jitter;
+
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, delay);
+  });
+};
+
 const revisionNumber = (value: number | string | undefined, operation: string, minimum = 0) => {
   const revision = Number(value);
   if (!Number.isSafeInteger(revision) || revision < minimum) {
@@ -249,11 +306,18 @@ const revisionNumber = (value: number | string | undefined, operation: string, m
   return revision;
 };
 
-const lockCaptureSourceWrites = async (transaction: FtsSearchSyncExecutor): Promise<void> => {
-  await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
-  await transaction.execute(
-    sql`LOCK TABLE ${FTS_SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS} IN SHARE MODE`,
+const lockCaptureSourceWrites = async (
+  transaction: FtsSearchSyncExecutor,
+  entities: readonly FtsSearchDocumentEntity[],
+): Promise<void> => {
+  const sourceTables = getFtsSearchSyncCaptureSourceTables(entities);
+  if (sourceTables.length === 0) throw new Error('Cannot fence writes for an empty entity set');
+  const sourceTableIdentifiers = sql.join(
+    sourceTables.map((table) => sql`${sql.identifier('public')}.${sql.identifier(table)}`),
+    sql`, `,
   );
+  await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
+  await transaction.execute(sql`LOCK TABLE ${sourceTableIdentifiers} IN SHARE MODE`);
 };
 
 /** Durable claim and settlement operations for the PostgreSQL-triggered search outbox. */
@@ -267,7 +331,7 @@ export class FtsSearchSyncOutboxRepository {
    */
   async installCaptureInfrastructure(): Promise<void> {
     await this.db.transaction(async (transaction) => {
-      await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
+      await transaction.execute(sql`SET LOCAL lock_timeout = '60s'`);
       /** Serialize installers before inspecting state so two deployments cannot both create DDL. */
       await transaction.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext('lobehub.fts_search_sync_capture'))`,
@@ -275,29 +339,89 @@ export class FtsSearchSyncOutboxRepository {
       await assertCaptureGinIndex(transaction);
 
       const state = await readCaptureInfrastructureState(transaction);
-      if (state.mismatches.length === 0) return;
-      if (state.upgradeable) {
-        /** The transaction keeps writers from observing a capture gap during the known upgrade. */
-        for (const { name, table } of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
-          await transaction.execute(sql.raw(`DROP TRIGGER "${name}" ON public."${table}"`));
-        }
-        for (const statement of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
-          await transaction.execute(statement);
-        }
-        await assertCaptureDefinitions(transaction);
-        return;
-      }
-      if (!state.absent) {
+      if (state.mismatches.length > 0 || (!state.absent && state.version === null)) {
         throw new Error(
           `Refusing to replace partial or unknown FTS search sync capture infrastructure: ${state.mismatches.join(', ')}`,
         );
       }
-
-      for (const statement of FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS) {
-        await transaction.execute(statement);
+      if (state.persisted && state.version === CURRENT_CAPTURE_VERSION) return;
+      if (state.absent) {
+        for (const statement of FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS) {
+          await transaction.execute(statement);
+        }
+        for (const statement of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
+          await transaction.execute(statement);
+        }
+        await transaction.execute(sql`
+          INSERT INTO fts_search_sync_capture_version (id, version)
+          VALUES ('capture', ${CURRENT_CAPTURE_VERSION})
+        `);
+        await assertCaptureDefinitions(transaction);
+        return;
       }
-      for (const statement of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
-        await transaction.execute(statement);
+
+      if (!state.persisted) {
+        await transaction.execute(sql`
+          INSERT INTO fts_search_sync_capture_version (id, version)
+          VALUES ('capture', ${state.version})
+        `);
+      }
+      for (
+        let nextVersion = state.version! + 1;
+        nextVersion <= CURRENT_CAPTURE_VERSION;
+        nextVersion++
+      ) {
+        const next = CAPTURE_VERSIONS.find(({ version }) => version === nextVersion)!;
+        const previous = CAPTURE_VERSIONS.find(({ version }) => version === nextVersion - 1)!;
+        const changedTriggers = next.triggers.filter(
+          (trigger) =>
+            !previous.triggers.some(
+              (old) =>
+                old.name === trigger.name &&
+                old.table === trigger.table &&
+                old.definition === trigger.definition,
+            ),
+        );
+        if (changedTriggers.length > 0) {
+          const tables = sql.join(
+            [...new Set(changedTriggers.map(({ table }) => table))]
+              .sort()
+              .map((table) => sql`${sql.identifier('public')}.${sql.identifier(table)}`),
+            sql`, `,
+          );
+          /**
+           * Acquire the replacement lock before changing functions so affected writes cannot
+           * observe a mixed definition. Unlike DROP TRIGGER, this permits ordinary readers.
+           * https://www.postgresql.org/docs/17/explicit-locking.html
+           */
+          await transaction.execute(sql`LOCK TABLE ${tables} IN SHARE ROW EXCLUSIVE MODE`);
+        }
+        if (nextVersion === CURRENT_CAPTURE_VERSION) {
+          for (const statement of FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS) {
+            await transaction.execute(statement);
+          }
+        }
+        for (const trigger of changedTriggers) {
+          await transaction.execute(
+            sql.raw(
+              `${trigger.definition.replace(/^CREATE TRIGGER /, 'CREATE OR REPLACE TRIGGER ')};`,
+            ),
+          );
+        }
+        await transaction.execute(sql`
+          UPDATE fts_search_sync_capture_version SET version = ${nextVersion}
+          WHERE id = 'capture'
+        `);
+        const upgraded = await readCaptureInfrastructureState(transaction);
+        if (
+          !upgraded.persisted ||
+          upgraded.version !== nextVersion ||
+          upgraded.mismatches.length > 0
+        ) {
+          throw new Error(
+            `FTS search sync capture upgrade to version ${nextVersion} failed validation`,
+          );
+        }
       }
 
       await assertCaptureDefinitions(transaction);
@@ -334,9 +458,11 @@ export class FtsSearchSyncOutboxRepository {
    * locks could include a revision whose Outbox row is still invisible and later commits after the
    * validation snapshot. The locks close that race without allocating a revision or mutating rows.
    */
-  async readCommittedRevisionBoundary(): Promise<number> {
+  async readCommittedRevisionBoundary(
+    entities: readonly FtsSearchDocumentEntity[] = FTS_SEARCH_DOCUMENT_ENTITIES,
+  ): Promise<number> {
     return this.db.transaction(async (transaction) => {
-      await lockCaptureSourceWrites(transaction);
+      await lockCaptureSourceWrites(transaction, entities);
       const result = await transaction.execute(sql`
         SELECT CASE WHEN is_called THEN last_value ELSE 0 END AS revision
         FROM fts_search_sync_revision_seq
@@ -353,7 +479,9 @@ export class FtsSearchSyncOutboxRepository {
    * Without this fence, a long transaction could commit an older Outbox revision after the
    * backfill has already written stale data at the newer base revision.
    */
-  async reserveRevisionWithWriteFence(): Promise<number> {
+  async reserveRevisionWithWriteFence(
+    entities: readonly FtsSearchDocumentEntity[],
+  ): Promise<number> {
     return this.db.transaction(async (transaction) => {
       const result = await transaction.execute(sql`
         SELECT nextval('fts_search_sync_revision_seq')::bigint AS revision
@@ -363,15 +491,8 @@ export class FtsSearchSyncOutboxRepository {
         'reserving a reindex version',
         1,
       );
-      await lockCaptureSourceWrites(transaction);
+      await lockCaptureSourceWrites(transaction, entities);
       return revision;
-    });
-  }
-
-  /** Re-establishes the write fence before resuming a checkpoint created by an older process. */
-  async fenceSourceWrites(): Promise<void> {
-    await this.db.transaction(async (transaction) => {
-      await lockCaptureSourceWrites(transaction);
     });
   }
 
@@ -385,7 +506,7 @@ export class FtsSearchSyncOutboxRepository {
       ),
       sql`, `,
     );
-    const result = await this.db.execute(sql`
+    const statement = sql`
       WITH acknowledged(entity, document_id, revision, lease_token) AS (
         VALUES ${values}
       )
@@ -397,9 +518,38 @@ export class FtsSearchSyncOutboxRepository {
         AND EXTRACT(EPOCH FROM outbox.locked_until) = acknowledged.lease_token
       RETURNING outbox.entity, outbox.document_id, outbox.revision,
                 EXTRACT(EPOCH FROM outbox.locked_until)::text AS lease_token
-    `);
+    `;
 
-    return rowsOf<FtsSearchSyncRow>(result).map(toWork);
+    let attempt = 1;
+    while (true) {
+      try {
+        const result = await this.db.execute(statement);
+        return rowsOf<FtsSearchSyncRow>(result).map(toWork);
+      } catch (error) {
+        if (
+          postgresErrorCode(error) !== POSTGRES_DEADLOCK_DETECTED ||
+          attempt === ACKNOWLEDGEMENT_DEADLOCK_MAX_ATTEMPTS
+        ) {
+          throw error;
+        }
+
+        /**
+         * `acknowledgeMany` is one autocommit statement, so PostgreSQL has already rolled the
+         * deadlocked transaction back. The revision and lease-token fences make retrying the exact
+         * DELETE safe even when a newer capture committed while this worker was waiting.
+         */
+        console.warn(
+          '[fts-search-sync] Retrying outbox acknowledgement after PostgreSQL deadlock',
+          {
+            attempt,
+            maxAttempts: ACKNOWLEDGEMENT_DEADLOCK_MAX_ATTEMPTS,
+            workCount: works.length,
+          },
+        );
+        await waitForAcknowledgementDeadlockRetry(attempt);
+        attempt += 1;
+      }
+    }
   }
 
   /** Keeps PostgreSQL's microsecond precision in the token instead of truncating through JS Date. */

@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 
+import { registerGoalCommand } from './goal';
 import { registerOpCommand } from './op';
 
 export function registerTraceCommand(program: Command) {
@@ -8,4 +9,5 @@ export function registerTraceCommand(program: Command) {
     .description('Inspect and replay recorded agent execution traces');
 
   registerOpCommand(trace);
+  registerGoalCommand(trace);
 }

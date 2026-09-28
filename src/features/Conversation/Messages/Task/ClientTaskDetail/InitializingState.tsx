@@ -1,12 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, keyframes } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { shinyTextStyles } from '@/styles';
 
 const shimmer = keyframes`
@@ -57,7 +56,7 @@ const InitializingState = memo(() => {
   return (
     <Flexbox className={styles.container} gap={12}>
       <Flexbox horizontal align="center" gap={8}>
-        <NeuralNetworkLoading size={14} />
+        <Spin size="small" variant="network" />
         <Text className={shinyTextStyles.shinyText} weight={500}>
           {t('task.status.initializing')}
         </Text>

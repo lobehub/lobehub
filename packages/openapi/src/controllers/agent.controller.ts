@@ -14,6 +14,21 @@ import type {
  * Handles Agent-related HTTP requests and responses
  */
 export class AgentController extends BaseController {
+  async duplicateAgent(c: Context) {
+    try {
+      const { id } = this.getParams<{ id: string }>(c);
+      const body = await this.getBody<{ title?: string }>(c);
+      const service = new AgentService(
+        await this.getDatabase(),
+        this.getUserId(c)!,
+        this.getWorkspaceId(c),
+      );
+      return this.success(c, await service.duplicateAgent(id, body.title), 'Agent duplicated', 201);
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
   /**
    * Retrieves a list of all Agents in the system
    * GET /api/v1/agents/list

@@ -460,6 +460,39 @@ export const credsRouter = router({
   }),
 
   // List OAuth connections (for creating OAuth credentials)
+  /**
+   * The credentials an agent run may inject, as the runtime's context rules
+   * see them: inside a verified workspace the workspace's merged organization
+   * view (org-owned creds + members' shared creds), otherwise the caller's
+   * personal creds. Unlike `list`, this is scoped on purpose — it mirrors
+   * `createServerContextFactProviders.listCredentials` so browser-mode and
+   * server-mode runs read the same list.
+   */
+  listForContext: credsProcedure.query(async ({ ctx }) => {
+    const result = ctx.workspaceId
+      ? await ctx.marketService.market.organizations.creds({ workspaceId: ctx.workspaceId }).list()
+      : await ctx.marketService.market.creds.list();
+    const creds = (result.data ?? []) as Array<{
+      description?: string;
+      key: string;
+      name: string;
+      ownerDisplayName?: string;
+      ownerType?: 'organization' | 'user';
+      type: string;
+    }>;
+    log('listForContext success: %d credentials (workspace=%s)', creds.length, ctx.workspaceId);
+    return {
+      data: creds.map((cred) => ({
+        description: cred.description,
+        key: cred.key,
+        name: cred.name,
+        ownerDisplayName: cred.ownerDisplayName,
+        ownerType: cred.ownerType,
+        type: cred.type,
+      })),
+    };
+  }),
+
   listOAuthConnections: credsManageProcedure.query(async ({ ctx }) => {
     log('listOAuthConnections called');
 

@@ -10,7 +10,11 @@ import {
   type ScheduleToolCallReportParams,
 } from './scheduleToolCallReport';
 
-const mockAfter = vi.hoisted(() => vi.fn((callback: () => unknown) => callback()));
+const mockAfter = vi.hoisted(() =>
+  vi.fn(function (callback: () => unknown) {
+    return callback();
+  }),
+);
 
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   after: mockAfter,
@@ -18,9 +22,11 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
 
 // Mock DiscoverService
 vi.mock('@/server/services/discover', () => ({
-  DiscoverService: vi.fn().mockImplementation(() => ({
-    reportCall: vi.fn().mockResolvedValue(undefined),
-  })),
+  DiscoverService: vi.fn().mockImplementation(function () {
+    return {
+      reportCall: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 describe('scheduleToolCallReport', () => {
@@ -47,9 +53,11 @@ describe('scheduleToolCallReport', () => {
   describe('calculateObjectSizeBytes (via integration)', () => {
     it('should calculate byte size for simple objects', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       const now = 1000;
       vi.setSystemTime(now);
@@ -79,9 +87,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should calculate byte size for complex nested objects', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       const complexObject = {
         nested: {
@@ -108,9 +118,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should handle empty objects', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -127,9 +139,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should handle arrays', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -146,9 +160,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should handle strings', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -165,9 +181,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should handle numbers', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -184,9 +202,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should handle null and undefined', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -204,9 +224,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should handle Unicode characters correctly', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -224,9 +246,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should return 0 for circular reference objects', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       const circular: any = { a: 1 };
       circular.self = circular;
@@ -249,9 +273,11 @@ describe('scheduleToolCallReport', () => {
   describe('scheduleToolCallReport function', () => {
     it('should not report when telemetry is disabled', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -265,9 +291,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should not report when marketAccessToken is missing', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -281,9 +309,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should not report when both telemetry disabled and no token', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -298,9 +328,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should report successful tool call with all metadata', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       const now = 2000;
       vi.setSystemTime(now);
@@ -350,9 +382,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should report failed tool call with error details', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       const now = 3000;
       vi.setSystemTime(now);
@@ -391,9 +425,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should use "unknown" as default version when not provided', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -408,9 +444,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should handle different mcpType values', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -425,9 +463,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should set responseSizeBytes to 0 when success is false', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -443,9 +483,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should set responseSizeBytes to 0 when result is undefined', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -461,11 +503,13 @@ describe('scheduleToolCallReport', () => {
 
     it('should catch and log errors during reporting', async () => {
       const mockReportCall = vi.fn().mockRejectedValue(new Error('Network error'));
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
       scheduleToolCallReport(baseParams);
 
@@ -487,9 +531,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should create DiscoverService with marketAccessToken', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -503,9 +549,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should calculate correct duration for very fast calls', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       const now = 5000;
       vi.setSystemTime(now);
@@ -523,9 +571,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should calculate correct duration for slow calls', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       const now = 60000;
       vi.setSystemTime(now);
@@ -543,9 +593,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should handle empty custom plugin info', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,
@@ -564,9 +616,11 @@ describe('scheduleToolCallReport', () => {
 
     it('should handle partial custom plugin info', async () => {
       const mockReportCall = vi.fn().mockResolvedValue(undefined);
-      (DiscoverService as any).mockImplementation(() => ({
-        reportCall: mockReportCall,
-      }));
+      (DiscoverService as any).mockImplementation(function () {
+        return {
+          reportCall: mockReportCall,
+        };
+      });
 
       scheduleToolCallReport({
         ...baseParams,

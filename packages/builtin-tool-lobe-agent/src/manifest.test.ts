@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LobeAgentManifest } from './manifest';
+import { LobeAgentApiName } from './types';
 
 describe('LobeAgentManifest', () => {
   it('should keep the package metadata generic for future Lobe Agent capabilities', () => {
@@ -56,5 +57,32 @@ describe('LobeAgentManifest', () => {
     expect(parameters).not.toHaveProperty('oneOf');
     expect(parameters).not.toHaveProperty('allOf');
     expect(parameters).not.toHaveProperty('anyOf');
+  });
+
+  it('should expose a restrained vent API for reporting platform friction', () => {
+    const ventApi = LobeAgentManifest.api.find((api) => api.name === LobeAgentApiName.vent);
+
+    expect(ventApi).toBeDefined();
+    expect(ventApi!.parameters.required).toEqual(['category', 'severity', 'summary', 'details']);
+    expect(Object.keys(ventApi!.parameters.properties)).toEqual([
+      'category',
+      'severity',
+      'summary',
+      'details',
+      'attempts',
+      'toolName',
+      'evidenceRefs',
+    ]);
+    expect(ventApi!.description).toContain('at most one vent per run');
+    expect(LobeAgentManifest.systemRole).toContain('<vent>');
+  });
+
+  // A run once called vent 133 times as a way to "stop the tool loop".
+  it('tells the model that vent is not a way to stop or end a loop', () => {
+    const ventApi = LobeAgentManifest.api.find((api) => api.name === LobeAgentApiName.vent);
+
+    expect(ventApi!.description).toContain('It never stops a tool loop or ends your turn');
+    expect(LobeAgentManifest.systemRole).toContain('`vent` is never a control action');
+    expect(LobeAgentManifest.systemRole).toContain('do not call it again');
   });
 });

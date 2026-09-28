@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TaskSubtasks from './TaskSubtasks';
 
 const mocks = vi.hoisted(() => ({
+  activeWorkspaceId: 'workspace-1' as string | undefined,
   buildContextMenuItems: vi.fn(() => []),
   installKeyboardHandlers: vi.fn(),
   navigate: vi.fn(),
@@ -38,15 +39,12 @@ vi.mock('@/libs/contextMenu', () => ({
   showContextMenu: mocks.showContextMenu,
 }));
 
-vi.mock('antd', async (importOriginal) => ({
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => mocks.activeWorkspaceId,
+}));
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  App: {
-    useApp: () => ({
-      message: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
-      modal: { confirm: vi.fn() },
-    }),
-  },
-  ConfigProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tree: ({
     onRightClick,
     onSelect,
@@ -73,6 +71,16 @@ vi.mock('antd', async (importOriginal) => ({
       ))}
     </div>
   ),
+}));
+
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  App: {
+    useApp: () => ({
+      message: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
+      modal: { confirm: vi.fn() },
+    }),
+  },
 }));
 
 vi.mock('antd-style', async (importOriginal) => ({
@@ -106,6 +114,10 @@ vi.mock('../AgentTaskList/CreateTaskInlineEntry', () => ({
 }));
 
 vi.mock('../features/AssigneeAgentSelector', () => ({
+  default: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('../features/AssigneeMemberSelector', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
@@ -147,7 +159,7 @@ vi.mock('../shared/AccordionArrowIcon', () => ({
 }));
 
 vi.mock('../shared/style', () => ({
-  styles: { subtaskTree: 'subtask-tree' },
+  styles: { subtaskTreeTitle: 'subtask-tree-title' },
 }));
 
 vi.mock('./RunSubtasksPreview', () => ({
@@ -160,6 +172,7 @@ vi.mock('./TopicStatusIcon', () => ({
 
 describe('TaskSubtasks', () => {
   beforeEach(() => {
+    mocks.activeWorkspaceId = 'workspace-1';
     mocks.buildContextMenuItems.mockClear();
     mocks.installKeyboardHandlers.mockClear();
     mocks.navigate.mockClear();
@@ -183,7 +196,7 @@ describe('TaskSubtasks', () => {
 
     fireEvent.click(screen.getByTestId('subtask-tree-node'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-child');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-child/child-task');
   });
 
   it('routes right-click on a subtask through @/libs/contextMenu', () => {
@@ -215,6 +228,38 @@ describe('TaskSubtasks', () => {
     expect(mocks.installKeyboardHandlers).toHaveBeenCalledWith(expectedTarget);
   });
 
+  it('shows the responsible assignee on an automated subtask', () => {
+    mocks.taskState.taskDetailMap['T-parent'].subtasks = [
+      {
+        assigneeUserId: 'member-1',
+        automationMode: 'schedule',
+        identifier: 'T-child',
+        name: 'Scheduled child task',
+        status: 'scheduled',
+      },
+    ];
+
+    render(<TaskSubtasks />);
+
+    expect(screen.getByText('member assignee')).toBeInTheDocument();
+  });
+
+  it('keeps an existing responsible assignee visible in personal mode', () => {
+    mocks.activeWorkspaceId = undefined;
+    mocks.taskState.taskDetailMap['T-parent'].subtasks = [
+      {
+        assigneeUserId: 'member-1',
+        identifier: 'T-child',
+        name: 'Child task',
+        status: 'backlog',
+      },
+    ];
+
+    render(<TaskSubtasks />);
+
+    expect(screen.getByText('member assignee')).toBeInTheDocument();
+  });
+
   it('falls back to the global task route when the selected subtask has no assignee', () => {
     mocks.taskState.taskDetailMap['T-parent'].subtasks = [
       {
@@ -228,7 +273,7 @@ describe('TaskSubtasks', () => {
 
     fireEvent.click(screen.getByTestId('subtask-tree-node'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-child');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-child/child-task');
   });
 
   it('uses the running topic status icon when a subtask has an active topic run', () => {

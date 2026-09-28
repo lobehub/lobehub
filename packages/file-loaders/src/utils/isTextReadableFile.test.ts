@@ -21,6 +21,8 @@ describe('isTextReadableFile', () => {
       'sql',
       'patch',
       'diff',
+      'v',
+      'sv',
     ];
 
     for (const ext of positives) {

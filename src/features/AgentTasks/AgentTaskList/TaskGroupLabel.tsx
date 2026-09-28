@@ -37,6 +37,10 @@ const AssigneeUserLabel = memo<{ userId: string }>(({ userId }) => {
 const TaskGroupPrefix = ({ group }: { group: TaskGroupMeta }) => {
   if (group.groupBy === 'assignee') {
     if (group.assigneeId) return <AssigneeAvatar agentId={group.assigneeId} size={18} />;
+    return <Icon icon={UserRound} size={14} />;
+  }
+
+  if (group.groupBy === 'member') {
     if (group.assigneeUserId) return <AssigneeUserAvatar size={18} userId={group.assigneeUserId} />;
     return <Icon icon={UserRound} size={14} />;
   }
@@ -78,9 +82,9 @@ const TaskGroupLabel = memo<TaskGroupLabelProps>(({ group }) => (
   <Flexbox horizontal align={'center'} flex={'none'} gap={6} style={{ overflow: 'hidden' }}>
     <TaskGroupPrefix group={group} />
     <Text ellipsis weight={500}>
-      {group.assigneeId ? (
+      {group.groupBy === 'assignee' && group.assigneeId ? (
         <AssigneeLabel agentId={group.assigneeId} />
-      ) : group.assigneeUserId ? (
+      ) : group.groupBy === 'member' && group.assigneeUserId ? (
         <AssigneeUserLabel userId={group.assigneeUserId} />
       ) : (
         group.label

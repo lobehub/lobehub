@@ -9,7 +9,11 @@ import { BaseExecutor } from '@lobechat/types';
 
 import { goalService } from '@/services/goal';
 
-import { buildGoalRequirement, resolveGoalAttemptBudget } from '../../createGoalInput';
+import {
+  buildGoalRequirement,
+  resolveGoalAttemptBudget,
+  resolveGoalScheduleConfig,
+} from '../../createGoalInput';
 import { GoalIdentifier } from '../../manifest';
 import type { CreateGoalParams } from '../../types';
 import { GoalApiName } from '../../types';
@@ -51,19 +55,26 @@ class GoalExecutor extends BaseExecutor<typeof GoalApiName> {
     }
 
     try {
+      const scheduleConfig = resolveGoalScheduleConfig(params.deadline);
       const graph = await goalService.create({
         agentId: ctx.agentId,
         createdByAgentId: ctx.agentId,
         config: {
-          recovery: { maxAttemptsPerWork: resolveGoalAttemptBudget(params.maxIterations) },
+          recovery: { maxAttemptsPerTask: resolveGoalAttemptBudget(params.maxIterations) },
+          ...(scheduleConfig ? { schedule: scheduleConfig } : {}),
         },
         // `maxIterations` caps attempts on one Work; it is deliberately not
         // passed as `maxRounds`, which counts runs across every Work in the
         // graph and would strand later tasks that have not run at all.
+        // Structured criteria persist alongside the prose requirement so the
+        // goal page can edit them and the terminal acceptance runs exactly them.
+        criteria,
         maxTotalCost: params.maxTotalCost ?? undefined,
+        // No seed work: the coordinator plans the decomposition on first
+        // advance, turning a complex ask into several explorable directions.
+        problemDescription: params.instruction,
         requirement: buildGoalRequirement(params.name, criteria, params.instruction),
         title: params.name,
-        work: [{ description: params.instruction, title: params.name }],
       });
 
       return await this.reportCreatedGoal(graph, criteria.length, params.name);

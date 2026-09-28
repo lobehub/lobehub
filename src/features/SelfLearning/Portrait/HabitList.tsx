@@ -163,11 +163,12 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
         <Popover
           // Long enough that dragging the pointer down the list does not fetch every row.
           openDelay={420}
-          // Above the row rather than below it: the row's own hint sits directly beneath the
-          // title, so a card there buries the line the reader just came from.
-          placement={'topRight'}
-          // This stack never flips a popup to the opposite side, so the card has to fit in the
-          // space above the row; the padding keeps it clear of the viewport edge.
+          // Below the row by preference, so the row the reader is pointing at stays visible
+          // while they move into the card.
+          placement={'bottomRight'}
+          // Preference, not a rule: reading down a list parks the pointer on the last visible
+          // row, and pinning the card downward there pushes its body off-screen. Base UI's
+          // default side avoidance flips it back above when the space below runs out.
           positionerProps={{ collisionPadding: 12 }}
           trigger={'hover'}
           content={

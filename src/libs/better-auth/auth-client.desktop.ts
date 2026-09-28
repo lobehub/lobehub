@@ -7,17 +7,22 @@ import {
 import { createAuthClient } from 'better-auth/react';
 
 import { type auth } from '@/auth';
-import { electronSyncSelectors } from '@/store/electron/selectors/sync';
-import { getElectronStoreState } from '@/store/electron/store';
 
 let _client: any = null;
 
+const desktopAuthFetch: typeof fetch = (input, init) => {
+  const url = new URL(input instanceof Request ? input.url : input.toString());
+  return fetch(`${url.pathname}${url.search}`, init);
+};
+
 function getClient() {
   if (!_client) {
-    const baseURL = electronSyncSelectors.remoteServerUrl(getElectronStoreState());
-
     _client = createAuthClient({
-      baseURL,
+      // better-auth getBaseURL only accepts http(s); app://renderer throws.
+      baseURL: 'http://lobehub.invalid',
+      fetchOptions: {
+        customFetchImpl: desktopAuthFetch,
+      },
       plugins: [
         adminClient(),
         inferAdditionalFields<typeof auth>(),

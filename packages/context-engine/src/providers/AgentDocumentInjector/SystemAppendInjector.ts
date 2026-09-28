@@ -3,7 +3,7 @@ import debug from 'debug';
 import { BaseSystemRoleProvider } from '../../base/BaseSystemRoleProvider';
 import type { PipelineContext, ProcessorOptions } from '../../types';
 import type { AgentContextDocument, AgentDocumentFilterContext } from './shared';
-import { combineDocuments, getDocumentsForPositions } from './shared';
+import { combineDocuments, getDocumentsForPositions, withRunStartedAt } from './shared';
 
 const log = debug('context-engine:provider:AgentDocumentSystemAppendInjector');
 
@@ -28,7 +28,7 @@ export class AgentDocumentSystemAppendInjector extends BaseSystemRoleProvider {
     super(options);
   }
 
-  protected buildSystemRoleContent(_context: PipelineContext): string | null {
+  protected buildSystemRoleContent(context: PipelineContext): string | null {
     if (this.config.enabled === false) return null;
 
     const docs = getDocumentsForPositions(
@@ -40,6 +40,6 @@ export class AgentDocumentSystemAppendInjector extends BaseSystemRoleProvider {
     if (docs.length === 0) return null;
 
     log('Appending %d agent documents to system message', docs.length);
-    return combineDocuments(docs, this.config);
+    return combineDocuments(docs, withRunStartedAt(this.config, context.messages));
   }
 }

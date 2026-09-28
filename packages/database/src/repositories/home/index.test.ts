@@ -43,7 +43,7 @@ describe('HomeRepository', () => {
   });
 
   describe('getSidebarAgentList - agents', () => {
-    it('should return agents with their session info', async () => {
+    it('should return agents without projecting legacy session info', async () => {
       // Create agent
       const [agent] = await serverDB
         .insert(agents)
@@ -80,7 +80,6 @@ describe('HomeRepository', () => {
         description: 'Test agent description',
         id: agent.id,
         pinned: false,
-        sessionId: session.id,
         title: 'Test Agent',
         type: 'agent',
       });
@@ -116,7 +115,6 @@ describe('HomeRepository', () => {
       expect(result.ungrouped[0]).toMatchObject({
         avatar: DEFAULT_INBOX_AVATAR,
         id: agent.id,
-        sessionId: session.id,
         title: DEFAULT_INBOX_TITLE,
       });
     });
@@ -198,16 +196,13 @@ describe('HomeRepository', () => {
     });
 
     it('should return custom avatar when chat group has one set', async () => {
-      const [group] = await serverDB
-        .insert(chatGroups)
-        .values({
-          avatar: '🚀',
-          backgroundColor: '#ff5500',
-          pinned: false,
-          title: 'Custom Avatar Group',
-          userId,
-        })
-        .returning();
+      await serverDB.insert(chatGroups).values({
+        avatar: '🚀',
+        backgroundColor: '#ff5500',
+        pinned: false,
+        title: 'Custom Avatar Group',
+        userId,
+      });
 
       const result = await homeRepo.getSidebarAgentList();
 
@@ -320,53 +315,10 @@ describe('HomeRepository', () => {
 
   describe('getSidebarAgentList - pinned items', () => {
     it('should separate pinned agents', async () => {
-      // Create pinned agent
-      const [pinnedAgent] = await serverDB
-        .insert(agents)
-        .values({
-          title: 'Pinned Agent',
-          userId,
-          virtual: false,
-        })
-        .returning();
-
-      const [pinnedSession] = await serverDB
-        .insert(sessions)
-        .values({
-          pinned: true,
-          userId,
-        })
-        .returning();
-
-      await serverDB.insert(agentsToSessions).values({
-        agentId: pinnedAgent.id,
-        sessionId: pinnedSession.id,
-        userId,
-      });
-
-      // Create unpinned agent
-      const [unpinnedAgent] = await serverDB
-        .insert(agents)
-        .values({
-          title: 'Unpinned Agent',
-          userId,
-          virtual: false,
-        })
-        .returning();
-
-      const [unpinnedSession] = await serverDB
-        .insert(sessions)
-        .values({
-          pinned: false,
-          userId,
-        })
-        .returning();
-
-      await serverDB.insert(agentsToSessions).values({
-        agentId: unpinnedAgent.id,
-        sessionId: unpinnedSession.id,
-        userId,
-      });
+      await serverDB.insert(agents).values([
+        { pinned: true, title: 'Pinned Agent', userId, virtual: false },
+        { pinned: false, title: 'Unpinned Agent', userId, virtual: false },
+      ]);
 
       const result = await homeRepo.getSidebarAgentList();
 
@@ -404,28 +356,12 @@ describe('HomeRepository', () => {
         .returning();
 
       // Create agent in group
-      const [agent] = await serverDB
-        .insert(agents)
-        .values({
-          title: 'Work Agent',
-          userId,
-          virtual: false,
-        })
-        .returning();
-
-      const [session] = await serverDB
-        .insert(sessions)
-        .values({
-          groupId: group.id,
-          pinned: false,
-          userId,
-        })
-        .returning();
-
-      await serverDB.insert(agentsToSessions).values({
-        agentId: agent.id,
-        sessionId: session.id,
+      await serverDB.insert(agents).values({
+        pinned: false,
+        sessionGroupId: group.id,
+        title: 'Work Agent',
         userId,
+        virtual: false,
       });
 
       const result = await homeRepo.getSidebarAgentList();
@@ -734,52 +670,20 @@ describe('HomeRepository', () => {
         .returning();
 
       // Create pinned agent
-      const [pinnedAgent] = await serverDB
-        .insert(agents)
-        .values({
-          title: 'Pinned Agent',
-          userId,
-          virtual: false,
-        })
-        .returning();
-
-      const [pinnedSession] = await serverDB
-        .insert(sessions)
-        .values({
-          pinned: true,
-          userId,
-        })
-        .returning();
-
-      await serverDB.insert(agentsToSessions).values({
-        agentId: pinnedAgent.id,
-        sessionId: pinnedSession.id,
+      await serverDB.insert(agents).values({
+        pinned: true,
+        title: 'Pinned Agent',
         userId,
+        virtual: false,
       });
 
       // Create grouped agent
-      const [groupedAgent] = await serverDB
-        .insert(agents)
-        .values({
-          title: 'Grouped Agent',
-          userId,
-          virtual: false,
-        })
-        .returning();
-
-      const [groupedSession] = await serverDB
-        .insert(sessions)
-        .values({
-          groupId: folder.id,
-          pinned: false,
-          userId,
-        })
-        .returning();
-
-      await serverDB.insert(agentsToSessions).values({
-        agentId: groupedAgent.id,
-        sessionId: groupedSession.id,
+      await serverDB.insert(agents).values({
+        pinned: false,
+        sessionGroupId: folder.id,
+        title: 'Grouped Agent',
         userId,
+        virtual: false,
       });
 
       // Create ungrouped chat group

@@ -24,8 +24,10 @@ import type {
   AcceptanceVisualRender,
   ToulminVerdict,
   VerifyCheckDecisionDetail,
+  VerifyCheckDefinition,
   VerifyCheckItem,
   VerifyCheckResultMetadata,
+  VerifyFlowSnapshot,
   VerifyRubricConfig,
   VerifyRunContext,
   VerifyRunDecisionDetail,
@@ -77,6 +79,10 @@ export const verifyCriteria = pgTable(
 
     /** One-sentence summary of what this criterion verifies. */
     description: text('description'),
+
+    definition: jsonb('definition').$type<VerifyCheckDefinition>(),
+    tags: text('tags').array().notNull().default([]),
+    archivedAt: timestamptz('archived_at'),
 
     /** Default blocking behaviour; a snapshot item may override it. */
     required: boolean('required').default(true).notNull(),
@@ -218,6 +224,9 @@ export const verifyCheckResults = pgTable(
 
     /** Stable relation key → verify_runs.plan.items[].id (never the array index). */
     checkItemId: text('check_item_id').notNull(),
+    sourceCriterionId: uuid('source_criterion_id').references(() => verifyCriteria.id, {
+      onDelete: 'set null',
+    }),
 
     // ---- Flattened item snapshot (denormalized for analytics) ----
     checkItemTitle: text('check_item_title'),
@@ -276,6 +285,7 @@ export const verifyCheckResults = pgTable(
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
+    index('verify_check_results_criterion_created_idx').on(t.sourceCriterionId, t.createdAt),
     index('verify_check_results_verify_run_id_idx').on(t.verifyRunId),
     index('verify_check_results_operation_id_idx').on(t.operationId),
     index('verify_check_results_user_id_idx').on(t.userId),
@@ -604,6 +614,8 @@ export const verifyRuns = pgTable(
      * check_item_id. Moved here off `agent_operations.verify_plan`.
      */
     plan: jsonb('plan').$type<VerifyCheckItem[]>(),
+    /** Frozen graphs for this round; historical views never resolve current graph rows. */
+    flowSnapshots: jsonb('flow_snapshots').$type<VerifyFlowSnapshot[]>(),
     /** When the plan was confirmed (frozen). */
     planConfirmedAt: timestamptz('plan_confirmed_at'),
 
@@ -717,7 +729,13 @@ export const verifyReviewPredictions = pgTable(
      */
     action: text('action', { enum: reviewPredictionActions }),
 
-    /** Why a `skipped` / `errored` attempt produced no verdict. */
+    /**
+     * Why a `skipped` / `errored` attempt produced no verdict — and, on a
+     * `judged` row, which artifacts the request had to withhold from the model
+     * (frames past the cap, unreadable media, unresolved payloads). A verdict
+     * reached while part of the evidence was invisible is not comparable to one
+     * reached on the whole check, so the caveat travels with the row.
+     */
     statusReason: text('status_reason'),
 
     /**

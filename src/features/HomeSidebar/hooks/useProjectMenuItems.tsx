@@ -4,7 +4,7 @@ import { BoxIcon } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useCreateNewModal } from '@/features/LibraryModal';
+import { useCreateNewModal } from '@/features/LibraryModal/CreateNew';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 /**

@@ -115,4 +115,107 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu 
     const result = promptFileContents(fileContents);
     expect(result).toMatchSnapshot();
   });
+
+  it('should explain an empty window whose offset is past the end of the file', () => {
+    const result = promptFileContents([
+      {
+        content: '',
+        fileId: 'file-eof',
+        filename: 'short.md',
+        range: {
+          endLine: 0,
+          startLine: 900,
+          totalChars: 100,
+          totalLines: 800,
+          truncated: false,
+        },
+      },
+    ]);
+
+    expect(result).toContain('lines="900-0"');
+    expect(result).toContain('Line 900 is past the end of this text (800 lines, 100 characters)');
+  });
+
+  it('should explain a line that was cut to fit the per-call cap', () => {
+    const result = promptFileContents([
+      {
+        content: 'x'.repeat(10),
+        fileId: 'file-cut',
+        filename: 'minified.json',
+        range: {
+          cutLine: { keptChars: 10, line: 1, totalChars: 30_000 },
+          endLine: 1,
+          startLine: 1,
+          totalChars: 30_002,
+          totalLines: 2,
+          truncated: true,
+        },
+      },
+    ]);
+
+    expect(result).toContain('Line 1 is 30000 characters long and was cut at 10');
+    expect(result).toContain(
+      'To continue with the next line, call readKnowledge with fileIds=["file-cut"] and offset=2.',
+    );
+  });
+
+  it('should render a paged window with range attributes and a continue notice', () => {
+    const fileContents: FileContent[] = [
+      {
+        content: 'line 1\nline 2',
+        fileId: 'file-paged',
+        filename: 'long.md',
+        range: {
+          endLine: 2,
+          startLine: 1,
+          totalChars: 30_334,
+          totalLines: 800,
+          truncated: true,
+        },
+      },
+      {
+        content: 'tail line',
+        fileId: 'file-complete',
+        filename: 'short.md',
+        range: {
+          endLine: 1,
+          startLine: 1,
+          totalChars: 9,
+          totalLines: 1,
+          truncated: false,
+        },
+      },
+    ];
+
+    const result = promptFileContents(fileContents);
+    expect(result).toMatchSnapshot();
+    expect(result).toContain('lines="1-2" total_lines="800" total_chars="30334" truncated="true"');
+    expect(result).toContain(
+      '[Showing lines 1-2 of 800 lines, 30334 characters. To continue, call readKnowledge with fileIds=["file-paged"] and offset=3.]',
+    );
+    expect(result).not.toContain('offset=2');
+  });
+
+  it('should say the stored text is incomplete when the original file was longer', () => {
+    const result = promptFileContents([
+      {
+        content: 'last line',
+        fileId: 'file-capped',
+        filename: 'huge.csv',
+        originalChars: 9_000_000,
+        range: {
+          endLine: 80,
+          startLine: 80,
+          totalChars: 5_000_000,
+          totalLines: 80,
+          truncated: false,
+        },
+      },
+    ]);
+
+    expect(result).toContain('truncated="true" original_chars="9000000"');
+    expect(result).toContain(
+      'only the first 5000000 of the original 9000000 characters were kept, ending at line 80',
+    );
+  });
 });

@@ -31,12 +31,12 @@ export class QStashGoalScheduler implements GoalSchedulerImpl {
   }
 
   async scheduleAdvance(params: ScheduleGoalAdvanceParams): Promise<string> {
-    const { delay = 0, goalId, userId, workspaceId } = params;
+    const { delay = 0, goalId, trigger, userId, workspaceId } = params;
     const url = `${this.baseUrl}${GOAL_ADVANCE_PATH}`;
 
     log('publishing advance: goal=%s delay=%ds url=%s', goalId, delay, url);
     const response = await this.qstashClient.publishJSON({
-      body: { goalId, userId, workspaceId },
+      body: { goalId, trigger, userId, workspaceId },
       delay,
       url,
     });

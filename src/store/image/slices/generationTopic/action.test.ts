@@ -1,3 +1,4 @@
+import { RequestTrigger } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +14,14 @@ vi.mock('@/libs/swr', async () => {
   const actual = await vi.importActual('@/libs/swr');
   return {
     ...actual,
+    mutate: vi.fn(),
+  };
+});
+
+vi.mock('swr', async () => {
+  const actual = await vi.importActual('swr');
+  return {
+    ...(actual as any),
     mutate: vi.fn(),
   };
 });
@@ -245,7 +254,9 @@ describe('GenerationTopicAction', () => {
         await result.current.summaryGenerationTopicTitle(topicId, prompts);
       });
 
-      expect(chatService.fetchPresetTaskResult).toHaveBeenCalled();
+      expect(chatService.fetchPresetTaskResult).toHaveBeenCalledWith(
+        expect.objectContaining({ trigger: RequestTrigger.GenerationTopicTitle }),
+      );
       expect(generationTopicService.updateTopic).toHaveBeenCalledWith(topicId, {
         title: generatedTitle,
       });
@@ -459,16 +470,6 @@ describe('GenerationTopicAction', () => {
   });
 
   describe('refreshGenerationTopics', () => {
-    beforeEach(() => {
-      vi.mock('swr', async () => {
-        const actual = await vi.importActual('swr');
-        return {
-          ...(actual as any),
-          mutate: vi.fn(),
-        };
-      });
-    });
-
     afterEach(() => {
       vi.resetAllMocks();
     });

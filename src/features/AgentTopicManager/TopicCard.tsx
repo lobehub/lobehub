@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
@@ -117,6 +118,9 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
 
   const projectLabel = getProjectLabel(topic);
   const status = topic.status ?? 'active';
+  // Bot source platform icon (same identity mark as the sidebar topic item).
+  const botPlatform = topic.metadata?.bot?.platform;
+  const BotPlatformIcon = botPlatform ? getPlatformIcon(botPlatform) : undefined;
   // Preview priority: user-written description → AI history summary → first user
   // message (sliced server-side when neither richer field exists).
   const preview =
@@ -147,6 +151,13 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
       <Flexbox horizontal align={'center'} className={styles.titleRow} gap={6}>
         {topic.favorite && (
           <Icon icon={Star} size={13} style={{ color: cssVar.colorWarning, flexShrink: 0 }} />
+        )}
+        {BotPlatformIcon && (
+          <BotPlatformIcon
+            color={cssVar.colorTextDescription}
+            size={14}
+            style={{ flexShrink: 0 }}
+          />
         )}
         <Text className={styles.title} fontSize={14} weight={600}>
           {topic.title || t('defaultTitle')}

@@ -39,6 +39,8 @@ export {
   CODEX_CLI_INSTALL_DOCS_URL,
   CURSOR_CLI_INSTALL_COMMANDS,
   CURSOR_CLI_INSTALL_DOCS_URL,
+  DROID_CLI_INSTALL_COMMANDS,
+  DROID_CLI_INSTALL_DOCS_URL,
   getHeterogeneousAgentConfig,
   getHeterogeneousAgentConfigOrThrow,
   GROK_BUILD_CLI_INSTALL_COMMANDS,
@@ -103,7 +105,6 @@ export type {
   ResolveHeterogeneousProviderBindingInput,
   ResolveHeterogeneousProviderBindingResult,
   ServerDefaultHeterogeneousAgentType,
-  ServerDefaultHeterogeneousCompatibilityProfile,
   ServerDefaultHeterogeneousIngress,
   ServerDefaultHeterogeneousModelPolicy,
   ServerDefaultHeterogeneousTokenHeader,
@@ -116,12 +117,10 @@ export {
   HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES,
   isHeterogeneousProviderBindingSupported,
   isServerDefaultHeterogeneousAgentType,
-  isServerDefaultHeterogeneousProfileModel,
   resolveHeterogeneousProviderBinding,
   resolveProviderBindingProtocol,
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG,
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
-  SERVER_DEFAULT_HETEROGENEOUS_PROFILE_DEFAULT_MODELS,
 } from './providerBinding';
 export { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
 export type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './scan/types';

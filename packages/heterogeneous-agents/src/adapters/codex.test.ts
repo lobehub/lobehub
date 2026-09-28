@@ -211,6 +211,38 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it.each(['error', 'turn.failed'])(
+    'classifies capacity failures from %s for auto-retry',
+    (type) => {
+      const adapter = new CodexAdapter();
+      const message = 'Selected model is at capacity. Please try a different model.';
+      adapter.adapt({ type: 'turn.started' });
+
+      const events = adapter.adapt(
+        type === 'error' ? { message, type } : { error: { message }, type },
+      );
+
+      expect(events.at(-1)).toMatchObject({
+        data: {
+          agentType: 'codex',
+          clearEchoedContent: true,
+          code: 'overloaded',
+          details: { kind: 'server_overloaded' },
+          message,
+          stderr: message,
+        },
+        type: 'error',
+      });
+      expect(adapter.adapt({ error: { message }, type: 'turn.failed' })).toEqual([]);
+    },
+  );
+
+  it('does not auto-retry unrelated model errors', () => {
+    const adapter = new CodexAdapter();
+    const events = adapter.adapt({ message: 'Selected model is unavailable.', type: 'error' });
+    expect(events.at(-1)?.data).not.toHaveProperty('code');
+  });
+
   it('classifies Codex usage-limit errors with retry metadata', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 5, 13, 3, 9, 27));

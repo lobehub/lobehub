@@ -177,6 +177,17 @@ describe('MarketSandboxProvider', () => {
       });
     });
 
+    it('fully redacts a command that writes into ~/.creds/env, regardless of the credential names it carries', () => {
+      const params = {
+        command:
+          "mkdir -p ~/.creds && \\\n(printf '%s\\n' 'export DC_CLI_TOKEN='\\''sk-super-secret'\\''') >> ~/.creds/env",
+      };
+
+      expect(redactSandboxParams(params)).toEqual({
+        command: '[redacted]',
+      });
+    });
+
     it('redacts sandbox resource URLs from params', () => {
       expect(
         redactSandboxParams({

@@ -9,6 +9,7 @@ import {
 const labels = {
   channel: 'tab.integration',
   profile: 'tab.profile',
+  share: 'share',
   statistics: 'usageStats.title',
 };
 
@@ -37,9 +38,15 @@ describe('buildAgentProfileTabOptions', () => {
       canConfigure: true,
       channelsSupported: true,
       labels,
+      shareSupported: true,
     });
 
-    expect(options.map((option) => option.value)).toEqual(['profile', 'channel', 'statistics']);
+    expect(options.map((option) => option.value)).toEqual([
+      'profile',
+      'channel',
+      'statistics',
+      'share',
+    ]);
   });
 
   it('drops channels when the agent cannot host them', () => {
@@ -48,6 +55,7 @@ describe('buildAgentProfileTabOptions', () => {
       canConfigure: true,
       channelsSupported: false,
       labels,
+      shareSupported: false,
     });
 
     expect(options.map((option) => option.value)).toEqual(['profile', 'statistics']);
@@ -59,6 +67,7 @@ describe('buildAgentProfileTabOptions', () => {
       canConfigure: false,
       channelsSupported: true,
       labels,
+      shareSupported: true,
     });
 
     expect(options.map((option) => option.value)).toEqual(['statistics']);
@@ -70,8 +79,33 @@ describe('buildAgentProfileTabOptions', () => {
       canConfigure: false,
       channelsSupported: false,
       labels,
+      shareSupported: false,
     });
 
     expect(options.map((option) => option.value)).toEqual(['channel', 'statistics']);
+  });
+
+  it('drops share when the agent cannot be shared at all', () => {
+    const options = buildAgentProfileTabOptions({
+      active: 'profile',
+      canConfigure: true,
+      channelsSupported: true,
+      labels,
+      shareSupported: false,
+    });
+
+    expect(options.map((option) => option.value)).toEqual(['profile', 'channel', 'statistics']);
+  });
+
+  it('keeps share when it owns the current page even though it is gated off', () => {
+    const options = buildAgentProfileTabOptions({
+      active: 'share',
+      canConfigure: false,
+      channelsSupported: false,
+      labels,
+      shareSupported: false,
+    });
+
+    expect(options.map((option) => option.value)).toEqual(['statistics', 'share']);
   });
 });

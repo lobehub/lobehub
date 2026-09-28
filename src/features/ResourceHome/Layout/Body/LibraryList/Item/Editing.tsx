@@ -5,7 +5,6 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } fr
 import { useTranslation } from 'react-i18next';
 
 import { useKnowledgeBaseStore } from '@/store/library';
-import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface EditingProps {
   id: string;
@@ -44,8 +43,8 @@ const Editing = memo<EditingProps>(({ id, name, toggleEditing }) => {
     if (value && value !== name) {
       try {
         await updateKnowledgeBase(id, { name: value });
-      } catch (error) {
-        toast.error(isForbiddenError(error) ? t('manageOnlyCreator') : t('operationFailed'));
+      } catch {
+        toast.error(t('operationFailed'));
       }
     }
 
