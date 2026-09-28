@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { TRPCError } from '@trpc/server';
+import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,7 +12,7 @@ import { TaskRunnerService } from './index';
 const { mockSelectTask, mockSetTaskSchedulerExecutionCallback, mockWhereTask } = vi.hoisted(() => ({
   mockSelectTask: vi.fn(),
   mockSetTaskSchedulerExecutionCallback: vi.fn(),
-  mockWhereTask: vi.fn(() => ({
+  mockWhereTask: vi.fn((_condition: SQL) => ({
     limit: () => mockSelectTask(),
   })),
 }));
