@@ -1026,10 +1026,15 @@ export class FlatListBuilder {
     // Create tool map for lookup
     const toolMap = new Map<string, Message>();
     const toolMessagesById = new Map<string, Message>();
+    // `${parentId}:${tool_call_id}` → first result that assistant received
+    const toolMapByCaller = new Map<string, Message>();
     allToolMessages.forEach((tm) => {
       toolMessagesById.set(tm.id, tm);
       if (tm.tool_call_id) {
         toolMap.set(tm.tool_call_id, tm);
+
+        const callerKey = `${tm.parentId}:${tm.tool_call_id}`;
+        if (tm.parentId && !toolMapByCaller.has(callerKey)) toolMapByCaller.set(callerKey, tm);
       }
     });
     const chainAssistantIds = new Set(assistantChain.map((assistant) => assistant.id));
@@ -1042,9 +1047,7 @@ export class FlatListBuilder {
       const explicit = resultMsgId ? toolMessagesById.get(resultMsgId) : undefined;
       if (explicit) return explicit;
 
-      const own = allToolMessages.find(
-        (tm) => tm.parentId === assistant.id && tm.tool_call_id === toolCallId,
-      );
+      const own = toolMapByCaller.get(`${assistant.id}:${toolCallId}`);
       if (own) return own;
 
       const fallback = toolMap.get(toolCallId);
