@@ -57,13 +57,11 @@ export const topicHandler: TrashHandler = {
     const [topic] = await topicModel.findTrashedByIds([root.resourceId]);
     if (!topic) throw new TrashRestoreError('notFound');
 
-    // A topic that hangs off an agent sitting in the bin would come back into
-    // an invisible container — restore the agent first.
-    if (topic.agentId) {
-      const agentModel = new AgentModel(ctx.db, ctx.userId, ctx.workspaceId);
-      const [agent] = await agentModel.findTrashedByIds([topic.agentId]);
-      if (agent) throw new TrashRestoreError('parentTrashed');
-    }
+    // A topic that hangs off an agent sitting in the bin — directly, or only
+    // through a legacy session shell — would come back into an invisible
+    // container: restore the agent first.
+    const agentModel = new AgentModel(ctx.db, ctx.userId, ctx.workspaceId);
+    if (await agentModel.hasTrashedOwner(topic)) throw new TrashRestoreError('parentTrashed');
 
     await topicModel.restore([root.resourceId]);
   },
