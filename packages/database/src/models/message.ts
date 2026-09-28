@@ -1070,6 +1070,11 @@ export interface SoftDeletedMessage {
   id: string;
   /** Pulled in as a tool companion of a requested message (never a root of its own). */
   isCompanion: boolean;
+  /**
+   * For a companion: the requested message whose tool call produced it, so the
+   * caller can file it under the right root. `null` for requested rows.
+   */
+  ownerId: string | null;
   parentId: string | null;
   role: string;
   topicId: string | null;
@@ -5382,15 +5387,26 @@ export class MessageModel {
         .flatMap((row) => ((row.tools as ChatToolPayload[]) ?? []).map((tool) => tool.id))
         .filter(Boolean);
       const requestedIds = new Set(requested.map((row) => row.id));
+      // toolCallId → the requested row that issued it, so each companion is
+      // attributed to its own assistant turn rather than to the batch.
+      const toolCallOwner = new Map<string, string>();
+      for (const row of requested) {
+        for (const tool of (row.tools as ChatToolPayload[]) ?? []) {
+          if (tool.id) toolCallOwner.set(tool.id, row.id);
+        }
+      }
+      const companionOwner = new Map<string, string>();
       let companions: typeof requested = [];
       if (toolCallIds.length > 0) {
         const companionRows = await tx
-          .select({ id: messagePlugins.id })
+          .select({ id: messagePlugins.id, toolCallId: messagePlugins.toolCallId })
           .from(messagePlugins)
           .where(inArray(messagePlugins.toolCallId, toolCallIds));
-        const companionIds = companionRows
-          .map((row) => row.id)
-          .filter((id) => !requestedIds.has(id));
+        for (const row of companionRows) {
+          const owner = row.toolCallId ? toolCallOwner.get(row.toolCallId) : undefined;
+          if (owner && !requestedIds.has(row.id)) companionOwner.set(row.id, owner);
+        }
+        const companionIds = [...companionOwner.keys()];
         if (companionIds.length > 0) {
           companions = await tx
             .select({
@@ -5476,6 +5492,7 @@ export class MessageModel {
         content: row.content,
         id: row.id,
         isCompanion: !requestedIds.has(row.id),
+        ownerId: companionOwner.get(row.id) ?? null,
         parentId: row.parentId,
         role: row.role,
         topicId: row.topicId,
