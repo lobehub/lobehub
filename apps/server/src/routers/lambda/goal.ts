@@ -371,6 +371,39 @@ export const goalRouter = router({
       },
     ),
 
+  /**
+   * Answer a goal's clarification round at once. One advance follows all the
+   * answers, so the re-plan never starts with half of them.
+   */
+  answerClarifications: goalWriteProcedure
+    .input(
+      idInput.extend({
+        answers: z
+          .array(
+            z.object({
+              decisionId: z.string().uuid(),
+              optionId: z.string(),
+              resolution: z.string().optional(),
+            }),
+          )
+          .min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.goalService.answerClarifications(input.id, input.answers);
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'decide',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { message: 'Clarifications answered', success: true };
+      } catch (error) {
+        mapGoalError(error, 'answer clarifications for');
+      }
+    }),
+
   decide: goalWriteProcedure
     .input(
       idInput.extend({
@@ -518,6 +551,15 @@ export const goalRouter = router({
       return { message: 'Goal deleted', success: true };
     } catch (error) {
       mapGoalError(error, 'delete');
+    }
+  }),
+
+  /** Clarifications still waiting on the user, grouped by goal. */
+  pendingClarifications: goalProcedure.query(async ({ ctx }) => {
+    try {
+      return { data: await ctx.goalService.pendingClarifications(), success: true };
+    } catch (error) {
+      mapGoalError(error, 'list clarifications for');
     }
   }),
 

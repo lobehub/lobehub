@@ -585,6 +585,26 @@ describe('CreateTaskInlineEntry', () => {
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
     });
 
+    it('creates the draft as typed when the questions are skipped, even after a pick', async () => {
+      analyzeIntentMock.mockResolvedValue({
+        ...clearReading,
+        clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
+        confidence: 'medium',
+      });
+
+      render(<CreateTaskInlineEntry variant="hero" />);
+      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+      await screen.findByText('taskIntent.reviewStep');
+      fireEvent.click(screen.getByText('lobe-chat'));
+      fireEvent.click(screen.getByText('taskIntent.skipQuestions'));
+
+      await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+      // Skipping is declining to narrow the scope: no rewrite, no answers.
+      expect(synthesizeInstructionMock).not.toHaveBeenCalled();
+      expect(createTaskMock.mock.calls[0][0].instruction).not.toContain('lobe-chat');
+    });
+
     it('names the last step "create", answered or not', async () => {
       analyzeIntentMock.mockResolvedValue({
         ...clearReading,

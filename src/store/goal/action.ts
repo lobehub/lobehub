@@ -42,6 +42,7 @@ const SERVER_ADVANCING_STATUSES = new Set<GoalStatus>(['planning', 'running', 'v
 
 /** Kept coarse on purpose — this is liveness, not a progress bar. */
 const GOAL_GRAPH_POLL_INTERVAL = 5000;
+const PENDING_CLARIFICATIONS_POLL_INTERVAL = 30_000;
 
 /** A conversation rarely plans more than one goal; this only bounds a runaway topic. */
 const TOPIC_GOAL_FETCH_LIMIT = 20;
@@ -110,6 +111,15 @@ export class GoalActionImpl {
     await this.refreshGoalGraph(goalId);
   };
 
+  /** Answer a goal's clarification round in one call, then refresh every view of it. */
+  answerGoalClarifications = async (
+    goalId: string,
+    answers: Array<{ decisionId: string; optionId: string; resolution?: string }>,
+  ): Promise<void> => {
+    await goalService.answerClarifications({ answers, id: goalId });
+    await Promise.all([this.refreshGoalGraph(goalId), mutate(goalKeys.pendingClarifications())]);
+  };
+
   pauseGoal = async (goalId: string): Promise<void> => {
     await goalService.pause(goalId);
     await this.refreshGoalGraph(goalId);
@@ -158,6 +168,18 @@ export class GoalActionImpl {
     await this.refreshGoalGraph(goalId);
     return result;
   };
+
+  /**
+   * Clarifications waiting on the user across their goals — what the global
+   * island asks when the user is not on that goal's page. A goal parks until
+   * answered, so a slow poll plus focus revalidation is enough.
+   */
+  useFetchPendingClarifications = (enabled: boolean) =>
+    useClientDataSWR(
+      enabled ? goalKeys.pendingClarifications() : null,
+      () => goalService.pendingClarifications(),
+      { refreshInterval: PENDING_CLARIFICATIONS_POLL_INTERVAL, revalidateOnFocus: true },
+    );
 
   /** The Goal Graph snapshot behind the process-control surface. */
   useFetchGoalGraph = (goalId?: string | null) =>

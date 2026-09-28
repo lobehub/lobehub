@@ -1,4 +1,4 @@
-import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
+import { GOAL_ACCEPTANCE_TASK_TITLE, GOAL_CLARIFICATION_OPTION } from '@lobechat/const/goal';
 import type { GoalGraphDecision } from '@lobechat/types';
 
 import type { GoalNodeView } from './goalGraphViewModel';
@@ -11,7 +11,7 @@ import type { GoalNodeView } from './goalGraphViewModel';
  * not recognize renders verbatim.
  */
 
-export type CoordinatorGateKind = 'goalAcceptance' | 'recoverTask';
+export type CoordinatorGateKind = 'clarifyGoal' | 'goalAcceptance' | 'recoverTask';
 
 export interface LocalizedCopyRef {
   key: string;
@@ -27,6 +27,8 @@ export const coordinatorGateKind = (
   const ids = idsOf(decision);
   if (ids.has('retry') && ids.has('retire')) return 'recoverTask';
   if (ids.has('retry') && ids.has('fail')) return 'goalAcceptance';
+  if (ids.has(GOAL_CLARIFICATION_OPTION.assume) && ids.has(GOAL_CLARIFICATION_OPTION.answer))
+    return 'clarifyGoal';
   return undefined;
 };
 

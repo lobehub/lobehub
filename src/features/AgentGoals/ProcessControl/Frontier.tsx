@@ -15,6 +15,7 @@ import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
 
+import GoalClarification, { type PendingGoalClarification } from '../GoalClarification';
 import AssigneeProfileAvatar from './AssigneeProfileAvatar';
 import {
   coordinatorGateReason,
@@ -434,6 +435,13 @@ const FrontierRow = memo<{
               {gateReasonText ?? view.decision.question}
             </Text>
           )}
+          {gateKind === 'clarifyGoal' && node.description && (
+            // What changes with the answer — the reason the question is worth
+            // stopping for, which the bare question does not say.
+            <Text fontSize={13} type={'secondary'}>
+              {node.description}
+            </Text>
+          )}
           {item.kind === 'stale' && <StaleBody view={view} />}
           <AttemptLedger view={subject ?? view} />
           {item.kind === 'gate' && canEdit && (
@@ -508,6 +516,20 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
   const finalAcceptanceView = graph.nodes.find(
     (view) => isGoalAcceptanceTask(view) && view.node.status === 'resolved' && !!view.acceptance,
   );
+  // A goal's clarification round is asked as one form, not one gate row per
+  // question. Someone who cannot answer still sees the questions as rows.
+  const clarifyItems = canEdit
+    ? graph.frontier.filter(
+        (item) => item.kind === 'gate' && viewGateKind(item.view) === 'clarifyGoal',
+      )
+    : [];
+  const rows = graph.frontier.filter((item) => !clarifyItems.includes(item));
+  const pendingClarifications: PendingGoalClarification[] = clarifyItems.map(({ view }) => ({
+    decisionId: view.decision!.id,
+    description: view.node.description,
+    options: view.decision!.options,
+    question: view.decision!.question,
+  }));
 
   return (
     <Flexbox gap={8}>
@@ -556,9 +578,24 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
                   </Text>
                 </Flexbox>
               ))}
-            {graph.frontier.map((item, index) => (
+            {pendingClarifications.length > 0 && (
+              // Filled so the one thing blocking the goal stands apart from the
+              // task rows around it.
+              <Block gap={12} padding={12} variant={'filled'}>
+                <Flexbox gap={2}>
+                  <Text weight={500}>{t('goalProcess.clarify.title')}</Text>
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('goalProcess.clarify.description')}
+                  </Text>
+                </Flexbox>
+                <GoalClarification goalId={graph.goal.id} pending={pendingClarifications} />
+              </Block>
+            )}
+            {rows.map((item, index) => (
               <Fragment key={item.key}>
-                {index > 0 && <Divider dashed style={{ margin: 0 }} />}
+                {(index > 0 || pendingClarifications.length > 0) && (
+                  <Divider dashed style={{ margin: 0 }} />
+                )}
                 <FrontierRow
                   actions={actions}
                   canEdit={canEdit}

@@ -51,6 +51,21 @@ export const GOAL_COORDINATOR_ACTOR_ID = 'goal-coordinator';
 export const GOAL_ACCEPTANCE_TASK_TITLE = 'Complete full Goal acceptance';
 
 /**
+ * Fixed title of the decision node the coordinator opens when decomposition
+ * finds a question only the user can answer. Stored in English as data and
+ * matched by clients for localized copy, the same way as the acceptance title.
+ */
+export const GOAL_CLARIFICATION_TITLE = 'Clarify the goal';
+
+/** Option ids every clarification decision carries besides the planner's own choices. */
+export const GOAL_CLARIFICATION_OPTION = {
+  /** Answer in the free-text note; the note is the answer. */
+  answer: 'answer',
+  /** Proceed on the assumption the planner stated for this question. */
+  assume: 'assume',
+} as const;
+
+/**
  * Task error strings the Goal coordinator matches on to route a paused Task.
  *
  * These are a contract between whoever pauses a Task and the coordinator that

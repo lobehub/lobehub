@@ -517,10 +517,6 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     await submitDraft(draft);
   }, [canCreateTask, readDraft, submitDraft]);
 
-  const handleAnswerChange = useCallback((index: number, value: string) => {
-    setIntentAnswers((current) => ({ ...current, [index]: value }));
-  }, []);
-
   /**
    * The review editor is the source of truth for what gets created, not the
    * composer draft it was seeded from — the user may have rewritten any of it.
@@ -542,51 +538,62 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
    * falls back to the draft with the answers appended, which is what the flow
    * did before this step existed.
    */
-  const handleConfirmIntent = useCallback(async () => {
-    const draft = readDraft();
-    if (!analysis || !draft) return;
+  const confirmIntentWith = useCallback(
+    async (answers: ClarificationAnswers) => {
+      const draft = readDraft();
+      if (!analysis || !draft) return;
 
-    const pairs = answeredClarifications(analysis, intentAnswers);
+      const pairs = answeredClarifications(analysis, answers);
 
-    if (pairs.length > 0) {
-      setIsSynthesizing(true);
-      try {
-        const written = await taskService.synthesizeInstruction({
-          answers: pairs,
-          context: assigneeMeta?.title ? `Assigned agent: ${assigneeMeta.title}` : undefined,
-          instruction: draft.instruction,
-        });
+      if (pairs.length > 0) {
+        setIsSynthesizing(true);
+        try {
+          const written = await taskService.synthesizeInstruction({
+            answers: pairs,
+            context: assigneeMeta?.title ? `Assigned agent: ${assigneeMeta.title}` : undefined,
+            instruction: draft.instruction,
+          });
 
-        await submitDraft({
-          // Freshly written prose has no mirror to inherit. Sending the
-          // pre-answer draft's document instead would win over this markdown
-          // when the task renders, showing a brief the agent never received.
-          editorJson: undefined,
-          instruction: written.instruction,
-          name: written.title.trim() || intentTitle.trim() || analysis.title,
-        });
-        return;
-      } catch {
-        // Fall through to the append path below.
-      } finally {
-        setIsSynthesizing(false);
+          await submitDraft({
+            // Freshly written prose has no mirror to inherit. Sending the
+            // pre-answer draft's document instead would win over this markdown
+            // when the task renders, showing a brief the agent never received.
+            editorJson: undefined,
+            instruction: written.instruction,
+            name: written.title.trim() || intentTitle.trim() || analysis.title,
+          });
+          return;
+        } catch {
+          // Fall through to the append path below.
+        } finally {
+          setIsSynthesizing(false);
+        }
       }
-    }
 
-    const confirmed = buildConfirmedDraft({
-      analysis,
-      answers: intentAnswers,
-      editorJson: draft.editorJson,
-      heading: t('taskIntent.answersHeading'),
-      instruction: draft.instruction,
-    });
+      const confirmed = buildConfirmedDraft({
+        analysis,
+        answers,
+        editorJson: draft.editorJson,
+        heading: t('taskIntent.answersHeading'),
+        instruction: draft.instruction,
+      });
 
-    await submitDraft({
-      editorJson: confirmed.editorData,
-      instruction: confirmed.instruction,
-      name: intentTitle.trim() || analysis.title,
-    });
-  }, [analysis, assigneeMeta?.title, intentAnswers, intentTitle, readDraft, submitDraft, t]);
+      await submitDraft({
+        editorJson: confirmed.editorData,
+        instruction: confirmed.instruction,
+        name: intentTitle.trim() || analysis.title,
+      });
+    },
+    [analysis, assigneeMeta?.title, intentTitle, readDraft, submitDraft, t],
+  );
+
+  const handleConfirmIntent = useCallback(
+    () => confirmIntentWith(intentAnswers),
+    [confirmIntentWith, intentAnswers],
+  );
+  // Skipping creates from the draft as typed; the answers state may still hold
+  // what was picked before the user chose to skip.
+  const handleSkipIntent = useCallback(() => confirmIntentWith({}), [confirmIntentWith]);
 
   // Hands the draft (and any answers already given) to the goal modal, then
   // drops back to composing: the goal flow owns the outcome from here, and the
@@ -660,12 +667,12 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         {isReviewing && analysis && (
           <TaskIntentReview
             analysis={analysis}
-            answers={intentAnswers}
             isCreating={isCreating || isSynthesizing}
             title={intentTitle}
-            onAnswerChange={handleAnswerChange}
+            onAnswersChange={setIntentAnswers}
             onBack={() => setAnalysis(null)}
             onConfirm={handleConfirmIntent}
+            onSkip={handleSkipIntent}
             onSwitchToGoal={canCreateGoal ? handleSwitchToGoal : undefined}
             onTitleChange={setIntentTitle}
           />
