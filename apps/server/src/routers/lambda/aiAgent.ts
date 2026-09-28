@@ -525,6 +525,13 @@ const resolveContinuationUserInterventionConfig = async (
 const dispatchClaimedAgentIntervention = async (
   resolution: ClaimedAgentInterventionResolution,
   ctx: AgentInterventionDispatchContext,
+  /**
+   * `acceptsMemberRuntimeEnd`: the resolving client's own declaration when that
+   * client is the one subscribing to the continuation (the Web source bridge).
+   * Left unset for a resolver that isn't (token Review), so the continuation
+   * inherits the parked operation's declaration.
+   */
+  options: { acceptsMemberRuntimeEnd?: boolean } = {},
 ): Promise<{ execution?: ExecAgentResult; status: AgentInterventionReviewStatus }> => {
   const { runtimeAction } = resolution;
   let execution: ExecAgentResult | undefined;
@@ -608,6 +615,7 @@ const dispatchClaimedAgentIntervention = async (
             const skipped = customAction.type === 'skipped';
             execution = await ctx.aiAgentService.execAgent({
               agentId: runtimeAction.agentId,
+              acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
               approvalResolutionRequestId: resolution.resolutionRequestId,
               approvalSourceOperationId: runtimeAction.operationId,
               appContext: runtimeAction.appContext,
@@ -642,6 +650,7 @@ const dispatchClaimedAgentIntervention = async (
           const [singleDecision] = runtimeAction.decisions;
           execution = await ctx.aiAgentService.execAgent({
             agentId: runtimeAction.agentId,
+            acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
             approvalResolutionRequestId: resolution.resolutionRequestId,
             approvalSourceOperationId: runtimeAction.operationId,
             appContext: runtimeAction.appContext,
@@ -662,6 +671,7 @@ const dispatchClaimedAgentIntervention = async (
         case 'resume_tool_result': {
           execution = await ctx.aiAgentService.execAgent({
             agentId: runtimeAction.agentId,
+            acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
             approvalResolutionRequestId: resolution.resolutionRequestId,
             approvalSourceOperationId: runtimeAction.operationId,
             appContext: runtimeAction.appContext,
@@ -1009,6 +1019,16 @@ const StartExecutionSchema = z.object({
 /**
  * Schema for execAgent - execute a single Agent
  */
+/**
+ * Whether the calling client declared it handles `member_runtime_end`
+ * (`streamFeatures`). Always a boolean for a client-facing route: a client that
+ * declares nothing (a released desktop, a stale tab) is a `false` of its own,
+ * never "unknown" — only a server-internal continuation, with no caller of its
+ * own, inherits the parked operation's declaration.
+ */
+const acceptsMemberRuntimeEndOf = (streamFeatures: string[] | undefined): boolean =>
+  streamFeatures?.includes('member_runtime_end') ?? false;
+
 const ExecAgentSchema = z
   .object({
     includeFinalState: z.boolean().optional(),
@@ -2408,7 +2428,9 @@ export const aiAgentRouter = router({
             if (sourceResolution.state === 'already_resolved') {
               throw new HumanApprovalAlreadyResolvedError(parentMessageId ?? 'intervention');
             }
-            const dispatch = await dispatchClaimedAgentIntervention(sourceResolution, ctx);
+            const dispatch = await dispatchClaimedAgentIntervention(sourceResolution, ctx, {
+              acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
+            });
             if (!dispatch.execution) {
               throw new Error('Durable intervention resume did not create an operation');
             }
@@ -2418,7 +2440,7 @@ export const aiAgentRouter = router({
       }
 
       const result = await ctx.aiAgentService.execAgent({
-        acceptsMemberRuntimeEnd: input.streamFeatures?.includes('member_runtime_end'),
+        acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
         agentId,
         appContext,
         autoStart,
@@ -2584,7 +2606,7 @@ export const aiAgentRouter = router({
           workspaceId: ctx.workspaceId,
         });
         const result = await ctx.aiAgentService.execAgent({
-          acceptsMemberRuntimeEnd: task.streamFeatures?.includes('member_runtime_end'),
+          acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(task.streamFeatures),
           includeFinalState: task.includeFinalState,
           agentId,
           appContext,
@@ -3512,7 +3534,9 @@ export const aiAgentRouter = router({
         };
       }
 
-      const dispatch = await dispatchClaimedAgentIntervention(resolution, ctx);
+      const dispatch = await dispatchClaimedAgentIntervention(resolution, ctx, {
+        acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
+      });
       return {
         contractVersion: 2 as const,
         ...(resolution.conversationUrl && { conversationUrl: resolution.conversationUrl }),

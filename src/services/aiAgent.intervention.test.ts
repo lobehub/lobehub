@@ -29,6 +29,19 @@ describe('aiAgentService.resolveAgentInterventionBySource', () => {
     vi.clearAllMocks();
   });
 
+  // G-02: the resolving client subscribes to the continuation, so it declares
+  // its own `member_runtime_end` support rather than inheriting the parked run's.
+  it('declares this client stream features with the resolution', async () => {
+    mocks.resolveAgentInterventionBySource.mockResolvedValueOnce({ success: false });
+
+    await aiAgentService.resolveAgentInterventionBySource(params);
+
+    expect(mocks.resolveAgentInterventionBySource).toHaveBeenCalledWith({
+      ...params,
+      streamFeatures: ['member_runtime_end'],
+    });
+  });
+
   it('preserves a claimed result and its precreated execution', async () => {
     const execution = {
       autoStarted: true,

@@ -212,8 +212,11 @@ describe('AI Agent Router Integration Tests', () => {
       expect(createOperationCalls()).toEqual([true, true]);
 
       vi.mocked(AgentRuntimeService).mockClear();
+      // A client that declares nothing (a released desktop, a stale tab) is an
+      // explicit `false`, so a continuation never inherits a newer client's `true`.
+      await caller.execAgent({ agentId: testAgentId, prompt: 'undeclared single' });
       await caller.execAgents({ tasks: [{ agentId: testAgentId, prompt: 'undeclared' }] });
-      expect(createOperationCalls()).toEqual([undefined]);
+      expect(createOperationCalls()).toEqual([false, false]);
     });
 
     it('should create a new topic when topicId is not provided', async () => {

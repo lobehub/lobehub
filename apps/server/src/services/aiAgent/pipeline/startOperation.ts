@@ -148,9 +148,10 @@ export const startOperation = async (
   // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
   // If createOperation fails, we still have valid messages that need error info
   try {
-    // An approval continuation is a new operation for the same client: carry the
-    // parked operation's `member_runtime_end` declaration over (it is read here,
-    // before the parked operation is retired below).
+    // A server-internal approval continuation (no client of its own declared
+    // anything — client-facing routes always pass a boolean) streams to the
+    // parked operation's client: carry its `member_runtime_end` declaration over
+    // (read here, before the parked operation is retired below).
     const memberRuntimeEndAccepted =
       acceptsMemberRuntimeEnd ??
       (approvalSourceOperationId

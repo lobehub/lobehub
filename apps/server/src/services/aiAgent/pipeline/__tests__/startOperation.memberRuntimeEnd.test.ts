@@ -81,6 +81,24 @@ describe('startOperation › member_runtime_end declaration', () => {
     expect(calls).toEqual(['read-source', 'retire-source']);
   });
 
+  // Codex P1 on #20102: an older client resuming an approval of a run a newer
+  // client started must get what IT declared (nothing ⇒ false), not the parked
+  // operation's `true`.
+  it('keeps a resuming client explicit false over the parked operation declaration', async () => {
+    const { agentRuntimeService, ctx, deps, input } = setup(true);
+
+    await startOperation(
+      deps,
+      ctx,
+      input({ acceptsMemberRuntimeEnd: false, approvalSourceOperationId: 'op-parked' }),
+    );
+
+    expect(agentRuntimeService.acceptsMemberRuntimeEnd).not.toHaveBeenCalled();
+    expect(agentRuntimeService.createOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ acceptsMemberRuntimeEnd: false }),
+    );
+  });
+
   it('leaves the declaration unset for a client that did not make one', async () => {
     const { agentRuntimeService, ctx, deps, input } = setup(true);
 

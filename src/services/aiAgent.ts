@@ -348,7 +348,11 @@ class AiAgentService {
   async resolveAgentInterventionBySource(
     params: ResolveAgentInterventionBySourceParams,
   ): Promise<ResolveAgentInterventionBySourceResult> {
-    const result = await lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate(params);
+    const result = await lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate({
+      ...params,
+      // This client subscribes to the continuation it starts.
+      streamFeatures: STREAM_FEATURES,
+    });
 
     if (!result.success) return { handled: false };
 
