@@ -249,14 +249,13 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
         title={t('environments.form.sources')}
         notice={
           /* When an edit here reaches an instance, which is the question this
-             panel otherwise leaves open: the repository is cloned and the
-             setup command run once, while an instance is built. So changing
-             either does nothing to an instance that already exists until it is
-             rebuilt — the same rule its checkout and its installed packages
-             already follow. Repeated on the setup section and the variables
-             tab, which are governed by it too, and nowhere else: the
-             maintenance command and the network switch are read on every run
-             and need no rebuild at all. */
+             panel otherwise leaves open. An instance keeps the definition it
+             was created with — `configurationSnapshot`, taken once at creation
+             — and a rebuild replays that one rather than reading the
+             environment again. So an edit reaches new instances only, and
+             saying "rebuild to apply" would send people to a button that
+             cannot do it. Repeated on the setup section and the variables tab,
+             which are governed by the same snapshot. */
           <Text fontSize={12} type={'secondary'}>
             {t('environments.form.appliesOnBuild')}
           </Text>
@@ -330,9 +329,10 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
         icon={TerminalIcon}
         title={t('environments.form.setup')}
         notice={
-          /* The setup command's half of it. The maintenance command below is
-             the opposite and says so itself — it runs every time work resumes,
-             which is the whole reason the two are separate fields. */
+          /* The setup command's half of it. The maintenance command below
+             runs every time work resumes, which is the whole reason the two
+             are separate fields — but it is read from the same snapshot, so
+             an edit to it reaches new instances too. */
           <Text fontSize={12} type={'secondary'}>
             {t('environments.form.appliesOnBuild')}
           </Text>

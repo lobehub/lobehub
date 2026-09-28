@@ -541,7 +541,7 @@
   "environments.files.up": "Up one level",
   "environments.form.addEnv": "New variable",
   "environments.form.addSource": "Add repository",
-  "environments.form.appliesOnBuild": "Applied when an instance is built. An instance that already exists keeps what it was built with until you rebuild it.",
+  "environments.form.appliesOnBuild": "Applied when an instance is created. Existing instances keep the definition they were made with — a rebuild replays that one, so use a new instance to pick this up.",
   "environments.form.basics": "Basics",
   "environments.form.bootstrap": "Setup command",
   "environments.form.bootstrapHint": "Runs once in the checkout, with network access, before the conversation starts.",

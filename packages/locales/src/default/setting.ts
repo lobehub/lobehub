@@ -4066,7 +4066,7 @@ When I am ___, I need ___
   'environments.form.desc':
     'What an instance is built from — where the code comes from and what makes it usable.',
   'environments.form.appliesOnBuild':
-    'Applied when an instance is built. An instance that already exists keeps what it was built with until you rebuild it.',
+    'Applied when an instance is created. Existing instances keep the definition they were made with — a rebuild replays that one, so use a new instance to pick this up.',
   'environments.refresh': 'Refresh',
   'environments.emptyPublished': 'Nothing published to this workspace yet',
   'environments.visibility.tabs.workspace': 'Workspace',
