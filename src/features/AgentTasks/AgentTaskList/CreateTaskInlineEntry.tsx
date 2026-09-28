@@ -588,7 +588,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   );
 
   const handleConfirmIntent = useCallback(
-    () => confirmIntentWith(intentAnswers),
+    (answers?: ClarificationAnswers) => confirmIntentWith(answers ?? intentAnswers),
     [confirmIntentWith, intentAnswers],
   );
   // Skipping creates from the draft as typed; the answers state may still hold

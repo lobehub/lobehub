@@ -1460,6 +1460,38 @@ describe('GoalService', () => {
     expect(await service.pendingClarifications()).toEqual([]);
   });
 
+  it('keeps the answers in the fallback task when the re-plan fails', async () => {
+    const planner = vi
+      .spyOn(GoalCriteriaGeneratorService.prototype, 'decompose')
+      .mockResolvedValue({
+        assumptions: [],
+        problemStatement: '写发布说明',
+        questions: [
+          {
+            assumption: '终端用户',
+            blocking: true,
+            options: ['终端用户', '开发者'],
+            question: '给谁看？',
+          },
+        ],
+        tasks: [{ dependsOn: [], hypothesis: null, instruction: '写', title: '撰写' }],
+      });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Release notes' });
+    await service.tick(graph.goal.id);
+    const [{ questions }] = await service.pendingClarifications();
+    await service.answerClarifications(graph.goal.id, [
+      { decisionId: questions[0].decisionId, optionId: 'option-2', resolution: '只关心 SDK' },
+    ]);
+
+    planner.mockRejectedValueOnce(new Error('planner down'));
+    await service.tick(graph.goal.id);
+
+    const task = (await service.graph(graph.goal.id)).nodes.find((n) => n.kind === 'task');
+    expect(task!.description).toContain('Q: 给谁看？');
+    expect(task!.description).toContain('A: 开发者 (只关心 SDK)');
+  });
+
   it('keeps the coordinator understanding when the user edits the goal policy', async () => {
     vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
       assumptions: ['只修 P0'],

@@ -68,7 +68,7 @@ describe('GoalCriteriaGeneratorService', () => {
       expect.objectContaining({ schema: expect.objectContaining({ name: 'goal_decomposition' }) }),
       expect.objectContaining({
         tracing: {
-          promptVersion: 'v1',
+          promptVersion: 'v6',
           scenario: 'goal_decompose',
           schemaName: 'goal_decomposition',
         },

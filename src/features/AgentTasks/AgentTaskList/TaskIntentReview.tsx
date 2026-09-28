@@ -89,7 +89,8 @@ export interface TaskIntentReviewProps {
   /** Mirrors the answers given so far, keyed by clarification index. */
   onAnswersChange: (answers: ClarificationAnswers) => void;
   onBack: () => void;
-  onConfirm: () => void;
+  /** `answers` is what the form just submitted; without it, the mirrored answers are used. */
+  onConfirm: (answers?: ClarificationAnswers) => void;
   /** Create without answering: exactly the task the composer would have created. */
   onSkip: () => void;
   /** Omitted when goals are unavailable — the exit is then simply not offered. */
@@ -204,7 +205,9 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
             submitLabel={t('taskIntent.create')}
             onAnswersChange={handleAnswersChange}
             onSkip={onSkip}
-            onSubmit={onConfirm}
+            // Hand over what was submitted: a keyboard pick submits in the same
+            // event that mirrors it, before the parent's state has caught up.
+            onSubmit={(answers) => onConfirm(toIndexedAnswers(answers))}
           />
         )}
       </Flexbox>
@@ -223,7 +226,7 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
             shape={'round'}
             size={'small'}
             type={'primary'}
-            onClick={onConfirm}
+            onClick={() => onConfirm()}
           >
             {t('taskIntent.create')}
           </Button>

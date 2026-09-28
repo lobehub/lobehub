@@ -43,7 +43,7 @@ describe('chainGoalDecompose', () => {
     const { messages } = chainGoalDecompose({ requirement });
     const prompt = messages[0].content;
 
-    expect(GOAL_DECOMPOSE_PROMPT_VERSION).toBe('v1');
+    expect(GOAL_DECOMPOSE_PROMPT_VERSION).toBe('v6');
     expect(messages[1].content).toContain(requirement);
     expect(prompt).toContain('a request to build, fix, or upgrade requires implementation');
     expect(prompt).toContain('It may pass when it proves a capability is missing');
