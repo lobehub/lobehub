@@ -22,6 +22,12 @@ const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
   const isSharePage = useConversationStore(
     (s) => !!s.context.topicShareId || !!s.context.agentShareId,
   );
+  // "Start a topic in this folder" writes an agent default and opens a fresh
+  // main-agent topic, so only offer it in a single-agent conversation — a group
+  // chat's new topic would not inherit an individual agent's directory.
+  const conversationAgentId = useConversationStore((s) =>
+    s.context.groupId ? undefined : s.context.agentId,
+  );
 
   if (!name || !path) {
     // If required properties are missing, render an error or null
@@ -32,7 +38,15 @@ const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
   // isDirectory may be true (from plugin) or undefined; ensure it is a boolean
   const isDir = isDirectory === true;
 
-  return <LocalFile isDirectory={isDir} name={name} path={path} readonly={isSharePage} />;
+  return (
+    <LocalFile
+      conversationAgentId={conversationAgentId}
+      isDirectory={isDir}
+      name={name}
+      path={path}
+      readonly={isSharePage}
+    />
+  );
 }, isEqual);
 
 export default Render;

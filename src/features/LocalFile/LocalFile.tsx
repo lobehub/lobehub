@@ -97,6 +97,11 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface LocalFileProps {
+  /**
+   * Agent of the conversation rendering this reference. Enables "start a topic
+   * in this folder" for that agent; omitted outside a conversation.
+   */
+  conversationAgentId?: string;
   isDirectory?: boolean;
   name: string;
   path?: string;
@@ -108,6 +113,7 @@ interface LocalFileProps {
 }
 
 export const LocalFile = ({
+  conversationAgentId,
   name,
   path,
   isDirectory = false,
@@ -117,6 +123,7 @@ export const LocalFile = ({
   const { canPreview, handleClick, handleOpenFile, handleOpenFolder, handlePreview } =
     useLocalFileActions({ isDirectory, path, readonly });
   const { canStartTopic, startTopic } = useStartTopicInDirectory({
+    conversationAgentId,
     isDirectory,
     path,
     readonly,

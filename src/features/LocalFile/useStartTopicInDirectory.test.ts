@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useStartTopicInDirectory } from './useStartTopicInDirectory';
 
 const mocks = vi.hoisted(() => ({
+  activeAgentId: 'agent-1',
+  activeTopicId: 'topic-1' as string | null,
   commitAgentDefault: vi.fn(),
   isPreferenceLoading: false,
   switchTopic: vi.fn(),
@@ -30,32 +32,45 @@ vi.mock('@/features/ChatInput/ControlBar/useCommitWorkingDirectory', () => ({
   }),
 }));
 
-vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (state: { activeAgentId: string }) => unknown) =>
-    selector({ activeAgentId: 'agent-1' }),
-}));
+vi.mock('@/store/agent', () => {
+  const getState = () => ({ activeAgentId: mocks.activeAgentId });
+  const useAgentStore = (selector: (state: { activeAgentId: string }) => unknown) =>
+    selector(getState());
+  useAgentStore.getState = getState;
+  return { useAgentStore };
+});
 
-vi.mock('@/store/chat', () => ({
-  useChatStore: (selector: (state: { switchTopic: typeof mocks.switchTopic }) => unknown) =>
-    selector({ switchTopic: mocks.switchTopic }),
-}));
+vi.mock('@/store/chat', () => {
+  const getState = () => ({ activeTopicId: mocks.activeTopicId, switchTopic: mocks.switchTopic });
+  const useChatStore = (selector: (state: ReturnType<typeof getState>) => unknown) =>
+    selector(getState());
+  useChatStore.getState = getState;
+  return { useChatStore };
+});
+
+const renderStartTopic = (params: Partial<Parameters<typeof useStartTopicInDirectory>[0]> = {}) =>
+  renderHook(() =>
+    useStartTopicInDirectory({
+      conversationAgentId: 'agent-1',
+      isDirectory: true,
+      path: '/Users/me/Compositor',
+      readonly: false,
+      ...params,
+    }),
+  );
 
 describe('useStartTopicInDirectory', () => {
   afterEach(() => {
     vi.clearAllMocks();
+    mocks.activeAgentId = 'agent-1';
+    mocks.activeTopicId = 'topic-1';
     mocks.isPreferenceLoading = false;
   });
 
   it('starts a fresh topic after saving the directory as the agent default', async () => {
     mocks.commitAgentDefault.mockResolvedValue(undefined);
     mocks.switchTopic.mockResolvedValue(undefined);
-    const { result } = renderHook(() =>
-      useStartTopicInDirectory({
-        isDirectory: true,
-        path: '/Users/me/Compositor',
-        readonly: false,
-      }),
-    );
+    const { result } = renderStartTopic();
 
     expect(result.current.canStartTopic).toBe(true);
     await result.current.startTopic();
@@ -74,13 +89,7 @@ describe('useStartTopicInDirectory', () => {
 
   it('does not leave the current topic when setting the directory fails', async () => {
     mocks.commitAgentDefault.mockRejectedValue(new Error('write failed'));
-    const { result } = renderHook(() =>
-      useStartTopicInDirectory({
-        isDirectory: true,
-        path: '/Users/me/Compositor',
-        readonly: false,
-      }),
-    );
+    const { result } = renderStartTopic();
 
     await result.current.startTopic();
 
@@ -90,13 +99,7 @@ describe('useStartTopicInDirectory', () => {
 
   it('stays disabled until workspace preferences resolve the target device', async () => {
     mocks.isPreferenceLoading = true;
-    const { result } = renderHook(() =>
-      useStartTopicInDirectory({
-        isDirectory: true,
-        path: '/Users/me/Compositor',
-        readonly: false,
-      }),
-    );
+    const { result } = renderStartTopic();
 
     expect(result.current.canStartTopic).toBe(false);
     await result.current.startTopic();
@@ -105,14 +108,39 @@ describe('useStartTopicInDirectory', () => {
     expect(mocks.switchTopic).not.toHaveBeenCalled();
   });
 
+  it('is unavailable when the rendering conversation is not the active agent', async () => {
+    // e.g. a group chat opened from a task: the global active agent is still the
+    // task agent, which must not receive this directory as its default.
+    mocks.activeAgentId = 'task-agent';
+    const { result } = renderStartTopic({ conversationAgentId: 'supervisor-agent' });
+
+    expect(result.current.canStartTopic).toBe(false);
+    await result.current.startTopic();
+
+    expect(mocks.commitAgentDefault).not.toHaveBeenCalled();
+  });
+
+  it('is unavailable outside a conversation', () => {
+    const { result } = renderStartTopic({ conversationAgentId: undefined });
+
+    expect(result.current.canStartTopic).toBe(false);
+  });
+
+  it('keeps a topic the user navigated to while the directory was saving', async () => {
+    mocks.commitAgentDefault.mockImplementation(async () => {
+      mocks.activeTopicId = 'topic-2';
+    });
+    const { result } = renderStartTopic();
+
+    await result.current.startTopic();
+
+    expect(mocks.commitAgentDefault).toHaveBeenCalled();
+    expect(mocks.switchTopic).not.toHaveBeenCalled();
+    expect(mocks.toastError).not.toHaveBeenCalled();
+  });
+
   it('disables the action for shared directory references', () => {
-    const { result } = renderHook(() =>
-      useStartTopicInDirectory({
-        isDirectory: true,
-        path: '/Users/me/Compositor',
-        readonly: true,
-      }),
-    );
+    const { result } = renderStartTopic({ readonly: true });
 
     expect(result.current.canStartTopic).toBe(false);
   });
