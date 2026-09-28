@@ -66,7 +66,7 @@ export class TaskConfigSliceActionImpl {
   readonly #set: Setter;
   // Lazily-initialized engine shared by every action that mutates a task's
   // `taskDetailMap` entry (setAutomationMode, updateSchedule, updateCheckpoint,
-  // updateTaskExecution, updateTaskModelConfig). Per-task path conflicts
+  // updateReview, updateVerifyConfig, updateTaskExecution, updateTaskModelConfig). Per-task path conflicts
   // serialize rapid edits for the same task while different tasks stay parallel.
   #detailWriteEngine?: OptimisticEngine<TaskDetailWriteState>;
 
@@ -104,15 +104,21 @@ export class TaskConfigSliceActionImpl {
    *
    * The optimistic patch is applied synchronously and a failure replays exactly
    * its inverse, so there is deliberately NO refetch: a refresh is an async SWR
-   * write that can land after the user's next edit and replace it.
+   * write that can land after the user's next edit and replace it. The writers
+   * whose detail is derived server-side (review, verify) refetch INSIDE `mutate`,
+   * which keeps that refresh serialized with the other writes too.
+   *
+   * Resolves on failure unless `rethrow` is set, for multi-step callers that
+   * must abort when the write did not land.
    */
   #commitConfigWrite = async (
     id: string,
     write: {
       mutate: () => Promise<unknown>;
       name: string;
-      onError: (error: unknown) => void;
+      onError: (error: unknown) => void | Promise<void>;
       optimistic: (draft: Draft<TaskDetailWriteState>) => void;
+      rethrow?: boolean;
     },
   ): Promise<void> => {
     const engine = this.#getDetailWriteEngine();
@@ -125,10 +131,11 @@ export class TaskConfigSliceActionImpl {
     try {
       await tx.commit();
       this.#get().internal_setTaskSaveStatus(id, 'saved');
-    } catch {
+    } catch (error) {
       // The engine already replayed the inverse patch and `onError` surfaced the
       // failure — never leave the write looking idle.
       this.#get().internal_setTaskSaveStatus(id, 'failed');
+      if (write.rethrow) throw error;
     }
   };
 
@@ -178,29 +185,55 @@ export class TaskConfigSliceActionImpl {
     id: string,
     review: Parameters<typeof taskService.updateReview>[0]['review'],
   ): Promise<void> => {
-    try {
-      await taskService.updateReview({ id, review });
-      await this.#get().internal_refreshTaskDetail(id);
-    } catch (error) {
-      console.error('[TaskStore] Failed to update review:', error);
-      await this.#get().internal_refreshTaskDetail(id);
-    }
+    // Same column as the run location / model / checkpoint writers, so it goes
+    // through the same serialized path; the refetch stays inside the mutation
+    // (the review detail is derived server-side) so it cannot land on top of a
+    // later write's optimistic state.
+    await this.#commitConfigWrite(id, {
+      mutate: async () => {
+        await taskService.updateReview({ id, review });
+        await this.#get().internal_refreshTaskDetail(id);
+      },
+      name: 'updateReview',
+      onError: async (error) => {
+        console.error('[TaskStore] Failed to update review:', error);
+        await this.#get().internal_refreshTaskDetail(id);
+      },
+      optimistic: (draft) => {
+        const target = draft.taskDetailMap[id];
+        if (!target) return;
+        target.config = { ...target.config, review };
+      },
+    });
   };
 
   updateVerifyConfig = async (
     id: string,
     verify: Parameters<typeof taskService.updateVerifyConfig>[0]['verify'],
   ): Promise<void> => {
-    try {
-      await taskService.updateVerifyConfig({ id, verify });
-      await this.#get().internal_refreshTaskDetail(id);
-    } catch (error) {
-      console.error('[TaskStore] Failed to update verify config:', error);
-      await this.#get().internal_refreshTaskDetail(id);
-      // Rethrow so multi-step callers (e.g. acceptance removal) can abort
-      // instead of proceeding as if the config write landed.
-      throw error;
-    }
+    // Serialized with every other `config` writer — see `updateReview`.
+    await this.#commitConfigWrite(id, {
+      mutate: async () => {
+        await taskService.updateVerifyConfig({ id, verify });
+        await this.#get().internal_refreshTaskDetail(id);
+      },
+      name: 'updateVerifyConfig',
+      onError: async (error) => {
+        console.error('[TaskStore] Failed to update verify config:', error);
+        await this.#get().internal_refreshTaskDetail(id);
+      },
+      // The server applies `verify` as a per-key patch (`null` clears), which the
+      // refetch reflects; the optimistic write only has to claim the task's slot
+      // so this write queues behind — and ahead of — the other config writers.
+      optimistic: (draft) => {
+        const target = draft.taskDetailMap[id];
+        if (!target) return;
+        target.config = { ...target.config };
+      },
+      // Multi-step callers (e.g. acceptance removal) abort instead of proceeding
+      // as if the config write landed.
+      rethrow: true,
+    });
   };
 
   // Safely merges model/provider into config via task.updateConfig without overwriting checkpoint/review

@@ -1527,6 +1527,27 @@ describe('TaskModel', () => {
       expect(config.checkpoint.topic.before).toBe(true);
     });
 
+    it('keeps every key when config writers race on the same task', async () => {
+      // The run-location chip, the review/verify toggles and the model picker all
+      // merge into this one column. Without a lock both writers read the same
+      // snapshot and the later whole-column write drops the other's key.
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      await Promise.all([
+        model.updateTaskConfig(task.id, {
+          execution: toTaskExecutionConfigPatch({ boundDeviceId: 'device-a' }),
+        }),
+        model.updateReviewConfig(task.id, { enabled: true }),
+        model.updateVerifyConfig(task.id, { enabled: true }),
+      ]);
+
+      const config = (await model.findById(task.id))!.config as Record<string, any>;
+      expect(config.execution?.boundDeviceId).toBe('device-a');
+      expect(config.review).toEqual({ enabled: true });
+      expect(config.verify).toEqual({ enabled: true });
+    });
+
     it('should return null for non-existent task', async () => {
       const model = new TaskModel(serverDB, userId);
       const result = await model.updateTaskConfig('non-existent-id', { model: 'gpt-4' });

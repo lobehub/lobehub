@@ -14,6 +14,7 @@ vi.mock('@/services/task', () => ({
     updateCheckpoint: vi.fn(),
     updateConfig: vi.fn(),
     updateReview: vi.fn(),
+    updateVerifyConfig: vi.fn(),
   },
 }));
 
@@ -85,6 +86,59 @@ describe('TaskConfigSliceAction', () => {
 
       expect(taskService.updateReview).toHaveBeenCalledWith({ id: 'T-1', review });
       expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+    });
+  });
+
+  describe('review / verify writes', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    it.each([
+      [
+        'updateReview',
+        () => useTaskStore.getState().updateReview('T-1', { enabled: true } as any),
+        () => taskService.updateReview,
+      ],
+      [
+        'updateVerifyConfig',
+        () => useTaskStore.getState().updateVerifyConfig('T-1', { enabled: true }),
+        () => taskService.updateVerifyConfig,
+      ],
+    ] as const)(
+      '%s queues behind an in-flight run-location write on the same config column',
+      async (_name, write, service) => {
+        // The server merges `tasks.config` read-modify-write, and this writer's
+        // follow-up refetch would otherwise land on top of the run-location
+        // chip's optimistic state while its PUT is still in flight.
+        let settleExecution!: () => void;
+        vi.mocked(taskService.updateConfig).mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              settleExecution = () => resolve({ success: true } as any);
+            }),
+        );
+        vi.mocked(service()).mockResolvedValue({ success: true } as any);
+
+        const store = useTaskStore.getState();
+        const p1 = store.updateTaskExecution('T-1', { boundDeviceId: 'device-a' });
+        const p2 = write();
+
+        await flush();
+        expect(taskService.updateConfig).toHaveBeenCalledTimes(1);
+        expect(service()).not.toHaveBeenCalled();
+
+        settleExecution();
+        await Promise.all([p1, p2]);
+        expect(service()).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it('updateVerifyConfig still rejects so multi-step callers can abort', async () => {
+      vi.mocked(taskService.updateVerifyConfig).mockRejectedValue(new Error('fail'));
+
+      await expect(
+        useTaskStore.getState().updateVerifyConfig('T-1', { enabled: true }),
+      ).rejects.toThrow('fail');
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
     });
   });
 

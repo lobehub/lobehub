@@ -4,6 +4,7 @@ import type {
   TaskExecutionConfig,
   WorkingDirConfig,
 } from '@lobechat/types';
+import { readTaskExecutionConfig } from '@lobechat/types';
 
 /**
  * What a task's own execution selection contributes to ONE run.
@@ -137,15 +138,30 @@ const topicExecutionOf = (metadata?: ChatTopicMetadata | null): string =>
  * CLEARED, because "inherit the agent" is a decision too: a pin the user removed
  * must stop deciding where the run goes.
  *
- * Returns `undefined` when the topic already agrees — the common case, and a
- * continuation should not pay for a write it does not need.
+ * Only a task that has EVER made a selection gets that treatment. A task with no
+ * `execution` block at all — every task written before this existed, and every
+ * one nobody pinned — never said anything about where it runs, so its topic's
+ * own device and directory stand: that is where the continued topic's CLI session
+ * and cwd live, and `turnSetup` keeps routing the continuation there. Clearing
+ * them would let a since-changed agent target move the run to another machine
+ * and lose the session. A selection the user cleared is still persisted (as
+ * `null` axes, see `toTaskExecutionConfigPatch`), so the two stay tellable apart.
+ *
+ * Returns `undefined` when there is nothing to write — the topic already agrees
+ * (the common case: a continuation should not pay for a write it does not need)
+ * or the task never selected anything.
  */
 export const resolveTopicExecutionPatch = (
   topicMetadata: ChatTopicMetadata | null | undefined,
-  execution: TaskExecutionConfig | undefined,
+  /** The task's raw `config` — the block's PRESENCE matters, not only its values. */
+  taskConfig: null | Record<string, unknown> | undefined,
   /** The device this run will use — see {@link resolveTaskRunExecution}. */
   runDeviceId: string | undefined,
 ): ChatTopicMetadata | undefined => {
+  const stored = taskConfig?.execution;
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return undefined;
+
+  const execution = readTaskExecutionConfig(taskConfig);
   const initial = resolveTaskRunExecution(execution, runDeviceId)?.initialTopicMetadata;
 
   const next: ChatTopicMetadata = {

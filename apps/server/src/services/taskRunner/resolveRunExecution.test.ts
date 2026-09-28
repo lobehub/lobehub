@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { LobeAgentAgencyConfig, TaskExecutionConfig } from '@lobechat/types';
+import { toTaskExecutionConfigPatch } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -138,12 +139,12 @@ describe('resolveTopicExecutionPatch', () => {
           workingDirectory: '/srv/app',
           workingDirectoryConfig: { path: '/srv/app' },
         },
-        { boundDeviceId: 'device-a', workingDirectory: '/srv/app' },
+        { execution: { boundDeviceId: 'device-a', workingDirectory: '/srv/app' } },
         'device-a',
       ),
     ).toBeUndefined();
 
-    expect(resolveTopicExecutionPatch({}, undefined, undefined)).toBeUndefined();
+    expect(resolveTopicExecutionPatch({}, {}, undefined)).toBeUndefined();
   });
 
   it('moves a continued topic to the machine the task now pins', () => {
@@ -156,7 +157,7 @@ describe('resolveTopicExecutionPatch', () => {
           workingDirectory: '/a/project',
           workingDirectoryConfig: { path: '/a/project' },
         },
-        { boundDeviceId: 'device-b', workingDirectory: '/b/project' },
+        { execution: { boundDeviceId: 'device-b', workingDirectory: '/b/project' } },
         'device-b',
       ),
     ).toEqual({
@@ -175,7 +176,7 @@ describe('resolveTopicExecutionPatch', () => {
           workingDirectory: '/a/project',
           workingDirectoryConfig: { path: '/a/project' },
         },
-        { repos: ['lobehub/lobehub'] },
+        { execution: { repos: ['lobehub/lobehub'] } },
         undefined,
       ),
     ).toEqual({
@@ -187,6 +188,7 @@ describe('resolveTopicExecutionPatch', () => {
   });
 
   it('clears the axes a task no longer pins, so "inherit the agent" wins', () => {
+    // A cleared selection is persisted as `null` axes (`toTaskExecutionConfigPatch`).
     expect(
       resolveTopicExecutionPatch(
         {
@@ -195,7 +197,7 @@ describe('resolveTopicExecutionPatch', () => {
           workingDirectory: 'lobehub/lobehub',
           workingDirectoryConfig: { path: 'lobehub/lobehub', repoType: 'github' },
         },
-        undefined,
+        { execution: toTaskExecutionConfigPatch(undefined) },
         undefined,
       ),
     ).toEqual({
@@ -213,7 +215,7 @@ describe('resolveTopicExecutionPatch', () => {
     expect(
       resolveTopicExecutionPatch(
         { boundDeviceId: 'device-a', workingDirectory: '/a/project' },
-        { boundDeviceId: 'device-a', workingDirectory: '/a/project' },
+        { execution: { boundDeviceId: 'device-a', workingDirectory: '/a/project' } },
         'device-b',
       ),
     ).toEqual({
@@ -224,10 +226,27 @@ describe('resolveTopicExecutionPatch', () => {
     });
   });
 
+  it('leaves a continued topic alone when the task never selected a run location', () => {
+    // Legacy and untouched tasks carry no `execution` block. Their topic's device
+    // and directory are where the continued CLI session lives; clearing them
+    // would let a since-changed agent target move the run and lose the session.
+    const topic = {
+      boundDeviceId: 'device-a',
+      workingDirectory: '/a/project',
+      workingDirectoryConfig: { path: '/a/project' },
+    };
+
+    expect(resolveTopicExecutionPatch(topic, {}, undefined)).toBeUndefined();
+    expect(resolveTopicExecutionPatch(topic, null, undefined)).toBeUndefined();
+    expect(
+      resolveTopicExecutionPatch(topic, { model: 'gpt-4o', provider: 'openai' }, undefined),
+    ).toBeUndefined();
+  });
+
   it('leaves the rest of the topic metadata to the merge', () => {
     const patch = resolveTopicExecutionPatch(
       { boundDeviceId: 'device-a', cronJobId: 'cron-1', workingDirectory: '/a' },
-      { boundDeviceId: 'device-b' },
+      { execution: { boundDeviceId: 'device-b' } },
       'device-b',
     );
 

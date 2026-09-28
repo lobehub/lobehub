@@ -1461,15 +1461,40 @@ export class TaskModel {
 
   /**
    * Safely merge-update the task's config object.
-   * Reads the current config, shallow-merges the incoming partial, and writes back.
+   * Reads the current config, deep-merges the incoming partial, and writes back.
+   *
+   * The read is taken under a row lock: several independent writers merge into
+   * this one column (model, run location, checkpoint, review, verify), and two
+   * of them reading the same snapshot would let the later whole-column write
+   * silently drop the other's key.
    */
   async updateTaskConfig(id: string, partial: Record<string, unknown>): Promise<TaskItem | null> {
-    const task = await this.findById(id);
-    if (!task) return null;
+    return this.rewriteConfig(id, (current) => merge(current, partial));
+  }
 
-    const current = (task.config as Record<string, unknown>) || {};
-    const config = merge(current, partial);
-    return this.update(id, { config });
+  /**
+   * Read-modify-write of the `config` column under a row lock. Every writer that
+   * derives the next config from the current one must come through here, so two
+   * of them cannot read the same snapshot and drop each other's key.
+   */
+  private async rewriteConfig(
+    id: string,
+    next: (current: Record<string, any>) => Record<string, unknown>,
+  ): Promise<TaskItem | null> {
+    return this.db.transaction(async (tx) => {
+      const runner = tx as LobeChatDatabase;
+      const [task] = await runner
+        .select({ config: tasks.config })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), this.ownership()))
+        .for('update')
+        .limit(1);
+      if (!task) return null;
+
+      return this.writeRow(runner, id, {
+        config: next((task.config as Record<string, any>) || {}),
+      });
+    });
   }
 
   // ========== Context (runtime state) ==========
@@ -1566,18 +1591,16 @@ export class TaskModel {
     id: string,
     patch: { [K in keyof TaskVerifyConfig]?: TaskVerifyConfig[K] | null },
   ): Promise<TaskItem | null> {
-    const task = await this.findById(id);
-    if (!task) return null;
+    return this.rewriteConfig(id, (config) => {
+      const next: Record<string, any> = { ...(config.verify as TaskVerifyConfig | undefined) };
 
-    const config = (task.config as Record<string, any>) || {};
-    const next: Record<string, any> = { ...(config.verify as TaskVerifyConfig | undefined) };
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) delete next[key];
+        else if (value !== undefined) next[key] = value;
+      }
 
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === null) delete next[key];
-      else if (value !== undefined) next[key] = value;
-    }
-
-    return this.update(id, { config: { ...config, verify: next } });
+      return { ...config, verify: next };
+    });
   }
 
   // Check if a task should pause after a topic completes

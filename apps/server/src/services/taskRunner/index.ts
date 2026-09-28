@@ -2,12 +2,7 @@ import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills'
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import type {
-  ExecAgentResult,
-  TaskExecutionConfig,
-  TaskItem,
-  TaskRunTrigger,
-} from '@lobechat/types';
+import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
 import { readTaskExecutionConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -96,11 +91,11 @@ export class TaskRunnerService {
    */
   private async syncTopicExecution(
     topicId: string,
-    execution: TaskExecutionConfig | undefined,
+    taskConfig: Record<string, unknown>,
     runDeviceId: string | undefined,
   ): Promise<void> {
     const topic = await this.topicModel.findById(topicId);
-    const patch = resolveTopicExecutionPatch(topic?.metadata, execution, runDeviceId);
+    const patch = resolveTopicExecutionPatch(topic?.metadata, taskConfig, runDeviceId);
     if (!patch) return;
 
     await this.topicModel.updateMetadata(topicId, patch);
@@ -286,7 +281,7 @@ export class TaskRunnerService {
       // be ignored, and the previous machine's kept. Stamp the task's selection
       // onto the topic first; see `resolveTopicExecutionPatch`.
       if (continueTopicId) {
-        await this.syncTopicExecution(continueTopicId, taskExecution, runDeviceId);
+        await this.syncTopicExecution(continueTopicId, taskConfig, runDeviceId);
       }
 
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
