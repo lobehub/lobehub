@@ -364,6 +364,9 @@ export default {
   'builtins.lobe-knowledge-base.apiName.searchKnowledgeBase': 'Search Library',
   'builtins.lobe-knowledge-base.inspector.andMoreFiles': 'and {{count}} more',
   'builtins.lobe-knowledge-base.inspector.noResults': 'No results',
+  'builtins.lobe-knowledge-base.inspector.noScope': 'No library attached',
+  'builtins.lobe-knowledge-base.render.noScope':
+    'No library is attached to this agent, so nothing was searched. Attach a library to let it search your files.',
   'builtins.lobe-knowledge-base.title': 'Library',
   'builtins.lobe-local-system.apiName.editFile': 'Edit file',
   'builtins.lobe-local-system.apiName.getCommandOutput': 'Get command output',

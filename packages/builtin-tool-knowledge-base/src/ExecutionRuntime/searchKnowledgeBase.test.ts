@@ -22,7 +22,8 @@ describe('KnowledgeBaseExecutionRuntime.searchKnowledgeBase', () => {
     expect(result.content).toContain('No knowledge base is attached to this agent');
     expect(result.content).toContain('readKnowledge');
     expect(result.content).not.toContain('No relevant files found');
-    expect(result.state).toMatchObject({ totalResults: 0 });
+    // The card and chip read this to say "no library attached" instead of "No results".
+    expect(result.state).toMatchObject({ scope: 'none', totalResults: 0 });
   });
 
   it('skips the search entirely when the caller passes an empty knowledge base scope', async () => {
@@ -35,6 +36,7 @@ describe('KnowledgeBaseExecutionRuntime.searchKnowledgeBase', () => {
 
     expect(ragService.semanticSearchForChat).not.toHaveBeenCalled();
     expect(result.content).toContain('No knowledge base is attached to this agent');
+    expect(result.state).toMatchObject({ scope: 'none' });
   });
 
   it('keeps the "no relevant files" message when an attached knowledge base has no match', async () => {
@@ -47,5 +49,6 @@ describe('KnowledgeBaseExecutionRuntime.searchKnowledgeBase', () => {
 
     expect(result.content).toContain('No relevant files found');
     expect(result.content).not.toContain('No knowledge base is attached');
+    expect(result.state).not.toHaveProperty('scope');
   });
 });

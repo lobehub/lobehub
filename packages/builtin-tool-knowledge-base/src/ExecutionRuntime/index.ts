@@ -289,6 +289,7 @@ export class KnowledgeBaseExecutionRuntime {
           chunks: [],
           documents: [],
           fileResults: [],
+          scope: 'none',
           totalResults: 0,
         } satisfies SearchKnowledgeBaseState,
         success: true,
