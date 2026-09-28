@@ -1,11 +1,18 @@
 import debug from 'debug';
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
+import { AzureOpenAI } from 'openai';
 
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { refineErrorCode } from '../../errors';
-import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
+import type {
+  ASROptions,
+  ASRPayload,
+  ASRResponse,
+  ChatMethodOptions,
+  ChatStreamPayload,
+} from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
@@ -72,6 +79,15 @@ const normalizeAzureBaseURL = (value?: string) => {
 
   return url.toString().replace(/\/$/, '');
 };
+
+/**
+ * Azure's `/openai/v1` compatible surface returns 404 `DeploymentNotFound` for
+ * transcription deployments (`gpt-4o-transcribe` family), so transcription must
+ * use the classic `/openai/deployments/{deployment}/audio/transcriptions` path,
+ * which requires an explicit `api-version`.
+ * @see https://learn.microsoft.com/azure/ai-foundry/openai/reference-preview
+ */
+const AZURE_TRANSCRIPTION_API_VERSION = '2025-03-01-preview';
 
 const maskSensitiveUrl = (url: string) => {
   const regex = /^(https:\/\/)([^.]+)(\.(?:openai\.azure\.com|cognitiveservices\.azure\.com).*)$/;
@@ -196,6 +212,8 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
 });
 
 export class LobeAzureOpenAI extends BaseAzureOpenAI {
+  private transcriptionClient?: AzureOpenAI;
+
   constructor(options: Record<string, any> = {}) {
     const { endpoint, ...rest } = options;
     const baseURL = normalizeAzureBaseURL(rest.baseURL ?? endpoint);
@@ -212,6 +230,32 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
     } catch (error) {
       throw this.attachDeploymentId(error, payload.deploymentName ?? payload.model);
     }
+  }
+
+  async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
+    try {
+      return await super.transcribe(payload, options);
+    } catch (error) {
+      throw this.attachDeploymentId(error, this.getMappedModelId(payload.model));
+    }
+  }
+
+  /**
+   * `AzureOpenAI` rewrites `/audio/transcriptions` to
+   * `/deployments/{model}/audio/transcriptions` using the request `model`
+   * (already mapped to the deployment name) and appends `api-version`.
+   */
+  protected getTranscriptionClient(): OpenAI {
+    this.transcriptionClient ??= new AzureOpenAI({
+      apiKey: this._options.apiKey,
+      apiVersion: AZURE_TRANSCRIPTION_API_VERSION,
+      // `this.baseURL` is normalized to `.../openai/v1`; deployments live under `.../openai`.
+      baseURL: this.baseURL.replace(/\/v1$/, ''),
+      defaultHeaders: this._options.defaultHeaders,
+      fetch: this._options.fetch,
+    });
+
+    return this.transcriptionClient;
   }
 
   async createImage(payload: CreateImagePayload) {

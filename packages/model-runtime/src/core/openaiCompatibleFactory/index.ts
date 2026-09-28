@@ -1369,6 +1369,14 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       }
     }
 
+    /**
+     * Client used for `audio.transcriptions`. Providers whose transcription
+     * endpoint differs from their chat base URL (e.g. Azure deployments) override it.
+     */
+    protected getTranscriptionClient(): OpenAI {
+      return this.client;
+    }
+
     async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
       const log = debug(`${this.logPrefix}:transcribe`);
       const { file, fileName, model, language, prompt, responseFormat, temperature } = payload;
@@ -1381,7 +1389,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         const uploadFile =
           file instanceof File ? file : new File([file], fileName || 'audio', { type: file.type });
 
-        const transcription = await this.client.audio.transcriptions.create(
+        const transcription = await this.getTranscriptionClient().audio.transcriptions.create(
           {
             file: uploadFile,
             language,
