@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { resolveThreadScope } from '../../indexing';
 import type { Message, MessageGroupMetadata } from '../../types';
 import { BranchResolver } from '../BranchResolver';
 import { FlatListBuilder } from '../FlatListBuilder';
@@ -10,6 +11,7 @@ describe('FlatListBuilder', () => {
   const createBuilder = (
     messages: Message[],
     messageGroupMap: Map<string, MessageGroupMetadata> = new Map(),
+    threadId?: string | null,
   ) => {
     const messageMap = new Map<string, Message>();
     const childrenMap = new Map<string | null, string[]>();
@@ -25,14 +27,14 @@ describe('FlatListBuilder', () => {
     });
 
     // Mirrors `buildHelperMaps`, so the builder is scoped the way production scopes it.
-    const mainFlowOnly = messages.some((msg) => !msg.threadId);
+    const threadScope = resolveThreadScope(messages, threadId);
 
     const branchResolver = new BranchResolver();
     const messageCollector = new MessageCollector(
       messageMap,
       childrenMap,
       branchResolver,
-      mainFlowOnly,
+      threadScope,
     );
     const messageTransformer = new MessageTransformer();
 
@@ -43,7 +45,7 @@ describe('FlatListBuilder', () => {
       branchResolver,
       messageCollector,
       messageTransformer,
-      mainFlowOnly,
+      threadScope,
     );
   };
 
@@ -1256,7 +1258,15 @@ describe('FlatListBuilder', () => {
           id: 'thr-1',
           parentId: 'asst-1',
           threadId: 'thd-1',
-          tools: [{ apiName: 'search', arguments: '{}', id: 'call-1', identifier: 'search' }],
+          tools: [
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'call-1',
+              identifier: 'search',
+              type: 'default',
+            },
+          ],
         },
       ];
 
@@ -1264,6 +1274,54 @@ describe('FlatListBuilder', () => {
 
       expect(result.map((m) => m.id)).toEqual(['user-1', 'asst-1']);
       expect(result[1].role).toBe('assistant');
+    });
+
+    // The thread view's query returns the unthreaded ancestors together with the thread's
+    // replies, so the input mixes both. Scoped to that thread, the replies must survive while
+    // other threads stay out.
+    const threadQuery: Message[] = [
+      ...mainChain,
+      {
+        ...base,
+        content: 'Reply',
+        createdAt: 3,
+        id: 'thr-1',
+        parentId: 'asst-1',
+        threadId: 'thd-1',
+      },
+      {
+        ...base,
+        content: 'Follow-up',
+        createdAt: 4,
+        id: 'thr-2',
+        parentId: 'thr-1',
+        role: 'user',
+        threadId: 'thd-1',
+      },
+      {
+        ...base,
+        content: 'Other thread',
+        createdAt: 5,
+        id: 'other-1',
+        parentId: 'asst-1',
+        threadId: 'thd-2',
+      },
+    ];
+
+    it('should keep the replies of the requested thread alongside its ancestors', () => {
+      expect(
+        createBuilder(threadQuery, new Map(), 'thd-1')
+          .flatten(threadQuery)
+          .map((m) => m.id),
+      ).toEqual(['user-1', 'asst-1', 'thr-1', 'thr-2']);
+    });
+
+    it('should drop every thread when scoped to the main flow', () => {
+      expect(
+        createBuilder(threadQuery, new Map(), null)
+          .flatten(threadQuery)
+          .map((m) => m.id),
+      ).toEqual(['user-1', 'asst-1']);
     });
 
     it('should still render a thread when it is all the caller passed', () => {

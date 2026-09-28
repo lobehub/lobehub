@@ -35,7 +35,7 @@ export class Transformer {
       this.messageMap,
       helperMaps.childrenMap,
       this.branchResolver,
-      helperMaps.mainFlowOnly,
+      helperMaps.threadScope,
     );
     this.messageTransformer = new MessageTransformer();
 
@@ -55,7 +55,7 @@ export class Transformer {
       this.branchResolver,
       this.messageCollector,
       this.messageTransformer,
-      helperMaps.mainFlowOnly,
+      helperMaps.threadScope,
     );
   }
 

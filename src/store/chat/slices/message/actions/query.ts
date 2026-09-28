@@ -254,7 +254,9 @@ export class MessageQueryActionImpl {
     if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;
 
     // Parse messages using conversation-flow
-    const { flatList } = parse(reconciled);
+    // A thread view's rows are its ancestors plus its replies; scope the parse to that thread
+    // so the replies are not dropped as a side conversation.
+    const { flatList } = parse(reconciled, undefined, { threadId: ctx.threadId });
 
     this.#set(
       {

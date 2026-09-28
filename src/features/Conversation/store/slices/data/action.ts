@@ -166,7 +166,7 @@ export const dataSlice: StateCreator<
     }
 
     // Re-parse for display order and grouping
-    const { flatList } = parse(newDbMessages);
+    const { flatList } = parse(newDbMessages, undefined, { threadId: get().context.threadId });
     // parse() rebuilds every message/block/tool reference, so pin unchanged
     // subtrees back to their previous identity to preserve memo bailouts.
     const stableFlatList = stabilizeReferences(get().displayMessages, flatList);
@@ -206,7 +206,7 @@ export const dataSlice: StateCreator<
     const prevDbMessages = get().dbMessages;
 
     // Parse messages using conversation-flow
-    const { flatList } = parse(messages);
+    const { flatList } = parse(messages, undefined, { threadId: get().context.threadId });
     const stableFlatList = stabilizeReferences(get().displayMessages, flatList);
 
     log(
@@ -313,7 +313,7 @@ export const dataSlice: StateCreator<
           );
 
           // Parse messages using conversation-flow
-          const { flatList } = parse(mergedMessages);
+          const { flatList } = parse(mergedMessages, undefined, { threadId: context.threadId });
           const stableFlatList = stabilizeReferences(get().displayMessages, flatList);
 
           log(

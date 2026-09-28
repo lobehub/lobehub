@@ -1,4 +1,4 @@
-import type { HelperMaps, Message, MessageGroupMetadata } from './types';
+import type { HelperMaps, Message, MessageGroupMetadata, ThreadScope } from './types';
 
 interface CompressedDisplayNode {
   children?: CompressedDisplayNode[];
@@ -32,6 +32,24 @@ const getLastMessageIdFromCompressedDisplay = (
 };
 
 /**
+ * Resolve the flat-list thread scope. An explicit `threadId` (including `null`) wins; without
+ * one, mixed input is scoped to the main flow and thread-only input keeps every message.
+ */
+export const resolveThreadScope = (messages: Message[], threadId?: string | null): ThreadScope => {
+  if (threadId !== undefined) return threadId || null;
+
+  return messages.some((message) => !message.threadId) ? null : undefined;
+};
+
+/** Whether `message` belongs to the flat list under `scope`. */
+export const isInThreadScope = (message: Message | undefined, scope: ThreadScope): boolean => {
+  if (!message) return false;
+  if (scope === undefined || !message.threadId) return true;
+
+  return message.threadId === scope;
+};
+
+/**
  * Phase 1: Indexing
  * Builds helper maps for efficient querying during parsing
  *
@@ -42,6 +60,7 @@ const getLastMessageIdFromCompressedDisplay = (
 export function buildHelperMaps(
   messages: Message[],
   messageGroups?: MessageGroupMetadata[],
+  threadId?: string | null,
 ): HelperMaps {
   const messageMap = new Map<string, Message>();
   const childrenMap = new Map<string | null, string[]>();
@@ -112,9 +131,9 @@ export function buildHelperMaps(
 
   return {
     childrenMap,
-    mainFlowOnly: messages.some((message) => !message.threadId),
     messageGroupMap,
     messageMap,
     threadMap,
+    threadScope: resolveThreadScope(messages, threadId),
   };
 }

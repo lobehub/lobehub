@@ -2973,7 +2973,7 @@ export const aiAgentRouter = router({
       );
 
       // 6.1 Parse messages using conversation-flow for UI display
-      const { flatList: parsedMessages } = parse(threadMessages);
+      const { flatList: parsedMessages } = parse(threadMessages, undefined, { threadId });
 
       // 7. Get result content when task is completed or failed
       let resultContent: string | undefined;

@@ -1,4 +1,12 @@
-import type { ContextNode, IdNode, Message, MessageNode, SignalCallbacksNode } from '../types';
+import { isInThreadScope } from '../indexing';
+import type {
+  ContextNode,
+  IdNode,
+  Message,
+  MessageNode,
+  SignalCallbacksNode,
+  ThreadScope,
+} from '../types';
 import { BranchResolver } from './BranchResolver';
 
 /**
@@ -57,8 +65,8 @@ export class MessageCollector {
     private messageMap: Map<string, Message>,
     private childrenMap: Map<string | null, string[]>,
     private branchResolver: BranchResolver = new BranchResolver(messageMap),
-    /** See `HelperMaps.mainFlowOnly`. Threaded messages are out of scope when it is set. */
-    private mainFlowOnly: boolean = false,
+    /** See `ThreadScope`. Defaults to every message in scope. */
+    private threadScope: ThreadScope = undefined,
   ) {}
 
   /**
@@ -71,9 +79,9 @@ export class MessageCollector {
    */
   private scopedMessages(): Message[] {
     const messages = [...this.messageMap.values()];
-    if (!this.mainFlowOnly) return messages;
+    if (this.threadScope === undefined) return messages;
 
-    return messages.filter((message) => !message.threadId);
+    return messages.filter((message) => isInThreadScope(message, this.threadScope));
   }
 
   /**

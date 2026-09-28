@@ -1,6 +1,7 @@
 import type { AssistantContentBlock, ChatToolPayloadWithResult } from '@lobechat/types';
 
-import type { Message, MessageGroupMetadata } from '../types';
+import { isInThreadScope } from '../indexing';
+import type { Message, MessageGroupMetadata, ThreadScope } from '../types';
 import type { BranchResolver } from './BranchResolver';
 import type { MessageCollector } from './MessageCollector';
 import type { MessageTransformer } from './MessageTransformer';
@@ -30,24 +31,27 @@ export class FlatListBuilder {
     private branchResolver: BranchResolver,
     private messageCollector: MessageCollector,
     private messageTransformer: MessageTransformer,
-    /** See `HelperMaps.mainFlowOnly`. Threaded messages are out of scope when it is set. */
-    private mainFlowOnly: boolean = false,
+    /** See `ThreadScope`. Defaults to every message in scope. */
+    private threadScope: ThreadScope = undefined,
   ) {}
 
   /**
-   * Children of `parentId` that belong to the main conversation flow.
+   * Children of `parentId` that belong to the flat list's thread scope.
    *
    * Threaded messages live outside the main chain, and `buildIdTree` already drops them from
    * the context tree. The flat list has to apply the same rule: a thread head is parented to
    * nothing (`parentId: null`) or to the main-chain assistant/tool that spawned it, so an
    * unfiltered walk reaches it and renders a background run — an isolated memory or sub-agent
-   * turn — as an ordinary bubble in the middle of the user's transcript.
+   * turn — as an ordinary bubble in the middle of the user's transcript. A thread view keeps
+   * its own thread in scope, since its input is the ancestors plus that thread's replies.
    */
   private childIdsInScope(parentId: string | null): string[] {
     const childIds = this.childrenMap.get(parentId) ?? [];
-    if (!this.mainFlowOnly) return childIds;
+    if (this.threadScope === undefined) return childIds;
 
-    return childIds.filter((childId) => !this.messageMap.get(childId)?.threadId);
+    return childIds.filter((childId) =>
+      isInThreadScope(this.messageMap.get(childId), this.threadScope),
+    );
   }
 
   /**
@@ -58,9 +62,10 @@ export class FlatListBuilder {
     const flatList: Message[] = [];
     const processedIds = new Set<string>();
 
-    const scopedMessages = this.mainFlowOnly
-      ? messages.filter((message) => !message.threadId)
-      : messages;
+    const scopedMessages =
+      this.threadScope === undefined
+        ? messages
+        : messages.filter((message) => isInThreadScope(message, this.threadScope));
 
     // Determine the root parentId
     // Normal case: start from null (messages with no parentId)
