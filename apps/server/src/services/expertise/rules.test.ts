@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ExpertiseRuleDraftService } from './rules';
+import { DraftRuleInputSchema, ExpertiseRuleDraftService } from './rules';
 
 const { resolveExpertiseModelConfig } = vi.hoisted(() => ({
   resolveExpertiseModelConfig: vi.fn(),
@@ -115,5 +115,16 @@ describe('ExpertiseRuleDraftService', () => {
 
     expect(draft.title).toBe('OSS 工程规范');
     expect(generateObject.mock.calls[0][1].tracing.scenario).toBe('expertise_rule_group_draft');
+  });
+
+  it('accepts a scope with more groups than a page used to fit', () => {
+    const many = Array.from({ length: 120 }, (_, i) => ({
+      gate: `守门题 ${i}`,
+      id: `g-${i}`,
+      title: `分组 ${i}`,
+    }));
+    expect(DraftRuleInputSchema.safeParse({ brief: '颜色取自变量', groups: many }).success).toBe(
+      true,
+    );
   });
 });

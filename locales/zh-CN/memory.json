@@ -199,6 +199,7 @@
   "rules.reason.reviewer": "你说过的",
   "rules.reason.taste": "凭感觉",
   "rules.revisions.bySystem": "系统改的",
+  "rules.revisions.byTeammate": "队友改的",
   "rules.revisions.byYou": "你改的",
   "rules.revisions.generalize": "并入了「{{title}}」",
   "rules.revisions.prevTitle": "原来叫「{{title}}」",

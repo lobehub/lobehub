@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import type { RuleItem, RuleScope } from '@/services/expertise';
+import type { RuleItem, RuleRevision, RuleScope } from '@/services/expertise';
 
 export type RuleSectionKey = 'rule' | 'why' | 'how' | 'limits';
 
@@ -33,6 +33,17 @@ export const mergedIntoId = (rule: Pick<RuleItem, 'rejectedReason'>) =>
   rule.rejectedReason?.startsWith('merged-into:')
     ? rule.rejectedReason.slice('merged-into:'.length)
     : null;
+
+/**
+ * Who made one edit. In a shared group any member can edit, so a human edit is "yours" only when
+ * the reader made it.
+ */
+export const revisionAuthorKey = (revision: Pick<RuleRevision, 'byViewer' | 'changedBy'>) => {
+  if (revision.changedBy !== 'user') return 'rules.revisions.bySystem' as const;
+  return revision.byViewer
+    ? ('rules.revisions.byYou' as const)
+    : ('rules.revisions.byTeammate' as const);
+};
 
 /**
  * The sentence that says where a group takes effect, in the reader's language and with the

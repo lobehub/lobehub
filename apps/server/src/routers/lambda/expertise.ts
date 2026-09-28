@@ -15,7 +15,7 @@ import {
   ExpertiseDomainService,
 } from '@/server/services/expertise/domain';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
-import { ExpertiseRuleDraftService } from '@/server/services/expertise/rules';
+import { DraftRuleInputSchema, ExpertiseRuleDraftService } from '@/server/services/expertise/rules';
 import { ExpertiseHistoryWorkflow } from '@/server/workflows/expertiseHistory';
 
 /**
@@ -263,12 +263,7 @@ export const expertiseRouter = router({
    */
   // Drafting spends model capacity on something only a member can save, so it is gated the same.
   draftRule: expertiseWriteProcedure
-    .input(
-      z.object({
-        brief: z.string().min(1).max(20_000),
-        groups: z.array(z.object({ gate: z.string(), id: z.string(), title: z.string() })).max(50),
-      }),
-    )
+    .input(DraftRuleInputSchema)
     .mutation(async ({ ctx, input }) => ctx.expertiseRuleDraftService.draftRule(input)),
 
   /** Drafts a group (name + gate question) from a sentence; `createRuleGroup` persists it. */

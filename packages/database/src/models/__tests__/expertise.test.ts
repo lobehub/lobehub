@@ -524,30 +524,128 @@ describe('ExpertiseModel', () => {
     expect(revisions[0]).toMatchObject({ changedBy: 'user', kind: 'user-feedback', revision: 2 });
   });
 
-  it('numbers revisions from the row, not from a stale read', async () => {
+  it('numbers revisions from the row, and a switch flip never writes one back', async () => {
     const { first } = await seedRuleGroup();
     const rules = new ExpertiseRuleRepository(serverDB, userId);
+    const model = new ExpertiseModel(serverDB, userId);
     await rules.updateRule(first, { title: '第二版' });
     await rules.updateRule(first, { title: '第三版' });
 
-    // Another request read the rule back when it was still at revision 1.
-    const reader = new ExpertiseModel(serverDB, userId);
-    const stale = { ...(await reader.findLesson(first))!, currentRevision: 1 };
-    const racing = new ExpertiseRuleRepository(serverDB, userId);
-    racing['model'].findLesson = async () => stale;
+    await rules.updateRule(first, { enforcement: 'block' });
+    expect((await model.findLesson(first))?.currentRevision).toBe(3);
 
-    // A switch flip does not write the stale number back...
-    await racing.updateRule(first, { enforcement: 'block' });
-    const [afterSwitch] = await serverDB
-      .select({ rev: expertiseLessons.currentRevision })
-      .from(expertiseLessons)
-      .where(eq(expertiseLessons.id, first));
-    expect(afterSwitch.rev).toBe(3);
-
-    // ...and a wording edit takes the next free number instead of colliding with revision 2.
-    await expect(racing.updateRule(first, { title: '第四版' })).resolves.toMatchObject({
+    await expect(rules.updateRule(first, { title: '第四版' })).resolves.toMatchObject({
       revision: 4,
     });
+  });
+
+  it('keeps both of two concurrent edits to different sections', async () => {
+    const { first } = await seedRuleGroup();
+    const rules = new ExpertiseRuleRepository(serverDB, userId);
+
+    // Two members save different sections of the same rule at the same moment.
+    const results = await Promise.all([
+      rules.updateRule(first, { sections: { why: '截图要能复现' } }),
+      rules.updateRule(first, { sections: { limits: '报错态本身除外' } }),
+    ]);
+
+    expect(results.map((r) => r?.revision).sort()).toEqual([2, 3]);
+    const lesson = await new ExpertiseModel(serverDB, userId).findLesson(first);
+    expect(lesson?.currentRevision).toBe(3);
+    expect(lesson?.sections).toEqual(
+      expect.arrayContaining([
+        { body: '截图要能复现', key: 'why' },
+        { body: '报错态本身除外', key: 'limits' },
+      ]),
+    );
+  });
+
+  it("tells a member which edits to a shared rule were a teammate's", async () => {
+    const teammate = 'expertise-rules-editor-teammate';
+    const workspaceId = 'rules-editor-workspace';
+    await serverDB.insert(users).values({ id: teammate });
+    await serverDB
+      .insert(workspaces)
+      .values({ id: workspaceId, name: 'Team', primaryOwnerId: userId, slug: 'rules-editor-team' });
+    await serverDB.insert(expertiseDomains).values({
+      anchorChosenAt: new Date(),
+      domainFilter: '团队规矩',
+      id: 'edited-domain',
+      slug: 'edited-domain',
+      title: '团队规矩',
+      userId,
+      visibility: 'public',
+      workspaceId,
+    });
+    const lesson = '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b107';
+    await serverDB.insert(expertiseLessons).values({
+      code: 'P-01',
+      domainId: 'edited-domain',
+      id: lesson,
+      polarity: 'rule',
+      sections: [{ body: '共享规矩', key: 'rule' }],
+      title: '共享规矩',
+    });
+
+    await new ExpertiseRuleRepository(serverDB, teammate, workspaceId).updateRule(lesson, {
+      title: '队友改过的规矩',
+    });
+
+    const [mine] = await new ExpertiseModel(serverDB, userId, workspaceId).listLessonRevisions(
+      lesson,
+    );
+    const [theirs] = await new ExpertiseModel(serverDB, teammate, workspaceId).listLessonRevisions(
+      lesson,
+    );
+    expect(mine.byViewer).toBe(false);
+    expect(mine).not.toHaveProperty('changedByUserId');
+    expect(theirs.byViewer).toBe(true);
+  });
+
+  it("does not name a teammate's private agent among a shared group's mounts", async () => {
+    const teammate = 'expertise-rules-mount-teammate';
+    const workspaceId = 'rules-mount-workspace';
+    await serverDB.insert(users).values({ id: teammate });
+    await serverDB
+      .insert(workspaces)
+      .values({ id: workspaceId, name: 'Team', primaryOwnerId: userId, slug: 'rules-mount-team' });
+    await serverDB.insert(agents).values([
+      {
+        id: 'teammate-private-agent',
+        title: '队友的私有助手',
+        userId: teammate,
+        visibility: 'private',
+        workspaceId,
+      },
+      {
+        id: 'teammate-public-agent',
+        title: '团队助手',
+        userId: teammate,
+        visibility: 'public',
+        workspaceId,
+      },
+    ]);
+    await serverDB.insert(expertiseDomains).values({
+      anchorChosenAt: new Date(),
+      domainFilter: '团队规矩',
+      id: 'mounted-domain',
+      slug: 'mounted-domain',
+      title: '团队规矩',
+      userId,
+      workspaceId,
+    });
+    await serverDB.insert(expertiseBindings).values([
+      { boundWorkspaceId: workspaceId, domainId: 'mounted-domain', sortOrder: 0 },
+      { agentId: 'teammate-private-agent', domainId: 'mounted-domain', sortOrder: 1 },
+      { agentId: 'teammate-public-agent', domainId: 'mounted-domain', sortOrder: 2 },
+    ]);
+
+    const [group] = await new ExpertiseModel(serverDB, userId, workspaceId).listRules();
+
+    expect(group.scopes).toEqual([
+      { id: workspaceId, kind: 'workspace', title: null },
+      { id: 'teammate-public-agent', kind: 'agent', title: '团队助手' },
+    ]);
   });
 
   it("moves one rule within its group from the server's own order", async () => {

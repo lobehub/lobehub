@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendException, findMove } from './labels';
+import { appendException, findMove, revisionAuthorKey } from './labels';
 
 describe('appendException', () => {
   it('keeps the exceptions already written and adds the new one below', () => {
@@ -38,5 +38,20 @@ describe('findMove', () => {
 
   it('reports nothing when the order did not change', () => {
     expect(findMove(['a', 'b'], ['a', 'b'])).toBeNull();
+  });
+});
+
+describe('revisionAuthorKey', () => {
+  it("credits the reader only with their own edits, not a teammate's", () => {
+    expect(revisionAuthorKey({ byViewer: true, changedBy: 'user' })).toBe('rules.revisions.byYou');
+    expect(revisionAuthorKey({ byViewer: false, changedBy: 'user' })).toBe(
+      'rules.revisions.byTeammate',
+    );
+  });
+
+  it('attributes a generalization to the system', () => {
+    expect(revisionAuthorKey({ byViewer: false, changedBy: 'system' })).toBe(
+      'rules.revisions.bySystem',
+    );
   });
 });

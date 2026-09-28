@@ -221,6 +221,7 @@ export default {
   'rules.reason.reviewer': 'in your words',
   'rules.reason.taste': 'Judgement call',
   'rules.revisions.bySystem': 'by the system',
+  'rules.revisions.byTeammate': 'by a teammate',
   'rules.revisions.byYou': 'by you',
   'rules.revisions.generalize': 'Merged in "{{title}}"',
   'rules.revisions.prevTitle': 'Was "{{title}}"',

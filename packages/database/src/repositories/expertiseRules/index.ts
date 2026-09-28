@@ -23,15 +23,11 @@ export interface UpdateRulePatch {
  * single-table pieces on {@link ExpertiseModel}. Reads and single-table writes stay on the model.
  */
 export class ExpertiseRuleRepository {
-  private readonly model: ExpertiseModel;
-
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     private readonly workspaceId?: string,
-  ) {
-    this.model = new ExpertiseModel(db, userId, workspaceId);
-  }
+  ) {}
 
   private inTransaction = <T>(run: (model: ExpertiseModel) => Promise<T>) =>
     this.db.transaction((tx) =>
@@ -44,53 +40,50 @@ export class ExpertiseRuleRepository {
    * one list whether the reviewer typed a sentence or rewrote a paragraph. Switches (enforcement,
    * compilability, reason kind) are not versioned: they are settings, not judgments.
    */
-  updateRule = async (lessonId: string, patch: UpdateRulePatch) => {
-    const lesson = await this.model.findLesson(lessonId);
-    if (!lesson) return null;
+  updateRule = async (lessonId: string, patch: UpdateRulePatch) =>
+    this.inTransaction(async (model) => {
+      // The patch is applied to the row as it is now, not as this request first read it: two
+      // members saving different sections at once must both keep their edit.
+      const lesson = await model.lockLesson(lessonId);
+      if (!lesson) return null;
 
-    const title = patch.title?.trim();
-    const titleChanged = Boolean(title) && title !== lesson.title;
+      const title = patch.title?.trim();
+      const titleChanged = Boolean(title) && title !== lesson.title;
 
-    let sections = lesson.sections;
-    let sectionsChanged = false;
-    if (patch.sections) {
-      sections = lesson.sections.filter((section) => !(section.key in patch.sections!));
-      for (const [key, body] of Object.entries(patch.sections)) {
-        const text = body?.trim();
-        if (text) sections.push({ body: text, key: key as ExpertiseLessonSection['key'] });
+      let sections = lesson.sections;
+      let sectionsChanged = false;
+      if (patch.sections) {
+        sections = lesson.sections.filter((section) => !(section.key in patch.sections!));
+        for (const [key, body] of Object.entries(patch.sections)) {
+          const text = body?.trim();
+          if (text) sections.push({ body: text, key: key as ExpertiseLessonSection['key'] });
+        }
+        sectionsChanged = true;
       }
-      sectionsChanged = true;
-    }
-    // The rule sentence and the title are the same words seen from two places.
-    if (titleChanged && !patch.sections?.rule) {
-      sections = [
-        { body: title!, key: 'rule' as const },
-        ...sections.filter((section) => section.key !== 'rule'),
-      ];
-      sectionsChanged = true;
-    }
+      // The rule sentence and the title are the same words seen from two places.
+      if (titleChanged && !patch.sections?.rule) {
+        sections = [
+          { body: title!, key: 'rule' as const },
+          ...sections.filter((section) => section.key !== 'rule'),
+        ];
+        sectionsChanged = true;
+      }
 
-    const versioned = titleChanged || sectionsChanged;
-    const feedback = titleChanged
-      ? title!
-      : (Object.values(patch.sections ?? {})
-          .find(Boolean)
-          ?.trim() ?? null);
-
-    const revision = await this.inTransaction(async (model) => {
-      let next = lesson.currentRevision;
+      const versioned = titleChanged || sectionsChanged;
+      const revision = versioned ? lesson.currentRevision + 1 : lesson.currentRevision;
       if (versioned) {
-        // Take the next number under a row lock: two edits racing on a stale read would
-        // otherwise both claim it and trip the (lesson, revision) unique key.
-        next = ((await model.lockLessonRevision(lessonId)) ?? lesson.currentRevision) + 1;
         await model.insertLessonRevision({
           changedBy: 'user',
           changedByUserId: this.userId,
-          feedback,
+          feedback: titleChanged
+            ? title!
+            : (Object.values(patch.sections ?? {})
+                .find(Boolean)
+                ?.trim() ?? null),
           kind: 'user-feedback',
           lessonId,
           prevTitle: titleChanged ? lesson.title : null,
-          revision: next,
+          revision,
           sections,
         });
       }
@@ -100,13 +93,11 @@ export class ExpertiseRuleRepository {
         ...(patch.reasonKind && { reasonKind: patch.reasonKind }),
         ...(titleChanged && { title }),
         ...(sectionsChanged && { sections }),
-        // A switch flip is not a revision and must not write back a number it read earlier.
-        ...(versioned && { currentRevision: next }),
+        // A switch flip is not a revision and never writes the number back.
+        ...(versioned && { currentRevision: revision }),
       });
-      return next;
+      return { id: lessonId, revision };
     });
-    return { id: lessonId, revision };
-  };
 
   /**
    * Folds one rule into another: the counts move to the target, the target gets a `generalize`
@@ -116,16 +107,18 @@ export class ExpertiseRuleRepository {
    */
   mergeRules = async (fromId: string, intoId: string) => {
     if (fromId === intoId) return null;
-    const [from, into] = await Promise.all([
-      this.model.findLesson(fromId),
-      this.model.findLesson(intoId),
-    ]);
-    if (!from || !into) return null;
-    // Folding into an archived rule would leave neither rule in force.
-    if (from.status !== 'active' || into.status !== 'active') return null;
+    return this.inTransaction(async (model) => {
+      // Both rows are read under a lock, in a fixed order so two merges of the same pair cannot
+      // deadlock, and the counts are summed from what they hold now.
+      const locked = new Map<string, Awaited<ReturnType<ExpertiseModel['lockLesson']>>>();
+      for (const id of [fromId, intoId].sort()) locked.set(id, await model.lockLesson(id));
+      const from = locked.get(fromId);
+      const into = locked.get(intoId);
+      if (!from || !into) return null;
+      // Folding into an archived rule would leave neither rule in force.
+      if (from.status !== 'active' || into.status !== 'active') return null;
 
-    const revision = await this.inTransaction(async (model) => {
-      const next = ((await model.lockLessonRevision(intoId)) ?? into.currentRevision) + 1;
+      const revision = into.currentRevision + 1;
       // The evidence stays where it is; `generalizedFromIds` is how the target reads it.
       await model.insertLessonRevision({
         changedBy: 'user',
@@ -134,11 +127,11 @@ export class ExpertiseRuleRepository {
         kind: 'generalize',
         lessonId: intoId,
         prevTitle: null,
-        revision: next,
+        revision,
         sections: into.sections,
       });
       await model.updateLessonFields(intoId, {
-        currentRevision: next,
+        currentRevision: revision,
         exampleCount: into.exampleCount + from.exampleCount,
         falsePositiveCount: into.falsePositiveCount + from.falsePositiveCount,
         generalizedFromIds: [...(into.generalizedFromIds ?? []), fromId],
@@ -155,8 +148,7 @@ export class ExpertiseRuleRepository {
         retiredAt: new Date(),
         status: 'retired',
       });
-      return next;
+      return { fromId, intoId, revision };
     });
-    return { fromId, intoId, revision };
   };
 }

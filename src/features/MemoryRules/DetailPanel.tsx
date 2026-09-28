@@ -33,7 +33,13 @@ import type { RuleGroup, RuleItem, UpdateRuleInput } from '@/services/expertise'
 
 import Field from './Field';
 import { useRuleRevisions, useRuleSources } from './hooks';
-import { appendException, mergedIntoId, sectionBody, useScopeLabel } from './labels';
+import {
+  appendException,
+  mergedIntoId,
+  revisionAuthorKey,
+  sectionBody,
+  useScopeLabel,
+} from './labels';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -557,11 +563,7 @@ const RuleDocument = ({
                   </div>
                 )}
                 <div className={styles.muted}>
-                  {t(
-                    revision.changedBy === 'user'
-                      ? 'rules.revisions.byYou'
-                      : 'rules.revisions.bySystem',
-                  )}
+                  {t(revisionAuthorKey(revision))}
                   {' · '}
                   {dayjs(revision.createdAt).format('YYYY-MM-DD')}
                 </div>

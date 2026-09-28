@@ -260,9 +260,21 @@ export class ExpertiseModel {
         })
         .from(expertiseBindings)
         .leftJoin(projects, eq(projects.id, expertiseBindings.projectId))
-        .leftJoin(agents, eq(agents.id, expertiseBindings.agentId))
+        // A shared group can also be mounted on a teammate's private agent; the viewer may see
+        // the group without being allowed to see that agent, its id or its name.
+        .leftJoin(
+          agents,
+          and(
+            eq(agents.id, expertiseBindings.agentId),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents),
+          ),
+        )
         .where(
-          and(inArray(expertiseBindings.domainId, domainIds), eq(expertiseBindings.enabled, true)),
+          and(
+            inArray(expertiseBindings.domainId, domainIds),
+            eq(expertiseBindings.enabled, true),
+            or(isNull(expertiseBindings.agentId), isNotNull(agents.id)),
+          ),
         )
         .orderBy(asc(expertiseBindings.sortOrder)),
     ]);
@@ -855,9 +867,10 @@ export class ExpertiseModel {
       if (!previous || chain.includes(previous)) break;
       chain.push(previous);
     }
-    return this.db
+    const rows = await this.db
       .select({
         changedBy: expertiseLessonRevisions.changedBy,
+        changedByUserId: expertiseLessonRevisions.changedByUserId,
         createdAt: expertiseLessonRevisions.createdAt,
         feedback: expertiseLessonRevisions.feedback,
         id: expertiseLessonRevisions.id,
@@ -871,6 +884,12 @@ export class ExpertiseModel {
       .where(and(inArray(expertiseLessonRevisions.lessonId, chain), this.scopeWhere()))
       .orderBy(desc(expertiseLessonRevisions.revision), desc(expertiseLessonRevisions.createdAt))
       .limit(limit);
+    // In a shared group any member can edit; the reader is told whether an edit was theirs, and
+    // the other member's id does not leave the server.
+    return rows.map(({ changedByUserId, ...row }) => ({
+      ...row,
+      byViewer: changedByUserId === this.userId,
+    }));
   };
 
   /** Brings a retired standard back into practice. */
@@ -952,16 +971,19 @@ export class ExpertiseModel {
   };
 
   /**
-   * The lesson's current revision number, read under a row lock. Call it inside the transaction
-   * that writes the next revision, so two concurrent edits cannot both claim the same number.
+   * The same row `findLesson` returns, read under a row lock for the rest of the caller's
+   * transaction. Anything computed from it — the next revision number, a section patch, merged
+   * counts — stays valid until commit, so a concurrent edit waits instead of being overwritten.
    */
-  lockLessonRevision = async (lessonId: string) => {
+  lockLesson = async (lessonId: string) => {
     const [row] = await this.db
-      .select({ currentRevision: expertiseLessons.currentRevision })
+      .select({ lesson: expertiseLessons })
       .from(expertiseLessons)
-      .where(eq(expertiseLessons.id, lessonId))
-      .for('update');
-    return row?.currentRevision;
+      .innerJoin(expertiseDomains, eq(expertiseDomains.id, expertiseLessons.domainId))
+      .where(and(eq(expertiseLessons.id, lessonId), this.scopeWhere()))
+      .for('update', { of: expertiseLessons })
+      .limit(1);
+    return row?.lesson;
   };
 
   /** Appends one entry to a lesson's edit history. */

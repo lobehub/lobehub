@@ -44,10 +44,18 @@ export const RuleGroupDraftSchema = z.object({
 export type RuleDraft = z.infer<typeof RuleDraftSchema>;
 export type RuleGroupDraft = z.infer<typeof RuleGroupDraftSchema>;
 
-export interface DraftRuleInput {
-  brief: string;
-  groups: { gate: string; id: string; title: string }[];
-}
+/**
+ * What the compose box sends: the sentence plus every group the page shows, so the model can
+ * file the draft into one of them. The group list is not capped — group creation has no limit
+ * and the page lists them all, so a cap here would turn every draft in a long-lived scope into a
+ * failure.
+ */
+export const DraftRuleInputSchema = z.object({
+  brief: z.string().min(1).max(20_000),
+  groups: z.array(z.object({ gate: z.string(), id: z.string(), title: z.string() })),
+});
+
+export type DraftRuleInput = z.infer<typeof DraftRuleInputSchema>;
 
 /**
  * Turns what the reviewer typed or pasted into an editable draft, and nothing else: no row is
