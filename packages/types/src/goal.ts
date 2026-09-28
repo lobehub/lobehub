@@ -228,6 +228,20 @@ export interface GoalManagerPolicy {
   maxTurns?: number;
 }
 
+/** Bounded wait on time or one correlated external result. */
+export interface GoalManagerWait {
+  event?: { key: string; type: string };
+  /** Fallback check even when an external event is lost. */
+  until: string;
+  wake?: {
+    at: string;
+    cause: 'event' | 'timer';
+    eventId?: string;
+    reference?: string;
+    summary?: string;
+  };
+}
+
 /** Server-owned dispatch receipt, retained across backend restarts. */
 export interface GoalManagerState {
   /**
@@ -272,17 +286,19 @@ export interface GoalManagerState {
    *  it can retire exactly that node without parsing the key. */
   problemTaskId?: string;
   readyForAcceptance?: boolean;
+  replanReason?: string;
   reviewSnapshot?: string;
   snapshot: string;
   startedAt: string;
   submitted?: {
-    action: 'tasks' | 'verify' | 'retry' | 'escalate';
+    action: 'tasks' | 'verify' | 'retry' | 'escalate' | 'wait';
     reason: string;
     taskId?: string;
   };
   token: string;
   topicId: string;
   turns: number;
+  wait?: GoalManagerWait;
 }
 
 /**

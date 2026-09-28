@@ -15,7 +15,7 @@ describe('buildGoalManagerPrompt', () => {
         requirement,
         token: 'test-token',
       });
-      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v5');
+      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v6');
       expect(prompt).toContain(`Requirement: ${requirement}`);
       expect(prompt).toContain('Use the language of the Goal requirement');
       expect(prompt).toContain(

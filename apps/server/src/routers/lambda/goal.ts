@@ -17,6 +17,7 @@ import {
 } from '@/server/services/goal/recoveryPolicy';
 import { GoalReportStore, type SubmitGoalReportInput } from '@/server/services/goal/reportStore';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
+import { GoalWaitService, goalWakeEventSchema } from '@/server/services/goal/wait';
 import {
   HeteroOperationPrincipalError,
   resolveActiveHeteroOperationPrincipal,
@@ -157,6 +158,20 @@ function mapGoalError(error: unknown, operation: string): never {
 }
 
 export const goalRouter = router({
+  wake: goalWriteProcedure
+    .input(goalWakeEventSchema.extend({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...event } = input;
+      const goal = await ctx.goalModel.findById(id);
+      if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+      const data = await new GoalWaitService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).deliver(id, event);
+      return { data, success: true };
+    }),
   // A plan is an operation result; the turn token further restricts ingestion to its Goal.
   submitOperationPlan: heteroAuthedProcedure
     .use(serverDatabase)

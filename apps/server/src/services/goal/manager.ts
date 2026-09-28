@@ -28,6 +28,7 @@ import { TopicStartReservationError } from '@/server/services/aiAgent/topicStart
 import { countDeviceOfflineRuns, DEFAULT_MANAGER_MAX_TURNS } from './recoveryPolicy';
 import { scheduleGoalAdvance } from './scheduler';
 import { recoveryEligibility } from './supervisor/policy';
+import { goalWaitSchema, GoalWaitService } from './wait';
 
 const reason = z.string().trim().min(1).max(8000);
 export const goalPlanSchema = z.discriminatedUnion('action', [
@@ -57,6 +58,7 @@ export const goalPlanSchema = z.discriminatedUnion('action', [
     })
     .strict(),
   z.object({ action: z.literal('verify'), reason }).strict(),
+  z.object({ action: z.literal('wait'), reason, ...goalWaitSchema.shape }).strict(),
   z
     .object({
       action: z.literal('retry'),
@@ -403,7 +405,7 @@ export class GoalManagerService {
    * `mayStartTurn` is what orders the two planners. The system's own
    * exploration planner owns the ordinary path; a main Agent is the fallback for
    * problems that planner cannot express, so on a Goal that has exploration
-   * configured this only settles a turn already in flight and otherwise declines.
+   * configured this settles an in-flight turn or resumes an explicit continuation.
    * A Goal whose only planner IS the main Agent keeps starting turns here.
    */
   advance = async (
@@ -413,7 +415,12 @@ export class GoalManagerService {
     if (!this.eligible(graph)) return null;
     const settled = await this.settleInFlight(graph);
     if (settled) return settled;
-    if (options?.mayStartTurn === false) return null;
+    const waiting = await new GoalWaitService(this.db, this.userId, this.workspaceId).advance(
+      graph,
+    );
+    if (waiting) return waiting;
+    const state = graph.goal.config?.managerState;
+    if (options?.mayStartTurn === false && !state?.replanReason && !state?.wait?.wake) return null;
     return this.startTurn(graph);
   };
 
@@ -440,6 +447,37 @@ export class GoalManagerService {
     const settled = await this.settleInFlight(graph);
     if (settled) return settled;
     return this.startTurn(graph, problem);
+  };
+
+  /** Return measured shortfalls to planning without weakening acceptance. */
+  reconsiderAcceptance = async (
+    graph: GoalGraphSnapshot,
+    reason: string,
+  ): Promise<GoalTickResult | null> => {
+    if (!this.eligible(graph)) return null;
+    if (!graph.goal.config?.managerState) return this.startTurn(graph, undefined, reason);
+    const changed = await this.db.transaction(async (db) => {
+      const goal = await new GoalModel(db, this.userId, this.workspaceId).lockById(graph.goal.id);
+      const state = goal?.config?.managerState;
+      if (
+        !goal ||
+        !activeStatuses.has(goal.status) ||
+        !state?.consumed ||
+        state.token !== graph.goal.config?.managerState?.token
+      )
+        return false;
+      const current = await this.graph(db).getGraph(goal.id);
+      if (!current || managerSnapshot(current) !== managerSnapshot(graph)) return false;
+      await this.save(db, goal.id, {
+        ...state,
+        readyForAcceptance: false,
+        replanReason: reason,
+        problem: undefined,
+        problemTaskId: undefined,
+      });
+      return true;
+    });
+    return changed ? { goalId: graph.goal.id, outcome: 'advanced', message: reason } : null;
   };
 
   /** Shared entry conditions: a policy and its agent, an active Goal, and nobody waiting on a person. */
@@ -564,6 +602,7 @@ export class GoalManagerService {
   private startTurn = async (
     graph: GoalGraphSnapshot,
     problem?: { reason: string; taskId?: string },
+    continuation?: string,
   ): Promise<GoalTickResult | null> => {
     const { goal } = graph;
     const policy = goal.config!.manager!;
@@ -692,6 +731,12 @@ export class GoalManagerService {
           token: claimed.token,
           feedback: claimed.reviewNotes,
           problem: problem?.reason,
+          continuation:
+            continuation ??
+            state?.replanReason ??
+            (state?.wait?.wake
+              ? JSON.stringify({ reason: state.submitted?.reason, ...state.wait })
+              : undefined),
         }),
       });
       await this.db.transaction(async (db) => {
@@ -756,7 +801,7 @@ export class GoalManagerService {
 
   submit = async (goalId: string, token: string, operationId: string, input: GoalPlan) => {
     const plan = goalPlanSchema.parse(input);
-    return this.db.transaction(async (db) => {
+    const result = await this.db.transaction(async (db) => {
       const model = new GoalModel(db, this.userId, this.workspaceId);
       const goal = await model.lockById(goalId);
       const state = goal?.config?.managerState;
@@ -842,6 +887,10 @@ export class GoalManagerService {
           code: 'CONFLICT',
           message: 'Existing work must be delivered before planning or verification',
         });
+      if (plan.action === 'wait' && unfinished.length)
+        throw new TRPCError({ code: 'CONFLICT', message: 'Settle existing work before waiting' });
+      if (plan.action === 'wait' && Date.parse(plan.until) <= Date.now())
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Wait until must be in the future' });
       const authored = new GoalGraphModel(db, this.userId, this.workspaceId, {
         id: agentId,
         type: 'agent',
@@ -969,8 +1018,16 @@ export class GoalManagerService {
           ...(plan.action === 'retry' ? { taskId: plan.taskId } : {}),
         },
         readyForAcceptance: plan.action === 'verify',
+        replanReason: undefined,
+        wait: plan.action === 'wait' ? { until: plan.until, event: plan.event } : undefined,
       });
       return { recorded: true, action: plan.action };
     });
+    if (plan.action === 'wait' && !('duplicate' in result))
+      await new GoalWaitService(this.db, this.userId, this.workspaceId).schedule(
+        goalId,
+        plan.until,
+      );
+    return result;
   };
 }
