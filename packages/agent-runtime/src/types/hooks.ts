@@ -1,6 +1,7 @@
 import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
 
 import type { ToolRunResult } from '../transport/tool';
+import type { AgentRunLineage } from './state';
 
 /**
  * Agent Runtime Hook Types
@@ -82,7 +83,8 @@ export interface AgentHookEvent {
    */
   errorBudget?: ChatErrorBudgetContext;
   // Content
-  errorDetail?: string;
+  /** Original structured runtime error; preserved without flattening to a message. */
+  errorDetail?: unknown;
   errorHeterogeneous?: ChatErrorHeterogeneousContext;
 
   errorMessage?: string;
@@ -104,16 +106,21 @@ export interface AgentHookEvent {
    */
   finalState?: any;
 
+  groupId?: string;
   lastAssistantContent?: string;
   /** Last LLM content from previous steps — for showing context during tool execution (afterStep only) */
   lastLLMContent?: string;
   /** Last tools calling from previous steps (afterStep only) */
   lastToolsCalling?: any;
-  llmCalls?: number;
+  /** Existing run lineage only; no inferred parent or root operation. */
+  lineage?: AgentRunLineage;
 
+  llmCalls?: number;
   // Caller-provided metadata (from webhook.body)
   metadata?: Record<string, unknown>;
   operationId: string;
+  parentOperationId?: string;
+
   // Execution result
   reason?: string; // 'done' | 'error' | 'interrupted' | 'max_steps' | 'cost_limit'
   /** LLM reasoning / thinking content (afterStep only) */
@@ -124,33 +131,35 @@ export interface AgentHookEvent {
   /** Step cost (afterStep only, LLM steps) */
   stepCost?: number;
   stepIndex?: number;
-
   /** Step label for display (e.g. graph node name when using GraphAgent) */
   stepLabel?: string;
   steps?: number;
+
   stepType?: string; // 'call_llm' | 'call_tool'
   /** Whether next step is LLM thinking (afterStep only) */
   thinking?: boolean;
-
+  threadId?: string;
   toolCalls?: number;
+
   /** Tools the LLM decided to call (afterStep only) */
   toolsCalling?: any;
   /** Results from tool execution (afterStep only) */
   toolsResult?: any;
   topicId?: string;
-  /** Cumulative total cost (afterStep only) */
+  /** Cumulative total cost (afterStep and terminal events) */
   totalCost?: number;
-  /** Cumulative input tokens (afterStep only) */
+  /** Cumulative input tokens (afterStep and terminal events) */
   totalInputTokens?: number;
-  /** Cumulative output tokens (afterStep only) */
+  /** Cumulative output tokens (afterStep and terminal events) */
   totalOutputTokens?: number;
-  /** Total steps executed so far (afterStep only) */
+  /** Total steps executed so far (afterStep and terminal events) */
   totalSteps?: number;
   totalTokens?: number;
-  /** Running total of tool calls across all steps (afterStep only) */
+  /** Executed tool calls from runtime usage (afterStep and terminal events) */
   totalToolCalls?: number;
-
   userId: string;
+
+  workspaceId?: string;
 }
 
 /**

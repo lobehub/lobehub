@@ -40,6 +40,7 @@ import { after } from '@/server/utils/scheduleAfterResponse';
 import { buildRuntimeInterventionNotification } from './agentInterventionNotification';
 import { extractFinalReplyImageUrls } from './finalReplyImages';
 import { CriticalHookDeliveryError, hookDispatcher, type SerializedHook } from './hooks';
+import { buildLifecycleHookContext } from './hooks/lifecycleHookContext';
 
 const log = debug('lobe-server:completion-lifecycle');
 
@@ -1265,7 +1266,7 @@ export class CompletionLifecycle {
     return {
       assistantMessageId,
       event: {
-        agentId: runOrigin.agentId || '',
+        ...buildLifecycleHookContext(operationId, state?.origin, this.userId),
         attachments: attachments.length > 0 ? attachments : undefined,
         cost: state?.cost?.total,
         duration,
@@ -1284,6 +1285,11 @@ export class CompletionLifecycle {
         steps: state?.stepCount || 0,
         toolCalls: state?.usage?.tools?.totalCalls,
         topicId: runOrigin.topicId,
+        totalCost: state?.cost?.total,
+        totalInputTokens: state?.usage?.llm?.tokens?.input,
+        totalOutputTokens: state?.usage?.llm?.tokens?.output,
+        totalSteps: state?.stepCount ?? 0,
+        totalToolCalls: state?.usage?.tools?.totalCalls ?? 0,
         totalTokens: state?.usage?.llm?.tokens?.total,
         userId: runOrigin.userId || this.userId,
       },
