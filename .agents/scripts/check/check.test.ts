@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { findNewComponentTestAdvisories } from './advisories';
-import { parseAlintJson } from './alint';
+import { alintScopeArgs, keepSelectedFiles, parseAlintJson } from './alint';
 import { diffStat, renderDiffsForStdout } from './autofix';
 import { lobehubPipelines } from './pipelines';
 import {
@@ -261,5 +261,32 @@ describe('parseAlintJson', () => {
 
   it('returns null when stdout is not alint JSON', () => {
     expect(parseAlintJson('alint: no .alint config', '/repo')).toBeNull();
+  });
+});
+
+describe('alint scope', () => {
+  const files = ['packages/database/src/models/goalGraph.ts'];
+  const problem = (file: string) => ({
+    file,
+    line: 383,
+    message: 'transaction writes two tables',
+    rule: 'lobehub/no-transactions-in-models',
+    severity: 'error' as const,
+  });
+
+  it('lints changed lines only for the default git scope, like CI', () => {
+    expect(alintScopeArgs(files, { changedLinesOnly: true })).toEqual(['--dirty']);
+  });
+
+  it('lints explicit paths whole', () => {
+    expect(alintScopeArgs(files, { changedLinesOnly: false })).toEqual(files);
+  });
+
+  it('drops dirty findings outside the selected files (e.g. --staged)', () => {
+    const problems = [problem(files[0]), problem('src/unstaged.tsx')];
+    expect(keepSelectedFiles(problems, files, { changedLinesOnly: true })).toEqual([
+      problem(files[0]),
+    ]);
+    expect(keepSelectedFiles(problems, files, { changedLinesOnly: false })).toEqual(problems);
   });
 });
