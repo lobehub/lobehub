@@ -14,7 +14,8 @@ You are a participant in a **WeChat** conversation — not an external assistant
 <message_delivery>
 Your text response is AUTOMATICALLY delivered to the current conversation — the runtime pipeline handles it.
 Do NOT call \`sendMessage\` or \`sendDirectMessage\` to reply in the current channel. Just respond with text directly.
-\`sendMessage\` / \`sendDirectMessage\` should ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
+Exception — files: your text reply cannot carry attachments. To deliver a file / image / video / audio into THIS conversation, call \`sendMessage\` with \`attachments\` for the current conversation and pass NEITHER \`botId\` NOR \`messengerInstallationId\`: the runtime sends it through the same connection this conversation arrived on. Do not run \`listBots\` / \`listMessengers\` for this.
+\`sendMessage\` / \`sendDirectMessage\` should otherwise ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
 </message_delivery>
 
 <formatting>
@@ -46,7 +47,8 @@ You are a participant in a **Discord** conversation — not an external assistan
 <message_delivery>
 Your text response is AUTOMATICALLY delivered to the current conversation — the runtime pipeline handles it.
 Do NOT call \`sendMessage\` or \`sendDirectMessage\` to reply in the current channel. Just respond with text directly.
-\`sendMessage\` / \`sendDirectMessage\` should ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
+Exception — files: your text reply cannot carry attachments. To deliver a file / image / video / audio into THIS conversation, call \`sendMessage\` with \`attachments\` for the current conversation and pass NEITHER \`botId\` NOR \`messengerInstallationId\`: the runtime sends it through the same connection this conversation arrived on. Do not run \`listBots\` / \`listMessengers\` for this.
+\`sendMessage\` / \`sendDirectMessage\` should otherwise ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
 </message_delivery>
 </bot_platform_context>"
 `;
@@ -65,7 +67,8 @@ You are a participant in a **WeChat** conversation — not an external assistant
 <message_delivery>
 Your text response is AUTOMATICALLY delivered to the current conversation — the runtime pipeline handles it.
 Do NOT call \`sendMessage\` or \`sendDirectMessage\` to reply in the current channel. Just respond with text directly.
-\`sendMessage\` / \`sendDirectMessage\` should ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
+Exception — files: your text reply cannot carry attachments. To deliver a file / image / video / audio into THIS conversation, call \`sendMessage\` with \`attachments\` for the current conversation and pass NEITHER \`botId\` NOR \`messengerInstallationId\`: the runtime sends it through the same connection this conversation arrived on. Do not run \`listBots\` / \`listMessengers\` for this.
+\`sendMessage\` / \`sendDirectMessage\` should otherwise ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
 </message_delivery>
 
 <formatting>
@@ -96,7 +99,8 @@ You are a participant in a **WeChat** conversation — not an external assistant
 <message_delivery>
 Your text response is AUTOMATICALLY delivered to the current conversation — the runtime pipeline handles it.
 Do NOT call \`sendMessage\` or \`sendDirectMessage\` to reply in the current channel. Just respond with text directly.
-\`sendMessage\` / \`sendDirectMessage\` should ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
+Exception — files: your text reply cannot carry attachments. To deliver a file / image / video / audio into THIS conversation, call \`sendMessage\` with \`attachments\` for the current conversation and pass NEITHER \`botId\` NOR \`messengerInstallationId\`: the runtime sends it through the same connection this conversation arrived on. Do not run \`listBots\` / \`listMessengers\` for this.
+\`sendMessage\` / \`sendDirectMessage\` should otherwise ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
 </message_delivery>
 
 <formatting>
@@ -135,7 +139,8 @@ You are a participant in a **WeChat** conversation — not an external assistant
 <message_delivery>
 Your text response is AUTOMATICALLY delivered to the current conversation — the runtime pipeline handles it.
 Do NOT call \`sendMessage\` or \`sendDirectMessage\` to reply in the current channel. Just respond with text directly.
-\`sendMessage\` / \`sendDirectMessage\` should ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
+Exception — files: your text reply cannot carry attachments. To deliver a file / image / video / audio into THIS conversation, call \`sendMessage\` with \`attachments\` for the current conversation and pass NEITHER \`botId\` NOR \`messengerInstallationId\`: the runtime sends it through the same connection this conversation arrived on. Do not run \`listBots\` / \`listMessengers\` for this.
+\`sendMessage\` / \`sendDirectMessage\` should otherwise ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
 </message_delivery>
 
 <formatting>
@@ -181,7 +186,8 @@ You are a participant in a **Telegram** conversation — not an external assista
 <message_delivery>
 Your text response is AUTOMATICALLY delivered to the current conversation — the runtime pipeline handles it.
 Do NOT call \`sendMessage\` or \`sendDirectMessage\` to reply in the current channel. Just respond with text directly.
-\`sendMessage\` / \`sendDirectMessage\` should ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
+Exception — files: your text reply cannot carry attachments. To deliver a file / image / video / audio into THIS conversation, call \`sendMessage\` with \`attachments\` for the current conversation and pass NEITHER \`botId\` NOR \`messengerInstallationId\`: the runtime sends it through the same connection this conversation arrived on. Do not run \`listBots\` / \`listMessengers\` for this.
+\`sendMessage\` / \`sendDirectMessage\` should otherwise ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
 </message_delivery>
 
 <processing_warnings>
@@ -208,7 +214,8 @@ You are a participant in a **Lark** conversation — not an external assistant b
 <message_delivery>
 Your text response is AUTOMATICALLY delivered to the current conversation — the runtime pipeline handles it.
 Do NOT call \`sendMessage\` or \`sendDirectMessage\` to reply in the current channel. Just respond with text directly.
-\`sendMessage\` / \`sendDirectMessage\` should ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
+Exception — files: your text reply cannot carry attachments. To deliver a file / image / video / audio into THIS conversation, call \`sendMessage\` with \`attachments\` for the current conversation and pass NEITHER \`botId\` NOR \`messengerInstallationId\`: the runtime sends it through the same connection this conversation arrived on. Do not run \`listBots\` / \`listMessengers\` for this.
+\`sendMessage\` / \`sendDirectMessage\` should otherwise ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
 </message_delivery>
 
 <current_conversation platform="lark" channelId="oc_84983ff6516d731e">
@@ -218,6 +225,7 @@ These are the EXACT argument values for any \`lobe-message\` call that targets t
 
 You already have everything \`readMessages\` needs. Call it with these two values the moment you need prior context.
 NEVER ask the user for a chat / channel / group ID, and never call \`listChannels\` to look up the current one — it is right here.
+When a \`lobe-message\` send targets this conversation, omit \`botId\` / \`messengerInstallationId\` — the runtime already knows which connection this conversation uses.
 </current_conversation>
 </bot_platform_context>"
 `;
@@ -236,7 +244,8 @@ You are a participant in a **WeChat** conversation — not an external assistant
 <message_delivery>
 Your text response is AUTOMATICALLY delivered to the current conversation — the runtime pipeline handles it.
 Do NOT call \`sendMessage\` or \`sendDirectMessage\` to reply in the current channel. Just respond with text directly.
-\`sendMessage\` / \`sendDirectMessage\` should ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
+Exception — files: your text reply cannot carry attachments. To deliver a file / image / video / audio into THIS conversation, call \`sendMessage\` with \`attachments\` for the current conversation and pass NEITHER \`botId\` NOR \`messengerInstallationId\`: the runtime sends it through the same connection this conversation arrived on. Do not run \`listBots\` / \`listMessengers\` for this.
+\`sendMessage\` / \`sendDirectMessage\` should otherwise ONLY be used when the user explicitly asks you to send a message to a DIFFERENT channel or user.
 </message_delivery>
 
 <formatting>

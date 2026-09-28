@@ -125,4 +125,25 @@ describe('resolveAttachmentMetadata', () => {
       expect.objectContaining({ content: 'Visitor report', id: 'file-visitor-pdf' }),
     ]);
   });
+
+  it('reports the original size of text that was cut at parse time', async () => {
+    mocks.findByIds.mockResolvedValue([
+      { fileType: 'text/csv', id: 'file-big', name: 'big.csv', size: 42, url: 'files/big.csv' },
+    ]);
+    mocks.getFullFileUrl.mockResolvedValue('https://storage.example.com/files/big.csv');
+    mocks.parseFile.mockResolvedValue({
+      content: 'head',
+      metadata: { originalCharCount: 9_000_000, truncated: true },
+    });
+
+    const result = await resolveAttachmentsByFileIds({
+      db: {} as LobeChatDatabase,
+      fileIds: ['file-big'],
+      userId: 'user-1',
+    });
+
+    expect(result.fileList).toEqual([
+      expect.objectContaining({ content: 'head', id: 'file-big', originalCharCount: 9_000_000 }),
+    ]);
+  });
 });

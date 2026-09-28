@@ -26,6 +26,7 @@ export class RendererUrlManager {
   private readonly rendererStaticOverride = getDesktopEnv().DESKTOP_RENDERER_STATIC;
   private readonly rendererLoadedUrl: string;
   private activeRendererDir = rendererDir;
+  private previousRendererDir: string | null = null;
 
   constructor() {
     this.rendererProtocolManager = new RendererProtocolManager({
@@ -56,6 +57,7 @@ export class RendererUrlManager {
       return;
     }
     logger.info(`Renderer serving root: ${next}`);
+    if (next !== this.activeRendererDir) this.previousRendererDir = this.activeRendererDir;
     this.activeRendererDir = next;
   }
 
@@ -98,7 +100,11 @@ export class RendererUrlManager {
     // Static assets: direct file mapping
     if (pathname.startsWith('/assets/') || path.extname(pathname)) {
       const filePath = path.join(root, pathname);
-      return existsSync(filePath) ? filePath : null;
+      if (existsSync(filePath)) return filePath;
+      // Windows that cancelled the OTA reload via beforeunload still lazy-load
+      // hash-named chunks from the previous tree.
+      const previous = this.previousRendererDir && path.join(this.previousRendererDir, pathname);
+      return previous && pathname.startsWith('/assets/') && existsSync(previous) ? previous : null;
     }
 
     // Overlay entry (separate MPA page)

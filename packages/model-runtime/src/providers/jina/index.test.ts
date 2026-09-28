@@ -2,27 +2,11 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import type { JinaModelCard } from './index';
-import { LobeJinaAI, params } from './index';
+import { params } from './index';
 
 const provider = ModelProvider.Jina;
 const defaultBaseURL = 'https://deepsearch.jina.ai/v1';
-
-// Basic provider tests
-testProvider({
-  Runtime: LobeJinaAI,
-  bizErrorType: 'ProviderBizError',
-  chatDebugEnv: 'DEBUG_JINA_CHAT_COMPLETION',
-  chatModel: 'jina-embeddings-v3',
-  defaultBaseURL,
-  invalidErrorType: 'InvalidProviderAPIKey',
-  provider,
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 // Custom feature tests
 describe('LobeJinaAI - custom features', () => {

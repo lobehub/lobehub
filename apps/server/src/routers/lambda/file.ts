@@ -269,10 +269,15 @@ export const fileRouter = router({
       //   2. Otherwise an explicit caller value wins.
       //   3. Otherwise inherit the parent document's visibility so a file
       //      uploaded inside a private folder stays private.
-      //   4. Otherwise default top-level uploads to 'private' so new content
+      //   4. Agent-document uploads default to 'public' to match their document's
+      //      access contract; their source keeps them out of resource listings.
+      //   5. Otherwise default top-level uploads to 'private' so new content
       //      starts in the creator's private space (mirrors the Pages spec).
       const resolvedVisibility: 'private' | 'public' | undefined = ctx.workspaceId
-        ? (knowledgeBaseVisibility ?? input.visibility ?? parentVisibility ?? 'private')
+        ? (knowledgeBaseVisibility ??
+          input.visibility ??
+          parentVisibility ??
+          (input.source === FileSource.AgentDocument ? 'public' : 'private'))
         : undefined;
 
       if (latestUpload?.status === 'settled') {
@@ -917,7 +922,8 @@ export const fileRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.fileModel.findById(input.id);
-      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+      // Import failure cleanup can run on both server and client; retries are harmless.
+      if (!existing) return;
       await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
       const file = await ctx.fileModel.deleteUnreferenced(input.id, {

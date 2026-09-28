@@ -12,7 +12,6 @@ import { fileURLToPath } from 'node:url';
 
 import { unzipSync, zipSync } from 'fflate';
 
-import { computeMainHash } from './mainHash.mjs';
 import { candidateDeltaVersions, generateZstdPatch, pairRendererFiles } from './rendererDelta.mjs';
 
 const PACK_COMPRESSION_LEVEL = 9;
@@ -352,7 +351,8 @@ async function main() {
     .export({ format: 'pem', type: 'spki' })
     .toString();
   const feedDir = path.join(outDir, channel, appVersion, 'renderer', 'v2');
-  const mainHash = args.mainHash ?? (await computeMainHash());
+  const mainHash = args.mainHash;
+  if (!/^[0-9a-f]{64}$/.test(mainHash ?? '')) throw new Error('--mainHash=<sha256> is required');
   const { objects, tree } = readRendererTree(rendererDir);
   const fullMetadata = { kind: 'full', packVersion: 1, tree, version };
   const fullPack = encodePack(fullPackEntries(objects, fullMetadata));

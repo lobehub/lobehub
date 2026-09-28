@@ -43,6 +43,7 @@ export interface HeteroTraceTotals {
  * stashed on the partial so finalize prefers it over summing per-turn steps. */
 interface HeteroSessionUsage {
   totalCost?: number;
+  totalCredits?: number;
   totalInputTokens?: number;
   totalOutputTokens?: number;
   totalTokens?: number;
@@ -174,6 +175,8 @@ export class HeteroTraceRecorder {
       const totalOutputTokens =
         session?.totalOutputTokens ?? steps.reduce((sum, s) => sum + (s.outputTokens || 0), 0);
       const totalCost = session?.totalCost ?? steps.reduce((sum, s) => sum + (s.totalCost || 0), 0);
+      const totalCredits =
+        session?.totalCredits ?? steps.reduce((sum, s) => sum + (s.credits || 0), 0);
 
       // Fall back to the agentId/topicId encoded in the operationId when the
       // caller didn't supply them, so the snapshot body and its S3 key never
@@ -195,6 +198,7 @@ export class HeteroTraceRecorder {
         steps,
         topicId,
         totalCost,
+        totalCredits,
         totalSteps: steps.length,
         totalTokens,
         traceId: operationId,
@@ -308,6 +312,7 @@ export class HeteroTraceRecorder {
         const outT = usage ? num(usage.totalOutputTokens) : undefined;
         const tot = usage ? num(usage.totalTokens) : undefined;
         const cost = num(data.costUsd);
+        const credits = usage ? num(usage.credits) : undefined;
 
         // Claude Code emits one `turn_metadata` per turn (incremental usage) and
         // a single final `result_usage` carrying the authoritative SESSION
@@ -320,6 +325,7 @@ export class HeteroTraceRecorder {
           };
           target.heteroSessionUsage = {
             totalCost: cost ?? target.heteroSessionUsage?.totalCost,
+            totalCredits: credits ?? target.heteroSessionUsage?.totalCredits,
             totalInputTokens: inT ?? target.heteroSessionUsage?.totalInputTokens,
             totalOutputTokens: outT ?? target.heteroSessionUsage?.totalOutputTokens,
             totalTokens:
@@ -337,6 +343,7 @@ export class HeteroTraceRecorder {
         else if (inT !== undefined || outT !== undefined)
           step.totalTokens = (inT ?? 0) + (outT ?? 0);
         if (cost !== undefined) step.totalCost = cost;
+        if (credits !== undefined) step.credits = credits;
         break;
       }
       default: {

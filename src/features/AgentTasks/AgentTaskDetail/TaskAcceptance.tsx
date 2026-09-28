@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Collapsible, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Collapsible, Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRight,
@@ -14,7 +14,6 @@ import {
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   type AcceptanceCheck,
   checkDisplayTitle,
@@ -183,7 +182,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   // acceptance section here would advertise a contract that never runs.
   if (automationMode) return null;
 
-  if (subjectLoading) return <NeuralNetworkLoading size={28} />;
+  if (subjectLoading) return <Spin size="middle" />;
   // Before the first Acceptance round exists, the configured criteria ARE the
   // delivery acceptance. Keep them in this single slot; once a round exists,
   // replace the definitions with their live/result projection below.
@@ -284,7 +283,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
       {header}
       <Collapsible open={sectionExpanded}>
         <Flexbox className={styles.body} gap={14}>
-          {bundleLoading && <NeuralNetworkLoading size={28} />}
+          {bundleLoading && <Spin size="middle" />}
           {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
           {bundle && (
             <>

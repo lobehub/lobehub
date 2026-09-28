@@ -72,6 +72,8 @@ export default {
   'claudeCode.askUserQuestion.skip': 'Skip',
   'claudeCode.askUserQuestion.submit': 'Submit',
   'claudeCode.askUserQuestion.timeExpired': 'Time expired — using option 1 of each question.',
+  'claudeCode.askUserQuestion.timeExpiredNoAnswer':
+    'Time expired — this question can no longer be answered.',
   'claudeCode.askUserQuestion.timeRemaining':
     'Time remaining: {{time}} · unanswered questions default to option 1 on timeout.',
   'codeInterpreter-legacy.error': 'Execution Error',
@@ -168,6 +170,7 @@ export default {
   'localFiles.open': 'Open',
   'localFiles.openFile': 'Open File',
   'localFiles.openFolder': 'Open Folder',
+  'localFiles.openInPanel': 'Open in side panel',
   'localFiles.outOfScope.requestedPaths': 'Requested Paths',
   'localFiles.outOfScope.warning':
     'Warning: The following path(s) are outside the configured working directory. Please confirm you want to allow access.',

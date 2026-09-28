@@ -58,6 +58,7 @@ import AcceptanceRow from './AcceptanceRow';
 import {
   acceptanceBatchTargets,
   acceptanceProjectTargets,
+  acceptanceRedirectAfterDelete,
   acceptanceSelectAllState,
   chunkAcceptanceBatch,
   nextAcceptanceSelectAll,
@@ -570,8 +571,8 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
 
             // The open acceptance just stopped existing — leave its dead route
             // rather than letting the detail pane render a 404.
-            if (acceptanceId && targets.includes(acceptanceId) && !failedIds.includes(acceptanceId))
-              navigate(acceptanceHomePath(), { replace: true });
+            const redirect = acceptanceRedirectAfterDelete(acceptanceId, targets, failedIds);
+            if (redirect) navigate(redirect, { replace: true });
             await settleBatch(targets, [], failedIds);
             reportBatch(deleted, targets.length, 'acceptance.workspace.batch.deleteSuccess');
           } finally {

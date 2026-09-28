@@ -11,7 +11,6 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useTaskStore } from '@/store/task';
 import { oneLineEllipsis } from '@/styles';
 
-import Actions from './Actions';
 import { useLiveRun } from './useLiveRun';
 
 const Title = memo(() => {
@@ -25,7 +24,7 @@ const Title = memo(() => {
   // then what this run is about.
   if (liveRun)
     return (
-      <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
+      <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
         <AssigneeAvatar agentId={liveRun.agentId} size={20} />
         <Text fontSize={14} style={{ flexShrink: 0 }} weight={500}>
           {agentMeta?.title ?? liveRun.activity.author?.name}
@@ -37,14 +36,13 @@ const Title = memo(() => {
         >
           {liveRun.activity.title}
         </Text>
-        <Actions />
       </Flexbox>
     );
 
   // The panel is headed by the task itself: the generic "Task result" label
   // only pushed the name aside. It stays as the placeholder until the task loads.
   return (
-    <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
+    <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
       {detail?.identifier && (
         <Text fontSize={13} style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }}>
           {detail.identifier}
@@ -58,7 +56,6 @@ const Title = memo(() => {
       >
         {detail?.name || t('goalDetail.taskResult')}
       </Text>
-      <Actions />
     </Flexbox>
   );
 });

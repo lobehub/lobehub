@@ -2,7 +2,7 @@
 
 import type { GitWorkingTreePatch } from '@lobechat/electron-client-ipc';
 import { Center, type DropdownItem, DropdownMenu, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon, Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {
   ArrowLeftIcon,
@@ -24,7 +24,6 @@ import path from 'path-browserify-esm';
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useFetchGitBranch } from '@/store/device';
 
@@ -393,7 +392,7 @@ const Review = memo<ReviewProps>(
     if (!data && isLoading) {
       return (
         <Center flex={1}>
-          <NeuralNetworkLoading size={48} />
+          <Spin size="large" />
         </Center>
       );
     }

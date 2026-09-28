@@ -1,3 +1,4 @@
+import { trace } from '@lobechat/observability-otel/api';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -72,6 +73,15 @@ export const generationRouter = router({
       if (!asyncTask) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Async task not found' });
       }
+
+      /**
+       * Image and video clients (including the chat video tool, every 3s) poll this shared
+       * endpoint, so tag the request span with the task type to split polling volume by kind.
+       */
+      trace.getActiveSpan()?.setAttributes({
+        'generation.task.status': asyncTask.status ?? undefined,
+        'generation.task.type': asyncTask.type ?? undefined,
+      });
 
       const { status, error } = asyncTask;
       const result: GetGenerationStatusResult = {

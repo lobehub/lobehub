@@ -125,7 +125,7 @@ const collectErrorStrings = (
   return result;
 };
 
-const collectStatusCodes = (
+export const collectStatusCodes = (
   value: unknown,
   visited = new WeakSet<object>(),
   depth = 0,

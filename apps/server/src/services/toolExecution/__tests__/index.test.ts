@@ -25,6 +25,37 @@ vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
 }));
 
 describe('ToolExecutionService', () => {
+  it('keeps a readable content when a runtime throws a plain budget error object', async () => {
+    // The lobehub provider rejects with a plain object (not an Error) whose
+    // message is nested under `error.message`.
+    const budgetError = {
+      budget: { availableCredits: 0, requiredCredits: 1219, shortfallCredits: 1219 },
+      error: { message: 'Budget exceeded' },
+      errorType: 'InsufficientBudgetForModel',
+      provider: 'lobehub',
+    };
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: { execute: vi.fn().mockRejectedValue(budgetError) } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'analyzeMedia',
+        arguments: '{}',
+        id: 'call_budget',
+        identifier: 'lobe-agent',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Budget exceeded');
+    expect(result.content).toContain('InsufficientBudgetForModel');
+    expect(result.error).toMatchObject({ errorType: 'InsufficientBudgetForModel' });
+  });
+
   it('keeps a failed command HTTP status as command output', async () => {
     const output = 'curl: (22) The requested URL returned error: 403';
     const service = new ToolExecutionService({
@@ -285,7 +316,7 @@ describe('ToolExecutionService', () => {
     );
 
     expect(result.content).toContain('01234');
-    expect(result.content).toContain('Content truncated');
+    expect(result.content).toContain('[Showing lines 1-');
   });
 
   /**
@@ -321,7 +352,7 @@ describe('ToolExecutionService', () => {
     const message = (result.error as { message: string }).message;
     expect(message.length).toBeLessThan(5000);
     expect(message).toContain('Command failed with exit code 1');
-    expect(message).toContain('Content truncated');
+    expect(message).toContain('[Showing lines 1-');
     // The archival opt-out covers the LLM-facing content, never the error.
     expect(result.content).toBe(runawayOutput);
   });
@@ -479,6 +510,76 @@ describe('ToolExecutionService', () => {
         expect.objectContaining({ deviceId: 'newest' }),
         undefined,
       );
+    });
+
+    // `lh connect` answers `mcp` tool calls with `Unknown tool API: <tool>` — an
+    // active device that is CLI-only must not receive the tunnel (Honcho-Memory
+    // vents: calls worked until the agent activated a CLI-only Mac mini).
+    it('skips a CLI-only active device and tunnels to the newest desktop device', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
+      ] as any);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli', online: true },
+        { channels: [{ channel: 'desktop' }], deviceId: 'macbook', online: true },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { name: 'Honcho-Memory', type: 'http', url: 'http://localhost:8787/' },
+          { activeDeviceId: 'mac-mini-cli' },
+        ),
+      );
+
+      expect(result.success).toBe(true);
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'macbook' }),
+        undefined,
+      );
+    });
+
+    it('fails with an actionable error when only CLI devices are online', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
+      ] as any);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli', online: true },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { name: 'Honcho-Memory', type: 'http', url: 'http://localhost:8787/' },
+          { activeDeviceId: 'mac-mini-cli' },
+        ),
+      );
+
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+      expect(result.content).toContain('lh connect');
+    });
+
+    it('fails closed for a workspace run whose active device is CLI-only', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'ws-cli' },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'ws-cli', workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(deviceGateway.queryDeviceList).toHaveBeenCalledWith('user-1', 'ws-1');
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
     });
 
     it('addresses the workspace pool for a plan-routed device in a workspace run', async () => {

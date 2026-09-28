@@ -458,15 +458,21 @@ export const agentBotProviderRouter = router({
         platform,
       );
 
+      // A failed check is a normal outcome of this procedure, not a transport
+      // error: return it so the client keeps the per-error `code` and can show
+      // a readable hint next to the platform's raw message.
       if (!result.valid) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message:
-            result.errors?.map((e) => `${e.field}: ${e.message}`).join('; ') || 'Validation failed',
-        });
+        const errors = result.errors?.length
+          ? result.errors
+          : [{ field: 'credentials', message: 'Validation failed' }];
+        return {
+          errors,
+          message: errors.map((e) => `${e.field}: ${e.message}`).join('; '),
+          valid: false as const,
+        };
       }
 
-      return { valid: true };
+      return { valid: true as const };
     }),
 
   /**

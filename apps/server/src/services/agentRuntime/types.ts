@@ -268,6 +268,12 @@ export interface AgentExecutionResult {
  * `AgentRuntimeService.completeSubAgentBridge`.
  */
 export interface SubAgentBridgeParams {
+  /**
+   * Failure reason known to the caller but absent from the child's stored
+   * state — set when the watchdog abandoned the child, whose coordinator state
+   * was never marked errored.
+   */
+  errorMessage?: string;
   /** Child op's final state — passed in local mode; loaded from the coordinator otherwise. */
   finalState?: AgentState;
   /** Child (sub-agent) operation ID. */
@@ -428,6 +434,8 @@ export interface OperationCreationParams {
     clientIp?: string;
     defaultTaskAssigneeAgentId?: string;
     documentId?: string | null;
+    editingAgentId?: string;
+    editingGroupId?: string;
     groupId?: string | null;
     isSubAgent?: boolean;
     /**
@@ -534,6 +542,8 @@ export interface OperationCreationParams {
   modelRuntimeConfig?: any;
   /** Marks the source claim non-rollbackable once deterministic runtime state is durable. */
   onInterventionPrepared?: () => void;
+  /** Prepare dependent records after persistence and before execution dispatch. */
+  onOperationCreated?: (operationId: string) => Promise<void>;
   /** Credentials frozen for the run; see {@link FrozenCredentialFacts}. */
   operationCredentials?: FrozenCredentialFacts;
   operationId: string;

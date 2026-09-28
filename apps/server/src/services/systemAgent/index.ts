@@ -81,7 +81,7 @@ export class SystemAgentService {
           schema: TOPIC_TITLE_JSON_SCHEMA,
         },
         {
-          metadata: { topicId, trigger: RequestTrigger.Topic },
+          metadata: { topicId, trigger: RequestTrigger.TopicTitle },
           tracing: {
             promptVersion: TOPIC_TITLE_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TopicTitle,

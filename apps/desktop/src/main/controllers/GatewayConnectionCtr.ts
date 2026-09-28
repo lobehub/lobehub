@@ -13,7 +13,11 @@ import {
   resolveRemotePlatformRuntime,
 } from '@lobechat/heterogeneous-agents/scanHost';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
+import { managedProcessEnvironment, spawnManaged } from '@lobechat/utils/managedProcess';
+import { app as electronApp } from 'electron';
 
+import { updaterConfig } from '@/modules/updater/configs';
+import { createRemoteAppUpdateDeps } from '@/modules/updater/remoteUpdate';
 import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
 import { backfillDeviceArchitecture } from '@/services/deviceArchitectureBackfill';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
@@ -248,7 +252,18 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   @IpcMethod()
   async getConnectionStatus(): Promise<{ status: GatewayConnectionStatus }> {
-    return { status: this.service.getStatus() };
+    return { status: this.service.getDisplayedStatus() };
+  }
+
+  @IpcMethod()
+  async getKeepAwake(): Promise<{ enabled: boolean }> {
+    return { enabled: this.service.getKeepAwake() };
+  }
+
+  @IpcMethod()
+  async setKeepAwake({ enabled }: { enabled: boolean }): Promise<{ enabled: boolean }> {
+    this.service.setKeepAwake(enabled);
+    return { enabled: this.service.getKeepAwake() };
   }
 
   @IpcMethod()
@@ -342,6 +357,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       // the process has actually spawned (or emitted an early error) before
       // acknowledging the server request.
       return await this.heterogeneousAgentCtr.spawnLhHeteroExec({
+        agentId: request.agentId,
         agentType: request.agentType,
         assistantMessageId: request.assistantMessageId,
         args: request.args,
@@ -447,10 +463,20 @@ export default class GatewayConnectionCtr extends ControllerModule {
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
       listHeterogeneousAgentModels: (params) => this.heterogeneousAgentCtr.listModels(params),
       searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
+      // Remote "delete" goes to this machine's trash (`shell.trashItem`), same
+      // as the local Files tree, so it stays recoverable.
+      trashLocalFiles: (params) => this.localFileCtr.trashLocalFiles(params),
       unenrollWorkspace: (params) => this.service.unenrollWorkspace(params),
       // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
       // deps so gateway-prepared skills share one cache with the renderer-IPC path.
       ...this.localFileCtr.getSkillDirectoryDeps(),
+      // Remote app update from the web device page, over the same updater the
+      // local "Check for updates" menu drives.
+      ...createRemoteAppUpdateDeps({
+        currentVersion: electronApp.getVersion(),
+        enabled: updaterConfig.enableAppUpdate,
+        getUpdater: () => this.app.getUpdaterManager(),
+      }),
     };
   }
 
@@ -892,10 +918,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
         '--local',
       ];
       const spawnPlan = await runtime.prepareSpawn(openclawArgs);
-      const child = spawn(spawnPlan.command, spawnPlan.args, {
+      const child = spawnManaged(spawnPlan.command, spawnPlan.args, {
         cwd: workDir,
         detached: true,
-        env: spawnPlan.env,
+        env: { ...spawnPlan.env, ...managedProcessEnvironment({ topicId, agentId }) },
         stdio: 'ignore',
       });
 
@@ -988,10 +1014,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
       // Hermes keeps stdout response-only in --quiet mode and prints the final
       // session_id to stderr so callers can resume the session on the next turn.
       const spawnPlan = await runtime.prepareSpawn(hermesArgs);
-      const child = spawn(spawnPlan.command, spawnPlan.args, {
+      const child = spawnManaged(spawnPlan.command, spawnPlan.args, {
         cwd: workDir,
         detached: true,
-        env: spawnPlan.env,
+        env: { ...spawnPlan.env, ...managedProcessEnvironment({ topicId, agentId }) },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 

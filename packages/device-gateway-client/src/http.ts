@@ -1,3 +1,5 @@
+import type { DeviceMetricSample } from '@lobechat/types';
+
 import {
   describeGatewayRequestFailure,
   describeGatewayResponseFailure,
@@ -9,6 +11,7 @@ import type {
   GatewayDevice,
   GatewayMcpParams,
   GatewayToolCallType,
+  GatewayTunnelRegistration,
 } from './types';
 
 const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
@@ -261,6 +264,7 @@ export class GatewayHttpClient {
   }
 
   async dispatchAgentRun(params: {
+    agentId?: string;
     agentType: string;
     assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */
@@ -314,9 +318,20 @@ export class GatewayHttpClient {
    * dispatcher and correlates the response by `requestId`, so new methods need
    * no per-method gateway route. Distinct from {@link executeToolCall}, which is
    * the LLM-facing tool channel.
+   *
+   * `channel` names the connection to prefer when one device holds several
+   * (e.g. `desktop` alongside `cli`). A gateway that predates the hint ignores
+   * it and picks by its own channel priority, so callers must still handle an
+   * answer from another channel.
    */
   async invokeRpc<T = unknown>(
-    params: { deviceId?: string; timeout?: number; userId: string; workspaceId?: string },
+    params: {
+      channel?: string;
+      deviceId?: string;
+      timeout?: number;
+      userId: string;
+      workspaceId?: string;
+    },
     rpc: { method: string; params?: unknown },
   ): Promise<DeviceRpcResult<T>> {
     const timeout =
@@ -326,6 +341,7 @@ export class GatewayHttpClient {
     const res = await this.post(
       '/api/device/rpc',
       {
+        channel: params.channel,
         deviceId: params.deviceId,
         method: rpc.method,
         params: rpc.params,
@@ -371,6 +387,89 @@ export class GatewayHttpClient {
     };
   }
 
+  /**
+   * Health samples the gateway holds for a device (it keeps two days), observed
+   * at or after `since`. Served from gateway storage, so an offline device
+   * still has its history.
+   */
+  async getDeviceMetrics(
+    userId: string,
+    deviceId: string,
+    options: { since?: number; workspaceId?: string } = {},
+  ): Promise<DeviceMetricSample[]> {
+    const res = await this.post(
+      '/api/device/metrics',
+      { deviceId, since: options.since, userId, workspaceId: options.workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
+    if (!res.ok) throw new Error(`device metrics read failed: HTTP ${res.status}`);
+    const data = (await res.json()) as { samples?: DeviceMetricSample[] };
+    return data.samples ?? [];
+  }
+
+  // ─── Tunnel registry (gateway admin API) ───
+  //
+  // These do NOT reach the device: they manage the slug → { device, port }
+  // mapping that gives a tunnel its public hostname. Ownership is enforced
+  // here, on the server — the gateway's admin API trusts the service token.
+
+  /** Register a tunnel and return it with its public hostname. */
+  async createTunnel(params: {
+    createdBy: string;
+    deviceId: string;
+    port: number;
+    principal: string;
+    ttlSeconds?: number;
+  }): Promise<GatewayTunnelRegistration> {
+    const res = await this.post('/api/admin/tunnels', params, {
+      timeout: DEVICE_QUERY_TIMEOUT_MS,
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`Device gateway /api/admin/tunnels responded ${res.status} ${detail}`.trim());
+    }
+
+    const data = (await res.json()) as {
+      hostname: string;
+      registration: GatewayTunnelRegistration;
+    };
+    return { ...data.registration, hostname: data.hostname };
+  }
+
+  /** Every live tunnel owned by one principal. */
+  async listTunnels(principal: string): Promise<GatewayTunnelRegistration[]> {
+    const res = await this.request(
+      `/api/admin/tunnels?principal=${encodeURIComponent(principal)}`,
+      'GET',
+    );
+    if (!res.ok) {
+      throw new Error(`Device gateway /api/admin/tunnels responded ${res.status}`);
+    }
+
+    const data = (await res.json()) as { tunnels?: GatewayTunnelRegistration[] };
+    return data.tunnels ?? [];
+  }
+
+  /** The registration behind a slug, or undefined when it is unknown or expired. */
+  async resolveTunnel(slug: string): Promise<GatewayTunnelRegistration | undefined> {
+    const res = await this.request(`/api/admin/tunnels/resolve/${encodeURIComponent(slug)}`, 'GET');
+    if (res.status === 404) return undefined;
+    if (!res.ok) {
+      throw new Error(`Device gateway /api/admin/tunnels/resolve responded ${res.status}`);
+    }
+    return (await res.json()) as GatewayTunnelRegistration;
+  }
+
+  /** Revoke a tunnel. Returns false when the slug was already gone. */
+  async revokeTunnel(slug: string): Promise<boolean> {
+    const res = await this.request(`/api/admin/tunnels/${encodeURIComponent(slug)}`, 'DELETE');
+    if (res.status === 404) return false;
+    if (!res.ok) {
+      throw new Error(`Device gateway /api/admin/tunnels responded ${res.status}`);
+    }
+    return true;
+  }
+
   private post(path: string, body: unknown, options?: { timeout?: number }): Promise<Response> {
     return fetch(`${this.gatewayUrl}${path}`, {
       body: JSON.stringify(body),
@@ -380,6 +479,15 @@ export class GatewayHttpClient {
       },
       method: 'POST',
       ...(options?.timeout ? { signal: AbortSignal.timeout(options.timeout) } : {}),
+    });
+  }
+
+  /** Bodyless service-authenticated call, for the registry's GET/DELETE routes. */
+  private request(path: string, method: 'DELETE' | 'GET'): Promise<Response> {
+    return fetch(`${this.gatewayUrl}${path}`, {
+      headers: { Authorization: `Bearer ${this.serviceToken}` },
+      method,
+      signal: AbortSignal.timeout(DEVICE_QUERY_TIMEOUT_MS),
     });
   }
 }

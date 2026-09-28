@@ -15,7 +15,7 @@ import PortalHeader from '../components/Header';
 import Title from './Title';
 import { getTaskDetailPageUrl } from './url';
 
-const TaskDetailHeader = memo(() => {
+const TaskDetailHeader = memo<{ onClose?: () => void }>(({ onClose }) => {
   const { t } = useTranslation('verify');
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -49,6 +49,7 @@ const TaskDetailHeader = memo(() => {
           }}
         />
       }
+      onClose={onClose}
     />
   );
 });

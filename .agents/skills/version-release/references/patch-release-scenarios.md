@@ -42,7 +42,8 @@ gh pr create \
   --body-file changelog.md
 ```
 
-4. **After merge**: auto-tag-release detects `release/*` branch → auto patch +1.
+4. **While the PR is open**: `release-pr-version.yml` commits `package.json` to latest stable tag + patch.
+5. **After merge**: auto-tag-release detects `release/*` branch → tags latest stable tag +1.
 
 ---
 
@@ -66,7 +67,9 @@ git push -u origin hotfix/v{version}-{short-hash}
 3. **Write a short hotfix changelog** — See `changelog-example/hotfix.md`. Keep it minimal: scope line, 1-3 fix bullets (symptom + fix in one sentence), upgrade note, owner. No long root-cause section — that lives in the commit message.
    - **Hotfix owner**: Use the actual PR author (retrieve via `gh pr view <number> --json author --jq '.author.login'`), never hardcode a username.
 
-4. **After merge**: auto-tag-release detects `hotfix/*` branch → auto patch +1.
+4. **While the PR is open**: `release-pr-version.yml` commits `package.json` to latest stable tag + patch.
+
+5. **After merge**: auto-tag-release detects `hotfix/*` branch → tags latest stable tag +1.
 
 ### Script
 
@@ -108,7 +111,7 @@ git cherry-pick <migration-commit-hash>
 git push -u origin release/db-migration-{name}
 ```
 
-2. **Write a migration-specific changelog** — See `db-migration-changelog-example.md` for the format. This should explain:
+2. **Write a migration-specific changelog** — See `changelog-example/db-migration.md` for the format. This should explain:
    - What tables/columns are added, modified, or removed
    - Whether the migration is backwards-compatible
    - Any action required by self-hosted users
@@ -124,4 +127,5 @@ gh pr create \
   --body-file changelog.md
 ```
 
-4. **After merge**: auto-tag-release detects `release/*` branch → auto patch +1.
+4. **While the PR is open**: `release-pr-version.yml` commits `package.json` to latest stable tag + patch.
+5. **After merge**: auto-tag-release detects `release/*` branch → tags latest stable tag +1.

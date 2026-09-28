@@ -6,6 +6,7 @@ import type {
   GoalTickOutcome,
 } from '@lobechat/agent-tracing';
 import {
+  ABANDONED_OPERATION_ERROR_PREFIX,
   GOAL_ACCEPTANCE_TASK_TITLE,
   LEASE_EXPIRED_ERROR,
   VERIFICATION_ERRORED_ERROR,
@@ -25,6 +26,14 @@ export { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 export { LEASE_EXPIRED_ERROR, VERIFICATION_ERRORED_ERROR, VERIFICATION_FAILED_ERROR };
 
 export const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
+
+/**
+ * Whether a paused Task lost its run rather than failed it: the coordinator
+ * reclaimed an expired lease, or the gateway watchdog abandoned a silent run.
+ * Either way nothing judged the work, so another attempt is the recovery.
+ */
+export const isLostRunError = (error?: string | null): boolean =>
+  error === LEASE_EXPIRED_ERROR || !!error?.startsWith(ABANDONED_OPERATION_ERROR_PREFIX);
 
 export interface FrontierSelection {
   /** Every eligible task node, best first — the trace-shaped view. */
@@ -94,7 +103,7 @@ export const needsBudget = (task?: TaskItem | null): boolean => {
   // A failure the coordinator can retry spends money too.
   if (task.status === 'paused') {
     return (
-      task.error === LEASE_EXPIRED_ERROR ||
+      isLostRunError(task.error) ||
       task.error === VERIFICATION_FAILED_ERROR ||
       task.error === VERIFICATION_ERRORED_ERROR
     );
@@ -516,7 +525,7 @@ const decideForTask = (
     if (
       budget?.deadlinePassed &&
       task.status === 'paused' &&
-      (task.error === LEASE_EXPIRED_ERROR ||
+      (isLostRunError(task.error) ||
         task.error === VERIFICATION_FAILED_ERROR ||
         task.error === VERIFICATION_ERRORED_ERROR)
     ) {
@@ -527,7 +536,7 @@ const decideForTask = (
         outcome: 'no_progress',
       };
     }
-    if (task.status === 'paused' && task.error === LEASE_EXPIRED_ERROR) {
+    if (task.status === 'paused' && isLostRunError(task.error)) {
       if (!capacity) return 'needs-capacity';
       return {
         ...base,

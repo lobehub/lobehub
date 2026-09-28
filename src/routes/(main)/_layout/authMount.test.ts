@@ -37,6 +37,7 @@ vi.mock('@/features/Electron/ActiveConversationBridge', nullComponent);
 vi.mock('@/features/Electron/ScreenCapture/OverlayCaptureUploader', nullComponent);
 vi.mock('@/features/Electron/ScreenCapture/OverlayMessageDispatcher', nullComponent);
 vi.mock('@/features/Electron/ScreenCapture/OverlaySnapshotPublisher', nullComponent);
+vi.mock('@/features/Electron/HeterogeneousAgent/RestartRecovery', nullComponent);
 vi.mock('@/features/Electron/system/ZoomHUD', nullComponent);
 vi.mock('@/features/Electron/titlebar/TabBar/TabCacheBridges', nullComponent);
 vi.mock('@/features/Electron/titlebar/TitleBar', nullComponent);

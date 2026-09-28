@@ -50,6 +50,11 @@ export interface ToolRuleRequest {
   /** The run's effective execution target, resolved by the host. */
   executionTarget: DeviceExecutionTarget;
   hasEnabledKnowledgeBases?: boolean;
+  /**
+   * An attached or agent-assigned file is too long to inline and is sent as a preview; the
+   * attachments tool is enabled so the model can read the rest with `readAttachment`.
+   */
+  hasOversizedFiles?: boolean;
   isBotConversation?: boolean;
   /** Verified against the persisted roster, never a client claim. */
   isGroupSupervisor?: boolean;

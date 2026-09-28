@@ -16,6 +16,19 @@ import { buildTraeAcpPrompt, parseTraeAcpModelCatalog } from './traeAcpSession';
 
 const TRANSPORT = 'devin-acp' as const;
 
+// Devin's CLI exposes thinking variants, while ACP exposes one representative
+// model per family plus `thought_level`. Fusion IDs also contain a sidekick's
+// effort, so they must not be interpreted as a single-model thinking variant.
+const splitThinkingModel = (model: string) => {
+  const match = /^(?!fusion-)(.+)-(none|minimal|low|medium|high|xhigh|max)$/i.exec(model);
+  return match ? { family: match[1], thoughtLevel: match[2].toLowerCase() } : undefined;
+};
+
+const getThinkingConfig = (configOptions: unknown) =>
+  Array.isArray(configOptions)
+    ? configOptions.filter(isRecord).find((option) => option.id === 'thought_level')
+    : undefined;
+
 export type DevinAcpTextPromptBlock = TraeAcpTextPromptBlock;
 export type DevinAcpImagePromptBlock = TraeAcpImagePromptBlock;
 export type DevinAcpPromptBlock = TraeAcpPromptBlock;
@@ -264,7 +277,12 @@ export class DevinAcpSession extends AcpAgentSession<
   }
 
   private resolveCurrentModel(configOptions: unknown): string | undefined {
-    return parseTraeAcpModelCatalog({ configOptions })?.currentModelId;
+    const model = parseTraeAcpModelCatalog({ configOptions })?.currentModelId;
+    const thinkingModel = model ? splitThinkingModel(model) : undefined;
+    const thoughtLevel = getThinkingConfig(configOptions)?.currentValue;
+    return thinkingModel && typeof thoughtLevel === 'string'
+      ? `${thinkingModel.family}-${thoughtLevel}`
+      : model;
   }
 
   private async applyInitialModel(
@@ -289,15 +307,67 @@ export class DevinAcpSession extends AcpAgentSession<
       return this.setModelOption(sessionId, requestedModel);
     }
 
-    const selected = catalog.models.find((model) =>
+    const requestedThinking = splitThinkingModel(requestedModel);
+    const exactMatch = catalog.models.find((model) =>
       [model.id, model.label].some(
         (candidate) =>
           typeof candidate === 'string' &&
           this.normalizeModelId(candidate) === this.normalizeModelId(requestedModel),
       ),
     );
+    const selected =
+      exactMatch ??
+      (requestedThinking &&
+        catalog.models.find((model) => {
+          const thinkingModel = splitThinkingModel(model.id);
+          return (
+            thinkingModel &&
+            this.normalizeModelId(thinkingModel.family) ===
+              this.normalizeModelId(requestedThinking.family)
+          );
+        }));
 
     if (!selected) {
+      throw new Error(`Devin ACP model is unavailable: ${requestedModel}`);
+    }
+
+    const selectedThinking = splitThinkingModel(selected.id);
+    if (requestedThinking && selectedThinking) {
+      // Switching families can change the supported thinking levels. Validate
+      // against the response for the selected family, not the previous one.
+      let result =
+        catalog.currentModelId === selected.id
+          ? sessionResult
+          : await this.client.request<DevinAcpSetConfigOptionResult>('session/set_config_option', {
+              configId: 'model',
+              sessionId,
+              value: selected.id,
+            });
+      const thinking = getThinkingConfig(result.configOptions);
+      if (thinking) {
+        if (
+          !Array.isArray(thinking.options) ||
+          !thinking.options.some(
+            (option: unknown) =>
+              isRecord(option) && option.value === requestedThinking.thoughtLevel,
+          )
+        ) {
+          throw new Error(`Devin ACP thinking level is unavailable: ${requestedModel}`);
+        }
+        if (thinking.currentValue !== requestedThinking.thoughtLevel) {
+          result = await this.client.request<DevinAcpSetConfigOptionResult>(
+            'session/set_config_option',
+            {
+              configId: thinking.id,
+              sessionId,
+              value: requestedThinking.thoughtLevel,
+            },
+          );
+        }
+        return this.resolveCurrentModel(result.configOptions) ?? requestedModel;
+      }
+      // Older Devin versions may advertise each variant as a model directly.
+      if (exactMatch) return this.resolveCurrentModel(result.configOptions) ?? selected.id;
       throw new Error(`Devin ACP model is unavailable: ${requestedModel}`);
     }
 

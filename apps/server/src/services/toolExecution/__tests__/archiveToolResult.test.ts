@@ -194,13 +194,43 @@ describe('archiveToolResultIfNeeded', () => {
     expect(mockTopicDocumentModel.associate).not.toHaveBeenCalled();
   });
 
+  it('ends a multi-line archive preview with the readDocument call for the next window', async () => {
+    const content = 'line 1\nline 2\nline 3';
+    mockVfsService.read.mockResolvedValue({ content });
+
+    const result = await archive({ content, limit: 14 });
+
+    expect(result.content).toContain(
+      'line 1\nline 2\n[Showing lines 1-2 of 3 lines, 20 characters. To continue, call lobe-agent-documents readDocument with id="agent-doc-1", format="markdown" and offset=3.]',
+    );
+  });
+
+  it('tells the model to re-read a cut line that fits the readDocument budget', async () => {
+    const result = await archive();
+
+    expect(result.content).toContain(
+      'Line 1 is 10 characters long and was cut at 5. To read it in full and continue, call lobe-agent-documents readDocument with id="agent-doc-1", format="markdown" and offset=1.',
+    );
+  });
+
+  it('truncates without archiving or naming readDocument when the run cannot call it', async () => {
+    const result = await archive({ canReadArchive: false });
+
+    expect(result.archived).toBe(false);
+    expect(result.content).toContain('01234');
+    expect(result.content).not.toContain('readDocument');
+    expect(result.content).not.toContain('lobe-agent-documents');
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(AgentDocumentVfsService).not.toHaveBeenCalled();
+  });
+
   it('falls back to truncation without archive context', async () => {
     const result = await archive({ serverDB: undefined });
 
     expect(result.archived).toBe(false);
     expect(result.archivePath).toBeUndefined();
     expect(result.content).toContain('01234');
-    expect(result.content).toContain('Content truncated');
+    expect(result.content).toContain('[Showing lines 1-1 of 1 lines');
     expect(result.content).not.toContain('Archive failed');
     expect(AgentDocumentVfsService).not.toHaveBeenCalled();
   });

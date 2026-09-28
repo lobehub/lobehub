@@ -9,7 +9,7 @@ import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agentDocuments, agents, documents, users } from '../../../schemas';
+import { agentDocuments, agents, documents, files, users } from '../../../schemas';
 import {
   AGENT_SKILL_TEMPLATE_ID,
   DOCUMENT_FOLDER_TYPE,
@@ -200,6 +200,39 @@ describe('AgentDocumentModel', () => {
 
       expect(created.sourceType).toBe(AGENT_DOCUMENT_SOURCE_TYPE);
       expect(created.source).toBe(`agent-document://${agentId}/brief`);
+    });
+
+    it('persists fileId on a file-backed document', async () => {
+      const [file] = await serverDB
+        .insert(files)
+        .values({
+          fileType: 'application/pdf',
+          name: 'brief.pdf',
+          size: 12,
+          url: 's3://brief.pdf',
+          userId,
+        })
+        .returning();
+
+      const created = await agentDocumentModel.create(agentId, 'brief.pdf', '', {
+        fileId: file!.id,
+        fileType: 'application/pdf',
+        sourceType: 'file',
+      });
+
+      const [doc] = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.id, created.documentId));
+
+      expect(doc?.fileId).toBe(file!.id);
+      /** @example Both tree and topic-scoped lists retain the original-file preview target. */
+      expect((await agentDocumentModel.listByAgent(agentId))[0].fileId).toBe(file!.id);
+      expect(
+        (await agentDocumentModel.listByDocumentIds(agentId, [created.documentId]))[0].fileId,
+      ).toBe(file!.id);
+      expect(doc?.sourceType).toBe('file');
+      expect(doc?.filename).toBe('brief.pdf');
     });
 
     it('allows trusted callers to set document source attribution', async () => {
@@ -562,6 +595,62 @@ describe('AgentDocumentModel', () => {
     });
   });
 
+  describe('updateEditorSnapshotIfUnchanged', () => {
+    const repaired = {
+      content: 'body',
+      editorData: { root: { children: [{ type: 'paragraph' }], type: 'root' } },
+    };
+
+    it('writes the repaired snapshot when the document still matches the read version', async () => {
+      const created = await agentDocumentModel.create(agentId, 'repair.md', 'body');
+      const read = (await agentDocumentModel.findById(created.id))!;
+
+      const written = await agentDocumentModel.updateEditorSnapshotIfUnchanged(
+        created.id,
+        { content: read.content, editorData: read.editorData },
+        repaired,
+      );
+
+      expect(written).toBe(true);
+      const after = await agentDocumentModel.findById(created.id);
+      expect(after?.editorData).toEqual(repaired.editorData);
+    });
+
+    it('does not overwrite a save that landed after the read', async () => {
+      const created = await agentDocumentModel.create(agentId, 'repair.md', 'body');
+      const read = (await agentDocumentModel.findById(created.id))!;
+      const autosaved = { root: { children: [{ text: 'newer' }], type: 'root' } };
+      await agentDocumentModel.update(created.id, { content: 'newer', editorData: autosaved });
+
+      const written = await agentDocumentModel.updateEditorSnapshotIfUnchanged(
+        created.id,
+        { content: read.content, editorData: read.editorData },
+        repaired,
+      );
+
+      expect(written).toBe(false);
+      const after = await agentDocumentModel.findById(created.id);
+      expect(after?.content).toBe('newer');
+      expect(after?.editorData).toEqual(autosaved);
+    });
+
+    it('treats an editorData-only save as a new version', async () => {
+      const created = await agentDocumentModel.create(agentId, 'repair.md', 'body');
+      const read = (await agentDocumentModel.findById(created.id))!;
+      const autosaved = { root: { children: [{ text: 'body' }], type: 'root' } };
+      await agentDocumentModel.update(created.id, { editorData: autosaved });
+
+      const written = await agentDocumentModel.updateEditorSnapshotIfUnchanged(
+        created.id,
+        { content: read.content, editorData: read.editorData },
+        repaired,
+      );
+
+      expect(written).toBe(false);
+      expect((await agentDocumentModel.findById(created.id))?.editorData).toEqual(autosaved);
+    });
+  });
+
   describe('rename and copy', () => {
     it('should rename and preserve human-readable filename/source', async () => {
       const created = await agentDocumentModel.create(agentId, 'old-name.md', 'hello');
@@ -909,6 +998,30 @@ describe('AgentDocumentModel', () => {
       // (slash menu / skills) that never render them.
       const nonWeb = await agentDocumentModel.listByAgent(agentId, { excludeWeb: true });
       expect(nonWeb.map((item) => item.filename)).toEqual(['file.md']);
+    });
+
+    it('should include agent-authored docs when filtering by the "file" source type', async () => {
+      // `create` defaults to the `agent` source type — that is how every
+      // createDocument / Portal doc is stored. The tool contract defines
+      // sourceType="file" as "documents authored or edited as agent documents",
+      // so it has to cover them, not only uploaded originals (`file`).
+      const authored = await agentDocumentModel.create(agentId, 'daily-report.md', 'report');
+      await agentDocumentModel.create(agentId, 'upload.pdf', 'parsed pdf', { sourceType: 'file' });
+      await agentDocumentModel.create(agentId, 'web-page', 'web content', {
+        fileType: 'article',
+        sourceType: 'web',
+      });
+
+      const fileOnly = await agentDocumentModel.listByAgent(agentId, { sourceType: 'file' });
+      expect(fileOnly.map((item) => item.filename).sort()).toEqual([
+        'daily-report.md',
+        'upload.pdf',
+      ]);
+
+      const byIds = await agentDocumentModel.listByDocumentIds(agentId, [authored.documentId], {
+        sourceType: 'file',
+      });
+      expect(byIds.map((item) => item.filename)).toEqual(['daily-report.md']);
     });
 
     it('should return only skill-managed docs for skill registry assembly', async () => {
