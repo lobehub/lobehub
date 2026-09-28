@@ -11,7 +11,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { type ChatModelCard } from '@/types/llm';
 
 import ExtendParamsSelect from './ExtendParamsSelect';
-import { hasDuplicateModelId } from './utils';
+import { CUSTOM_MODEL_TYPES, hasDuplicateModelId } from './utils';
 
 interface ModelConfigFormProps {
   disabled?: boolean;
@@ -40,18 +40,7 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
 
     const modelTypeOptions = useMemo(
       () =>
-        (
-          [
-            'chat',
-            'embedding',
-            'tts',
-            'asr',
-            'image',
-            'video',
-            'text2music',
-            'realtime',
-          ] as AiModelType[]
-        ).map((value) => {
+        CUSTOM_MODEL_TYPES.map((value) => {
           const label = t(`providerModels.item.modelConfig.type.options.${value}`);
 
           return {

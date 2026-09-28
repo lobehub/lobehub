@@ -291,7 +291,6 @@ export function registerKbCommand(program: Command) {
         const buildUrl = await resolveAppUrlBuilder(client);
         const result = await client.document.createDocument.mutate({
           content: options.content,
-          editorData: JSON.stringify({}),
           fileType: 'custom/document',
           knowledgeBaseId,
           parentId: options.parent,

@@ -1,6 +1,8 @@
 import type { AppProcessMetrics, GpuStatus, MemoryDump } from '@lobechat/electron-client-ipc';
-import { app } from 'electron';
+import { getManagedProcesses, stopManagedProcess } from '@lobechat/utils/managedProcess';
+import { app, BrowserWindow, webContents } from 'electron';
 
+import { getSharedAppMetrics } from '@/utils/appMetrics';
 import { collectRendererGarbage, startIdleRendererGc } from '@/utils/idleRendererGc';
 import { getIpcContext } from '@/utils/ipc';
 import { parseMemoryDump, type TraceEvent } from '@/utils/memoryDump';
@@ -22,6 +24,22 @@ export default class DevtoolsCtr extends ControllerModule {
   static override readonly groupName = 'devtools';
 
   @IpcMethod()
+  async getManagedProcesses() {
+    return getManagedProcesses();
+  }
+
+  @IpcMethod()
+  async stopManagedProcess({ id }: { id: string }) {
+    if (typeof id !== 'string' || !id) throw new Error('Invalid process identity');
+    await stopManagedProcess(id);
+  }
+
+  @IpcMethod()
+  async openProcessExplorer() {
+    this.app.browserManager.retrieveByIdentifier('processExplorer').show();
+  }
+
+  @IpcMethod()
   async openDevtools() {
     const devtoolsBrowser = this.app.browserManager.retrieveByIdentifier('devtools');
     devtoolsBrowser.show();
@@ -32,7 +50,13 @@ export default class DevtoolsCtr extends ControllerModule {
   // sees the sliver since the other one sampled.
   @IpcMethod()
   async getAppProcessMetrics(): Promise<AppProcessMetrics> {
-    const metrics = app.getAppMetrics();
+    const metrics = getSharedAppMetrics();
+    const windowTitles = new Map<number, string>();
+    for (const contents of webContents.getAllWebContents()) {
+      const title = BrowserWindow.fromWebContents(contents)?.getTitle();
+      const pid = contents.getOSProcessId();
+      if (title && !windowTitles.has(pid)) windowTitles.set(pid, title);
+    }
     const gpuProcesses = metrics.filter((metric) => metric.type === 'GPU');
     const rendererPid = getIpcContext()?.sender.getOSProcessId();
     const renderer =
@@ -53,6 +77,7 @@ export default class DevtoolsCtr extends ControllerModule {
         name: readText(metric.name) ?? readText(metric.serviceName),
         pid: metric.pid,
         type: metric.type,
+        windowTitle: windowTitles.get(metric.pid) ?? null,
         workingSetMB: metric.memory.workingSetSize / 1024,
       })),
       rendererResidentMB: renderer ? renderer.memory.workingSetSize / 1024 : null,

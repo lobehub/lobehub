@@ -148,29 +148,8 @@ git commit -m "📝 docs: update installation guide"
 
 Fill out the PR template in `.github/PULL_REQUEST_TEMPLATE.md`:
 
-```markdown
-## Description
-
-Clear description of what this PR does.
-
-## Type of Change
-
-- [ ] ✨ New feature
-- [ ] 🐛 Bug fix
-- [ ] 📝 Documentation
-- [ ] ♻️ Refactoring
-
-## Checklist
-
-- [ ] Code follows project style guidelines
-- [ ] Tests added/updated
-- [ ] Documentation updated
-- [ ] All tests pass
-
-## Related Issues
-
-Fixes #123
-```
+- **Human** — what changed, screenshots, how you tested it, the acceptance round, and the related issue (`Fixes #123`, `Fixes LOBE-xxx`)
+- **AI** — delete this section when a person wrote the change. When an agent wrote it, and the author is an outside collaborator or another external contributor, the commented instructions in the template tell that agent to record the harness, the model, the thinking level, and every user prompt from the session, in order. The author reviews that text before it is published, and sensitive content is redacted. An active member of the lobehub organization deletes this section.
 
 **PR titles with `✨ feat:` or `🐛 fix:` automatically trigger a new release.** Use other prefixes for changes that don't need a release.
 

@@ -8,6 +8,7 @@ export interface AppProcessRow {
   name: string | null;
   pid: number;
   type: string;
+  windowTitle: string | null;
   workingSetMB: number;
 }
 

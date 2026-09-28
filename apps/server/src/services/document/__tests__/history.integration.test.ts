@@ -215,8 +215,10 @@ describe('DocumentHistoryService', () => {
         });
       }
 
-      // Force document updatedAt to match the history savedAt
-      await documentModel.update(doc.id, { updatedAt: sharedDate });
+      await serverDB
+        .update(documents)
+        .set({ updatedAt: sharedDate })
+        .where(eq(documents.id, doc.id));
 
       const firstPage = await historyService.listDocumentHistory({
         documentId: doc.id,

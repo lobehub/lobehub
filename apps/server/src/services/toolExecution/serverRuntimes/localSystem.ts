@@ -130,6 +130,7 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // script, a Makefile) inherits the scope too. The model's own `env`
         // wins: it may be deliberately overriding the scope.
         if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
+          finalArgs = { ...finalArgs, topicId: context.topicId, agentId: context.agentId };
           const lhEnv = buildDeviceLhEnv(await getContentWorkspaceId());
           if (lhEnv) finalArgs = { ...finalArgs, env: { ...lhEnv, ...finalArgs.env } };
 

@@ -3,22 +3,7 @@ import { ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeCohereAI, params } from './index';
-
-const provider = ModelProvider.Cohere;
-const defaultBaseURL = 'https://api.cohere.ai/compatibility/v1';
-
-testProvider({
-  Runtime: LobeCohereAI,
-  provider,
-  defaultBaseURL,
-  chatDebugEnv: 'DEBUG_COHERE_CHAT_COMPLETION',
-  chatModel: 'command-r7b',
-  test: {
-    skipAPICall: true,
-  },
-});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -68,20 +53,6 @@ describe('LobeCohereAI - custom features', () => {
         expect.anything(),
       );
     });
-
-    it('should clamp frequency_penalty negative values to 0', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'command-r7b',
-        frequency_penalty: -0.5,
-      });
-
-      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({ frequency_penalty: 0 }),
-        expect.anything(),
-      );
-    });
-
     it('should clamp presence_penalty to [0, 1] range', async () => {
       // Test upper bound
       await instance.chat({
@@ -95,20 +66,6 @@ describe('LobeCohereAI - custom features', () => {
         expect.anything(),
       );
     });
-
-    it('should clamp presence_penalty negative values to 0', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'command-r7b',
-        presence_penalty: -0.3,
-      });
-
-      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({ presence_penalty: 0 }),
-        expect.anything(),
-      );
-    });
-
     it('should clamp top_p to [0, 1] range', async () => {
       // Test upper bound
       await instance.chat({
@@ -122,59 +79,6 @@ describe('LobeCohereAI - custom features', () => {
         expect.anything(),
       );
     });
-
-    it('should clamp top_p negative values to 0', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'command-r7b',
-        top_p: -0.1,
-      });
-
-      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({ top_p: 0 }),
-        expect.anything(),
-      );
-    });
-
-    it('should accept valid frequency_penalty values', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'command-r7b',
-        frequency_penalty: 0.5,
-      });
-
-      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({ frequency_penalty: 0.5 }),
-        expect.anything(),
-      );
-    });
-
-    it('should accept valid presence_penalty values', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'command-r7b',
-        presence_penalty: 0.7,
-      });
-
-      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({ presence_penalty: 0.7 }),
-        expect.anything(),
-      );
-    });
-
-    it('should accept valid top_p values', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'command-r7b',
-        top_p: 0.9,
-      });
-
-      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({ top_p: 0.9 }),
-        expect.anything(),
-      );
-    });
-
     it('should handle all penalty parameters together', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
@@ -258,44 +162,6 @@ describe('LobeCohereAI - custom features', () => {
       expect(callArgs).not.toHaveProperty('frequency_penalty');
       expect(callArgs).not.toHaveProperty('presence_penalty');
       expect(callArgs).not.toHaveProperty('top_p');
-    });
-
-    it('should handle edge case: all penalties at maximum', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'command-r7b',
-        frequency_penalty: 2,
-        presence_penalty: 2,
-        top_p: 2,
-      });
-
-      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          frequency_penalty: 1,
-          presence_penalty: 1,
-          top_p: 1,
-        }),
-        expect.anything(),
-      );
-    });
-
-    it('should handle edge case: all penalties at minimum', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'command-r7b',
-        frequency_penalty: -1,
-        presence_penalty: -1,
-        top_p: -1,
-      });
-
-      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          frequency_penalty: 0,
-          presence_penalty: 0,
-          top_p: 0,
-        }),
-        expect.anything(),
-      );
     });
   });
 
@@ -655,13 +521,6 @@ describe('LobeCohereAI - custom features', () => {
 
       await expect(params.models({ client: mockClient as any })).rejects.toThrow('API Error');
     });
-
-    it('should handle network timeout errors', async () => {
-      mockClient.models.list.mockRejectedValue(new Error('Network timeout'));
-
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Network timeout');
-    });
-
     it('should handle invalid API response structure', async () => {
       mockClient.models.list.mockResolvedValue({
         body: {

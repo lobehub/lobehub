@@ -63,6 +63,7 @@ describe('FileService', () => {
   beforeEach(() => {
     mockFileModel = {
       delete: vi.fn(),
+      deleteUnreferenced: vi.fn(),
       findById: vi.fn(),
       updateGlobalFile: vi.fn(),
     };
@@ -94,6 +95,19 @@ describe('FileService', () => {
     new FileService(mockDb, mockUserId, 'workspace-1');
 
     expect(FileModel).toHaveBeenCalledWith(mockDb, mockUserId, 'workspace-1');
+  });
+
+  /** @example Shared blobs survive cleanup; exclusively owned blobs are removed. */
+  it('deletes storage only when reference-safe cleanup returns the file', async () => {
+    mockFileModel.deleteUnreferenced
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ id: 'exclusive', url: 'files/exclusive.pdf' });
+    await service.removeUnreferencedFile('shared', FileSource.AgentDocument);
+    /** @example A shared object is not removed. */
+    expect(service['impl'].deleteFile).not.toHaveBeenCalled();
+    await service.removeUnreferencedFile('exclusive', FileSource.AgentDocument);
+    /** @example The exclusive object's key is removed after DB cleanup. */
+    expect(service['impl'].deleteFile).toHaveBeenCalledWith('files/exclusive.pdf');
   });
 
   describe('downloadFileToLocal', () => {

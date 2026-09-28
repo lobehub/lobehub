@@ -15,20 +15,20 @@ let root;
 afterEach(async () => {
   if (root) await rm(root, { recursive: true, force: true });
 });
-const base = { outcome: 'success', outputs: { found: 'true', main_hash: 'a'.repeat(64) } };
-const gate = { outcome: 'success', outputs: { allowed: 'true', main_hash: 'a'.repeat(64) } };
+const base = { outcome: 'success', outputs: { found: 'true', shell_abi: 'a'.repeat(64) } };
+const gate = { outcome: 'success', outputs: { allowed: 'true', shell_abi: 'a'.repeat(64) } };
+const version = { outcome: 'success', outputs: { seq: '4', version: '1.0.0-core.4' } };
 
-describe('renderer OTA diagnostic outcomes', () => {
+describe('classifyResult', () => {
   it('requests a full release only for a successfully evaluated compatibility decision', () => {
     expect(
       classifyResult({
         base,
-        gate: { outcome: 'success', outputs: { allowed: 'false', reason: 'main-changed' } },
+        gate: { outcome: 'success', outputs: { allowed: 'false', reason: 'abi-changed' } },
       }),
-    ).toMatchObject({ outcome: 'skipped', reason: 'main-changed', requiresFullRelease: true });
+    ).toMatchObject({ outcome: 'skipped', reason: 'abi-changed', requiresFullRelease: true });
     expect(classifyResult({ base, gate: { outcome: 'failure' } })).toMatchObject({
-      outcome: 'failed',
-      reason: 'hash-compute-failed',
+      reason: 'abi-compute-failed',
       requiresFullRelease: false,
     });
     expect(classifyResult({ base: { outcome: 'failure' } })).toMatchObject({
@@ -41,29 +41,47 @@ describe('renderer OTA diagnostic outcomes', () => {
     expect(
       classifyResult({
         base: { outcome: 'success', outputs: { found: 'false', reason: 'base-missing' } },
+        gate: { outcome: 'success', outputs: { allowed: 'false', reason: 'abi-changed' } },
       }),
     ).toMatchObject({ reason: 'base-missing', requiresFullRelease: true });
+    expect(classifyResult({ base, gate, version })).toMatchObject({
+      outcome: 'gated',
+      reason: 'core-allowed',
+      requiresFullRelease: false,
+    });
   });
 
   it.each([
     ['setup', 'environment-setup-failed'],
-    ['renderer', 'renderer-build-failed'],
-    ['sign', 'manifest-sign-failed'],
-    ['publish', 'upload-failed'],
-  ])(
-    'retains %s failure instead of reporting an incompatible or published patch',
-    (stage, reason) => {
-      expect(classifyResult({ base, gate, [stage]: { outcome: 'failure' } })).toMatchObject({
-        reason,
-        outcome: 'failed',
-        published: false,
-        requiresFullRelease: false,
-      });
-    },
-  );
+    ['build', 'core-build-failed'],
+    ['core', 'core-release-failed'],
+    ['upload', 'artifact-upload-failed'],
+  ])('retains core-build %s failure', (stage, reason) => {
+    expect(classifyResult({ [stage]: { outcome: 'failure' } }, 'core-build')).toMatchObject({
+      reason,
+      outcome: 'failed',
+      published: false,
+      requiresFullRelease: false,
+    });
+  });
+
+  it('reports unchanged cores as skipped and uploaded cores as built', () => {
+    expect(
+      classifyResult({ core: { outcome: 'success', outputs: { skipped: 'true' } } }, 'core-build'),
+    ).toMatchObject({ outcome: 'skipped', reason: 'core-unchanged' });
+    expect(
+      classifyResult(
+        {
+          core: { outcome: 'success', outputs: { skipped: 'false' } },
+          upload: { outcome: 'success' },
+        },
+        'core-build',
+      ),
+    ).toMatchObject({ outcome: 'built', reason: 'core-ready' });
+  });
 
   it('distinguishes cancellation, prepared artifacts and actual publication', () => {
-    expect(classifyResult({ base, gate, renderer: { outcome: 'cancelled' } })).toMatchObject({
+    expect(classifyResult({ base, gate, version: { outcome: 'cancelled' } })).toMatchObject({
       reason: 'cancelled',
       published: false,
       requiresFullRelease: false,
@@ -83,11 +101,23 @@ describe('renderer OTA diagnostic outcomes', () => {
     ).toMatchObject({ published: true });
     expect(
       classifyResult(
-        { base, gate, version: { outputs: { version: 'r2' } }, publish: { outcome: 'success' } },
-        'patch',
-        'cancelled',
+        {
+          collect: { outcome: 'success', outputs: { skipped: 'false' } },
+          publish: { outcome: 'success', outputs: { published: 'true' } },
+        },
+        'core-publish',
       ),
-    ).toMatchObject({ published: true, version: 'r2', reason: 'published' });
+    ).toMatchObject({ published: true, reason: 'published' });
+    expect(
+      classifyResult(
+        { collect: { outcome: 'success', outputs: { skipped: 'true' } } },
+        'core-publish',
+      ),
+    ).toMatchObject({ outcome: 'skipped', reason: 'core-unchanged' });
+    expect(classifyResult({ publish: { outcome: 'failure' } }, 'core-publish')).toMatchObject({
+      outcome: 'failed',
+      reason: 'upload-failed',
+    });
   });
 
   it('writes CLI evidence after setup failure without exposing unrelated outputs or secrets', async () => {
@@ -101,7 +131,7 @@ describe('renderer OTA diagnostic outcomes', () => {
       cwd: root,
       env: {
         ...process.env,
-        DIAGNOSTIC_KIND: 'patch',
+        DIAGNOSTIC_KIND: 'core-build',
         CHANNEL: 'canary',
         GITHUB_SHA: 'fixture-commit',
         GITHUB_RUN_ID: '123',
@@ -110,17 +140,15 @@ describe('renderer OTA diagnostic outcomes', () => {
         GITHUB_STEP_SUMMARY: summary,
         RENDERER_OTA_PRIVATE_KEY: 'NEVER-LOG-THIS-PRIVATE-KEY',
         STEPS_JSON: JSON.stringify({
-          base,
           setup: { outcome: 'failure', outputs: { token: 'NEVER-LOG-THIS-TOKEN' } },
         }),
       },
     });
-    const data = await readFile(path.join(root, 'renderer-ota-diagnostics/result.json'), 'utf8');
+    const data = await readFile(path.join(root, 'desktop-ota-diagnostics/result.json'), 'utf8');
     expect(JSON.parse(data)).toMatchObject({
       reason: 'environment-setup-failed',
       commit: 'fixture-commit',
       runId: '123',
-      inputManifestStatus: 'missing',
       lockSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
     expect(data).not.toContain('NEVER-LOG');

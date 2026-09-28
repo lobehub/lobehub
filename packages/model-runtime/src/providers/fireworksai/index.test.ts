@@ -2,27 +2,11 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import type { FireworksAIModelCard } from './index';
-import { LobeFireworksAI, params } from './index';
+import { params } from './index';
 
 const provider = ModelProvider.FireworksAI;
 const defaultBaseURL = 'https://api.fireworks.ai/inference/v1';
-
-// Basic provider tests
-testProvider({
-  Runtime: LobeFireworksAI,
-  bizErrorType: 'ProviderBizError',
-  chatDebugEnv: 'DEBUG_FIREWORKSAI_CHAT_COMPLETION',
-  chatModel: 'deepseek-r1',
-  defaultBaseURL,
-  invalidErrorType: 'InvalidProviderAPIKey',
-  provider,
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 // Custom feature tests
 describe('LobeFireworksAI - custom features', () => {

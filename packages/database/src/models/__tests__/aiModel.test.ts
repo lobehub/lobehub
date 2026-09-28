@@ -15,6 +15,7 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
     { id: 'gpt-4', providerId: 'openai', type: 'chat' },
     { id: 'dall-e-3', providerId: 'openai', type: 'image' },
     { id: 'gpt-4o', providerId: 'openai', type: 'chat' },
+    { id: 'whisper-1', providerId: 'openai', type: 'asr' },
   ]),
 }));
 
@@ -320,6 +321,32 @@ describe('AiModelModel', () => {
       });
     });
 
+    it('should list every personal reasoning config in one read', async () => {
+      await workspaceAiModelModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
+        gpt5_6ReasoningEffort: 'low',
+      });
+      await aiProviderModel.updateModelReasoningConfig('claude-opus-5', 'anthropic', {
+        reasoningMode: 'pro',
+      });
+      // A row without chatConfig is not a saved preference
+      await aiProviderModel.create({ id: 'gpt-4o', providerId: 'openai' });
+      await new AiModelModel(serverDB, 'user2').updateModelReasoningConfig(
+        'gpt-5.6-sol',
+        'openai',
+        {
+          gpt5_6ReasoningEffort: 'high',
+        },
+      );
+
+      const expected = {
+        'anthropic/claude-opus-5': { reasoningMode: 'pro' },
+        'openai/gpt-5.6-sol': { gpt5_6ReasoningEffort: 'low' },
+      };
+      expect(await aiProviderModel.getAllModelReasoningConfigs()).toEqual(expected);
+      // Cross-workspace, like the single-model read
+      expect(await workspaceAiModelModel.getAllModelReasoningConfigs()).toEqual(expected);
+    });
+
     it('should isolate configs across providers and users', async () => {
       await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
         gpt5_6ReasoningEffort: 'high',
@@ -516,6 +543,30 @@ describe('AiModelModel', () => {
       const updatedModel = await aiProviderModel.findById(model.id);
       expect(updatedModel?.enabled).toBe(false);
       expect(updatedModel?.type).toBe('image');
+    });
+
+    it('keeps the builtin type when a toggle without a type creates the row', async () => {
+      await aiProviderModel.toggleModelEnabled({
+        enabled: true,
+        id: 'whisper-1',
+        providerId: 'openai',
+      });
+
+      const created = await aiProviderModel.findById('whisper-1');
+      expect(created).toMatchObject({ enabled: true, type: 'asr' });
+    });
+
+    it('does not rewrite the type of an existing row on a toggle without a type', async () => {
+      await aiProviderModel.create({ id: 'whisper-1', providerId: 'openai', type: 'chat' });
+
+      await aiProviderModel.toggleModelEnabled({
+        enabled: false,
+        id: 'whisper-1',
+        providerId: 'openai',
+      });
+
+      const updated = await aiProviderModel.findById('whisper-1');
+      expect(updated).toMatchObject({ enabled: false, type: 'chat' });
     });
 
     it('should write workspace model toggles without updating personal models', async () => {

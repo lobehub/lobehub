@@ -5,7 +5,7 @@ import { knowledgePrompts } from './knowledge';
 import { userQueryPrompt } from './userQuery';
 
 export type { FileContent, FileContentRange } from './formatFileContents';
-export { promptFileContents } from './formatFileContents';
+export { promptFileContents, readKnowledgeContinuation } from './formatFileContents';
 export { promptNoSearchResults } from './formatNoSearchResults';
 export type { FileSearchResult, FileSearchResultChunk } from './formatSearchResults';
 export { formatSearchResults } from './formatSearchResults';

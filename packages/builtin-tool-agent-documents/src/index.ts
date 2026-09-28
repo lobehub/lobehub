@@ -12,6 +12,7 @@ export {
   type CreateDocumentState,
   type ListDocumentsArgs,
   type ListDocumentsState,
+  MAX_READ_DOCUMENT_CONTENT_CHARS,
   type ModifyDocumentNodesArgs,
   type ModifyDocumentNodesState,
   type ModifyDocumentOperation,

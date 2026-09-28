@@ -1,3 +1,4 @@
+import { ordinaryWorkAccessScope, type WorkAccessScope } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, eq, ne, or, sql } from 'drizzle-orm';
 
@@ -7,6 +8,7 @@ import { tasks } from '../../schemas/task';
 import { works } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { workMatchesAccessScope } from '../../utils/workVisibility';
 
 /**
  * Ambient dependencies every Work query/mutation needs. Passed as the first
@@ -15,10 +17,18 @@ import { buildWorkspaceWhere } from '../../utils/workspace';
  * acyclic).
  */
 export interface WorkContext {
+  /**
+   * Agent Share access boundary. Omitted = ordinary (creator-facing) scope,
+   * which never sees share-stamped rows; see {@link workMatchesAccessScope}.
+   */
+  accessScope?: WorkAccessScope;
   db: LobeChatDatabase;
   userId: string;
   workspaceId?: string;
 }
+
+export const resolveWorkAccessScope = (ctx: Pick<WorkContext, 'accessScope'>): WorkAccessScope =>
+  ctx.accessScope ?? ordinaryWorkAccessScope;
 
 /**
  * Row-level guard for task Works: visible iff the viewer registered the Work
@@ -69,6 +79,10 @@ const documentVisibilityGuard = (ctx: WorkContext): SQL =>
 export const workOwnership = (ctx: WorkContext) =>
   and(
     buildWorkspaceWhere({ userId: ctx.userId, workspaceId: ctx.workspaceId }, works),
+    // Share provenance fences visitor-registered Works off from the creator's
+    // ordinary surfaces (and one visitor topic from another) on EVERY read and
+    // write path, since every per-type module funnels through this predicate.
+    workMatchesAccessScope(works.metadata, resolveWorkAccessScope(ctx)),
     taskVisibilityGuard(ctx),
     documentVisibilityGuard(ctx),
   ) as SQL;

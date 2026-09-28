@@ -71,15 +71,6 @@ jobs:
           fi
           echo "cloud_ref=$cloud_ref" >> "$GITHUB_OUTPUT"
 
-  renderer-ota:
-    name: Publish Renderer OTA
-    needs: [check-beta]
-    if: needs.check-beta.outputs.is_beta == 'true'
-    uses: ./.github/workflows/release-desktop-renderer-ota.yml
-    with:
-      channel: beta
-    secrets: inherit
-
   test:
     name: Code quality check
     needs: [check-beta]
@@ -120,6 +111,13 @@ jobs:
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Resolve core seq
+        id: core_seq
+        uses: ./.github/actions/desktop-core-seq
+        with:
+          channel: beta
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+
       - name: Set package version
         id: app_version
         run: npm run workflow:set-desktop-version ${{ needs.check-beta.outputs.version }} beta
@@ -143,6 +141,7 @@ jobs:
           UPDATE_CHANNEL: beta
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -164,6 +163,7 @@ jobs:
           UPDATE_CHANNEL: beta
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -181,6 +181,7 @@ jobs:
           UPDATE_CHANNEL: beta
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -192,9 +193,8 @@ jobs:
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.os }}
-          renderer-ota-private-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
-          renderer-ota-public-key: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
-          update-channel: beta
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+          core-signing-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
 
       - name: Preserve desktop build diagnostics
         if: always()
@@ -239,9 +239,6 @@ jobs:
           pattern: release-*
           merge-multiple: true
 
-      - name: Validate platform renderer hashes
-        run: node apps/desktop/scripts/validateMainHash.mjs release release-macos-latest release-macos-15-intel release-windows-2025 release-ubuntu-latest
-
       # 列出下载的构建产物
       - name: List downloaded artifacts
         run: ls -R release
@@ -274,6 +271,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
       # 下载合并后的构建产物
       - name: Download merged artifacts
         uses: actions/download-artifact@v7
@@ -301,14 +304,22 @@ jobs:
             release/*.rpm*
             release/*.tar.gz*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
-  publish-renderer-base:
+  publish-core-base:
     needs: [check-beta, merge-mac-files]
-    name: Publish Beta Renderer Base
+    name: Publish Beta Shell and Core r0
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/desktop-publish-s3
         with:
           channel: beta

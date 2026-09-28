@@ -21,6 +21,7 @@
     "brotli-wasm": "^3.0.1",
     "chroma-js": "^3.2.0",
     "countries-and-timezones": "^3.9.0",
+    "cron-parser": "^5.10.1",
     "dayjs": "^1.11.21",
     "debug": "^4.4.3",
     "dompurify": "^3.4.11",

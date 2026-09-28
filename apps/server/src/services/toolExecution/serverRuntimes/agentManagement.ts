@@ -19,10 +19,17 @@ import {
 } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
+import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
+import { AgentService } from '@/server/services/agent';
 import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
+import {
+  NEXT_RUN_NOTE,
+  resolveOrInstallMarketPlugin,
+  unresolvablePluginResult,
+} from './pluginResolution';
 import { type ServerRuntimeRegistration } from './types';
 
 const handleError = (error: unknown, message: string): ToolExecutionResult => {
@@ -40,7 +47,13 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
     }
 
     const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
+    const agentService = new AgentService(context.serverDB, context.userId, context.workspaceId);
     const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
+    const connectorModel = new ConnectorModel(
+      context.serverDB,
+      context.userId,
+      context.workspaceId,
+    );
     // Same identity requirement as the Agent Builder runtime: built without an
     // identity, DiscoverService sends no credentials and every market read fails
     // as `unauthorized`.
@@ -238,18 +251,23 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
 
       installPlugin: async (params: InstallPluginParams): Promise<ToolExecutionResult> => {
         try {
-          const { agentId, identifier } = params;
+          const { agentId, identifier, source } = params;
           const agent = await agentModel.getAgentConfigById(agentId);
           if (!agent) {
             return { content: `Agent "${agentId}" not found.`, success: false };
           }
 
-          // Ensure the plugin is registered in user_installed_plugins so that
-          // PluginModel.query() can resolve its manifest during agent execution.
-          const existing = await pluginModel.findById(identifier);
-          if (!existing) {
-            await pluginModel.create({ identifier, type: 'plugin' });
-          }
+          // Pin only an id the runtime can load: a builtin, a connector, or a
+          // plugin whose manifest lists its APIs (fetched from the marketplace
+          // when not installed yet). Registering a bare row here used to report
+          // success for ids that never produced a tool.
+          const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
+            identifier,
+            { connectorModel, discoverService, pluginModel },
+            { agentId, source },
+          );
+          if (resolution.status !== 'loadable')
+            return unresolvablePluginResult(identifier, resolution);
 
           // upsertPluginMode preserves an already-pinned entry (string or
           // object) as-is and flips a disabled entry back to pinned in place,
@@ -265,7 +283,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           }
 
           return {
-            content: `Successfully enabled plugin "${identifier}" for agent "${agentId}"`,
+            content: `Successfully enabled plugin "${identifier}" for agent "${agentId}".${installedNow ? NEXT_RUN_NOTE : ''}`,
             state: { installed: true, pluginId: identifier, success: true },
             success: true,
           };
@@ -386,7 +404,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           const updatedParts: string[] = [];
 
           if (config && Object.keys(config).length > 0) {
-            await agentModel.updateConfig(agentId, config as Record<string, unknown>);
+            await agentService.updateAgentConfig(agentId, config);
             updatedParts.push(`config: ${Object.keys(config).join(', ')}`);
           }
 

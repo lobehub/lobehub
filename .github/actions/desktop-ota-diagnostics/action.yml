@@ -2,8 +2,8 @@ name: Desktop OTA Diagnostics
 description: Preserve compatibility inputs and explicit build/publication outcomes, including failures
 inputs:
   kind:
-    description: patch, build or release
-    default: patch
+    description: gate, core-build, core-publish, build or release
+    default: gate
   channel:
     description: Desktop update channel
     required: true
@@ -13,9 +13,13 @@ inputs:
   job-status:
     description: Caller job status before diagnostics
     required: true
+  suffix:
+    description: Extra artifact-name segment for matrix legs sharing job id, os and arch
+    required: false
+    default: ''
 outputs:
   published:
-    description: Whether the renderer patch was published
+    description: Whether a core release was published
     value: ${{ steps.report.outputs.published }}
   reason:
     description: Publication or skip reason
@@ -24,7 +28,7 @@ outputs:
     description: Whether compatibility requires a full release
     value: ${{ steps.report.outputs.requires_full_release }}
   version:
-    description: Published renderer patch version
+    description: Published core version
     value: ${{ steps.report.outputs.version }}
 runs:
   using: composite
@@ -43,17 +47,13 @@ runs:
       if: always()
       uses: actions/upload-artifact@v6
       with:
-        name: renderer-ota-diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}-${{ github.run_attempt }}
+        name: desktop-ota-diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}${{ inputs.suffix && format('-{0}', inputs.suffix) || '' }}-${{ github.run_attempt }}
         if-no-files-found: warn
         retention-days: 14
         path: |
-          renderer-ota-diagnostics/
-          apps/desktop/release/renderer-mainhash-inputs.json
-          apps/desktop/release/renderer-mainhash.txt
-          apps/desktop/release/renderer-mainhash/
-          release/renderer-mainhash-inputs.json
-          release/renderer-mainhash.txt
-          release/renderer-mainhash/
-          ${{ runner.temp }}/renderer-base.json
-          ${{ runner.temp }}/base-mainhash-inputs.json
-          ${{ runner.temp }}/renderer-mainhash-diff.txt
+          desktop-ota-diagnostics/
+          apps/desktop/release/core-ota/core/*/latest.json
+          release/core-ota/core/*/latest.json
+          release/shell.json
+          ${{ runner.temp }}/shell.json
+          ${{ runner.temp }}/previous-core.json

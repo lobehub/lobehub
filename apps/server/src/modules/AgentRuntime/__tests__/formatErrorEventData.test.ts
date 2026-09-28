@@ -1,3 +1,4 @@
+import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
@@ -154,6 +155,24 @@ describe('formatErrorEventData', () => {
 
       expect(out.errorType).toBe('ConversationParentMissing');
       expect(out.error).toBe('Conversation parent message msg_abc no longer exists.');
+    });
+
+    it.each([
+      ['ModelRefusalError', ModelRefusalError, AgentRuntimeErrorType.ModelRefusal],
+      ['ModelEmptyError', ModelEmptyError, AgentRuntimeErrorType.ModelEmptyCompletion],
+    ])('keeps %s diagnostics in the event body', (_, ErrorClass, errorType) => {
+      const diagnostics = {
+        finishReason: 'sensitive',
+        model: 'glm-5.3-flash',
+        provider: 'lobehub',
+      };
+      const out = formatErrorEventData(new ErrorClass(undefined, diagnostics), 'call_llm');
+
+      expect(out).toMatchObject({
+        body: { diagnostics },
+        errorType,
+        phase: 'call_llm',
+      });
     });
 
     it('preserves a custom errorType even when no .cause PG info exists', () => {

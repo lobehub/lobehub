@@ -9,6 +9,7 @@ export {
   type AskUserQuestionViewProps,
 } from './AskUserQuestionView';
 export {
+  AUTO_SUBMIT_LEAD_MS,
   buildSubmitPayload,
   DEFAULT_COUNTDOWN_MS,
   DRAFT_PLUGIN_STATE_KEY,
@@ -16,6 +17,8 @@ export {
   FREEFORM_PAYLOAD_KEY,
   isQuestionAnswered,
   readDraft,
+  SUBMIT_ACK_TIMEOUT_MS,
+  SUBMIT_SETTLE_FALLBACK_MS,
   SUPPLEMENT_PAYLOAD_KEY,
 } from './draft';
 export { normalizeAskUserQuestions } from './normalize';

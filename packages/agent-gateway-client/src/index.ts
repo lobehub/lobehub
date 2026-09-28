@@ -17,7 +17,6 @@ export type {
   MuxHeartbeatAckMessage,
   MuxHeartbeatMessage,
   MuxInputRequestMessage,
-  MuxInterruptMessage,
   MuxOperationMessage,
   MuxOperationMeta,
   MuxOpLifecycleMessage,

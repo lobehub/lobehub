@@ -1,7 +1,7 @@
 import { type BlockProps } from '@lobehub/ui';
 import { Block, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Spin, Statistic } from 'antd';
+import { Spin, Text } from '@lobehub/ui/base-ui';
+import { Statistic } from 'antd';
 import { createStaticStyles, responsive } from 'antd-style';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo } from 'react';
@@ -108,7 +108,7 @@ const StatisticCard = memo<StatisticCardProps>(
               title
             )}
           </div>
-          {loading ? <Spin percent={'auto'} size={'small'} /> : extra}
+          {loading ? <Spin size={'small'} /> : extra}
         </div>
         {statistic && (
           <Flexbox gap={16} style={statistic.style}>

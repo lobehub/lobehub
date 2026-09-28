@@ -1,11 +1,13 @@
 // @vitest-environment node
 import { AGENT_DOCUMENT_FILE_TYPE } from '@lobechat/const';
+import { FileSource } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentAccess, AgentDocumentModel } from '@/database/models/agentDocuments';
 import type { LobeChatDatabase } from '@/database/type';
 
 import * as headlessEditor from '../agentDocuments/headlessEditor';
+import { FileService } from '../file';
 import { AgentDocumentVfsService } from './index';
 import { createSkillMount } from './mounts/skills/createSkillMount';
 
@@ -25,6 +27,13 @@ vi.mock('@/database/models/agentDocuments', () => ({
 
 vi.mock('./mounts/skills/createSkillMount', () => ({
   createSkillMount: vi.fn(),
+}));
+
+const removeUnreferencedFile = vi.hoisted(() => vi.fn());
+vi.mock('../file', () => ({
+  FileService: vi.fn(function () {
+    return { removeUnreferencedFile };
+  }),
 }));
 
 describe('AgentDocumentVfsService', () => {
@@ -52,9 +61,12 @@ describe('AgentDocumentVfsService', () => {
   };
 
   beforeEach(() => {
+    vi.mocked(FileService).mockClear();
+    removeUnreferencedFile.mockReset().mockResolvedValue(undefined);
     for (const method of Object.values(mockAgentDocumentModel)) {
       method.mockReset();
     }
+    mockAgentDocumentModel.permanentlyDelete.mockResolvedValue([]);
     for (const method of Object.values(mockSkillMount)) {
       method.mockReset();
     }
@@ -66,6 +78,15 @@ describe('AgentDocumentVfsService', () => {
       const result = await mockAgentDocumentModel.findByParentAndFilename(...args);
       return result ? [result] : [];
     });
+  });
+
+  /** @example Native VFS browsing remains available without object storage. */
+  it('does not initialize storage when listing native documents', async () => {
+    mockAgentDocumentModel.listByParent.mockResolvedValue([]);
+    const service = new AgentDocumentVfsService(db, userId);
+    await service.list('./', { agentId: 'agent-1' });
+    /** @example Browsing a document tree has no storage configuration prerequisite. */
+    expect(FileService).not.toHaveBeenCalled();
   });
 
   afterEach(() => {
@@ -740,6 +761,12 @@ ${'lossless tool result\n'.repeat(100)}
   });
 
   it('permanently deletes ordinary directory subtrees child-first', async () => {
+    // ROOT CAUSE:
+    // Permanent deletion removed document rows without reclaiming hidden backing uploads.
+    // Returned file IDs now go through reference-safe cleanup after each committed deletion.
+    mockAgentDocumentModel.permanentlyDelete
+      .mockResolvedValueOnce(['child-file'])
+      .mockResolvedValueOnce([]);
     mockAgentDocumentModel.findByIdWithOptions.mockResolvedValue({
       accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
       content: '',
@@ -780,6 +807,8 @@ ${'lossless tool result\n'.repeat(100)}
       2,
       'folder-agent-doc-1',
     );
+    /** @example The child upload is reclaimed using the dedicated source policy. */
+    expect(removeUnreferencedFile.mock.calls).toEqual([['child-file', FileSource.AgentDocument]]);
   });
 
   it('opts read-only mounted skill paths out of trash deletes', async () => {

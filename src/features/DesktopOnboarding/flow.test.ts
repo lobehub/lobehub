@@ -38,10 +38,32 @@ describe('desktop onboarding flow', () => {
       ).toBe(DesktopOnboardingScreen.Permissions);
     });
 
-    it('continues from Login to DataMode on non-macOS', () => {
+    it('continues from Login to KeepAwake on non-macOS', () => {
       expect(
         resolveNextScreen({
           current: DesktopOnboardingScreen.Login,
+          everCompleted: false,
+          isAuthenticated: true,
+          isMac: false,
+        }),
+      ).toBe(DesktopOnboardingScreen.KeepAwake);
+    });
+
+    it('continues from Permissions to KeepAwake on macOS', () => {
+      expect(
+        resolveNextScreen({
+          current: DesktopOnboardingScreen.Permissions,
+          everCompleted: false,
+          isAuthenticated: true,
+          isMac: true,
+        }),
+      ).toBe(DesktopOnboardingScreen.KeepAwake);
+    });
+
+    it('continues from KeepAwake to DataMode', () => {
+      expect(
+        resolveNextScreen({
+          current: DesktopOnboardingScreen.KeepAwake,
           everCompleted: false,
           isAuthenticated: true,
           isMac: false,
@@ -111,6 +133,15 @@ describe('desktop onboarding flow', () => {
           isMac: true,
         }),
       ).toBe(DesktopOnboardingScreen.Login);
+    });
+
+    it('returns from DataMode to KeepAwake', () => {
+      expect(
+        resolvePreviousScreen({
+          current: DesktopOnboardingScreen.DataMode,
+          isMac: false,
+        }),
+      ).toBe(DesktopOnboardingScreen.KeepAwake);
     });
   });
 });

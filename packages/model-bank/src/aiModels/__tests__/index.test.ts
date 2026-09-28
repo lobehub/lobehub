@@ -106,7 +106,7 @@ describe('ChatGPT subscription models', () => {
       (model) => model.providerId === ModelProvider.ChatGPT,
     );
 
-    expect(models).toHaveLength(5);
+    expect(models).toHaveLength(7);
     expect(
       models.every((model) => model.settings?.extendParams?.includes('preserveThinking')),
     ).toBe(true);

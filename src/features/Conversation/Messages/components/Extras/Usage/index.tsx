@@ -7,7 +7,7 @@ import { unwrapServerDefaultHeterogeneousModel } from '@lobechat/types';
 import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { CircleDollarSignIcon } from 'lucide-react';
+import { CircleDollarSignIcon, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -140,6 +140,19 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
             provider={displayProvider}
             usage={usage}
           />
+        )}
+        {/* CLI subscription credits (e.g. Qoder) — the CLI reports these instead
+            of token counts, so without them the footer would show no usage at
+            all. Not LobeHub 积分 and not USD, hence the separate label. */}
+        {!!usage?.credits && (
+          <Tooltip title={t('messages.tokenDetails.cliCredits.tooltip')}>
+            <Center horizontal gap={2}>
+              <Icon icon={CoinsIcon} />
+              {t('messages.tokenDetails.cliCredits.title', {
+                value: formatNumber(usage.credits, 2),
+              })}
+            </Center>
+          </Tooltip>
         )}
         {!isShowCredit && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
           <Center horizontal gap={2}>

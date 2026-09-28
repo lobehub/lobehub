@@ -71,24 +71,33 @@ afterEach(async () => {
 });
 
 describe('AgentModel.transferAgentOwnership', () => {
-  it('rejects the handover while the agent still carries a share row', async () => {
-    const agent = await ownerModel.create({ slug: 'shared-handover', title: 'Shared Handover' });
-    await serverDB
-      .insert(agentShares)
-      .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' });
+  it.each(['link', 'private'] as const)(
+    'rejects ownership handover with a %s share without changing the agent or share',
+    async (visibility) => {
+      const agent = await ownerModel.create({
+        slug: 'shared-handover',
+        title: 'Shared Handover',
+        visibility: 'public',
+      });
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({
+          agentId: agent.id,
+          shareConfig: { allowReadMemory: true, monthlySpendLimit: 5 },
+          visibility,
+        })
+        .returning();
 
-    await expect(
-      handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId }),
-    ).rejects.toThrow(AGENT_SHARED_TRANSFER_BLOCKED);
+      await expect(
+        handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId }),
+      ).rejects.toThrow(AGENT_SHARED_TRANSFER_BLOCKED);
 
-    // Guard fires before any mutation: the agent stays with the previous
-    // owner and the share row is untouched. The block lifts only once the
-    // share row itself is removed (no product entry point yet).
-    const [row] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
-    expect(row.userId).toBe(ownerId);
-    const rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
-    expect(rows).toHaveLength(1);
-  });
+      expect(await serverDB.select().from(agents).where(eq(agents.id, agent.id))).toEqual([agent]);
+      expect(await serverDB.select().from(agentShares).where(eq(agentShares.id, share.id))).toEqual(
+        [share],
+      );
+    },
+  );
 
   it('flips only the agent owner; scope, slug and visibility stay put', async () => {
     const agent = await ownerModel.create({

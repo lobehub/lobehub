@@ -32,7 +32,9 @@ export const resolveQuotaAccountSpawnPlan = async (
   // Codex accounts exist in the DB but have no runnable credential mapping yet.
   if (adapterType !== 'claude-code' || !agentId) return NO_ROUTING;
 
-  const selection = await agentQuotaService.selectAccountForAgent(agentId).catch(() => null);
+  const selection = await agentQuotaService
+    .selectAccountForAgent(agentId, { provider: adapterType })
+    .catch(() => null);
   if (!selection) return NO_ROUTING;
 
   const attribution = {

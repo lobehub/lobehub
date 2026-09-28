@@ -1,6 +1,8 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 
+import { spawnManaged } from '@lobechat/utils/managedProcess';
+
 import { resolveCliSpawnPlan } from './cliSpawn';
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
@@ -103,7 +105,7 @@ export class AcpStdioClient {
     const spawnPlan = await resolveCliSpawnPlan(this.options.commandPath, this.options.args);
     if (this.closed) throw new Error('ACP stdio client is closed');
     const detached = process.platform !== 'win32' && (this.options.detached ?? true);
-    const child = spawn(spawnPlan.command, spawnPlan.args, {
+    const child = spawnManaged(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
       detached,
       env: this.options.env,

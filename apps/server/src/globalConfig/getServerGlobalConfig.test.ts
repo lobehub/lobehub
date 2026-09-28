@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 interface MockGlobalConfigOptions {
+  agentGatewayProtocol?: number;
   agentGatewayUrl?: string;
   enableAgentGateway?: boolean;
   toolNameMaxLengthEnv?: string;
@@ -39,6 +40,9 @@ const mockGlobalConfigDependencies = (
 
   vi.doMock('@/envs/app', () => ({
     appEnv: {
+      ...(options.agentGatewayProtocol === undefined
+        ? {}
+        : { AGENT_GATEWAY_PROTOCOL: options.agentGatewayProtocol }),
       ...(options.agentGatewayUrl ? { AGENT_GATEWAY_URL: options.agentGatewayUrl } : {}),
       ...(options.enableAgentGateway === undefined
         ? {}
@@ -195,6 +199,33 @@ describe('getServerGlobalConfig', () => {
 
     await expect(loadServerConfig(false, { enableAgentGateway: true })).resolves.toMatchObject({
       enableGatewayMode: false,
+    });
+  });
+
+  it('should declare gateway protocol 2 only where the v2 socket exists', async () => {
+    // The business gateway serves `/v2/ws`; `lobehub/lobehub-gateway`, which is
+    // what a self-hosted deployment runs, serves only `/ws`.
+    await expect(loadServerConfig(true)).resolves.toMatchObject({ agentGatewayProtocol: 2 });
+    await expect(
+      loadServerConfig(false, {
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableAgentGateway: true,
+      }),
+    ).resolves.toMatchObject({ agentGatewayProtocol: 1 });
+  });
+
+  it('should let AGENT_GATEWAY_PROTOCOL correct either guess', async () => {
+    await expect(
+      loadServerConfig(false, {
+        agentGatewayProtocol: 2,
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableAgentGateway: true,
+      }),
+    ).resolves.toMatchObject({ agentGatewayProtocol: 2 });
+
+    // An on-prem business deployment sitting in front of a v1 gateway.
+    await expect(loadServerConfig(true, { agentGatewayProtocol: 1 })).resolves.toMatchObject({
+      agentGatewayProtocol: 1,
     });
   });
 

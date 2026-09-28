@@ -832,17 +832,17 @@ export class UserMemoryQueryModel {
       identities: params.topK?.identities ?? DEFAULT_HYBRID_SEARCH_LIMIT,
       preferences: params.topK?.preferences ?? DEFAULT_HYBRID_SEARCH_LIMIT,
     };
+    // Experience memory is retired: nothing writes it any more and no surface lists it, so the
+    // search never reaches for those rows either — whichever caller asked, whatever it requested.
     const requestedLayers = new Set(
       (params.layers ?? Object.values(LayersEnum)).filter((layer) => {
+        if (layer === LayersEnum.Experience) return false;
         switch (layer) {
           case LayersEnum.Activity: {
             return (limits.activities ?? 0) > 0;
           }
           case LayersEnum.Context: {
             return (limits.contexts ?? 0) > 0;
-          }
-          case LayersEnum.Experience: {
-            return (limits.experiences ?? 0) > 0;
           }
           case LayersEnum.Identity: {
             return (limits.identities ?? 0) > 0;

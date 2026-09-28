@@ -9,18 +9,25 @@ import { notebookRouter } from './notebook';
 const mocks = vi.hoisted(() => ({
   associate: vi.fn(),
   create: vi.fn(),
+  findDocumentById: vi.fn(),
   findOwnOperationById: vi.fn(),
+  findTopicById: vi.fn(),
   registerDocument: vi.fn(),
 }));
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/database/models/document', () => ({
   DocumentModel: vi.fn().mockImplementation(function () {
-    return { create: mocks.create };
+    return { create: mocks.create, findById: mocks.findDocumentById };
   }),
 }));
 vi.mock('@/database/models/topicDocument', () => ({
   TopicDocumentModel: vi.fn().mockImplementation(function () {
     return { associate: mocks.associate };
+  }),
+}));
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: vi.fn().mockImplementation(function () {
+    return { findById: mocks.findTopicById };
   }),
 }));
 vi.mock('@/database/models/agentOperation', () => ({
@@ -101,5 +108,41 @@ describe('notebook document work provenance', () => {
       (await caller()).createDocument({ ...input, operationId: 'child' }),
     ).rejects.toThrow(/ancestry/);
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('notebook.associateDocument', () => {
+  beforeEach(() => {
+    for (const mock of Object.values(mocks)) mock.mockReset();
+    mocks.associate.mockImplementation(async (params) => params);
+  });
+
+  const caller = async () => createCaller(await createContextInner({ userId: 'user-1' }));
+
+  it('links the existing document without creating a copy or a new Work', async () => {
+    mocks.findDocumentById.mockResolvedValue({ id: 'doc-1' });
+    mocks.findTopicById.mockResolvedValue({ id: 'topic-1' });
+
+    const result = await (
+      await caller()
+    ).associateDocument({ documentId: 'doc-1', topicId: 'topic-1' });
+
+    expect(result).toEqual({ documentId: 'doc-1', topicId: 'topic-1' });
+    expect(mocks.associate).toHaveBeenCalledWith({ documentId: 'doc-1', topicId: 'topic-1' });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.registerDocument).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['document', null, { id: 'topic-1' }],
+    ['topic', { id: 'doc-1' }, null],
+  ])('rejects an inaccessible %s', async (_, document, topic) => {
+    mocks.findDocumentById.mockResolvedValue(document);
+    mocks.findTopicById.mockResolvedValue(topic);
+
+    await expect(
+      (await caller()).associateDocument({ documentId: 'doc-1', topicId: 'topic-1' }),
+    ).rejects.toThrow(/not found/);
+    expect(mocks.associate).not.toHaveBeenCalled();
   });
 });

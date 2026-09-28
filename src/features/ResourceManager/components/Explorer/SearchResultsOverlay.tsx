@@ -1,7 +1,7 @@
 'use client';
 
 import { Center, Flexbox } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui/base-ui';
+import { Checkbox, Spin } from '@lobehub/ui/base-ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
 import { cssVar } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
@@ -11,7 +11,6 @@ import { Virtuoso } from 'react-virtuoso';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import {
   getResourceQueryVisibility,
@@ -160,7 +159,7 @@ const SearchResultsOverlay = memo(() => {
     >
       {isLoading ? (
         <Center height="100%">
-          <NeuralNetworkLoading size={48} />
+          <Spin size="large" />
         </Center>
       ) : error && (!data || data.length === 0) ? (
         // A failed search fetch used to fall through to the "no results" state, telling

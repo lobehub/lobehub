@@ -23,7 +23,6 @@ describe('settingsSelectors', () => {
               params: {},
               tts: {
                 showAllLocaleVoice: false,
-                sttLocale: 'auto',
                 ttsService: 'openai',
                 voice: {
                   openai: 'alloy',
@@ -37,11 +36,8 @@ describe('settingsSelectors', () => {
           },
           tts: {
             openAI: {
-              sttModel: 'whisper-1',
               ttsModel: 'tts-1',
             },
-            sttAutoStop: true,
-            sttServer: 'openai',
           },
           languageModel: {
             openAI: {
@@ -106,9 +102,8 @@ describe('settingsSelectors', () => {
       const s = {
         settings: {
           tts: {
-            sttAutoStop: false,
             openAI: {
-              sttModel: 'whisper-2',
+              ttsModel: 'tts-1-hd',
             },
           },
         },

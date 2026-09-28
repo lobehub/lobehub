@@ -18,11 +18,17 @@ jobs:
   sync-branches:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Set up Git
         run: |
@@ -126,4 +132,4 @@ jobs:
               --body-file /tmp/pr-body.md
           fi
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}

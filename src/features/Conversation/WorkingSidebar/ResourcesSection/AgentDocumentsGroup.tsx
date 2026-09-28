@@ -5,7 +5,7 @@ import {
   EMPTY_ARRAY,
 } from '@lobechat/const';
 import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, confirmModal, Spin, Text, toast } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
@@ -19,7 +19,6 @@ import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { withErrorBoundary } from '@/components/ErrorBoundary';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
@@ -519,7 +518,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     if (isLoading) {
       return (
         <Center flex={1} paddingBlock={24}>
-          <NeuralNetworkLoading size={32} />
+          <Spin size="large" />
         </Center>
       );
     }
@@ -581,7 +580,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
         if (showProjectSkills && isProjectSkillsLoading) {
           return (
             <Center flex={1} paddingBlock={24}>
-              <NeuralNetworkLoading size={32} />
+              <Spin size="large" />
             </Center>
           );
         }

@@ -11,7 +11,6 @@ import type {
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
   UserInterventionConfig,
-  WorkingDirConfig,
 } from '@lobechat/types';
 import { getWorkingDirEffectivePath, RequestTrigger } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -58,23 +57,23 @@ import { createGraphAwareAgentFactory } from './helpers/agentFactory';
 import { createGroupActionMemberBridgeHook } from './hooks/threadRunHooks';
 import { InterventionController } from './intervention/InterventionController';
 import type { ApprovalClaimState } from './pipeline/approvalResume';
-import {
-  buildApprovalResumeContext,
-  claimApprovalResume,
-  tryReuseInterventionContinuation,
-} from './pipeline/approvalResume';
+import { claimApprovalResume, tryReuseInterventionContinuation } from './pipeline/approvalResume';
 import { dispatchHeteroAgent } from './pipeline/heteroDispatch';
-import { createHistoryMessagesLoader, prepareOperation } from './pipeline/operationPrep';
+import { buildOperationInitRequest, runOperationInit } from './pipeline/operationInit';
+import { createHistoryMessagesLoader } from './pipeline/operationPrep';
 import { resolveRunAgentConfig } from './pipeline/resolveRunAgentConfig';
 import { startOperation } from './pipeline/startOperation';
-import { discoverTools } from './pipeline/toolDiscovery';
 import { resolveNewTopicSnapshot, setupTurn } from './pipeline/turnSetup';
 import { createRunFacts, type RunFacts } from './runFacts';
 import { applyShareGateToAgentConfig } from './shareGate';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import { execAgentMember, execAgentThreadRun } from './subAgentRuns';
 import { acquireTopicStartReservation } from './topicStartReservation';
-import type { ExecRunContext, InternalExecAgentParams } from './types';
+import type {
+  BindTopicWorkingDirectoryParams,
+  ExecRunContext,
+  InternalExecAgentParams,
+} from './types';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -269,25 +268,50 @@ export class AiAgentService {
    * CLI agent does. Purely additive: a topic that already carries a cwd (the
    * client resolved one and sent it as `initialTopicMetadata`, or an earlier
    * turn bound it) is never rewritten, so the historical pin always wins.
+   *
+   * The pin is a bare path that only holds on the machine it came from, so the
+   * device is stamped alongside it (`boundDeviceId`, unless the topic already
+   * names one) — that is what lets another device skip it. A topic already
+   * bound to a different device is left unpinned rather than given this
+   * device's path.
+   *
+   * An unbound topic that already carries a cwd (the client's initial
+   * metadata, or a pre-binding row) still gets the device stamped: the run
+   * just used that cwd here, and the binding is what keeps later turns and the
+   * device picker on this machine.
    */
-  private async bindTopicWorkingDirectory(params: {
-    config?: WorkingDirConfig;
-    currentWorkingDirectory?: string;
-    topicId: string;
-  }): Promise<void> {
-    const { config, currentWorkingDirectory, topicId } = params;
-    if (currentWorkingDirectory || !config) return;
-    const path = getWorkingDirEffectivePath(config);
-    if (!path) return;
+  private async bindTopicWorkingDirectory(params: BindTopicWorkingDirectoryParams): Promise<void> {
+    const { config, currentDeviceId, currentWorkingDirectory, deviceId, topicId } = params;
+    if (!config) {
+      // No directory resolved on this machine (no agent pick, no device
+      // default), so the caller never read the topic either. The run still
+      // happened here — pin an unbound topic to it all the same.
+      if (deviceId) await this.stampTopicDevice(topicId, deviceId);
+      return;
+    }
+    if (currentDeviceId && deviceId && currentDeviceId !== deviceId) return;
+    const stampDevice = !!deviceId && !currentDeviceId;
+    const path = currentWorkingDirectory ? undefined : getWorkingDirEffectivePath(config);
+    if (!path && !stampDevice) return;
 
     try {
       await this.topicModel.updateMetadata(topicId, {
-        workingDirectory: path,
-        workingDirectoryConfig: config,
+        ...(stampDevice && { boundDeviceId: deviceId }),
+        ...(path && { workingDirectory: path, workingDirectoryConfig: config }),
       });
     } catch (err) {
       // Metadata bookkeeping must never fail a run that is otherwise fine.
       log('execAgent: bindTopicWorkingDirectory failed (non-fatal): %O', err);
+    }
+  }
+
+  private async stampTopicDevice(topicId: string, deviceId: string): Promise<void> {
+    try {
+      const topic = await this.topicModel.findById(topicId);
+      if (!topic || topic.metadata?.boundDeviceId) return;
+      await this.topicModel.updateMetadata(topicId, { boundDeviceId: deviceId });
+    } catch (err) {
+      log('execAgent: stampTopicDevice failed (non-fatal): %O', err);
     }
   }
 
@@ -673,6 +697,7 @@ export class AiAgentService {
       botContext,
       botSender,
       createdThreadId,
+      externalOrigin,
       clientIp,
       userAgent,
       deviceId: requestedDeviceId,
@@ -994,6 +1019,7 @@ export class AiAgentService {
         continuationAssistantId,
         conversationAgentId,
         createdThreadId,
+        externalOrigin,
         cronJobId,
         files,
         modelOverride,
@@ -1039,7 +1065,10 @@ export class AiAgentService {
 
     const runContext: ExecRunContext = {
       agentConfig,
-      appContext,
+      appContext:
+        turn.editingAgentId && turn.editingAgentId !== appContext?.editingAgentId
+          ? { ...appContext, editingAgentId: turn.editingAgentId }
+          : appContext,
       assistantMessageId: turn.assistantMessageId,
       canUseDevice,
       deviceAccessReason,
@@ -1051,6 +1080,7 @@ export class AiAgentService {
       resolvedAgentId,
       runFacts,
       shareGate,
+      topicEditingGroupId: turn.topicEditingGroupId,
       topicId,
       trigger,
       userMessageId: turn.userMessageId,
@@ -1081,10 +1111,11 @@ export class AiAgentService {
           maxSteps,
           memberDeviceOverride,
           operationTaskId,
+          onOperationCreated: params.onOperationCreated,
           parentOperationId,
           pinnedHeterogeneousTopicModel: turn.pinnedHeterogeneousTopicModel,
           requestTrigger: requestTriggerMetadata.trigger,
-          requestedDeviceId,
+          requestedDeviceId: turn.requestedDeviceId,
           runAttachments,
           selfMessageIds,
           topicStartOwnerOperationId: params.topicStartOwnerOperationId,
@@ -1169,98 +1200,71 @@ export class AiAgentService {
     // injected separately via `initialContext.mentionedAgents` below.
     const hasMentionedAgents = !appContext?.groupId && !!mentionedAgents?.length;
 
-    // Stage 5 (5a–5f) — tool discovery (see `pipeline/toolDiscovery`).
-    const discovery = await discoverTools(
+    // 15. Generate operation ID: op_{timestamp}_{agentId}_{topicId}_{random}
+    const operationId =
+      continuationOperationId ?? `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
+
+    // Stages 5–18 — the run's init: the tool surface, the message/context
+    // assembly, and the human decision a resumed approval turns into the first
+    // context. One call so the same work can later run in the step-0 worker
+    // instead of on the send path.
+    const initRequest = buildOperationInitRequest({
+      additionalPluginIds,
+      agentSlug,
+      approvalOwnerAssistantId,
+      approvedToolEntries,
+      attachedFileIds,
+      botContext,
+      botPlatformContext,
+      disableLocalSystem,
+      disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
+      disableTools: params.disableTools,
+      disabledPluginIds,
+      discordContext,
+      ephemeralUserMessage,
+      exclusivePluginIds,
+      files,
+      functionTools,
+      globalMemoryEnabled,
+      hasMentionedAgents,
+      isFixedDeviceTarget: turn.isFixedDeviceTarget,
+      localDeviceId,
+      mentionedAgents,
+      operationId,
+      parentMessageId,
+      requestTrigger: requestTriggerMetadata.trigger,
+      requestedDeviceId: turn.requestedDeviceId,
+      resumeApproval,
+      resumeApprovalPlugin,
+      resumeApprovals,
+      resumeFromHistory: runFromHistory,
+      resumeToolResult,
+      runAttachments,
+      selectedToolIds,
+      topicBoundDeviceId: turn.topicBoundDeviceId,
+    });
+
+    const { discovery, initialContext, prep } = await runOperationInit(
       {
         agentDocumentsService: this.agentDocumentsService,
+        agentModel: this.agentModel,
+        bindTopicWorkingDirectory: (p) => this.bindTopicWorkingDirectory(p),
         composioService: this.composioService,
         connectorModel: this.connectorModel,
         connectorToolModel: this.connectorToolModel,
         db: this.db,
         getMarketService: () => this.getMarketService(runFacts),
+        loadHistoryMessages,
         messageModel: this.messageModel,
         pluginModel: this.pluginModel,
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      },
-      runContext,
-      {
-        additionalPluginIds,
-        agentSlug,
-        attachedFileIds,
-        botContext,
-        disableLocalSystem,
-        disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
-        disableTools: params.disableTools,
-        disabledPluginIds,
-        discordContext,
-        exclusivePluginIds,
-        files,
-        functionTools,
-        globalMemoryEnabled,
-        hasMentionedAgents,
-        isFixedDeviceTarget: turn.isFixedDeviceTarget,
-        loadHistoryMessages,
-        localDeviceId,
-        requestTrigger: requestTriggerMetadata.trigger,
-        requestedDeviceId,
-        selectedToolIds,
         throwIfExecutionAborted,
-        topicBoundDeviceId: turn.topicBoundDeviceId,
-      },
-    );
-
-    // 15. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
-    const timestamp = Date.now();
-    const operationId =
-      continuationOperationId ?? `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
-
-    // Stages 9.4–18 — device system info, agent-management context, persona
-    // memory, history + message assembly, the base initial runtime context,
-    // workspace init, the OperationSkillSet, and the expertise snapshot
-    // (see `pipeline/operationPrep`).
-    const prep = await prepareOperation(
-      {
-        agentDocumentsService: this.agentDocumentsService,
-        agentModel: this.agentModel,
-        bindTopicWorkingDirectory: (p) => this.bindTopicWorkingDirectory(p),
-        db: this.db,
         topicModel: this.topicModel,
         userId: this.userId,
         workspaceId: this.workspaceId,
       },
       runContext,
-      {
-        botPlatformContext,
-        disabledPluginIds,
-        discovery,
-        ephemeralUserMessage,
-        globalMemoryEnabled,
-        hasMentionedAgents,
-        loadHistoryMessages,
-        mentionedAgents,
-        operationId,
-        runAttachments,
-        runFromHistory,
-        throwIfExecutionAborted,
-      },
+      initRequest,
     );
-
-    // 16b/16c — override the initial context with the human decision
-    // (see `pipeline/approvalResume`). Pure; no-op on a fresh send.
-    const initialContext = buildApprovalResumeContext({
-      approvalOwnerAssistantId,
-      approvedToolEntries,
-      assistantMessageId: turn.assistantMessageId,
-      initialContext: prep.initialContext,
-      messageCount: prep.allMessages.length,
-      operationId,
-      parentMessageId,
-      resumeApproval,
-      resumeApprovalPlugin,
-      resumeApprovals,
-      resumeToolResult,
-    });
 
     // 17. Log final operation parameters summary
     log(
@@ -1330,6 +1334,7 @@ export class AiAgentService {
         approvalSourceOperationId,
         approvalSourceToolMessageIds,
         autoStart,
+        onOperationCreated: params.onOperationCreated,
         botContext,
         botPlatformContext,
         clientIp,
@@ -1485,7 +1490,9 @@ export class AiAgentService {
   execVirtualSubAgent = async (params: ExecVirtualSubAgentParams): Promise<ExecSubAgentResult> =>
     execAgentThreadRun(this.subAgentRunDeps, params, {
       chatConfig: params.chatConfig,
+      deviceId: params.deviceId,
       isSubAgent: true,
+      localDeviceId: params.localDeviceId,
       logScope: 'execVirtualSubAgent',
       // Sub-agent model is resolved at the spawn site (callSubAgent runner) from
       // the parent agent's `agencyConfig.subagent` and threaded through here as an

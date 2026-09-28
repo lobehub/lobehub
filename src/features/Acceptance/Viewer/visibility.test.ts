@@ -1,10 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  canCommentOnAcceptanceEvidence,
   canReviewAcceptance,
   canViewAcceptanceHistory,
   resolveAcceptanceHistoryNavigation,
 } from './visibility';
+
+describe('canCommentOnAcceptanceEvidence', () => {
+  it('hides standalone region comments from the acceptance author', () => {
+    expect(canCommentOnAcceptanceEvidence({ isOwner: true }, true)).toBe(false);
+  });
+
+  it('keeps region comments available to another viewer with comment access', () => {
+    expect(canCommentOnAcceptanceEvidence({ isOwner: false }, true)).toBe(true);
+  });
+
+  it('withholds region comments without comment access or a loaded identity', () => {
+    expect(canCommentOnAcceptanceEvidence({ isOwner: false }, false)).toBe(false);
+    expect(canCommentOnAcceptanceEvidence(undefined, true)).toBe(false);
+  });
+});
 
 describe('canViewAcceptanceHistory', () => {
   it('keeps run history available to the acceptance owner', () => {

@@ -1,5 +1,6 @@
 'use client';
 
+import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
 import { Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Button, Skeleton, toast } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
@@ -26,6 +27,7 @@ import {
   getPullRequestState,
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
+import { TopicBackgroundActivity } from '@/features/BackgroundActivity/TopicSection';
 import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
@@ -38,16 +40,17 @@ import { dbMessageSelectors } from '@/store/chat/selectors';
 import {
   useFetchGitAheadBehind,
   useFetchGitBranch,
-  useFetchGitLinkedPR,
   useFetchGitWorktrees,
   useReviewPatches,
 } from '@/store/device';
-import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import ProgressSection from '../ProgressSection';
 import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from './overviewData';
 import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
+import PortSwitcher from './PortSwitcher';
 import { sectionStyles } from './sectionStyles';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -66,7 +69,9 @@ interface OverviewProps {
   deviceId?: string;
   environmentAvailable: boolean;
   onOpenTab: (tab: string) => void;
-  prAvailable?: boolean;
+  onRefreshPullRequest: () => Promise<unknown>;
+  /** Parent-owned so the Overview row and the on-demand PR tab cannot disagree. */
+  pullRequest?: DeviceGitLinkedPullRequest | null;
   repoType?: string;
   sourcePath?: string;
   workingDirectory?: string;
@@ -81,7 +86,8 @@ const Overview = memo<OverviewProps>(
     deviceId,
     environmentAvailable,
     onOpenTab,
-    prAvailable,
+    onRefreshPullRequest,
+    pullRequest,
     repoType,
     sourcePath,
     workingDirectory,
@@ -90,6 +96,7 @@ const Overview = memo<OverviewProps>(
     const { t: tDevice } = useTranslation('device');
     const { t: tCommon } = useTranslation('common');
     const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+    const tunnelsEnabled = useUserStore(labPreferSelectors.enableDeviceTunnel);
     const topicId = useChatStore((s) => s.activeTopicId);
     const threadId = useChatStore((s) => s.activeThreadId);
     const works = useChatStore((s) =>
@@ -121,13 +128,6 @@ const Overview = memo<OverviewProps>(
       deviceId,
       gitPath,
     );
-    const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(
-      deviceId,
-      gitPath,
-      branch,
-      isGithub,
-    );
-
     const [switcherOpen, setSwitcherOpen] = useState(false);
     const [pulling, setPulling] = useState(false);
     const [pushing, setPushing] = useState(false);
@@ -148,9 +148,9 @@ const Overview = memo<OverviewProps>(
         mutateAheadBehind(),
         mutateReview(),
         mutateWorktrees(),
-        mutatePR(),
+        onRefreshPullRequest(),
       ]);
-    }, [mutateBranch, mutateAheadBehind, mutateReview, mutateWorktrees, mutatePR]);
+    }, [mutateBranch, mutateAheadBehind, mutateReview, mutateWorktrees, onRefreshPullRequest]);
 
     // Flip the displayed branch instantly on checkout; the switcher's
     // onAfterCheckout reconciles once the checkout lands (same as GitStatus).
@@ -203,7 +203,6 @@ const Overview = memo<OverviewProps>(
       }
     }, [deviceId, refreshGit, syncBusy, tDevice, workingDirectory]);
 
-    const pullRequest = prData?.pullRequest;
     const ciStatus = pullRequest?.ciStatus;
     const ci = pullRequest ? getCiVisual(ciStatus) : undefined;
     const prVisual = pullRequest ? PR_STATE_VISUAL[getPullRequestState(pullRequest)] : undefined;
@@ -358,13 +357,7 @@ const Overview = memo<OverviewProps>(
                     {pullRequest.title}
                   </>
                 }
-                onClick={
-                  prAvailable
-                    ? () => onOpenTab('pr')
-                    : pullRequest.url
-                      ? () => openTrustedExternalUrl(pullRequest.url)
-                      : undefined
-                }
+                onClick={() => onOpenTab('pr')}
               />
             </div>
           </Tooltip>
@@ -417,10 +410,21 @@ const Overview = memo<OverviewProps>(
               repoType={repoType}
               onClick={() => onOpenTab('files')}
             />
-            <Flexbox className={sectionStyles.section}>{workspaceSection}</Flexbox>
+            <Flexbox className={sectionStyles.section}>
+              {workspaceSection}
+              {/* Outside the git rows: a dev server runs in plain folders too. */}
+              {tunnelsEnabled && deviceId && (
+                <PortSwitcher
+                  active={active}
+                  deviceId={deviceId}
+                  workingDirectory={workingDirectory}
+                />
+              )}
+            </Flexbox>
           </>
         )}
 
+        <TopicBackgroundActivity topicId={topicId} />
         {environmentAvailable && !workingDirectory && (
           <Empty
             className={cx(sectionStyles.section, styles.emptyWorkspace)}

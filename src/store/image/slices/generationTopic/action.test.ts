@@ -1,3 +1,4 @@
+import { RequestTrigger } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -253,7 +254,9 @@ describe('GenerationTopicAction', () => {
         await result.current.summaryGenerationTopicTitle(topicId, prompts);
       });
 
-      expect(chatService.fetchPresetTaskResult).toHaveBeenCalled();
+      expect(chatService.fetchPresetTaskResult).toHaveBeenCalledWith(
+        expect.objectContaining({ trigger: RequestTrigger.GenerationTopicTitle }),
+      );
       expect(generationTopicService.updateTopic).toHaveBeenCalledWith(topicId, {
         title: generatedTitle,
       });

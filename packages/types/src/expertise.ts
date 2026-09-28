@@ -142,6 +142,16 @@ export type ExpertiseReasonKind = 'mechanism' | 'taste';
 export type ExpertiseReasonSource = 'inferred' | 'reviewer';
 
 /**
+ * What a rule does when a delivery breaks it.
+ *
+ * `remind` only reaches the agent's context; `block` is meant to hold the delivery until the
+ * reviewer waves it through. Storing the choice is the reviewer's half — the compiler and the
+ * verify-plan wiring that make `block` actually stop anything land separately.
+ */
+export type ExpertiseEnforcement = 'block' | 'remind';
+export const EXPERTISE_ENFORCEMENTS: ExpertiseEnforcement[] = ['block', 'remind'];
+
+/**
  * What a backtest concluded about one lesson.
  *
  * `ready` does not mean the standard is correct — it means firing it would not have contradicted

@@ -98,7 +98,6 @@ vi.mock('react-i18next', () => ({
 vi.mock('swr', () => ({ default: useSWRMock }));
 
 vi.mock('@/components/AsyncError', () => ({ default: () => null }));
-vi.mock('@/components/NeuralNetworkLoading', () => ({ default: () => <span>Loading</span> }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => vi.fn(),
 }));
