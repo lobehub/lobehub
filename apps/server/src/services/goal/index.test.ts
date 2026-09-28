@@ -34,6 +34,7 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
+import { AiAgentService } from '@/server/services/aiAgent';
 
 import { deviceGateway } from '../deviceGateway';
 import { TaskService } from '../task';
@@ -1251,6 +1252,84 @@ describe('GoalService', () => {
     // A closed goal reopens through the ordinary resume.
     expect((await service.resume(graph.goal.id)).status).toBe('running');
     expect((await service.close(graph.goal.id, 'achieved')).status).toBe('achieved');
+  });
+
+  it('fences new dispatch before interrupting the runs of a goal being closed', async () => {
+    // A tick overlapping the close must not claim another Task while the scan
+    // and cancellation are under way, so the goal stops reading `running` first.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ tasks: ['Runs'], title: 'Fenced' });
+    const created = await service.tick(graph.goal.id);
+    await new TaskModel(serverDB, userId).update(created.taskId!, { status: 'running' });
+    await serverDB.insert(topics).values({ id: 'tpc_fence', userId });
+    await new TaskTopicModel(serverDB, userId).add(created.taskId!, 'tpc_fence', { seq: 1 });
+    await new TaskTopicModel(serverDB, userId).updateStatus(
+      created.taskId!,
+      'tpc_fence',
+      'running',
+    );
+    const statusDuringCancel: string[] = [];
+    vi.spyOn(TaskService.prototype, 'cancelTopic').mockImplementation(async () => {
+      const goal = await new GoalModel(serverDB, userId).findById(graph.goal.id);
+      statusDuringCancel.push(goal!.status);
+    });
+
+    await service.close(graph.goal.id, 'canceled');
+
+    expect(statusDuringCancel).toEqual(['paused']);
+  });
+
+  describe('closing a goal with a main Agent turn in flight', () => {
+    const managedGoal = async (title: string) => {
+      const service = new GoalService(serverDB, userId);
+      const graph = await service.create({ tasks: ['Managed'], title });
+      await new AgentOperationModel(serverDB, userId).recordStart({
+        operationId: `op-manager-${title}`,
+      });
+      await serverDB
+        .update(goals)
+        .set({
+          config: {
+            ...graph.goal.config,
+            manager: {},
+            managerState: {
+              operationId: `op-manager-${title}`,
+              startedAt: new Date().toISOString(),
+              token: 'turn',
+              topicId: 'management-topic',
+              turns: 1,
+            },
+          } as never,
+        })
+        .where(eq(goals.id, graph.goal.id));
+      return { goalId: graph.goal.id, service };
+    };
+
+    it('interrupts the main Agent turn before ending the goal', async () => {
+      // The coordinator's own operation is not a graph Task topic, so the
+      // topic scan alone would leave it spending after the goal ended.
+      const { goalId, service } = await managedGoal('interrupted');
+      const interrupt = vi
+        .spyOn(AiAgentService.prototype, 'interruptTask')
+        .mockResolvedValue({ success: true } as never);
+
+      expect((await service.close(goalId, 'achieved')).status).toBe('achieved');
+      expect(interrupt).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-manager-interrupted' }),
+      );
+    });
+
+    it('refuses to end the goal when the interruption is not confirmed', async () => {
+      const { goalId, service } = await managedGoal('unconfirmed');
+      vi.spyOn(AiAgentService.prototype, 'interruptTask').mockResolvedValue({
+        deviceCancellationConfirmed: false,
+        success: true,
+      } as never);
+
+      await expect(service.close(goalId, 'canceled')).rejects.toThrow(/not closed/);
+      // Still fenced so nothing new starts, but not claimed as ended.
+      expect((await new GoalModel(serverDB, userId).findById(goalId))?.status).toBe('paused');
+    });
   });
 
   it('restarts a split-role goal under a new executor without replacing its supervisor', async () => {
