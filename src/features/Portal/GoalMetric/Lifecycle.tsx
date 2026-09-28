@@ -19,7 +19,13 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AssigneeProfileAvatar from '@/features/AgentGoals/ProcessControl/AssigneeProfileAvatar';
+import {
+  artifactIconOf,
+  openTargetOf,
+  useOpenGoalArtifact,
+} from '@/features/AgentGoals/ProcessControl/Deliverables';
 import type {
+  GoalArtifactView,
   GoalGraphView,
   GoalNodeView,
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
@@ -30,6 +36,13 @@ import UserAvatar from '@/features/User/UserAvatar';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+
+import {
+  type LifecycleNote,
+  type LifecyclePresentation,
+  nodeTwinKey,
+  presentLifecycleEvent,
+} from './lifecycleEvent';
 
 /**
  * The goal's history as a timeline, newest first and grouped by day. Each event
@@ -107,6 +120,7 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
+    white-space: pre-line;
     overflow-wrap: anywhere;
 
     background: ${cssVar.colorFillQuaternary};
@@ -238,6 +252,34 @@ const Subject = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView }>
 
 Subject.displayName = 'GoalMetricLifecycleSubject';
 
+/** A deliverable the event attached, opened where it lives. */
+const ArtifactSubject = memo<{ artifact: GoalArtifactView }>(({ artifact }) => {
+  const { t } = useTranslation('chat');
+  const open = useOpenGoalArtifact();
+  const label = artifact.title || artifact.identifier || t('goalProcess.deliverables.untitled');
+  const content = (
+    <>
+      <Icon color={cssVar.colorTextTertiary} icon={artifactIconOf(artifact.type)} size={13} />
+      <span className={styles.subjectTitle}>{label}</span>
+    </>
+  );
+
+  if (!openTargetOf(artifact))
+    return (
+      <span className={styles.subject} style={{ cursor: 'default' }}>
+        {content}
+      </span>
+    );
+
+  return (
+    <button className={styles.subject} type={'button'} onClick={() => open(artifact)}>
+      {content}
+    </button>
+  );
+});
+
+ArtifactSubject.displayName = 'GoalMetricLifecycleArtifact';
+
 const AgentActor = memo<{ agentId: string }>(({ agentId }) => {
   const { t } = useTranslation('chat');
   const meta = useAgentDisplayMeta(agentId);
@@ -302,11 +344,18 @@ const Actor = memo<{ event: GoalGraphEvent }>(({ event }) => {
 
 Actor.displayName = 'GoalMetricLifecycleActor';
 
+const noteText = (note: LifecycleNote, t: (key: any, options?: any) => string) => {
+  if (!('key' in note)) return note.text;
+  if (note.key === 'mainAgent') return t('goalProcess.lifecycle.note.mainAgent', { text: note.text });
+  return t(`goalProcess.lifecycle.note.${note.key}` as const);
+};
+
 const EventItem = memo<{
   event: GoalGraphEvent;
   graph: GoalGraphView;
   onSelect: (nodeId: string) => void;
-}>(({ event, graph, onSelect }) => {
+  presentation: Exclude<LifecyclePresentation, { hidden: true }>;
+}>(({ event, graph, onSelect, presentation }) => {
   const { t } = useTranslation('chat');
   const { icon, tone } = EVENT_VISUAL[event.eventType] ?? {
     icon: History,
@@ -315,11 +364,17 @@ const EventItem = memo<{
   const subjects = subjectNodes(event, graph);
   const kind = eventKind(event, subjects);
   const phrase = `${event.eventType}.${kind}`;
-  const action = ACTION_PHRASES.has(phrase)
-    ? t(`goalProcess.lifecycle.action.${phrase}` as any)
-    : t(`goalProcess.lifecycle.action.${event.eventType}` as const, {
-        kind: kind ? t(`goalProcess.lifecycle.kind.${kind}` as const) : '',
-      }).trim();
+  const action = presentation.action
+    ? t(`goalProcess.lifecycle.action.${presentation.action}` as const)
+    : ACTION_PHRASES.has(phrase)
+      ? t(`goalProcess.lifecycle.action.${phrase}` as any)
+      : t(`goalProcess.lifecycle.action.${event.eventType}` as const, {
+          kind: kind ? t(`goalProcess.lifecycle.kind.${kind}` as const) : '',
+        }).trim();
+  const artifact = presentation.workVersion
+    ? graph.artifacts.find((item) => item.workVersionId === presentation.workVersion!.id)
+    : undefined;
+  const note = presentation.note ? noteText(presentation.note, t) : undefined;
 
   return (
     <Flexbox horizontal className={styles.item} gap={10}>
@@ -348,6 +403,14 @@ const EventItem = memo<{
               <Subject view={view} onSelect={onSelect} />
             </Flexbox>
           ))}
+          {artifact && (
+            <Flexbox horizontal align={'center'} gap={2} style={{ flexShrink: 1, minWidth: 0 }}>
+              <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
+                →
+              </Text>
+              <ArtifactSubject artifact={artifact} />
+            </Flexbox>
+          )}
           <Text
             className={styles.mono}
             fontSize={12}
@@ -358,9 +421,9 @@ const EventItem = memo<{
             {dayjs(event.createdAt).format('HH:mm')}
           </Text>
         </Flexbox>
-        {event.reason && (
-          <div className={styles.reason} title={event.reason}>
-            {event.reason}
+        {note && (
+          <div className={styles.reason} title={note}>
+            {note}
           </div>
         )}
       </Flexbox>
@@ -391,15 +454,29 @@ const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, grap
   const onSelect = useGoalNodeSelect(goalId, graph);
 
   const days = useMemo(() => {
-    const sorted = [...(snapshot?.events ?? [])].sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    const events = snapshot?.events ?? [];
+    const workTypes = new Map(
+      (snapshot?.workVersions ?? []).map((link) => [link.workVersionId, link.work?.type]),
     );
-    const groups: { day: dayjs.Dayjs; events: GoalGraphEvent[] }[] = [];
+    const nodeTwins = new Set(
+      events.filter((event) => event.entityType === 'node' && event.reason).map(nodeTwinKey),
+    );
+    const sorted = [...events].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    type Row = { event: GoalGraphEvent; presentation: Exclude<LifecyclePresentation, { hidden: true }> };
+    const groups: { day: dayjs.Dayjs; rows: Row[] }[] = [];
     for (const event of sorted) {
+      const presentation = presentLifecycleEvent(event, {
+        hasNodeTwin: event.entityType === 'goal' && nodeTwins.has(nodeTwinKey(event)),
+        workTypeOf: (id) => workTypes.get(id),
+      });
+      // Bookkeeping rows are dropped before grouping so a day holding nothing
+      // else does not leave an empty header behind.
+      if (presentation.hidden) continue;
+      const row = { event, presentation };
       const day = dayjs(event.createdAt).startOf('day');
       const last = groups.at(-1);
-      if (last?.day.isSame(day)) last.events.push(event);
-      else groups.push({ day, events: [event] });
+      if (last?.day.isSame(day)) last.rows.push(row);
+      else groups.push({ day, rows: [row] });
     }
     return groups;
   }, [snapshot]);
@@ -408,13 +485,19 @@ const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, grap
     return <Empty description={t('goalProcess.metricDetail.lifecycle.empty')} icon={History} />;
 
   return (
-    <Flexbox gap={8}>
-      {days.map(({ day, events }) => (
+    <Flexbox gap={0}>
+      {days.map(({ day, rows }) => (
         <Flexbox gap={4} key={day.valueOf()}>
           <div className={styles.day}>{dayLabel(day)}</div>
           <Flexbox gap={0}>
-            {events.map((event) => (
-              <EventItem event={event} graph={graph} key={event.id} onSelect={onSelect} />
+            {rows.map(({ event, presentation }) => (
+              <EventItem
+                event={event}
+                graph={graph}
+                key={event.id}
+                presentation={presentation}
+                onSelect={onSelect}
+              />
             ))}
           </Flexbox>
         </Flexbox>
