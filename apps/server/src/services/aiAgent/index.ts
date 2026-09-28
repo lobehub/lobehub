@@ -78,6 +78,28 @@ import type {
 const log = debug('lobe-server:ai-agent-service');
 
 /**
+ * Triggers of runs started by a producer other than the composer. A composer
+ * send never supersedes these; any other trigger (chat, onboarding, …, or a
+ * legacy row without one) counts as a foreground run.
+ */
+const BACKGROUND_OPERATION_TRIGGERS = new Set<string>([
+  RequestTrigger.AgentShare,
+  RequestTrigger.AgentSignal,
+  RequestTrigger.Api,
+  RequestTrigger.Bot,
+  RequestTrigger.Cli,
+  RequestTrigger.Cron,
+  RequestTrigger.Eval,
+  RequestTrigger.Goal,
+  RequestTrigger.Notify,
+  RequestTrigger.Openapi,
+  RequestTrigger.Scheduled,
+  RequestTrigger.Scm,
+  RequestTrigger.Task,
+  RequestTrigger.Verify,
+]);
+
+/**
  * AI Agent Service
  *
  * Encapsulates agent execution logic that can be triggered via:
@@ -585,10 +607,56 @@ export class AiAgentService {
     }
 
     try {
+      if (params.interactiveStart && !isInterventionThreadStart) {
+        await this.supersedeRunningForegroundOperation(topicId, [
+          params.replacesOperationId,
+          params.topicStartOwnerOperationId,
+        ]);
+      }
       return withCreatedThread(await this.execAgentWithApprovalRollback(params));
     } finally {
       await this.topicModel.releaseTaskCallbackReservation(topicId, reservationId);
     }
+  }
+
+  /**
+   * Retire the foreground run that still owns the topic's `runningOperation`
+   * before an interactive send starts the next one.
+   *
+   * The client queues sends behind a visibly running turn and names at most one
+   * run as `replacesOperationId`. When several runs overlap (a replaced run is
+   * still stopping while the user sends again), it can name the older one and
+   * leave the live marker holder running. `startOperation` then overwrites the
+   * marker, so nothing ever stops that run: both runs keep reading the same
+   * topic, interleave writes, and invalidate each other's prompt cache
+   * (LOBE-14448 — one topic spent ~$900 in two hours this way).
+   *
+   * Runs inside the topic-start reservation so two fast sends cannot both read
+   * the same stale holder. Only a `running` foreground run is retired; these
+   * keep the existing behavior:
+   * - a parked run (`waiting_for_human` etc.) — the send may be its answer;
+   * - a background producer's run (task, cron, bot, …), see
+   *   {@link BACKGROUND_OPERATION_TRIGGERS};
+   * - a device-hosted Claude Code / Codex run: cancelling it waits up to 10s
+   *   for the device, far past the reservation's ~3s retry budget, so a
+   *   concurrent send would fail. Those still go through `replacesOperationId`,
+   *   which settles the device process before reserving.
+   */
+  private async supersedeRunningForegroundOperation(
+    topicId: string,
+    alreadyHandledOperationIds: (string | undefined)[],
+  ): Promise<void> {
+    const topic = await this.topicModel.findById(topicId);
+    const marker = topic?.metadata?.runningOperation;
+    const holderId = marker?.operationId;
+    if (!holderId || marker.heteroType || alreadyHandledOperationIds.includes(holderId)) return;
+
+    const holder = await this.agentOperationModel.findById(holderId);
+    if (holder?.status !== 'running') return;
+    if (holder.trigger && BACKGROUND_OPERATION_TRIGGERS.has(holder.trigger)) return;
+
+    log('execAgent: superseding running foreground operation %s on topic %s', holderId, topicId);
+    await this.interruptTask({ operationId: holderId, topicId });
   }
 
   /**
