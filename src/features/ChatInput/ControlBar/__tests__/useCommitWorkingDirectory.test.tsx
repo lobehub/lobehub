@@ -152,6 +152,7 @@ describe('useCommitWorkingDirectory — topic device provenance', () => {
     testState.currentDeviceId = 'this-machine';
     testState.effective = {
       agencyConfig: { boundDeviceId: 'device-b', executionTarget: 'device' },
+      isPreferenceLoading: false,
       workspaceScoped: false,
     };
   });
