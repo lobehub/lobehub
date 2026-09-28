@@ -424,9 +424,12 @@ export class SkillImporter {
 
     // Older agent-tool imports keyed market skills by the URL-derived
     // identifier. Look that row up too, so a skill whose manifest name changed
-    // since then is still updated in place rather than installed twice.
+    // since then is still updated in place rather than installed twice. Only
+    // take it when it was fetched from this same URL: a user skill may carry
+    // that identifier explicitly and must not be overwritten.
     if (!existing && identifier !== urlIdentifier) {
-      existing = await this.skillModel.findByIdentifier(urlIdentifier);
+      const legacy = await this.skillModel.findByIdentifier(urlIdentifier);
+      if (legacy?.manifest?.sourceUrl === input.url) existing = legacy;
     }
 
     // Names are unique per scope, so the same skill already installed under yet
