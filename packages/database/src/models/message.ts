@@ -5549,9 +5549,40 @@ export class MessageModel {
   findTrashedByIds = async (ids: string[]) => {
     if (ids.length === 0) return [];
     return this.db
-      .select({ id: messages.id, parentId: messages.parentId, topicId: messages.topicId })
+      .select({
+        agentId: messages.agentId,
+        id: messages.id,
+        parentId: messages.parentId,
+        sessionId: messages.sessionId,
+        topicId: messages.topicId,
+      })
       .from(messages)
       .where(and(this.trashScope(), inArray(messages.id, ids), isTrashed(messages.isDeleted)));
+  };
+
+  /**
+   * Cascade helper for trashing an agent: stamps the live messages that hang
+   * off the given agents or their legacy session shells WITHOUT a topic. Rows
+   * inside a topic are hidden by that topic's own stamp; topic-less rows have
+   * no parent to hide them (`workspaceScope()` treats them as live), so they
+   * are stamped directly and registered as the agent's children. Their branch
+   * stays intact, so a plain restore of the same ids brings them back.
+   */
+  softDeleteTopicless = async (
+    parents: { agentIds?: string[]; sessionIds?: string[] },
+    options: SoftDeleteOptions,
+  ) => {
+    const conditions: SQL[] = [];
+    if (parents.agentIds?.length) conditions.push(inArray(messages.agentId, parents.agentIds));
+    if (parents.sessionIds?.length)
+      conditions.push(inArray(messages.sessionId, parents.sessionIds));
+    if (conditions.length === 0) return [];
+
+    return this.db
+      .update(messages)
+      .set(trashStamp(options.deletedAt))
+      .where(and(isNull(messages.topicId), or(...conditions), this.ownership()))
+      .returning({ content: messages.content, id: messages.id, role: messages.role });
   };
 
   /**

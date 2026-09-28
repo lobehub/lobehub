@@ -1106,6 +1106,35 @@ export class AgentModel {
     return [...new Set(links.map((link) => link.sessionId))];
   };
 
+  /** Agents linked to the given legacy session shells — the reverse of {@link findSessionIdsByAgentIds}. */
+  findAgentIdsBySessionIds = async (sessionIds: string[]): Promise<string[]> => {
+    if (sessionIds.length === 0) return [];
+    const links = await this.db
+      .select({ agentId: agentsToSessions.agentId })
+      .from(agentsToSessions)
+      .where(
+        and(inArray(agentsToSessions.sessionId, sessionIds), this.agentsToSessionsOwnership()),
+      );
+    return [...new Set(links.map((link) => link.agentId))];
+  };
+
+  /**
+   * Whether the agent that owns a row is sitting in the bin — reached either
+   * directly (`agent_id`) or, for legacy rows that only carry `session_id`,
+   * through the session shell's agent link. Restoring such a row first would
+   * bring it back under an invisible container.
+   */
+  hasTrashedOwner = async (owner: {
+    agentId?: string | null;
+    sessionId?: string | null;
+  }): Promise<boolean> => {
+    const agentIds = [
+      ...(owner.agentId ? [owner.agentId] : []),
+      ...(owner.sessionId ? await this.findAgentIdsBySessionIds([owner.sessionId]) : []),
+    ];
+    return (await this.findTrashedByIds([...new Set(agentIds)])).length > 0;
+  };
+
   /**
    * Move agents to the recycle bin. Only the `agents` rows are stamped here —
    * the server-side trash handler cascades to sessions / topics through their

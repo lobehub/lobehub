@@ -1,3 +1,4 @@
+import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import type { TrashRegisterEntry } from '@/database/models/trash';
@@ -10,7 +11,7 @@ import {
   TrashRestoreError,
 } from './types';
 
-const TITLE_LENGTH = 120;
+export const MESSAGE_TITLE_LENGTH = 120;
 
 /**
  * Trash messages. Each requested message is its own root; the tool-result
@@ -34,7 +35,7 @@ export const softDeleteMessages = async (
     },
     resourceId: row.id,
     resourceType: 'message',
-    title: row.content?.trim().slice(0, TITLE_LENGTH) || null,
+    title: row.content?.trim().slice(0, MESSAGE_TITLE_LENGTH) || null,
   });
 
   const roots = rows.filter((row) => !row.isCompanion);
@@ -74,6 +75,11 @@ export const messageHandler: TrashHandler = {
       const [topic] = await topicModel.findTrashedByIds([message.topicId]);
       if (topic) throw new TrashRestoreError('parentTrashed');
     }
+
+    // Nor may its owning agent be in the bin (topic-less rows have no topic
+    // check to fall back on).
+    const agentModel = new AgentModel(ctx.db, ctx.userId, ctx.workspaceId);
+    if (await agentModel.hasTrashedOwner(message)) throw new TrashRestoreError('parentTrashed');
 
     const entries = [root, ...children.filter((c) => c.resourceType === 'message')].map((row) => ({
       childIds: row.meta?.messageTree?.childIds,

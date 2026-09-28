@@ -1,9 +1,11 @@
 import { AgentModel } from '@/database/models/agent';
+import { MessageModel } from '@/database/models/message';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { TopicModel } from '@/database/models/topic';
 import type { AgentItem } from '@/database/schemas';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
+import { MESSAGE_TITLE_LENGTH } from './message';
 import { topicEntry } from './topic';
 import {
   type TrashCascade,
@@ -26,8 +28,9 @@ export const agentEntry = (agent: AgentItem, childCount: number) => ({
 /**
  * Trash an agent with everything the hard delete would cascade through: every
  * topic that hangs off it directly (`agent_id`) or through its legacy session
- * shell (`session_id`). Topics are registered as children so a restore brings
- * the whole conversation history back in one go.
+ * shell (`session_id`), plus the topic-less messages under either (no topic
+ * stamp hides those). Both are registered as children so a restore brings the
+ * whole conversation history back in one go.
  */
 export const softDeleteAgent = async (
   ctx: TrashHandlerContext,
@@ -54,10 +57,23 @@ export const softDeleteAgent = async (
     { agentIds: [agentId], sessionIds },
     { deletedAt: options.deletedAt },
   );
+  const topiclessMessages = await new MessageModel(
+    ctx.db,
+    ctx.userId,
+    ctx.workspaceId,
+  ).softDeleteTopicless({ agentIds: [agentId], sessionIds }, { deletedAt: options.deletedAt });
 
   return {
-    children: topics.map((topic) => topicEntry(topic)),
-    root: agentEntry(agent, topics.length),
+    children: [
+      ...topics.map((topic) => topicEntry(topic)),
+      ...topiclessMessages.map((message) => ({
+        meta: { role: message.role },
+        resourceId: message.id,
+        resourceType: 'message' as const,
+        title: message.content?.trim().slice(0, MESSAGE_TITLE_LENGTH) || null,
+      })),
+    ],
+    root: agentEntry(agent, topics.length + topiclessMessages.length),
   };
 };
 
@@ -79,6 +95,11 @@ export const agentHandler: TrashHandler = {
 
     const topicIds = children.filter((c) => c.resourceType === 'topic').map((c) => c.resourceId);
     await new TopicModel(ctx.db, ctx.userId, ctx.workspaceId).restore(topicIds);
+
+    const messageIds = children.filter((c) => c.resourceType === 'message');
+    await new MessageModel(ctx.db, ctx.userId, ctx.workspaceId).restoreMessages(
+      messageIds.map((c) => ({ id: c.resourceId })),
+    );
   },
   type: 'agent',
 };

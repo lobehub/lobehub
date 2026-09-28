@@ -144,6 +144,65 @@ describe('TrashService', () => {
       expect(await topicModel.findById(topic.id)).toBeUndefined();
     });
 
+    it('refuses to restore a legacy session-only topic whose agent is still in the bin', async () => {
+      const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
+      const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
+      // no agentId: linked to the agent only through its session shell
+      const topic = await topicModel.create({ sessionId: session.id, title: 'via session' });
+      const [topicRoot] = await service.trashTopics([topic.id]);
+      await service.trashAgent(agent.id);
+
+      const outcome = await service.restore([topicRoot.id]);
+      expect(outcome.failed).toEqual([{ code: 'parentTrashed', id: topicRoot.id }]);
+      expect(await topicModel.findById(topic.id)).toBeUndefined();
+    });
+
+    it('takes topic-less messages along and brings them back with the agent', async () => {
+      const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
+      const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
+      const byAgent = await messageModel.create({
+        agentId: agent.id,
+        content: 'topic-less via agent',
+        role: 'user',
+      });
+      const bySession = await messageModel.create({
+        content: 'topic-less via session',
+        role: 'user',
+        sessionId: session.id,
+      });
+      const other = await agentModel.create({ title: 'Other' });
+      const bystander = await messageModel.create({
+        agentId: other.id,
+        content: 'another agent',
+        role: 'user',
+      });
+
+      const root = await service.trashAgent(agent.id);
+      expect(root?.meta?.childCount).toBe(2);
+      expect(await messageModel.findById(byAgent.id)).toBeUndefined();
+      expect(await messageModel.findById(bySession.id)).toBeUndefined();
+      expect(await messageModel.findById(bystander.id)).toBeTruthy();
+
+      await service.restore([root!.id]);
+      expect(await messageModel.findById(byAgent.id)).toBeTruthy();
+      expect(await messageModel.findById(bySession.id)).toBeTruthy();
+    });
+
+    it('refuses to restore a topic-less message whose agent is still in the bin', async () => {
+      const agent = await agentModel.create({ title: 'Bot' });
+      const message = await messageModel.create({
+        agentId: agent.id,
+        content: 'loose',
+        role: 'user',
+      });
+      const [messageRoot] = await service.trashMessages([message.id]);
+      await service.trashAgent(agent.id);
+
+      const outcome = await service.restore([messageRoot.id]);
+      expect(outcome.failed).toEqual([{ code: 'parentTrashed', id: messageRoot.id }]);
+      expect(await messageModel.findById(message.id)).toBeUndefined();
+    });
+
     it('purges the agent with its cascade', async () => {
       const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
       const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
