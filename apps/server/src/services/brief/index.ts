@@ -5,6 +5,7 @@ import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import type { BriefItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { getLLMGenerationTracingService } from '@/server/services/llmGenerationTracing';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
 export interface AgentAvatarInfo {
@@ -261,8 +262,9 @@ export class BriefService {
 
   /**
    * Translate the user's resolve action into a feedback signal against the
-   * brief's source generation. Fire-and-forget at the service boundary — a
-   * tracing write must never break brief resolution, so failures are swallowed.
+   * brief's source generation. This is a proxy for task-result satisfaction,
+   * not a direct rating of the summary prompt. The write is awaited, but
+   * failures are swallowed so they cannot break brief resolution.
    */
   private async recordBriefFeedback(
     brief: BriefItem,
@@ -295,10 +297,6 @@ export class BriefService {
     })();
 
     try {
-      // Lazy-load to keep the tracing service out of BriefService's static
-      // import graph, mirroring the TaskRunner lazy-import above.
-      const { getLLMGenerationTracingService } =
-        await import('@/server/services/llmGenerationTracing');
       await getLLMGenerationTracingService().recordFeedback(
         this.userId,
         tracingId,
