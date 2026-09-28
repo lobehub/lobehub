@@ -58,6 +58,8 @@ interface ToolTitleProps {
   isAborted?: boolean;
   isLoading?: boolean;
   partialArgs?: Record<string, unknown>;
+  /** The settled tool result, so a failed goal command is not titled as done. */
+  result?: { error?: unknown; state?: any };
 }
 
 const isCJK = (value: string) => /[\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(value);
@@ -70,7 +72,7 @@ const isCJK = (value: string) => /[\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.tes
  * keep the "<label> <keyword>" shape in the smaller code font.
  */
 const ToolTitle = memo<ToolTitleProps>(
-  ({ identifier, apiName, args, partialArgs, isLoading, isAborted }) => {
+  ({ identifier, apiName, args, partialArgs, isLoading, isAborted, result }) => {
     const { t } = useTranslation('plugin');
 
     const pluginMeta = useToolStore(toolSelectors.getMetaById(identifier), isEqual);
@@ -108,10 +110,16 @@ const ToolTitle = memo<ToolTitleProps>(
     );
     if (goalCommand) {
       const goalTitle = goalCommand.kind === 'create' ? goalCommand.title : undefined;
+      // Same rule as the expanded GoalCommandInspector, so the collapsed row
+      // never says "Goal created" next to a failed status.
+      const failed =
+        !isLoading &&
+        (!!result?.error || (result?.state?.success === false && result?.state?.exitCode !== 0));
+      const status = isLoading ? 'loading' : failed ? 'failed' : 'completed';
       return (
         <div className={cx(styles.root, isAborted && styles.aborted)}>
           <span className={cx(styles.label, isLoading && shinyTextStyles.shinyText)}>
-            {t(`builtins.goalCommand.${goalCommand.kind}.${isLoading ? 'loading' : 'completed'}`)}
+            {t(`builtins.goalCommand.${goalCommand.kind}.${status}`)}
           </span>
           {goalTitle && <span className={styles.standalone}>{goalTitle}</span>}
         </div>

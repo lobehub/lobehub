@@ -150,6 +150,7 @@ const Inspectors = memo<InspectorProps>(
             isAborted={isAborted}
             isLoading={isTitleLoading}
             partialArgs={partialJson || undefined}
+            result={result}
           />
         )}
         <ExecutionTime

@@ -36,6 +36,34 @@ describe('ToolTitle', () => {
       expect(screen.getByText('Fog report')).toBeInTheDocument();
     });
 
+    it('says the step failed when the goal command errored', () => {
+      // The collapsed row used to read "completed" beside a failed status icon.
+      render(
+        <ToolTitle
+          apiName={'Bash'}
+          args={createArgs}
+          identifier={'claude-code'}
+          result={{ state: { exitCode: 1, success: false } }}
+        />,
+      );
+
+      expect(screen.getByText('failed')).toBeInTheDocument();
+      expect(screen.queryByText('completed')).toBeNull();
+    });
+
+    it('also treats a result error as failed', () => {
+      render(
+        <ToolTitle
+          apiName={'Bash'}
+          args={createArgs}
+          identifier={'claude-code'}
+          result={{ error: { message: 'unknown option' } }}
+        />,
+      );
+
+      expect(screen.getByText('failed')).toBeInTheDocument();
+    });
+
     it('reads a plan submission without a raw goal id', () => {
       render(
         <ToolTitle
