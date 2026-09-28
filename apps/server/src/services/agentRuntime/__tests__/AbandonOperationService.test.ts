@@ -293,6 +293,59 @@ describe('AbandonOperationService', () => {
     });
   });
 
+  describe('no-state row pre-claimed by the caller', () => {
+    // Regression (LOBE-14161): runStep claims the expired lease with
+    // `settleStaleRunning` (row → `abandoned`) before abandoning. With both
+    // state and metadata gone, the no-state guard used to accept only live
+    // statuses, so the row retired while the turn kept loading.
+    const abandonedRow = {
+      agentId: 'agt_x',
+      id: 'op_x',
+      metadata: { _hooks: [{ id: 'h1', type: 'onComplete', webhook: { url: '/hook' } }] },
+      startedAt: new Date('2026-09-24T17:30:02.000Z'),
+      status: 'abandoned',
+      topicId: 'tpc_x',
+      userId: 'user_x',
+      workspaceId: 'ws_x',
+    };
+    const abandon = (options?: { settledAsAbandoned?: boolean }) =>
+      new AbandonOperationService(buildDb({ operationRow: abandonedRow }), {
+        coordinator: buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) }) as any,
+        snapshotStore: buildStore() as any,
+      }).finalizeAbandoned('op_x', 'operation_metadata_missing', options);
+
+    it('still settles the topic, errors the placeholder and fires hooks', async () => {
+      topicSettleRunningOperationMock.mockResolvedValue({
+        assistantMessageId: 'msg_assist_1',
+        status: 'settled',
+      });
+
+      const result = await abandon({ settledAsAbandoned: true });
+
+      expect(result).toMatchObject({ abandoned: true, assistantMessageUpdated: true });
+      expect(recordCompletionMock).not.toHaveBeenCalled();
+      expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
+      expect(messageUpdateMock).toHaveBeenCalledWith('msg_assist_1', {
+        content: '',
+        error: expect.objectContaining({
+          message: expect.stringContaining('operation_metadata_missing'),
+        }),
+      });
+      expect(completeOperationMock).toHaveBeenCalledWith(expect.anything(), 'error', {
+        settledAsAbandoned: true,
+        skipErrorMessageWrite: true,
+      });
+    });
+
+    it('leaves an abandoned row alone without the pre-claim flag', async () => {
+      const result = await abandon();
+
+      expect(result.abandoned).toBeUndefined();
+      expect(topicSettleRunningOperationMock).not.toHaveBeenCalled();
+      expect(messageUpdateMock).not.toHaveBeenCalled();
+    });
+  });
+
   it('keeps no-state terminal operations classified as completed phantom timeouts', async () => {
     const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
     const store = buildStore();
