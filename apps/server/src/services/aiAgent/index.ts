@@ -964,27 +964,17 @@ export class AiAgentService {
       ephemeralUserMessage,
     } = params;
 
-    // Agent Share visitor runs execute under the CREATOR's credentials (see
-    // `shareChat.ts` `execAgent` → `AiAgentService.execAgent({ shareGate })`)
-    // with no visitor-facing approval UI at all, so no approval can ever be
-    // WAITED for: `headless` is the only mode that converts an intervention
-    // into an immediate blocked tool result ('always'-policy calls become
-    // `resolve_blocked_tools`) instead of parking the run on
-    // `request_human_approve` forever. Forced unconditionally — overriding
-    // whatever the caller passed — so a future execAgent call site cannot
-    // reintroduce a waiting mode by omission.
+    // Agent Share visitor runs execute under the CREATOR's credentials but are
+    // approved by the VISITOR: granting a tool grants its normal approval
+    // flow, so the run honors the visitor's own approval mode (sent by the
+    // share client, see `shareChat.execAgent`) and parks intervention-gated
+    // calls for the visitor to resolve on the share page.
     //
-    // `headless` DOES auto-run overridable ('required') interventions. That is
-    // acceptable here only because of the two share-specific layers on top:
-    // `applyShareGateToInterventionRequiredApis` strips every
-    // intervention-gated API from what the model is offered, and
-    // `isShareBlockedBuiltinDispatch` re-blocks intervention-gated (and
-    // non-enabled, and data-rule-violating) builtin calls at the executor
-    // dispatch site — re-reading the UNSTRIPPED manifest, since the assembly
-    // strip removes the very intervention config the runtime would otherwise
-    // consult. No 'required' builtin API can execute through either layer.
+    // A share caller that sends no config falls back to `manual`, never to
+    // this method's `headless` default: `headless` auto-runs `'required'`
+    // calls, which would grant a consent nobody gave.
     const userInterventionConfig: UserInterventionConfig = shareGate
-      ? { approvalMode: 'headless' }
+      ? (params.userInterventionConfig ?? { approvalMode: 'manual' })
       : requestedUserInterventionConfig;
 
     // Honour client-minted row ids on a FRESH send only. Resume / regeneration

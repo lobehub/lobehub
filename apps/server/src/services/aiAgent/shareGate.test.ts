@@ -225,7 +225,7 @@ describe('AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS', () => {
   // share visitor's run gets an isolated per-topic sandbox session with no
   // `lh` CLI JWT shim, so it cannot mint or exfiltrate the creator's
   // credentials — see the positive-evidence doc block above
-  // `applyShareGateToInterventionRequiredApis` in `shareGate.ts`.
+  // `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS` in `shareGate.ts`.
   it('allowlists lobe-cloud-sandbox now that visitor runs get a credential-free sandbox session', () => {
     expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has('lobe-cloud-sandbox')).toBe(true);
   });
@@ -719,35 +719,21 @@ describe('applyShareGateToToolSet', () => {
     ]);
   });
 
-  it('strips apis whose humanIntervention can never resolve under reject mode', () => {
+  // Share runs honor the visitor's own approval mode, so granting a tool
+  // grants its normal approval flow: intervention-gated APIs stay offered
+  // WITH their config intact, which is what makes the runtime park them for
+  // the visitor's approval instead of auto-running them.
+  it('keeps intervention-gated apis and their humanIntervention config', () => {
     const toolSet = buildToolSet([
       {
         apis: [
           { name: 'safe' },
-          { humanIntervention: 'never', name: 'explicitlySafe' },
           { humanIntervention: 'required', name: 'needsApproval' },
           { humanIntervention: 'always', name: 'alwaysAsks' },
           { humanIntervention: { type: 'dynamic' }, name: 'maybeAsks' },
         ],
         identifier: CalculatorIdentifier,
       },
-    ]);
-
-    applyShareGateToToolSet(
-      toolSet,
-      buildGate({ toolGrants: [{ identifier: CalculatorIdentifier }] }),
-    );
-
-    expect(toolSet.manifestMap[CalculatorIdentifier].api.map((api) => api.name)).toEqual([
-      'safe',
-      'explicitlySafe',
-    ]);
-    expect(toolSet.tools).toHaveLength(2);
-  });
-
-  it('drops a tool whose tool-level humanIntervention is unusable', () => {
-    const toolSet = buildToolSet([
-      { apis: [{ name: 'calculate' }], identifier: CalculatorIdentifier },
     ]);
     (toolSet.manifestMap[CalculatorIdentifier] as any).humanIntervention = 'required';
 
@@ -756,19 +742,21 @@ describe('applyShareGateToToolSet', () => {
       buildGate({ toolGrants: [{ identifier: CalculatorIdentifier }] }),
     );
 
-    expect(toolSet.manifestMap[CalculatorIdentifier]).toBeUndefined();
-    expect(toolSet.enabledToolIds).toEqual([]);
+    const manifest = toolSet.manifestMap[CalculatorIdentifier] as any;
+    expect(manifest.humanIntervention).toBe('required');
+    expect(manifest.api.map((api: any) => [api.name, api.humanIntervention])).toEqual([
+      ['safe', undefined],
+      ['needsApproval', 'required'],
+      ['alwaysAsks', 'always'],
+      ['maybeAsks', { type: 'dynamic' }],
+    ]);
+    expect(toolSet.tools).toHaveLength(4);
   });
 
-  it('strips a required-intervention API from a non-builtin (MCP/connector) manifest, keeping its normal APIs', () => {
+  it('keeps a required-intervention API on a non-builtin (MCP/connector) manifest', () => {
     // Mirrors `buildConnectorManifests.ts`: a connector tool with the
-    // `needs_approval` permission maps to `humanIntervention: 'required'` on
-    // an otherwise-ordinary MCP manifest. Regression for the fix that widened
-    // `applyShareGateToInterventionRequiredApis` beyond builtin-only
-    // manifests — the connector permission gate at dispatch time
-    // (`ToolExecutionService.executeTool`) only hard-blocks `disabled`, so
-    // this assembly-time strip is the only thing stopping a share visitor's
-    // headless run from auto-executing a "needs approval" connector call.
+    // `needs_approval` permission maps to `humanIntervention: 'required'`.
+    // The config must survive so the visitor is asked before it runs.
     const toolSet = buildToolSet([
       {
         apis: [{ name: 'listRepos' }, { humanIntervention: 'required', name: 'deleteRepo' }],
@@ -779,17 +767,12 @@ describe('applyShareGateToToolSet', () => {
 
     applyShareGateToToolSet(toolSet, buildGate({ toolGrants: [{ identifier: 'mcp-github' }] }));
 
-    expect(toolSet.manifestMap['mcp-github'].api.map((api) => api.name)).toEqual(['listRepos']);
-    // `type: 'mcp'` means `ToolNameResolver.generate` appends a THIRD
-    // `____mcp` segment to the function-calling name — a naive
-    // `identifier____apiName` string would never match this, so this
-    // assertion only passes when the strip regenerates the real name.
-    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
-      toolName('mcp-github', 'listRepos', 'mcp'),
+    expect(
+      toolSet.manifestMap['mcp-github'].api.map((api: any) => [api.name, api.humanIntervention]),
+    ).toEqual([
+      ['listRepos', undefined],
+      ['deleteRepo', 'required'],
     ]);
-    expect(toolSet.tools!.map((tool: any) => tool.function.name)).not.toContain(
-      `mcp-github____deleteRepo____mcp`,
-    );
   });
 
   it('narrows a per-API grant on a non-builtin (MCP) manifest, matching the real `____<type>`-suffixed generated name', () => {
@@ -934,8 +917,9 @@ describe('applyShareGateToToolSet', () => {
 
 // Dispatch-time full gate, asserted against the REAL manifests: a call that
 // bypassed assembly must clear the master allowlist, the owner's
-// toolGrants picker, the UNSTRIPPED manifest's humanIntervention policy,
-// and the data-tool rules — in that order, all fail-closed.
+// toolGrants picker, sub-agent dispatch, and the data-tool rules — in that
+// order, all fail-closed. `humanIntervention` is not a dispatch rule: the
+// runtime parks those calls for the visitor's approval first.
 describe('isShareBlockedBuiltinDispatch', () => {
   it('blocks an allowlisted builtin the owner did not enable', () => {
     expect(isShareBlockedBuiltinDispatch({}, CalculatorIdentifier, 'evalExpression')).toBe(true);
@@ -951,11 +935,7 @@ describe('isShareBlockedBuiltinDispatch', () => {
     ).toBe(false);
   });
 
-  it("blocks 'required'- and 'always'-intervention APIs even on an enabled tool", () => {
-    // createPlan is humanIntervention: 'required' in the real manifest — the
-    // assembly strip removes that config from the runtime-visible manifest,
-    // so under headless it would auto-run without its consent step. The
-    // dispatch gate re-reads the unstripped manifest and blocks.
+  it('passes an approved intervention-gated API on an enabled tool', () => {
     for (const apiName of [LobeAgentApiName.createPlan, LobeAgentApiName.askUserQuestion]) {
       expect(
         isShareBlockedBuiltinDispatch(
@@ -963,13 +943,13 @@ describe('isShareBlockedBuiltinDispatch', () => {
           LobeAgentIdentifier,
           apiName,
         ),
-      ).toBe(true);
+      ).toBe(false);
     }
   });
 
   it('blocks sub-agent dispatch even on an enabled tool with no intervention config', () => {
-    // callSubAgent carries no humanIntervention, so neither the intervention
-    // check nor the data-tool rules would catch it — and the child run it
+    // callSubAgent carries no humanIntervention, so neither the approval
+    // flow nor the data-tool rules would catch it — and the child run it
     // spawns does not inherit the parent's shareGate. Must be blocked by its
     // dedicated dispatch rule.
     expect(

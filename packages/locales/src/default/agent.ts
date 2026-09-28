@@ -514,8 +514,6 @@ export default {
     'Could not load this Agent’s skills. Close and reopen the share settings to try again.',
   'share.settings.skills.loading': 'Loading skills…',
   'share.settings.skills.title': 'Skills visitors can use',
-  'share.settings.tools.apiNeedsApproval':
-    'This action needs your approval before it runs, and nobody can approve it during a shared run, so it stays off.',
   'share.settings.tools.apiWritesOwnerDocuments':
     'Visitors can never delete or copy your documents or change their load rules — this action stays off in shared runs.',
   'share.settings.tools.desc':

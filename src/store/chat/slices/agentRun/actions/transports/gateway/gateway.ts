@@ -1008,8 +1008,10 @@ export class GatewayActionImpl {
 
     // Agent-share visitor surface: dispatch through the share-authorized mirror.
     // It accepts only the share-safe subset (prompt / topic / clientIds /
-    // the visitor's share-uploaded fileIds) — everything else (tools, devices, mentions) is
-    // decided server-side by the share config, never by this client.
+    // the visitor's share-uploaded fileIds, plus the visitor's own approval
+    // mode and their answers to this run's pending interventions) — everything
+    // else (tools, devices, mentions) is decided server-side by the share
+    // config, never by this client.
     const agentShareId = executionContext.agentShareId;
 
     const serverResult =
@@ -1019,10 +1021,15 @@ export class GatewayActionImpl {
             {
               clientIds,
               fileIds,
+              parentMessageId,
               prompt: message,
+              resumeApproval,
+              resumeApprovals,
+              resumeToolResult,
               shareId: agentShareId,
               steer: metadata?.steer,
               topicId: executionContext.topicId,
+              userInterventionConfig,
             },
             { signal: abortSignal },
           )

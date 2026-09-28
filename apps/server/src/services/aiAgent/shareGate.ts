@@ -21,7 +21,6 @@ import {
 } from '@lobechat/builtin-tool-skills';
 import {
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
-  builtinTools,
   isBuiltinToolIdentifier,
 } from '@lobechat/builtin-tools';
 import {
@@ -365,12 +364,11 @@ const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
     grant: (permissions) => (hasShareSkillAuthorization(permissions) ? 'read' : 'none'),
     // Derived as "everything outside the visitor-safe set" rather than listed,
     // so a skill API added later is denied by default. Today that resolves to
-    // `runCommand` / `execScript` / `exportFile`: the first two declare
-    // `humanIntervention: 'required'` and are therefore ALSO stripped by
-    // `applyShareGateToInterventionRequiredApis`, but they are named here on
-    // purpose — that strip exists to honor an approval policy, and the day
-    // Agent Share grows a real approval step it must be a deliberate decision
-    // to open them, not a side effect of the policy check going quiet.
+    // `runCommand` / `execScript` / `exportFile`. Share runs now honor the
+    // visitor's approval flow, so `humanIntervention: 'required'` no longer
+    // strips the first two — this list is what keeps them closed until
+    // opening skill script execution to visitors is decided on its own
+    // (LOBE-14296).
     writeApiNames: SkillsManifest.api
       .map((api) => api.name)
       .filter((apiName) => !AGENT_SHARE_SKILL_API_NAMES.has(apiName)),
@@ -441,13 +439,7 @@ export const isShareBlockedDataToolCall = (
  *    is necessary but NOT sufficient; a tool the creator never enabled for
  *    this share (e.g. image generation spending the creator's quota) must not
  *    run just because a call reached the executor;
- * 3. `humanIntervention` policy, re-derived from the REAL manifest: the
- *    assembly strip removes intervention-gated APIs from the manifest the
- *    runtime later consults, so at dispatch time such a call looks
- *    config-less and `headless` would silently auto-run it — the manifest in
- *    `@lobechat/builtin-tools` is the unstripped source of truth, so the
- *    consent-gated call is blocked here instead;
- * 4. the per-API data-tool rules ({@link isShareBlockedDataToolCall}).
+ * 3. the per-API data-tool rules ({@link isShareBlockedDataToolCall}).
  *
  * Non-builtin identifiers (MCP/market/custom plugins, LobeHub skills) pass
  * through untouched: their id namespace does not reliably match
@@ -476,20 +468,11 @@ export const isShareBlockedBuiltinDispatch = (
   // (`stripSubAgentDispatchApis`); this is its dispatch-time counterpart.
   if (SUB_AGENT_DISPATCH_APIS[identifier]?.apiName === apiName) return true;
 
-  const manifest = builtinTools.find((tool) => tool.identifier === identifier)?.manifest;
-  const toolLevelHumanIntervention = (manifest as { humanIntervention?: unknown } | undefined)
-    ?.humanIntervention;
-  // Match assembly's semantics exactly (`applyShareGateToInterventionRequiredApis`
-  // drops the WHOLE tool when the tool-level fallback is unusable): a
-  // tool-level 'required'/'always'/dynamic config blocks every API here too —
-  // an api-level 'never' must not override it at dispatch when it could not
-  // have survived assembly either.
-  if (!isApiUsableForShareVisitor(toolLevelHumanIntervention)) return true;
-  const apiHumanIntervention = manifest?.api?.find(
-    (api) => api.name === apiName,
-  )?.humanIntervention;
-  if (!isApiUsableForShareVisitor(apiHumanIntervention ?? toolLevelHumanIntervention)) return true;
-
+  // `humanIntervention` is deliberately NOT re-checked here: share runs keep
+  // the manifest's intervention config and honor the visitor's own approval
+  // mode, so an intervention-gated call reaches this executor only after the
+  // visitor approved it (or chose auto-run). Granting a tool grants its normal
+  // approval flow.
   return isShareBlockedDataToolCall(agentShare, identifier, apiName, args);
 };
 
@@ -613,15 +596,14 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
 
   stripSubAgentDispatchApis(toolSet);
   applyShareGateToDataToolAccess(toolSet, gate);
-  applyShareGateToInterventionRequiredApis(toolSet);
   applyShareGateToPerApiGrants(toolSet, grants);
 };
 
 /**
  * Narrow each surviving tool's offered APIs down to what the owner's picker
  * actually granted for it. Runs LAST in {@link applyShareGateToToolSet}, after
- * every other strip (data-tool write/always-blocked APIs, sub-agent dispatch,
- * humanIntervention) has already trimmed `manifest.api` — so a per-API grant
+ * every other strip (data-tool write/always-blocked APIs, sub-agent dispatch)
+ * has already trimmed `manifest.api` — so a per-API grant
  * naming an API another rule already removed is simply a no-op here, never an
  * unstrip.
  *
@@ -658,85 +640,6 @@ const applyShareGateToPerApiGrants = (
       dropToolFromSet(toolSet, identifier);
       continue;
     }
-
-    stripApisFromTool(toolSet, identifier, blockedApiNames);
-  }
-};
-
-/**
- * Whether an API's own `humanIntervention` policy can ever HONESTLY complete
- * for a share-visitor run. Every share run is forced onto `approvalMode:
- * 'headless'` (see `AiAgentService.execAgent`'s unconditional override) — the
- * only mode with **no approver waited for**: an `'always'`-policy call becomes
- * an immediate blocked tool result (`resolve_blocked_tools`), and a
- * `'required'`-policy call would silently auto-run, granting itself the
- * consent nobody was present to give. Stripping both classes from the offer
- * is therefore the fail-closed reading: never offer a function that either
- * cannot run or would run without its declared consent step. A `dynamic`
- * config might resolve to `'never'` for some argument, but this static,
- * schema-assembly-time check cannot prove it always will.
- *
- * `undefined` (no config at all) and the literal string `'never'` are the only
- * two configs that execute with no intervention semantics attached.
- */
-const isApiUsableForShareVisitor = (humanIntervention: unknown): boolean =>
-  humanIntervention === undefined || humanIntervention === 'never';
-
-/**
- * Structural counterpart to `applyShareGateToDataToolAccess`: strip any tool's
- * API whose OWN `humanIntervention` policy cannot honestly complete under a
- * share visitor's forced `headless` approval mode. Reads the SAME `humanIntervention`
- * metadata every builtin tool already declares for the approval-UI feature, so
- * a future tool added to `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS` with an
- * intervention-gated API is caught automatically instead of requiring a manual
- * audit.
- *
- * Applies to EVERY manifest still in `toolSet.manifestMap` at this point,
- * builtin or not — MCP/connector manifests (`buildConnectorManifests.ts`) map
- * a connector tool's `needs_approval` permission onto this SAME `humanIntervention:
- * 'required'` field, and `ToolExecutionService.executeTool`'s dispatch-time
- * connector-permission gate only hard-blocks `disabled`, deliberately leaving
- * `needs_approval` to this manifest strip — so a share run (always `headless`,
- * see {@link isApiUsableForShareVisitor}) would otherwise auto-run a
- * creator-configured "needs approval" connector call with no approver ever
- * present. `isGovernedByBuiltinAllowlist` is intentionally NOT consulted here:
- * that allowlist decides which BUILTIN tools may be exposed at all (still
- * enforced earlier in {@link applyShareGateToToolSet}), not which manifests
- * this intervention strip should look at.
- *
- * A tool whose TOOL-LEVEL `humanIntervention` (the fallback every API without
- * its own entry inherits) is itself unusable loses every API and is dropped
- * entirely, the same treatment `applyShareGateToDataToolAccess` gives a
- * `'none'` grant.
- *
- * Under `headless` this strip is MORE than UX for `'required'`-policy APIs:
- * headless auto-runs those, so removing them from the offer is the layer that
- * keeps a share visitor's model from invoking a consent-gated API without its
- * consent step ever happening. `'always'`-policy APIs stay unreachable either
- * way (headless converts them to blocked results); data-bearing BUILTIN APIs
- * are additionally re-blocked at dispatch by {@link isShareBlockedDataToolCall}
- * — non-builtin manifests have no such dispatch-time backstop, which is why
- * this assembly-time strip is their ONLY enforcement point.
- */
-const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): void => {
-  for (const identifier of Object.keys(toolSet.manifestMap)) {
-    const manifest = toolSet.manifestMap[identifier];
-    if (!Array.isArray(manifest.api) || manifest.api.length === 0) continue;
-
-    const toolLevelHumanIntervention = (manifest as { humanIntervention?: unknown })
-      .humanIntervention;
-
-    if (!isApiUsableForShareVisitor(toolLevelHumanIntervention)) {
-      dropToolFromSet(toolSet, identifier);
-      continue;
-    }
-
-    const blockedApiNames = new Set(
-      manifest.api
-        .filter((api) => !isApiUsableForShareVisitor(api.humanIntervention))
-        .map((api) => api.name),
-    );
-    if (blockedApiNames.size === 0) continue;
 
     stripApisFromTool(toolSet, identifier, blockedApiNames);
   }
@@ -838,18 +741,11 @@ const applyShareGateToInterventionRequiredApis = (toolSet: ShareGateToolSet): vo
  *   it would only let the owner-facing tool picker confirm a grant no visitor
  *   conversation can ever exercise.
  *
- * - `lobe-user-interaction` / `lobe-activator`: same "picker promises an
- *   unusable grant" class, not a data leak. Every share run is forced onto
- *   `approvalMode: 'headless'` with no approver ever present:
- *   `lobe-user-interaction`'s only entry point (`askUserQuestion`,
- *   `humanIntervention: 'always'`) is converted to a blocked tool result and
- *   never runs, and its other APIs all require a `requestId` only a
- *   successful `askUserQuestion` mints. `lobe-activator`'s only API
- *   (`activateTools`, `humanIntervention: 'required'`) would auto-run under
- *   headless but is stripped from the offer instead. See
- *   {@link applyShareGateToInterventionRequiredApis} for the structural fix
- *   that catches this failure mode generically on every ALLOWED tool's
- *   individual APIs.
+ * - `lobe-user-interaction` / `lobe-activator`: originally denied because
+ *   share runs were forced headless, so neither could ever honestly complete.
+ *   Share runs now honor the visitor's approval flow, but both stay denied
+ *   until audited on their own: `lobe-activator` can widen the run's tool
+ *   surface at runtime, which must be proven not to escape the share grant.
  */
 
 /**

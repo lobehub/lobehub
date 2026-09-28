@@ -411,7 +411,6 @@
   "share.settings.tabs.stats": "Stats",
   "share.settings.title": "Share Agent",
   "share.settings.tools.apiGrantedCount": "{{granted}} of {{total}} APIs granted",
-  "share.settings.tools.apiNeedsApproval": "This action needs your approval before it runs, and nobody can approve it during a shared run, so it stays off.",
   "share.settings.tools.apiNotAvailableToVisitors": "This action is never available to visitors in a shared run.",
   "share.settings.tools.apiWritesOwnerData": "Visitors can never write to your memory — this action stays off in shared runs.",
   "share.settings.tools.apiWritesOwnerDocuments": "Visitors can never delete or copy your documents or change their load rules — this action stays off in shared runs.",

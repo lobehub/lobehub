@@ -138,7 +138,10 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     const rejectInputRef = useRef<HTMLInputElement>(null);
 
     const isMessageCreating = messageId.startsWith('tmp_');
-    const isAllowListMode = approvalMode === 'allow-list';
+    // "Don't ask again" writes the allow list of the agent's owner; a share
+    // visitor approves only their own run, one call at a time.
+    const isShareVisitor = useConversationStore((s) => !!s.context?.agentShareId);
+    const isAllowListMode = approvalMode === 'allow-list' && !isShareVisitor;
     // Workspace topics are shared: a view-only member can be LOOKING at a
     // teammate's running conversation — they must not drive its tool approvals.
     const { canUseResource } = useConversationResourceAccess();

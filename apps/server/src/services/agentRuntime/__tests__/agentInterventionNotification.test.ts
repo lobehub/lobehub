@@ -114,6 +114,23 @@ describe('buildRuntimeInterventionNotification', () => {
     expect(result?.batch.allowedActions).toEqual(['approve_tool', 'reject_continue', 'stop']);
   });
 
+  it("marks a share visitor's run so the creator is not notified, with no one-tap action", async () => {
+    const result = await buildRuntimeInterventionNotification({
+      operationId: 'operation-1',
+      state: buildState({
+        principal: {
+          actor: {
+            shareVisitor: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          },
+        },
+      }),
+      userId: 'user-1',
+    });
+
+    expect(result?.shareVisitorUserId).toBe('visitor-1');
+    expect(result?.systemActionEligibility).toBe('review_only');
+  });
+
   it('keeps unknown and incomplete manifest APIs Review-only', async () => {
     const unknown = await buildRuntimeInterventionNotification({
       operationId: 'operation-1',

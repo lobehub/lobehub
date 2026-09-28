@@ -411,7 +411,6 @@
   "share.settings.tabs.stats": "统计",
   "share.settings.title": "分享助手",
   "share.settings.tools.apiGrantedCount": "已开放 {{granted}}/{{total}} 个接口",
-  "share.settings.tools.apiNeedsApproval": "该操作需要你本人确认后才能执行，分享运行中无人确认，因此始终关闭。",
   "share.settings.tools.apiNotAvailableToVisitors": "该操作在分享运行中始终不对访客开放。",
   "share.settings.tools.apiWritesOwnerData": "访客不能写入你的记忆，该操作在分享运行中始终关闭。",
   "share.settings.tools.apiWritesOwnerDocuments": "访客不能删除、复制你的文档或修改其加载规则，该操作在分享运行中始终关闭。",

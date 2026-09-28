@@ -2,6 +2,7 @@ import type { ConversationContext, UIChatMessage } from '@lobechat/types';
 
 import type { AgentInterventionSourceAction } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
+import { shareChatService } from '@/services/shareChat';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
@@ -56,7 +57,11 @@ export class QuestionSubmissionActionImpl {
     if (this.#get().questionSubmissions[id] === 'checking') return false;
     this.#setPhase(id, 'checking');
     try {
-      const messages = await messageService.getMessages({ ...context, skipWorks: true });
+      // A share visitor can only read their own topic through the share mirror.
+      const messages =
+        context.agentShareId && context.topicId
+          ? await shareChatService.getMessages(context.agentShareId, context.topicId)
+          : await messageService.getMessages({ ...context, skipWorks: true });
       const message = messages.find((item) => item.id === id);
       if (!message?.pluginIntervention) throw new Error('Question resolution is unavailable');
       if (message.pluginIntervention.status === 'pending') {
