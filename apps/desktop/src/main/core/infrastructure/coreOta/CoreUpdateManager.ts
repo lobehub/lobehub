@@ -285,6 +285,7 @@ export class CoreUpdateManager {
     lastCheckAt: this.lastCheckAt,
     lastError: this.lastError,
     needsFullRelease: this.needsFullRelease,
+    running: this.shell?.manifest?.version ?? null,
     staged: this.staged?.version ?? null,
   });
 
