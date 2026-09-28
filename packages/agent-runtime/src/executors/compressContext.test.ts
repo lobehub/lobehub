@@ -1,5 +1,5 @@
 import type { Mock } from 'vitest';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '../transport';
 import type { AgentInstructionCompressContext, AgentState } from '../types';
@@ -72,6 +72,7 @@ const createInstruction = (messages: any[]): AgentInstructionCompressContext => 
 });
 
 describe('compressContext executor', () => {
+  afterEach(() => vi.restoreAllMocks());
   let host: AgentRuntimeHost;
   let messagesQuery: ReturnType<typeof vi.fn>;
   let compressionCreateGroup: Mock;
@@ -237,6 +238,204 @@ describe('compressContext executor', () => {
         type: 'afterCompact',
       }),
     );
+  });
+
+  it('reports the actual run lineage and preserves compact payloads and persisted hooks', async () => {
+    const messages = [{ content: 'history', id: 'msg-history', role: 'assistant' }];
+    messagesQuery.mockResolvedValue(messages);
+    const summary = 's'.repeat(600);
+    llmStream.mockResolvedValue({ content: summary });
+    compressionFinalizeGroup.mockResolvedValue({
+      messages: [{ content: summary, id: 'group-123', role: 'compressedGroup' }],
+    });
+    const state = createState({
+      host: {
+        hooks: [{ id: 'compact', type: 'afterCompact', webhook: { url: 'https://example.com' } }],
+      },
+      messages,
+      origin: {
+        agentId: 'agent-origin',
+        groupId: 'conversation-group',
+        lineage: { isSubAgent: true, parentOperationId: 'parent-real' },
+        threadId: 'thread-origin',
+        topicId: 'topic-origin',
+        workspaceId: 'workspace-origin',
+      },
+    });
+
+    const result = await compressContext(host)(createInstruction(messages), state);
+
+    const context = {
+      agentId: 'agent-origin',
+      lineage: state.origin?.lineage,
+      operationId: 'op-123',
+      parentOperationId: 'parent-real',
+      stepIndex: 2,
+      threadId: 'thread-origin',
+      topicId: 'topic-origin',
+      userId: 'user-123',
+      workspaceId: 'workspace-origin',
+    };
+    expect(lifecycleDispatch).toHaveBeenNthCalledWith(1, {
+      event: { ...context, messageCount: 1, tokenCount: 5000 },
+      serializedHooks: state.host?.hooks,
+      type: 'beforeCompact',
+    });
+    expect(lifecycleDispatch).toHaveBeenNthCalledWith(2, {
+      event: {
+        ...context,
+        groupId: 'group-123',
+        messagesAfter: 1,
+        messagesBefore: 1,
+        summary: summary.slice(0, 500),
+      },
+      serializedHooks: state.host?.hooks,
+      type: 'afterCompact',
+    });
+    expect(result.newState.messages[0].content).toBe(summary);
+    expect(result.newState.host?.hooks).toEqual(state.host?.hooks);
+    expect(compressionRollbackGroup).not.toHaveBeenCalled();
+  });
+
+  it('does not infer a parent operation from a progress anchor or continuation', async () => {
+    const messages = [{ content: 'history', id: 'msg-history', role: 'assistant' }];
+    messagesQuery.mockResolvedValue(messages);
+    const state = createState({
+      messages,
+      origin: {
+        agentId: 'agent-123',
+        continuation: {
+          resolutionRequestId: 'resolution',
+          sourceOperationId: 'previous',
+          sourceToolMessageIds: [],
+        },
+        lineage: {
+          isSubAgent: true,
+          progressAnchor: { parentOperationId: 'anchor', toolMessageId: 'tool' },
+        },
+      },
+    });
+    host.operation.threadId = 'thread-host';
+    await compressContext(host)(createInstruction(messages), state);
+    for (const [{ event }] of lifecycleDispatch.mock.calls) {
+      expect(event).toMatchObject({
+        agentId: 'agent-123',
+        lineage: state.origin?.lineage,
+        threadId: 'thread-host',
+        topicId: 'topic-123',
+        workspaceId: 'workspace-123',
+      });
+      expect(event.parentOperationId).toBeUndefined();
+    }
+  });
+
+  it('keeps lineage immutable and uses the same effective agent/thread as compression', async () => {
+    const messages = [{ content: 'history', id: 'message', role: 'assistant' }];
+    messagesQuery.mockResolvedValue(messages);
+    host.operation.agentId = 'effective-agent';
+    host.operation.threadId = 'effective-thread';
+    const state = createState({
+      messages,
+      origin: {
+        agentId: 'origin-agent',
+        lineage: { parentOperationId: 'real-parent' },
+        threadId: 'origin-thread',
+        topicId: 'topic-origin',
+      },
+    });
+    lifecycleDispatch.mockImplementation(async ({ event, type }) => {
+      if (type === 'beforeCompact') event.lineage.parentOperationId = 'modified-by-observer';
+    });
+
+    await compressContext(host)(createInstruction(messages), state);
+
+    expect(state.origin?.lineage?.parentOperationId).toBe('real-parent');
+    expect(lifecycleDispatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          agentId: 'effective-agent',
+          lineage: { parentOperationId: 'real-parent' },
+          parentOperationId: 'real-parent',
+          threadId: 'effective-thread',
+          topicId: 'topic-origin',
+        }),
+        type: 'afterCompact',
+      }),
+    );
+    expect(messagesQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'effective-agent',
+        threadId: 'effective-thread',
+        topicId: 'topic-origin',
+      }),
+      expect.anything(),
+    );
+  });
+
+  it.each(['beforeCompact', 'afterCompact', 'onCompactError'] as const)(
+    'isolates a synchronous %s notification failure from compression',
+    async (type) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const messages = [{ content: 'history', id: 'msg-history', role: 'assistant' }];
+      messagesQuery.mockResolvedValue(messages);
+      const compressionError = new Error('actual summary failure');
+      if (type === 'onCompactError') llmStream.mockRejectedValue(compressionError);
+      lifecycleDispatch.mockImplementation((params) => {
+        if (params.type === type) throw new Error('notification failed');
+        return Promise.resolve();
+      });
+      const state = createState({ messages });
+
+      const result = await compressContext(host)(createInstruction(messages), state);
+
+      expect(result.events).toEqual(
+        type === 'onCompactError'
+          ? [{ error: compressionError, type: 'compression_error' }]
+          : [
+              {
+                groupId: 'group-123',
+                parentMessageId: 'msg-history',
+                type: 'compression_complete',
+              },
+            ],
+      );
+      expect(compressionRollbackGroup).toHaveBeenCalledTimes(type === 'onCompactError' ? 1 : 0);
+      expect(lifecycleDispatch.mock.calls.map(([params]) => params.type)).toEqual([
+        'beforeCompact',
+        type === 'onCompactError' ? 'onCompactError' : 'afterCompact',
+      ]);
+    },
+  );
+
+  it('retains the actual compression error and correlation when error notification rejects', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = new Error('provider failed');
+    const messages = [{ content: 'history', id: 'msg-history', role: 'assistant' }];
+    messagesQuery.mockResolvedValue(messages);
+    llmStream.mockRejectedValue(error);
+    lifecycleDispatch.mockRejectedValue(new Error('hook failed'));
+    const state = createState({ messages });
+
+    const result = await compressContext(host)(createInstruction(messages), state);
+
+    expect(result.events).toEqual([{ error, type: 'compression_error' }]);
+    expect(result.newState.messages).toEqual(messages);
+    expect(result.nextContext?.payload).toMatchObject({ skipped: true });
+    expect(lifecycleDispatch).toHaveBeenLastCalledWith({
+      event: {
+        agentId: 'agent-123',
+        error: 'provider failed',
+        operationId: 'op-123',
+        stepIndex: 2,
+        threadId: 'thread-123',
+        tokenCount: 5000,
+        topicId: 'topic-123',
+        userId: 'user-123',
+        workspaceId: 'workspace-123',
+      },
+      serializedHooks: undefined,
+      type: 'onCompactError',
+    });
   });
 
   it('preserves the latest user Work contract even after assistant and tool messages', async () => {

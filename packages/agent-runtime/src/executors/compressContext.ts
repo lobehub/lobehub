@@ -1,12 +1,15 @@
 import { UsageCounter } from '../core';
 import type { AgentRuntimeHost } from '../transport';
 import type {
+  AfterCompactHookEvent,
   AgentEvent,
   AgentInstruction,
-  AnyHookEvent,
+  BeforeCompactHookEvent,
+  CompactErrorHookEvent,
   GeneralAgentCompressionResultPayload,
   InstructionExecutor,
 } from '../types';
+import { buildCompactHookContext } from './compactHookContext';
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -18,19 +21,23 @@ const getErrorMessage = (error: unknown): string => {
   return String(error);
 };
 
-const dispatchLifecycle = (
+const dispatchLifecycle = async (
   host: AgentRuntimeHost,
-  type: Parameters<NonNullable<AgentRuntimeHost['lifecycle']>['dispatch']>[0]['type'],
-  event: AnyHookEvent,
+  type: 'beforeCompact' | 'afterCompact' | 'onCompactError',
+  event: BeforeCompactHookEvent | AfterCompactHookEvent | CompactErrorHookEvent,
   serializedHooks: unknown,
 ) => {
-  host.lifecycle
-    ?.dispatch({
+  try {
+    await host.lifecycle?.dispatch({
       event,
       serializedHooks,
       type,
-    })
-    .catch(() => {});
+    });
+  } catch {
+    // A notification failure must never enter the compression rollback/error path.
+    // Do not log delivery errors which could include webhook credentials.
+    console.error('Failed to deliver context compression notification', { type });
+  }
 };
 
 /**
@@ -99,16 +106,17 @@ export const compressContext =
       return skippedResult();
     }
 
-    dispatchLifecycle(
+    await dispatchLifecycle(
       host,
       'beforeCompact',
       {
+        ...buildCompactHookContext(operation, state.origin),
         messageCount: messagesToCompress.length,
         operationId,
         stepIndex,
         tokenCount: currentTokenCount,
         userId,
-      } as AnyHookEvent,
+      },
       state.host?.hooks,
     );
 
@@ -264,10 +272,11 @@ export const compressContext =
         type: 'compression_complete',
       });
 
-      dispatchLifecycle(
+      await dispatchLifecycle(
         host,
         'afterCompact',
         {
+          ...buildCompactHookContext(operation, state.origin),
           groupId: compressionResult.messageGroupId,
           messagesAfter: compressedMessages.length,
           messagesBefore: messagesToCompress.length,
@@ -275,7 +284,7 @@ export const compressContext =
           stepIndex,
           summary: summaryResult.content.slice(0, 500),
           userId,
-        } as AnyHookEvent,
+        },
         state.host?.hooks,
       );
 
@@ -312,16 +321,17 @@ export const compressContext =
         }
       }
 
-      dispatchLifecycle(
+      await dispatchLifecycle(
         host,
         'onCompactError',
         {
+          ...buildCompactHookContext(operation, state.origin),
           error: getErrorMessage(error),
           operationId,
           stepIndex,
           tokenCount: currentTokenCount,
           userId,
-        } as AnyHookEvent,
+        },
         state.host?.hooks,
       );
 
