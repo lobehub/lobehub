@@ -586,6 +586,7 @@
   "goalProcess.activity.finding": "Recorded finding: {{title}}",
   "goalProcess.activity.title": "Activity",
   "goalProcess.actor.agent": "Agent",
+  "goalProcess.actor.member": "Member",
   "goalProcess.actor.system": "Auto",
   "goalProcess.actor.user": "You",
   "goalProcess.addTask.descriptionLabel": "Instruction (optional)",

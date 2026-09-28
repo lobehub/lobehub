@@ -256,12 +256,12 @@ const UserActor = memo<{ userId?: string | null }>(({ userId }) => {
     userProfileSelectors.nickName(s),
   ]);
 
-  // Only the signed-in user can be shown by face; someone else's event keeps
-  // the generic label rather than borrowing this user's identity.
+  // Only the signed-in user can be shown by face; another member's event reads
+  // as "Member" rather than borrowing this user's identity or calling it "You".
   if (userId && userId !== currentUserId)
     return (
       <Text fontSize={13} style={{ flex: 'none' }} weight={500}>
-        {t('goalProcess.actor.user')}
+        {t('goalProcess.actor.member')}
       </Text>
     );
 

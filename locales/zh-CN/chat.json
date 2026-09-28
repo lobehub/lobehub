@@ -586,6 +586,7 @@
   "goalProcess.activity.finding": "沉淀结论：{{title}}",
   "goalProcess.activity.title": "活动",
   "goalProcess.actor.agent": "Agent",
+  "goalProcess.actor.member": "成员",
   "goalProcess.actor.system": "自动",
   "goalProcess.actor.user": "你",
   "goalProcess.addTask.descriptionLabel": "任务说明（选填）",

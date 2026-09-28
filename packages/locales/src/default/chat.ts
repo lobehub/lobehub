@@ -2144,6 +2144,7 @@ export default {
   'goalProcess.node.unanswered': 'Unanswered',
   'goalProcess.metrics.status': 'Status',
   'goalProcess.actor.agent': 'Agent',
+  'goalProcess.actor.member': 'Member',
   'goalProcess.actor.system': 'Auto',
   'goalProcess.actor.user': 'You',
   'goalProcess.lifecycle.action.activated': 'started {{kind}}',
