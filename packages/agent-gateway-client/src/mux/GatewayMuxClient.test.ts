@@ -785,6 +785,92 @@ describe('GatewayMuxClient', () => {
       expect(onComplete).toHaveBeenCalledWith({ source: 'status_change', status: 'error' });
     });
 
+    // Codex P1 on #20102: v2 echoes a member ending with ONE signal, chosen by
+    // its status — only that one may be owed, or the leftover swallows the
+    // supervisor's own end.
+    describe('owes only the v2 echo the member status produces (G-02)', () => {
+      const memberEnd = (reason: string) =>
+        ({
+          event: {
+            data: { reason },
+            operationId: 'op-member',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'agent_runtime_end',
+          } as any,
+          id: '1',
+          operationId: 'op-1',
+          type: 'agent_event',
+        }) as MuxServerMessage;
+
+      it('interrupted member, then the supervisor completes via session_complete', async () => {
+        const { mux } = createMux();
+        const ws = await connectAndReady(mux);
+        const sub = mux.subscribe('op-1');
+        const onComplete = vi.fn();
+        sub.on('session_complete', onComplete);
+
+        ws.simulateMessage(memberEnd('interrupted'));
+        ws.simulateMessage({
+          id: '2',
+          operationId: 'op-1',
+          status: 'interrupted',
+          type: 'status_change',
+        });
+        expect(onComplete).not.toHaveBeenCalled();
+
+        ws.simulateMessage({ id: '3', operationId: 'op-1', type: 'session_complete' } as any);
+        expect(onComplete).toHaveBeenCalledWith({ source: 'raw_session_complete' });
+        expect(sub.active).toBe(false);
+      });
+
+      it('completed member, then the supervisor fails via status_change{error}', async () => {
+        const { mux } = createMux();
+        const ws = await connectAndReady(mux);
+        const sub = mux.subscribe('op-1');
+        const onComplete = vi.fn();
+        sub.on('session_complete', onComplete);
+
+        ws.simulateMessage(memberEnd('done'));
+        ws.simulateMessage({ id: '2', operationId: 'op-1', type: 'session_complete' } as any);
+        expect(onComplete).not.toHaveBeenCalled();
+
+        ws.simulateMessage({
+          id: '3',
+          operationId: 'op-1',
+          status: 'error',
+          type: 'status_change',
+        });
+        expect(onComplete).toHaveBeenCalledWith({ source: 'status_change', status: 'error' });
+        expect(sub.active).toBe(false);
+      });
+
+      it('errored member, then the supervisor is interrupted', async () => {
+        const { mux } = createMux();
+        const ws = await connectAndReady(mux);
+        const sub = mux.subscribe('op-1');
+        const onComplete = vi.fn();
+        sub.on('session_complete', onComplete);
+
+        ws.simulateMessage(memberEnd('error'));
+        ws.simulateMessage({
+          id: '2',
+          operationId: 'op-1',
+          status: 'error',
+          type: 'status_change',
+        });
+        expect(onComplete).not.toHaveBeenCalled();
+
+        ws.simulateMessage({
+          id: '3',
+          operationId: 'op-1',
+          status: 'interrupted',
+          type: 'status_change',
+        });
+        expect(onComplete).toHaveBeenCalledWith({ source: 'status_change', status: 'interrupted' });
+      });
+    });
+
     it('subscribe_failed emits auth_failed and ends the subscription', async () => {
       const { mux } = createMux();
       const ws = await connectAndReady(mux);

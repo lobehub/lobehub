@@ -113,7 +113,7 @@ class OperationSubscriptionImpl implements OperationSubscription {
     this._lastEventId = options.lastEventId ?? '';
     this.lastSeq = Number(this._lastEventId) || 0;
     this.listeners = new ListenerMap(`GatewayMuxClient:${operationId}`);
-    this.terminalEchoGuard = new MirroredTerminalEchoGuard(operationId);
+    this.terminalEchoGuard = new MirroredTerminalEchoGuard(operationId, 'v2');
   }
 
   get active(): boolean {
@@ -238,7 +238,10 @@ class OperationSubscriptionImpl implements OperationSubscription {
       }
 
       case 'status_change': {
-        if (isTerminalStatus(message.status) && this.terminalEchoGuard.consumeEcho('status_change'))
+        if (
+          isTerminalStatus(message.status) &&
+          this.terminalEchoGuard.consumeEcho('status_change', message.status)
+        )
           break;
         this.listeners.emit('status_change', message.status);
         if (isTerminalStatus(message.status)) {

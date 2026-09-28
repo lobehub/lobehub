@@ -20,18 +20,35 @@ const sessionStatusOf = (event: AgentStreamEvent): SessionStatus => {
 /** A session-ending signal a gateway echoes for a mirrored member terminal. */
 export type MirroredTerminalEchoSignal = 'session_complete' | 'status_change';
 
+/** Which gateway protocol the guarded subscription speaks. */
+export type MirroredTerminalEchoProtocol = 'v1' | 'v2';
+
+/**
+ * The echoes a gateway sends for an `agent_runtime_end` that left `status`.
+ * v1 answers every ending with `session_complete`. v2 sends a terminal
+ * `status_change` carrying the status for `error` / `interrupted`, and
+ * `session_complete` for `completed` (PROTOCOL_V2.md §6) — plus, from builds
+ * that still send both, a `status_change{completed}`. Tolerating that one is
+ * safe: the owner's own completion arrives with its own `agent_runtime_end`
+ * (which clears everything owed) or ends on the `session_complete` after it.
+ */
+const echoKeysOf = (protocol: MirroredTerminalEchoProtocol, status: SessionStatus): string[] => {
+  if (protocol === 'v1') return ['session_complete'];
+  return status === 'completed'
+    ? ['session_complete', 'status_change:completed']
+    : [`status_change:${status}`];
+};
+
 export class MirroredTerminalEchoGuard {
   /**
-   * Echoes still owed for verbatim foreign terminals, per signal: such a gateway
-   * answers each one with exactly one `session_complete` (v1 and v2) and, on v2,
-   * one terminal `status_change`. Counted by message order, not wall-clock time:
-   * a suspended tab or renderer delivers the echo late but still in order. An
-   * owner event proves the owner alive and clears it; so does a new resume.
+   * Echoes still owed for verbatim foreign terminals, keyed by the exact signal
+   * (see `echoKeysOf`). Counted by message
+   * order, not wall-clock time: a suspended tab or renderer delivers the echo
+   * late but still in order. Only the signal that will actually arrive is owed,
+   * so nothing stays armed to swallow the owner's own end. An owner event proves
+   * the owner alive and clears it; so does a new resume.
    */
-  private pendingEchoes: Record<MirroredTerminalEchoSignal, number> = {
-    session_complete: 0,
-    status_change: 0,
-  };
+  private pendingEchoes = new Map<string, number>();
   /**
    * The session status another operation's `agent_runtime_end` REPLAYED BY THE
    * CURRENT RESUME would have left on this channel's DO, while no terminal of
@@ -42,7 +59,10 @@ export class MirroredTerminalEchoGuard {
    */
   private replayForeignStatus: SessionStatus | undefined;
 
-  constructor(private readonly operationId: string) {}
+  constructor(
+    private readonly operationId: string,
+    private readonly protocol: MirroredTerminalEchoProtocol = 'v1',
+  ) {}
 
   /** Record an incoming agent event. */
   observe(event: AgentStreamEvent): void {
@@ -56,9 +76,11 @@ export class MirroredTerminalEchoGuard {
       return;
     }
     if (event.type === 'agent_runtime_end') {
-      this.pendingEchoes.session_complete += 1;
-      this.pendingEchoes.status_change += 1;
-      this.replayForeignStatus = sessionStatusOf(event);
+      const status = sessionStatusOf(event);
+      for (const key of echoKeysOf(this.protocol, status)) {
+        this.pendingEchoes.set(key, (this.pendingEchoes.get(key) ?? 0) + 1);
+      }
+      this.replayForeignStatus = status;
     }
   }
 
@@ -93,13 +115,16 @@ export class MirroredTerminalEchoGuard {
    * Consumes one owed echo of that kind, so a genuine end arriving after the
    * echoes (a watchdog's status, the owner's own session end) is honored.
    */
-  consumeEcho(signal: MirroredTerminalEchoSignal): boolean {
-    if (this.pendingEchoes[signal] === 0) return false;
-    this.pendingEchoes[signal] -= 1;
+  consumeEcho(signal: MirroredTerminalEchoSignal, status?: SessionStatus): boolean {
+    const key = signal === 'status_change' ? `status_change:${status}` : signal;
+    const owed = this.pendingEchoes.get(key) ?? 0;
+    if (owed === 0) return false;
+    if (owed === 1) this.pendingEchoes.delete(key);
+    else this.pendingEchoes.set(key, owed - 1);
     return true;
   }
 
   private clearPendingEchoes(): void {
-    this.pendingEchoes = { session_complete: 0, status_change: 0 };
+    this.pendingEchoes.clear();
   }
 }
