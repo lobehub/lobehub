@@ -113,6 +113,8 @@ const REPORT_CHECK_OUTCOMES = new Set<GoalTickResult['outcome']>([
 /** A Goal whose delivery the owner can still send back for rework. */
 const REOPENABLE_GOAL_STATUSES = new Set(['achieved', 'running']);
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
+/** Ends a person reached, or the coordinator's verdict of success: nothing reopens these but `resume`. */
+const GOAL_ENDED_STATUSES = new Set<string>(['achieved', 'canceled']);
 /** Advisory-lock namespace for goal dispatch. `0x676f_6469` is ASCII `godi`. */
 const GOAL_DISPATCH_LOCK_NAMESPACE = 0x67_6f_64_69;
 
@@ -1704,11 +1706,16 @@ export class GoalService {
         : [],
     );
     if (unfinishedTaskIds.length > 0) {
-      // Withdraw claims whose run is still starting. `dispatchWork` marks the
+      // Claims whose run has not been recorded yet. `dispatchWork` marks the
       // Task `running` before `runTask` records the topic, so the scan below
-      // cannot see that run yet. Under the task row lock that recording also
-      // takes: with no recorded run, back to `backlog`, and the recording will
-      // find it withdrawn and stop its own run; with one, the scan cancels it.
+      // cannot see that run, and only a recorded run can be interrupted with
+      // confirmation. A fresh claim therefore refuses the close: the goal stays
+      // fenced, and a retry a moment later finds the run recorded and stops it
+      // the confirmed way. A claim older than the operation lease is one whose
+      // startup died; it is withdrawn to `backlog` under the task row lock the
+      // recording also takes, so a straggler recording stops its own run.
+      const staleBefore = Date.now() - resolveOperationLeaseTimeout(graph.goal);
+      let starting = false;
       for (const taskId of unfinishedTaskIds) {
         await this.db.transaction(async (tx) => {
           const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
@@ -1720,10 +1727,20 @@ export class GoalService {
             this.userId,
             this.workspaceId,
           ).findRunningByTaskIds([taskId]);
-          if (recorded.length === 0)
-            await taskModel.updateStatusIfCurrent(taskId, 'running', 'backlog', { error: null });
+          if (recorded.length > 0) return;
+          if (task.updatedAt.getTime() > staleBefore) {
+            starting = true;
+            return;
+          }
+          await taskModel.updateStatusIfCurrent(taskId, 'running', 'backlog', { error: null });
         });
       }
+      if (starting)
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'A run for this goal is still starting, so it was not closed. No new work will start; try again in a moment.',
+        });
 
       const runningTopics = await this.taskTopicModel.findRunningByTaskIds(unfinishedTaskIds);
       for (const topic of runningTopics) {
@@ -1775,6 +1792,11 @@ export class GoalService {
 
   decide = async (goalId: string, decisionId: string, optionId: string, resolution?: string) => {
     const graph = await this.requireGraph(goalId);
+    // A goal a person ended stays ended: a gate another tab still shows must
+    // not reopen it. Checked again under the lock before the status moves.
+    if (GOAL_ENDED_STATUSES.has(graph.goal.status)) {
+      throw new TRPCError({ code: 'CONFLICT', message: 'This goal has ended' });
+    }
     const decision = graph.decisions.find((item) => item.id === decisionId);
     if (!decision || decision.status !== 'pending') {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Pending decision not found' });
@@ -1826,11 +1848,25 @@ export class GoalService {
         : terminalAcceptance && optionId === 'retire'
           ? 'canceled'
           : 'running';
-    await this.transitionStatus(
-      graph.goal,
-      nextStatus,
-      `decision "${decision.question}" resolved: ${optionId}`,
-    );
+    // Serialized with `close`, which commits under this row lock: a goal that
+    // ended while this answer was being written is left ended.
+    await this.db.transaction(async (tx) => {
+      const current = await new GoalModel(tx, this.userId, this.workspaceId).lockById(goalId);
+      if (!current || GOAL_ENDED_STATUSES.has(current.status)) return;
+      if (current.status === nextStatus) return;
+      await new GoalModel(tx, this.userId, this.workspaceId).updateStatus(goalId, nextStatus);
+      await new GoalGraphModel(tx, this.userId, this.workspaceId, {
+        id: GOAL_COORDINATOR_ACTOR_ID,
+        type: 'system',
+      })
+        .recordGoalStatus(
+          goalId,
+          current.status,
+          nextStatus,
+          `decision "${decision.question}" resolved: ${optionId}`,
+        )
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+    });
     return resolved;
   };
 
