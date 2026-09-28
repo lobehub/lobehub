@@ -118,7 +118,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
   };
 
   updateIdentityMemory = async (
-    params: z.infer<typeof UpdateIdentityToolInputSchema>,
+    params: z.input<typeof UpdateIdentityToolInputSchema>,
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     this.ensureWritable(ctx?.agentId);

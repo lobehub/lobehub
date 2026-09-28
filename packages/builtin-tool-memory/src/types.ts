@@ -100,7 +100,8 @@ export interface AddPreferenceMemoryState {
 }
 
 // Update Identity
-export type UpdateIdentityMemoryParams = z.infer<typeof UpdateIdentityToolInputSchema>;
+/** Raw tool arguments: the model may send null for fields it leaves unchanged. */
+export type UpdateIdentityMemoryParams = z.input<typeof UpdateIdentityToolInputSchema>;
 export interface UpdateIdentityMemoryState {
   identityId?: string;
 }

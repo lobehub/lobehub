@@ -46,7 +46,7 @@ export interface MemoryRuntimeService {
   ) => Promise<RemoveIdentityMemoryResult>;
   searchMemory: (params: SearchMemoryParams) => Promise<SearchMemoryResult>;
   updateIdentityMemory: (
-    params: z.infer<typeof UpdateIdentityToolInputSchema>,
+    params: z.output<typeof UpdateIdentityToolInputSchema>,
   ) => Promise<UpdateIdentityMemoryResult>;
 }
 
@@ -240,7 +240,7 @@ export class MemoryExecutionRuntime {
   }
 
   async updateIdentityMemory(
-    params: z.infer<typeof UpdateIdentityToolInputSchema>,
+    params: z.input<typeof UpdateIdentityToolInputSchema>,
   ): Promise<BuiltinServerRuntimeOutput> {
     if (this.isReadOnly) return READ_ONLY_RESULT;
     try {

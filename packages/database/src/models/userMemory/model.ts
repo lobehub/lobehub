@@ -439,11 +439,13 @@ export interface GetMemoryDetailParams {
 const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
-/** Shallow-merge supplied metadata keys over the stored object, keeping keys not supplied. */
-const mergeMetadataKeys = (stored: unknown, supplied: Record<string, unknown>) => ({
-  ...(isPlainRecord(stored) ? stored : {}),
-  ...supplied,
-});
+/**
+ * Shallow-merge supplied metadata keys over the stored object inside the UPDATE itself, so
+ * concurrent partial updates of different keys cannot overwrite each other with a stale read.
+ * A stored value that is not a JSON object is treated as empty.
+ */
+const mergeMetadataKeysSql = (column: AnyColumn, supplied: Record<string, unknown>) =>
+  sql`(CASE WHEN jsonb_typeof(${column}) = 'object' THEN ${column} ELSE '{}'::jsonb END) || ${JSON.stringify(supplied)}::jsonb`;
 
 export class UserMemoryModel {
   static parseAssociatedObjects(value?: unknown): Record<string, unknown>[] {
@@ -2389,7 +2391,6 @@ export class UserMemoryModel {
 
       let baseUpdate: Partial<typeof userMemories.$inferInsert> = {};
       let identityUpdate: Partial<typeof userMemoriesIdentities.$inferInsert> = {};
-      const storedIdentityMetadata = identity.metadata;
 
       if (params.base) {
         baseUpdate = merge(baseUpdate, params.base);
@@ -2397,20 +2398,18 @@ export class UserMemoryModel {
           baseUpdate.lastAccessedAt = coerceDate(baseUpdate.lastAccessedAt) ?? new Date();
         }
 
-        if (params.preserveOmittedFields && isPlainRecord(baseUpdate.metadata)) {
-          const [storedBase] = await tx
-            .select({ metadata: userMemories.metadata })
-            .from(userMemories)
-            .where(and(eq(userMemories.id, identity.userMemoryId), this.memoryWhere(userMemories)))
-            .limit(1);
-          baseUpdate.metadata = mergeMetadataKeys(storedBase?.metadata, baseUpdate.metadata);
-        }
-
         if (Object.keys(baseUpdate).length > 0) {
           baseUpdate.updatedAt = new Date();
           await tx
             .update(userMemories)
-            .set(baseUpdate)
+            .set(
+              params.preserveOmittedFields && isPlainRecord(baseUpdate.metadata)
+                ? {
+                    ...baseUpdate,
+                    metadata: mergeMetadataKeysSql(userMemories.metadata, baseUpdate.metadata),
+                  }
+                : baseUpdate,
+            )
             .where(and(eq(userMemories.id, identity.userMemoryId), this.memoryWhere(userMemories)));
         }
       }
@@ -2475,20 +2474,23 @@ export class UserMemoryModel {
           }
         }
 
-        // A partial tool update names only the metadata keys it changes (e.g. scoreConfidence);
-        // keep the other stored keys such as sourceEvidence instead of replacing the object.
-        if (params.preserveOmittedFields && isPlainRecord(identityUpdate.metadata)) {
-          identityUpdate.metadata = mergeMetadataKeys(
-            storedIdentityMetadata,
-            identityUpdate.metadata,
-          );
-        }
-
         if (Object.keys(identityUpdate).length > 0) {
           identityUpdate.updatedAt = new Date();
           await tx
             .update(userMemoriesIdentities)
-            .set(identityUpdate)
+            .set(
+              // A partial tool update names only the metadata keys it changes (e.g.
+              // scoreConfidence); keep the other stored keys such as sourceEvidence.
+              params.preserveOmittedFields && isPlainRecord(identityUpdate.metadata)
+                ? {
+                    ...identityUpdate,
+                    metadata: mergeMetadataKeysSql(
+                      userMemoriesIdentities.metadata,
+                      identityUpdate.metadata,
+                    ),
+                  }
+                : identityUpdate,
+            )
             .where(
               and(
                 eq(userMemoriesIdentities.id, params.identityId),

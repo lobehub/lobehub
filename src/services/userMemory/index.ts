@@ -161,7 +161,7 @@ class UserMemoryService {
   };
 
   updateIdentityMemory = async (
-    params: z.infer<typeof UpdateIdentityToolInputSchema>,
+    params: z.output<typeof UpdateIdentityToolInputSchema>,
   ): Promise<UpdateIdentityMemoryResult> => {
     return lambdaClient.userMemories.toolUpdateIdentityMemory.mutate(params);
   };

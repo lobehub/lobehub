@@ -1,4 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import { MergeStrategyEnum } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ToolExecutionContext } from '../../types';
@@ -168,9 +169,9 @@ describe('memoryRuntime', () => {
 
     const result = await runtime.updateIdentityMemory({
       id: 'mem_1',
-      mergeStrategy: 'replace',
+      mergeStrategy: MergeStrategyEnum.Replace,
       set: { title: null, withIdentity: { description: null, role: 'lead maintainer' } },
-    } as never);
+    });
 
     expect(result.success).toBe(true);
     expect(mocks.updateIdentityEntry).toHaveBeenCalledWith({

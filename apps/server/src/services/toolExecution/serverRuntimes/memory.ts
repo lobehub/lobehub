@@ -676,7 +676,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
   };
 
   updateIdentityMemory = async (
-    input: z.infer<typeof UpdateIdentityToolInputSchema>,
+    input: z.output<typeof UpdateIdentityToolInputSchema>,
   ): Promise<UpdateIdentityMemoryResult> => {
     try {
       const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(

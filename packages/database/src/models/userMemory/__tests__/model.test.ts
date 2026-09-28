@@ -8,7 +8,7 @@ import {
   TypesEnum,
   UserMemoryContextObjectType,
 } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -1543,6 +1543,72 @@ describe('UserMemoryModel', () => {
         expect(identityRow?.description).toBe('original desc');
       },
     );
+
+    // Another writer can change a different metadata key after this update loaded the row;
+    // merging in SQL must keep that key instead of writing back a stale snapshot.
+    it('keeps metadata keys written concurrently during a partial tool update', async () => {
+      const { identityId, userMemoryId } = await memoryModel.addIdentityEntry({
+        base: { metadata: { scoreConfidence: 0.4 } },
+        identity: { description: 'original desc', metadata: { scoreConfidence: 0.4 } },
+      });
+
+      const concurrentPatch = sql`'{"sourceEvidence":"written concurrently"}'::jsonb`;
+      const originalTransaction = serverDB.transaction.bind(serverDB);
+      const transactionSpy = vi.spyOn(serverDB, 'transaction').mockImplementationOnce(((
+        callback: (tx: unknown) => Promise<unknown>,
+      ) =>
+        originalTransaction(async (tx) => {
+          const interfered = new Set<unknown>();
+          // Land a competing write right before each of this update's own writes.
+          const wrappedTx = new Proxy(tx, {
+            get(target, prop) {
+              if (prop !== 'update') {
+                const value = Reflect.get(target, prop, target);
+                return typeof value === 'function' ? value.bind(target) : value;
+              }
+              return (table: typeof userMemories | typeof userMemoriesIdentities) => {
+                const builder = target.update(table);
+                if (interfered.has(table)) return builder;
+                interfered.add(table);
+                const rowId = table === userMemories ? userMemoryId : identityId;
+                return {
+                  set: (values: never) => ({
+                    where: (condition: never) =>
+                      target
+                        .update(table)
+                        .set({
+                          metadata: sql`coalesce(${table.metadata}, '{}'::jsonb) || ${concurrentPatch}`,
+                        })
+                        .where(eq(table.id, rowId))
+                        .then(() => builder.set(values).where(condition)),
+                  }),
+                };
+              };
+            },
+          });
+          return callback(wrappedTx);
+        })) as typeof serverDB.transaction);
+
+      const success = await memoryModel.updateIdentityEntry({
+        base: { metadata: { scoreConfidence: 0.9 } },
+        identity: { metadata: { scoreConfidence: 0.9 } },
+        identityId,
+        mergeStrategy: MergeStrategyEnum.Replace,
+        preserveOmittedFields: true,
+      });
+      transactionSpy.mockRestore();
+
+      expect(success).toBe(true);
+      const identityRow = await serverDB.query.userMemoriesIdentities.findFirst({
+        where: eq(userMemoriesIdentities.id, identityId),
+      });
+      const baseRow = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, userMemoryId),
+      });
+      const expected = { scoreConfidence: 0.9, sourceEvidence: 'written concurrently' };
+      expect(identityRow?.metadata).toEqual(expected);
+      expect(baseRow?.metadata).toEqual(expected);
+    });
 
     it('should not update other user identity', async () => {
       const otherModel = new UserMemoryModel(serverDB, otherUserId);
