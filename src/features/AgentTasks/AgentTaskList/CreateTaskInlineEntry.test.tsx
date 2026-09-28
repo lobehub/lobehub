@@ -252,7 +252,7 @@ vi.mock('../shared/useAgentVisibility', () => ({
 }));
 
 /** Flips the Labs toggles the composer still reads. */
-const setLabs = (lab: { enableTopicAcceptance?: boolean }) => {
+const setLabs = (lab: { enableGoals?: boolean }) => {
   userStateMock.lab = lab as Record<string, boolean>;
 };
 
@@ -496,7 +496,7 @@ describe('CreateTaskInlineEntry', () => {
 
   describe('intent recognition', () => {
     beforeEach(() => {
-      setLabs({ enableTopicAcceptance: true });
+      setLabs({ enableGoals: true });
       editorMarkdownMock.value = 'Write a project plan';
     });
 

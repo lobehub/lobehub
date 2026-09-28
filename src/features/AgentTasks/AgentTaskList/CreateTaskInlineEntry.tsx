@@ -124,7 +124,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // Reading the draft is what submit does now. It only stops for confirmation
   // when it found something the user alone can settle, so the escape hatch is
   // the dropdown's "create directly" rather than a setting nobody would find.
-  const canCreateGoal = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const canCreateGoal = useUserStore(labPreferSelectors.enableGoals);
   const [analysis, setAnalysis] = useState<TaskIntentAnalysis | null>(null);
   const [intentTitle, setIntentTitle] = useState('');
   const [intentAnswers, setIntentAnswers] = useState<ClarificationAnswers>({});

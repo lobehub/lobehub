@@ -42,8 +42,6 @@
   "features.selfLearning.title": "Autoevolución",
   "features.taskVerify.desc": "Agrega una sección de aceptación de entrega a los detalles de la tarea: describe la aceptación en una frase y permite que la IA genere criterios de verificación editables.",
   "features.taskVerify.title": "Aceptación de Entrega de Tarea",
-  "features.topicAcceptance.desc": "Crea una lista de verificación de entrega para el tema actual justo encima del compositor, para que la conversación cumpla con los estándares que puedes editar en cualquier momento.",
-  "features.topicAcceptance.title": "Aceptación de Tema",
   "group.desktop": "Escritorio",
   "group.general": "General",
   "stage.alpha.desc": "Solo pruebas internas. No se recomienda para uso diario aún — puede cambiar o fallar en cualquier momento.",

@@ -19,6 +19,7 @@ type LabFeatureI18nKey =
   | 'desktopSplitView'
   | 'deviceTunnel'
   | 'evalCapture'
+  | 'goals'
   | 'heteroSessionImport'
   | 'imessage'
   | 'inputMarkdown'
@@ -26,8 +27,7 @@ type LabFeatureI18nKey =
   | 'messageTextSelectionActions'
   | 'oauthApps'
   | 'projects'
-  | 'selfLearning'
-  | 'topicAcceptance';
+  | 'selfLearning';
 
 export interface LabFeatureItem {
   /** Only rendered (and searchable) in the Electron shell */
@@ -79,9 +79,9 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    flag: 'enableTopicAcceptance',
-    i18nKey: 'topicAcceptance',
-    searchKeywords: ['acceptance', 'checklist'],
+    flag: 'enableGoals',
+    i18nKey: 'goals',
+    searchKeywords: ['goal', 'goals', 'objective'],
     stage: 'alpha',
   },
   {

@@ -28,7 +28,7 @@ export const labPreferSelectors = {
   enableOAuthApps: (s: UserState): boolean => s.preference.lab?.enableOAuthApps ?? false,
   enableSelfLearning: (s: UserState): boolean => s.preference.lab?.enableSelfLearning ?? false,
   enableProjects: (s: UserState): boolean => s.preference.lab?.enableProjects ?? false,
+  enableGoals: (s: UserState): boolean =>
+    s.preference.lab?.enableGoals ?? s.preference.lab?.enableTopicAcceptance ?? false,
   enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
-  enableTopicAcceptance: (s: UserState): boolean =>
-    s.preference.lab?.enableTopicAcceptance ?? false,
 };

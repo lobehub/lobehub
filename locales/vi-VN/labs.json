@@ -42,8 +42,6 @@
   "features.selfLearning.title": "Tự tiến hóa",
   "features.taskVerify.desc": "Thêm phần chấp nhận giao hàng vào chi tiết nhiệm vụ: mô tả chấp nhận trong một câu và để AI tạo tiêu chí xác minh có thể chỉnh sửa.",
   "features.taskVerify.title": "Chấp Nhận Giao Nhiệm Vụ",
-  "features.topicAcceptance.desc": "Tạo danh sách kiểm tra giao hàng cho chủ đề hiện tại ngay phía trên trình soạn thảo, để cuộc trò chuyện tuân theo các tiêu chuẩn mà bạn có thể chỉnh sửa bất kỳ lúc nào.",
-  "features.topicAcceptance.title": "Chấp nhận Chủ đề",
   "group.desktop": "Máy tính để bàn",
   "group.general": "Chung",
   "stage.alpha.desc": "Chỉ dành cho thử nghiệm nội bộ. Chưa được khuyến nghị sử dụng hàng ngày — có thể thay đổi hoặc gặp lỗi bất cứ lúc nào.",

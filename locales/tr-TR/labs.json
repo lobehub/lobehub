@@ -42,8 +42,6 @@
   "features.selfLearning.title": "Kendi Kendine Gelişen",
   "features.taskVerify.desc": "Görev detayına teslimat kabul bölümü ekleyin: kabulü bir cümleyle açıklayın ve düzenlenebilir doğrulama kriterlerini AI ile oluşturun.",
   "features.taskVerify.title": "Görev Teslimat Kabulü",
-  "features.topicAcceptance.desc": "Mevcut konu için bir teslimat kontrol listesi oluşturun ve bunu düzenleyiciye hemen üstüne yerleştirin, böylece konuşma her zaman düzenleyebileceğiniz standartlara uygun şekilde yapılır.",
-  "features.topicAcceptance.title": "Konu Kabulü",
   "group.desktop": "Masaüstü",
   "group.general": "Genel",
   "stage.alpha.desc": "Yalnızca dahili test için. Günlük kullanım için henüz önerilmez — herhangi bir zamanda değişebilir veya bozulabilir.",

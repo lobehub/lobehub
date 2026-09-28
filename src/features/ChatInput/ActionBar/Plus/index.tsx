@@ -284,7 +284,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const { updateAgentChatConfig } = useUpdateAgentConfig();
 
   // Goal creation is lab-gated while the product surface is being rolled out.
-  const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
 
   const upload = useFileStore((s) => s.uploadChatFiles);
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
@@ -687,7 +687,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     // Goal creation has one canonical entry: drop the goal chip at the head of
     // the composer. The agent then plans and calls lobe-goal.createGoal,
     // regardless of whether this conversation already has a topic.
-    const acceptanceItems: ActionDropdownMenuItems = enableTopicAcceptance
+    const acceptanceItems: ActionDropdownMenuItems = enableGoals
       ? [
           {
             icon: TargetIcon,
@@ -717,7 +717,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     agentId,
     activeSearchOption,
     canConfigureResource,
-    enableTopicAcceptance,
+    enableGoals,
     canUploadImage,
     canUploadVideo,
     canUploadAudio,

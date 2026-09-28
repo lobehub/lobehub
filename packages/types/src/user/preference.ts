@@ -227,8 +227,12 @@ export const UserLabSchema = z.object({
    */
   enableGatewayMux: z.boolean().optional(),
   /**
-   * enable the per-topic acceptance tray above the composer (author a topic's
-   * delivery checklist inline)
+   * enable Goals: hand the agent a goal it plans into tasks, tracks and delivers
+   */
+  enableGoals: z.boolean().optional(),
+  /**
+   * @deprecated Renamed to `enableGoals`. Still read as its fallback so users
+   * who opted in under the old name keep the lab on.
    */
   enableTopicAcceptance: z.boolean().optional(),
   /**

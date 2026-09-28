@@ -42,8 +42,6 @@
   "features.selfLearning.title": "Auto-évolution",
   "features.taskVerify.desc": "Ajoutez une section d'acceptation de livraison dans les détails de la tâche : décrivez l'acceptation en une phrase et laissez l'IA générer des critères de vérification modifiables.",
   "features.taskVerify.title": "Acceptation de Livraison de Tâche",
-  "features.topicAcceptance.desc": "Rédigez une liste de contrôle de livraison pour le sujet actuel juste au-dessus du compositeur, afin que la conversation respecte des normes que vous pouvez modifier à tout moment.",
-  "features.topicAcceptance.title": "Acceptation du sujet",
   "group.desktop": "Bureau",
   "group.general": "Général",
   "stage.alpha.desc": "Test interne uniquement. Non recommandé pour une utilisation quotidienne pour le moment — cela peut changer ou rencontrer des problèmes à tout moment.",

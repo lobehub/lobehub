@@ -42,8 +42,6 @@
   "features.selfLearning.title": "Selbstentwicklung",
   "features.taskVerify.desc": "Fügen Sie einen Abschnitt zur Lieferannahme in die Aufgabenbeschreibung hinzu: Beschreiben Sie die Annahme in einem Satz und lassen Sie die KI bearbeitbare Überprüfungskriterien erstellen.",
   "features.taskVerify.title": "Aufgabenlieferung und -annahme",
-  "features.topicAcceptance.desc": "Erstellen Sie eine Liefercheckliste für das aktuelle Thema direkt über dem Editor, damit die Unterhaltung den Standards entspricht, die Sie jederzeit bearbeiten können.",
-  "features.topicAcceptance.title": "Themenakzeptanz",
   "group.desktop": "Desktop",
   "group.general": "Allgemein",
   "stage.alpha.desc": "Nur für interne Tests. Noch nicht für den täglichen Gebrauch empfohlen — es kann sich jederzeit ändern oder ausfallen.",
