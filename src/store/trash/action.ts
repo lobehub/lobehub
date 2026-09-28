@@ -4,10 +4,12 @@ import type {
   TrashListResult,
   TrashResourceType,
 } from '@lobechat/types';
+import { useLayoutEffect } from 'react';
 import type { SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { trashKeys } from '@/libs/swr/keys';
+import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
 import { trashService } from '@/services/trash';
 import type { StoreSetter } from '@/store/types';
 
@@ -83,10 +85,28 @@ export class TrashActionImpl {
   };
 
   loadMore = async () => {
-    const { activeType, nextCursor, items } = this.#get();
-    if (!nextCursor) return;
-    const page = await trashService.list({ cursor: nextCursor, resourceType: activeType });
-    this.#set({ items: [...items, ...page.items], nextCursor: page.nextCursor }, false, 'loadMore');
+    const { activeType, isLoadingMore, nextCursor, scope } = this.#get();
+    if (!nextCursor || isLoadingMore) return;
+    this.#set({ isLoadingMore: true }, false, 'loadMore/start');
+    try {
+      const page = await trashService.list({ cursor: nextCursor, resourceType: activeType });
+      // The filter, cursor or workspace may have moved on while this page was
+      // in flight; appending it then would mix another list's rows in.
+      const current = this.#get();
+      if (
+        current.activeType !== activeType ||
+        current.nextCursor !== nextCursor ||
+        current.scope !== scope
+      )
+        return;
+      this.#set(
+        { items: [...current.items, ...page.items], nextCursor: page.nextCursor },
+        false,
+        'loadMore',
+      );
+    } finally {
+      this.#set({ isLoadingMore: false }, false, 'loadMore/end');
+    }
   };
 
   #withLoading = async (ids: string[], run: () => Promise<void>) => {
@@ -153,31 +173,50 @@ export class TrashActionImpl {
   useFetchTrash = (
     enabled: boolean,
     resourceType?: TrashResourceType,
-  ): SWRResponse<TrashListResult> =>
-    useClientDataSWR<TrashListResult>(
+  ): SWRResponse<TrashListResult> => {
+    const scope = useCacheScope();
+
+    // A workspace (or user) switch inside the SPA: drop the previous scope's
+    // rows before paint instead of showing them until — or, if the fetch
+    // fails, instead of — the new scope's list.
+    useLayoutEffect(() => {
+      if (!enabled || this.#get().scope === scope) return;
+      this.#set(
+        { countByType: {}, isTrashInit: false, items: [], nextCursor: null, scope },
+        false,
+        'fetchTrash/scope',
+      );
+    }, [enabled, scope]);
+
+    return useClientDataSWR<TrashListResult>(
       enabled ? trashKeys.list(resourceType) : null,
       () => trashService.list({ resourceType }),
       {
         onSuccess: (data) => {
+          if (scope !== getCacheScope()) return;
           this.#set(
-            { isTrashInit: true, items: data.items, nextCursor: data.nextCursor },
+            { isTrashInit: true, items: data.items, nextCursor: data.nextCursor, scope },
             false,
             'fetchTrash',
           );
         },
       },
     );
+  };
 
-  useFetchTrashCount = (enabled: boolean): SWRResponse<TrashCountByType> =>
-    useClientDataSWR<TrashCountByType>(
+  useFetchTrashCount = (enabled: boolean): SWRResponse<TrashCountByType> => {
+    const scope = useCacheScope();
+    return useClientDataSWR<TrashCountByType>(
       enabled ? trashKeys.countByType() : null,
       () => trashService.countByType(),
       {
         onSuccess: (data) => {
+          if (scope !== getCacheScope()) return;
           this.#set({ countByType: data }, false, 'fetchTrashCount');
         },
       },
     );
+  };
 }
 
 export type TrashAction = Pick<TrashActionImpl, keyof TrashActionImpl>;

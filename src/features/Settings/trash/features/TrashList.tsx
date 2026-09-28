@@ -56,6 +56,7 @@ const TrashList = () => {
     nextCursor,
     activeType,
     countByType,
+    isLoadingMore,
     loadingIds,
     setActiveType,
     restore,
@@ -69,6 +70,7 @@ const TrashList = () => {
     s.nextCursor,
     s.activeType,
     s.countByType,
+    s.isLoadingMore,
     s.loadingIds,
     s.setActiveType,
     s.restore,
@@ -86,8 +88,18 @@ const TrashList = () => {
 
   const typeLabel = (type: TrashResourceType) => t(`trash.type.${type}` as const);
 
+  // A rejected call (network / server) must not end in a silent spinner stop:
+  // the user has to know whether the row was restored or deleted.
+  const reportFailure = () => toast.error(tc('operationFailed'));
+
   const handleRestore = async (item: TrashItem) => {
-    const outcome = await restore([item.id]);
+    let outcome: Awaited<ReturnType<typeof restore>>;
+    try {
+      outcome = await restore([item.id]);
+    } catch {
+      reportFailure();
+      return;
+    }
     const failure = outcome.failed[0];
     if (failure) {
       toast.error(t(`trash.restore.failed.${failure.code}`));
@@ -103,7 +115,12 @@ const TrashList = () => {
       okButtonProps: { danger: true },
       okText: t('trash.actions.purge'),
       onOk: async () => {
-        await purge([item.id]);
+        try {
+          await purge([item.id]);
+        } catch {
+          reportFailure();
+          return;
+        }
         toast.success(t('trash.purge.success'));
       },
       title: t('trash.purgeConfirm.title'),
@@ -120,7 +137,12 @@ const TrashList = () => {
         ? t('trash.actions.emptyType', { type: typeLabel(activeType) })
         : t('trash.actions.empty'),
       onOk: async () => {
-        await emptyTrash();
+        try {
+          await emptyTrash();
+        } catch {
+          reportFailure();
+          return;
+        }
         toast.success(t('trash.purge.success'));
       },
       title: t('trash.emptyConfirm.title'),
@@ -281,7 +303,7 @@ const TrashList = () => {
       />
       {nextCursor && (
         <Center style={{ paddingBlockStart: 12 }}>
-          <Button size={'small'} type={'text'} onClick={() => loadMore()}>
+          <Button loading={isLoadingMore} size={'small'} type={'text'} onClick={() => loadMore()}>
             {t('trash.actions.loadMore')}
           </Button>
         </Center>
