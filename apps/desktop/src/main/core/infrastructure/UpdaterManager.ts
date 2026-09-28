@@ -485,6 +485,8 @@ export class UpdaterManager {
         logger.info(
           `Skipping auto-download — install-later acknowledged for v${this.installLaterVersion}, incoming v${info.version}`,
         );
+        // Finish the check with the cached update still installable, without reopening its prompt.
+        this.setStage('downloaded');
         return;
       }
 

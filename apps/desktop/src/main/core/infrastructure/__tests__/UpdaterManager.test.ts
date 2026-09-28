@@ -485,16 +485,36 @@ describe('UpdaterManager', () => {
       );
     });
 
-    it('skips auto-download on update-available for the install-later version', () => {
-      fireDownloaded('2.2.6');
-      updaterManager.installLater();
+    it.each([
+      { incomingVersion: '2.2.6', manual: false },
+      { incomingVersion: '2.2.6', manual: true },
+      { incomingVersion: '2.2.5', manual: false },
+      { incomingVersion: '2.2.5', manual: true },
+    ])(
+      'restores the downloaded state after checking $incomingVersion (manual=$manual)',
+      async ({ incomingVersion, manual }) => {
+        fireDownloaded('2.2.6');
+        updaterManager.installLater();
+        mockBroadcast.mockClear();
+        vi.mocked(autoUpdater.downloadUpdate).mockClear();
+        vi.mocked(autoUpdater.checkForUpdates).mockImplementation(async () => {
+          fireAvailable(incomingVersion);
+          return null;
+        });
 
-      vi.mocked(autoUpdater.downloadUpdate).mockClear();
+        await updaterManager.checkForUpdates({ manual });
 
-      fireAvailable('2.2.6');
-
-      expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
-    });
+        const expectedState = {
+          stage: 'downloaded',
+          updateInfo: { kind: 'app', version: '2.2.6' },
+        };
+        expect(updaterManager.getUpdaterState()).toEqual(expectedState);
+        expect(mockBroadcast).toHaveBeenLastCalledWith('updaterStateChanged', expectedState);
+        expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
+        expect(mockBroadcast).not.toHaveBeenCalledWith('updateReady', expect.anything());
+        expect(autoUpdater.autoInstallOnAppQuit).toBe(true);
+      },
+    );
 
     it('clears the guard and re-broadcasts when a newer version arrives', () => {
       fireDownloaded('2.2.6');
