@@ -101,7 +101,10 @@ const hook: AgentHook = {
 
 - `matcher` is a regex against `${identifier}/${apiName}`, supported only on tool events. Omitted, empty, or `*` matches all tools.
 - Header environment templates resolve only at send time from `allowedEnvVars`; persist templates, never resolved secrets.
-- Notifications ignore response content. `responseHandling: 'toolCall'` is explicitly unsupported at registration/restoration in this version; the response parser and HTTP helper do not enforce tool decisions.
+- Notifications ignore response content and may return HTTP 204.
+- `beforeToolCall` with `responseHandling: 'toolCall'` awaits an HTTP control response before tool execution. Return HTTP 200 JSON with `{ "decision": "allow" }` or `{ "decision": "deny", "reason": "禁止执行该操作" }`. The type is `{ decision: 'allow' } | { decision: 'deny'; reason?: string }`; a deny without reason uses `Blocked by beforeToolCall hook.`. Denials preserve the reason in the tool result/card with classification `hook_denied`.
+- Empty bodies, HTTP 204 or other non-200 status, invalid JSON, missing/invalid decisions, and responses containing only the old nested `hookSpecificOutput` format are protocol errors. They follow the control hook's `onError: 'continue' | 'block'` policy (default `continue`); an empty response is never an allow decision.
+- Extra response fields are allowed and discarded. Only `decision` and a deny's optional string `reason` are consumed; `updatedInput`/`additionalContext` do not change tool arguments or conversation context.
 - Configuration: `packages/types/src/agentHook.ts`; response parsing: `packages/types/src/agentHookResponse.ts`; HTTP delivery: `apps/server/src/services/agentRuntime/hooks/httpWebhook.ts`.
 
 ## Events

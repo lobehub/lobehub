@@ -12,8 +12,7 @@ const control = {
   type: 'beforeToolCall',
   webhook: { responseHandling: 'toolCall', url: 'https://example.com' },
 };
-const response = (output: Record<string, unknown>) =>
-  JSON.stringify({ hookSpecificOutput: { hookEventName: 'beforeToolCall', ...output } });
+const response = (output: Record<string, unknown>) => JSON.stringify(output);
 
 describe('serialized hook contract', () => {
   it('round trips all fields including legacy fallback without expanding secrets', () => {
@@ -100,65 +99,72 @@ describe('serialized hook contract', () => {
   });
 });
 
-describe('strict tool response parser', () => {
-  it.each(['', '{}'])('accepts an empty response or no decision: %s', (body) => {
-    expect(parseToolCallHookResponse(body)).toMatchObject({ status: 'success' });
-  });
-  it('returns allow/replacement/context without applying them', () => {
-    const decision = {
-      additionalContext: 'untrusted tool context',
-      permissionDecision: 'allow',
-      updatedInput: { path: '/new' },
-    };
+describe('flat tool response parser', () => {
+  it.each([
+    { decision: 'allow' },
+    { decision: 'deny' },
+    { decision: 'deny', reason: '禁止执行该操作' },
+    { decision: 'deny', reason: '' },
+  ])('accepts only flat allow/deny: %j', (decision) => {
     expect(parseToolCallHookResponse(response(decision))).toEqual({
-      decision: { hookEventName: 'beforeToolCall', ...decision },
+      decision,
       status: 'success',
     });
-    expect(
-      parseToolCallHookResponse(
-        response({ permissionDecision: 'deny', permissionDecisionReason: 'private' }),
-      ),
-    ).toMatchObject({ status: 'success', decision: { permissionDecision: 'deny' } });
   });
   it.each([
+    '',
+    '{}',
     ' ',
     '{',
     'null',
     '[]',
     'true',
-    '{"continue":false}',
-    '{"decision":"block"}',
-    '{"stopReason":"stop"}',
-    '{"hookSpecificOutput":null}',
     ...[
-      { hookEventName: 'afterToolCall' },
-      { permissionDecision: 'ask' },
-      { permissionDecision: 'defer' },
-      { updatedInput: {} },
-      { updatedInput: {}, permissionDecision: 'deny' },
-      { updatedInput: [], permissionDecision: 'allow' },
-      { additionalContext: 1 },
-      { additionalContext: 'x'.repeat(10_001) },
-      { updatedOutput: {} },
-      { permissionDecisionReason: 3 },
+      { decision: 'block' },
+      { decision: 'ask' },
+      { decision: 'defer' },
+      { decision: null },
+      { decision: 1 },
+      { reason: 'missing decision' },
+      { decision: 'deny', reason: 3 },
+      { decision: 'deny', reason: null },
+      { hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'allow' } },
+      { hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'deny' } },
     ].map(response),
   ])('rejects malformed or unsupported control response %#', (body) => {
     expect(parseToolCallHookResponse(body)).toEqual({ code: 'invalid_response', status: 'error' });
   });
-  it('counts response UTF-8 bytes and enforces exact context boundary', () => {
-    expect(parseToolCallHookResponse('{}' + ' '.repeat(65_534))).toMatchObject({
+  it.each(['allow', 'deny'])(
+    'discards service fields from %s without extending control',
+    (decision) => {
+      const body = {
+        decision,
+        reason: '禁止执行该操作',
+        requestId: 'service-trace',
+        version: 2,
+        updatedInput: { path: '/replacement' },
+        additionalContext: 'must not enter the conversation',
+        hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'deny' },
+      };
+      expect(parseToolCallHookResponse(response(body))).toEqual({
+        status: 'success',
+        decision: decision === 'allow' ? { decision } : { decision, reason: body.reason },
+      });
+    },
+  );
+  it('counts response UTF-8 bytes at the exact response boundary', () => {
+    const body = response({ decision: 'allow' });
+    expect(parseToolCallHookResponse(body + ' '.repeat(65_536 - body.length))).toEqual({
+      decision: { decision: 'allow' },
       status: 'success',
     });
-    expect(parseToolCallHookResponse('{}' + ' '.repeat(65_535))).toEqual({
+    expect(parseToolCallHookResponse(body + ' '.repeat(65_537 - body.length))).toEqual({
       status: 'error',
       code: 'response_too_large',
     });
     expect(
-      parseToolCallHookResponse(response({ permissionDecisionReason: '界'.repeat(22_000) })),
+      parseToolCallHookResponse(response({ decision: 'deny', reason: '界'.repeat(22_000) })),
     ).toEqual({ status: 'error', code: 'response_too_large' });
-    expect(
-      parseToolCallHookResponse(response({ additionalContext: 'x'.repeat(10_000) })),
-    ).toMatchObject({ status: 'success' });
   });
   it('defaults errors to continue and supports explicit block', () => {
     expect(resolveToolCallHookErrorPolicy()).toEqual({ action: 'continue' });

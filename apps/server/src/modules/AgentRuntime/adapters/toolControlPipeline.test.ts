@@ -53,16 +53,8 @@ const control = (id = 'control', onError: 'continue' | 'block' = 'continue'): Ag
   type: 'beforeToolCall',
   webhook: { url: `https://hooks.example/${id}`, responseHandling: 'toolCall', onError },
 });
-const response = (permissionDecision: 'allow' | 'deny', permissionDecisionReason?: string) =>
-  new Response(
-    JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: 'beforeToolCall',
-        permissionDecision,
-        permissionDecisionReason,
-      },
-    }),
-  );
+const response = (decision: 'allow' | 'deny', reason?: string) =>
+  new Response(JSON.stringify(decision === 'deny' ? { decision, reason } : { decision }));
 
 function setup(hooks: AgentHook[], signal?: AbortSignal, restore = false) {
   const registered = new HookDispatcher();
@@ -291,7 +283,12 @@ describe('beforeToolCall control pipeline', () => {
       expect(result.events).toContainEqual(
         expect.objectContaining({
           type: 'tool_result',
-          result: expect.objectContaining({ error: 'hook_denied', success: false }),
+          result: expect.objectContaining({
+            content: reason,
+            error: 'hook_denied',
+            state: { type: 'blocked', reason },
+            success: false,
+          }),
         }),
       );
       expect(fixture.execute).not.toHaveBeenCalled();
@@ -528,30 +525,6 @@ describe('beforeToolCall control pipeline', () => {
     expect(fixture.execute).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])(
-    'never allows deny with unsupported additionalContext, queue=%s',
-    async (queue) => {
-      queueMode.mockReturnValue(queue);
-      fetchHook.mockImplementation(
-        async () =>
-          new Response(
-            JSON.stringify({
-              hookSpecificOutput: {
-                hookEventName: 'beforeToolCall',
-                permissionDecision: 'deny',
-                permissionDecisionReason: 'explicit denial',
-                additionalContext: 'context',
-              },
-            }),
-          ),
-      );
-      const fixture = setup([control()]);
-      await fixture.step();
-      expect(fixture.execute).not.toHaveBeenCalled();
-      expect(fixture.rows[0].content).toBe('explicit denial');
-    },
-  );
-
   it.each(['constructor', '__proto__'])('checks controls for native id %s', async (id) => {
     fetchHook.mockImplementation(async () => response('deny'));
     const fixture = setup([control()]);
@@ -574,35 +547,81 @@ describe('beforeToolCall control pipeline', () => {
     expect(fixture.execute).not.toHaveBeenCalled();
   });
 
-  it.each(['updatedInput', 'additionalContext'] as const)(
-    'routes unsupported %s through onError',
-    async (field) => {
-      fetchHook.mockImplementation(
-        async () =>
-          new Response(
-            JSON.stringify({
-              hookSpecificOutput: {
-                hookEventName: 'beforeToolCall',
-                permissionDecision: 'allow',
-                [field]: field === 'updatedInput' ? { path: 'b' } : 'context',
-              },
-            }),
-          ),
-      );
-      const blocked = setup([control('block', 'block')]);
+  describe.each([false, true])('control errors, queue=%s', (queue) => {
+    it.each([
+      { body: '', status: 200 },
+      { body: null, status: 204 },
+      { body: '{}', status: 200 },
+      { body: 'not JSON', status: 200 },
+      { body: '{"reason":"missing decision"}', status: 200 },
+      { body: '{"decision":"ask"}', status: 200 },
+      { body: '{"decision":"deny","reason":42}', status: 200 },
+      { body: '{"decision":"allow"}', status: 201 },
+      { body: '{"decision":"allow"}', status: 400 },
+      { body: '{"decision":"allow"}', status: 500 },
+      ...['allow', 'deny'].map((decision) => ({
+        body: JSON.stringify({
+          hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: decision },
+        }),
+        status: 200,
+      })),
+    ])('applies both onError policies to response %#', async ({ body, status }) => {
+      queueMode.mockReturnValue(queue);
+      fetchHook.mockImplementation(async () => new Response(body, { status }));
+      const blocked = setup([control('block', 'block')], undefined, queue);
       await blocked.step();
       expect(blocked.execute).not.toHaveBeenCalled();
-      expect(blocked.rows[0].content).toBe('unsupported_control_response');
-      expect(blocked.rows[0].pluginIntervention).toEqual({
-        status: 'rejected',
-        rejectedReason: 'unsupported_control_response',
+      expect(blocked.rows[0]).toMatchObject({
+        content: 'hook_control_error',
+        pluginError: 'hook_denied',
+        pluginIntervention: { status: 'rejected', rejectedReason: 'hook_control_error' },
       });
-      const continued = setup([control()]);
+      const continued = setup([control()], undefined, queue);
       await continued.step();
       expect(continued.execute).toHaveBeenCalledTimes(1);
       expect(continued.execute.mock.calls[0][0].arguments).toBe('{"path":"a"}');
-    },
-  );
+    });
+  });
+
+  describe.each([false, true])('service response fields, queue=%s', (queue) => {
+    it.each([
+      { decision: 'allow', onError: 'block' },
+      { decision: 'allow', onError: 'continue' },
+      { decision: 'deny', onError: 'block' },
+      { decision: 'deny', onError: 'continue' },
+    ] as const)(
+      'honors $decision and ignores extra fields with onError=$onError',
+      async ({ decision, onError }) => {
+        queueMode.mockReturnValue(queue);
+        fetchHook.mockImplementation(
+          async () =>
+            new Response(
+              JSON.stringify({
+                decision,
+                reason: '禁止执行该操作',
+                requestId: 'service-trace',
+                updatedInput: { path: 'replacement' },
+                additionalContext: 'must not enter the conversation',
+              }),
+            ),
+        );
+        const fixture = setup([control('control', onError)], undefined, queue);
+        const result = await fixture.step();
+        if (decision === 'allow') {
+          expect(fixture.execute).toHaveBeenCalledTimes(1);
+          expect(fixture.execute.mock.calls[0][0].arguments).toBe('{"path":"a"}');
+        } else {
+          expect(fixture.execute).not.toHaveBeenCalled();
+          expect(fixture.rows[0]).toMatchObject({
+            content: '禁止执行该操作',
+            pluginError: 'hook_denied',
+          });
+        }
+        expect(JSON.stringify(result)).not.toContain('must not enter the conversation');
+        expect(JSON.stringify(fixture.rows)).not.toContain('service-trace');
+      },
+    );
+  });
 
   it.each([false, true])('does not await an ordinary HTTP observation, queue=%s', async (queue) => {
     queueMode.mockReturnValue(queue);

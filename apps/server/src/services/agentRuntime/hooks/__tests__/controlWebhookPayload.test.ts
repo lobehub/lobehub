@@ -47,7 +47,7 @@ beforeEach(() => {
     async () =>
       new Response(
         JSON.stringify({
-          hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'allow' },
+          decision: 'allow',
         }),
       ),
   );

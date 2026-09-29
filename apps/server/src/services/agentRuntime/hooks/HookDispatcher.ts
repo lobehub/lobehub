@@ -168,23 +168,17 @@ export class HookDispatcher {
       if (!payload || signal?.aborted) return { status: 'cancelled' };
       const response = await executeToolCallWebhook(hook.webhook, payload, { signal });
       if (signal?.aborted || response.status === 'cancelled') return { status: 'cancelled' };
-      // An explicit deny is authoritative even when extra fields are unsupported.
-      if (response.status === 'success' && response.decision?.permissionDecision === 'deny') {
+      if (response.status === 'success' && response.decision.decision === 'deny') {
         return {
           status: 'blocked',
-          reason: response.decision.permissionDecisionReason ?? 'Blocked by beforeToolCall hook.',
+          reason: response.decision.reason ?? 'Blocked by beforeToolCall hook.',
         };
       }
-      // This entry supports allow/deny only; unsupported responses follow onError.
-      const unsupported =
-        response.status === 'success' &&
-        (response.decision?.updatedInput !== undefined ||
-          response.decision?.additionalContext !== undefined);
-      if (response.status === 'error' || unsupported) {
+      if (response.status === 'error') {
         if (resolveToolCallHookErrorPolicy(hook.webhook.onError).action === 'block') {
           return {
             status: 'blocked',
-            reason: unsupported ? 'unsupported_control_response' : 'hook_control_error',
+            reason: 'hook_control_error',
           };
         }
         continue;

@@ -1,27 +1,15 @@
 import { z } from 'zod';
 
 export const AGENT_HOOK_RESPONSE_MAX_BYTES = 64 * 1024;
-export const AGENT_HOOK_CONTEXT_MAX_CHARACTERS = 10_000;
-
-export const toolCallHookDecisionSchema = z
-  .strictObject({
-    additionalContext: z.string().max(AGENT_HOOK_CONTEXT_MAX_CHARACTERS).optional(),
-    hookEventName: z.literal('beforeToolCall'),
-    permissionDecision: z.enum(['allow', 'deny']).optional(),
-    permissionDecisionReason: z.string().optional(),
-    updatedInput: z.record(z.string(), z.unknown()).optional(),
-  })
-  .refine((value) => value.updatedInput === undefined || value.permissionDecision === 'allow', {
-    message: 'updatedInput requires permissionDecision:allow',
-  });
-
-const responseSchema = z.strictObject({
-  hookSpecificOutput: toolCallHookDecisionSchema.optional(),
-});
+/** Consume only the flat decision fields from an HTTP 200 body; strip service metadata. */
+export const toolCallHookDecisionSchema = z.discriminatedUnion('decision', [
+  z.object({ decision: z.literal('allow') }),
+  z.object({ decision: z.literal('deny'), reason: z.string().optional() }),
+]);
 
 export type ToolCallHookDecision = z.infer<typeof toolCallHookDecisionSchema>;
 export type ToolCallHookParseResult =
-  | { decision?: ToolCallHookDecision; status: 'success' }
+  | { decision: ToolCallHookDecision; status: 'success' }
   | { code: 'invalid_response' | 'response_too_large'; status: 'error' };
 
 /** Pure parser: never executes tools, applies policy, or includes remote text in errors. */
@@ -29,16 +17,15 @@ export function parseToolCallHookResponse(body: string): ToolCallHookParseResult
   if (new TextEncoder().encode(body).byteLength > AGENT_HOOK_RESPONSE_MAX_BYTES) {
     return { code: 'response_too_large', status: 'error' };
   }
-  if (body.length === 0) return { status: 'success' };
   let value: unknown;
   try {
     value = JSON.parse(body);
   } catch {
     return { code: 'invalid_response', status: 'error' };
   }
-  const parsed = responseSchema.safeParse(value);
+  const parsed = toolCallHookDecisionSchema.safeParse(value);
   if (!parsed.success) return { code: 'invalid_response', status: 'error' };
-  return { decision: parsed.data.hookSpecificOutput, status: 'success' };
+  return { decision: parsed.data, status: 'success' };
 }
 
 /** C1 must branch on cancelled before applying onError; cancellation never grants permission. */

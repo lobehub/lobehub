@@ -20,6 +20,15 @@ describe('HTTP hook network boundary', () => {
       if (req.url === '/redirect') {
         res.writeHead(302, { Location: `${base}/leaked` });
         res.end();
+      } else if (req.url === '/allow' || req.url === '/deny') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify(
+            req.url === '/allow'
+              ? { decision: 'allow' }
+              : { decision: 'deny', reason: '禁止执行该操作' },
+          ),
+        );
       } else if (req.url?.startsWith('/disconnect')) {
         req.socket.destroy();
       } else if (req.url === '/large') {
@@ -64,6 +73,21 @@ describe('HTTP hook network boundary', () => {
       expect(requests).toEqual(['/hook', '/hook']);
     },
   );
+  it.each(['allow', 'deny'] as const)('parses a flat %s over real HTTP', async (decision) => {
+    expect(await executeToolCallWebhook(config(`${base}/${decision}`), {})).toEqual({
+      status: 'success',
+      decision: decision === 'allow' ? { decision } : { decision, reason: '禁止执行该操作' },
+    });
+    expect(requests).toEqual([`/${decision}`]);
+  });
+  it('rejects 204 for control but accepts it for notification', async () => {
+    expect(await executeToolCallWebhook(config(`${base}/hook`), {})).toEqual({
+      status: 'error',
+      code: 'invalid_response',
+    });
+    await expect(deliverWebhook({ url: `${base}/hook` }, {})).resolves.toBeUndefined();
+    expect(requests).toEqual(['/hook', '/hook']);
+  });
   it('does not log query credentials when the connection fails', async () => {
     const logger = vi.mocked(console.error);
     expect(

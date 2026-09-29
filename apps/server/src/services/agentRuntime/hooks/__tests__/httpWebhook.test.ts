@@ -30,7 +30,7 @@ describe('HTTP hook primitive', () => {
   });
 
   it('uses fetch without redirects and with a default deadline', async () => {
-    fetchMock.mockResolvedValue(new Response('{}'));
+    fetchMock.mockResolvedValue(new Response('{"decision":"allow"}'));
     expect(await executeToolCallWebhook(config, { args: { value: 1 } })).toMatchObject({
       status: 'success',
     });
@@ -43,17 +43,29 @@ describe('HTTP hook primitive', () => {
     expect(request.signal).toBeInstanceOf(AbortSignal);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
-  it.each([200, 204, 205])('accepts empty 2xx %i', async (status) => {
+  it.each([200, 204, 205])('rejects empty control response %i', async (status) => {
     fetchMock.mockResolvedValue(new Response(null, { status }));
-    expect(await executeToolCallWebhook(config, {})).toEqual({ status: 'success' });
+    expect(await executeToolCallWebhook(config, {})).toEqual({
+      status: 'error',
+      code: 'invalid_response',
+    });
+  });
+  it.each([201, 202, 206])(
+    'requires HTTP 200 even with a valid control body: %i',
+    async (status) => {
+      fetchMock.mockResolvedValue(new Response('{"decision":"allow"}', { status }));
+      expect(await executeToolCallWebhook(config, {})).toEqual({
+        status: 'error',
+        code: 'invalid_response',
+      });
+    },
+  );
+  it.each([200, 204, 205])('accepts empty notification response %i', async (status) => {
+    fetchMock.mockResolvedValue(new Response(null, { status }));
+    await expect(deliverWebhook({ url: config.url }, {})).resolves.toBeUndefined();
   });
   it.each([301, 400, 500])('rejects status %i without parsing the body', async (status) => {
-    fetchMock.mockResolvedValue(
-      new Response(
-        '{"hookSpecificOutput":{"hookEventName":"beforeToolCall","permissionDecision":"allow"}}',
-        { status },
-      ),
-    );
+    fetchMock.mockResolvedValue(new Response('{"decision":"allow"}', { status }));
     expect(await executeToolCallWebhook(config, {})).toEqual({
       status: 'error',
       code: 'http_error',
@@ -99,9 +111,7 @@ describe('HTTP hook primitive', () => {
     const controller = new AbortController();
     fetchMock.mockImplementation(async () => {
       controller.abort();
-      return new Response(
-        '{"hookSpecificOutput":{"hookEventName":"beforeToolCall","permissionDecision":"allow"}}',
-      );
+      return new Response('{"decision":"allow"}');
     });
     expect(await executeToolCallWebhook(config, {}, { signal: controller.signal })).toEqual({
       status: 'cancelled',
@@ -118,9 +128,11 @@ describe('HTTP hook primitive', () => {
   it('ignores legacy notification response bodies', async () => {
     fetchMock.mockResolvedValueOnce(new Response('not json'));
     fetchMock.mockResolvedValueOnce(new Response(new Uint8Array([0xff])));
+    fetchMock.mockResolvedValueOnce(new Response('{"decision":"deny","reason":"ignored"}'));
     await expect(
       deliverWebhook({ url: config.url, fallback: 'none' }, {}),
     ).resolves.toBeUndefined();
+    await expect(deliverWebhook({ url: config.url }, {})).resolves.toBeUndefined();
     await expect(deliverWebhook({ url: config.url }, {})).resolves.toBeUndefined();
   });
   it('expands only allowed env values at send time without mutating configuration', async () => {
