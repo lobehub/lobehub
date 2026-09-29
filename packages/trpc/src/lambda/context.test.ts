@@ -233,6 +233,32 @@ describe('createLambdaContext', () => {
     });
   });
 
+  describe('clientIp', () => {
+    const contextFor = (headers: Record<string, string>) =>
+      createLambdaContext(new NextRequest('https://example.com/trpc/lambda', { headers }));
+
+    it('should prefer cf-connecting-ip over proxy-rewritten headers', async () => {
+      const context = await contextFor({
+        'cf-connecting-ip': '203.0.113.7',
+        'x-forwarded-for': '172.70.1.1, 10.0.0.1',
+        'x-real-ip': '172.70.1.1',
+      });
+
+      expect(context.clientIp).toBe('203.0.113.7');
+    });
+
+    it('should fall back to x-real-ip, then the first x-forwarded-for entry', async () => {
+      expect((await contextFor({ 'x-real-ip': '198.51.100.2' })).clientIp).toBe('198.51.100.2');
+      expect((await contextFor({ 'x-forwarded-for': '198.51.100.3, 10.0.0.1' })).clientIp).toBe(
+        '198.51.100.3',
+      );
+    });
+
+    it('should leave clientIp undefined without any IP header', async () => {
+      expect((await contextFor({})).clientIp).toBeUndefined();
+    });
+  });
+
   it('should authenticate with API key and skip session fallback', async () => {
     const apiKeyRecord = {
       accessedAt: new Date(),
