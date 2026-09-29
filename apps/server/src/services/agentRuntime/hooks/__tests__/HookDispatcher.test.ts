@@ -935,12 +935,7 @@ describe('HookDispatcher', () => {
         stepIndex: 0,
       });
 
-      // In local mode this would return the mock, but hooks are still in-memory
-      // so it should still work (dispatchBeforeToolCall doesn't check queue mode)
-      expect(result).toEqual({
-        isMocked: true,
-        result: { content: '{"mocked":true}', success: true },
-      });
+      expect(result).toBeNull();
     });
 
     it('should not affect other hook types when beforeToolCall is registered', async () => {

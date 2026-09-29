@@ -3,7 +3,6 @@ export {
   HookDispatcher,
   hookDispatcher,
   parseSerializedHooks,
-  UnsupportedControlHookError,
 } from './HookDispatcher';
 export { executeToolCallWebhook } from './httpWebhook';
 export { matchesHook } from './matcher';

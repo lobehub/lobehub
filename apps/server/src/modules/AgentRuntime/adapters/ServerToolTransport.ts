@@ -113,6 +113,32 @@ export class ServerToolTransport implements ToolTransport {
     );
   }
 
+  async beforeToolCall(
+    call: ChatToolPayload,
+    context: ToolRunContext,
+  ): Promise<ToolRunExecution | undefined> {
+    const decision = await this.ctx.hookDispatcher?.evaluateToolCall(
+      this.ctx.operationId,
+      buildToolCallHookContext(call, context, this.ctx),
+      context.state.host?.hooks,
+      context.abortSignal,
+    );
+    if (context.abortSignal?.aborted || decision?.status === 'cancelled')
+      return this.abortedBeforeLaunch();
+    if (decision?.status === 'blocked') {
+      const reason = decision.reason ?? 'Blocked by beforeToolCall hook.';
+      const result = {
+        content: reason,
+        error: 'hook_denied',
+        executionTime: 0,
+        state: { reason, type: 'blocked' },
+        success: false,
+      };
+      await this.dispatchAfterToolCall(call, context, result, false);
+      return { attempts: 0, mocked: false, result };
+    }
+  }
+
   async run(chatToolPayload: ChatToolPayload, context: ToolRunContext): Promise<ToolRunExecution> {
     const { operationId, serverDB, stepIndex, streamManager, toolExecutionService, userId } =
       this.ctx;
@@ -134,6 +160,7 @@ export class ServerToolTransport implements ToolTransport {
 
     try {
       const hookResult = await this.dispatchBeforeToolCall(chatToolPayload, context);
+      if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
       let toolCallMocked = false;
 
       if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {
@@ -368,11 +395,7 @@ export class ServerToolTransport implements ToolTransport {
     if (!hookDispatcher) return null;
 
     const event = buildToolCallHookContext(chatToolPayload, context, this.ctx);
-    hookDispatcher
-      .dispatch(operationId, 'beforeToolCall', event, context.state.host?.hooks)
-      .catch(() => {});
-
-    return hookDispatcher.dispatchBeforeToolCall(operationId, event);
+    return hookDispatcher.dispatchBeforeToolCall(operationId, event, context.state.host?.hooks);
   }
 
   private async dispatchAfterToolCall(

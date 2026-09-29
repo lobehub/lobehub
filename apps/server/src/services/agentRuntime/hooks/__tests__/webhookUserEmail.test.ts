@@ -7,13 +7,15 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { HookDispatcher, hookDispatcher } from '../HookDispatcher';
 import type {
   AfterToolCallHookEvent,
+  AgentHook,
   AgentHookEvent,
   AgentHookType,
   SerializedHook,
 } from '../types';
 import { createWebhookPayloadBuilder } from '../webhookPayload';
 
-const { getEmailsByIds, publishJSON } = vi.hoisted(() => ({
+const { getEmailsByIds, publishJSON, queueMode } = vi.hoisted(() => ({
+  queueMode: { enabled: true },
   getEmailsByIds: vi.fn(),
   publishJSON: vi.fn(),
 }));
@@ -21,7 +23,9 @@ vi.mock('@/database/models/user', () => ({ UserModel: { getEmailsByIds } }));
 vi.mock('@/database/server', () => ({
   getServerDB: async () => ({}),
 }));
-vi.mock('@/server/services/queue/impls', () => ({ isQueueAgentRuntimeEnabled: () => true }));
+vi.mock('@/server/services/queue/impls', () => ({
+  isQueueAgentRuntimeEnabled: () => queueMode.enabled,
+}));
 vi.mock('@upstash/qstash', () => ({
   Client: class {
     publishJSON = publishJSON;
@@ -67,6 +71,7 @@ afterAll(async () => {
   );
 });
 beforeEach(() => {
+  queueMode.enabled = true;
   dispatcher = new HookDispatcher();
   received.length = 0;
   getEmailsByIds
@@ -487,4 +492,59 @@ describe('webhook tool results', () => {
     );
     expect(payload?.result).toEqual(result);
   });
+});
+
+describe('before-tool observation identity', () => {
+  it.each([false, true])(
+    'delivers final payload identity while preserving mock short-circuiting (queue=%s)',
+    async (isQueue) => {
+      queueMode.enabled = isQueue;
+      const first = vi.fn((event) => event.mock({ content: 'mocked', success: true }));
+      const skipped = vi.fn();
+      const hooks: AgentHook[] = [
+        { id: 'first-mock', type: 'beforeToolCall', handler: first },
+        { id: 'later-handler', type: 'beforeToolCall', handler: skipped },
+        ...['owner-notification', 'sibling'].map((id): AgentHook => ({
+          id,
+          type: 'beforeToolCall',
+          webhook: { url, body: { userId: 'owner' } },
+        })),
+      ];
+      dispatcher.register('run', hooks);
+      const serialized = dispatcher.getSerializedHooks('run');
+      if (isQueue) dispatcher = new HookDispatcher(); // Cold worker has only persisted hooks.
+      const toolEvent = {
+        ...event,
+        apiName: 'write',
+        args: {},
+        assistantMessageId: 'assistant',
+        callIndex: 0,
+        stepIndex: 0,
+        executor: 'server' as const,
+        identifier: 'fs',
+        toolCallId: 'native',
+      };
+      const result = await dispatcher.dispatchBeforeToolCall('run', toolEvent, serialized);
+      expect(result).toEqual(
+        isQueue ? null : { isMocked: true, result: { content: 'mocked', success: true } },
+      );
+      expect(first).toHaveBeenCalledTimes(isQueue ? 0 : 1);
+      expect(skipped).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(received).toHaveLength(2));
+      for (const payload of received) {
+        expect(payload).toMatchObject({ userId: 'owner', userEmail: 'owner@example.test' });
+        expect(payload).not.toHaveProperty('mock');
+        expect(payload).not.toHaveProperty('deliveryContext');
+        expect(payload).not.toHaveProperty('ownerUserId');
+      }
+      // A later delivery reuses the final identity email without invoking skipped handlers.
+      await dispatcher.dispatchBeforeToolCall('run', toolEvent, serialized);
+      await vi.waitFor(() => expect(received).toHaveLength(4));
+      expect(received[2]).toMatchObject({ userId: 'owner', userEmail: 'owner@example.test' });
+      expect(received[3]).toMatchObject({ userId: 'owner', userEmail: 'owner@example.test' });
+      expect(getEmailsByIds).toHaveBeenCalledTimes(1);
+      expect(skipped).not.toHaveBeenCalled();
+      expect(JSON.stringify(serialized)).not.toContain('ownerUserId');
+    },
+  );
 });

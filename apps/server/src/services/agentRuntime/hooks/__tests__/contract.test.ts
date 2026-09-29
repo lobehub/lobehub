@@ -1,7 +1,7 @@
 import type { SerializedAgentHook } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HookDispatcher, UnsupportedControlHookError } from '../HookDispatcher';
+import { HookDispatcher } from '../HookDispatcher';
 import { matchesHook } from '../matcher';
 import type { AgentHook, AgentHookEvent } from '../types';
 
@@ -87,20 +87,18 @@ describe('hook registration and restoration', () => {
     dispatcher.register('op', [serialized]);
     expect(dispatcher.getSerializedHooks('op')).toEqual([serialized]);
   });
-  it('blocks unsupported controls on registration atomically and on restore before event selection', async () => {
+  it('registers/restores controls but ordinary dispatch never delivers them', async () => {
     const dispatcher = new HookDispatcher();
     const control: AgentHook = {
       id: 'control',
       type: 'beforeToolCall',
       webhook: { url: '/hook', responseHandling: 'toolCall' },
     };
-    expect(() => dispatcher.register('op', [hook, control])).toThrow(UnsupportedControlHookError);
-    expect(dispatcher.hasHooks('op')).toBe(false);
+    dispatcher.register('op', [control]);
+    expect(dispatcher.getSerializedHooks('op')).toEqual([control]);
     for (const queue of [false, true]) {
       queueMode.mockReturnValue(queue);
-      await expect(
-        dispatcher.dispatch('op', 'onComplete', event, [control as SerializedAgentHook]),
-      ).rejects.toThrow(UnsupportedControlHookError);
+      await dispatcher.dispatch('op', 'beforeToolCall', event, [control as SerializedAgentHook]);
     }
     expect(fetchMock).not.toHaveBeenCalled();
   });
