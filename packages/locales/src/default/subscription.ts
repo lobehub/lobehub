@@ -779,5 +779,6 @@ export default {
   'usage.overview.title': 'Overview',
   'usage.storage.embeddings.used': 'Vector Storage',
   'usage.storage.file.used': 'File Usage',
+  'usage.storage.sandboxStorage.used': 'Sandbox Storage',
   'usage.remaining': 'Remaining',
 };

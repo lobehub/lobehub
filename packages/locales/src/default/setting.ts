@@ -1638,6 +1638,17 @@ When I am ___, I need ___
   'storageOverage.noPaymentMethod': 'Please add a payment method to enable storage pay-as-you-go.',
   'storageOverage.rate':
     'About {{limitedMonthlyRate}}/GB/month for a limited time (regular {{regularMonthlyRate}}).',
+  // The sandbox workspace is the same bargain on different storage, so only
+  // what actually differs is restated: what it is, what it costs, and what
+  // stops when it is turned off. Everything else — consent terms, cap,
+  // payment-method prompt — is shared word for word.
+  'storageOverage.sandbox.title': 'Sandbox Storage Pay-as-you-go',
+  'storageOverage.sandbox.desc':
+    "Bill for sandbox workspace storage beyond your plan's included size, instead of stopping at it.",
+  'storageOverage.sandbox.rate': 'About {{regularMonthlyRate}}/GB/month.',
+  'storageOverage.sandbox.consent.rate': 'About {{regularMonthlyRate}}/GB/month.',
+  'storageOverage.sandbox.disableConfirm.blockWrites':
+    'If your workspace is still above the included size, agents will be unable to write to it.',
   'storageOverage.subscriptionRequired.action': 'View plans',
   'storageOverage.subscriptionRequired.desc':
     'Subscribe to a plan to enable storage pay-as-you-go for overage usage.',
@@ -3889,4 +3900,218 @@ When I am ___, I need ___
   'tools.tabs.all': 'All',
   'tools.tabs.installed': 'Enabled',
   'tools.title': 'Skills',
+  'tab.environments': 'Environments',
+  'environments.desc':
+    'What a sandbox run needs around it: a repository, its setup, its variables. Each instance built from one keeps its own files between sessions.',
+  'environments.create': 'New environment',
+  'environments.cancel': 'Cancel',
+  'environments.createFailed': 'Could not create the environment',
+  'environments.namePlaceholder': 'Environment name',
+  'environments.empty': 'No environments yet',
+  'environments.removeFailed': 'Could not delete this environment',
+  'environments.saveFailed': 'Could not save this change',
+  'environments.instances.removeFailed': 'Could not delete this instance',
+  'environments.instances.removing': 'Deleting — removing its folder and everything in it',
+  'environments.instances.removeConfirmTitle': 'Delete instance {{name}}?',
+  'environments.instances.removeConfirmContent':
+    'Its folder and everything it kept — installed packages, reports, data — will be deleted. This cannot be undone.',
+  'environments.remove': 'Delete environment',
+  'environments.removeConfirmTitle': 'Delete environment {{name}}?',
+  'environments.removeConfirmContent':
+    'Its specification, variables and saved snapshot go with it, and cannot be recovered.',
+  'environments.storage.used': '{{used}} of {{total}}',
+  'environments.storage.unmeasured': 'Storage not measured yet · {{total}} available',
+  'environments.storage.measuredAt': 'Measured {{time}}. Refresh to measure again.',
+  'environments.storage.over':
+    'Over the storage limit. Saving a file is refused until you delete something.',
+  'environments.duplicateName': 'You already have an environment with this name',
+  'environments.hasInstances': 'Remove its instances first',
+  'environments.unavailable.title': 'Persistent sandbox is not available here',
+  'environments.unavailable.desc':
+    'Environments describe a persistent cloud workspace, and this deployment does not provide one.',
+  'environments.upgrade.title': 'Upgrade to Pro to unlock sandbox environments',
+  'environments.upgrade.desc':
+    'Give cloud-sandbox runs a persistent working directory. An environment describes what the sandbox needs — repositories, setup, variables — and its instances keep everything between sessions.',
+  'environments.upgrade.cta': 'Upgrade to Pro',
+  'environments.upgrade.benefits.environments.title': 'Sandbox setup written once',
+  'environments.upgrade.benefits.environments.desc':
+    'Repositories, setup command and variables live in the environment; every sandbox built from it starts ready.',
+  'environments.upgrade.benefits.persist.title': 'Files survive the sandbox',
+  'environments.upgrade.benefits.persist.desc':
+    'The working directory is kept when the sandbox is recycled; the next run continues where the last stopped.',
+  'environments.upgrade.benefits.instances.title': 'One instance per task',
+  'environments.upgrade.benefits.instances.desc':
+    'Parallel conversations each run in their own instance of the environment, so nothing overwrites anything else.',
+  'environments.github.label': 'Repository',
+  'environments.github.notConnected':
+    'No GitHub connection yet — connect one to build an environment from a repository',
+  'environments.nameLabel': 'Name',
+  'environments.github.optional': 'optional',
+  'environments.github.organization': 'Organization',
+  'environments.github.organizationPlaceholder': 'Search organizations',
+  'environments.github.repository': 'Repository',
+  'environments.github.repositoryPlaceholder': 'Search repositories',
+  'environments.github.repositoryPending': 'Choose an organization first',
+  'environments.github.noRepositories': 'This connection cannot see any repositories yet',
+  'environments.github.connect': 'Connect GitHub',
+  'environments.github.reviewAccess': 'Review access',
+  'environments.instances.create': 'New instance',
+  'environments.form.description': 'Description',
+  'environments.form.descriptionPlaceholder': 'What this environment is for',
+  'environments.form.sources': 'Source code',
+  'environments.form.sourcesHint':
+    'Cloned over HTTPS before anything else runs. Private repositories are not supported yet — a specification holds no credentials.',
+  'environments.form.ref': 'Branch or tag',
+  'environments.form.refDefault': 'Repository default branch',
+  'environments.form.path': 'Folder',
+  'environments.form.addSource': 'Add repository',
+  'environments.form.removeSource': 'Remove repository',
+  'environments.form.bootstrap': 'Setup command',
+  'environments.form.bootstrapHint':
+    'Runs once in the checkout, with network access, before the conversation starts.',
+  'environments.form.env': 'Environment variables',
+  'environments.form.envHint':
+    'Non-secret values only — these are stored as plain text and copied into every instance.',
+  'environments.form.addEnv': 'New variable',
+  'environments.form.envCount_one': '{{count}} variable',
+  'environments.form.envCount_other': '{{count}} variables',
+  'environments.form.envEmpty': 'No variables yet',
+  'environments.form.envEmptyHint': 'Add one, or paste a whole .env file in the',
+  'environments.form.rawEditor': 'Raw editor',
+  'environments.form.rawEditorHint':
+    'One KEY=value per line, the way a .env file reads. Blank lines and # comments are ignored; saving replaces every variable.',
+  'environments.form.rawInvalid': 'Line {{line}} is not KEY=value',
+  'environments.form.removeEnv': 'Remove variable',
+  'environments.form.internetAccess': 'Agent internet access',
+  'environments.form.internetAccessHint':
+    'Setup always has network access. This controls the conversation itself.',
+  'environments.form.saved': 'Saved',
+  'environments.form.editEnv': 'Edit variable',
+  'environments.form.changeRepository': 'Change repository',
+  'environments.form.disconnect': 'Disconnect',
+  'environments.instances.title': 'Instances',
+  'environments.instances.desc':
+    'An instance is a working copy of this environment, with its own folder and its own installed packages. Conversations run inside an instance, and several can run side by side without touching each other.',
+  'environments.instances.empty': 'No instances yet',
+  'environments.instances.emptyHint':
+    'Create one, then pick it under "Working Directory" in the chat input.',
+  'environments.instances.emptyReadonly':
+    'Nobody has created an instance of this environment yet. Only its owner can add one.',
+  'environments.instances.count_one': '{{count}} instance',
+  'environments.instances.count_other': '{{count}} instances',
+  'environments.instances.add': 'New instance',
+  'environments.instances.namePlaceholder': 'Instance name',
+  // One line, because the field fills itself in from the name: almost nobody
+  // has a decision to make here, and a paragraph over a solved field reads as
+  // a warning that something is about to go wrong.
+  'environments.instances.directoryHint': 'Folder path. Cannot be changed once created.',
+  'environments.sessions.stale': 'No end recorded',
+  'environments.instances.remove': 'Delete instance',
+  'environments.instances.rename': 'Rename instance',
+  'environments.instances.renameFailed': 'Could not rename this instance',
+  'environments.instances.directoryLocked':
+    'The folder cannot be changed after the instance is built — delete it and create another to move it.',
+  'environments.instances.duplicateDirectory': 'Another instance already uses this folder',
+  'environments.instances.overlappingDirectory':
+    "This folder is inside another instance's folder, or contains one",
+  'environments.instances.createFailed': 'Could not create the instance',
+  'environments.form.maintenance': 'Maintenance command',
+  'environments.form.maintenanceHint':
+    'Runs each time work resumes in an instance — refreshing a checkout, reapplying a migration. Not the setup command again: that one is expensive and is meant to run once.',
+  'environments.form.exclude': 'Regenerable paths',
+  'environments.form.excludeHint':
+    'One per line, relative to the copy. Listing a path says it can be rebuilt, so it is kept apart from your work and may be discarded to reclaim space. Anything named here that cannot be rebuilt is work you can lose.',
+  'environments.meta.creatorTooltip': 'Created by {{name}}',
+  'environments.meta.unknownCreator': 'Unknown',
+  'environments.meta.createdAt': 'Created {{time}}',
+  'environments.meta.storage': 'Using {{size}}',
+  'environments.detail.close': 'Close',
+  'environments.detail.tabs.settings': 'Settings',
+  'environments.sessions.title': 'Run history',
+  'environments.sessions.desc':
+    'Every session that ran in one of these instances and every build of them, newest first, with how each ended and whether what it installed was saved.',
+  'environments.sessions.empty': 'Nothing has run here yet',
+  'environments.sessions.emptyHint':
+    'Every conversation and build in one of its instances will show up here.',
+  'environments.sessions.unavailable':
+    'Part of the history could not be read — some instances are missing from this list',
+  'environments.sessions.running': 'Running',
+  'environments.sessions.activeSession': 'A sandbox is running in {{instance}} right now',
+  'environments.sessions.activeBuild': '{{instance}} is being built right now',
+  'environments.sessions.openConversation': 'Open conversation',
+  'environments.sessions.history': 'History',
+  'environments.sessions.historyEmpty': 'No finished runs yet',
+  'environments.sessions.kind.build': 'Build',
+  'environments.sessions.kind.console': 'File browser',
+  'environments.sessions.kind.conversation': 'Conversation',
+  'environments.sessions.snapshotSaved': 'Saved {{size}}',
+  'environments.sessions.snapshotFailed': 'Not saved',
+  'environments.sessions.reason.idle': 'Stopped after idling',
+  'environments.sessions.reason.expired': 'Reached its time limit',
+  'environments.sessions.reason.switched': 'Replaced by another environment',
+  'environments.sessions.reason.explicit': 'Stopped',
+  'environments.sessions.reason.lost': 'Ended unexpectedly',
+  'environments.sessions.reason.build_succeeded': 'Built',
+  'environments.sessions.reason.build_failed': 'Build failed',
+  'environments.sessions.reason.build_timeout': 'Build timed out',
+  'environments.sessions.reason.build_gone': 'Build interrupted',
+  'environments.form.desc':
+    'What an instance is built from — where the code comes from and what makes it usable.',
+  'environments.form.appliesOnBuild':
+    'Applied when an instance is created. Existing instances keep the definition they were made with — a rebuild replays that one, so use a new instance to pick this up.',
+  'environments.refresh': 'Refresh',
+  'environments.emptyPublished': 'Nothing published to this workspace yet',
+  'environments.visibility.tabs.workspace': 'Workspace',
+  'environments.visibility.tabs.private': 'Private',
+  'environments.visibility.publish': 'Publish to Workspace',
+  'environments.visibility.createPublishedConfirmTitle':
+    'Create this environment in the workspace?',
+  'environments.visibility.publishConfirmTitle': 'Publish this environment to the workspace?',
+  'environments.visibility.publicTag': 'Published',
+  'environments.visibility.changeFailed': "Could not change this environment's visibility",
+  'environments.visibility.readonlyHint':
+    'Published to this workspace by its creator: you can run in this environment, but only they can change what it builds.',
+  'environments.files.browse': 'Browse files',
+  'environments.files.back': 'Back',
+  'environments.files.empty': 'This directory is empty',
+  'environments.files.binary': 'Not a text file, so it cannot be shown here.',
+  'environments.files.unreadable': 'This file could not be read',
+  'environments.files.listFailed': 'This directory could not be listed',
+  'environments.files.invalidPath': "The name has to stay inside this instance's directory",
+  'environments.files.truncated': 'Only the first entries are shown',
+  'environments.mine': 'My environments',
+  'environments.form.basics': 'Basics',
+  'environments.form.setup': 'Setup',
+  'environments.form.runtime': 'Runtime and storage',
+  'environments.instances.confirm': 'Create',
+  'environments.instances.save': 'Save',
+  // Materializing an instance: the clone and the bootstrap. Minutes long by
+  // nature, which is why it is a state of the row rather than a spinner on a
+  // button, and why the log is one click away instead of gone.
+  'environments.instances.building': 'Building — cloning and installing',
+  'environments.instances.buildFailed': 'Build failed',
+  'environments.instances.rebuild': 'Rebuild',
+  'environments.instances.build': 'Build',
+  'environments.instances.buildConfirmTitle': 'Build instance {{name}}?',
+  'environments.instances.buildStartFailed': 'Could not start the build',
+  // Context-free on purpose: the same code refuses a rebuild and a delete, so
+  // a sentence that only mentions rebuilding was wrong half the time.
+  'environments.instances.running': 'Running',
+  'environments.instances.occupancyUnavailable':
+    'Could not read which instances are running right now',
+  'environments.instances.inUse':
+    'A conversation is using this instance — try again once that run ends',
+  'environments.instances.notBuilt': 'Not built yet — nothing has been cloned or installed',
+  'environments.instances.rebuildConfirmContent':
+    "This clears the instance's folder, then clones the code again and runs the setup script. Everything in it now — changes made in conversations, installed packages, reports, data — will be lost. This cannot be undone.",
+  'environments.instances.rebuildConfirmTitle': 'Rebuild instance {{name}}?',
+  'environments.instances.showLog': 'Show log',
+  'environments.instances.hideLog': 'Hide log',
+  'environments.instances.directoryLabel': 'Directory',
+  'environments.files.up': 'Up one level',
+  'environments.files.readOnlyHint':
+    'Read-only: kept in sync by the sandbox. Dependencies such as node_modules are not shown.',
+  'environments.files.openHint': 'Double-click a folder to open it, or a file to view it',
+  'environments.files.unusedInstance':
+    'Nothing here yet. The code appears once the instance is built or a conversation runs in it.',
 };

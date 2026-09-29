@@ -22,7 +22,6 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { WorkspaceModel } from '@/database/models/workspace';
-import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import { appEnv } from '@/envs/app';
 import { loadConnectedComposioIds } from '@/server/modules/AgentRuntime/adapters/composioConnectedIds';
 import type { RuntimeExecutorContext } from '@/server/modules/AgentRuntime/context';
@@ -30,6 +29,7 @@ import { buildPostProcessUrl, log } from '@/server/modules/AgentRuntime/executor
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { MarketService } from '@/server/services/market';
 import { OnboardingService } from '@/server/services/onboarding';
+import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
 export interface ServerContextFactSource {
@@ -338,15 +338,20 @@ export const createServerContextFactProviders = ({
     // the runtime is: that is the workspace the trust token carries, and the
     // entitlement has to agree with the token that presents it.
     resolveSandboxPersistence: async () => {
-      const { mode, cwd, claim } = await resolveSandboxSessionConfig({
+      const { mode, cwd, claim, workingDir } = await resolveSandboxSessionConfig({
         isShareVisitorRun: Boolean(ctx.agentShareVisitor),
         serverDB: db,
         topicId: ctx.topicId ?? state.origin?.topicId,
         userId,
-        workspaceId: ctx.workspaceId,
+        // The run's workspace, the same one every other fact here is scoped to.
+        // Reading the raw context instead looked the topic up in the personal
+        // scope on any path that does not carry the id, found nothing, and
+        // described a disposable sandbox to a run that had a persistent one —
+        // so the model was told its files would not survive and worked in /tmp.
+        workspaceId,
       });
 
-      return claim ? { cwd, mode } : undefined;
+      return claim ? { cwd, mode, workingDir } : undefined;
     },
 
     listTopicMessages: async (topic) => {

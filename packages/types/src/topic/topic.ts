@@ -316,21 +316,33 @@ export interface ChatTopicMetadata {
    */
   runStartedAt?: string;
   /**
-   * Working directory for this topic's CLOUD SANDBOX, relative to the
-   * persistent workspace root (`reports/q3`, never an absolute path). Empty or
-   * absent means the workspace root itself.
+   * Which CLOUD-SANDBOX INSTANCE this topic runs in: one instance of an
+   * environment, meaning a directory inside the persistent workspace together
+   * with the packages restored into it. Absent means the workspace root under
+   * the caller's default environment, which is what a topic that never chose
+   * gets and what a topic keeps if its instance is later deleted.
    *
-   * A preference, not a security boundary: the execution plane composes it onto
-   * the workspace directory the signed entitlement names and fences the result,
-   * so a value pointing outside is rejected there rather than trusted here.
-   * Ignored entirely when the run has no persistent workspace, which is why it
-   * survives a downgrade — resubscribing restores the directory the user chose.
+   * Two conversations that must not overwrite each other's files take two
+   * instances of one environment rather than two directories under one, because
+   * what was installed follows the directory — separating them at the directory
+   * alone would leave both sharing, and overwriting, the same captured state.
+   *
+   * A preference, not a security boundary: the directory it resolves to is
+   * composed onto the workspace the signed entitlement names and fenced there,
+   * so a value pointing outside is rejected by the execution plane rather than
+   * trusted here. Ignored entirely when the run has no persistent workspace,
+   * which is why it survives a downgrade — resubscribing puts the conversation
+   * back where it was.
+   *
+   * Fixed for the life of a session — the execution plane binds the session on
+   * its first call and refuses a snapshot under a different name — so a change
+   * takes effect the next time the sandbox starts.
    *
    * The desktop counterpart is {@link ChatTopicMetadata.workingDirectory}; the
    * two never interact, one addresses the user's machine and the other a
    * directory inside a remote volume.
    */
-  sandboxCwd?: string;
+  sandboxInstanceId?: string;
   /**
    * Whether this topic's cloud sandbox should persist its working directory.
    * Absent means ephemeral — persistence is an explicit choice, since not every
@@ -589,11 +601,18 @@ export const chatTopicMetadataUpdateSchema = z.object({
     })
     .nullable()
     .optional(),
-  // The user's own choice of where this topic's sandbox works and whether it
-  // keeps anything. Client-writable on purpose: the execution plane fences the
-  // directory against the entitlement it was issued, so this is a preference,
-  // not a boundary (see `TopicMetadata.sandboxCwd`).
+  // The topic's own sandbox choices: where it works, which instance it works in,
+  // and whether anything survives. Client-writable on purpose — the execution
+  // plane fences all three against the entitlement it was issued, so they are
+  // preferences rather than boundaries (see `TopicMetadata.sandboxCwd`).
+  //
+  // A key absent here is not rejected, it is silently dropped: this is a plain
+  // `z.object()`, and stripping unknown keys is its default. So a field that
+  // lives only on `ChatTopicMetadata` writes nothing and still answers 200 —
+  // the interface and this schema are two declarations the type checker never
+  // compares.
   sandboxCwd: z.string().optional(),
+  sandboxInstanceId: z.string().optional(),
   sandboxMode: z.enum(['ephemeral', 'persistent']).optional(),
   scheduledRun: topicScheduledRunSchema.nullish(),
   workingDirectory: z.string().optional(),

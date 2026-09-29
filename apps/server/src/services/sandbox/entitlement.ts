@@ -6,7 +6,7 @@ import {
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
-import { resolveSandboxWorkspaceQuotaBytes } from '@/business/server/sandboxWorkspace';
+import { resolveSandboxWorkspaceEntitlement } from '@/business/server/sandboxWorkspace';
 import { UserModel } from '@/database/models/user';
 
 const log = debug('lobe-server:sandbox:entitlement');
@@ -65,12 +65,17 @@ export const resolveSandboxWorkspaceClaim = async ({
     const preference = await new UserModel(serverDB, userId).getUserPreference();
     if (preference?.lab?.enablePersistentSandbox !== true) return null;
 
-    const quotaBytes = await resolveSandboxWorkspaceQuotaBytes({ userId, workspaceId });
+    const entitlement = await resolveSandboxWorkspaceEntitlement({ userId, workspaceId });
+    const quotaBytes = entitlement?.quotaBytes;
     if (typeof quotaBytes !== 'number' || !Number.isSafeInteger(quotaBytes) || quotaBytes <= 0) {
       return null;
     }
 
-    return { key, quotaBytes };
+    // Only when true. An entitlement that says nothing about overage means the
+    // quota is a hard limit — the reading that cannot bill anyone by accident.
+    return entitlement?.overageAllowed
+      ? { key, overageAllowed: true, quotaBytes }
+      : { key, quotaBytes };
   } catch (error) {
     log('Failed to resolve the sandbox workspace entitlement for %s: %O', key, error);
     return null;

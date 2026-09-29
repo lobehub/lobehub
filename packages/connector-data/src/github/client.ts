@@ -15,15 +15,26 @@ import type {
   GitHubContribution,
   GitHubContributionCollectionOptions,
   GitHubOrganization,
+  GitHubOwnerRepository,
   GitHubPullRequest,
   GitHubRepository,
   GitHubRepositoryContributor,
   GitHubUserProfile,
 } from './types';
 
+const BRANCH_PAGE_SIZE = 100;
+
+/**
+ * The most branches {@link GitHubConnectorClient.listRepositoryBranches}
+ * returns. A list of exactly this length may be partial.
+ */
+export const MAX_REPOSITORY_BRANCHES = 1000;
+
 export interface GitHubConnectorClient {
   getUserProfile: () => Promise<GitHubUserProfile>;
   getUserProfileReadme: () => Promise<string | undefined>;
+  /** Every repository this account can reach, newest activity first. */
+  listAccessibleRepositories: () => Promise<GitHubOwnerRepository[]>;
   /** Lists repositories associated with the user during the configured contribution window. */
   listContributedRepositories: () => Promise<GitHubContributedRepository[]>;
   /** Lists high-star repositories with contribution evidence in the configured window. */
@@ -34,6 +45,8 @@ export interface GitHubConnectorClient {
   listRecentContributions: () => Promise<GitHubContribution[]>;
   listRecentPullRequests: () => Promise<GitHubPullRequest[]>;
   listRecentRepositories: () => Promise<GitHubRepository[]>;
+  /** Branch names of one repository, in the order GitHub lists them. */
+  listRepositoryBranches: (owner: string, repository: string) => Promise<string[]>;
   listRepositoryContributors: (repository: string) => Promise<GitHubRepositoryContributor[]>;
   listUserOrganizations: () => Promise<GitHubOrganization[]>;
 }
@@ -102,7 +115,45 @@ export function createGitHubConnectorClient({
     listRecentContributions: async () => (await getContributionOverview()).contributions,
     listRecentPullRequests: async () => (await getRepositories()).pulls,
     listRecentRepositories: async () => (await getRepositories()).recent,
+    listRepositoryBranches: async (owner, repository) => {
+      // GitHub pages at 100. Walked to a ceiling rather than to the end: a
+      // repository with thousands of branches would otherwise be thousands of
+      // requests behind one picker. A caller that gets exactly the ceiling back
+      // should treat the list as partial.
+      const names: string[] = [];
+      for (let page = 1; page <= MAX_REPOSITORY_BRANCHES / BRANCH_PAGE_SIZE; page += 1) {
+        const branches = await transport.listRepositoryBranches({
+          owner,
+          page,
+          perPage: BRANCH_PAGE_SIZE,
+          repository,
+        });
+        for (const { name } of branches) if (name) names.push(name);
+        if (branches.length < BRANCH_PAGE_SIZE) break;
+      }
+
+      return names;
+    },
     listRepositoryContributors: (repository) => loadRepositoryContributors(transport, repository),
+    listAccessibleRepositories: async () => {
+      const repositories = await transport.listAccessibleRepositories({ perPage: 100 });
+
+      // A repository the caller cannot address — missing either half of
+      // `owner/name` — is dropped rather than rendered as a row that cannot be
+      // turned into a checkout URL.
+      return repositories.flatMap(({ defaultBranch, isPrivate, name, owner: login }) =>
+        name && login
+          ? [
+              {
+                defaultBranch: defaultBranch ?? undefined,
+                isPrivate: isPrivate === true,
+                name,
+                owner: login,
+              },
+            ]
+          : [],
+      );
+    },
     listUserOrganizations: () => loadOrganizations(transport),
   };
 }

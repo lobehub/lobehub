@@ -44,6 +44,32 @@ describe('MarketSandboxProvider', () => {
     });
   });
 
+  // The instance the call belongs to and where it runs travel together: the
+  // execution plane scopes a shared workspace by the first and runs commands
+  // in the second (LOBE-14363).
+  it('forwards the instance directory and the local working directory together', async () => {
+    const runBuildInTool = vi.fn(async () => ({ data: { result: {} }, success: true }));
+    const marketService = {
+      getSDK: vi.fn(() => ({ plugins: { runBuildInTool } })),
+    } as unknown as MarketService;
+    const provider = new MarketSandboxProvider({
+      marketService,
+      sandboxCwd: 'projects/atlas',
+      sandboxMode: 'persistent',
+      sandboxWorkingDir: '/root/work',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    await provider.callTool('runCommand', { command: 'pwd' });
+
+    expect(runBuildInTool).toHaveBeenCalledWith(
+      'runCommand',
+      { command: 'pwd' },
+      expect.objectContaining({ sandboxCwd: 'projects/atlas', sandboxWorkingDir: '/root/work' }),
+    );
+  });
+
   it('keeps the previous Market sandbox callTool error mapping', async () => {
     const marketService = createMarketService({
       error: {

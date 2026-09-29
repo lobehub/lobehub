@@ -12,4 +12,5 @@ export type {
   SandboxService,
   SandboxServiceOptions,
   SandboxSessionContext,
+  SandboxSessionSpecification,
 } from './types';

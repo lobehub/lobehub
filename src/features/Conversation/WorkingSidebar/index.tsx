@@ -38,6 +38,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 
 import { useBusinessWorkingSidebarTabs } from '@/business/client/features/WorkingSidebarTabs';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -48,6 +49,7 @@ import {
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
+import { useSandboxMode } from '@/features/ChatInput/ControlBar/useSandboxMode';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
@@ -61,6 +63,7 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -373,12 +376,60 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // actions enabled.
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
   const isLocalExecution = effectiveTarget === 'local';
+  // A cloud-sandbox run keeps its files in the persistent workspace, so it has a
+  // tree to show too — read through the topic's warm session rather than a
+  // device. Only when the run actually persists: a throwaway box keeps nothing,
+  // and pointing the panel at the workspace would let another conversation's
+  // files read as this one's.
+  // Through the same hook the composer writes with, so the panel sees a choice
+  // the moment it is made. Before a conversation exists the choice is buffered
+  // on the agent rather than stored on a topic, and reading the topic's
+  // metadata directly meant the panel could not see it: the composer said
+  // "cloud sandbox, Lobehub Dev" while the panel showed nothing and explained
+  // nothing. A device's tree needs no conversation either.
+  const { selection: sandboxSelection } = useSandboxMode(activeAgentId ?? '');
+  const sandboxInstanceId = sandboxSelection.instanceId;
+  const isSandboxExecution =
+    effectiveTarget === 'sandbox' && sandboxSelection.mode === 'persistent';
+  const sandboxTopicId = isSandboxExecution ? (topicId ?? undefined) : undefined;
+  // Scoped to the bound instance's directory, or the workspace root when the
+  // run keeps files without one. The empty string IS the root here, which is
+  // why the tab's gate is the topic rather than a truthy path.
+  const { data: sandboxInstances } = useSWR(
+    isSandboxExecution && sandboxInstanceId ? ['sandbox-instance-dir', sandboxInstanceId] : null,
+    () => sandboxWorkspaceService.getInstance({ id: sandboxInstanceId! }),
+  );
+  const sandboxDirectory = sandboxInstances?.workingDirectory ?? '';
+  // The empty string IS the workspace root, so an unresolved instance does not
+  // read as "no directory yet" — it reads as "the whole workspace", and the
+  // tree would list every instance's folder for as long as the lookup took.
+  const sandboxDirectoryKnown = !sandboxInstanceId || sandboxInstances !== undefined;
+
   const filesystemEnvironmentAvailable = isLocalExecution || isDeviceMode;
   const environmentWorkingDirectory = filesystemEnvironmentAvailable ? workingDirectory : undefined;
   const environmentRepoType = filesystemEnvironmentAvailable ? repoType : undefined;
   // Files tab is an agent-mode affordance — in plain chat mode the working
   // directory is irrelevant to the user, so hide the tab even when one resolves.
-  const filesAvailable = !isChatMode && (isLocalExecution || isDeviceMode) && !!workingDirectory;
+  // Which directory the tree shows, and therefore whether there is a tree at
+  // all. Kept as one value rather than a pair of conditions: the sandbox's root
+  // is the empty string, so "has a directory" and "is truthy" part ways here,
+  // and the tab's availability has to follow the value it will render.
+  // A directory is only showable when something can actually read it: the
+  // sandbox through its workspace API, a device or this machine through the
+  // filesystem. A topic can carry a path persisted on a desktop the web client
+  // has no way to reach, and that path is not a tree — it is a string.
+  // An instance is what makes a sandbox tree addressable. Persistent mode with
+  // none picked is the workspace root, which the execution plane can only
+  // resolve through a conversation — so that one still waits for the topic.
+  const filesDirectory =
+    isSandboxExecution && (sandboxInstanceId || sandboxTopicId)
+      ? sandboxDirectoryKnown
+        ? sandboxDirectory
+        : undefined
+      : filesystemEnvironmentAvailable
+        ? workingDirectory
+        : undefined;
+  const filesAvailable = !isChatMode && filesDirectory !== undefined;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
   const snapshotConfig =
     (topicDeviceId ? topicDeviceId === targetDeviceId : isLocalExecution) &&
@@ -1130,7 +1181,12 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                 {filesAvailable && (
                   <Activity mode={showRightPanel && activeTab === 'files' ? 'visible' : 'hidden'}>
                     <Flexbox className={styles.pane}>
-                      <Files deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
+                      <Files
+                        deviceId={remoteDeviceId}
+                        sandboxInstanceId={isSandboxExecution ? sandboxInstanceId : undefined}
+                        sandboxTopicId={sandboxTopicId}
+                        workingDirectory={filesDirectory}
+                      />
                     </Flexbox>
                   </Activity>
                 )}

@@ -39,6 +39,10 @@ interface UseFileTreeActionsParams {
   onClearDisplayFilter: () => void;
   onCollapseAll: () => void;
   projectRoot: string;
+  /** Set when the tree is showing a sandbox instance nobody is talking to. */
+  sandboxInstanceId?: string;
+  /** Set when the tree is showing a cloud sandbox's workspace rather than a disk. */
+  sandboxTopicId?: string;
   treeRef: RefObject<ExplorerTreeHandle | null>;
   workingDirectory: string;
 }
@@ -77,11 +81,14 @@ export const useFileTreeActions = ({
   onClearDisplayFilter,
   onCollapseAll,
   projectRoot,
+  sandboxInstanceId,
+  sandboxTopicId,
   treeRef,
   workingDirectory,
 }: UseFileTreeActionsParams) => {
   const { t } = useTranslation('chat');
-  const isRemote = !!deviceId;
+  const isSandbox = !!sandboxTopicId || !!sandboxInstanceId;
+  const isRemote = !!deviceId || isSandbox;
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const openWorkingSidebar = useGlobalStore((s) => s.openWorkingSidebar);
   const { canOfferFile, publishFile } = usePublishWorkspaceHtmlFromFile({
@@ -136,9 +143,14 @@ export const useFileTreeActions = ({
         if (!isRemote) void ops.openInSystem(node.data);
         return;
       }
-      openLocalFile({ deviceId, filePath: node.data.path, workingDirectory: projectRoot });
+      openLocalFile({
+        deviceId,
+        filePath: node.data.path,
+        sandboxTopicId,
+        workingDirectory: projectRoot,
+      });
     },
-    [deviceId, isRemote, openLocalFile, ops, projectRoot],
+    [deviceId, isRemote, openLocalFile, ops, projectRoot, sandboxTopicId],
   );
 
   const handleNodeClick = useCallback(
