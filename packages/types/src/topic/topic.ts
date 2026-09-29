@@ -4,7 +4,6 @@ import { z } from 'zod';
 
 import type { HeterogeneousReasoningEffort } from '../agent/heteroSelectorCapabilities';
 import type { SerializedAgentHook } from '../agentHook';
-import { serializedAgentHookSchema } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
 import type { BaseDataModel } from '../meta';
@@ -554,37 +553,8 @@ export const chatTopicMetadataUpdateSchema = z.object({
   lastSettledOperationId: z.string().optional(),
   reasoningConfig: AiModelReasoningConfigSchema.optional(),
   repos: z.array(z.string()).optional(),
-  runningOperation: z
-    .object({
-      assistantMessageId: z.string(),
-      childOperations: z
-        .array(
-          z.object({
-            assistantMessageId: z.string(),
-            deviceId: z.string().optional(),
-            deviceUserId: z.string().optional(),
-            deviceWorkspaceId: z.string().optional(),
-            heteroType: z.string().nullable().optional(),
-            hooks: z.array(serializedAgentHookSchema).optional(),
-            operationId: z.string(),
-            orchestrationRole: z.enum(['supervisor', 'member']).optional(),
-            scope: z.string().optional(),
-            threadId: z.string().nullish(),
-          }),
-        )
-        .optional(),
-      deviceId: z.string().optional(),
-      deviceUserId: z.string().optional(),
-      deviceWorkspaceId: z.string().optional(),
-      heteroType: z.string().nullable().optional(),
-      hooks: z.array(serializedAgentHookSchema).optional(),
-      operationId: z.string(),
-      orchestrationRole: z.enum(['supervisor', 'member']).optional(),
-      scope: z.string().optional(),
-      threadId: z.string().nullish(),
-    })
-    .nullable()
-    .optional(),
+  // Runtime state and hooks are server-owned; clients may only clear a stale marker.
+  runningOperation: z.null().optional(),
   taskCallbackReservation: z
     .object({
       messageId: z.string(),
@@ -596,6 +566,9 @@ export const chatTopicMetadataUpdateSchema = z.object({
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
 });
+
+/** Public topic metadata patch, distinct from the full persisted metadata. */
+export type UpdateTopicMetadataInput = z.input<typeof chatTopicMetadataUpdateSchema>;
 
 /**
  * Metadata a client may seed when creating a topic: the pinned reasoning
