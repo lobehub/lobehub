@@ -195,7 +195,7 @@ describe('serverMessagesEngine', () => {
 
       // No additionalVariables — the run got no persistent workspace: the
       // original ephemeral-session wording must render, never the literal tokens.
-      const fallback = await serverMessagesEngine({
+      const { messages: fallback } = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         provider: 'openai',
@@ -209,7 +209,7 @@ describe('serverMessagesEngine', () => {
       expect(fallback[0].content).toContain('Files from previous sessions may not persist');
 
       // The builder's persistent-workspace guidance overrides both fallbacks.
-      const resolved = await serverMessagesEngine({
+      const { messages: resolved } = await serverMessagesEngine({
         additionalVariables: {
           sandbox_session_files: '- Files in your working directory persist',
           sandbox_workspace: '- Your working directory is a persistent workspace',

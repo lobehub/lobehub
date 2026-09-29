@@ -589,6 +589,12 @@ export const chatTopicMetadataUpdateSchema = z.object({
     })
     .nullable()
     .optional(),
+  // The user's own choice of where this topic's sandbox works and whether it
+  // keeps anything. Client-writable on purpose: the execution plane fences the
+  // directory against the entitlement it was issued, so this is a preference,
+  // not a boundary (see `TopicMetadata.sandboxCwd`).
+  sandboxCwd: z.string().optional(),
+  sandboxMode: z.enum(['ephemeral', 'persistent']).optional(),
   scheduledRun: topicScheduledRunSchema.nullish(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
