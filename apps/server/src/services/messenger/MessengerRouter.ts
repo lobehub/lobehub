@@ -21,6 +21,7 @@ import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
 import { buildBotContext } from '@/server/services/bot/buildBotContext';
 import { replayDeferredBotMessages } from '@/server/services/bot/deferredMessages';
 import { submitBotFeedback } from '@/server/services/bot/feedbackSubmit';
+import { isWholeGroupChatThreadId } from '@/server/services/bot/isWholeGroupChatThreadId';
 import {
   buildReplayMessages,
   getSameSenderMessages,
@@ -786,18 +787,21 @@ export class MessengerRouter {
       if (!shouldHandle) {
         // First skip in this thread → tell the room why the bot just went
         // quiet so participants know to @mention if they need it. Dedupe
-        // by thread id so we never spam more than once.
-        try {
-          const fresh = await bot
-            .getState()
-            .setIfNotExists(mentionRequiredAnnouncedKey(thread.id), '1', PARTICIPANTS_TTL_MS);
-          if (fresh) {
-            await thread.post(
-              "Multiple people are talking in this thread now. From here on I'll only respond when you @mention me.",
-            );
+        // by thread id so we never spam more than once. Feishu/Lark group
+        // mains are already mention-only — skip the notice there (LOBE-14475).
+        if (!isWholeGroupChatThreadId(thread.id)) {
+          try {
+            const fresh = await bot
+              .getState()
+              .setIfNotExists(mentionRequiredAnnouncedKey(thread.id), '1', PARTICIPANTS_TTL_MS);
+            if (fresh) {
+              await thread.post(
+                "Multiple people are talking in this thread now. From here on I'll only respond when you @mention me.",
+              );
+            }
+          } catch (error) {
+            log('onSubscribedMessage: mention-mode announcement failed: %O', error);
           }
-        } catch (error) {
-          log('onSubscribedMessage: mention-mode announcement failed: %O', error);
         }
         return;
       }
