@@ -14,6 +14,7 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { useChatStore } from '@/store/chat';
 
 import { SectionTitle } from './GoalResultFollowUps';
@@ -251,11 +252,14 @@ const CriterionRow = ({ index, outcome }: { index: number; outcome: CriterionOut
 };
 
 interface GoalCriteriaResultsProps {
+  /** The acceptance or criteria read failed: its outcomes are not a result. */
+  error?: unknown;
   loading: boolean;
+  onRetry?: () => void;
   outcomes: CriterionOutcome[];
 }
 
-const GoalCriteriaResults = ({ loading, outcomes }: GoalCriteriaResultsProps) => {
+const GoalCriteriaResults = ({ error, loading, onRetry, outcomes }: GoalCriteriaResultsProps) => {
   const { t } = useTranslation('chat');
   const met = outcomes.filter((outcome) => outcome.state === 'passed').length;
 
@@ -263,6 +267,7 @@ const GoalCriteriaResults = ({ loading, outcomes }: GoalCriteriaResultsProps) =>
     <Flexbox gap={8}>
       <SectionTitle
         extra={
+          !error &&
           outcomes.length > 0 && (
             <Text fontSize={13} type={'secondary'}>
               {t('goalProcess.result.scale.criteria', { met, total: outcomes.length })}
@@ -272,7 +277,9 @@ const GoalCriteriaResults = ({ loading, outcomes }: GoalCriteriaResultsProps) =>
       >
         {t('goalProcess.result.criteria.title')}
       </SectionTitle>
-      {loading ? (
+      {error ? (
+        <AsyncError error={error} variant={'block'} onRetry={onRetry} />
+      ) : loading ? (
         <Flexbox gap={10}>
           <Skeleton height={18} radius={4} />
           <Skeleton height={18} radius={4} />

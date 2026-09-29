@@ -352,11 +352,10 @@ describe('buildGoalReportSkeleton', () => {
   });
 
   it('asks for chapters, detour reasons and lessons, next steps and a submission', () => {
-    const text = buildGoalReportInstruction(
-      snapshot,
-      'accepted',
-      'lobe-goal-report.submitGoalReport',
-    );
+    const text = buildGoalReportInstruction(snapshot, 'accepted', {
+      kind: 'tool',
+      toolName: 'lobe-goal-report.submitGoalReport',
+    });
     expect(text).toContain('Candidate main path');
     expect(text).toContain('t1b [task, resolved] t1b · superseded by t2 (revises) · fork: t2');
     expect(text).toContain('Goal-level acceptance passed');
@@ -368,6 +367,20 @@ describe('buildGoalReportSkeleton', () => {
     expect(text).toContain('- edge t2-depends_on-t1: t2 -[depends_on]-> t1');
     expect(text).toContain('Mark the mainline');
     expect(text).toContain('headline, deliverableWorkId, chapters, mainline, nextSteps');
+  });
+
+  /**
+   * Regression: a heterogeneous wrap-up agent (Claude Code, Codex) never
+   * receives server tools, so an instruction that only named the report tool
+   * left it with no way to submit — no report could ever be stored.
+   */
+  it('tells a heterogeneous wrap-up agent to submit through the lh CLI', () => {
+    const text = buildGoalReportInstruction(snapshot, 'accepted', { kind: 'cli' });
+    expect(text).toContain(
+      `lh goal report ${snapshot.goal.id} --metadata-file <json> --content-file <md>`,
+    );
+    expect(text).toContain(`lh goal show ${snapshot.goal.id} --json`);
+    expect(text).not.toContain('submitGoalReport');
   });
 
   describe('validateGoalReport', () => {

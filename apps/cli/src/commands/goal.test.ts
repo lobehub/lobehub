@@ -13,6 +13,8 @@ const { mockClient } = vi.hoisted(() => ({
       delete: { mutate: vi.fn() },
       submitPlan: { mutate: vi.fn() },
       submitOperationPlan: { mutate: vi.fn() },
+      submitOperationReport: { mutate: vi.fn() },
+      submitReport: { mutate: vi.fn() },
       graph: { query: vi.fn() },
       setBudget: { mutate: vi.fn() },
       supervision: { query: vi.fn() },
@@ -98,6 +100,55 @@ describe('goal plan authentication', () => {
         operationId: 'op-1',
         token: 'turn-1',
         plan: { action: 'verify', reason: 'Ready' },
+      });
+      expect(other.mutate).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('goal report authentication', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.mocked(console.log).mockRestore();
+  });
+
+  it.each(['hetero-operation', undefined])(
+    'routes %s credentials to the appropriate report endpoint',
+    async (purpose) => {
+      vi.clearAllMocks();
+      vi.stubEnv(
+        'LOBEHUB_JWT',
+        purpose
+          ? `header.${Buffer.from(JSON.stringify({ purpose })).toString('base64url')}.signature`
+          : undefined,
+      );
+      vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-wrapup');
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      mockClient.goal.submitReport.mutate.mockResolvedValue({ data: {} });
+      mockClient.goal.submitOperationReport.mutate.mockResolvedValue({ data: {} });
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'goal',
+        'report',
+        'goal-1',
+        '--metadata-file',
+        'report.json',
+        '--content-file',
+        'report.md',
+      ]);
+      const [selected, other] =
+        purpose === 'hetero-operation'
+          ? [mockClient.goal.submitOperationReport, mockClient.goal.submitReport]
+          : [mockClient.goal.submitReport, mockClient.goal.submitOperationReport];
+      // The mocked readFile returns the same text for both files.
+      expect(selected.mutate).toHaveBeenCalledWith({
+        id: 'goal-1',
+        operationId: 'op-wrapup',
+        report: {
+          content: JSON.stringify({ action: 'verify', reason: 'Ready' }),
+          metadata: { action: 'verify', reason: 'Ready' },
+        },
       });
       expect(other.mutate).not.toHaveBeenCalled();
     },

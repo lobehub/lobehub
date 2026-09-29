@@ -5,12 +5,14 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { WorkModel } from '@/database/models/work';
 import {
   acceptances,
   agentOperations,
+  agents,
   goalEdges,
   goalEvents,
   goalNodeDecisions,
@@ -68,6 +70,7 @@ afterEach(async () => {
   await serverDB.delete(taskTopics);
   await serverDB.delete(topics);
   await serverDB.delete(tasks);
+  await serverDB.delete(agents);
   await serverDB.delete(users);
 });
 
@@ -191,6 +194,31 @@ describe('GoalService wrap-up branch', () => {
     expect(second.taskId).toBe(first.taskId);
   });
 
+  /**
+   * Regression: a heterogeneous wrap-up agent never receives server tools, so an
+   * instruction naming only the report tool could never be followed.
+   */
+  it('tells a heterogeneous wrap-up agent to submit through the CLI', async () => {
+    await serverDB.insert(agents).values({
+      agencyConfig: { heterogeneousProvider: { type: 'claude-code' } } as any,
+      id: 'agt_report_hetero',
+      userId,
+    });
+    const service = new GoalService(serverDB, userId);
+    const { acceptanceTaskId, goalId, taskModel } = await runToAcceptance(service, {
+      taskAgentId: 'agt_report_hetero',
+    });
+    await taskModel.updateStatus(acceptanceTaskId, 'completed');
+    await service.tick(goalId);
+    await service.tick(goalId);
+
+    const [{ taskId }] = reportTaskRuns().map(([params]: any) => params);
+    const task = await taskModel.findById(taskId);
+    expect(task?.assigneeAgentId).toBe('agt_report_hetero');
+    expect(task?.instruction).toContain(`lh goal report ${goalId}`);
+    expect(task?.instruction).not.toContain('submitGoalReport');
+  });
+
   it('a failed wrap-up leaves the Goal status alone and reads as failed', async () => {
     runTask.mockRejectedValue(new Error('agent unavailable'));
     const service = new GoalService(serverDB, userId);
@@ -291,6 +319,29 @@ describe('GoalReportStore.submit', () => {
 
     expect(await new WorkModel(serverDB, userId).findLatestGoalReport(goalId)).toBeUndefined();
     expect((await service.graph(goalId)).report?.status).toBe('running');
+  });
+
+  it('accepts a report from an operation of the wrap-up run and refuses any other run', async () => {
+    const { goalId, metadata, topicId } = await setup();
+    const reports = new GoalReportStore(serverDB, userId);
+    const operations = new AgentOperationModel(serverDB, userId);
+    await operations.recordStart({ operationId: 'op_cli_wrapup', topicId });
+    await serverDB.insert(topics).values({ id: 'tpc_elsewhere', userId });
+    await operations.recordStart({ operationId: 'op_cli_elsewhere', topicId: 'tpc_elsewhere' });
+
+    await expect(
+      reports.submitFromOperation(goalId, { content: '# Report', metadata }, 'op_cli_elsewhere'),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(
+      reports.submitFromOperation(goalId, { content: '# Report', metadata }, 'op_missing'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    const stored = await reports.submitFromOperation(
+      goalId,
+      { content: '# Report', metadata },
+      'op_cli_wrapup',
+    );
+    expect(stored.version).toBe(1);
   });
 
   it('stores metadata and content separately, appending a version per submission', async () => {

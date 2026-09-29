@@ -1,4 +1,5 @@
 import { GoalReportApiName, GoalReportIdentifier } from '@lobechat/builtin-tool-goal/report';
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import {
   GOAL_ACCEPTANCE_TASK_TITLE,
   GOAL_COORDINATOR_ACTOR_ID,
@@ -112,10 +113,19 @@ export class GoalReportService {
     trigger: GoalReportTrigger,
   ): Promise<Partial<GoalReportDispatch>> => {
     const goalId = graph.goal.id;
+    // A re-run keeps whoever the Task is already assigned to.
+    const assigneeAgentId = dispatch.taskId
+      ? ((await this.taskModel.findById(dispatch.taskId))?.assigneeAgentId ?? undefined)
+      : await this.resolveAssignee(graph);
     const instruction = buildGoalReportInstruction(
       graph,
       trigger,
-      `${GoalReportIdentifier}.${GoalReportApiName.submitGoalReport}`,
+      (await this.isHeterogeneousAgent(assigneeAgentId))
+        ? { kind: 'cli' }
+        : {
+            kind: 'tool',
+            toolName: `${GoalReportIdentifier}.${GoalReportApiName.submitGoalReport}`,
+          },
     );
 
     let taskId = dispatch.taskId;
@@ -131,7 +141,7 @@ export class GoalReportService {
       await this.taskModel.update(taskId, { error: null, instruction, status: 'backlog' });
     } else {
       const task = await new TaskService(this.db, this.userId, this.workspaceId).createTask({
-        assigneeAgentId: await this.resolveAssignee(graph),
+        assigneeAgentId,
         config: { checkpoint: { topic: { after: false } } },
         description: `Wrap-up report of ${graph.goal.title}`.slice(0, TASK_DESCRIPTION_MAX_LENGTH),
         instruction,
@@ -171,6 +181,22 @@ export class GoalReportService {
       if (id && (await agentModel.existsById(id))) return id;
     }
     return undefined;
+  };
+
+  /**
+   * Heterogeneous agents run on a device and never receive server tools such as
+   * the report tool, so their wrap-up submits through the `lh` CLI. Same test
+   * the agent runtime uses to route a run to the device.
+   */
+  private isHeterogeneousAgent = async (agentId?: string) => {
+    if (!agentId) return false;
+    const agent = await new AgentModel(this.db, this.userId, this.workspaceId).getAgentConfigById(
+      agentId,
+    );
+    return (
+      !!agent?.agencyConfig?.heterogeneousProvider?.type ||
+      (!!agent?.model && isHeterogeneousAgentModelId(agent.model))
+    );
   };
 
   private recordDispatch = async (

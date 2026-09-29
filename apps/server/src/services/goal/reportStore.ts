@@ -10,6 +10,7 @@ import { GoalReportMetadataSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
@@ -45,6 +46,7 @@ export interface GoalReportCaller {
  */
 export class GoalReportStore {
   private readonly coordinatorGraph: GoalGraphModel;
+  private readonly operationModel: AgentOperationModel;
   private readonly taskModel: TaskModel;
   private readonly taskTopicModel: TaskTopicModel;
   private readonly workModel: WorkModel;
@@ -58,6 +60,7 @@ export class GoalReportStore {
       id: GOAL_COORDINATOR_ACTOR_ID,
       type: 'system',
     });
+    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
     this.workModel = new WorkModel(db, userId, workspaceId);
@@ -66,6 +69,26 @@ export class GoalReportStore {
   // -------------------------------------------------------------------------
   // Submission
   // -------------------------------------------------------------------------
+
+  /**
+   * Submit on behalf of a running operation — the CLI path a heterogeneous
+   * wrap-up agent takes, since server tools never reach a device run. The
+   * operation is looked up with the caller's own ownership, and its topic must
+   * be a run of this Goal's wrap-up Task, exactly as for the tool.
+   */
+  submitFromOperation = async (
+    goalId: string,
+    input: SubmitGoalReportInput,
+    operationId: string,
+  ) => {
+    const operation = await this.operationModel.findOwnOperationById(operationId);
+    if (!operation) throw new TRPCError({ code: 'NOT_FOUND', message: 'Operation not found' });
+    return this.submit(goalId, input, {
+      agentId: operation.agentId,
+      operationId: operation.id,
+      topicId: operation.topicId,
+    });
+  };
 
   /**
    * Validate and store one report version.

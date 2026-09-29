@@ -15,6 +15,7 @@ import {
   DEFAULT_MANAGER_MAX_TURNS,
   managerTurnsSpent,
 } from '@/server/services/goal/recoveryPolicy';
+import { GoalReportStore, type SubmitGoalReportInput } from '@/server/services/goal/reportStore';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import {
   HeteroOperationPrincipalError,
@@ -41,6 +42,18 @@ const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 );
 const goalWriteProcedure = goalProcedure.use(withScopedPermission('agent:update'));
 const idInput = z.object({ id: z.string() });
+/**
+ * A wrap-up report submitted from a run. The metadata passes through as a
+ * record: `GoalReportStore.submit` parses it with the report schema and checks
+ * every reference against the Goal graph.
+ */
+const reportInput = idInput.extend({
+  operationId: z.string().min(1),
+  report: z.object({
+    content: z.string(),
+    metadata: z.record(z.string(), z.unknown()),
+  }),
+});
 
 /** Everything a goal is created from except who owns it. */
 const conversationGoalInput = z.object({
@@ -190,6 +203,50 @@ export const goalRouter = router({
       });
       return { data, success: true };
     }),
+  // The wrap-up report of a heterogeneous agent's run: server tools never reach
+  // a device run, so its report arrives through the CLI instead of the tool.
+  submitOperationReport: heteroAuthedProcedure
+    .use(serverDatabase)
+    .input(reportInput)
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.heteroAuthKind !== 'operation' || !ctx.heteroOperation) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'An operation-bound token is required',
+        });
+      }
+      let principal;
+      try {
+        principal = await resolveActiveHeteroOperationPrincipal({
+          capability: 'hetero:ingest',
+          claims: ctx.heteroOperation,
+          db: ctx.serverDB,
+          operationId: input.operationId,
+        });
+      } catch (error) {
+        if (!(error instanceof HeteroOperationPrincipalError)) throw error;
+        throw new TRPCError({
+          cause: error,
+          code:
+            error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
+          message: error.message,
+        });
+      }
+      const data = await new GoalReportStore(
+        ctx.serverDB,
+        principal.userId,
+        principal.workspaceId,
+      ).submitFromOperation(input.id, input.report as SubmitGoalReportInput, input.operationId);
+      return { data, success: true };
+    }),
+  submitReport: goalWriteProcedure.input(reportInput).mutation(async ({ ctx, input }) => {
+    const data = await new GoalReportStore(
+      ctx.serverDB,
+      ctx.userId,
+      ctx.workspaceId ?? undefined,
+    ).submitFromOperation(input.id, input.report as SubmitGoalReportInput, input.operationId);
+    return { data, success: true };
+  }),
   submitPlan: goalWriteProcedure
     .input(
       idInput.extend({

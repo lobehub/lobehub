@@ -16,6 +16,7 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import CollapsibleContent from '@/components/CollapsibleContent';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
@@ -141,6 +142,15 @@ const SignOffStrip = ({
     });
 
   const actionable = state === 'open' && !!acceptanceId && canReview;
+
+  // Without the bundle the page cannot tell whether a sign-off is possible;
+  // say so and offer a retry rather than silently dropping the actions.
+  if (data.error && state === 'open')
+    return (
+      <Flexbox className={styles.strip} data-sign-off-state={'error'}>
+        <AsyncError error={data.error} variant={'inline'} onRetry={data.retry} />
+      </Flexbox>
+    );
 
   return (
     <Flexbox

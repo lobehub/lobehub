@@ -365,10 +365,18 @@ const TRIGGER_LABEL: Record<GoalReportTrigger, string> = {
 };
 
 /** The wrap-up agent's instruction: the skeleton plus what it must produce. */
+/**
+ * How the wrap-up agent submits. An ordinary agent gets the report tool; a
+ * heterogeneous agent (Claude Code, Codex…) runs on a device where server tools
+ * are not wired in, so it submits through the `lh` CLI instead — the same way
+ * a heterogeneous main Agent submits its plan.
+ */
+export type GoalReportSubmission = { kind: 'cli' } | { kind: 'tool'; toolName: string };
+
 export const buildGoalReportInstruction = (
   graph: GoalGraphSnapshot,
   trigger: GoalReportTrigger,
-  submitToolName: string,
+  submission: GoalReportSubmission,
 ): string => {
   const skeleton = buildGoalReportSkeleton(graph);
   const line = (node: { id: string; kind: string; status: string; title: string }) =>
@@ -418,14 +426,18 @@ export const buildGoalReportInstruction = (
     `Graph cursor: ${skeleton.graphCursor ?? 'none'}`,
     [
       'What to do:',
-      '1. Inspect the Goal, its findings and deliverables as needed. The skeleton is a starting point, not the answer.',
+      submission.kind === 'cli'
+        ? `1. Inspect the Goal, its findings and deliverables as needed (\`lh goal show ${graph.goal.id} --json\`). The skeleton is a starting point, not the answer.`
+        : '1. Inspect the Goal, its findings and deliverables as needed. The skeleton is a starting point, not the answer.',
       '2. Split the main path into a few chapters. Give each a title and a narrative of what was tried, what was learned and what it produced; reference its nodeIds (resolved main-path nodes only), findingIds and workVersionIds.',
       '3. Decide which detours are worth telling. For each one attach it to the chapter it forked from, with kind (dead_end | superseded | retry), the reason it was abandoned and the lesson it taught. Leave out detours that teach nothing.',
       '4. Write nextSteps: what remains or should come next, each with a reason.',
       '5. Write a one-sentence headline, and set deliverableWorkId when there is a final deliverable.',
       '6. Mark the mainline: the path that actually led to the result. mainline.nodeIds are the resolved tasks on the correct path (plus, when useful, the resolved root problem and the findings that carried the answer forward); mainline.edgeIds are the edges of this Goal that connect two of those nodes. Detour nodes are never on the mainline. The chapters must tell exactly this path: every chapter nodeId is a mainline node, and every mainline task appears in a chapter.',
       '7. Do NOT restate acceptance verdicts or user decisions as data; the page reads those from their own records. Narrate around them.',
-      `8. Call ${submitToolName} once with goalId, the metadata (headline, deliverableWorkId, chapters, mainline, nextSteps, graphCursor) and content: the full written report in markdown, built from that same metadata. If it rejects a reference, fix it and call again.`,
+      submission.kind === 'cli'
+        ? `8. Write the metadata (headline, deliverableWorkId, chapters, mainline, nextSteps, graphCursor) as JSON to a file, and the full written report in markdown, built from that same metadata, to another file. Submit both once with \`lh goal report ${graph.goal.id} --metadata-file <json> --content-file <md>\`. If it rejects a reference, fix the file and submit again.`
+        : `8. Call ${submission.toolName} once with goalId, the metadata (headline, deliverableWorkId, chapters, mainline, nextSteps, graphCursor) and content: the full written report in markdown, built from that same metadata. If it rejects a reference, fix it and call again.`,
     ].join('\n'),
   ]
     .filter(Boolean)

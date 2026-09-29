@@ -72,7 +72,12 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
           outcomes={data.outcomes}
           primaryResourceId={deliverable?.documentId}
         />
-        <GoalCriteriaResults loading={data.isLoading} outcomes={data.outcomes} />
+        <GoalCriteriaResults
+          error={data.error}
+          loading={data.isLoading}
+          outcomes={data.outcomes}
+          onRetry={data.retry}
+        />
         <GoalDecisionsMade graph={graph} />
         <GoalUnfinished graph={graph} outcomes={data.outcomes} onContinue={continueFromResult} />
       </Flexbox>
