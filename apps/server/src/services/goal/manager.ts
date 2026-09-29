@@ -383,7 +383,20 @@ export class GoalManagerService {
       // An adopted local desktop run has no server operation to watch exit; its
       // submitted plan is the only settlement the server can observe.
       const settledLocally = !!state.adopted && !operation && !!state.submitted;
-      if (!settledLocally && (!operation || !terminalOperations.has(operation.status))) {
+      // A dispatched turn that still has no operation after the timeout never
+      // started: the dispatch failed before the run was persisted, or the
+      // planning topic was busy and the prompt never became its own run. There
+      // is no process whose exit could be unconfirmed, so settle it like a turn
+      // that exited without a plan instead of pausing the Goal. Pausing left it
+      // stuck for good — every resume re-read this same turn and paused again.
+      // An adopted turn is exempt: it never has a server operation to find.
+      const neverStarted =
+        !state.adopted && !operation && Date.now() - Date.parse(state.startedAt) > TIMEOUT_MS;
+      if (
+        !settledLocally &&
+        !neverStarted &&
+        (!operation || !terminalOperations.has(operation.status))
+      ) {
         if (operation?.status === 'waiting_for_human') {
           await this.wait(goal.id, 'Main Agent is waiting for a human decision');
           return {
@@ -418,7 +431,9 @@ export class GoalManagerService {
         outcome: 'advanced',
         message: state.submitted
           ? 'Main Agent plan committed; normal Task coordination continues'
-          : 'Main Agent exited without a plan; a new bounded turn will reread durable state',
+          : neverStarted
+            ? 'Main Agent turn never started; a new bounded turn will reread durable state'
+            : 'Main Agent exited without a plan; a new bounded turn will reread durable state',
       };
     }
     return null;

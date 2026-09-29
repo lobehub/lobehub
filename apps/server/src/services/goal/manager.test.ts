@@ -690,6 +690,32 @@ describe('CLI main Agent planning', () => {
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
   });
 
+  it('replaces a timed-out turn that never started instead of pausing on it', async () => {
+    // The dispatch reaches no operation: the planning topic was busy, or the
+    // call failed before the run was persisted. Nothing can still be running.
+    const original = vi.mocked(AiAgentService.prototype.execAgent).getMockImplementation()!;
+    vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(async () => {
+      throw new Error('Topic is busy');
+    });
+    const { id, state, op } = await start();
+    expect(op).toBeUndefined();
+
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
+    expect((await service().tick(id)).outcome).toBe('advanced');
+    const settled = (await model().findById(id))!;
+    expect(settled.status).toBe('running');
+    expect(settled.config!.managerState!.token).toBe(state.token);
+    expect(settled.config!.managerState!.consumed).toBe(true);
+
+    vi.mocked(AiAgentService.prototype.execAgent).mockImplementation(original);
+    expect((await service().tick(id)).outcome).toBe('waiting_external');
+    const next = (await model().findById(id))!.config!.managerState!;
+    expect(next.token).not.toBe(state.token);
+    expect(next.turns).toBe(state.turns + 1);
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects an open human Gate without planning or dispatching work', async () => {
     const { id, state, op } = await start();
     const graph = new GoalGraphModel(db, userId);
