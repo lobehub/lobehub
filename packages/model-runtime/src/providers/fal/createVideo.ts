@@ -2,6 +2,7 @@ import type { FalClient } from '@fal-ai/client';
 import debug from 'debug';
 import type { RuntimeVideoGenParams } from 'model-bank';
 
+import { getVideoReferenceImages } from '../../core/usageConverters/utils/computeVideoCost';
 import type { CreateVideoResult, PollVideoStatusResult } from '../../types/video';
 
 const log = debug('lobe-video:fal');
@@ -67,9 +68,8 @@ export const buildFalVideoRequest = (model: string, params: RuntimeVideoGenParam
   let task: 'image-to-video' | 'reference-to-video' | 'text-to-video';
   if (imageUrls?.length) {
     task = 'reference-to-video';
-    input.reference_image_urls = [imageUrl, ...imageUrls, endImageUrl].filter(
-      (url): url is string => !!url,
-    );
+    // Shared with pricing so the billed reference tokens cover every image sent
+    input.reference_image_urls = getVideoReferenceImages({ endImageUrl, imageUrl, imageUrls });
     if (aspectRatio) input.aspect_ratio = aspectRatio;
   } else if (imageUrl || endImageUrl) {
     task = 'image-to-video';

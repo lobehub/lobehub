@@ -49,7 +49,7 @@ describe('resolveVideoSinglePrice', () => {
   });
 });
 
-describe('resolveVideoSinglePrice with per-second pricing', () => {
+describe('resolveVideoSinglePrice with request pricing', () => {
   const pricing: Pricing = {
     approximatePricePerVideo: 0.4,
     units: [
@@ -65,25 +65,25 @@ describe('resolveVideoSinglePrice with per-second pricing', () => {
     ],
   };
 
-  it('prices the requested duration and resolution exactly', () => {
-    expect(resolveVideoSinglePrice(pricing, { duration: 15, resolution: '1080P' })).toEqual({
-      approximatePrice: 2.4,
-    });
+  it('returns the exact price when the request prices every unit', () => {
+    const result = resolveVideoSinglePrice(pricing, { duration: 15, resolution: '1080P' });
+
+    expect(result.approximatePrice).toBe(0.4);
+    expect(result.price).toBeCloseTo(2.4, 10);
   });
 
-  it('falls back to approximatePricePerVideo when params are missing', () => {
+  it('omits the exact price when params are missing', () => {
     expect(resolveVideoSinglePrice(pricing)).toEqual({ approximatePrice: 0.4 });
     expect(resolveVideoSinglePrice(pricing, { resolution: '1080P' })).toEqual({
       approximatePrice: 0.4,
     });
-    expect(resolveVideoSinglePrice(pricing, { duration: 5 })).toEqual({ approximatePrice: 0.4 });
-    // Lookup keys follow the model card enum exactly; an unknown casing is not priced per second.
+    // Lookup keys follow the model card enum exactly; an unknown casing is not priced.
     expect(resolveVideoSinglePrice(pricing, { duration: 5, resolution: '480p' })).toEqual({
       approximatePrice: 0.4,
     });
   });
 
-  it('ignores params for token-priced models', () => {
+  it('only returns the approximate price for token-priced models', () => {
     const tokenPricing: Pricing = {
       approximatePricePerVideo: 0.76,
       units: [{ name: 'videoGeneration', rate: 7, strategy: 'fixed', unit: 'millionTokens' }],

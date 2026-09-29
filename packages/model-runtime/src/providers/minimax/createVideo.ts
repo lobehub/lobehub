@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
+import { getVideoReferenceImages } from '../../core/usageConverters/utils/computeVideoCost';
 import type { CreateVideoPayload, CreateVideoResult } from '../../types/video';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
 
@@ -233,12 +234,8 @@ export async function createMiniMaxVideo(
 
   if (isMiniMaxH3(model) || isMiniMaxH3(requestModel)) {
     const content: Record<string, unknown>[] = [{ text: prompt, type: 'text' }];
-    const hasReferenceImages = Boolean(imageUrls?.length);
-    const referenceImageUrls = hasReferenceImages
-      ? [imageUrl, ...(imageUrls ?? []), endImageUrl].filter(
-          (url): url is string => typeof url === 'string' && url.length > 0,
-        )
-      : [];
+    const referenceImageUrls = getVideoReferenceImages({ endImageUrl, imageUrl, imageUrls });
+    const hasReferenceImages = referenceImageUrls.length > 0;
 
     if (referenceImageUrls.length > 9) {
       throw new Error('MiniMax-H3 supports up to 9 reference images');

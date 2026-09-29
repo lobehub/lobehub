@@ -198,6 +198,14 @@ export interface FixedPricingUnit extends PricingUnitBase {
 }
 
 export interface TieredPricingUnit extends PricingUnitBase {
+  /**
+   * How tiers apply to a quantity:
+   * - `volume` (default): the whole quantity is billed at the rate of the tier it falls into
+   *   (e.g. Google's long-context pricing)
+   * - `graduated`: each tier bills only the part of the quantity inside it, so a zero-rate first
+   *   tier expresses a free allowance (e.g. fal's 4,096 free reference tokens per request)
+   */
+  mode?: 'graduated' | 'volume';
   strategy: 'tiered';
   tiers: Array<{
     /**

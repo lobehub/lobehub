@@ -241,11 +241,7 @@ const falVideoModels: AIVideoModelCard[] = [
       imageUrls: {
         aspectRatio: { max: 2.5, min: 0.4 },
         default: [],
-        // fal bills reference tokens beyond 4,096 per request ($0.02/1K; 1,024 per square image,
-        // 1,824 per 16:9, 2,560 per 5:2), which per-second pricing does not cover. Reference mode
-        // submits only this list, so three images cap the unbilled surcharge at about $0.03 for
-        // 16:9 inputs.
-        maxCount: 3,
+        maxCount: 9,
       },
       prompt: { default: '' },
       promptExtend: { default: 'balanced', enum: ['disabled', 'balanced', 'quality'] },
@@ -264,6 +260,18 @@ const falVideoModels: AIVideoModelCard[] = [
           name: 'videoGeneration',
           strategy: 'lookup',
           unit: 'second',
+        },
+        {
+          // Reference tokens above 4,096 per request at $0.02 / 1K; tokens per image follow the
+          // aspect ratio (see countVideoReferenceImageTokens)
+          mode: 'graduated',
+          name: 'imageInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0, upTo: 4096 },
+            { rate: 20, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
         },
       ],
     },

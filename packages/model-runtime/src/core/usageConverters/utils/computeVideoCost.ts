@@ -1,6 +1,14 @@
 import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '@lobechat/const/currency';
 import debug from 'debug';
-import type { FixedPricingUnit, LookupPricingUnit, Pricing } from 'model-bank';
+import type {
+  FixedPricingUnit,
+  LookupPricingUnit,
+  Pricing,
+  PricingUnit,
+  PricingUnitName,
+  PricingUnitType,
+  TieredPricingUnit,
+} from 'model-bank';
 
 const log = debug('lobe-cost:computeVideoCost');
 
@@ -12,6 +20,23 @@ export interface VideoGenerationParams {
   resolution?: string;
 }
 
+/**
+ * Request inputs that cannot be read from the params alone and are metered before the request
+ * (e.g. by reading the reference images' dimensions).
+ */
+export interface VideoRequestPricingInputs {
+  /** Reference-image tokens, counted by {@link countVideoReferenceImageTokens} */
+  referenceImageTokens?: number;
+}
+
+export interface VideoRequestCostItem {
+  cost: number;
+  lookupKey?: string;
+  name: PricingUnitName;
+  quantity: number;
+  unit: PricingUnitType;
+}
+
 export interface VideoCostResult {
   breakdown?: {
     completionTokens: number;
@@ -20,6 +45,8 @@ export interface VideoCostResult {
     lookupKey?: string;
     pricePerMillionTokens?: number;
     pricePerSecond?: number;
+    /** Every pricing unit priced from the request, set by {@link computeVideoRequestCost} */
+    units?: VideoRequestCostItem[];
   };
   totalCost: number; // Total cost in USD
   totalCredits: number; // Total credits (USD * CREDITS_PER_DOLLAR)
@@ -56,66 +83,174 @@ const resolveLookupRate = (
   return { lookupKey, rate };
 };
 
-/**
- * Whether the model bills video by requested output seconds instead of provider-reported tokens.
- */
-export const isDurationPricedVideo = (pricing?: Pricing): boolean =>
-  pricing?.units.find((unit) => unit.name === 'videoGeneration')?.unit === 'second';
+const toImageUrl = (value: unknown): string | undefined =>
+  typeof value === 'string' && value ? value : undefined;
 
 /**
- * Compute the cost of a video priced per output second (e.g. fal H3 Max), where the provider
- * bills the requested `duration` at a rate that may depend on other params such as `resolution`.
- * The request params fully determine the charge, so this is exact before the video exists.
+ * Reference images a request sends. Models that take both frames and references (MiniMax H3,
+ * fal H3 Max) fold the first/last frames into the reference pool once references are present,
+ * so pricing and the runtimes must agree on this order.
  */
-export const computeVideoDurationCost = (
-  pricing: Pricing,
-  params: VideoGenerationParams,
-): VideoCostResult | undefined => {
-  const videoGenUnit = pricing.units.find((unit) => unit.name === 'videoGeneration');
-  if (videoGenUnit?.unit !== 'second') return undefined;
+export const getVideoReferenceImages = (params: {
+  [key: string]: unknown;
+  endImageUrl?: unknown;
+  imageUrl?: unknown;
+  imageUrls?: unknown;
+}): string[] => {
+  const references = Array.isArray(params.imageUrls)
+    ? params.imageUrls.map(toImageUrl).filter((url): url is string => !!url)
+    : [];
+  if (references.length === 0) return [];
 
-  const duration = Number(params.duration);
-  if (!Number.isFinite(duration) || duration <= 0) {
-    log('Missing duration for per-second video pricing');
-    return undefined;
+  return [toImageUrl(params.imageUrl), ...references, toImageUrl(params.endImageUrl)].filter(
+    (url): url is string => !!url,
+  );
+};
+
+const countReferenceImages = (params: VideoGenerationParams) =>
+  getVideoReferenceImages(params).length;
+
+/**
+ * Request params the pricing reads. A request must carry them explicitly: when one is missing the
+ * provider applies its own default, which the price cannot see.
+ */
+export const getVideoPricingParamNames = (pricing?: Pricing): string[] => {
+  const names = new Set<string>();
+  for (const unit of pricing?.units ?? []) {
+    if (unit.name === 'videoGeneration' && unit.unit === 'second') names.add('duration');
+    if (unit.strategy === 'lookup') unit.lookup.pricingParams?.forEach((name) => names.add(name));
   }
+  return [...names];
+};
 
-  let pricePerSecond: number;
-  let lookupKey: string | undefined;
-  switch (videoGenUnit.strategy) {
-    case 'fixed': {
-      pricePerSecond = (videoGenUnit as FixedPricingUnit).rate;
-      break;
+/**
+ * Whether the pricing bills reference images by token, so callers must meter
+ * `referenceImageTokens` from the images before pricing the request.
+ */
+export const needsVideoReferenceImageTokens = (pricing?: Pricing): boolean =>
+  !!pricing?.units.some((unit) => unit.name === 'imageInput' && unit.unit === 'millionTokens');
+
+/**
+ * The quantity a pricing unit bills, known from the request alone. `undefined` means the quantity
+ * only exists after generation (e.g. output video tokens), so the request cannot be priced exactly.
+ */
+const resolveRequestQuantity = (
+  unit: PricingUnit,
+  params: VideoGenerationParams,
+  inputs: VideoRequestPricingInputs,
+): number | undefined => {
+  switch (`${unit.name}:${unit.unit}`) {
+    case 'videoGeneration:second': {
+      const duration = Number(params.duration);
+      return Number.isFinite(duration) && duration > 0 ? duration : undefined;
     }
-    case 'lookup': {
-      const resolved = resolveLookupRate(videoGenUnit as LookupPricingUnit, params);
-      if (!resolved) return undefined;
-
-      ({ lookupKey, rate: pricePerSecond } = resolved);
-      break;
+    case 'videoGeneration:video': {
+      return 1;
+    }
+    case 'imageInput:image': {
+      return countReferenceImages(params);
+    }
+    case 'imageInput:millionTokens': {
+      if (countReferenceImages(params) === 0) return 0;
+      return inputs.referenceImageTokens;
     }
     default: {
-      log(`Unsupported pricing strategy for per-second video: ${videoGenUnit.strategy}`);
       return undefined;
     }
   }
+};
+
+/** Price of `quantity` under `rate`, where token units are rated per million */
+const toUnitCost = (unit: PricingUnit, rate: number, quantity: number) =>
+  unit.unit === 'millionTokens' ? (rate * quantity) / 1_000_000 : rate * quantity;
+
+const computeTieredCost = (unit: TieredPricingUnit, quantity: number): number | undefined => {
+  if (unit.mode !== 'graduated') {
+    const tier = unit.tiers.find(({ upTo }) => upTo === 'infinity' || quantity <= (upTo as number));
+    return tier ? toUnitCost(unit, tier.rate, quantity) : undefined;
+  }
+
+  let cost = 0;
+  let lowerBound = 0;
+  for (const tier of unit.tiers) {
+    const upperBound = tier.upTo === 'infinity' ? Number.POSITIVE_INFINITY : tier.upTo;
+    const inTier = Math.min(quantity, upperBound) - lowerBound;
+    if (inTier > 0) cost += toUnitCost(unit, tier.rate, inTier);
+    if (quantity <= upperBound) return cost;
+    lowerBound = upperBound;
+  }
+
+  // Tiers end before the quantity does: the remainder has no configured rate.
+  return undefined;
+};
+
+/**
+ * Price a video request before it runs. Returns a result only when every pricing unit's quantity
+ * is known from the request (see {@link resolveRequestQuantity}) and priced; that result is the
+ * exact charge, e.g. fal H3 Max bills requested seconds plus reference tokens above an allowance.
+ * `undefined` means the cost depends on provider-reported usage (e.g. output video tokens), so the
+ * caller holds an approximate price and settles on completion instead.
+ */
+export const computeVideoRequestCost = (
+  pricing: Pricing,
+  params: VideoGenerationParams,
+  inputs: VideoRequestPricingInputs = {},
+): VideoCostResult | undefined => {
+  if (pricing.units.length === 0) return undefined;
+
+  const units: VideoRequestCostItem[] = [];
+  for (const unit of pricing.units) {
+    const quantity = resolveRequestQuantity(unit, params, inputs);
+    if (quantity === undefined) {
+      log('Unit %s:%s is not known before the request', unit.name, unit.unit);
+      return undefined;
+    }
+
+    let cost: number | undefined;
+    let lookupKey: string | undefined;
+    switch (unit.strategy) {
+      case 'fixed': {
+        cost = toUnitCost(unit, unit.rate, quantity);
+        break;
+      }
+      case 'lookup': {
+        const resolved = resolveLookupRate(unit, params);
+        if (resolved) {
+          lookupKey = resolved.lookupKey;
+          cost = toUnitCost(unit, resolved.rate, quantity);
+        }
+        break;
+      }
+      case 'tiered': {
+        cost = computeTieredCost(unit, quantity);
+        break;
+      }
+    }
+
+    if (cost === undefined) {
+      log('Unit %s:%s cannot be priced from the request', unit.name, unit.unit);
+      return undefined;
+    }
+    units.push({ cost, lookupKey, name: unit.name, quantity, unit: unit.unit });
+  }
 
   const currency = pricing.currency || 'USD';
-  const costInUSD = toUSD(pricePerSecond * duration, currency);
-  log(
-    `Video cost: %d s × %d/%s per second = $%d USD`,
-    duration,
-    pricePerSecond,
+  const costInUSD = toUSD(
+    units.reduce((sum, item) => sum + item.cost, 0),
     currency,
-    costInUSD,
   );
+  const outputUnit = units.find(
+    (item) => item.name === 'videoGeneration' && item.unit === 'second',
+  );
+  log('Video request cost: $%d USD, units: %O', costInUSD, units);
 
   return {
     breakdown: {
       completionTokens: 0,
-      durationSeconds: duration,
-      lookupKey,
-      pricePerSecond,
+      durationSeconds: outputUnit?.quantity,
+      lookupKey: outputUnit?.lookupKey,
+      pricePerSecond: outputUnit ? outputUnit.cost / outputUnit.quantity : undefined,
+      units,
     },
     totalCost: costInUSD,
     totalCredits: Math.ceil(costInUSD * CREDITS_PER_DOLLAR),
@@ -124,8 +259,8 @@ export const computeVideoDurationCost = (
 
 /**
  * Compute the cost for video generation based on pricing configuration.
- * Supports both fixed and lookup pricing strategies; per-second units price `params.duration`
- * and ignore `completionTokens`.
+ * Supports both fixed and lookup pricing strategies; units not rated per token (e.g. per second)
+ * are priced from the request by {@link computeVideoRequestCost} and ignore `completionTokens`.
  * Handles CNY→USD conversion when pricing currency is CNY.
  */
 export const computeVideoCost = (
@@ -139,7 +274,7 @@ export const computeVideoCost = (
     return undefined;
   }
 
-  if (videoGenUnit.unit === 'second') return computeVideoDurationCost(pricing, params);
+  if (videoGenUnit.unit !== 'millionTokens') return computeVideoRequestCost(pricing, params);
 
   const currency = pricing.currency || 'USD';
   let pricePerMillionTokens: number;

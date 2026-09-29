@@ -2,7 +2,7 @@ import type { Pricing } from 'model-bank';
 import { describe, expect, it } from 'vitest';
 
 import type { VideoGenerationParams } from './computeVideoCost';
-import { computeVideoCost } from './computeVideoCost';
+import { computeVideoCost, computeVideoRequestCost } from './computeVideoCost';
 
 describe('computeVideoCost', () => {
   describe('fixed pricing strategy', () => {
@@ -329,5 +329,153 @@ describe('computeVideoCost', () => {
       expect(computeVideoCost(lookupPricing, 0, { resolution: '768P' })).toBeUndefined();
       expect(computeVideoCost(lookupPricing, 0, { duration: 5, resolution: '4K' })).toBeUndefined();
     });
+  });
+});
+
+describe('computeVideoRequestCost', () => {
+  // fal H3 Max reference-to-video: requested seconds by resolution, plus reference tokens above a
+  // 4,096-token allowance at $0.02 / 1K (https://fal.ai/models/minimax/h3-max/reference-to-video)
+  const h3MaxPricing: Pricing = {
+    units: [
+      {
+        lookup: {
+          prices: { '1080P': 0.16, '480P': 0.05, '768P': 0.08 },
+          pricingParams: ['resolution'],
+        },
+        name: 'videoGeneration',
+        strategy: 'lookup',
+        unit: 'second',
+      },
+      {
+        mode: 'graduated',
+        name: 'imageInput',
+        strategy: 'tiered',
+        tiers: [
+          { rate: 0, upTo: 4096 },
+          { rate: 20, upTo: 'infinity' },
+        ],
+        unit: 'millionTokens',
+      },
+    ],
+  };
+  const images = (count: number) => Array.from({ length: count }, (_, i) => `https://img/${i}.png`);
+
+  it('prices text-to-video from the requested duration alone', () => {
+    const result = computeVideoRequestCost(h3MaxPricing, { duration: 15, resolution: '1080P' });
+
+    expect(result?.totalCost).toBeCloseTo(2.4, 10);
+    expect(result?.breakdown?.units).toEqual([
+      {
+        cost: expect.closeTo(2.4, 10),
+        lookupKey: '1080P',
+        name: 'videoGeneration',
+        quantity: 15,
+        unit: 'second',
+      },
+      { cost: 0, lookupKey: undefined, name: 'imageInput', quantity: 0, unit: 'millionTokens' },
+    ]);
+  });
+
+  it('matches fal published examples for reference tokens', () => {
+    // 5 square images: 5 × 1,024 tokens, 1,024 above the allowance
+    expect(
+      computeVideoRequestCost(
+        h3MaxPricing,
+        { duration: 5, imageUrls: images(5), resolution: '480P' },
+        { referenceImageTokens: 5120 },
+      )?.totalCost,
+    ).toBeCloseTo(0.270_48, 10);
+    // Within the allowance, references add nothing
+    expect(
+      computeVideoRequestCost(
+        h3MaxPricing,
+        { duration: 5, imageUrls: images(4), resolution: '768P' },
+        { referenceImageTokens: 4096 },
+      )?.totalCost,
+    ).toBeCloseTo(0.4, 10);
+  });
+
+  it('matches billed units of calibration requests', () => {
+    // fal bills reference-to-video in 480P seconds ($0.05); 4 × 6:5 images → 5.3072 units
+    expect(
+      computeVideoRequestCost(
+        h3MaxPricing,
+        { duration: 5, imageUrls: images(4), resolution: '480P' },
+        { referenceImageTokens: 4 * 1216 },
+      )?.totalCost,
+    ).toBeCloseTo(5.3072 * 0.05, 10);
+  });
+
+  it('is not exact when reference tokens were not metered', () => {
+    expect(
+      computeVideoRequestCost(h3MaxPricing, {
+        duration: 5,
+        imageUrls: images(1),
+        resolution: '480P',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('is not exact when a param needed by a unit is missing', () => {
+    expect(computeVideoRequestCost(h3MaxPricing, { resolution: '480P' })).toBeUndefined();
+    expect(computeVideoRequestCost(h3MaxPricing, { duration: 5 })).toBeUndefined();
+    expect(
+      computeVideoRequestCost(h3MaxPricing, { duration: 5, resolution: '4K' }),
+    ).toBeUndefined();
+  });
+
+  it('is not exact when any unit is billed from reported usage', () => {
+    const pricing: Pricing = {
+      units: [
+        ...h3MaxPricing.units,
+        { name: 'videoGeneration', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    };
+
+    expect(computeVideoRequestCost(pricing, { duration: 5, resolution: '480P' })).toBeUndefined();
+  });
+
+  it('prices reference image counts with a graduated free allowance', () => {
+    const pricing: Pricing = {
+      units: [
+        { name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'video' },
+        {
+          mode: 'graduated',
+          name: 'imageInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0, upTo: 5 },
+            { rate: 0.04, upTo: 'infinity' },
+          ],
+          unit: 'image',
+        },
+      ],
+    };
+
+    expect(computeVideoRequestCost(pricing, { imageUrls: images(7) })?.totalCost).toBeCloseTo(
+      0.58,
+      10,
+    );
+  });
+
+  it('bills the whole quantity at the matched tier for volume tiers', () => {
+    const pricing: Pricing = {
+      units: [
+        {
+          name: 'imageInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0, upTo: 5 },
+            { rate: 0.04, upTo: 'infinity' },
+          ],
+          unit: 'image',
+        },
+      ],
+    };
+
+    expect(computeVideoRequestCost(pricing, { imageUrls: images(7) })?.totalCost).toBeCloseTo(
+      0.28,
+      10,
+    );
   });
 });
