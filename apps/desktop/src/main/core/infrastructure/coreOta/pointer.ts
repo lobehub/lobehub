@@ -32,11 +32,6 @@ const readRaw = (otaRoot: string) => {
   }
 };
 
-export const readPointerAbi = (otaRoot: string): string | null => {
-  const abi = readRaw(otaRoot)?.abi;
-  return typeof abi === 'string' ? abi : null;
-};
-
 export const readPointer = (otaRoot: string, abi: string): CorePointer => {
   const raw = readRaw(otaRoot);
   if (raw?.abi === abi) {

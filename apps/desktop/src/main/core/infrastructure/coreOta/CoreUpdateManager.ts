@@ -24,13 +24,7 @@ import {
   coreManifestSchema,
   verifyManifestSignature,
 } from './manifest';
-import {
-  type CorePointer,
-  emptyPointer,
-  readPointer,
-  readPointerAbi,
-  writePointer,
-} from './pointer';
+import { type CorePointer, emptyPointer, readPointer, writePointer } from './pointer';
 import { cleanupLegacy, CoreStore } from './store';
 
 const logger = createLogger('core:CoreUpdateManager');
@@ -152,12 +146,11 @@ export class CoreUpdateManager {
     cleanupLegacy(electronApp.getPath('userData')).catch((error) =>
       logger.warn('Legacy renderer OTA cleanup failed:', error),
     );
-    const abiChanged = readPointerAbi(this.otaRoot) !== this.shell!.abi;
     const stored = readPointer(this.otaRoot, this.shell!.abi);
     this.pointer = { ...this.reconcilePointer(stored), channel: this.activeChannel };
     writePointer(this.otaRoot, this.pointer);
     logger.info('Core OTA boot state', this.pointer);
-    this.gc(abiChanged);
+    this.gc();
   };
 
   private reconcilePointer(pointer: CorePointer): CorePointer {
@@ -528,9 +521,9 @@ export class CoreUpdateManager {
     });
   }
 
-  private gc(keepStore = false) {
+  private gc() {
     this.gcTask = this.gcTask
-      .then(() => this.store.gc(this.keepVersions, { keepStore }))
+      .then(() => this.store.gc(this.keepVersions))
       .catch((error) => logger.warn('Core OTA gc failed:', error));
   }
 }

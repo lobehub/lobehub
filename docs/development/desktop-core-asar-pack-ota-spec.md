@@ -57,6 +57,8 @@
 
 安装布局变化属于 shell 能力变化，通过完整应用发布交付，并纳入 shell ABI 输入。新的 shell 必须能验证 v4 manifest；旧 shell 不应被切换到无法理解的外部 core。
 
+完整升级首次启动时，旧 ABI 的 OTA 指针失效，应用使用新的内置 core。启动 GC 删除旧 core 版本目录、staging 和未被保留版本引用的对象缓存；不再跨 ABI 保留缓存。已有 `renderer-ota` / `renderer-ota-v2` 目录也会清理。正在运行的外部 core 及 `current`、`previous`、`staged` 引用仍受保护，应用设置和业务数据不属于清理范围。
+
 ## 4. Pack 格式和 manifest v4
 
 ### 4.1 Pack 字节布局

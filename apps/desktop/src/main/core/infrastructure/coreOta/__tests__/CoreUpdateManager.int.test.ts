@@ -246,15 +246,41 @@ describe('CoreUpdateManager initialize', () => {
     expect(existsSync(coreDir('0.9.0'))).toBe(false);
   });
 
-  it('keeps store objects across an abi reset', async () => {
+  it('removes old OTA cache after a full release without touching app data', async () => {
     mkdirSync(storeDir(), { recursive: true });
     writeFileSync(path.join(storeDir(), 'f'.repeat(64)), 'blob');
-    pointerAt({ abi: 'b'.repeat(64) } as never);
+    pointerAt({
+      abi: 'b'.repeat(64),
+      current: 'old',
+      previous: 'older',
+      staged: 'pending',
+    } as never);
+    for (const dir of [
+      'core-ota/cores/old',
+      'core-ota/cores/older',
+      'core-ota/cores/pending',
+      'core-ota/staging',
+      'renderer-ota',
+      'renderer-ota-v2',
+    ]) {
+      mkdirSync(path.join(userDataDir, dir), { recursive: true });
+      writeFileSync(path.join(userDataDir, dir, 'old-file'), 'old OTA bytes');
+    }
+    writeFileSync(path.join(userDataDir, 'app-data.json'), 'keep app data');
 
     await loadManager();
     await flushGc();
 
-    expect(existsSync(path.join(storeDir(), 'f'.repeat(64)))).toBe(true);
+    expect(existsSync(path.join(storeDir(), 'f'.repeat(64)))).toBe(false);
+    expect(readdirSync(path.join(otaRoot(), 'cores'))).toEqual([]);
+    for (const dir of ['core-ota/staging', 'renderer-ota', 'renderer-ota-v2'])
+      expect(existsSync(path.join(userDataDir, dir))).toBe(false);
+    expect(readPointer(otaRoot(), ABI)).toMatchObject({
+      current: null,
+      previous: null,
+      staged: null,
+    });
+    expect(readFileSync(path.join(userDataDir, 'app-data.json'), 'utf8')).toBe('keep app data');
   });
 
   it('clears pointer.current when the shell fell back to builtin and the core dir is gone', async () => {

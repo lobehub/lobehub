@@ -251,7 +251,7 @@ export class CoreStore {
     return { dir, downloaded, fallbackFull } satisfies StageResult;
   }
 
-  async gc(keep: string[], { keepStore = false } = {}) {
+  async gc(keep: string[]) {
     if (this.active) return;
     await rm(path.join(this.otaRoot, 'staging'), { force: true, recursive: true });
     const referenced = new Set<string>();
@@ -264,7 +264,6 @@ export class CoreStore {
       const manifest = await this.readManifest(dir);
       for (const file of manifest?.tree ?? []) referenced.add(file.sha256);
     }
-    if (keepStore) return;
     const unreferenced = (await readDirNames(this.storeDir)).filter(
       (name) => !referenced.has(name),
     );
