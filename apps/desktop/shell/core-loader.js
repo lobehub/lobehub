@@ -1,4 +1,4 @@
-const { createHash, verify } = require('node:crypto');
+const { verify } = require('node:crypto');
 const fs = require('node:fs');
 const Module = require('node:module');
 const path = require('node:path');
@@ -7,8 +7,6 @@ const MAX_BOOT_FAILURES = 3;
 const VERSION_NAME = /^[\w.+-]{1,64}$/;
 const UNSAFE_SEGMENT = /^\.\.?$/;
 const MAIN_ENTRY = 'dist/main/index.js';
-
-const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 
 const canonicalJson = (value) => {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -64,9 +62,12 @@ const verifyCandidate = (dir, { abi, publicKey }) => {
   }
   if (!manifest.tree.some((entry) => entry.path === MAIN_ENTRY))
     throw new Error(`${MAIN_ENTRY} not in tree`);
+  // Content hashes are verified once while staging; hashing ~110 MB here cost ~600 ms on a
+  // cold Windows boot. Sizes still catch truncated, deleted or quarantined files.
   for (const file of manifest.tree) {
-    if (sha256(fs.readFileSync(path.join(dir, file.path))) !== file.sha256)
-      throw new Error(`hash mismatch ${file.path}`);
+    const stat = fs.statSync(path.join(dir, file.path), { throwIfNoEntry: false });
+    if (!stat) throw new Error(`missing ${file.path}`);
+    if (stat.size !== file.size) throw new Error(`size mismatch ${file.path}`);
   }
   return manifest;
 };

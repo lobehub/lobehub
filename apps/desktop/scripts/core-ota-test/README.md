@@ -58,11 +58,11 @@ node scripts/core-ota-test/run.mjs tamper # 改 cores/1.0.0-core.2/dist/main/ind
 node scripts/core-ota-test/run.mjs launch
 ```
 
-期望：壳日志 `core 1.0.0-core.2 rejected: ... hash mismatch`，回退到 `previous`（1.0.0-core.1）。
+期望：壳日志 `core 1.0.0-core.2 rejected: size mismatch dist/main/index.js`，回退到 `previous`（1.0.0-core.1）。
 
 ## 5. boot 失败回滚
 
-直接改 `cores/<v>/` 里的文件会被壳的 hash 校验拦下（等于第 4 步），所以发布一个签名有效但 renderer 永远不 mount 的 v4：
+直接改 `cores/<v>/` 里的文件并改变大小会被壳的 size 校验拦下（等于第 4 步），所以发布一个签名有效但 renderer 永远不 mount 的 v4：
 
 ```bash
 node scripts/core-ota-test/run.mjs v4 # index.html 只引一个 js 资源并 throw，seq 3，reload

@@ -117,38 +117,48 @@ describe('resolveCore', () => {
     expect(core.log.join('\n')).toMatch(/signature/);
   });
 
-  it('rejects a core whose main file hash mismatches', () => {
+  it('rejects a core whose main file size mismatches', () => {
     writeExternal('1.1.0', {
       mutate: (dir) => fs.writeFileSync(path.join(dir, 'dist/main/index.js'), 'tampered'),
     });
     writePointer({ current: '1.1.0' });
     const core = resolve();
     expect(core.source).toBe('builtin');
-    expect(core.log.join('\n')).toMatch(/dist\/main\/index\.js/);
+    expect(core.log.join('\n')).toContain('size mismatch dist/main/index.js');
   });
 
-  it('rejects a core whose renderer file hash mismatches', () => {
+  it.each(['node_modules/electron-log/main.js', 'cli/lobe-cli.js', 'package.json'])(
+    'rejects a core whose %s size mismatches',
+    (file) => {
+      writeExternal('1.1.0', {
+        mutate: (dir) => fs.writeFileSync(path.join(dir, file), 'tampered content'),
+      });
+      writePointer({ current: '1.1.0' });
+      const core = resolve();
+      expect(core.source).toBe('builtin');
+      expect(core.log.join('\n')).toContain(`size mismatch ${file}`);
+    },
+  );
+
+  it('rejects a core with a missing tree file', () => {
+    writeExternal('1.1.0', {
+      mutate: (dir) => fs.rmSync(path.join(dir, 'dist/renderer/index.html')),
+    });
+    writePointer({ current: '1.1.0' });
+    const core = resolve();
+    expect(core.source).toBe('builtin');
+    expect(core.log.join('\n')).toContain('missing dist/renderer/index.html');
+  });
+
+  it('accepts same-size local edits because content is hashed only while staging', () => {
     writeExternal('1.1.0', {
       mutate: (dir) => fs.writeFileSync(path.join(dir, 'dist/renderer/index.html'), 'changed'),
     });
     writePointer({ current: '1.1.0' });
     const core = resolve();
-    expect(core.source).toBe('builtin');
-    expect(core.log.join('\n')).toContain('hash mismatch dist/renderer/index.html');
+    expect(core.source).toBe('external');
+    expect(core.manifest.version).toBe('1.1.0');
   });
-
-  it.each(['node_modules/electron-log/main.js', 'cli/lobe-cli.js', 'package.json'])(
-    'rejects a core whose %s hash mismatches',
-    (file) => {
-      writeExternal('1.1.0', {
-        mutate: (dir) => fs.writeFileSync(path.join(dir, file), 'tampered'),
-      });
-      writePointer({ current: '1.1.0' });
-      const core = resolve();
-      expect(core.source).toBe('builtin');
-      expect(core.log.join('\n')).toContain(`hash mismatch ${file}`);
-    },
-  );
 
   it.each(['../x', 'dist/main/../x', './x', '/x', 'dist\\main\\x'])(
     'rejects a signed manifest whose tree contains %s',
