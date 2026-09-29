@@ -1726,8 +1726,7 @@ export default {
   'taskDetail.replyInThread': 'Reply in this thread',
   'taskDetail.replyPlaceholder': 'Reply in this thread...',
   'taskDetail.sendFollowUp': 'Send follow up message',
-  'taskDetail.deleteConfirm.content':
-    'The task will be moved to the trash and can be restored within 30 days.',
+  'taskDetail.deleteConfirm.content': 'This action cannot be undone.',
   'taskDetail.deleteConfirm.ok': 'Delete',
   'taskDetail.deleteConfirm.title': 'Delete this task?',
   'taskDetail.instruction': 'Instruction',
