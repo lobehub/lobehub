@@ -87,6 +87,21 @@ describe('MetricModel', () => {
   });
 
   describe('points', () => {
+    it('appends a batch through the owned series only', async () => {
+      const series = (await seed())!;
+      const batch = [1, 2, 3].map((value) => ({
+        actorType: 'system' as const,
+        observedAt: new Date(`2026-09-0${value}T00:00:00Z`),
+        sourceType: 'probe' as const,
+        value,
+      }));
+
+      expect(await model.addPoints(series.id, batch)).toBe(3);
+      expect(await model.addPoints(series.id, [])).toBe(0);
+      expect(await otherModel.addPoints(series.id, batch)).toBe(0);
+      expect((await model.latestPoint(series.id))!.value).toBe(3);
+    });
+
     it('appends through the owned series and refuses foreign or missing series', async () => {
       const series = (await seed())!;
 

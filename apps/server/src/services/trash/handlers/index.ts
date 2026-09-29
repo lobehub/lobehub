@@ -1,5 +1,6 @@
 import type { TrashResourceType } from '@lobechat/types';
 
+import { dashboardHandler, dashboardWidgetHandler } from './dashboard';
 import { topicHandler } from './topic';
 import type { TrashHandler } from './types';
 
@@ -12,6 +13,8 @@ import type { TrashHandler } from './types';
  * the handler itself.
  */
 export const TRASH_HANDLERS: Partial<Record<TrashResourceType, TrashHandler>> = {
+  dashboard: dashboardHandler,
+  dashboardWidget: dashboardWidgetHandler,
   topic: topicHandler,
 };
 

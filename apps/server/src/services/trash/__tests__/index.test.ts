@@ -5,10 +5,20 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
+import { DashboardModel } from '@/database/models/dashboard';
+import { DashboardWidgetModel } from '@/database/models/dashboardWidget';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TrashModel } from '@/database/models/trash';
-import { messages, topics, trashItems, users, workspaces } from '@/database/schemas';
+import {
+  dashboards,
+  dashboardWidgets,
+  messages,
+  topics,
+  trashItems,
+  users,
+  workspaces,
+} from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TrashService } from '../index';
@@ -85,6 +95,41 @@ describe('TrashService', () => {
       expect(roots).toHaveLength(2);
       expect((await topicModel.query({ agentId: agent.id })).items).toHaveLength(0);
       expect((await service.list()).items).toHaveLength(2);
+    });
+  });
+
+  describe('dashboards', () => {
+    it('restores a trashed board and widget from the bin', async () => {
+      const boards = new DashboardModel(serverDB, userId);
+      const widgets = new DashboardWidgetModel(serverDB, userId);
+      const board = await boards.create({ title: 'Ops' });
+      const widget = await widgets.create({ title: 'Open PRs' });
+      await boards.trash(board.id);
+      await widgets.trash(widget.id);
+
+      const { items } = await service.list();
+      expect(items.map((i) => i.resourceType).sort()).toEqual(['dashboard', 'dashboardWidget']);
+
+      const outcome = await service.restore(items.map((i) => i.id));
+      expect(outcome.failed).toEqual([]);
+      expect(outcome.restored).toHaveLength(2);
+      expect(await boards.findById(board.id)).toMatchObject({ id: board.id, isDeleted: null });
+      expect(await widgets.findById(widget.id)).toMatchObject({ id: widget.id, isDeleted: null });
+      expect(await serverDB.select().from(trashItems)).toHaveLength(0);
+    });
+
+    it('purges a trashed board and widget when the bin is emptied', async () => {
+      const boards = new DashboardModel(serverDB, userId);
+      const widgets = new DashboardWidgetModel(serverDB, userId);
+      const board = await boards.create({ title: 'Ops' });
+      const widget = await widgets.create({ title: 'Open PRs' });
+      await boards.trash(board.id);
+      await widgets.trash(widget.id);
+
+      expect(await service.emptyTrash()).toEqual({ hasMore: false, purged: 2 });
+      expect(await serverDB.select().from(dashboards)).toHaveLength(0);
+      expect(await serverDB.select().from(dashboardWidgets)).toHaveLength(0);
+      expect(await serverDB.select().from(trashItems)).toHaveLength(0);
     });
   });
 

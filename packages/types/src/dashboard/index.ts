@@ -49,12 +49,25 @@ export type WidgetOutputType = (typeof WIDGET_OUTPUT_TYPES)[number];
 
 export type WidgetTrend = 'up' | 'down' | 'flat';
 
+/**
+ * Optional envelope a script may attach to any output. `complete: false`
+ * marks a partial result (e.g. one of several upstream APIs failed): the run
+ * still succeeds and the card renders, but the value is not recorded into
+ * the widget's metric trend.
+ */
+export interface WidgetOutputMeta {
+  complete?: boolean;
+  /** Short human-readable note shown beside a partial result. */
+  message?: string;
+}
+
 /** A single headline number (or short string) with optional comparison. */
 export interface WidgetStatOutput {
   /** Change against the previous period, already formatted or numeric. */
   delta?: number | string;
   description?: string;
   label?: string;
+  meta?: WidgetOutputMeta;
   trend?: WidgetTrend;
   type: 'stat';
   unit?: string;
@@ -74,6 +87,7 @@ export interface WidgetListItem {
 
 export interface WidgetListOutput {
   items: WidgetListItem[];
+  meta?: WidgetOutputMeta;
   type: 'list';
 }
 
@@ -89,6 +103,7 @@ export interface WidgetSeries {
 }
 
 export interface WidgetSeriesOutput {
+  meta?: WidgetOutputMeta;
   series: WidgetSeries[];
   type: 'series';
   unit?: string;
@@ -104,6 +119,7 @@ export type WidgetTableCell = string | number | boolean | null;
 
 export interface WidgetTableOutput {
   columns: WidgetTableColumn[];
+  meta?: WidgetOutputMeta;
   rows: Record<string, WidgetTableCell>[];
   type: 'table';
 }

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import agentEvalRunApp from './agent-eval-run';
 import agentSignalApp from './agent-signal';
+import dashboardApp from './dashboard';
 import expertiseHistoryApp from './expertise-history';
 import expertiseRejectionApp from './expertise-rejection';
 import goalApp from './goal';
@@ -17,6 +18,7 @@ const app = new Hono().basePath('/api/workflows');
 
 app.route('/agent-eval-run', agentEvalRunApp);
 app.route('/agent-signal', agentSignalApp);
+app.route('/dashboard', dashboardApp);
 app.route('/expertise-history', expertiseHistoryApp);
 app.route('/expertise-rejection', expertiseRejectionApp);
 app.route('/goal', goalApp);

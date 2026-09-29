@@ -427,7 +427,69 @@ export class DashboardWidgetModel {
       .limit(options.limit ?? 20);
   }
 
+  async findRun(widgetId: string, runId: string) {
+    const widget = await this.findById(widgetId);
+    if (!widget) return undefined;
+
+    const [run] = await this.db
+      .select()
+      .from(dashboardWidgetRuns)
+      .where(and(eq(dashboardWidgetRuns.id, runId), eq(dashboardWidgetRuns.widgetId, widgetId)))
+      .limit(1);
+
+    return run;
+  }
+
+  /**
+   * Whether any version of this widget with the given content hash has a
+   * succeeded run. Publishing a draft is gated on this: the exact content
+   * going live must have been executed successfully at least once, whichever
+   * version row carried it.
+   */
+  async hasSucceededRunForContentHash(widgetId: string, contentHash: string) {
+    const widget = await this.findById(widgetId);
+    if (!widget) return false;
+
+    const [row] = await this.db
+      .select({ id: dashboardWidgetRuns.id })
+      .from(dashboardWidgetRuns)
+      .innerJoin(
+        dashboardWidgetVersions,
+        eq(dashboardWidgetRuns.versionId, dashboardWidgetVersions.id),
+      )
+      .where(
+        and(
+          eq(dashboardWidgetRuns.widgetId, widgetId),
+          eq(dashboardWidgetRuns.status, 'succeeded'),
+          eq(dashboardWidgetVersions.contentHash, contentHash),
+        ),
+      )
+      .limit(1);
+
+    return !!row;
+  }
+
   // ── Scheduler (trusted, cross-user) ──
+
+  /** A live widget and its published version, for a queued scheduled run. */
+  static async findLiveWithPublishedVersion(db: LobeChatDatabase, widgetId: string) {
+    const [row] = await db
+      .select({ version: dashboardWidgetVersions, widget: dashboardWidgets })
+      .from(dashboardWidgets)
+      .innerJoin(
+        dashboardWidgetVersions,
+        eq(dashboardWidgets.publishedVersionId, dashboardWidgetVersions.id),
+      )
+      .where(and(eq(dashboardWidgets.id, widgetId), isNotTrashed(dashboardWidgets.isDeleted)))
+      .limit(1);
+
+    return row;
+  }
+
+  /** Point the widget at its trend series once the first point is written. */
+  static async linkMetric(db: LobeChatDatabase, widgetId: string, metricId: string) {
+    await db.update(dashboardWidgets).set({ metricId }).where(eq(dashboardWidgets.id, widgetId));
+  }
 
   /**
    * Live, published, scheduled widgets whose `next_run_at` has passed, with

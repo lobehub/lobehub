@@ -215,6 +215,31 @@ export class MetricModel {
     return row;
   };
 
+  /**
+   * Append many observations to one series in a single insert — for samplers
+   * that report a batch (e.g. a dashboard widget's time series). Same
+   * ownership rule as {@link addPoint}; returns the inserted count, 0 when the
+   * series is not the caller's.
+   */
+  addPoints = async (metricId: string, points: AddMetricPointParams[]): Promise<number> => {
+    if (points.length === 0) return 0;
+    const series = await this.findById(metricId);
+    if (!series) return 0;
+
+    const rows = await this.db
+      .insert(metricPoints)
+      .values(
+        points.map((point) =>
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { ...point, metricId },
+          ),
+        ),
+      )
+      .returning({ id: metricPoints.id });
+    return rows.length;
+  };
+
   /** The most recent observation — what numeric acceptance criteria read. */
   latestPoint = async (metricId: string): Promise<MetricPointItem | undefined> => {
     const [row] = await this.db

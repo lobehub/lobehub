@@ -218,6 +218,36 @@ describe('DashboardWidgetModel', () => {
   });
 
   describe('runs', () => {
+    it('finds a run by id only through a readable widget', async () => {
+      const widget = await model.create({ title: 'w' });
+      await model.createVersion(widget.id, script(1));
+      const run = await model.startRun(widget.id, { trigger: 'preview' });
+
+      expect(await model.findRun(widget.id, run!.id)).toMatchObject({ id: run!.id });
+      expect(await other.findRun(widget.id, run!.id)).toBeUndefined();
+    });
+
+    it('tracks succeeded runs by content hash across version rows', async () => {
+      const widget = await model.create({ title: 'w' });
+      const v1 = await model.createVersion(widget.id, script(1));
+      await model.createVersion(widget.id, script(2));
+      // Back to v1's content: a new draft row with the same hash.
+      const v3 = await model.createVersion(widget.id, script(1));
+      expect(v3!.id).not.toBe(v1!.id);
+      expect(v3!.contentHash).toBe(v1!.contentHash);
+
+      expect(await model.hasSucceededRunForContentHash(widget.id, v1!.contentHash)).toBe(false);
+
+      const failed = await model.startRun(widget.id, { trigger: 'preview', versionId: v1!.id });
+      await model.finishRun(failed!.id, { status: 'failed' });
+      expect(await model.hasSucceededRunForContentHash(widget.id, v1!.contentHash)).toBe(false);
+
+      const ok = await model.startRun(widget.id, { trigger: 'preview', versionId: v1!.id });
+      await model.finishRun(ok!.id, { status: 'succeeded' });
+      expect(await model.hasSucceededRunForContentHash(widget.id, v3!.contentHash)).toBe(true);
+      expect(await other.hasSucceededRunForContentHash(widget.id, v1!.contentHash)).toBe(false);
+    });
+
     it('preview runs use the draft and never touch the widget snapshot', async () => {
       const widget = await model.create({ title: 'w' });
       const draft = await model.createVersion(widget.id, script(1));
@@ -330,6 +360,30 @@ describe('DashboardWidgetModel', () => {
   });
 
   describe('scheduler', () => {
+    it('loads a live widget with its published version and links its metric', async () => {
+      const widget = await model.create({ title: 'w' });
+      expect(
+        await DashboardWidgetModel.findLiveWithPublishedVersion(serverDB, widget.id),
+      ).toBeUndefined();
+
+      const v1 = await model.createVersion(widget.id, script(1));
+      await model.publishVersion(widget.id, v1!.id);
+      const live = await DashboardWidgetModel.findLiveWithPublishedVersion(serverDB, widget.id);
+      expect(live).toMatchObject({ version: { id: v1!.id }, widget: { id: widget.id } });
+
+      const [metric] = await serverDB
+        .insert(metrics)
+        .values({ key: 'value', subjectId: widget.id, subjectType: 'dashboardWidget', userId })
+        .returning();
+      await DashboardWidgetModel.linkMetric(serverDB, widget.id, metric.id);
+      expect((await model.findById(widget.id))!.metricId).toBe(metric.id);
+
+      await model.trash(widget.id);
+      expect(
+        await DashboardWidgetModel.findLiveWithPublishedVersion(serverDB, widget.id),
+      ).toBeUndefined();
+    });
+
     it('finds due widgets across users and claims each slot once', async () => {
       const now = new Date('2030-01-01T01:00:00Z');
       const past = new Date('2030-01-01T00:00:00Z');

@@ -212,6 +212,10 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   composio: 'blocked',
   config: 'open',
   connector: 'blocked',
+  // widget runs execute user scripts in the sandbox with the owner's connector
+  // credentials, so restricted keys may read boards and runs but not change
+  // or trigger them
+  dashboard: rw('agent:read', null),
   device: 'blocked',
   deviceMetric: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
