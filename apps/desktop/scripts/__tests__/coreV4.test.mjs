@@ -86,7 +86,8 @@ const stage = async (builtin, remote) =>
     packsBaseUrl: BASE,
     remote: remote.manifest,
   });
-describe('v4 pack OTA', () => {
+// Real level-19 compression and filesystem staging need headroom on shared CI runners.
+describe('v4 pack OTA', { timeout: 30_000 }, () => {
   it('builds deterministic signed packs and skips unchanged local bytes across versions', async () => {
     const v1 = await build('1', files);
     const v5 = await build('5', { ...files, 'cli/new.js': Buffer.from('new') });
