@@ -384,20 +384,25 @@ export class GoalManagerService {
       // An adopted local desktop run has no server operation to watch exit; its
       // submitted plan is the only settlement the server can observe.
       const settledLocally = !!state.adopted && !operation && !!state.submitted;
-      // A dispatched turn whose planning message was never written did not
-      // start: `execAgent` persists that message (`msg_goal_manager_<token>`)
-      // before it creates any operation, and the busy-topic gate — the planning
-      // topic can be the owner's own conversation — throws before it. With no
-      // run to confirm, settle the turn like one that exited without a plan
-      // instead of pausing: pausing left the Goal stuck for good, because every
-      // resume re-read this same turn and paused again.
+      // A dispatched turn never ran when its dispatch call is known to have
+      // ended in an error AND its planning message (`msg_goal_manager_<token>`)
+      // was never written: `execAgent` persists that message before it creates
+      // any operation, and the busy-topic gate — the planning topic can be the
+      // owner's own conversation — throws before it. With no run to confirm,
+      // settle the turn like one that exited without a plan instead of pausing:
+      // pausing left the Goal stuck for good, because every resume re-read this
+      // same turn and paused again.
       //
-      // A missing operation row alone proves nothing — the runtime keeps going
-      // when that insert fails — so a turn whose message exists still pauses as
-      // unconfirmed. An adopted turn never has a dispatched message and is exempt.
+      // Neither signal alone is enough. A missing operation row proves nothing —
+      // the runtime keeps going when that insert fails — and a missing message
+      // only says the call has not got that far yet; a call still pending may
+      // start a paid run later. So a turn whose dispatch never reported failure,
+      // or whose message exists, still pauses as unconfirmed. An adopted turn
+      // never has a dispatched message and is exempt.
       const neverStarted =
         !state.adopted &&
         !operation &&
+        !!state.dispatchFailedAt &&
         Date.now() - Date.parse(state.startedAt) > TIMEOUT_MS &&
         !(await new MessageModel(this.db, this.userId, this.workspaceId).findById(
           `${MANAGER_SOURCE_MESSAGE_PREFIX}${state.token}`,
@@ -608,6 +613,21 @@ export class GoalManagerService {
         '[goal:manager] dispatch failed; next wakeup adopts any persisted operation',
         error,
       );
+      // The call has returned, so it can no longer start a run on its own. Kept
+      // on the turn so a later settle can tell "never ran" from "still starting".
+      await this.db
+        .transaction(async (db) => {
+          const fresh = await new GoalModel(db, this.userId, this.workspaceId).lockById(goal.id);
+          if (fresh?.config?.managerState?.token === claimed.token) {
+            await this.save(db, goal.id, {
+              ...fresh.config.managerState,
+              dispatchFailedAt: new Date().toISOString(),
+            });
+          }
+        })
+        .catch((saveError) =>
+          console.error('[goal:manager] failed to record the dispatch failure', saveError),
+        );
     }
     return this.wait(goal.id, 'Main Agent dispatched with CLI planning access');
   };

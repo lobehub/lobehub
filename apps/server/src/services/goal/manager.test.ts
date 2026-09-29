@@ -702,6 +702,7 @@ describe('CLI main Agent planning', () => {
     });
     const { id, state, op } = await start();
     expect(op).toBeUndefined();
+    expect((await model().findById(id))!.config!.managerState!.dispatchFailedAt).toBeDefined();
 
     const now = Date.now();
     vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
@@ -717,6 +718,31 @@ describe('CLI main Agent planning', () => {
     expect(next.token).not.toBe(state.token);
     expect(next.turns).toBe(state.turns + 1);
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps pausing a timed-out turn whose dispatch never reported failure', async () => {
+    // No message and no operation, but the dispatch call never ended in an
+    // error: it may still be initialising and start a paid run later, so the
+    // turn cannot be replaced.
+    vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(
+      async (params) =>
+        ({
+          agentId: params.agentId!,
+          operationId: 'op-still-starting',
+          topicId: params.appContext!.topicId!,
+        }) as any,
+    );
+    const { id, state, op } = await start();
+    expect(op).toBeUndefined();
+
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
+    expect((await service().tick(id)).outcome).toBe('no_progress');
+    const fresh = (await model().findById(id))!;
+    expect(fresh.status).toBe('paused');
+    expect(fresh.config!.managerState!.token).toBe(state.token);
+    expect(fresh.config!.managerState!.consumed).not.toBe(true);
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
   });
 
   it('keeps pausing a timed-out turn whose message exists but whose operation row is missing', async () => {
