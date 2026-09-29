@@ -38,7 +38,11 @@ NotificationRoutes.get(
 /** GET /api/v1/notifications/unread-count */
 NotificationRoutes.get(
   '/unread-count',
-  describeRoute({ summary: 'Get the unread notification count', tags: ['notifications'] }),
+  describeRoute({
+    operationId: 'getUnreadNotificationCount',
+    summary: 'Get the unread notification count',
+    tags: ['notifications'],
+  }),
   requireAuth,
   async (c) => new NotificationController().getUnreadCount(c),
 );
@@ -46,7 +50,11 @@ NotificationRoutes.get(
 /** GET /api/v1/notifications/counts — per-category read/unread/total tallies. */
 NotificationRoutes.get(
   '/counts',
-  describeRoute({ summary: 'Get per-category notification counts', tags: ['notifications'] }),
+  describeRoute({
+    operationId: 'getNotificationCounts',
+    summary: 'Get per-category notification counts',
+    tags: ['notifications'],
+  }),
   requireAuth,
   async (c) => new NotificationController().getNavigationCounts(c),
 );
@@ -54,6 +62,7 @@ NotificationRoutes.get(
 /** POST /api/v1/notifications/read */
 NotificationRoutes.post(
   '/read',
+  describeRoute({ operationId: 'markNotificationsRead', tags: ['notifications'] }),
   requireAuth,
   notificationWrite,
   zValidator('json', MarkNotificationsReadRequestSchema),
@@ -63,7 +72,11 @@ NotificationRoutes.post(
 /** POST /api/v1/notifications/read-all */
 NotificationRoutes.post(
   '/read-all',
-  describeRoute({ summary: 'Mark every notification as read', tags: ['notifications'] }),
+  describeRoute({
+    operationId: 'markAllNotificationsRead',
+    summary: 'Mark every notification as read',
+    tags: ['notifications'],
+  }),
   requireAuth,
   notificationWrite,
   async (c) => new NotificationController().markAllAsRead(c),
@@ -72,7 +85,11 @@ NotificationRoutes.post(
 /** POST /api/v1/notifications/archive-all */
 NotificationRoutes.post(
   '/archive-all',
-  describeRoute({ summary: 'Archive every notification', tags: ['notifications'] }),
+  describeRoute({
+    operationId: 'archiveAllNotifications',
+    summary: 'Archive every notification',
+    tags: ['notifications'],
+  }),
   requireAuth,
   notificationWrite,
   async (c) => new NotificationController().archiveAll(c),
@@ -81,6 +98,7 @@ NotificationRoutes.post(
 /** POST /api/v1/notifications/:id/archive */
 NotificationRoutes.post(
   '/:id/archive',
+  describeRoute({ operationId: 'archiveNotification', tags: ['notifications'] }),
   requireAuth,
   notificationWrite,
   zValidator('param', NotificationIdParamSchema),

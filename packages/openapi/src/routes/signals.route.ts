@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
@@ -29,6 +30,7 @@ const signalWrite = requireAnyPermission(
 /** POST /api/v1/signals/source-events — emit a client-side event. */
 AgentSignalRoutes.post(
   '/source-events',
+  describeRoute({ operationId: 'emitSourceEvent', tags: ['signals'] }),
   requireAuth,
   signalWrite,
   zValidator('json', EmitSourceEventRequestSchema),
@@ -38,6 +40,7 @@ AgentSignalRoutes.post(
 /** POST /api/v1/signals/trigger — synthesise and enqueue a trigger event. */
 AgentSignalRoutes.post(
   '/trigger',
+  describeRoute({ operationId: 'triggerSourceEvent', tags: ['signals'] }),
   requireAuth,
   signalWrite,
   zValidator('json', TriggerSourceEventRequestSchema),
@@ -47,6 +50,7 @@ AgentSignalRoutes.post(
 /** GET /api/v1/signals/receipts — processed-event receipts for a topic. */
 AgentSignalRoutes.get(
   '/receipts',
+  describeRoute({ operationId: 'listSignalReceipts', tags: ['signals'] }),
   requireAuth,
   zValidator('query', ListReceiptsQuerySchema),
   async (c) => new AgentSignalController().listReceipts(c),

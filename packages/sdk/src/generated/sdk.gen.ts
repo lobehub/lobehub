@@ -743,7 +743,7 @@ export class Goals extends HeyApiClient {
         });
     }
     
-    public createAdvance<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdAdvanceData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdAdvanceResponses, PostApiV1GoalsByIdAdvanceErrors, ThrowOnError> {
+    public advance<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdAdvanceData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdAdvanceResponses, PostApiV1GoalsByIdAdvanceErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1GoalsByIdAdvanceResponses, PostApiV1GoalsByIdAdvanceErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/goals/{id}/advance',
@@ -751,7 +751,7 @@ export class Goals extends HeyApiClient {
         });
     }
     
-    public createPause<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdPauseData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdPauseResponses, PostApiV1GoalsByIdPauseErrors, ThrowOnError> {
+    public pause<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdPauseData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdPauseResponses, PostApiV1GoalsByIdPauseErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1GoalsByIdPauseResponses, PostApiV1GoalsByIdPauseErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/goals/{id}/pause',
@@ -759,7 +759,7 @@ export class Goals extends HeyApiClient {
         });
     }
     
-    public createResume<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdResumeData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdResumeResponses, PostApiV1GoalsByIdResumeErrors, ThrowOnError> {
+    public resume<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdResumeData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdResumeResponses, PostApiV1GoalsByIdResumeErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1GoalsByIdResumeResponses, PostApiV1GoalsByIdResumeErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/goals/{id}/resume',
@@ -767,7 +767,7 @@ export class Goals extends HeyApiClient {
         });
     }
     
-    public createRestart<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdRestartData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdRestartResponses, PostApiV1GoalsByIdRestartErrors, ThrowOnError> {
+    public restart<ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdRestartData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdRestartResponses, PostApiV1GoalsByIdRestartErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1GoalsByIdRestartResponses, PostApiV1GoalsByIdRestartErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/goals/{id}/restart',
@@ -943,7 +943,7 @@ export class Memories extends HeyApiClient {
     /**
      * Delete all memory entries
      */
-    public delete<ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1MemoriesData, ThrowOnError>): RequestResult<DeleteApiV1MemoriesResponses, DeleteApiV1MemoriesErrors, ThrowOnError> {
+    public deleteAll<ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1MemoriesData, ThrowOnError>): RequestResult<DeleteApiV1MemoriesResponses, DeleteApiV1MemoriesErrors, ThrowOnError> {
         return (options?.client ?? this.client).delete<DeleteApiV1MemoriesResponses, DeleteApiV1MemoriesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/memories',
@@ -951,7 +951,7 @@ export class Memories extends HeyApiClient {
         });
     }
     
-    public delete2<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MemoriesByCategoryByIdData, ThrowOnError>): RequestResult<DeleteApiV1MemoriesByCategoryByIdResponses, DeleteApiV1MemoriesByCategoryByIdErrors, ThrowOnError> {
+    public deleteEntry<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1MemoriesByCategoryByIdData, ThrowOnError>): RequestResult<DeleteApiV1MemoriesByCategoryByIdResponses, DeleteApiV1MemoriesByCategoryByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1MemoriesByCategoryByIdResponses, DeleteApiV1MemoriesByCategoryByIdErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/memories/{category}/{id}',
@@ -959,7 +959,7 @@ export class Memories extends HeyApiClient {
         });
     }
     
-    public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1MemoriesByCategoryData, ThrowOnError>): RequestResult<GetApiV1MemoriesByCategoryResponses, GetApiV1MemoriesByCategoryErrors, ThrowOnError> {
+    public listCategory<ThrowOnError extends boolean = false>(options: Options<GetApiV1MemoriesByCategoryData, ThrowOnError>): RequestResult<GetApiV1MemoriesByCategoryResponses, GetApiV1MemoriesByCategoryErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1MemoriesByCategoryResponses, GetApiV1MemoriesByCategoryErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/memories/{category}',
@@ -1124,7 +1124,7 @@ export class Notifications extends HeyApiClient {
     /**
      * Get per-category notification counts
      */
-    public listCounts<ThrowOnError extends boolean = false>(options?: Options<GetApiV1NotificationsCountsData, ThrowOnError>): RequestResult<GetApiV1NotificationsCountsResponses, GetApiV1NotificationsCountsErrors, ThrowOnError> {
+    public getCounts<ThrowOnError extends boolean = false>(options?: Options<GetApiV1NotificationsCountsData, ThrowOnError>): RequestResult<GetApiV1NotificationsCountsResponses, GetApiV1NotificationsCountsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1NotificationsCountsResponses, GetApiV1NotificationsCountsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/notifications/counts',
@@ -1132,7 +1132,7 @@ export class Notifications extends HeyApiClient {
         });
     }
     
-    public createRead<ThrowOnError extends boolean = false>(options: Options<PostApiV1NotificationsReadData, ThrowOnError>): RequestResult<PostApiV1NotificationsReadResponses, PostApiV1NotificationsReadErrors, ThrowOnError> {
+    public markRead<ThrowOnError extends boolean = false>(options: Options<PostApiV1NotificationsReadData, ThrowOnError>): RequestResult<PostApiV1NotificationsReadResponses, PostApiV1NotificationsReadErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1NotificationsReadResponses, PostApiV1NotificationsReadErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/notifications/read',
@@ -1144,7 +1144,7 @@ export class Notifications extends HeyApiClient {
     /**
      * Mark every notification as read
      */
-    public createReadAll<ThrowOnError extends boolean = false>(options?: Options<PostApiV1NotificationsReadAllData, ThrowOnError>): RequestResult<PostApiV1NotificationsReadAllResponses, PostApiV1NotificationsReadAllErrors, ThrowOnError> {
+    public markAllRead<ThrowOnError extends boolean = false>(options?: Options<PostApiV1NotificationsReadAllData, ThrowOnError>): RequestResult<PostApiV1NotificationsReadAllResponses, PostApiV1NotificationsReadAllErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<PostApiV1NotificationsReadAllResponses, PostApiV1NotificationsReadAllErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/notifications/read-all',
@@ -1155,7 +1155,7 @@ export class Notifications extends HeyApiClient {
     /**
      * Archive every notification
      */
-    public createArchiveAll<ThrowOnError extends boolean = false>(options?: Options<PostApiV1NotificationsArchiveAllData, ThrowOnError>): RequestResult<PostApiV1NotificationsArchiveAllResponses, PostApiV1NotificationsArchiveAllErrors, ThrowOnError> {
+    public archiveAll<ThrowOnError extends boolean = false>(options?: Options<PostApiV1NotificationsArchiveAllData, ThrowOnError>): RequestResult<PostApiV1NotificationsArchiveAllResponses, PostApiV1NotificationsArchiveAllErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<PostApiV1NotificationsArchiveAllResponses, PostApiV1NotificationsArchiveAllErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/notifications/archive-all',
@@ -1163,7 +1163,7 @@ export class Notifications extends HeyApiClient {
         });
     }
     
-    public createArchive<ThrowOnError extends boolean = false>(options: Options<PostApiV1NotificationsByIdArchiveData, ThrowOnError>): RequestResult<PostApiV1NotificationsByIdArchiveResponses, PostApiV1NotificationsByIdArchiveErrors, ThrowOnError> {
+    public archive<ThrowOnError extends boolean = false>(options: Options<PostApiV1NotificationsByIdArchiveData, ThrowOnError>): RequestResult<PostApiV1NotificationsByIdArchiveResponses, PostApiV1NotificationsByIdArchiveErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1NotificationsByIdArchiveResponses, PostApiV1NotificationsByIdArchiveErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/notifications/{id}/archive',
@@ -1341,7 +1341,7 @@ export class Roles extends HeyApiClient {
 }
 
 export class Signals extends HeyApiClient {
-    public createSourceEvents<ThrowOnError extends boolean = false>(options: Options<PostApiV1SignalsSourceEventsData, ThrowOnError>): RequestResult<PostApiV1SignalsSourceEventsResponses, PostApiV1SignalsSourceEventsErrors, ThrowOnError> {
+    public emit<ThrowOnError extends boolean = false>(options: Options<PostApiV1SignalsSourceEventsData, ThrowOnError>): RequestResult<PostApiV1SignalsSourceEventsResponses, PostApiV1SignalsSourceEventsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1SignalsSourceEventsResponses, PostApiV1SignalsSourceEventsErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/signals/source-events',
@@ -1350,7 +1350,7 @@ export class Signals extends HeyApiClient {
         });
     }
     
-    public createTrigger<ThrowOnError extends boolean = false>(options: Options<PostApiV1SignalsTriggerData, ThrowOnError>): RequestResult<PostApiV1SignalsTriggerResponses, PostApiV1SignalsTriggerErrors, ThrowOnError> {
+    public trigger<ThrowOnError extends boolean = false>(options: Options<PostApiV1SignalsTriggerData, ThrowOnError>): RequestResult<PostApiV1SignalsTriggerResponses, PostApiV1SignalsTriggerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1SignalsTriggerResponses, PostApiV1SignalsTriggerErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/signals/trigger',

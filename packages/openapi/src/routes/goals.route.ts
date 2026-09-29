@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
@@ -19,6 +20,8 @@ import {
  *
  * Goals are long-horizon, self-advancing targets: creating one hands it to the
  * coordinator, and the client reads progress instead of driving each step.
+ * Sub-actions carry explicit operation ids so generated SDK methods read as
+ * `goals.advanceGoal()` rather than a positional `createAdvance()`.
  */
 const GoalRoutes = new Hono();
 
@@ -53,6 +56,7 @@ GoalRoutes.get('/:id', requireAuth, goalRead, zValidator('param', GoalIdParamSch
 /** GET /api/v1/goals/:id/supervision — supervision toggle and current state. */
 GoalRoutes.get(
   '/:id/supervision',
+  describeRoute({ operationId: 'getGoalSupervision', tags: ['goals'] }),
   requireAuth,
   goalRead,
   zValidator('param', GoalIdParamSchema),
@@ -81,6 +85,7 @@ GoalRoutes.delete(
 /** POST /api/v1/goals/:id/advance — run the coordinator now. */
 GoalRoutes.post(
   '/:id/advance',
+  describeRoute({ operationId: 'advanceGoal', tags: ['goals'] }),
   requireAuth,
   goalWrite,
   zValidator('param', GoalIdParamSchema),
@@ -90,6 +95,7 @@ GoalRoutes.post(
 /** POST /api/v1/goals/:id/pause */
 GoalRoutes.post(
   '/:id/pause',
+  describeRoute({ operationId: 'pauseGoal', tags: ['goals'] }),
   requireAuth,
   goalWrite,
   zValidator('param', GoalIdParamSchema),
@@ -99,6 +105,7 @@ GoalRoutes.post(
 /** POST /api/v1/goals/:id/resume */
 GoalRoutes.post(
   '/:id/resume',
+  describeRoute({ operationId: 'resumeGoal', tags: ['goals'] }),
   requireAuth,
   goalWrite,
   zValidator('param', GoalIdParamSchema),
@@ -108,6 +115,7 @@ GoalRoutes.post(
 /** POST /api/v1/goals/:id/restart — start every unfinished task node over. */
 GoalRoutes.post(
   '/:id/restart',
+  describeRoute({ operationId: 'restartGoal', tags: ['goals'] }),
   requireAuth,
   goalWrite,
   zValidator('param', GoalIdParamSchema),

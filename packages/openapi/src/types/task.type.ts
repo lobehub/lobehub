@@ -58,6 +58,7 @@ export const UpdateTaskRequestSchema = z
     schedulePattern: z.string().nullish(),
     scheduleTimezone: z.string().nullish(),
   })
+  .strict()
   .refine((value) => Object.keys(value).length > 0, {
     message: 'Provide at least one field to update',
   });

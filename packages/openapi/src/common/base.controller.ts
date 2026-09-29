@@ -10,6 +10,31 @@ import { parseFormData } from '../helpers/file';
 import type { ApiResponse } from '../types';
 
 /**
+ * tRPC error codes, mapped to their HTTP equivalents.
+ *
+ * The REST layer reuses server services that speak tRPC: a guard deep inside
+ * one throws `TRPCError({ code: 'NOT_FOUND' })`, and without this map every such
+ * refusal surfaces as a 500. Matching on `name`/`code` instead of importing
+ * `@trpc/server` keeps the package free of that dependency — `TRPCError` sets
+ * `name` to `'TRPCError'`, which is part of its own public shape.
+ */
+const TRPC_CODE_TO_STATUS: Record<string, number> = {
+  BAD_REQUEST: 400,
+  CLIENT_CLOSED_REQUEST: 499,
+  CONFLICT: 409,
+  FORBIDDEN: 403,
+  INTERNAL_SERVER_ERROR: 500,
+  METHOD_NOT_SUPPORTED: 405,
+  NOT_FOUND: 404,
+  PAYLOAD_TOO_LARGE: 413,
+  PRECONDITION_FAILED: 412,
+  TIMEOUT: 408,
+  TOO_MANY_REQUESTS: 429,
+  UNAUTHORIZED: 401,
+  UNPROCESSABLE_CONTENT: 422,
+};
+
+/**
  * Base Controller Class
  * Provides unified response formatting, error handling, and common utility methods
  */
@@ -78,6 +103,13 @@ export abstract class BaseController {
 
     // Handle other known error types
     if (error instanceof Error) {
+      // Refusals raised by the shared server services arrive as tRPC errors;
+      // map them back to their HTTP status so a missing agent is a 404, not a 500.
+      if (error.name === 'TRPCError') {
+        const code = (error as Error & { code?: string }).code;
+        return this.error(c, error.message, (code && TRPC_CODE_TO_STATUS[code]) || 500);
+      }
+
       // Handle business logic errors
       if (error.name === 'BusinessError') {
         return this.error(c, error.message, 400);

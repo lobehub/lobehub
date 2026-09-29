@@ -27,7 +27,11 @@ const memoryWrite = requireAnyPermission(
 /** GET /api/v1/memories/persona */
 MemoryRoutes.get(
   '/persona',
-  describeRoute({ summary: 'Get the current persona document', tags: ['memories'] }),
+  describeRoute({
+    operationId: 'getMemoryPersona',
+    summary: 'Get the current persona document',
+    tags: ['memories'],
+  }),
   requireAuth,
   async (c) => new MemoryController().getPersona(c),
 );
@@ -35,7 +39,11 @@ MemoryRoutes.get(
 /** GET /api/v1/memories/persona/versions */
 MemoryRoutes.get(
   '/persona/versions',
-  describeRoute({ summary: 'List persona document versions', tags: ['memories'] }),
+  describeRoute({
+    operationId: 'listMemoryPersonaVersions',
+    summary: 'List persona document versions',
+    tags: ['memories'],
+  }),
   requireAuth,
   async (c) => new MemoryController().listPersonaVersions(c),
 );
@@ -43,7 +51,11 @@ MemoryRoutes.get(
 /** DELETE /api/v1/memories — purge everything and allow re-extraction. */
 MemoryRoutes.delete(
   '/',
-  describeRoute({ summary: 'Delete all memory entries', tags: ['memories'] }),
+  describeRoute({
+    operationId: 'deleteAllMemories',
+    summary: 'Delete all memory entries',
+    tags: ['memories'],
+  }),
   requireAuth,
   memoryWrite,
   async (c) => new MemoryController().deleteAll(c),
@@ -52,6 +64,7 @@ MemoryRoutes.delete(
 /** DELETE /api/v1/memories/:category/:id */
 MemoryRoutes.delete(
   '/:category/:id',
+  describeRoute({ operationId: 'deleteMemoryEntry', tags: ['memories'] }),
   requireAuth,
   memoryWrite,
   zValidator('param', MemoryEntryPathParamSchema),
@@ -61,6 +74,7 @@ MemoryRoutes.delete(
 /** GET /api/v1/memories/:category */
 MemoryRoutes.get(
   '/:category',
+  describeRoute({ operationId: 'listMemoryCategory', tags: ['memories'] }),
   requireAuth,
   zValidator('param', MemoryCategoryParamSchema),
   async (c) => new MemoryController().listCategory(c),
