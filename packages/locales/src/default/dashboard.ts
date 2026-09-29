@@ -55,6 +55,14 @@ export default {
   'form.descriptionPlaceholder': 'What this dashboard keeps an eye on (optional)',
   'form.titleLabel': 'Name',
   'form.titlePlaceholder': 'e.g. Open-source project health',
+  'project.boards': 'Dashboards',
+  'project.boardsEmpty': 'No dashboards in this project yet',
+  'project.description':
+    "This project's dashboards and widgets, including the ones its agents built in project conversations.",
+  'project.widgets_one': 'Widgets ({{count}})',
+  'project.widgets_other': 'Widgets ({{count}})',
+  'project.widgetsEmpty':
+    'No widgets yet. Ask an agent in a conversation of this project to build a monitoring widget and it will show up here.',
   'layout.cancel': 'Discard changes',
   'layout.drag': 'Drag to reorder',
   'layout.edit': 'Edit layout',

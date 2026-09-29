@@ -51,6 +51,12 @@ class DashboardService {
     return data;
   };
 
+  /** Every board of a project, including those an agent of the project also owns. */
+  listByProject = async (projectId: string) => {
+    const { data } = await lambdaClient.dashboard.listByProject.query({ projectId });
+    return data;
+  };
+
   detail = async (id: string) => {
     const { data } = await lambdaClient.dashboard.detail.query({ id });
     return data;
@@ -78,6 +84,12 @@ class DashboardService {
     lambdaClient.dashboard.removeItems.mutate({ dashboardId, itemIds });
 
   // ── Widgets ──
+
+  /** Every widget of a project, including those an agent of the project also owns. */
+  listWidgetsByProject = async (projectId: string) => {
+    const { data } = await lambdaClient.dashboard.listWidgetsByProject.query({ projectId });
+    return data;
+  };
 
   widgetDetail = async (widgetId: string) => {
     const { data } = await lambdaClient.dashboard.widgetDetail.query({ id: widgetId });

@@ -108,6 +108,12 @@ describe('runWidget', () => {
     // Every board detail, the run history and the trend revalidate.
     expect(mutate).toHaveBeenCalledWith(expect.any(Function));
     expect(mutate).toHaveBeenCalledWith(['dashboard:runs', 'w1']);
+    // …and so does every project widget list, where the widget may also show.
+    const matchers = vi
+      .mocked(mutate)
+      .mock.calls.map(([key]) => key)
+      .filter((key): key is (key: unknown) => boolean => typeof key === 'function');
+    expect(matchers.some((match) => match(['dashboard:projectWidgets', 'p1']))).toBe(true);
   });
 
   it('clears the running id when the request rejects', async () => {
@@ -163,6 +169,43 @@ describe('createDashboard', () => {
     });
     expect(mutate).toHaveBeenCalledWith(['dashboard:list', 'personal']);
     expect(useDashboardStore.getState().dashboardCreating).toBe(false);
+  });
+
+  it('also refreshes the project-wide list when creating on a project', async () => {
+    vi.mocked(dashboardService.create).mockResolvedValue({ id: 'd10' } as any);
+    await useDashboardStore.getState().createDashboard({ projectId: 'p1', title: 'Launch' });
+    expect(dashboardService.create).toHaveBeenCalledWith({ projectId: 'p1', title: 'Launch' });
+    expect(mutate).toHaveBeenCalledWith(['dashboard:list', 'project:p1']);
+    expect(mutate).toHaveBeenCalledWith(['dashboard:projectList', 'p1']);
+  });
+});
+
+describe('project-wide reads', () => {
+  it('keys on the project and fills the project maps', () => {
+    useDashboardStore.getState().useFetchProjectDashboards('p1');
+    const [dashboardsKey, , dashboardsOptions] = vi
+      .mocked(useClientDataSWR)
+      .mock.calls.at(-1) as any;
+    expect(dashboardsKey).toEqual(['dashboard:projectList', 'p1']);
+    dashboardsOptions.onSuccess([{ id: 'd1' }]);
+
+    useDashboardStore.getState().useFetchProjectWidgets('p1');
+    const [widgetsKey, , widgetsOptions] = vi.mocked(useClientDataSWR).mock.calls.at(-1) as any;
+    expect(widgetsKey).toEqual(['dashboard:projectWidgets', 'p1']);
+    widgetsOptions.onSuccess([widget({ agentId: 'a1', projectId: 'p1' })]);
+    expect(widgetsOptions.refreshInterval([{ lastRunStatus: 'running' }])).toBeGreaterThan(0);
+    expect(widgetsOptions.refreshInterval([{ lastRunStatus: 'succeeded' }])).toBe(0);
+
+    const state = useDashboardStore.getState();
+    expect(state.projectDashboardsMap.p1).toEqual([{ id: 'd1' }]);
+    expect(state.projectWidgetsMap.p1).toEqual([
+      expect.objectContaining({ agentId: 'a1', id: 'w1' }),
+    ]);
+  });
+
+  it('does not fetch without a project', () => {
+    useDashboardStore.getState().useFetchProjectWidgets(undefined);
+    expect(vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[0]).toBeNull();
   });
 });
 
@@ -233,12 +276,14 @@ describe('refreshWidgetPlacement', () => {
     expect(mutate).toHaveBeenCalledWith(['dashboard:widget', 'w1']);
     expect(mutate).toHaveBeenCalledWith(['dashboard:detail', 'd1']);
 
-    const matcher = vi
+    const matchers = vi
       .mocked(mutate)
       .mock.calls.map(([key]) => key)
-      .find((key) => typeof key === 'function') as (key: unknown) => boolean;
-    expect(matcher(['dashboard:list', 'personal'])).toBe(true);
-    expect(matcher(['dashboard:list', 'project:p'])).toBe(true);
-    expect(matcher(['dashboard:widget', 'w1'])).toBe(false);
+      .filter((key) => typeof key === 'function') as ((key: unknown) => boolean)[];
+    const revalidated = (key: unknown[]) => matchers.some((match) => match(key));
+    expect(revalidated(['dashboard:list', 'personal'])).toBe(true);
+    expect(revalidated(['dashboard:projectList', 'p'])).toBe(true);
+    expect(revalidated(['dashboard:projectWidgets', 'p'])).toBe(true);
+    expect(revalidated(['dashboard:widget', 'w2'])).toBe(false);
   });
 });

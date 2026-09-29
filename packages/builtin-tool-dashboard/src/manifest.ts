@@ -116,7 +116,7 @@ export const DashboardManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        "List the user's home dashboards with the widgets placed on them, plus the widgets this agent already owns (with publish and last-run status). Call before creating a widget to avoid duplicates and to pick a dashboard.",
+        "List the user's dashboards (in a project conversation, the project's dashboards first, then the home ones) with the widgets placed on them, plus the widgets this agent already owns (with publish and last-run status). Call before creating a widget to avoid duplicates and to pick a dashboard.",
       name: DashboardApiName.listDashboards,
       parameters: {
         additionalProperties: false,
@@ -208,7 +208,7 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Place a widget on a home dashboard. Pass dashboardId from listDashboards, or newDashboardTitle to create a dashboard first. Placing an unpublished widget is allowed.',
+        'Place a widget on a dashboard. Pass dashboardId from listDashboards, or newDashboardTitle to create a dashboard first (in a project conversation it belongs to the project). Placing an unpublished widget is allowed.',
       name: DashboardApiName.addWidgetToDashboard,
       parameters: {
         additionalProperties: false,

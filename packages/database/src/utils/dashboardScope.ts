@@ -130,3 +130,13 @@ export const buildDashboardLevelWhere = (
   }
   return and(isNull(cols.projectId), isNull(cols.agentId)) as SQL;
 };
+
+/**
+ * Predicate selecting everything that belongs to a project, whether or not an
+ * agent inside the project also owns it — what a project's dashboard page
+ * shows. Combine with `buildWorkspaceWhere` for access control.
+ */
+export const buildDashboardProjectWhere = (
+  cols: { projectId: AnyPgColumn },
+  projectId: string,
+): SQL => eq(cols.projectId, projectId);

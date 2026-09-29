@@ -10,6 +10,7 @@ import type { LobeChatDatabase } from '../type';
 import {
   assertDashboardScope,
   buildDashboardLevelWhere,
+  buildDashboardProjectWhere,
   DashboardScopeError,
   isNotTrashed,
 } from '../utils/dashboardScope';
@@ -114,6 +115,15 @@ export class DashboardModel {
       .select()
       .from(dashboards)
       .where(and(this.readable(), buildDashboardLevelWhere(dashboards, filter)))
+      .orderBy(asc(dashboards.sortOrder), asc(dashboards.createdAt));
+  }
+
+  /** Every board of a project, including those an agent of the project also owns. */
+  async listByProject(projectId: string) {
+    return this.db
+      .select()
+      .from(dashboards)
+      .where(and(this.readable(), buildDashboardProjectWhere(dashboards, projectId)))
       .orderBy(asc(dashboards.sortOrder), asc(dashboards.createdAt));
   }
 

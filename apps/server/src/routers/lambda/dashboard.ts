@@ -47,6 +47,7 @@ const levelInput = z
     projectId: z.string().nullish(),
   })
   .optional();
+const projectInput = z.object({ projectId: z.string().min(1) });
 const visibility = z.enum(DASHBOARD_VISIBILITIES);
 const layoutSchema = z.object({
   h: z.number().int().min(1).max(48),
@@ -105,6 +106,15 @@ export const dashboardRouter = router({
       return { data: await ctx.dashboardModel.list(input ?? {}), success: true };
     } catch (error) {
       mapDashboardError(error, 'list dashboards');
+    }
+  }),
+
+  /** Every board of a project, including those an agent of the project also owns. */
+  listByProject: dashboardProcedure.input(projectInput).query(async ({ ctx, input }) => {
+    try {
+      return { data: await ctx.dashboardModel.listByProject(input.projectId), success: true };
+    } catch (error) {
+      mapDashboardError(error, 'list project dashboards');
     }
   }),
 
@@ -260,6 +270,15 @@ export const dashboardRouter = router({
       return { data: await ctx.widgetModel.list(input ?? {}), success: true };
     } catch (error) {
       mapDashboardError(error, 'list widgets');
+    }
+  }),
+
+  /** Every widget of a project, including those an agent of the project also owns. */
+  listWidgetsByProject: dashboardProcedure.input(projectInput).query(async ({ ctx, input }) => {
+    try {
+      return { data: await ctx.widgetModel.listByProject(input.projectId), success: true };
+    } catch (error) {
+      mapDashboardError(error, 'list project widgets');
     }
   }),
 

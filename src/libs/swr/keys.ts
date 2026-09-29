@@ -369,6 +369,16 @@ export const dashboardKeys = {
   detail: def('dashboard:detail', (dashboardId: string) => ['dashboard:detail', dashboardId]),
   /** `level` identifies the direct ownership level, e.g. `personal` or `project:<id>`. */
   list: def('dashboard:list', (level: string) => ['dashboard:list', level]),
+  /** Every board of a project, including the ones an agent of the project owns. */
+  projectList: def('dashboard:projectList', (projectId: string) => [
+    'dashboard:projectList',
+    projectId,
+  ]),
+  /** Every widget of a project, including the ones an agent of the project owns. */
+  projectWidgets: def('dashboard:projectWidgets', (projectId: string) => [
+    'dashboard:projectWidgets',
+    projectId,
+  ]),
   /** One run with its output and logs. */
   run: def('dashboard:run', (widgetId: string, runId: string) => [
     'dashboard:run',

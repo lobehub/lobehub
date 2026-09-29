@@ -24,9 +24,14 @@ const hasRunningWidget = (detail?: DashboardDetail) =>
 const isDashboardDetailKey = (key: unknown) =>
   Array.isArray(key) && key[0] === dashboardKeys.detail.root;
 
-/** SWR matcher over every cached board list, whatever level it lists. */
+/** SWR matcher over every cached board list, whatever level or project it lists. */
 const isDashboardListKey = (key: unknown) =>
-  Array.isArray(key) && key[0] === dashboardKeys.list.root;
+  Array.isArray(key) &&
+  (key[0] === dashboardKeys.list.root || key[0] === dashboardKeys.projectList.root);
+
+/** SWR matcher over every cached project widget list — the widget may belong to any of them. */
+const isProjectWidgetsKey = (key: unknown) =>
+  Array.isArray(key) && key[0] === dashboardKeys.projectWidgets.root;
 
 /**
  * Where a widget's trend comes from: a stat records one point per run into its
@@ -74,6 +79,40 @@ export class DashboardActionImpl {
       },
     );
   };
+
+  /** Every board of a project, including those an agent of the project also owns. */
+  useFetchProjectDashboards = (projectId?: string) =>
+    useClientDataSWR(
+      projectId ? dashboardKeys.projectList(projectId) : null,
+      () => dashboardService.listByProject(projectId!),
+      {
+        onSuccess: (data) => {
+          this.#set(
+            (s) => ({ projectDashboardsMap: { ...s.projectDashboardsMap, [projectId!]: data } }),
+            false,
+            'useFetchProjectDashboards/onSuccess',
+          );
+        },
+      },
+    );
+
+  /** Every widget of a project — placed on a board or not — so none gets lost. */
+  useFetchProjectWidgets = (projectId?: string) =>
+    useClientDataSWR(
+      projectId ? dashboardKeys.projectWidgets(projectId) : null,
+      () => dashboardService.listWidgetsByProject(projectId!),
+      {
+        onSuccess: (data) => {
+          this.#set(
+            (s) => ({ projectWidgetsMap: { ...s.projectWidgetsMap, [projectId!]: data } }),
+            false,
+            'useFetchProjectWidgets/onSuccess',
+          );
+        },
+        refreshInterval: (data?: { lastRunStatus?: string | null }[]) =>
+          data?.some((widget) => widget.lastRunStatus === 'running') ? RUNNING_POLL_INTERVAL : 0,
+      },
+    );
 
   useFetchDashboardDetail = (dashboardId?: string) =>
     useClientDataSWR(
@@ -343,8 +382,12 @@ export class DashboardActionImpl {
     await mutate(dashboardKeys.widget(widgetId));
   };
 
+  /** The level's own list, plus the project-wide list when the level sits in a project. */
   refreshDashboards = async (level?: DashboardLevelFilter) => {
-    await mutate(dashboardKeys.list(dashboardLevelKey(level)));
+    await Promise.all([
+      mutate(dashboardKeys.list(dashboardLevelKey(level))),
+      level?.projectId && mutate(dashboardKeys.projectList(level.projectId)),
+    ]);
   };
 
   refreshDashboardDetail = async (dashboardId: string) => {
@@ -362,12 +405,14 @@ export class DashboardActionImpl {
       mutate(dashboardKeys.widget(widgetId)),
       mutate(dashboardId ? dashboardKeys.detail(dashboardId) : isDashboardDetailKey),
       mutate(isDashboardListKey),
+      mutate(isProjectWidgetsKey),
     ]);
   };
 
   refreshWidget = async (widgetId: string) => {
     await Promise.all([
       mutate(isDashboardDetailKey),
+      mutate(isProjectWidgetsKey),
       mutate(dashboardKeys.widget(widgetId)),
       mutate(dashboardKeys.runs(widgetId)),
       mutate(

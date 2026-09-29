@@ -113,6 +113,7 @@ export default {
   'overview.tasksTitle': 'Project tasks',
   'sections.agents': 'Agents',
   'sections.acceptance': 'Acceptance',
+  'sections.dashboard': 'Dashboards',
   'sections.goals': 'Goals',
   'sections.home': 'Project home',
   'sections.knowledgeBases': 'Libraries',

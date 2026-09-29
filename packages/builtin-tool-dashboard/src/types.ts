@@ -69,6 +69,8 @@ export interface DashboardWidgetRunRecord {
 
 export interface DashboardSummary {
   id: string;
+  /** Set for a board of the conversation's project; home boards have none. */
+  projectId?: string | null;
   title: string;
   widgets: { id: string; title: string }[];
 }
@@ -161,6 +163,8 @@ export interface AddWidgetToDashboardState {
   createdDashboard: boolean;
   dashboardId: string;
   dashboardTitle: string;
+  /** The board's project, so the card links to the project's dashboard page. */
+  projectId?: string | null;
   widgetId: string;
 }
 

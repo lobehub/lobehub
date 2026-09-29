@@ -173,6 +173,42 @@ describe('DashboardModel', () => {
       expect((await ws.list({ agentId, projectId })).map((d) => d.id)).toEqual([agentInProject.id]);
     });
 
+    it('lists every board of a project, with or without an agent, via listByProject', async () => {
+      const projectId = await seedProject('dash-p7', userId, workspaceId);
+      const otherProjectId = await seedProject('dash-p8', userId, workspaceId);
+      const agentId = await seedAgent('dash-a7', userId, workspaceId);
+      const ws = new DashboardModel(serverDB, userId, workspaceId);
+      const outsider = new DashboardModel(serverDB, otherUserId, workspaceId);
+
+      await ws.create({ title: 'workspace' });
+      await ws.create({ agentId, title: 'agent only' });
+      await ws.create({ projectId: otherProjectId, title: 'other project' });
+      const projectBoard = await ws.create({ projectId, sortOrder: 1, title: 'project' });
+      const agentInProject = await ws.create({
+        agentId,
+        projectId,
+        sortOrder: 0,
+        title: 'agent-in-project',
+      });
+      const privateBoard = await ws.create({
+        projectId,
+        sortOrder: 2,
+        title: 'private',
+        visibility: 'private',
+      });
+      await ws.trash((await ws.create({ projectId, title: 'trashed' })).id);
+
+      expect((await ws.listByProject(projectId)).map((d) => d.id)).toEqual([
+        agentInProject.id,
+        projectBoard.id,
+        privateBoard.id,
+      ]);
+      // workspace members only see the public ones
+      expect((await outsider.listByProject(projectId)).map((d) => d.id)).not.toContain(
+        privateBoard.id,
+      );
+    });
+
     it('cascades dashboards when their project or agent is deleted', async () => {
       const projectId = await seedProject('dash-p6', userId, null);
       const agentId = await seedAgent('dash-a6', userId, null);

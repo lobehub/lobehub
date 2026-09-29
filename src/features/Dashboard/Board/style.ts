@@ -1,4 +1,6 @@
+import type { DashboardItemLayout } from '@lobechat/types';
 import { createStaticStyles } from 'antd-style';
+import type { CSSProperties } from 'react';
 
 import { DASHBOARD_GRID_COLUMNS, DASHBOARD_GRID_GAP, DASHBOARD_ROW_HEIGHT } from '../utils/layout';
 
@@ -47,3 +49,7 @@ export const gridStyles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
 }));
+
+/** Place a cell of `gridStyles.grid` at a resolved layout. */
+export const cellStyle = (layout: DashboardItemLayout) =>
+  ({ '--h': layout.h, '--w': layout.w, '--x': layout.x, '--y': layout.y }) as CSSProperties;

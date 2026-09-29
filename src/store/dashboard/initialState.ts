@@ -5,6 +5,7 @@ import type {
   DashboardListItem,
   DashboardTrendSeries,
   DashboardWidgetDetail,
+  DashboardWidgetItem,
   DashboardWidgetRunDetail,
   DashboardWidgetRunItem,
   DashboardWidgetVersionItem,
@@ -19,6 +20,10 @@ export interface DashboardState {
   dashboardLayoutSavingIds: string[];
   /** Board lists keyed by `dashboardLevelKey` — each level lists only what lives directly on it. */
   dashboardListByLevel: Record<string, DashboardListItem[]>;
+  /** Every board of a project (with or without an agent), keyed by project id. */
+  projectDashboardsMap: Record<string, DashboardListItem[]>;
+  /** Every widget of a project (with or without an agent), keyed by project id. */
+  projectWidgetsMap: Record<string, DashboardWidgetItem[]>;
   /** Widgets with a board placement request in flight. */
   widgetAddingIds: string[];
   /** Widgets opened on their own (outside a board), keyed by widget id. */
@@ -42,6 +47,8 @@ export const initialState: DashboardState = {
   dashboardDetailMap: {},
   dashboardLayoutSavingIds: [],
   dashboardListByLevel: {},
+  projectDashboardsMap: {},
+  projectWidgetsMap: {},
   widgetAddingIds: [],
   widgetDetailMap: {},
   widgetPublishingIds: [],

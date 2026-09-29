@@ -1045,6 +1045,29 @@ export const sharedMainAreaChildren: RouteObject[] = [
         children: [
           {
             element: dynamicElement(
+              () => import('@/routes/(main)/project/[projectId]/dashboard'),
+              'Desktop > Project Dashboards',
+              { preloadId: 'dashboard' },
+            ),
+            handle: { meta: dashboardsRouteMeta },
+            index: true,
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/project/[projectId]/dashboard/[dashboardId]'),
+              'Desktop > Project Dashboard Detail',
+              { preloadId: 'dashboard' },
+            ),
+            handle: { meta: dashboardRouteMeta },
+            path: ':dashboardId',
+          },
+        ],
+        path: 'dashboard',
+      },
+      {
+        children: [
+          {
+            element: dynamicElement(
               () => import('@/routes/(main)/acceptance/empty'),
               'Desktop > Project Acceptance > Empty',
             ),

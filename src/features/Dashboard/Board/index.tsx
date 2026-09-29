@@ -12,8 +12,8 @@ import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { resolveLayouts, sortByPosition } from '../utils/layout';
 import WidgetDetailDrawer from '../WidgetDetail';
 import BoardWidgetCard from './BoardWidgetCard';
-import LayoutEditor, { cellStyle } from './LayoutEditor';
-import { gridStyles } from './style';
+import LayoutEditor from './LayoutEditor';
+import { cellStyle, gridStyles } from './style';
 
 export interface DashboardBoardProps {
   dashboardId: string;

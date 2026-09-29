@@ -193,14 +193,55 @@ describe('createDashboardToolService', () => {
     });
 
     const board = await service.createDashboard('Ops');
-    expect(await service.addToDashboard(board.id, widgetId)).toEqual({ title: 'Ops' });
+    expect(await service.addToDashboard(board.id, widgetId)).toEqual({
+      projectId: null,
+      title: 'Ops',
+    });
     // Boards of an agent / project level are not home boards.
     await new DashboardModel(db, userId).create({ agentId, title: 'Agent board' });
 
     expect(await service.listDashboards()).toEqual([
-      { id: board.id, title: 'Ops', widgets: [{ id: widgetId, title: 'Mine' }] },
+      { id: board.id, projectId: null, title: 'Ops', widgets: [{ id: widgetId, title: 'Mine' }] },
     ]);
     expect((await service.listWidgets()).map((widget) => widget.title)).toEqual(['Mine']);
+  });
+
+  it('creates boards on the project in a project topic and lists them before home boards', async () => {
+    const home = await createDashboardToolService(db, scope).createDashboard('Home');
+    const service = createDashboardToolService(db, {
+      ...scope,
+      projectId,
+      topicId: projectTopicId,
+    });
+    const { widgetId } = await service.createWidgetDraft({
+      content: statDraft,
+      description: '',
+      title: 'Project metric',
+    });
+
+    const board = await service.createDashboard('Project board');
+    expect(await service.addToDashboard(board.id, widgetId)).toEqual({
+      projectId,
+      title: 'Project board',
+    });
+    // A board another agent of the project owns is still the project's.
+    const agentBoard = await new DashboardModel(db, userId).create({
+      agentId,
+      projectId,
+      title: 'Agent board in project',
+    });
+
+    expect(await new DashboardModel(db, userId).findById(board.id)).toMatchObject({
+      agentId: null,
+      projectId,
+    });
+    expect(
+      (await service.listDashboards()).map(({ id, projectId: level }) => ({ id, level })),
+    ).toEqual([
+      { id: board.id, level: projectId },
+      { id: agentBoard.id, level: projectId },
+      { id: home.id, level: null },
+    ]);
   });
 });
 

@@ -1,9 +1,7 @@
 'use client';
 
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Empty, Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import dayjs from 'dayjs';
 import { LayoutDashboardIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,72 +11,10 @@ import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import type { DashboardListItem } from '@/services/dashboard';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 
-import DashboardActionsMenu from '../DashboardActionsMenu';
 import { openCreateDashboardModal } from '../DashboardFormModal';
-
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    position: relative;
-
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: inherit;
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: border-color ${cssVar.motionDurationFast};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 12px;
-  `,
-  menu: css`
-    position: absolute;
-    inset-block-start: 12px;
-    inset-inline-end: 12px;
-  `,
-}));
-
-const DashboardListCard = memo<{ dashboard: DashboardListItem }>(({ dashboard }) => {
-  const { t } = useTranslation('dashboard');
-
-  return (
-    <div className={styles.card} data-dashboard-id={dashboard.id}>
-      <WorkspaceLink style={{ color: 'inherit' }} to={`/dashboard/${dashboard.id}`}>
-        <Flexbox gap={8}>
-          <Flexbox horizontal align={'center'} gap={8} style={{ paddingInlineEnd: 24 }}>
-            <Icon color={cssVar.colorTextSecondary} icon={LayoutDashboardIcon} size={16} />
-            <Text ellipsis weight={500}>
-              {dashboard.title}
-            </Text>
-          </Flexbox>
-          <Text ellipsis={{ rows: 2 }} fontSize={12} type={'secondary'}>
-            {dashboard.description || t('list.noDescription')}
-          </Text>
-          <Text fontSize={12} type={'secondary'}>
-            {t('list.updatedAt', { time: dayjs(dashboard.updatedAt).fromNow() })}
-          </Text>
-        </Flexbox>
-      </WorkspaceLink>
-      <span className={styles.menu}>
-        <DashboardActionsMenu dashboard={dashboard} />
-      </span>
-    </div>
-  );
-});
-
-DashboardListCard.displayName = 'DashboardListCard';
+import DashboardListCard, { dashboardListStyles } from './DashboardListCard';
 
 /** Home: the personal boards (no workspace / project / agent) and creating one. */
 const DashboardListPage = memo(() => {
@@ -125,9 +61,13 @@ const DashboardListPage = memo(() => {
           }
           onRetry={() => void mutate()}
         >
-          <div className={styles.grid}>
+          <div className={dashboardListStyles.grid}>
             {dashboards.map((dashboard) => (
-              <DashboardListCard dashboard={dashboard} key={dashboard.id} />
+              <DashboardListCard
+                dashboard={dashboard}
+                href={`/dashboard/${dashboard.id}`}
+                key={dashboard.id}
+              />
             ))}
           </div>
         </AsyncBoundary>

@@ -61,6 +61,7 @@ beforeEach(() => {
 describe('listDashboards', () => {
   it('lists boards with their widgets and the agent’s own widgets', async () => {
     service.listDashboards.mockResolvedValue([
+      { id: 'd0', projectId: 'prj_1', title: 'Launch', widgets: [] },
       { id: 'd1', title: 'Ops', widgets: [{ id: 'w1', title: 'Stars' }] },
     ]);
     service.listWidgets.mockResolvedValue([
@@ -70,9 +71,10 @@ describe('listDashboards', () => {
     const result = await runtime.listDashboards();
 
     expect(result.success).toBe(true);
+    expect(result.content).toContain('"Launch" (d0) [project]: no widgets');
     expect(result.content).toContain('"Ops" (d1): "Stars" (w1)');
     expect(result.content).toContain('"Bugs" (w2): not published, has draft, last run failed');
-    expect(result.state.dashboards).toHaveLength(1);
+    expect(result.state.dashboards).toHaveLength(2);
   });
 
   it('points at creating a board when there is none', async () => {
@@ -256,6 +258,12 @@ describe('addWidgetToDashboard', () => {
     expect(service.createDashboard).toHaveBeenCalledWith('Team health');
     expect(service.addToDashboard).toHaveBeenCalledWith('d-new', 'w1');
     expect(result.state).toMatchObject({ createdDashboard: true, dashboardId: 'd-new' });
+  });
+
+  it('carries the board project so the card links to the project dashboard', async () => {
+    service.addToDashboard.mockResolvedValue({ projectId: 'prj_1', title: 'Project ops' });
+    const result = await runtime.addWidgetToDashboard({ dashboardId: 'd2', widgetId: 'w1' });
+    expect(result.state).toMatchObject({ dashboardId: 'd2', projectId: 'prj_1' });
   });
 
   it('needs a target', async () => {

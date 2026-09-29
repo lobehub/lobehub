@@ -67,7 +67,8 @@ const parseContent = (content: WidgetVersionContent & { changeNote?: string | nu
  * The dashboard tool's data access for one conversation. Widgets it creates
  * belong to the conversation's agent (and project, in a project topic) inside
  * the run's workspace; drafts record the agent, topic, message and operation
- * that wrote them. Boards are the home level (personal / workspace).
+ * that wrote them. Boards it creates belong to the conversation's project in a
+ * project topic, else to the home level (personal / workspace).
  */
 export const createDashboardToolService = (
   db: LobeChatDatabase,
@@ -91,11 +92,11 @@ export const createDashboardToolService = (
       const board = await dashboards.findById(dashboardId);
       const item = board ? await dashboards.addItem(dashboardId, widgetId) : undefined;
       if (!board || !item) throw new Error('Dashboard or widget not found');
-      return { title: board.title };
+      return { projectId: board.projectId, title: board.title };
     },
 
     createDashboard: async (title) => {
-      const board = await dashboards.create({ title });
+      const board = await dashboards.create({ projectId: projectId ?? null, title });
       return { id: board.id, title: board.title };
     },
 
@@ -147,11 +148,15 @@ export const createDashboardToolService = (
     },
 
     listDashboards: async () => {
-      const boards = await dashboards.list({});
+      const [projectBoards, homeBoards] = await Promise.all([
+        projectId ? dashboards.listByProject(projectId) : [],
+        dashboards.list({}),
+      ]);
       return pMap(
-        boards,
+        [...projectBoards, ...homeBoards],
         async (board) => ({
           id: board.id,
+          projectId: board.projectId,
           title: board.title,
           widgets: (await dashboards.listItems(board.id)).map(({ widget }) => ({
             id: widget.id,

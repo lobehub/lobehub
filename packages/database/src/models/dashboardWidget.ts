@@ -24,6 +24,7 @@ import type { LobeChatDatabase } from '../type';
 import {
   assertDashboardScope,
   buildDashboardLevelWhere,
+  buildDashboardProjectWhere,
   isNotTrashed,
 } from '../utils/dashboardScope';
 import {
@@ -171,6 +172,15 @@ export class DashboardWidgetModel {
       .select()
       .from(dashboardWidgets)
       .where(and(this.readable(), buildDashboardLevelWhere(dashboardWidgets, filter)))
+      .orderBy(desc(dashboardWidgets.updatedAt));
+  }
+
+  /** Every widget of a project, including those an agent of the project also owns. */
+  async listByProject(projectId: string) {
+    return this.db
+      .select()
+      .from(dashboardWidgets)
+      .where(and(this.readable(), buildDashboardProjectWhere(dashboardWidgets, projectId)))
       .orderBy(desc(dashboardWidgets.updatedAt));
   }
 

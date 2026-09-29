@@ -9,6 +9,7 @@ import {
   dashboardWidgets,
   dashboardWidgetVersions,
   metrics,
+  projects,
   trashItems,
   users,
   workspaces,
@@ -108,6 +109,53 @@ describe('DashboardWidgetModel', () => {
 
       await serverDB.delete(agents).where(eq(agents.id, 'widget-agent-ws'));
       expect(await ws.findById(byAgent.id)).toBeUndefined();
+    });
+
+    it('lists every widget of a project, including agent-owned ones, via listByProject', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'widget-project-coordinator', userId, workspaceId },
+        { id: 'widget-project-coordinator-2', userId, workspaceId },
+        { id: 'widget-project-agent', userId, workspaceId },
+      ]);
+      await serverDB.insert(projects).values([
+        {
+          coordinatorAgentId: 'widget-project-coordinator',
+          id: 'widget-project',
+          identifier: 'W0001',
+          name: 'p',
+          userId,
+          workspaceId,
+        },
+        {
+          coordinatorAgentId: 'widget-project-coordinator-2',
+          id: 'widget-project-2',
+          identifier: 'W0002',
+          name: 'p2',
+          userId,
+          workspaceId,
+        },
+      ]);
+      const ws = new DashboardWidgetModel(serverDB, userId, workspaceId);
+
+      await ws.create({ title: 'ws' });
+      await ws.create({ agentId: 'widget-project-agent', title: 'agent only' });
+      await ws.create({ projectId: 'widget-project-2', title: 'other project' });
+      const direct = await ws.create({ projectId: 'widget-project', title: 'project' });
+      const byAgent = await ws.create({
+        agentId: 'widget-project-agent',
+        projectId: 'widget-project',
+        title: 'agent in project',
+      });
+      await ws.trash((await ws.create({ projectId: 'widget-project', title: 'gone' })).id);
+
+      expect((await ws.listByProject('widget-project')).map((w) => w.id).sort()).toEqual(
+        [direct.id, byAgent.id].sort(),
+      );
+      // the direct level still excludes the agent-owned widget
+      expect((await ws.list({ projectId: 'widget-project' })).map((w) => w.id)).toEqual([
+        direct.id,
+      ]);
+      expect(await model.listByProject('widget-project')).toEqual([]);
     });
 
     it('trash / restore / delete go through the recycle bin', async () => {

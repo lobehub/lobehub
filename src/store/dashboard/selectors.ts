@@ -8,6 +8,12 @@ const EMPTY: never[] = [];
 const dashboardList = (level?: DashboardLevelFilter) => (s: DashboardStore) =>
   s.dashboardListByLevel[dashboardLevelKey(level)] ?? EMPTY;
 
+const projectDashboards = (projectId?: string) => (s: DashboardStore) =>
+  (projectId && s.projectDashboardsMap[projectId]) || EMPTY;
+
+const projectWidgets = (projectId?: string) => (s: DashboardStore) =>
+  (projectId && s.projectWidgetsMap[projectId]) || EMPTY;
+
 const dashboardDetail = (dashboardId?: string) => (s: DashboardStore) =>
   dashboardId ? s.dashboardDetailMap[dashboardId] : undefined;
 
@@ -50,6 +56,8 @@ export const dashboardSelectors = {
   isWidgetAdding,
   isWidgetPublishing,
   isWidgetRunning,
+  projectDashboards,
+  projectWidgets,
   widgetById,
   widgetDetail,
   widgetRunDetail,

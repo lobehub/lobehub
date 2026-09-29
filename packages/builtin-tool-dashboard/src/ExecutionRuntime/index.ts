@@ -27,7 +27,11 @@ import type {
  * throw on refused requests; the runtime turns the message into tool content.
  */
 export interface DashboardToolService {
-  addToDashboard: (dashboardId: string, widgetId: string) => Promise<{ title: string }>;
+  addToDashboard: (
+    dashboardId: string,
+    widgetId: string,
+  ) => Promise<{ projectId?: string | null; title: string }>;
+  /** Created on the conversation's project in a project topic, else on the home level. */
   createDashboard: (title: string) => Promise<{ id: string; title: string }>;
   /** Validate the content, create the widget and record its first draft. */
   createWidgetDraft: (input: {
@@ -38,6 +42,7 @@ export interface DashboardToolService {
   dryRun: (widgetId: string, versionId?: string) => Promise<DashboardWidgetRunRecord>;
   getRun: (widgetId: string, runId: string) => Promise<DashboardWidgetRunRecord | undefined>;
   getWidget: (widgetId: string) => Promise<DashboardWidgetRecord | undefined>;
+  /** The project's boards first (in a project topic), then the home boards. */
   listDashboards: () => Promise<DashboardSummary[]>;
   listRuns: (widgetId: string, limit: number) => Promise<DashboardWidgetRunRecord[]>;
   /** Widgets owned at the conversation's level (this agent, in this project). */
@@ -165,7 +170,8 @@ export class DashboardExecutionRuntime {
       const boardLines = dashboards.length
         ? dashboards.map((board) => {
             const placed = board.widgets.map((w) => `"${w.title}" (${w.id})`).join(', ');
-            return `- "${board.title}" (${board.id}): ${placed || 'no widgets'}`;
+            const level = board.projectId ? ' [project]' : '';
+            return `- "${board.title}" (${board.id})${level}: ${placed || 'no widgets'}`;
           })
         : ['- none yet (addWidgetToDashboard with newDashboardTitle creates one)'];
       const widgetLines = widgets.length
@@ -183,7 +189,7 @@ export class DashboardExecutionRuntime {
 
       return {
         content: [
-          `Home dashboards (${dashboards.length}):`,
+          `Dashboards (${dashboards.length}):`,
           ...boardLines,
           '',
           `Widgets owned by this agent (${widgets.length}):`,
@@ -355,11 +361,12 @@ export class DashboardExecutionRuntime {
         dashboardId = created.id;
         createdDashboard = true;
       }
-      const { title } = await this.service.addToDashboard(dashboardId, params.widgetId);
+      const { projectId, title } = await this.service.addToDashboard(dashboardId, params.widgetId);
       const state: AddWidgetToDashboardState = {
         createdDashboard,
         dashboardId,
         dashboardTitle: title,
+        projectId: projectId ?? null,
         widgetId: params.widgetId,
       };
 

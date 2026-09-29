@@ -28,7 +28,7 @@ import {
   ChevronUpIcon,
   GripVerticalIcon,
 } from 'lucide-react';
-import { type CSSProperties, memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DashboardBoardItem } from '@/services/dashboard';
@@ -41,7 +41,7 @@ import {
   flowLayouts,
 } from '../utils/layout';
 import WidgetCard from '../WidgetCard';
-import { gridStyles } from './style';
+import { cellStyle, gridStyles } from './style';
 
 type Size = { h: number; w: number };
 
@@ -50,9 +50,6 @@ const stepWidth = (w: number, direction: 1 | -1) => {
   if (direction > 0) return presets.find((preset) => preset > w) ?? w;
   return presets.reverse().find((preset) => preset < w) ?? w;
 };
-
-export const cellStyle = (layout: DashboardItemLayout) =>
-  ({ '--h': layout.h, '--w': layout.w, '--x': layout.x, '--y': layout.y }) as CSSProperties;
 
 interface EditableCellProps {
   entry: DashboardBoardItem;
