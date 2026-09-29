@@ -24,7 +24,7 @@ export type AgentHookType =
   | 'beforeStep' // Before each step executes
   | 'beforeToolCall' // Before a tool call executes (supports mocking via event.mock())
   | 'beforeCallAgent' // Before calling a sub-agent
-  | 'afterCallAgent' // After sub-agent completes
+  | 'afterCallAgent' // After sub-agent creation/start returns, not when the child completes
   | 'beforeCompact' // Before context compression starts
   | 'beforeHumanIntervention' // Before agent pauses for human approval
   | 'afterCompact' // After context compression completes
@@ -275,12 +275,14 @@ export interface BeforeCallAgentHookEvent {
   userId?: string;
 }
 
+/** Reports the creation/start result; child completion belongs to its onComplete hook. */
 export interface AfterCallAgentHookEvent {
   agentId: string;
   operationId: string;
   subOperationId: string;
   success: boolean;
-  threadId: string;
+  /** Isolated child thread, when available; shared group members have no isolated thread. */
+  threadId?: string;
   userId?: string;
 }
 
