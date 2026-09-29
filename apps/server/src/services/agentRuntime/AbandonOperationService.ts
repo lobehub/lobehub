@@ -17,6 +17,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
 import { CompletionLifecycle } from './CompletionLifecycle';
+import { getServerHooks } from './hooks/serverHooks';
 import type { SerializedHook } from './hooks/types';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
 import { createDefaultSnapshotStore } from './snapshotStore';
@@ -455,7 +456,11 @@ export class AbandonOperationService {
     // run the hooks belong to, the same rule `heteroFinish` applies.
     if (settled.ownershipUnproven) return;
     const serializedHooks = settled.hooks ?? readDurableHooks(op.metadata);
-    if (!serializedHooks?.length) return;
+    if (
+      !serializedHooks?.length &&
+      !getServerHooks().some((hook) => hook.type === 'onComplete' || hook.type === 'onError')
+    )
+      return;
 
     try {
       await new CompletionLifecycle(this.db, op.userId, op.workspaceId ?? undefined, {

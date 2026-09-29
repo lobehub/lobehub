@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
@@ -206,6 +206,15 @@ describe('AbandonOperationService', () => {
   });
 
   describe('no-state lifecycle hooks', () => {
+    const configureEnvironmentHooks = (events: string) => {
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'http://webhook-service/ingress');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-abandon-token');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', events);
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'ignore');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'continue');
+    };
+    afterEach(() => vi.unstubAllEnvs());
+
     const taskHook = {
       id: 'task-on-complete',
       type: 'onComplete',
@@ -291,6 +300,51 @@ describe('AbandonOperationService', () => {
 
       expect(completeOperationMock).not.toHaveBeenCalled();
     });
+
+    it.each(['onComplete', 'onError', 'onComplete,onError'])(
+      'runs the lifecycle for current environment events %s without persisted hooks',
+      async (events) => {
+        configureEnvironmentHooks(events);
+        await abandon(runningRow());
+
+        expect(completeOperationMock).toHaveBeenCalledTimes(1);
+        expect(completeOperationMock).toHaveBeenCalledWith(
+          expect.objectContaining({ operationId: 'op_x', serializedHooks: undefined }),
+          'error',
+          { skipErrorMessageWrite: true },
+        );
+      },
+    );
+
+    it('does not start terminal dispatch for tool-only environment events', async () => {
+      configureEnvironmentHooks('beforeToolCall,afterToolCall,onToolCallError');
+      await abandon(runningRow());
+      expect(completeOperationMock).not.toHaveBeenCalled();
+    });
+
+    it('does not start terminal dispatch after environment hooks are disabled', async () => {
+      configureEnvironmentHooks('onComplete,onError');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', undefined);
+      await abandon(runningRow());
+      expect(completeOperationMock).not.toHaveBeenCalled();
+    });
+
+    it.each(['conflict', 'failed'])(
+      'does not dispatch environment hooks when topic settlement is %s',
+      async (settlement) => {
+        configureEnvironmentHooks('onComplete,onError');
+        if (settlement === 'conflict') {
+          topicSettleRunningOperationMock.mockResolvedValue({
+            activeOperationId: 'op_newer',
+            status: 'conflict',
+          });
+        } else {
+          topicSettleRunningOperationMock.mockRejectedValue(new Error('db unavailable'));
+        }
+        await abandon(runningRow());
+        expect(completeOperationMock).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('no-state row pre-claimed by the caller', () => {
