@@ -856,6 +856,7 @@ describe('HeterogeneousAgentCtr', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     if (originalClaudeSdkLabEnv === undefined) delete process.env.LOBE_CLAUDE_CODE_SDK;
     else process.env.LOBE_CLAUDE_CODE_SDK = originalClaudeSdkLabEnv;
     if (originalCodexAppServerLabEnv === undefined) delete process.env.LOBE_CODEX_APP_SERVER;
@@ -1345,6 +1346,11 @@ describe('HeterogeneousAgentCtr', () => {
         systemContext: string;
       }> = {},
     ) => {
+      // These argv/stream fixtures need no wall-clock session-completion grace.
+      if (!vi.isFakeTimers()) {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        vi.setTimerTickMode('nextTimerAsync');
+      }
       const { proc, writes } = createFakeProc({ stdoutLines });
       nextFakeProc = proc;
 
@@ -2632,6 +2638,11 @@ describe('HeterogeneousAgentCtr', () => {
       }> = {},
       storeGet?: (key: string, defaultValue?: any) => any,
     ) => {
+      // These argv/stream fixtures need no wall-clock session-completion grace.
+      if (!vi.isFakeTimers()) {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        vi.setTimerTickMode('nextTimerAsync');
+      }
       const { proc, writes } = createFakeProc({ stdoutLines });
       nextFakeProc = proc;
 
