@@ -1,5 +1,5 @@
 import type { ModelParamsSchema } from '../standard-parameters';
-import type { AIImageModelCard } from '../types/aiModel';
+import type { AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
 export const fluxSchnellParamsSchema: ModelParamsSchema = {
   height: { default: 1024, max: 1536, min: 512, step: 1 },
@@ -221,6 +221,57 @@ const falImageModels: AIImageModelCard[] = [
   },
 ];
 
-export const allModels = [...falImageModels];
+const falVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      "fal's post-trained MiniMax H3 with stronger prompt adherence and aesthetics, supporting text-to-video, first/last-frame image-to-video, and reference-to-video with native audio.",
+    displayName: 'H3 Max',
+    enabled: true,
+    // One card for the fal app; the runtime picks text-to-video, image-to-video or
+    // reference-to-video from the supplied images.
+    id: 'minimax/h3-max',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+      },
+      duration: { default: 5, max: 15, min: 5, step: 1 },
+      endImageUrl: { default: null },
+      imageUrl: { default: null },
+      imageUrls: {
+        aspectRatio: { max: 2.5, min: 0.4 },
+        default: [],
+        // fal bills reference tokens beyond 4,096 per request ($0.02/1K; 1,024 per square image,
+        // 1,824 per 16:9, 2,560 per 5:2), which per-second pricing does not cover. First/last frames
+        // join the reference pool, so one extra reference caps the pool at three images and the
+        // unbilled surcharge at about $0.03 for 16:9 inputs.
+        maxCount: 1,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: 'balanced', enum: ['disabled', 'balanced', 'quality'] },
+      resolution: { default: '768P', enum: ['480P', '768P', '1080P'] },
+      seed: { default: null },
+    },
+    pricing: {
+      // 5 seconds at the default 768P
+      approximatePricePerVideo: 0.4,
+      units: [
+        {
+          lookup: {
+            prices: { '1080P': 0.16, '480P': 0.05, '768P': 0.08 },
+            pricingParams: ['resolution'],
+          },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'second',
+        },
+      ],
+    },
+    releasedAt: '2026-09-01',
+    type: 'video',
+  },
+];
+
+export const allModels = [...falImageModels, ...falVideoModels];
 
 export default allModels;

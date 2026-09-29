@@ -326,6 +326,7 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
     try {
       await chargeAfterGenerate({
         computePriceParams: {
+          duration: (batch?.config as RuntimeVideoGenParams)?.duration,
           generateAudio: (batch?.config as RuntimeVideoGenParams)?.generateAudio,
           resolution: (batch?.config as RuntimeVideoGenParams)?.resolution,
         },

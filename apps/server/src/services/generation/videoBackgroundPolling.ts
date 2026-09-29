@@ -151,6 +151,7 @@ export async function processBackgroundVideoPolling(
       const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
       await chargeAfterGenerate({
         computePriceParams: {
+          duration: (batch?.config as RuntimeVideoGenParams | undefined)?.duration,
           generateAudio: (batch?.config as RuntimeVideoGenParams | undefined)?.generateAudio,
           resolution: (batch?.config as RuntimeVideoGenParams | undefined)?.resolution,
         },

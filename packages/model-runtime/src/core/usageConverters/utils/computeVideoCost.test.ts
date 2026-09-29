@@ -287,4 +287,47 @@ describe('computeVideoCost', () => {
       expect(Number.isInteger(result?.totalCredits)).toBe(true);
     });
   });
+
+  describe('per-second pricing', () => {
+    const lookupPricing: Pricing = {
+      units: [
+        {
+          lookup: {
+            prices: { '1080P': 0.16, '480P': 0.05, '768P': 0.08 },
+            pricingParams: ['resolution'],
+          },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'second',
+        },
+      ],
+    };
+
+    it('bills requested duration at the resolution rate and ignores tokens', () => {
+      const result = computeVideoCost(lookupPricing, 123_456, {
+        duration: 10,
+        resolution: '768P',
+      });
+
+      expect(result?.totalCost).toBeCloseTo(0.8);
+      expect(result?.breakdown).toMatchObject({
+        durationSeconds: 10,
+        lookupKey: '768P',
+        pricePerSecond: 0.08,
+      });
+    });
+
+    it('supports a fixed per-second rate', () => {
+      const pricing: Pricing = {
+        units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+      };
+
+      expect(computeVideoCost(pricing, 0, { duration: 6 })?.totalCost).toBeCloseTo(0.3);
+    });
+
+    it('returns undefined without a duration or a matching lookup price', () => {
+      expect(computeVideoCost(lookupPricing, 0, { resolution: '768P' })).toBeUndefined();
+      expect(computeVideoCost(lookupPricing, 0, { duration: 5, resolution: '4K' })).toBeUndefined();
+    });
+  });
 });

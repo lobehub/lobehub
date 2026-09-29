@@ -11,7 +11,7 @@ export {
   type PricingComputationResult,
 } from './utils/computeChatCost';
 export { computeImageCost } from './utils/computeImageCost';
-export { computeVideoCost } from './utils/computeVideoCost';
+export { computeVideoCost, type VideoGenerationParams } from './utils/computeVideoCost';
 export {
   type ChatCostEstimate,
   type ChatInputTokenEstimate,

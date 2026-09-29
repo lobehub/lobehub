@@ -226,6 +226,7 @@ export const videoRouter = router({
           try {
             await chargeAfterGenerate({
               computePriceParams: {
+                duration: (batch?.config as any)?.duration,
                 generateAudio: (batch?.config as any)?.generateAudio,
                 resolution: (batch?.config as any)?.resolution,
               },
