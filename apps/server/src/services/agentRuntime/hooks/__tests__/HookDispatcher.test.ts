@@ -3,6 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deliverWebhook, HookDispatcher } from '../HookDispatcher';
 import type { AgentHook, AgentHookEvent } from '../types';
 
+vi.mock('@/database/models/user', () => ({
+  UserModel: { getEmailsByIds: async () => [] },
+}));
+vi.mock('@/database/server', () => ({ getServerDB: async () => ({}) }));
+
 // Mock isQueueAgentRuntimeEnabled to control local vs production mode
 vi.mock('@/server/services/queue/impls', () => ({
   isQueueAgentRuntimeEnabled: vi.fn(function () {
@@ -1116,7 +1121,7 @@ describe('HookDispatcher', () => {
           handler: vi.fn(),
           id: 'tool-webhook',
           type: 'afterToolCall',
-          webhook: { url: 'https://example.com/afterToolCall' },
+          webhook: { url: 'https://example.com/afterToolCall', eventFields: ['result', 'mocked'] },
         },
       ]);
 
@@ -1129,13 +1134,14 @@ describe('HookDispatcher', () => {
           apiName: 'search',
           args: {},
           callIndex: 1,
-          content: 'result',
-          executionTimeMs: 100,
+          assistantMessageId: 'assistant-1',
+          executor: 'server',
+          toolCallId: 'native-call-1',
+          result: { content: 'result', executionTime: 100, success: true },
           identifier: 'twitter',
           mocked: false,
           operationId,
           stepIndex: 0,
-          success: true,
           userId: 'user_test',
         },
         serialized,
@@ -1143,7 +1149,15 @@ describe('HookDispatcher', () => {
 
       expect(global.fetch).toHaveBeenCalledWith(
         'https://example.com/afterToolCall',
-        expect.objectContaining({ method: 'POST' }),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            result: { content: 'result', executionTime: 100, success: true },
+            mocked: false,
+            hookId: 'tool-webhook',
+            hookType: 'afterToolCall',
+          }),
+        }),
       );
     });
   });

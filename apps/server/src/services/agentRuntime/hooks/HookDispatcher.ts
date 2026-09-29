@@ -15,6 +15,7 @@ import type {
   SerializedHook,
   ToolCallHookEvent,
 } from './types';
+import { createWebhookPayloadBuilder } from './webhookPayload';
 
 const log = debug('lobe-server:hook-dispatcher');
 
@@ -90,26 +91,6 @@ async function fetchDeliver(url: string, payload: Record<string, unknown>): Prom
   log('Webhook delivered via fetch: %s (status: %d)', url, res.status);
 }
 
-function buildWebhookPayload(
-  event: AnyHookEvent,
-  eventFields?: (keyof AgentHookEvent)[],
-): Record<string, unknown> {
-  if (eventFields) {
-    const payload: Record<string, unknown> = {};
-    for (const field of eventFields) {
-      if (field === 'finalState') continue;
-      if (field in event) payload[field] = event[field as keyof AnyHookEvent];
-    }
-    return payload;
-  }
-
-  const payload = { ...event };
-  if ('finalState' in payload) {
-    delete (payload as { finalState?: unknown }).finalState;
-  }
-  return payload;
-}
-
 /**
  * HookDispatcher — central hub for registering and dispatching agent lifecycle hooks
  *
@@ -118,6 +99,8 @@ function buildWebhookPayload(
  *   delivered via HTTP POST or QStash
  */
 export class HookDispatcher {
+  private readonly buildWebhookPayload = createWebhookPayloadBuilder();
+
   /**
    * In-memory hook store (local mode)
    * Maps operationId → AgentHook[]
@@ -174,13 +157,11 @@ export class HookDispatcher {
             hook.id,
             hook.webhook.url,
           );
-          const webhookPayload = buildWebhookPayload(event, hook.webhook.eventFields);
-          await deliverWebhook(hook.webhook, {
-            ...webhookPayload,
+          const webhookPayload = await this.buildWebhookPayload(event, hook.webhook, {
             hookId: hook.id,
             hookType: type,
-            ...hook.webhook.body,
           });
+          if (webhookPayload) await deliverWebhook(hook.webhook, webhookPayload);
         } catch (error) {
           if (hook.webhook.fallback === 'none') {
             // No-fallback webhooks carry control flow (e.g. the sub-agent

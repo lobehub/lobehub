@@ -4,5 +4,6 @@ export type {
   AgentHookEvent,
   AgentHookType,
   AgentHookWebhook,
+  AgentHookWebhookPayload,
   SerializedHook,
 } from './types';

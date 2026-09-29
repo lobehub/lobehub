@@ -14,7 +14,11 @@ import type {
   AgentState,
   InstructionExecutor,
 } from '../types';
-import { extractActivatedSkillsFromMessages, extractTodosFromMessages } from '../utils';
+import {
+  extractActivatedSkillsFromMessages,
+  extractTodosFromMessages,
+  redactResultForEvents,
+} from '../utils';
 import { selectToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
 import { settleAbortedToolRows } from './abortedToolRows';
 
@@ -43,21 +47,6 @@ interface ToolResultEntry {
 }
 
 const nowIso = () => new Date().toISOString();
-
-/**
- * Skill work-registration intents carry the UNTRUNCATED tool payload
- * (`data`/`args`) solely for server-side Work registration, which reads it
- * off the in-process `executionResult` before anything leaves the executor.
- * Strip it from every copy that DOES leave: realtime `tool_end` stream events
- * (clients only read `workRegistration` as a presence flag, see
- * gatewayEventHandler) and the recorded step `tool_result` events
- * (AgentStateManager serializes those into Redis, where the raw payload would
- * bloat the capped event blob).
- */
-const redactResultForEvents = (result: ToolRunResult): ToolRunResult =>
-  result.workRegistration?.type === 'skill'
-    ? { ...result, workRegistration: { ...result.workRegistration, args: undefined, data: null } }
-    : result;
 
 const markPersistFatal = <T>(error: T): T => {
   if (error && typeof error === 'object') persistFatalErrors.add(error);
