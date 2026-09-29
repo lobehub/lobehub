@@ -48,7 +48,7 @@ try {
   const { installShellResolver, resolveCore } = require('./core-loader');
 
   const builtinDir = app.isPackaged
-    ? path.join(process.resourcesPath, 'core')
+    ? path.join(process.resourcesPath, 'core.asar')
     : path.join(__dirname, '..');
 
   const loadAbi = () => {
@@ -84,6 +84,7 @@ try {
     abi: abi.shellAbi,
     builtinDir,
     coreDir: core.dir,
+    coreProtocol: 4,
     log: core.log,
     manifest: core.manifest,
     markHealthy: core.markHealthy ?? (() => {}),

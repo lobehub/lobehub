@@ -14,6 +14,7 @@ import {
   getAsarUnpackPatterns,
   getNativeModulesFilesConfig,
 } from './native-deps.config.mjs';
+import { packBuiltinCore } from './scripts/packBuiltinCore.mjs';
 import { verifyFontListSignature } from './scripts/verifyFontListSigning.mjs';
 
 dotenv.config();
@@ -178,6 +179,7 @@ const config = {
       `node scripts/buildCoreManifest.mjs --core=core-dist --platform=${corePlatform} --channel=${channel || 'stable'} --version=${packageJSON.version} --seq=${process.env.CORE_SEQ || 0} --shell-abi=${shellAbi}`,
       { stdio: 'inherit', cwd: __dirname },
     );
+    await packBuiltinCore(__dirname);
   },
   /**
    * AfterPack hook for copying Liquid Glass Assets.car on macOS 26+.
@@ -343,9 +345,8 @@ const config = {
 
   extraResources: [
     { from: 'resources/bin', to: 'bin' },
-    { from: 'core-dist', to: 'core' },
-    // electron-builder's copy filter drops a top-level `node_modules` dir from any `from`, so it needs its own entry
-    { from: 'core-dist/node_modules', to: 'core/node_modules' },
+    { from: 'core.asar', to: 'core.asar' },
+    { from: 'core.asar.unpacked', to: 'core.asar.unpacked' },
     // Local Sandbox helper binaries. The sandbox spawns these by path, so they
     // must be real files — not entries inside app.asar, and not something the
     // user is expected to install separately.

@@ -135,3 +135,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     `core manifest: ${manifest.channel}/${manifest.platform} ${manifest.version} seq ${manifest.seq} (${manifest.tree.length} files, ${manifest.signature ? 'signed' : 'UNSIGNED'})`,
   );
 }
+
+export class EmptyReleaseError extends Error {
+  constructor() {
+    super('empty release');
+  }
+}

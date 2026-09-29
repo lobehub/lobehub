@@ -1,7 +1,8 @@
 # Core OTA 本地 E2E（打包态）
 
 在本机打一个 arm64 的壳 + 内置 core（v1），再用本地 feed 依次发布 renderer-only（v2，reload）
-和 main 变更（v3，relaunch），最后验证篡改拒绝和 boot 回滚。所有命令在 `apps/desktop/` 下执行。
+和 main 变更（v3，relaunch），最后验证篡改拒绝和 boot 回滚。
+这里的 v1–v4 是测试版本号，传输协议均为 schemaVersion 4，使用 `core-v4/<platform>` feed 和 HTTP Range；内置业务位于 `core.asar`，CLI 位于 `core.asar.unpacked/cli/dist/index.js`。所有命令在 `apps/desktop/` 下执行。
 
 产物都在 `release/core-ota-e2e/`：`priv.pem`/`pub.pem`、`app/`（打包结果）、`core-v1..v3/`、`feed/`。
 app 名固定为 `lobehub-core-ota-e2e`，userData 在 `~/Library/Application Support/lobehub-core-ota-e2e`，
@@ -67,8 +68,7 @@ node scripts/core-ota-test/run.mjs eval "window.electronAPI.invoke('rendererOta.
 
 ```bash
 R=release/core-ota-e2e/app/mac-arm64/lobehub-core-ota-e2e.app/Contents/Resources
-cp $R/core/dist/main/index.js /tmp/core-main.js # 结束后拷回
-sed -i '' '1s/^/throw new Error("e2e builtin boom");/' $R/core/dist/main/index.js
+mv "$R/core.asar" "$R/core.asar.saved" # 仅限独立 E2E 应用，结束后移回
 # --dir 打包没有 app-update.yml，救援靠它拿 feed 地址
 printf 'provider: generic\nurl: http://127.0.0.1:8787/stable\n' > $R/app-update.yml
 ```

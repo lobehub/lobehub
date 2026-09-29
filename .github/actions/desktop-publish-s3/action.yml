@@ -71,21 +71,21 @@ runs:
         SHELL_ABI=""
         # Same-platform builds from different runners (mac arm64/x64) must produce identical trees.
         for dir in release/core-r0/*/; do
-          for latest in "$dir"core/*/latest.json; do
+          for latest in "$dir"core-v4/*/latest.json; do
             platform=$(basename "$(dirname "$latest")")
             [ "$(jq -r '.version' "$latest")" = "$VERSION" ] || { echo "::error::core version in $latest is not $VERSION"; exit 1; }
             abi=$(jq -er '.shellAbi' "$latest")
             [ -z "$SHELL_ABI" ] && SHELL_ABI="$abi"
             [ "$abi" = "$SHELL_ABI" ] || { echo "::error::shellAbi differs across platforms ($latest)"; exit 1; }
-            if [ -f "release/core-ota/core/$platform/latest.json" ]; then
+            if [ -f "release/core-ota/core-v4/$platform/latest.json" ]; then
               # A mismatch only costs delta efficiency for some clients (they fall back to objects/full pack); keep the first tree.
-              diff <(jq -S '.tree' "release/core-ota/core/$platform/latest.json") <(jq -S '.tree' "$latest") \
+              diff <(jq -S '.tree' "release/core-ota/core-v4/$platform/latest.json") <(jq -S '.tree' "$latest") \
                 || echo "::warning::$platform core trees differ between runners; keeping the first"
               continue
             fi
-            mkdir -p release/core-ota/cas release/core-ota/core
+            mkdir -p release/core-ota/cas release/core-ota/core-v4
             if [ -d "$dir"cas ]; then cp -R "$dir"cas/. release/core-ota/cas/; fi
-            cp -R "$dir"core/"$platform" release/core-ota/core/
+            cp -R "$dir"core-v4/"$platform" release/core-ota/core-v4/
           done
         done
         [ -n "$SHELL_ABI" ] || { echo "::error::no r0 core artifacts found"; exit 1; }
@@ -97,6 +97,7 @@ runs:
       id: base
       uses: ./.github/actions/desktop-publish-core-ota
       with:
+        core-dir: core-v4
         channel: ${{ inputs.channel }}
         release-dir: release/core-ota
         shell-json: release/shell.json

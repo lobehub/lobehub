@@ -1,5 +1,15 @@
 import { existsSync } from 'node:fs';
-import { copyFile, link, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  link,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { zstdDecompress } from 'node:zlib';
@@ -9,16 +19,17 @@ import { unzip } from 'fflate';
 import { createLogger } from '@/utils/logger';
 
 import { type CoreManifest, findMissingEntryAssets, sha256File } from './manifest';
+import { PackDownloader, type PackFetch } from './pack';
 import { applyZstdPatch } from './zstdPatch';
 
 const logger = createLogger('core:CoreStore');
 
-type FetchImpl = (url: string) => Promise<Response>;
+type FetchImpl = PackFetch;
 type LocalCore = { dir: string; manifest: CoreManifest };
 type StageInput = {
   builtin: LocalCore;
   current: LocalCore | null;
-  objectsBaseUrl: string;
+  objectsBaseUrl?: string;
   packsBaseUrl: string;
   remote: CoreManifest;
 };
@@ -118,6 +129,8 @@ export const cleanupLegacy = async (userData: string) => {
 };
 
 export class CoreStore {
+  private active = false;
+  private readonly packDownloader: PackDownloader;
   private readonly storeDir: string;
   private readonly coresDir: string;
 
@@ -125,11 +138,22 @@ export class CoreStore {
     private readonly otaRoot: string,
     private readonly fetchImpl: FetchImpl,
   ) {
+    this.packDownloader = new PackDownloader(fetchImpl);
     this.storeDir = path.join(otaRoot, 'store');
     this.coresDir = path.join(otaRoot, 'cores');
   }
 
-  async stage({ builtin, current, objectsBaseUrl, packsBaseUrl, remote }: StageInput) {
+  async stage(input: StageInput) {
+    if (this.active) throw new Error('Core staging already active');
+    this.active = true;
+    try {
+      return await this.stageCore(input);
+    } finally {
+      this.active = false;
+    }
+  }
+
+  private async stageCore({ builtin, current, objectsBaseUrl, packsBaseUrl, remote }: StageInput) {
     if (!isSafeVersion(remote.version)) throw new Error(`Unsafe version: ${remote.version}`);
     await mkdir(this.storeDir, { mode: DIR_MODE, recursive: true });
     await mkdir(this.coresDir, { mode: DIR_MODE, recursive: true });
@@ -138,6 +162,40 @@ export class CoreStore {
       ...indexLocal(builtin.dir, builtin.manifest),
       ...(current ? indexLocal(current.dir, current.manifest) : []),
     ]);
+    if (remote.schemaVersion === 4) {
+      const expected = new Set([
+        ...remote.tree.map((file) => file.sha256),
+        ...remote.patches.map((patch) => patch.fromSha256),
+      ]);
+      await runPool([...expected], async (hash) => {
+        const candidates = [byHash.get(hash), this.objectPath(hash)].filter(
+          (file): file is string => !!file,
+        );
+        byHash.delete(hash);
+        for (const source of candidates) {
+          try {
+            if ((await stat(source)).size > 256 * 1024 ** 2) continue;
+            if (sha256File(await readFile(source)) === hash) {
+              byHash.set(hash, source);
+              break;
+            }
+          } catch {
+            /* Missing local content is fetched from the target pack. */
+          }
+        }
+      });
+      const missing = [...new Set(remote.tree.map((file) => file.sha256))].filter(
+        (hash) => !byHash.has(hash),
+      );
+      const result = await this.packDownloader.download(
+        remote,
+        missing,
+        byHash,
+        packsBaseUrl,
+        (hash, bytes) => this.putObject(hash, bytes),
+      );
+      return { ...result, dir: await this.assemble(remote, byHash) } satisfies StageResult;
+    }
     const missing = [...new Set(remote.tree.map((file) => file.sha256))].filter(
       (sha256) => !byHash.has(sha256) && !existsSync(this.objectPath(sha256)),
     );
@@ -194,6 +252,7 @@ export class CoreStore {
   }
 
   async gc(keep: string[], { keepStore = false } = {}) {
+    if (this.active) return;
     await rm(path.join(this.otaRoot, 'staging'), { force: true, recursive: true });
     const referenced = new Set<string>();
     for (const name of await readDirNames(this.coresDir)) {
@@ -247,11 +306,16 @@ export class CoreStore {
         const target = resolveInside(tmpDir, file.path);
         await mkdir(path.dirname(target), { mode: DIR_MODE, recursive: true });
         const source = byHash.get(file.sha256) ?? this.objectPath(file.sha256);
-        try {
-          await link(source, target);
-        } catch {
-          await copyFile(source, target);
-        }
+        if (/\.asar[/\\]/.test(source)) {
+          await writeFile(target, await readFile(source));
+        } else
+          try {
+            await link(source, target);
+          } catch {
+            await copyFile(source, target);
+          }
+        if (remote.schemaVersion === 4 && sha256File(await readFile(target)) !== file.sha256)
+          throw new Error(`Assembled file mismatch: ${file.path}`);
       });
       await writeFile(path.join(tmpDir, 'manifest.json'), JSON.stringify(remote));
       const rendererDir = path.join(tmpDir, RENDERER_ROOT);
@@ -264,7 +328,17 @@ export class CoreStore {
           throw new Error(`Entry integrity check failed (${entry}): ${missing.join(', ')}`);
         }
       }
-      await rm(finalDir, { force: true, recursive: true });
+      if (existsSync(finalDir)) {
+        const existing = await this.readManifest(finalDir);
+        if (JSON.stringify(existing) !== JSON.stringify(remote))
+          throw new Error('Existing core version differs');
+        for (const file of remote.tree) {
+          if (sha256File(await readFile(resolveInside(finalDir, file.path))) !== file.sha256)
+            throw new Error('Existing core version is corrupt');
+        }
+        await rm(tmpDir, { force: true, recursive: true });
+        return finalDir;
+      }
       await rename(tmpDir, finalDir);
       return finalDir;
     } catch (error) {

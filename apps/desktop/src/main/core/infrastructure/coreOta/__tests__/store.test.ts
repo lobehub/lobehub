@@ -8,7 +8,7 @@ import { constants, zstdCompressSync } from 'node:zlib';
 import { zipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type CoreManifest, sha256File } from '../manifest';
+import { type CoreManifestV3 as CoreManifest, sha256File } from '../manifest';
 import { cleanupLegacy, CoreStore, indexLocal, isSafeVersion } from '../store';
 
 vi.mock('node:fs/promises', async (importOriginal) => {

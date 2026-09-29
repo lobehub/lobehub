@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ShellGlobal } from '@/const/shell';
 
-import { canonicalJson, type CoreManifest, sha256File } from '../manifest';
+import { canonicalJson, type CoreManifestV3 as CoreManifest, sha256File } from '../manifest';
 import { readPointer, writePointer } from '../pointer';
 import { SAFE_VERSION } from '../store';
 
@@ -485,6 +485,32 @@ describe('CoreUpdateManager checkForUpdates', () => {
     const reload =
       app.browserManager.browsers.get('main')!.browserWindow.webContents.reloadIgnoringCache;
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the active renderer version after a reload even without its object cache', async () => {
+    serveLatest(rendererOnly('1.0.1', 1));
+    const { manager } = await loadManager();
+    await manager.checkForUpdates();
+    manager.applyStagedNow();
+    manager.handleBootPing('mounted');
+    rmSync(storeDir(), { recursive: true, force: true });
+    const reused = 'index-1.0.1';
+    serveLatest(
+      buildManifest('1.0.5', 5, {
+        ...BASE_FILES,
+        'dist/renderer/assets/index.js': reused,
+        'dist/renderer/assets/extra.js': 'new',
+      }),
+    );
+    fetchImpl.mockClear();
+    await manager.checkForUpdates();
+    expect(manager.getStatus().staged).toBe('1.0.5');
+    expect(
+      fetchImpl.mock.calls.some(([url]) => url.includes(sha256File(Buffer.from(reused)))),
+    ).toBe(false);
+    expect(readFileSync(path.join(coreDir('1.0.5'), 'dist/renderer/assets/index.js'), 'utf8')).toBe(
+      reused,
+    );
   });
 
   it('re-announces an already staged core on a manual check', async () => {

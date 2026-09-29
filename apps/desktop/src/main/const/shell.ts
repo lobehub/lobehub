@@ -4,6 +4,7 @@ export interface ShellGlobal {
   readonly abi: string;
   readonly builtinDir: string;
   readonly coreDir: string;
+  readonly coreProtocol?: 4;
   readonly log: string[];
   readonly manifest: CoreManifest | null;
   readonly markHealthy: () => void;

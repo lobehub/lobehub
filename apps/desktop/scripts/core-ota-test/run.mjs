@@ -43,13 +43,17 @@ const manifestOf = (tag) =>
 const publish = (tag, { version, seq, previous }) => {
   const { shellAbi } = manifestOf(previous ?? tag);
   const previousArg = previous
-    ? `--previous-manifest=${path.join(FEED, 'core', PLATFORM, 'versions', `${manifestOf(previous).version}.json`)}`
+    ? `--previous-manifest=${path.join(FEED, 'core-v4', PLATFORM, 'versions', `${manifestOf(previous).version}.json`)}`
     : '';
   sh(
-    `node scripts/buildCore.mjs --core=${coreDir(tag)} --platform=${PLATFORM} --channel=${CHANNEL} ` +
+    `node scripts/buildCore.mjs --protocol=4 --core=${coreDir(tag)} --platform=${PLATFORM} --channel=${CHANNEL} ` +
       `--version=${version} --seq=${seq} --shell-abi=${shellAbi} ` +
-      `--objects-base-url=http://127.0.0.1:${PORT}/cas --out=${FEED} ${previousArg}`,
+      `--previous-base-url=http://127.0.0.1:${PORT}/${CHANNEL}/core-v4/${PLATFORM} --out=${FEED} ${previousArg}`,
     { RENDERER_OTA_PRIVATE_KEY: keys().privateKey },
+  );
+  cpSync(
+    path.join(FEED, 'core-v4', PLATFORM, 'versions', `${version}.json`),
+    path.join(coreDir(tag), 'manifest.json'),
   );
 };
 
@@ -95,7 +99,7 @@ const steps = {
     cpSync(path.join(DESKTOP_DIR, 'core-dist'), coreDir('v1'), { recursive: true });
     rmSync(FEED, { force: true, recursive: true });
     publish('v1', { seq: manifestOf('v1').seq, version: manifestOf('v1').version });
-    // buildCore writes core/<platform>; the client reads <channel>/core/<platform> (S3 adds the channel prefix).
+    // buildCore writes core-v4/<platform>; the client reads <channel>/core-v4/<platform> (S3 adds the channel prefix).
     symlinkSync('.', path.join(FEED, CHANNEL));
     console.log(`v1 app: ${APP}`);
   },

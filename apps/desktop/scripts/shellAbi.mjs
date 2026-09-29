@@ -11,6 +11,8 @@ const TRACKED_INPUTS = [
   'apps/desktop/shell',
   'apps/desktop/build',
   'apps/desktop/electron-builder.mjs',
+  'apps/desktop/scripts/packBuiltinCore.mjs',
+  'apps/desktop/scripts/assembleCore.mjs',
   'apps/desktop/native-deps.config.mjs',
   'apps/desktop/module-deps.config.mjs',
   'apps/desktop/external-runtime-deps.config.mjs',

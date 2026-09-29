@@ -182,3 +182,7 @@ apps/desktop/core-dist
 # alint: local provider setup (holds the API key) and result cache
 .alint/
 .alintcache
+
+# Packaged builtin desktop core
+/apps/desktop/core.asar
+/apps/desktop/core.asar.unpacked/

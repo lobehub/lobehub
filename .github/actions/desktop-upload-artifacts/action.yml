@@ -78,7 +78,7 @@ runs:
           */stable|*/nightly|*/canary|*/beta) BASE="${BASE%/*}" ;;
         esac
         read -r PLATFORM CHANNEL VERSION SEQ SHELL_ABI < <(node -p "const m=require('./core-dist/manifest.json');[m.platform,m.channel,m.version,m.seq,m.shellAbi].join(' ')")
-        node scripts/buildCore.mjs \
+        node scripts/buildCore.mjs --protocol=4 \
           --core=core-dist \
           --platform="$PLATFORM" \
           --channel="$CHANNEL" \

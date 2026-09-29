@@ -5,10 +5,9 @@ name: Release Desktop Core OTA
 # ============================================
 # 门禁: HEAD 的 shellAbi 必须等于 <channel>/shell.json 的 shellAbi，
 #       否则 requires_full_release=true，由调用方走全量发版。
-# 产物: cas/objects/<sha>.zst, cas/patches/<from>-<to>.zst      跨平台共享，immutable
-#       <channel>/core/<platform>/packs/<sha>.zip                全量 zip（fallback）
-#       <channel>/core/<platform>/versions/<version>.json        签名快照
-#       <channel>/core/<platform>/latest.json                    签名 manifest（no-store）
+# 产物: <channel>/core-v4/<platform>/packs/<sha>.pack           独立 Zstd 块
+#       <channel>/core-v4/<platform>/versions/<version>.json     签名快照
+#       <channel>/core-v4/<platform>/latest.json                 签名 manifest
 # ============================================
 
 on:
@@ -235,7 +234,7 @@ jobs:
         run: |
           set -euo pipefail
           HTTP_STATUS=$(curl -sS --connect-timeout 10 --max-time 30 \
-            -o "$RUNNER_TEMP/previous-core.json" -w '%{http_code}' "$FEED_BASE_URL/$CHANNEL/core/$PLATFORM/latest.json")
+            -o "$RUNNER_TEMP/previous-core.json" -w '%{http_code}' "$FEED_BASE_URL/$CHANNEL/core-v4/$PLATFORM/latest.json")
           case "$HTTP_STATUS" in
             200)
               echo "Previous core: $(jq -er '.version' "$RUNNER_TEMP/previous-core.json")"
@@ -265,7 +264,7 @@ jobs:
           set -euo pipefail
           set +e
           # shellcheck disable=SC2086
-          node scripts/buildCore.mjs \
+          node scripts/buildCore.mjs --protocol=4 \
             --core=core-dist \
             --platform="$PLATFORM" \
             --channel="$CHANNEL" \
@@ -273,7 +272,7 @@ jobs:
             --seq="$SEQ" \
             --rollout="$ROLLOUT" \
             --shell-abi="$SHELL_ABI" \
-            --objects-base-url="$FEED_BASE_URL/cas" \
+            --previous-base-url="$FEED_BASE_URL/$CHANNEL/core-v4/$PLATFORM" \
             --out=release/core-ota \
             $PREVIOUS_ARGS
           STATUS=$?
@@ -327,8 +326,8 @@ jobs:
         id: collect
         run: |
           set -euo pipefail
-          if [ -d release/core-ota/core ] && [ -n "$(ls -A release/core-ota/core)" ]; then
-            echo "Platforms: $(ls release/core-ota/core | tr '\n' ' ')"
+          if [ -d release/core-ota/core-v4 ] && [ -n "$(ls -A release/core-ota/core-v4)" ]; then
+            echo "Platforms: $(ls release/core-ota/core-v4 | tr '\n' ' ')"
             echo "skipped=false" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::every platform was unchanged; nothing to publish"
@@ -340,6 +339,7 @@ jobs:
         if: steps.collect.outputs.skipped == 'false'
         uses: ./.github/actions/desktop-publish-core-ota
         with:
+          core-dir: core-v4
           channel: ${{ inputs.channel }}
           release-dir: release/core-ota
           aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
