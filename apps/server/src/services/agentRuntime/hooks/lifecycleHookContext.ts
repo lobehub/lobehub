@@ -1,9 +1,9 @@
-import type { AgentHookEvent, AgentRunOrigin } from '@lobechat/agent-runtime';
+import type { AgentHookEvent, AgentState } from '@lobechat/agent-runtime';
 
-/** Correlation for step and terminal notifications, sourced only from the run's origin. */
+/** Correlation for step and terminal notifications, sourced only from the trusted run state. */
 export function buildLifecycleHookContext(
   operationId: string,
-  origin: AgentRunOrigin | undefined,
+  state: Pick<AgentState, 'origin'> | undefined,
   userId: string,
 ): Pick<
   AgentHookEvent,
@@ -17,6 +17,7 @@ export function buildLifecycleHookContext(
   | 'userId'
   | 'workspaceId'
 > {
+  const origin = state?.origin;
   return {
     agentId: origin?.agentId ?? '',
     groupId: origin?.groupId,
@@ -25,7 +26,7 @@ export function buildLifecycleHookContext(
     parentOperationId: origin?.lineage?.parentOperationId,
     threadId: origin?.threadId,
     topicId: origin?.topicId,
-    userId: origin?.userId || userId,
+    userId,
     workspaceId: origin?.workspaceId,
   };
 }

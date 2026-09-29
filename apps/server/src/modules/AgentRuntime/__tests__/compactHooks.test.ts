@@ -7,6 +7,15 @@ import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
 import { ServerLifecycleSink } from '../adapters/ServerLifecycleSink';
 
+vi.mock('@/database/models/user', () => ({
+  UserModel: class {
+    static getEmailsByIds = async (_db: unknown, ids: string[]) =>
+      ids.map((id) => ({ id, email: `${id}@example.test` }));
+    getUserPreference = async () => ({});
+  },
+}));
+vi.mock('@/database/server', () => ({ getServerDB: async () => ({}) }));
+
 vi.mock('@/server/services/queue/impls', () => ({
   isQueueAgentRuntimeEnabled: vi.fn(() => true),
 }));
@@ -23,7 +32,7 @@ vi.mock('@upstash/qstash', () => ({
   },
 }));
 
-const createFixture = (delivery: 'fetch' | 'qstash') => {
+const createFixture = (delivery: 'fetch' | 'qstash', ownerCallback = false) => {
   const messages = [{ content: 'history', id: 'message', role: 'assistant' }];
   const registeringWorker = new HookDispatcher();
   registeringWorker.register(
@@ -31,7 +40,11 @@ const createFixture = (delivery: 'fetch' | 'qstash') => {
     (['beforeCompact', 'afterCompact', 'onCompactError'] as const).map((type) => ({
       id: type,
       type,
-      webhook: { delivery, url: 'https://hooks.example.com/compact' },
+      webhook: {
+        delivery,
+        url: 'https://hooks.example.com/compact',
+        ...(ownerCallback ? { body: { userId: 'user' } } : {}),
+      },
     })),
   );
   const state: AgentState = {
@@ -53,6 +66,11 @@ const createFixture = (delivery: 'fetch' | 'qstash') => {
     messages,
     modelRuntimeConfig: { model: 'gpt-4', provider: 'openai' },
     operationId: 'operation',
+    principal: {
+      actor: {
+        shareVisitor: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+      },
+    },
     origin: {
       agentId: 'agent',
       lineage: { isSubAgent: true, parentOperationId: 'parent' },
@@ -79,7 +97,7 @@ const createFixture = (delivery: 'fetch' | 'qstash') => {
   const stream = vi.fn().mockResolvedValue({ content: 'actual summary' });
   const rollbackGroup = vi.fn().mockResolvedValue(undefined);
   const host: AgentRuntimeHost = {
-    lifecycle: new ServerLifecycleSink(resumedWorker, 'operation'),
+    lifecycle: new ServerLifecycleSink(resumedWorker, 'operation', 'user'),
     operation: { operationId: 'operation', stepIndex: 2, userId: 'user' },
     transports: {
       compression: {
@@ -130,12 +148,15 @@ describe('compact notifications through the server lifecycle and F HTTP dispatch
           );
         }),
       );
-      const fixture = createFixture('fetch');
+      const fixture = createFixture('fetch', true);
+      const dispatch = vi.spyOn(fixture.resumedWorker, 'dispatch');
       const result = await fixture.run();
       expect(fixture.resumedWorker.hasHooks('operation')).toBe(false);
       expect(bodies.map((body) => body.hookType)).toEqual(['beforeCompact', 'afterCompact']);
       for (const body of bodies)
         expect(body).toMatchObject({
+          userId: 'user',
+          userEmail: 'user@example.test',
           agentId: 'agent',
           lineage: { isSubAgent: true, parentOperationId: 'parent' },
           operationId: 'operation',
@@ -152,6 +173,17 @@ describe('compact notifications through the server lifecycle and F HTTP dispatch
         summary: 'actual summary',
       });
       expect(result.newState.messages[0].content).toBe('actual summary');
+      for (const type of ['beforeCompact', 'afterCompact']) {
+        expect(dispatch).toHaveBeenCalledWith(
+          'operation',
+          type,
+          expect.objectContaining({ userId: 'user' }),
+          fixture.state.host?.hooks,
+          { ownerUserId: 'user' },
+        );
+      }
+      expect(fixture.host.operation.userId).toBe('user');
+      expect(result.newState.principal).toEqual(fixture.state.principal);
       expect(result.newState.host?.hooks).toEqual(fixture.state.host?.hooks);
       expect(fixture.rollbackGroup).not.toHaveBeenCalled();
     },
@@ -160,13 +192,23 @@ describe('compact notifications through the server lifecycle and F HTTP dispatch
   it('publishes the actual failure and lineage through restored QStash notification configs', async () => {
     vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
     vi.stubEnv('QSTASH_TOKEN', 'test-token');
-    const fixture = createFixture('qstash');
+    const fixture = createFixture('qstash', true);
+    const dispatch = vi.spyOn(fixture.resumedWorker, 'dispatch');
     const error = new Error('compression provider failed');
     fixture.stream.mockRejectedValue(error);
     const result = await fixture.run();
     const bodies = publishJSON.mock.calls.map(([request]) => request.body);
     expect(bodies.map((body) => body.hookType)).toEqual(['beforeCompact', 'onCompactError']);
+    expect(dispatch).toHaveBeenCalledWith(
+      'operation',
+      'onCompactError',
+      expect.objectContaining({ userId: 'user' }),
+      fixture.state.host?.hooks,
+      { ownerUserId: 'user' },
+    );
     expect(bodies[1]).toMatchObject({
+      userId: 'user',
+      userEmail: 'user@example.test',
       error: error.message,
       tokenCount: 8000,
       parentOperationId: 'parent',

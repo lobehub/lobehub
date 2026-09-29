@@ -19,6 +19,24 @@ called once; the first mock wins. Legacy dual handler/webhook hooks select the
 handler locally and the webhook in queue mode. Critical notification callbacks
 retain `fallback: 'none'` failure propagation.
 
+## Hook runtime identity
+
+Step/terminal, human, compact and parent call-agent notifications use the
+producer's trusted runtime account in `userId`. Share visitor state does not
+override these thirteen event identities. Permissions, service/model
+accounts and persisted ownership retain their existing runtime owner semantics.
+Internal callback owner closures and server-created static routing context remain
+unchanged; no public owner or actor field is added.
+
+Durable human continuations deliver with the resumed service's runtime account,
+including historical ledger events that contain the former visitor identity.
+Parent call-agent notifications use the parent caller's runtime account.
+The share entry point still forces headless approval and blocks sub-agent calls.
+
+This is a staged migration: the three tool notification identities and shared
+email authorization interfaces still follow the inherited contract. The shared
+identity helper remains until the upstream tool builder stops referencing it.
+
 ## Preparation and persistence
 
 - `RuntimeConfig.prepareTools(context, state)` runs before runtime decisions;

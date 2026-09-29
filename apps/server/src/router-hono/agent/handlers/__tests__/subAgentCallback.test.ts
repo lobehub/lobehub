@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { groupMemberCallback } from '../groupMemberCallback';
 import { subAgentCallback } from '../subAgentCallback';
 
 const mockCompleteSubAgentBridge = vi.fn();
@@ -10,7 +11,10 @@ const mockAiAgentService = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(function (...args: any[]) {
     mockAiAgentService(...args);
-    return { completeSubAgentBridge: mockCompleteSubAgentBridge };
+    return {
+      completeSubAgentBridge: mockCompleteSubAgentBridge,
+      completeGroupActionMember: mockCompleteSubAgentBridge,
+    };
   }),
 }));
 
@@ -63,6 +67,35 @@ describe('subAgentCallback handler', () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
+
+  it.each([subAgentCallback, groupMemberCallback])(
+    'uses persisted owner metadata, never the hook trigger for %s account access',
+    async (callback) => {
+      mockGetOperationMetadata.mockResolvedValue({
+        userId: 'owner',
+        streamOwnerUserId: 'visitor',
+        workspaceId: 'ws-1',
+      });
+      mockCompleteSubAgentBridge.mockResolvedValue(true);
+      const { ctx } = buildContext({
+        body: {
+          ...validBody,
+          userId: 'visitor',
+          anchorMessageId: 'anchor',
+          groupToolMessageId: 'group-tool',
+        },
+      });
+      expect((await callback(ctx)).status).toBe(200);
+      expect(mockAiAgentService).toHaveBeenCalledWith(expect.anything(), 'owner', {
+        includeShareVisitor: true,
+        workspaceId: 'ws-1',
+      });
+      expect(mockCompleteSubAgentBridge).toHaveBeenCalledOnce();
+      mockGetOperationMetadata.mockResolvedValue(undefined);
+      expect((await callback(ctx)).status).toBe(401);
+      expect(mockAiAgentService).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('returns 400 when JSON parsing throws', async () => {
     const { ctx } = buildContext({ jsonThrows: true });

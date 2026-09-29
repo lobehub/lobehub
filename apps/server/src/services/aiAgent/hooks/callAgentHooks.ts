@@ -82,7 +82,9 @@ export async function withCallAgentHooks<T extends CallAgentStartResult>(
       ...fields,
     };
     try {
-      await hookDispatcher.dispatch(parentOperationId, type, event, serializedHooks);
+      await hookDispatcher.dispatch(parentOperationId, type, event, serializedHooks, {
+        ownerUserId: context.userId,
+      });
     } catch (error) {
       // These three hooks are notifications. Delivery must never replace a
       // startup result/error or cause a second child launch on queue retry.

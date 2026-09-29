@@ -136,12 +136,13 @@ vi.mock('@/database/models/thread', () => ({
 }));
 
 vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn().mockImplementation(function () {
-    return {
-      getUserSettings: vi.fn().mockResolvedValue(undefined),
-    };
-  }),
+  UserModel: class {
+    static getEmailsByIds = async (_db: unknown, ids: string[]) =>
+      ids.map((id) => ({ id, email: `${id}@example.test` }));
+    getUserSettings = async () => undefined;
+  },
 }));
+vi.mock('@/database/server', () => ({ getServerDB: async () => ({}) }));
 
 vi.mock('@/database/models/userMemory/persona', () => ({
   UserPersonaModel: vi.fn().mockImplementation(function () {
@@ -344,7 +345,12 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       },
     ];
     mockLoadInterventionContinuationState.mockResolvedValue({
-      origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      origin: { agentId: 'agent-1', topicId: 'topic-1', userId: 'user-1' },
+      principal: {
+        actor: {
+          shareVisitor: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        },
+      },
       host: { hooks },
     });
     mockFindOperationById.mockResolvedValue({ status: 'waiting_for_human' });
@@ -369,6 +375,11 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     });
     const created = mockCreateOperation.mock.calls[0][0];
     expect(created.hooks).toEqual(hooks);
+    expect(
+      created.interventionHookEvents.every(
+        (event: { userId: string }) => event.userId === 'user-1',
+      ),
+    ).toBe(true);
     expect(created.interventionHookEvents).toEqual([
       expect.objectContaining({
         operationId: 'op-parked',
@@ -1530,6 +1541,7 @@ describe('AiAgentService.stopPendingApproval', () => {
   it.each(['none', undefined] as const)(
     'retries critical stop failure without restarting business; ordinary fallback=%s is consumed',
     async (fallback) => {
+      const dispatch = vi.spyOn(hookDispatcher, 'dispatch');
       let stopped = false;
       let pendingStopHookBatchId: string | undefined;
       mockResolveHumanApproval.mockResolvedValue('applied');
@@ -1558,13 +1570,18 @@ describe('AiAgentService.stopPendingApproval', () => {
         return true;
       });
       mockLoadInterventionContinuationState.mockResolvedValue({
-        origin: {},
+        origin: { userId: 'user-1' },
+        principal: {
+          actor: {
+            shareVisitor: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          },
+        },
         host: {
           hooks: [
             {
               id: 'stop-retry',
               type: 'onStopByHumanIntervention',
-              webhook: { url: 'https://hooks.example/stop', fallback },
+              webhook: { url: 'https://hooks.example/stop', fallback, body: { userId: 'user-1' } },
             },
           ],
         },
@@ -1628,6 +1645,20 @@ describe('AiAgentService.stopPendingApproval', () => {
       }
       expect(pendingStopHookBatchId).toBeUndefined();
       await expectForeignRequestsRejected();
+      expect(
+        hookFetch.mock.calls.every(([, init]) => {
+          const payload = JSON.parse(init.body);
+          return payload.userId === 'user-1' && payload.userEmail === 'user-1@example.test';
+        }),
+      ).toBe(true);
+      expect(dispatch).toHaveBeenCalledWith(
+        'op-parked-1',
+        'onStopByHumanIntervention',
+        expect.objectContaining({ userId: 'user-1' }),
+        expect.any(Array),
+        { ownerUserId: 'user-1' },
+      );
+      dispatch.mockRestore();
       const delivered = hookFetch.mock.calls.length;
       await service.stopPendingApproval(params);
       expect(hookFetch).toHaveBeenCalledTimes(delivered);

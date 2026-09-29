@@ -128,6 +128,68 @@ describe('beforeToolCall control pipeline', () => {
   );
 
   it.each([false, true])(
+    'enriches before/after/error notifications with the runtime owner after cold recovery, queue=%s',
+    async (queue) => {
+      queueMode.mockReturnValue(queue);
+      getEmailsByIds.mockImplementation(async (_db, ids: string[]) =>
+        ids.map((id) => ({ id, email: `${id}@example.test` })),
+      );
+      const types = ['beforeToolCall', 'afterToolCall', 'onToolCallError'] as const;
+      const fixture = setup(
+        [
+          control(),
+          ...types.map((type) => ({
+            id: type,
+            type,
+            webhook: {
+              url: `https://hooks.example/${type}`,
+              body: { userId: 'user' },
+            },
+          })),
+        ],
+        undefined,
+        queue,
+      );
+      fixture.state.principal = {
+        actor: {
+          shareVisitor: {
+            agentId: 'agent',
+            shareId: 'share',
+            visitorUserId: 'owner-email-visitor',
+          },
+        },
+      };
+      fixture.state.origin!.userId = 'historical-owner';
+      // Rehydrate persisted configuration/principal without process-local registrations.
+      // eslint-disable-next-line unicorn/prefer-structured-clone
+      Object.assign(fixture.state, JSON.parse(JSON.stringify(fixture.state)));
+      await fixture.step();
+      fixture.execute.mockRejectedValueOnce(new Error('tool failed'));
+      await fixture.step([call('native-failed')]);
+      const payloads = fetchHook.mock.calls.map(([, request]) => JSON.parse(request.body));
+      for (const type of types) {
+        const notifications = payloads.filter((payload) => payload.hookId === type);
+        expect(notifications.length).toBeGreaterThan(0);
+        for (const payload of notifications)
+          expect(payload).toMatchObject({
+            userId: 'user',
+            userEmail: 'user@example.test',
+          });
+      }
+      for (const payload of payloads.filter((payload) => payload.hookId === 'control'))
+        expect(payload).toMatchObject({
+          userId: 'owner-email-visitor',
+          userEmail: 'owner-email-visitor@example.test',
+        });
+      expect(fixture.execute.mock.calls.every(([, context]) => context.userId === 'user')).toBe(
+        true,
+      );
+      expect(fixture.state.origin?.userId).toBe('historical-owner');
+      expect(getEmailsByIds.mock.calls.filter(([, ids]) => ids[0] === 'user')).toHaveLength(1);
+    },
+  );
+
+  it.each([false, true])(
     'denies before approval/mock/execution and persists attempts=0, queue=%s',
     async (queue) => {
       queueMode.mockReturnValue(queue);

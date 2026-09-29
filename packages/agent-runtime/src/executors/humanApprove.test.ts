@@ -107,7 +107,13 @@ describe('requestHumanApprove', () => {
           webhook: { url: 'https://example.com/hook' },
         },
       ];
+      host.operation.userId = 'owner';
       const state = createState({
+        principal: {
+          actor: {
+            shareVisitor: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          },
+        },
         host: { hooks },
         origin: {
           agentId: 'agent-origin',
@@ -126,9 +132,11 @@ describe('requestHumanApprove', () => {
         state,
       );
 
+      expect(host.operation.userId).toBe('owner');
       const notification = vi.mocked(host.lifecycle!.dispatch).mock.calls[0][0];
       expect(notification).toMatchObject({
         event: {
+          userId: 'owner',
           agentId: 'agent-origin',
           assistantMessageId: 'assistant-current',
           operationId: 'op-1',

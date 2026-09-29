@@ -1,7 +1,9 @@
 // @vitest-environment node
 /** Real step/completion producers through the dispatcher and HTTP transport. */
+import { normalizeAgentState } from '@lobechat/agent-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createBotCompletionWebhook } from '@/server/services/bot/createBotCompletionHook';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
 import { AgentRuntimeService } from '../AgentRuntimeService';
@@ -73,7 +75,18 @@ vi.mock('@lobechat/builtin-tools/dynamicInterventionAudits', () => ({
   dynamicInterventionAudits: [],
 }));
 
-const { safeFetch, publish } = vi.hoisted(() => ({ safeFetch: vi.fn(), publish: vi.fn() }));
+const { safeFetch, publish, getEmailsByIds } = vi.hoisted(() => ({
+  safeFetch: vi.fn(),
+  publish: vi.fn(),
+  getEmailsByIds: vi.fn(),
+}));
+vi.mock('@/database/models/user', () => ({
+  UserModel: class {
+    static getEmailsByIds = getEmailsByIds;
+    getUserPreference = async () => ({});
+  },
+}));
+vi.mock('@/database/server', () => ({ getServerDB: async () => ({}) }));
 vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: safeFetch }));
 vi.mock('@/libs/qstash', () => ({
   OtelQstashClient: class {
@@ -127,8 +140,8 @@ const makeState = () => ({
     })),
   },
 });
-const setup = (state = makeState()) => {
-  const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+const setup = (state = makeState(), ownerUserId = 'user-1') => {
+  const service = new AgentRuntimeService({} as any, ownerUserId, { queueService: null });
   const coordinator = (service as any).coordinator;
   coordinator.loadAgentState.mockResolvedValue(state);
   const newState = { ...state, status: 'done', stepCount: 2 };
@@ -165,6 +178,11 @@ const execute = (service: AgentRuntimeService, runOperationId = operationId) =>
 const httpEvents = () => safeFetch.mock.calls.map(([, request]) => JSON.parse(request.body));
 
 beforeEach(() => {
+  getEmailsByIds
+    .mockReset()
+    .mockImplementation(async (_db, ids: string[]) =>
+      ids.map((id) => ({ id, email: `${id}@example.test` })),
+    );
   vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(false);
   safeFetch.mockReset().mockImplementation(async () => new Response('{}'));
   publish.mockReset().mockResolvedValue({ messageId: 'queued' });
@@ -176,6 +194,152 @@ afterEach(() => {
 });
 
 describe('lifecycle notifications from executeStep', () => {
+  it.each([false, true])(
+    'uses the runtime identity in all four events despite visitor state (queue=%s)',
+    async (queue) => {
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(queue);
+      // Historical persisted state is normalized by the same loader contract as local/queue workers.
+      const state = normalizeAgentState({
+        ...makeState(),
+        metadata: {
+          agentShareVisitor: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        },
+      } as any);
+      const { service, step, newState, coordinator } = setup(state);
+      const dispatch = vi.spyOn(hookDispatcher, 'dispatch');
+      const writes = observeStateWrites(coordinator);
+      const error = { type: 'ProviderFailure', message: 'provider failed' };
+      step.mockResolvedValue({
+        events: [{ type: 'done', reason: 'error' }],
+        newState: { ...newState, status: 'error', error },
+        nextContext: null,
+      });
+      await execute(service);
+      expect(httpEvents().map((event) => event.hookType)).toEqual(events);
+      for (const event of httpEvents()) {
+        expect(event.userId).toBe('user-1');
+        expect(event.userEmail).toBe('user-1@example.test');
+        expect(event).not.toHaveProperty('actorUserId');
+        expect(event).not.toHaveProperty('ownerUserId');
+      }
+      for (const type of events) {
+        expect(dispatch).toHaveBeenCalledWith(
+          operationId,
+          type,
+          expect.objectContaining({ userId: 'user-1' }),
+          expect.any(Array),
+          { ownerUserId: 'user-1' },
+        );
+      }
+      expect(writes.length).toBeGreaterThan(0);
+      expect(writes.every((write: any) => write.origin.userId === 'user-1')).toBe(true);
+      expect((service as any).userId).toBe('user-1');
+      expect(state.origin.userId).toBe('user-1');
+    },
+  );
+
+  it('keeps per-service owners separate across overlapping visitor runs', async () => {
+    const dispatch = vi.spyOn(hookDispatcher, 'dispatch');
+    const runs = ['owner-a', 'owner-b'].map((ownerUserId) => {
+      const runOperationId = `operation-${ownerUserId}`;
+      const state = normalizeAgentState({
+        ...makeState(),
+        operationId: runOperationId,
+        origin: { ...origin, userId: ownerUserId },
+        principal: {
+          actor: {
+            shareVisitor: {
+              agentId: 'agent-1',
+              shareId: 'share-1',
+              visitorUserId: `visitor-${ownerUserId}`,
+            },
+          },
+        },
+      } as any);
+      return { ...setup(state, ownerUserId), ownerUserId, runOperationId };
+    });
+    await Promise.all(runs.map(({ service, runOperationId }) => execute(service, runOperationId)));
+    for (const { ownerUserId, runOperationId } of runs) {
+      for (const type of ['beforeStep', 'afterStep', 'onComplete']) {
+        expect(dispatch).toHaveBeenCalledWith(
+          runOperationId,
+          type,
+          expect.objectContaining({ userId: ownerUserId }),
+          expect.any(Array),
+          { ownerUserId },
+        );
+      }
+    }
+  });
+
+  it.each([false, true])(
+    'enriches all terminal/step owner callbacks without leaking cached email across workers (queue=%s)',
+    async (queue) => {
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(queue);
+      vi.stubEnv('QSTASH_TOKEN', 'test-token');
+      const run = async (owner: string, target: string, id: string) => {
+        const state = normalizeAgentState({
+          ...makeState(),
+          operationId: id,
+          origin: { ...origin, userId: owner },
+          principal: {
+            actor: {
+              shareVisitor: {
+                agentId: 'agent-1',
+                shareId: 'share-1',
+                visitorUserId: `visitor-${id}`,
+              },
+            },
+          },
+          host: {
+            hooks: events.map((type) => ({
+              id: type,
+              type,
+              webhook: {
+                url: 'https://example.com/hooks',
+                delivery: queue ? 'qstash' : 'fetch',
+                body: { userId: target, userEmail: 'forged@example.test' },
+              },
+            })),
+          },
+        } as any);
+        // Each service is a fresh worker; the singleton only shares the bounded email cache.
+        const { service, step, newState, coordinator } = setup(state, owner);
+        const writes = observeStateWrites(coordinator);
+        step.mockResolvedValue({
+          events: [{ type: 'done', reason: 'error' }],
+          newState: {
+            ...newState,
+            status: 'error',
+            error: { type: 'BusinessError', message: 'failed' },
+          },
+          nextContext: null,
+        });
+        await execute(service, id);
+        expect(writes.every((write: any) => write.origin.userId === owner)).toBe(true);
+      };
+      const cachedOwner = `owner-warm-${queue}`;
+      await run(cachedOwner, cachedOwner, `warm-${queue}`);
+      // One authorized owner and one forged body ID overlap after warming the same dispatcher cache.
+      await Promise.all([
+        run(`owner-next-${queue}`, `owner-next-${queue}`, `next-${queue}`),
+        run(`owner-other-${queue}`, cachedOwner, `forged-${queue}`),
+      ]);
+      const payloads = queue ? publish.mock.calls.map(([request]) => request.body) : httpEvents();
+      for (const id of [`warm-${queue}`, `next-${queue}`, `forged-${queue}`]) {
+        const delivered = payloads.filter((payload) => payload.operationId === id);
+        expect(delivered.map((payload) => payload.hookType)).toEqual(events);
+        for (const payload of delivered) {
+          if (id.startsWith('forged')) expect(payload).not.toHaveProperty('userEmail');
+          else expect(payload.userEmail).toBe(`${payload.userId}@example.test`);
+          expect(payload).not.toHaveProperty('ownerUserId');
+          expect(payload).not.toHaveProperty('actorUserId');
+        }
+      }
+      expect(getEmailsByIds.mock.calls.filter(([, ids]) => ids[0] === cachedOwner)).toHaveLength(1);
+    },
+  );
+
   it.each([false, true])('uses persisted hooks on a fresh worker (queue=%s)', async (queue) => {
     vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(queue);
     const { service, step, newState } = setup();
@@ -224,6 +388,47 @@ describe('lifecycle notifications from executeStep', () => {
     });
   });
 
+  it('keeps the trusted owner on an internal QStash callback and external events keep the runtime identity', async () => {
+    vi.stubEnv('APP_URL', 'https://app.example.test');
+    vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
+    vi.stubEnv('QSTASH_TOKEN', 'test-token');
+    const state = {
+      ...makeState(),
+      principal: {
+        actor: {
+          shareVisitor: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        },
+      },
+    };
+    const webhook = createBotCompletionWebhook({
+      botContext: {
+        applicationId: 'bot',
+        isOwner: false,
+        platform: 'telegram',
+        platformThreadId: 'chat',
+        senderExternalUserId: 'external',
+      },
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+    state.host.hooks.find((hook) => hook.type === 'onComplete')!.webhook = webhook;
+    const { service } = setup(state);
+    await execute(service);
+    expect(
+      httpEvents().every(
+        (event) => event.userId === 'user-1' && event.userEmail === 'user-1@example.test',
+      ),
+    ).toBe(true);
+    expect(publish).toHaveBeenCalledOnce();
+    expect(publish.mock.calls[0][0].body).toMatchObject({
+      userId: 'user-1',
+      userEmail: 'user-1@example.test',
+      workspaceId: 'workspace-1',
+      operationId,
+    });
+    expect(webhook.fallback).toBe('none');
+  });
+
   it('delivers QStash notifications using persisted hooks without local registration', async () => {
     vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
     vi.stubEnv('QSTASH_TOKEN', 'test-token');
@@ -246,7 +451,14 @@ describe('lifecycle notifications from executeStep', () => {
   });
 
   it('keeps handler-only progress statistics equal to executed usage and retains local state', async () => {
-    const state = makeState();
+    const state = {
+      ...makeState(),
+      principal: {
+        actor: {
+          shareVisitor: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+        },
+      },
+    };
     state.host.hooks = [];
     const captured: AgentHookEvent[] = [];
     hookDispatcher.register(
@@ -262,6 +474,8 @@ describe('lifecycle notifications from executeStep', () => {
     const { service } = setup(state);
     await execute(service);
     expect(captured).toHaveLength(3);
+    expect(captured.every((event) => event.userId === 'user-1')).toBe(true);
+    expect(captured.every((event) => event.finalState?.origin?.userId === 'user-1')).toBe(true);
     expect(captured[1].totalToolCalls).toBe(1);
     expect(captured[2].totalToolCalls).toBe(1);
     expect(captured.every((event) => event.finalState !== undefined)).toBe(true);
@@ -385,7 +599,14 @@ describe('lifecycle notifications from executeStep', () => {
     'isolates two operations on one service when the second initial read succeeds=%s',
     async (secondReadSucceeds) => {
       vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
-      const firstState = makeState();
+      const firstState = {
+        ...makeState(),
+        principal: {
+          actor: {
+            shareVisitor: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          },
+        },
+      };
       const { service, coordinator, step } = setup(firstState);
       const firstError = { type: 'ProviderFailure', message: 'first operation failed' };
       coordinator.loadAgentState
@@ -399,7 +620,12 @@ describe('lifecycle notifications from executeStep', () => {
         'onComplete',
         'onError',
       ]);
-      expect(httpEvents()[2]).toMatchObject({ operationId, ...origin, errorDetail: firstError });
+      expect(httpEvents()[2]).toMatchObject({
+        operationId,
+        ...origin,
+        userId: 'user-1',
+        errorDetail: firstError,
+      });
 
       const secondOperationId = 'second-operation';
       const secondOrigin = {
@@ -435,6 +661,7 @@ describe('lifecycle notifications from executeStep', () => {
         ([id, type]) => id === secondOperationId && type === 'onError',
       )?.[2] as AgentHookEvent;
       expect(secondErrorEvent.operationId).toBe(secondOperationId);
+      expect(secondErrorEvent.userId).toBe('user-1');
       expect(secondErrorEvent.errorDetail).toMatchObject(secondError);
       expect(coordinator.saveAgentState).toHaveBeenCalledTimes(1);
       const [, savedState] = coordinator.saveAgentState.mock.calls[0];

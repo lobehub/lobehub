@@ -17,6 +17,16 @@ import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visible
 type PublishedStreamEvent = Omit<StreamEvent, 'operationId' | 'timestamp'>;
 type PublishStreamEventCall = [string, PublishedStreamEvent];
 
+const humanHookFetch = vi.hoisted(() => vi.fn());
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: humanHookFetch }));
+vi.mock('@/database/models/user', () => ({
+  UserModel: class {
+    static getEmailsByIds = async (_db: unknown, ids: string[]) =>
+      ids.map((id) => ({ id, email: `${id}@example.test` }));
+  },
+}));
+vi.mock('@/database/server', () => ({ getServerDB: async () => ({}) }));
+
 const mockCreateCompressionGroup = vi.fn();
 const mockCancelCompression = vi.fn();
 const mockFinalizeCompression = vi.fn();
@@ -6149,12 +6159,14 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             'op-123',
             identity,
             undefined,
+            { ownerUserId: 'user-123' },
           );
           expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
             'op-123',
             throws ? 'onToolCallError' : 'afterToolCall',
             identity,
             undefined,
+            { ownerUserId: 'user-123' },
           );
         },
       );
@@ -6227,6 +6239,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           'op-123',
           expect.objectContaining(identity),
           undefined,
+          { ownerUserId: 'user-123' },
         );
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'op-123',
@@ -6240,6 +6253,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             success: true,
           }),
           undefined,
+          { ownerUserId: 'user-123' },
         );
       });
 
@@ -6275,6 +6289,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             toolCallId: 'tc-1',
           }),
           undefined,
+          { ownerUserId: 'user-123' },
         );
         expect(
           mockDispatcher.dispatch.mock.calls.some(([, type]) => type === 'onToolCallError'),
@@ -6369,6 +6384,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             toolSource: 'mcp',
           }),
           undefined,
+          { ownerUserId: 'user-123' },
         );
       });
 
@@ -6395,6 +6411,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             identifier: 'twitter',
           }),
           undefined,
+          { ownerUserId: 'user-123' },
         );
 
         // afterToolCall dispatched via dispatch()
@@ -6408,6 +6425,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             success: true,
           }),
           undefined,
+          { ownerUserId: 'user-123' },
         );
       });
 
@@ -6511,6 +6529,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           'afterToolCall',
           expect.objectContaining({ mocked: true, success: true }),
           undefined,
+          { ownerUserId: 'user-123' },
         );
 
         // Tool message should be persisted with mock content
@@ -6559,6 +6578,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             toolCallId: 'tc-1',
           }),
           undefined,
+          { ownerUserId: 'user-123' },
         );
       });
 
@@ -6591,6 +6611,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             toolCallId: 'tc-1',
           }),
           undefined,
+          { ownerUserId: 'user-123' },
         );
       });
 
@@ -6615,6 +6636,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           'op-123',
           expect.objectContaining({ callIndex: 1 }),
           undefined,
+          { ownerUserId: 'user-123' },
         );
 
         // Second call: state reflects 1 prior call → callIndex = 2
@@ -6634,6 +6656,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           'op-123',
           expect.objectContaining({ callIndex: 2 }),
           undefined,
+          { ownerUserId: 'user-123' },
         );
       });
 
@@ -6684,71 +6707,104 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           'beforeCompact',
           expect.objectContaining({ tokenCount: 5000 }),
           undefined,
+          { ownerUserId: 'user-123' },
         );
       });
     });
 
     describe('request_human_approve hooks', () => {
-      it('should dispatch beforeHumanIntervention hook', async () => {
-        const mockDispatcher = {
-          dispatch: vi.fn().mockResolvedValue(undefined),
-          prepareToolCall: vi.fn().mockImplementation(async (_op, event) => ({
-            originalArgs: event.args,
-            status: 'ready',
-          })),
-          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
-        };
+      it.each(['user-123', undefined])(
+        'keeps beforeHumanIntervention on runtime user %s despite visitor state',
+        async (ownerUserId) => {
+          humanHookFetch.mockReset().mockResolvedValue(new Response('{}'));
+          const mockDispatcher = new HookDispatcher();
+          const dispatch = vi.spyOn(mockDispatcher, 'dispatch');
 
-        const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
-        const executors = createRuntimeExecutors(ctxWithHooks);
+          const ctxWithHooks = {
+            ...ctx,
+            userId: ownerUserId,
+            hookDispatcher: mockDispatcher as any,
+          };
+          const executors = createRuntimeExecutors(ctxWithHooks);
 
-        const state = createToolState({
-          messages: [{ content: '', id: 'asst-1', role: 'assistant' }],
-          status: 'running',
-        });
-
-        const instruction = {
-          pendingToolsCalling: [
-            {
-              apiName: 'post_tweet',
-              arguments: '{"text":"reviewed tweet"}',
-              id: 'tc-1',
-              identifier: 'twitter',
-              type: 'default' as const,
+          const state = createToolState({
+            messages: [{ content: '', id: 'asst-1', role: 'assistant' }],
+            host: {
+              hooks: [
+                {
+                  id: 'human',
+                  type: 'beforeHumanIntervention' as const,
+                  webhook: { url: 'https://hooks.example/human' },
+                },
+              ],
             },
-          ],
-          type: 'request_human_approve' as const,
-        };
+            status: 'running',
+            principal: {
+              actor: {
+                shareVisitor: {
+                  agentId: 'agent-1',
+                  shareId: 'share-1',
+                  visitorUserId: 'visitor-1',
+                },
+              },
+            },
+          });
 
-        await executors.request_human_approve!(instruction, state);
-
-        // The hook and the durable approval card use the same effective input
-        // and native ID, rather than a message ID or an earlier input snapshot.
-        expect(mockMessageModel.create).toHaveBeenCalledExactlyOnceWith(
-          expect.objectContaining({
-            parentId: 'asst-1',
-            plugin: expect.objectContaining({ arguments: '{"text":"reviewed tweet"}', id: 'tc-1' }),
-            tool_call_id: 'tc-1',
-          }),
-        );
-
-        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
-          'op-123',
-          'beforeHumanIntervention',
-          expect.objectContaining({
-            pendingTools: [
+          const instruction = {
+            pendingToolsCalling: [
               {
                 apiName: 'post_tweet',
-                identifier: 'twitter',
-                args: { text: 'reviewed tweet' },
                 arguments: '{"text":"reviewed tweet"}',
-                toolCallId: 'tc-1',
+                id: 'tc-1',
+                identifier: 'twitter',
+                type: 'default' as const,
               },
             ],
-          }),
-          undefined, // serializedHooks from state.host.hooks
-        );
-      });
+            type: 'request_human_approve' as const,
+          };
+
+          await executors.request_human_approve!(instruction, state);
+
+          // The hook and the durable approval card use the same effective input
+          // and native ID, rather than a message ID or an earlier input snapshot.
+          expect(mockMessageModel.create).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({
+              parentId: 'asst-1',
+              plugin: expect.objectContaining({
+                arguments: '{"text":"reviewed tweet"}',
+                id: 'tc-1',
+              }),
+              tool_call_id: 'tc-1',
+            }),
+          );
+
+          expect(dispatch).toHaveBeenCalledWith(
+            'op-123',
+            'beforeHumanIntervention',
+            expect.objectContaining({
+              userId: ownerUserId,
+              pendingTools: [
+                {
+                  apiName: 'post_tweet',
+                  identifier: 'twitter',
+                  args: { text: 'reviewed tweet' },
+                  arguments: '{"text":"reviewed tweet"}',
+                  toolCallId: 'tc-1',
+                },
+              ],
+            }),
+            state.host?.hooks,
+            ownerUserId === undefined ? undefined : { ownerUserId },
+          );
+          await dispatch.mock.results[0].value;
+          const payloads = humanHookFetch.mock.calls.map(([, request]) => JSON.parse(request.body));
+          expect(payloads).toHaveLength(1);
+          expect(payloads[0].userId).toBe(ownerUserId);
+          if (ownerUserId === undefined) expect(payloads[0]).not.toHaveProperty('userEmail');
+          else expect(payloads[0].userEmail).toBe('user-123@example.test');
+          dispatch.mockRestore();
+        },
+      );
     });
   });
 

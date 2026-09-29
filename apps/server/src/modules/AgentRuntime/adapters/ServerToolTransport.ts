@@ -106,6 +106,7 @@ export class ServerToolTransport implements ToolTransport {
             error: error instanceof Error ? error.message : String(error),
           } satisfies ToolCallErrorHookEvent,
           context.state.host?.hooks,
+          this.ctx.userId === undefined ? undefined : { ownerUserId: this.ctx.userId },
         )
         .catch(() => {});
     }
@@ -412,7 +413,12 @@ export class ServerToolTransport implements ToolTransport {
     if (!hookDispatcher) return null;
 
     const event = buildToolCallHookContext(chatToolPayload, context, this.ctx);
-    return hookDispatcher.dispatchBeforeToolCall(operationId, event, context.state.host?.hooks);
+    return hookDispatcher.dispatchBeforeToolCall(
+      operationId,
+      event,
+      context.state.host?.hooks,
+      this.ctx.userId === undefined ? undefined : { ownerUserId: this.ctx.userId },
+    );
   }
 
   private async dispatchAfterToolCall(
@@ -445,6 +451,7 @@ export class ServerToolTransport implements ToolTransport {
           success: result.success,
         } satisfies AfterToolCallHookEvent,
         context.state.host?.hooks,
+        this.ctx.userId === undefined ? undefined : { ownerUserId: this.ctx.userId },
       )
       .catch(() => {});
   }

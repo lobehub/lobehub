@@ -609,7 +609,7 @@ export class AgentRuntimeService {
     this.completionLifecycle = new CompletionLifecycle(db, userId, workspaceId, {
       includeShareVisitor,
     });
-    this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
+    this.humanIntervention = new HumanInterventionHandler(db, this.messageModel, this.userId);
 
     // Initialize ToolExecutionService with dependencies
     const builtinToolsExecutor = new BuiltinToolsExecutor(db, userId);
@@ -1818,8 +1818,14 @@ export class AgentRuntimeService {
           await hookDispatcher.dispatch(
             operationId,
             'afterHumanIntervention',
-            event,
+            {
+              ...event,
+              // Historical continuation events may contain the former visitor identity.
+              // Delivery always belongs to this resumed operation's runtime account.
+              userId: this.userId,
+            },
             agentState.host.hooks,
+            { ownerUserId: this.userId },
           );
           await this.coordinator.saveAgentState(operationId, {
             ...agentState,
@@ -2023,13 +2029,14 @@ export class AgentRuntimeService {
             operationId,
             'beforeStep',
             {
-              ...buildLifecycleHookContext(operationId, agentState?.origin, this.userId),
+              ...buildLifecycleHookContext(operationId, agentState, this.userId),
               finalState: agentState,
               operationId,
               stepIndex,
               steps: agentState?.stepCount || 0,
             },
             agentState?.host?.hooks,
+            { ownerUserId: this.userId },
           );
         } catch (hookError) {
           log('[%s] beforeStep hook dispatch error: %O', operationId, hookError);
@@ -2514,7 +2521,7 @@ export class AgentRuntimeService {
             operationId,
             'afterStep',
             {
-              ...buildLifecycleHookContext(operationId, stepResult.newState?.origin, this.userId),
+              ...buildLifecycleHookContext(operationId, stepResult.newState, this.userId),
               content,
               elapsedMs,
               executionTimeMs: stepPresentationData.executionTimeMs,
@@ -2541,9 +2548,9 @@ export class AgentRuntimeService {
               totalSteps: stepPresentationData.totalSteps,
               totalTokens: stepPresentationData.totalTokens,
               totalToolCalls: stepResult.newState?.usage?.tools?.totalCalls ?? 0,
-              userId: origin.userId || this.userId,
             },
             stepResult.newState?.host?.hooks,
+            { ownerUserId: this.userId },
           );
         } catch (hookError) {
           log('[%s] afterStep hook dispatch error: %O', operationId, hookError);

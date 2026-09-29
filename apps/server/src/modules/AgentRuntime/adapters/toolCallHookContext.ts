@@ -1,4 +1,5 @@
 import type { ToolCallHookContext, ToolRunContext } from '@lobechat/agent-runtime';
+import { resolveHookUserId } from '@lobechat/agent-runtime';
 import type { ChatToolPayload } from '@lobechat/types';
 
 import type { RuntimeExecutorContext } from '../context';
@@ -41,10 +42,10 @@ export const buildToolCallHookContext = (
     toolMessageId: context.toolMessageId,
     toolSource: context.toolSource ?? call.source,
     topicId: origin?.topicId ?? context.topicId ?? runtime.topicId,
-    userId:
-      context.state.principal?.actor?.shareVisitor?.visitorUserId ??
-      runtime.userId ??
-      origin?.userId,
+    userId: resolveHookUserId(
+      runtime.userId ?? origin?.userId,
+      context.state.principal?.actor?.shareVisitor,
+    ),
     workspaceId: origin?.workspaceId ?? context.workspaceId ?? runtime.workspaceId,
   };
 };

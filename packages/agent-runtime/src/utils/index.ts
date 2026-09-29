@@ -4,6 +4,7 @@ export * from './messageSelectors';
 export * from './normalizeAgentState';
 export * from './operationToolSet';
 export * from './replay';
+export * from './resolveHookUserId';
 export * from './runtimeRetry';
 export * from './stateSlots';
 export * from './status';

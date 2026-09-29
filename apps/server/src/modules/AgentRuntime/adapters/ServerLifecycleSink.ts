@@ -16,6 +16,7 @@ export class ServerLifecycleSink implements LifecycleSink {
   constructor(
     private readonly hookDispatcher: HookDispatcher,
     private readonly operationId: string,
+    private readonly userId?: string,
   ) {}
 
   async dispatch({ type, event, serializedHooks }: LifecycleDispatchParams): Promise<void> {
@@ -24,6 +25,7 @@ export class ServerLifecycleSink implements LifecycleSink {
       type as any,
       event as any,
       serializedHooks as any,
+      this.userId === undefined ? undefined : { ownerUserId: this.userId },
     );
   }
 
@@ -33,6 +35,8 @@ export class ServerLifecycleSink implements LifecycleSink {
     return (await this.hookDispatcher.dispatchBeforeToolCall(
       this.operationId,
       event as any,
+      undefined,
+      this.userId === undefined ? undefined : { ownerUserId: this.userId },
     )) as ToolCallMockResult | null;
   }
 }
