@@ -16,13 +16,13 @@ import { TopicTrigger } from '@/const/topic';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
-import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { goals } from '@/database/schemas/goal';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 
 import { DEFAULT_MANAGER_MAX_TURNS } from './recoveryPolicy';
 import { scheduleGoalAdvance } from './scheduler';
@@ -384,21 +384,20 @@ export class GoalManagerService {
       // An adopted local desktop run has no server operation to watch exit; its
       // submitted plan is the only settlement the server can observe.
       const settledLocally = !!state.adopted && !operation && !!state.submitted;
-      // A dispatched turn never ran when its dispatch call ended in an error
-      // before its planning message (`msg_goal_manager_<token>`) was written —
-      // the verdict `recordUnstartedDispatch` stored when the call returned.
-      // `execAgent` persists that message before it creates any operation, and
-      // the busy-topic gate — the planning topic can be the owner's own
-      // conversation — throws before it. With no run to confirm, settle the turn
-      // like one that exited without a plan instead of pausing: pausing left the
-      // Goal stuck for good, because every resume re-read this same turn and
-      // paused again.
+      // A dispatched turn never ran when its dispatch was refused the topic
+      // reservation — the verdict `recordUnstartedDispatch` stored from the
+      // error itself. That refusal comes before the planning message or any
+      // operation is written, and the planning topic can be the owner's busy
+      // conversation, which is how a turn gets stuck. With no run to confirm,
+      // settle it like a turn that exited without a plan instead of pausing:
+      // pausing left the Goal stuck for good, because every resume re-read this
+      // same turn and paused again.
       //
-      // Nothing is looked up again here. A missing operation row proves nothing
-      // (the runtime keeps going when that insert fails), a missing message only
-      // says a still-pending call has not got that far, and the message can be
-      // deleted by the owner. A turn without the stored verdict still pauses as
-      // unconfirmed. An adopted turn never has a dispatched message and is exempt.
+      // Nothing is inferred from rows: a missing operation row proves nothing
+      // (the runtime keeps going when that insert fails), and a missing planning
+      // message may be one the owner deleted or one a still-pending call has not
+      // written yet. Every other turn still pauses as unconfirmed; the owner can
+      // confirm its exit on resume. An adopted turn is exempt.
       const neverStarted =
         !state.adopted &&
         !operation &&
@@ -420,7 +419,7 @@ export class GoalManagerService {
         if (Date.now() - Date.parse(state.startedAt) > TIMEOUT_MS) {
           return this.pause(
             goal.id,
-            'Main Agent execution is unconfirmed or timed out. Confirm its exit before resuming; no replacement was dispatched.',
+            `Main Agent execution is unconfirmed or timed out; no replacement was dispatched. Once its run has ended, confirm and resume with: lh goal resume ${goal.id} --confirm-exit`,
           );
         }
         return this.wait(goal.id, 'Waiting for main Agent CLI planning turn');
@@ -610,36 +609,51 @@ export class GoalManagerService {
         '[goal:manager] dispatch failed; next wakeup adopts any persisted operation',
         error,
       );
-      // Classify the failure now, while the facts are fresh: the call has
-      // returned, so if its planning message was never written it cannot start a
-      // run. The verdict is stored once — the message sits in a conversation the
-      // owner can edit, so a later lookup could read a deleted message as
-      // "never started" for a run that is live.
-      await this.recordUnstartedDispatch(goal.id, claimed.token, claimed.topicId).catch(
-        (saveError) =>
-          console.error('[goal:manager] failed to record the dispatch failure', saveError),
-      );
+      // Only a refused topic reservation proves the turn never started: it is
+      // raised before the planning message or any operation is written, and the
+      // call has returned. Any other failure may come after a run went live, so
+      // it stays unconfirmed. Decided from the error, never from rows the owner
+      // can edit or delete.
+      if (error instanceof TopicStartReservationError)
+        await this.recordUnstartedDispatch(goal.id, claimed.token).catch((saveError) =>
+          console.error('[goal:manager] failed to record the refused dispatch', saveError),
+        );
     }
     return this.wait(goal.id, 'Main Agent dispatched with CLI planning access');
   };
 
-  /** Mark a failed dispatch as never started when its planning message is absent. */
-  private recordUnstartedDispatch = async (goalId: string, token: string, topicId: string) => {
-    const operation = await new AgentOperationModel(
-      this.db,
-      this.userId,
-      this.workspaceId,
-    ).findByTopicSourceMessage(topicId, `${MANAGER_SOURCE_MESSAGE_PREFIX}${token}`);
-    const message = await new MessageModel(this.db, this.userId, this.workspaceId).findById(
-      `${MANAGER_SOURCE_MESSAGE_PREFIX}${token}`,
-    );
-    if (operation || message) return;
-    await this.db.transaction(async (db) => {
+  /**
+   * The owner confirms that the planning turn the Goal is paused on has ended,
+   * so resuming can settle it and plan afresh — the repair for a turn the server
+   * cannot classify on its own, including turns recorded before
+   * `dispatchNeverStarted` existed. Refused while the turn's run is still live:
+   * interrupt it first, or a replacement would run beside it.
+   */
+  confirmTurnExit = async (goalId: string) =>
+    this.db.transaction(async (db) => {
+      const fresh = await new GoalModel(db, this.userId, this.workspaceId).lockById(goalId);
+      const state = fresh?.config?.managerState;
+      if (!state || state.consumed) return false;
+      const operation = await this.turnOperation(
+        new AgentOperationModel(db, this.userId, this.workspaceId),
+        state,
+      );
+      if (operation && !terminalOperations.has(operation.status))
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `The main Agent run ${operation.id} is still ${operation.status}; interrupt it before confirming its exit`,
+        });
+      await this.save(db, goalId, { ...state, consumed: true });
+      return true;
+    });
+
+  /** Mark a turn whose dispatch was refused its topic reservation as never started. */
+  private recordUnstartedDispatch = async (goalId: string, token: string) =>
+    this.db.transaction(async (db) => {
       const fresh = await new GoalModel(db, this.userId, this.workspaceId).lockById(goalId);
       if (fresh?.config?.managerState?.token === token)
         await this.save(db, goalId, { ...fresh.config.managerState, dispatchNeverStarted: true });
     });
-  };
 
   submit = async (goalId: string, token: string, operationId: string, input: GoalPlan) => {
     const plan = goalPlanSchema.parse(input);

@@ -16,6 +16,7 @@ const { mockClient } = vi.hoisted(() => ({
       submitOperationReport: { mutate: vi.fn() },
       submitReport: { mutate: vi.fn() },
       graph: { query: vi.fn() },
+      resume: { mutate: vi.fn() },
       setBudget: { mutate: vi.fn() },
       supervision: { query: vi.fn() },
       tick: { mutate: vi.fn() },
@@ -153,6 +154,28 @@ describe('goal report authentication', () => {
       expect(other.mutate).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('goal resume', () => {
+  it('asks the server to settle the stuck planning turn only with --confirm-exit', async () => {
+    vi.clearAllMocks();
+    mockClient.goal.resume.mutate.mockResolvedValue({ message: 'Goal resumed' });
+    await createProgram().parseAsync(['node', 'test', 'goal', 'resume', 'goal-1']);
+    expect(mockClient.goal.resume.mutate).toHaveBeenLastCalledWith({ id: 'goal-1' });
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'goal',
+      'resume',
+      'goal-1',
+      '--confirm-exit',
+    ]);
+    expect(mockClient.goal.resume.mutate).toHaveBeenLastCalledWith({
+      confirmExit: true,
+      id: 'goal-1',
+    });
+  });
 });
 
 describe('goal run command', () => {

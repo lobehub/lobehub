@@ -238,10 +238,10 @@ export interface GoalManagerState {
   adoptedOperationId?: string;
   consumed?: boolean;
   /**
-   * Set when the dispatch call for this turn ended in an error before its
-   * planning message was written — decided once, at the moment the call
-   * returned. The call can no longer start a run, and nothing written later
-   * (or deleted from the owner's conversation) changes that verdict.
+   * Set when the dispatch for this turn was refused its topic reservation — the
+   * one failure raised before anything of the run is written — so no run exists
+   * and none can start. Decided from the error itself, never from rows the
+   * owner can edit.
    */
   dispatchNeverStarted?: boolean;
   operationId?: string;

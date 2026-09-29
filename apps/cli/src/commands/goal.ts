@@ -550,16 +550,30 @@ export function registerGoalCommand(program: Command) {
       },
     );
 
-  for (const action of ['pause', 'resume'] as const) {
-    goal
-      .command(`${action} <id>`)
-      .description(`${action === 'pause' ? 'Pause' : 'Resume'} goal coordination`)
-      .action(async (id: string) => {
-        const client = await getTrpcClient();
-        const result = await client.goal[action].mutate({ id });
-        log.info(result.message);
+  goal
+    .command('pause <id>')
+    .description('Pause goal coordination')
+    .action(async (id: string) => {
+      const client = await getTrpcClient();
+      const result = await client.goal.pause.mutate({ id });
+      log.info(result.message);
+    });
+
+  goal
+    .command('resume <id>')
+    .description('Resume goal coordination')
+    .option(
+      '--confirm-exit',
+      'Confirm the main Agent planning turn the goal paused on has ended, and settle it before resuming',
+    )
+    .action(async (id: string, options: { confirmExit?: boolean }) => {
+      const client = await getTrpcClient();
+      const result = await client.goal.resume.mutate({
+        id,
+        ...(options.confirmExit ? { confirmExit: true } : {}),
       });
-  }
+      log.info(result.message);
+    });
 
   goal
     .command('delete <id>')

@@ -82,7 +82,7 @@ import { createRunFacts, type RunFacts } from './runFacts';
 import { applyShareGateToAgentConfig } from './shareGate';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import { execAgentMember, execAgentThreadRun } from './subAgentRuns';
-import { acquireTopicStartReservation } from './topicStartReservation';
+import { acquireTopicStartReservation, TopicStartReservationError } from './topicStartReservation';
 import type {
   BindTopicWorkingDirectoryParams,
   ExecRunContext,
@@ -639,7 +639,7 @@ export class AiAgentService {
     });
 
     if (!reserved) {
-      throw new Error(`Topic not found: ${topicId}`);
+      throw new TopicStartReservationError(`Topic not found: ${topicId}`);
     }
 
     try {

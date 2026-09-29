@@ -654,26 +654,42 @@ export const goalRouter = router({
     }
   }),
 
-  resume: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
-    try {
-      const data = await ctx.goalService.resume(input.id);
-      await scheduleGoalAdvance({
-        goalId: input.id,
-        trigger: 'resume',
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
-      // Resuming does not give the main Agent more turns, so a goal it paused
-      // for running out would stop again on the next tick. Say how to continue
-      // it instead of leaving the caller to replace it with a new goal.
-      const message = managerTurnsSpent(data.config)
-        ? `Goal resumed, but its main Agent has used all ${data.config?.manager?.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS} turns and it will pause again. Raise the cap with: lh goal set-budget ${input.id} --max-manager-turns <n>`
-        : 'Goal resumed';
-      return { data, message, success: true };
-    } catch (error) {
-      mapGoalError(error, 'resume');
-    }
-  }),
+  resume: goalWriteProcedure
+    .input(
+      idInput.extend({
+        /**
+         * The owner confirms the planning turn the Goal paused on has ended, so
+         * it is settled before resuming instead of pausing the Goal again.
+         */
+        confirmExit: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        if (input.confirmExit)
+          await new GoalManagerService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ).confirmTurnExit(input.id);
+        const data = await ctx.goalService.resume(input.id);
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'resume',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        // Resuming does not give the main Agent more turns, so a goal it paused
+        // for running out would stop again on the next tick. Say how to continue
+        // it instead of leaving the caller to replace it with a new goal.
+        const message = managerTurnsSpent(data.config)
+          ? `Goal resumed, but its main Agent has used all ${data.config?.manager?.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS} turns and it will pause again. Raise the cap with: lh goal set-budget ${input.id} --max-manager-turns <n>`
+          : 'Goal resumed';
+        return { data, message, success: true };
+      } catch (error) {
+        mapGoalError(error, 'resume');
+      }
+    }),
 
   /**
    * Start every unfinished Task node over (cancel stale runs, back to

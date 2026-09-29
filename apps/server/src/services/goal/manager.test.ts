@@ -26,6 +26,7 @@ import {
 } from '@/database/schemas';
 import { goalRouter } from '@/server/routers/lambda/goal';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 
 import { GoalService } from './index';
 import { GoalManagerService } from './manager';
@@ -694,11 +695,11 @@ describe('CLI main Agent planning', () => {
   });
 
   it('replaces a timed-out turn that never started instead of pausing on it', async () => {
-    // The busy-topic gate throws before the planning message is written, so
-    // no run can exist for this turn.
+    // A refused topic reservation — the planning topic was busy — is raised
+    // before the planning message or any operation is written.
     const original = vi.mocked(AiAgentService.prototype.execAgent).getMockImplementation()!;
     vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(async () => {
-      throw new Error('Topic is busy');
+      throw new TopicStartReservationError('Topic tpc remained busy while starting operation x');
     });
     const { id, state, op } = await start();
     expect(op).toBeUndefined();
@@ -747,6 +748,61 @@ describe('CLI main Agent planning', () => {
     expect(fresh.status).toBe('paused');
     expect(fresh.config!.managerState!.consumed).not.toBe(true);
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps pausing a turn whose dispatch failed for any reason other than a refused reservation', async () => {
+    // No message and no operation, but an ordinary failure can come after a run
+    // went live; only the error decides, never the absence of rows.
+    vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(async () => {
+      throw new Error('Something failed while starting');
+    });
+    const { id, state } = await start();
+    expect(state.dispatchNeverStarted).toBeUndefined();
+
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
+    expect((await service().tick(id)).outcome).toBe('no_progress');
+    expect((await model().findById(id))!.status).toBe('paused');
+  });
+
+  /**
+   * Regression: the pause asked the owner to "confirm its exit before resuming"
+   * with no way to do so, so a Goal paused on a turn recorded before the
+   * never-started verdict existed could not be resumed at all.
+   */
+  it('lets the owner confirm a stuck turn has ended and resume with a fresh one', async () => {
+    vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(
+      async (params) =>
+        ({
+          agentId: params.agentId!,
+          operationId: 'op-lost',
+          topicId: params.appContext!.topicId!,
+        }) as any,
+    );
+    const { id, state } = await start();
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
+    await service().tick(id);
+    expect((await model().findById(id))!.status).toBe('paused');
+
+    // A plain resume pauses again on the same turn.
+    await service().resume(id);
+    expect((await service().tick(id)).outcome).toBe('no_progress');
+
+    expect(await manager().confirmTurnExit(id)).toBe(true);
+    await service().resume(id);
+    // The settled turn no longer holds the Goal: the next advance plans afresh.
+    expect((await service().tick(id)).outcome).toBe('waiting_external');
+    expect((await model().findById(id))!.status).toBe('running');
+    const next = (await model().findById(id))!.config!.managerState!;
+    expect(next.token).not.toBe(state.token);
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses to confirm the exit of a turn whose run is still live', async () => {
+    const { id } = await start();
+    await expect(manager().confirmTurnExit(id)).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect((await model().findById(id))!.config!.managerState!.consumed).not.toBe(true);
   });
 
   it('keeps pausing a timed-out turn whose dispatch never reported failure', async () => {
