@@ -432,6 +432,15 @@ const groupResources: Record<string, { listKey: string; schema: string }> = {
 
 const ref = (schema: string): SchemaObject => ({ $ref: `#/components/schemas/${schema}` });
 
+/**
+ * Personal-agent resources whose payload is coordinator / inbox state rather
+ * than a stable CRUD row (a goal's graph snapshot, a category of memory
+ * entries, a page of receipts). The spec stays deliberately vague for these —
+ * same policy as unnamed sub-operations: `additionalProperties` over a guessed
+ * shape, so a generated client is never confidently mistyped.
+ */
+const PERSONAL_AGENT_GROUPS = new Set(['goals', 'memories', 'notifications', 'signals']);
+
 const successEnvelope = (data: SchemaObject): SchemaObject => ({
   additionalProperties: false,
   properties: {
@@ -456,6 +465,10 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
       required: ['service', 'status', 'timestamp'],
       type: 'object',
     };
+  }
+
+  if (PERSONAL_AGENT_GROUPS.has(group)) {
+    return successEnvelope({ additionalProperties: true, type: ['array', 'object', 'null'] });
   }
 
   if (group === 'responses') {
