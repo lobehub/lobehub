@@ -50,7 +50,10 @@ export interface SandboxRunParams {
    * sandbox every run used before persistence existed. The entitlement itself
    * travels on `marketService`'s trust token, not here.
    */
-  sandbox?: Pick<SandboxSessionConfig, 'cwd' | 'environment' | 'mode' | 'workingDir'>;
+  sandbox?: Pick<
+    SandboxSessionConfig,
+    'cwd' | 'environment' | 'mode' | 'specification' | 'workingDir'
+  >;
   /**
    * Optional context injected as a text block BEFORE the user's prompt.
    * Useful for priming CC with workspace state (cloned repos, env info, etc.).

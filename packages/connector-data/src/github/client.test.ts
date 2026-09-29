@@ -439,7 +439,6 @@ describe('createGitHubConnectorClient', () => {
       getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
       listAccessibleRepositories: async () => [],
       listRepositoryBranches: async () => [],
-      listRepositoryBranches: async () => [],
       listRepositoryContributors: async () => [],
       listUserOrganizations: async () => [],
       request,
@@ -515,7 +514,6 @@ describe('createGitHubConnectorClient', () => {
     const transport: GitHubConnectorTransport = {
       getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
       listAccessibleRepositories: async () => [],
-      listRepositoryBranches: async () => [],
       listRepositoryBranches: async () => [],
       listRepositoryContributors: vi.fn().mockRejectedValue({ status: 401 }),
       listUserOrganizations: async () => [],

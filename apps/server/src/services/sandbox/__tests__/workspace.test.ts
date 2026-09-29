@@ -101,7 +101,11 @@ describe('formatSandboxWorkspacePromptVariables', () => {
     // directory: where installs land is the platform's business, and a path
     // written here would outlive whatever it decides to do with them.
     expect(vars.sandbox_workspace).toContain('network storage');
-    expect(vars.sandbox_workspace).not.toContain('/tmp');
+    // The copy does name `/tmp` and `/root`, on purpose: as the places whose
+    // contents are lost, never as somewhere to work. What has to hold is that
+    // they are always paired with that loss, so naming one cannot read as an
+    // invitation. The mount path itself is covered by its own case below.
+    expect(vars.sandbox_workspace).toContain('lost with the session');
     expect(rendered).not.toContain('temporary and session-specific');
     expect(rendered).not.toContain('Files from previous sessions may not persist');
   });

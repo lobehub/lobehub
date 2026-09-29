@@ -14,7 +14,7 @@ import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
 import { marketSDK, requireMarketAuth } from '@/libs/trpc/lambda/middleware/marketSDK';
-import { isTrustedClientEnabled } from '@/libs/trusted-client';
+import { isTrustedClientEnabled, type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { DiscoverService } from '@/server/services/discover';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
@@ -198,7 +198,7 @@ const execInSandboxHandler = async ({
     fileService: FileService;
     marketAccessToken?: string;
     marketService: MarketService;
-    marketUserInfo?: Record<string, unknown>;
+    marketUserInfo?: TrustedClientUserInfo;
     serverDB: any;
     userId: string;
     workspaceId?: string | null;
@@ -310,7 +310,7 @@ const execInSandboxHandler = async ({
     const marketService = sandbox.claim
       ? new MarketService({
           accessToken: ctx.marketAccessToken,
-          userInfo: { ...ctx.marketUserInfo, sandboxWorkspace: sandbox.claim },
+          userInfo: { ...ctx.marketUserInfo, sandboxWorkspace: sandbox.claim, userId: ctx.userId },
         })
       : ctx.marketService;
 
