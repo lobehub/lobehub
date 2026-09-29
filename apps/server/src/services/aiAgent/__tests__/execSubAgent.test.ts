@@ -766,7 +766,7 @@ describe('AiAgentService.execSubAgent', () => {
       const completion = execAgentSpy.mock.calls[0][0].hooks?.find(
         (h) => h.id === 'thread-completion',
       );
-      await completion!.handler({
+      await completion!.handler!({
         finalState: {
           cost: { total: 0.25 },
           messages: [{ content: 'part 4', role: 'assistant' }],

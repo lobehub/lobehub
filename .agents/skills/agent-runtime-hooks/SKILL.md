@@ -78,7 +78,31 @@ const hooks: AgentHook[] = [
 await aiAgentService.execAgent({ agentId, prompt, hooks });
 ```
 
-Local dispatch awaits in-process handlers. Queue dispatch uses serialized webhook configuration from `state.host.hooks` or registered hooks. Completion cleans up registrations through `hookDispatcher.unregister(operationId)`.
+Completion cleans up registrations through `hookDispatcher.unregister(operationId)`.
+
+### Webhook Hooks
+
+Webhook-only hooks deliver in both local and queue modes. For hooks with both `handler` and `webhook`, local dispatch calls the handler; queue dispatch uses the serialized webhook. Only webhook configuration is persisted, so functions are unavailable after a process restart.
+
+```ts
+const hook: AgentHook = {
+  id: 'tool-notification',
+  type: 'afterToolCall',
+  matcher: '^fs/readFile$',
+  webhook: {
+    url: 'https://example.com/hooks',
+    delivery: 'fetch',
+    timeout: 5, // seconds; default 30
+    headers: { Authorization: 'Bearer ${HOOK_TOKEN}' },
+    allowedEnvVars: ['HOOK_TOKEN'],
+  },
+};
+```
+
+- `matcher` is a regex against `${identifier}/${apiName}`, supported only on tool events. Omitted, empty, or `*` matches all tools.
+- Header environment templates resolve only at send time from `allowedEnvVars`; persist templates, never resolved secrets.
+- Notifications ignore response content. `responseHandling: 'toolCall'` is explicitly unsupported at registration/restoration in this version; the response parser and HTTP helper do not enforce tool decisions.
+- Configuration: `packages/types/src/agentHook.ts`; response parsing: `packages/types/src/agentHookResponse.ts`; HTTP delivery: `apps/server/src/services/agentRuntime/hooks/httpWebhook.ts`.
 
 ## Events
 
@@ -123,7 +147,7 @@ Sandbox and MCP tools use the same event path. Filter with `identifier`, `apiNam
 event.mock({ content: '{"items":[]}', success: true });
 ```
 
-Tool observation payloads use `BeforeToolCallObservationEvent`; the callback belongs to the local handler event.
+Tool observation payloads use `BeforeToolCallObservationEvent`; the callback belongs to the in-memory handler event. `dispatchBeforeToolCall()` does not deliver webhooks.
 
 ## Webhook Payloads
 

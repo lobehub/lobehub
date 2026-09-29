@@ -1,3 +1,4 @@
+import type * as Qstash from '@upstash/qstash';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deliverWebhook, HookDispatcher } from '../HookDispatcher';
@@ -7,7 +8,6 @@ vi.mock('@/database/models/user', () => ({
   UserModel: { getEmailsByIds: async () => [] },
 }));
 vi.mock('@/database/server', () => ({ getServerDB: async () => ({}) }));
-
 // Mock isQueueAgentRuntimeEnabled to control local vs production mode
 vi.mock('@/server/services/queue/impls', () => ({
   isQueueAgentRuntimeEnabled: vi.fn(function () {
@@ -19,7 +19,8 @@ const mockPublishJSON = vi.hoisted(() => vi.fn());
 
 // Plain class (not vi.fn) so the file-level `vi.restoreAllMocks()` can't wipe
 // the implementation between tests.
-vi.mock('@upstash/qstash', () => ({
+vi.mock('@upstash/qstash', async (importOriginal) => ({
+  ...(await importOriginal<typeof Qstash>()),
   Client: class {
     publishJSON = mockPublishJSON;
   },
@@ -154,7 +155,7 @@ describe('HookDispatcher', () => {
     beforeEach(() => {
       vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
       // Mock global fetch
-      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      global.fetch = vi.fn().mockImplementation(async () => new Response(''));
     });
 
     afterEach(() => {
@@ -280,7 +281,7 @@ describe('HookDispatcher', () => {
     const originalToken = process.env.QSTASH_TOKEN;
 
     beforeEach(() => {
-      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      global.fetch = vi.fn().mockImplementation(async () => new Response(''));
       mockPublishJSON.mockReset();
       delete process.env.QSTASH_TOKEN;
     });
@@ -317,10 +318,35 @@ describe('HookDispatcher', () => {
           { delivery: 'qstash', fallback: 'none', url: 'https://example.com/hook' },
           { a: 1 },
         ),
-      ).rejects.toThrow('qstash down');
+      ).rejects.toThrow('network_error: QStash publish failed');
 
       expect(global.fetch).not.toHaveBeenCalled();
     });
+
+    it.each([false, true])(
+      'does not escalate an accepted large notification (queue=%s)',
+      async (queue) => {
+        vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(queue);
+        vi.mocked(global.fetch).mockResolvedValueOnce(new Response('x'.repeat(100_000)));
+        dispatcher.register(operationId, [
+          {
+            id: 'critical-hook',
+            type: 'onComplete',
+            webhook: { fallback: 'none', url: 'https://example.com/critical' },
+          },
+        ]);
+
+        await expect(
+          dispatcher.dispatch(
+            operationId,
+            'onComplete',
+            makeEvent(),
+            dispatcher.getSerializedHooks(operationId),
+          ),
+        ).resolves.toBeUndefined();
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+      },
+    );
 
     it('dispatch rejects a no-fallback delivery failure after delivering other hooks', async () => {
       vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
@@ -349,8 +375,9 @@ describe('HookDispatcher', () => {
       // The failure is escalated to production logs, and the sibling webhook
       // still gets delivered.
       expect(consoleError).toHaveBeenCalledWith(
-        expect.stringContaining('critical-hook'),
-        expect.any(Error),
+        '[HookDispatcher] Critical webhook delivery failed',
+        { operationId, hookId: 'critical-hook', hookType: 'onComplete' },
+        expect.objectContaining({ code: 'configuration' }),
       );
       expect(global.fetch).toHaveBeenCalledWith(
         'https://example.com/normal',
@@ -1114,7 +1141,7 @@ describe('HookDispatcher', () => {
 
     it('observation hooks should work in production mode via serializedHooks', async () => {
       vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
-      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      global.fetch = vi.fn().mockImplementation(async () => new Response(''));
 
       dispatcher.register(operationId, [
         {

@@ -301,7 +301,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
         'https://mock.test/tool-calls',
@@ -327,7 +327,7 @@ describe('AgentRuntimeService', () => {
         'case-42',
       );
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(JSON.parse(mockSsrfSafeFetch.mock.calls[0][1].body)).toMatchObject({
         metadata: { caseId: 'case-42' },
@@ -342,7 +342,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(event.mock).toHaveBeenCalledWith({
         content: 'fixture unavailable',
@@ -357,7 +357,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(event.mock).toHaveBeenCalledWith({ content: 'No tool result', success: true });
     });
@@ -370,7 +370,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(event.mock).toHaveBeenCalledWith({ content: 'No tool result', success: true });
     });
@@ -381,7 +381,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(event.mock).toHaveBeenCalledWith({
         content: expect.stringContaining('SyntaxError'),
@@ -396,7 +396,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(event.mock).toHaveBeenCalledWith({
         content: 'SSRF blocked',
