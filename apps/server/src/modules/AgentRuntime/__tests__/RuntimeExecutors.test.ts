@@ -6023,6 +6023,43 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     });
 
     describe('call_tool hooks', () => {
+      it.each(['allow', 'deny'] as const)(
+        'applies env-configured %s before executing the tool',
+        async (permissionDecision) => {
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'http://webhook-service/ingress');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-env-secret');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'beforeToolCall, afterToolCall');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
+          const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+            async () =>
+              new Response(
+                JSON.stringify({
+                  hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision },
+                }),
+              ),
+          );
+          try {
+            const dispatcher = new HookDispatcher();
+            dispatcher.register('op-123', []);
+            const serialized = JSON.stringify(dispatcher.getSerializedHooks('op-123'));
+            const persisted = JSON.parse(serialized);
+            await createRuntimeExecutors({ ...ctx, hookDispatcher: new HookDispatcher() })
+              .call_tool!(createToolInstruction(), createToolState({ host: { hooks: persisted } }));
+            expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(
+              permissionDecision === 'allow' ? 1 : 0,
+            );
+            expect(
+              fetchSpy.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).hookType),
+            ).toEqual(['beforeToolCall', 'afterToolCall']);
+            expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body)).mocked).toBe(false);
+          } finally {
+            fetchSpy.mockRestore();
+            vi.unstubAllEnvs();
+          }
+        },
+      );
+
       it('invokes each local before handler once across observation and mock dispatch', async () => {
         const dispatcher = new HookDispatcher();
         const handler = vi.fn();

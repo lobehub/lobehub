@@ -1385,10 +1385,9 @@ export class AgentRuntimeService {
       await this.coordinator.saveAgentState(operationId, initialState as any);
 
       // Register external hooks
-      if (hooks && hooks.length > 0) {
-        hookDispatcher.register(operationId, hooks);
-        hooksRegistered = true;
-
+      hookDispatcher.register(operationId, hooks ?? []);
+      hooksRegistered = hookDispatcher.hasHooks(operationId);
+      if (hooksRegistered) {
         // Persist webhook configs to state metadata for production mode
         const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
         if (serializedHooks && serializedHooks.length > 0) {

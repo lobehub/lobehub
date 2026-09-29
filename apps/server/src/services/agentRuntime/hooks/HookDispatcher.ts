@@ -12,6 +12,7 @@ import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
 import { deliverWebhook, executeToolCallWebhook } from './httpWebhook';
 import { matchesHook } from './matcher';
+import { getServerHooks, mergeServerHooks } from './serverHooks';
 import type {
   AgentHook,
   AgentHookEvent,
@@ -38,7 +39,10 @@ export { deliverWebhook } from './httpWebhook';
 
 /** Validate persisted configurations on every worker restore. */
 export function parseSerializedHooks(hooks: SerializedAgentHook[]): SerializedHook[] {
-  return hooks.map((hook) => serializedAgentHookSchema.parse(hook));
+  return mergeServerHooks(
+    hooks.map((hook) => serializedAgentHookSchema.parse(hook)),
+    [],
+  );
 }
 
 /**
@@ -56,6 +60,15 @@ export class HookDispatcher {
    * Maps operationId → AgentHook[]
    */
   private hooks: Map<string, AgentHook[]> = new Map();
+
+  /** Shared by normal dispatch and tool control, including cold-worker recovery. */
+  private resolveHooks(operationId: string, serializedHooks?: SerializedAgentHook[]) {
+    const restored = serializedHooks ? parseSerializedHooks(serializedHooks) : undefined;
+    const hooks: (AgentHook | SerializedHook)[] = isQueueAgentRuntimeEnabled()
+      ? (restored ?? this.getSerializedHooks(operationId) ?? [])
+      : (this.hooks.get(operationId) ?? restored ?? []);
+    return mergeServerHooks(hooks, getServerHooks());
+  }
 
   /**
    * Dispatch hooks for a given event type
@@ -85,12 +98,7 @@ export class HookDispatcher {
     consumer?: 'handler' | 'webhook',
   ): Promise<void> {
     const isQueueMode = isQueueAgentRuntimeEnabled();
-    const restored = serializedHooks ? parseSerializedHooks(serializedHooks) : undefined;
-
-    const registered = this.hooks.get(operationId);
-    const hooks: (AgentHook | SerializedHook)[] = isQueueMode
-      ? (restored ?? this.getSerializedHooks(operationId) ?? [])
-      : (registered ?? restored ?? []);
+    const hooks = this.resolveHooks(operationId, serializedHooks);
     let criticalError: CriticalHookDeliveryError | undefined;
     for (const hook of hooks.filter(
       (h) =>
@@ -147,10 +155,7 @@ export class HookDispatcher {
     serializedHooks?: SerializedAgentHook[],
     signal?: AbortSignal,
   ): Promise<{ status: 'allow' | 'blocked' | 'cancelled'; reason?: string }> {
-    const restored = serializedHooks ? parseSerializedHooks(serializedHooks) : undefined;
-    const hooks = isQueueAgentRuntimeEnabled()
-      ? (restored ?? this.getSerializedHooks(operationId) ?? [])
-      : (this.hooks.get(operationId) ?? restored ?? []);
+    const hooks = this.resolveHooks(operationId, serializedHooks);
     for (const hook of hooks) {
       if (signal?.aborted) return { status: 'cancelled' };
       if (
@@ -287,6 +292,8 @@ export class HookDispatcher {
    * In production mode: caller should persist getSerializedHooks() to state.host.hooks
    */
   register(operationId: string, hooks: AgentHook[]): void {
+    const existing = this.hooks.get(operationId) || [];
+    hooks = mergeServerHooks([...existing, ...hooks], getServerHooks());
     if (hooks.length === 0) return;
 
     // Validate the entire batch before mutating registration state.
@@ -321,8 +328,7 @@ export class HookDispatcher {
           hook.matcher !== undefined ? agentHookMatcherSchema.parse(hook.matcher) : undefined,
       };
     });
-    const existing = this.hooks.get(operationId) || [];
-    this.hooks.set(operationId, [...existing, ...validatedHooks]);
+    this.hooks.set(operationId, validatedHooks);
 
     log(
       '[%s] Registered %d hooks: %s',

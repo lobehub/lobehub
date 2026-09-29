@@ -344,7 +344,7 @@ export const dispatchHeteroAgent = async (
   // Hooks belong to this operation's lifecycle. Persist their serializable
   // form on the durable operation row before dispatch; runningOperation below
   // remains a compatibility mirror for older terminal consumers.
-  if (hooks?.length) hookDispatcher.register(operationId, hooks);
+  hookDispatcher.register(operationId, hooks ?? []);
   const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
 
   // Persist a first-class agent_operations row for the hetero run. The id is
