@@ -49,6 +49,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
+import { dashboardRouteMeta, dashboardsRouteMeta } from '@/features/Dashboard/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import { projectsRouteMeta } from '@/features/Projects/routeMeta';
 import { settingsRouteMeta } from '@/features/Settings/features/routeMeta';
@@ -991,6 +992,30 @@ export const sharedMainAreaChildren: RouteObject[] = [
     ],
     errorElement: <ErrorBoundary resetPath=".." />,
     path: 'projects',
+  },
+
+  // Personal dashboards (free-form monitoring boards)
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/dashboard'), 'Desktop > Dashboards', {
+          preloadId: 'dashboard',
+        }),
+        handle: { meta: dashboardsRouteMeta },
+        index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/dashboard/[dashboardId]'),
+          'Desktop > Dashboard Detail',
+          { preloadId: 'dashboard' },
+        ),
+        handle: { meta: dashboardRouteMeta },
+        path: ':dashboardId',
+      },
+    ],
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'dashboard',
   },
 
   // Task workspace routes (cross-agent)

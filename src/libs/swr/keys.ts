@@ -360,6 +360,24 @@ export const isMyTaskListKey = (key: unknown): boolean =>
  * Goal Graph reads. Keyed by the `goals` row id (not the carrier task's
  * identifier) because that is what every `goal.*` procedure takes.
  */
+/**
+ * Dashboards (free-form monitoring boards) and their widgets. A widget can sit
+ * on several boards, so widget-scoped reads (runs, versions, trend) key on the
+ * widget id alone and are shared by every board that shows it.
+ */
+export const dashboardKeys = {
+  detail: def('dashboard:detail', (dashboardId: string) => ['dashboard:detail', dashboardId]),
+  /** `level` identifies the direct ownership level, e.g. `personal` or `project:<id>`. */
+  list: def('dashboard:list', (level: string) => ['dashboard:list', level]),
+  runs: def('dashboard:runs', (widgetId: string) => ['dashboard:runs', widgetId]),
+  trend: def('dashboard:trend', (widgetId: string, source: string) => [
+    'dashboard:trend',
+    widgetId,
+    source,
+  ]),
+  versions: def('dashboard:versions', (widgetId: string) => ['dashboard:versions', widgetId]),
+};
+
 export const goalKeys = {
   graph: def('goal:graph', (goalId: string) => ['goal:graph', goalId]),
   metricSeries: def('goal:metricSeries', (goalId: string) => ['goal:metricSeries', goalId]),
@@ -1544,6 +1562,7 @@ export const swrKeys = {
   builtinAgent: builtinAgentKeys,
   changelog: changelogKeys,
   cron: cronKeys,
+  dashboard: dashboardKeys,
   device: deviceKeys,
   discover: discoverKeys,
   document: documentSWRKeys,

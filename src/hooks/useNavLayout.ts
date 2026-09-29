@@ -61,13 +61,21 @@ export const useNavLayout = (): NavLayout => {
           url: '/tasks',
         },
         {
+          // Personal boards only for now — workspace-level boards have no UI yet.
+          hidden: !!activeWorkspaceSlug,
+          icon: getRouteById('dashboard')!.icon,
+          key: SidebarTabKey.Dashboard,
+          title: t('tab.dashboard'),
+          url: '/dashboard',
+        },
+        {
           icon: getRouteById('resource')!.icon,
           key: SidebarTabKey.Resource,
           title: t('tab.resource'),
           url: '/resource',
         },
       ] as NavItem[],
-    [t, toggleCommandMenu],
+    [t, toggleCommandMenu, activeWorkspaceSlug],
   );
 
   const bottomMenuItems = useMemo(
