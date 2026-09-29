@@ -238,11 +238,12 @@ export interface GoalManagerState {
   adoptedOperationId?: string;
   consumed?: boolean;
   /**
-   * When the dispatch call for this turn returned with an error. The call has
-   * ended, so it cannot start a run later — the one positive signal that a turn
-   * without a planning message never ran, rather than has not run yet.
+   * Set when the dispatch call for this turn ended in an error before its
+   * planning message was written — decided once, at the moment the call
+   * returned. The call can no longer start a run, and nothing written later
+   * (or deleted from the owner's conversation) changes that verdict.
    */
-  dispatchFailedAt?: string;
+  dispatchNeverStarted?: boolean;
   operationId?: string;
   /**
    * The problem this turn was invited to take over, when the coordinator handed

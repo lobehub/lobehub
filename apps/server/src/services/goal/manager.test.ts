@@ -702,7 +702,7 @@ describe('CLI main Agent planning', () => {
     });
     const { id, state, op } = await start();
     expect(op).toBeUndefined();
-    expect((await model().findById(id))!.config!.managerState!.dispatchFailedAt).toBeDefined();
+    expect((await model().findById(id))!.config!.managerState!.dispatchNeverStarted).toBe(true);
 
     const now = Date.now();
     vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
@@ -718,6 +718,35 @@ describe('CLI main Agent planning', () => {
     expect(next.token).not.toBe(state.token);
     expect(next.turns).toBe(state.turns + 1);
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps pausing when the planning message is deleted after a dispatch that had started', async () => {
+    // The message was written and the call failed later, so a run may be live.
+    // The owner then deletes the message from their conversation; a later
+    // lookup must not turn that into "never started".
+    vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(async (params) => {
+      await new MessageModel(db, userId).create(
+        {
+          agentId: params.agentId,
+          content: 'plan',
+          role: 'user',
+          topicId: params.appContext!.topicId!,
+        },
+        params.clientIds!.userMessageId,
+      );
+      throw new Error('Topic metadata update failed');
+    });
+    const { id, state } = await start();
+    expect(state.dispatchNeverStarted).toBeUndefined();
+    await db.delete(messages).where(eq(messages.id, `msg_goal_manager_${state.token}`));
+
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
+    expect((await service().tick(id)).outcome).toBe('no_progress');
+    const fresh = (await model().findById(id))!;
+    expect(fresh.status).toBe('paused');
+    expect(fresh.config!.managerState!.consumed).not.toBe(true);
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
   });
 
   it('keeps pausing a timed-out turn whose dispatch never reported failure', async () => {
