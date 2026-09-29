@@ -12,6 +12,7 @@ import { AgentDetail } from './AgentDetail';
 import { Artifacts } from './Artifacts';
 import Header from './components/Header';
 import { PortalMoreMenuProvider } from './components/PortalMoreMenu/context';
+import { DashboardWidget } from './DashboardWidget';
 import { Document } from './Document';
 import { FilePreview } from './FilePreview';
 import { Goal } from './Goal';
@@ -43,6 +44,7 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
     Title: HomeTitle,
   },
   [PortalViewType.Artifact]: Artifacts,
+  [PortalViewType.DashboardWidget]: DashboardWidget,
   [PortalViewType.Document]: Document,
   [PortalViewType.Notebook]: Notebook,
   [PortalViewType.FilePreview]: FilePreview,

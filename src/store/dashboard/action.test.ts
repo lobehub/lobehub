@@ -13,7 +13,9 @@ vi.mock('@/libs/swr', () => ({
 }));
 vi.mock('@/services/dashboard', () => ({
   dashboardService: {
+    addItem: vi.fn(),
     create: vi.fn(),
+    publish: vi.fn(),
     runWidget: vi.fn(),
     updateItemLayouts: vi.fn(),
   },
@@ -161,5 +163,82 @@ describe('createDashboard', () => {
     });
     expect(mutate).toHaveBeenCalledWith(['dashboard:list', 'personal']);
     expect(useDashboardStore.getState().dashboardCreating).toBe(false);
+  });
+});
+
+describe('useFetchWidgetRun', () => {
+  it('keys on widget and run, polls only while the run is in flight', () => {
+    useDashboardStore.getState().useFetchWidgetRun('w1', 'r1');
+    const [key, , options] = vi.mocked(useClientDataSWR).mock.calls.at(-1) as any;
+    expect(key).toEqual(['dashboard:run', 'w1', 'r1']);
+    expect(options.refreshInterval({ status: 'running' })).toBeGreaterThan(0);
+    expect(options.refreshInterval({ status: 'failed' })).toBe(0);
+  });
+
+  it('does not fetch without both ids', () => {
+    useDashboardStore.getState().useFetchWidgetRun('w1', undefined);
+    expect(vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[0]).toBeNull();
+  });
+});
+
+describe('publishWidgetVersion', () => {
+  it('publishes, runs once and refreshes the widget and its versions', async () => {
+    let resolvePublish: (value: unknown) => void = () => {};
+    vi.mocked(dashboardService.publish).mockReturnValue(
+      new Promise((resolve) => {
+        resolvePublish = resolve;
+      }) as any,
+    );
+
+    vi.mocked(dashboardService.runWidget).mockRejectedValue(new Error('sandbox down'));
+    const pending = useDashboardStore.getState().publishWidgetVersion('w1', 'v2');
+    expect(useDashboardStore.getState().widgetPublishingIds).toEqual(['w1']);
+    resolvePublish({ version: { id: 'v2' } });
+    // A failing first run does not undo or fail the publish.
+    await expect(pending).resolves.toEqual({ version: { id: 'v2' } });
+
+    expect(dashboardService.publish).toHaveBeenCalledWith('w1', 'v2');
+    expect(dashboardService.runWidget).toHaveBeenCalledWith('w1');
+    expect(mutate).toHaveBeenCalledWith(['dashboard:widget', 'w1']);
+    expect(mutate).toHaveBeenCalledWith(['dashboard:versions', 'w1']);
+    expect(useDashboardStore.getState().widgetPublishingIds).toEqual([]);
+  });
+
+  it('lets a refused publish reach the caller and clears the pending id', async () => {
+    vi.mocked(dashboardService.publish).mockRejectedValue(new Error('dry-run it first'));
+    await expect(useDashboardStore.getState().publishWidgetVersion('w1', 'v2')).rejects.toThrow(
+      'dry-run it first',
+    );
+    expect(dashboardService.runWidget).not.toHaveBeenCalled();
+    expect(useDashboardStore.getState().widgetPublishingIds).toEqual([]);
+  });
+});
+
+describe('addWidgetToDashboard', () => {
+  it('places the widget and refreshes the board and the widget', async () => {
+    vi.mocked(dashboardService.addItem).mockResolvedValue({ id: 'i9' } as any);
+    await expect(useDashboardStore.getState().addWidgetToDashboard('d1', 'w1')).resolves.toEqual({
+      id: 'i9',
+    });
+    expect(dashboardService.addItem).toHaveBeenCalledWith('d1', 'w1');
+    expect(mutate).toHaveBeenCalledWith(['dashboard:detail', 'd1']);
+    expect(mutate).toHaveBeenCalledWith(['dashboard:widget', 'w1']);
+    expect(useDashboardStore.getState().widgetAddingIds).toEqual([]);
+  });
+});
+
+describe('refreshWidgetPlacement', () => {
+  it('revalidates the widget, the board and every cached board list', async () => {
+    await useDashboardStore.getState().refreshWidgetPlacement('w1', 'd1');
+    expect(mutate).toHaveBeenCalledWith(['dashboard:widget', 'w1']);
+    expect(mutate).toHaveBeenCalledWith(['dashboard:detail', 'd1']);
+
+    const matcher = vi
+      .mocked(mutate)
+      .mock.calls.map(([key]) => key)
+      .find((key) => typeof key === 'function') as (key: unknown) => boolean;
+    expect(matcher(['dashboard:list', 'personal'])).toBe(true);
+    expect(matcher(['dashboard:list', 'project:p'])).toBe(true);
+    expect(matcher(['dashboard:widget', 'w1'])).toBe(false);
   });
 });

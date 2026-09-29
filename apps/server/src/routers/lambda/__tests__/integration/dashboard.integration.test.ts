@@ -142,6 +142,23 @@ describe('dashboardRouter integration', () => {
       });
     });
 
+    it('reports the widget’s versions and the boards it is placed on', async () => {
+      const owner = dashboardRouter.createCaller(context(ownerId));
+      const board = (await owner.create({ title: 'Ops' }))!.data;
+      const widget = await createWidget(owner, { dashboardId: board.id, title: 'Open PRs' });
+      const draft = (await owner.saveDraft({ widgetId: widget.id, ...statScript }))!.data;
+
+      const detail = (await owner.widgetDetail({ id: widget.id }))!.data;
+      expect(detail).toMatchObject({
+        dashboards: [{ id: board.id, title: 'Ops' }],
+        draftVersion: { id: draft.id },
+        publishedVersion: null,
+      });
+
+      await owner.trash({ id: board.id });
+      expect((await owner.widgetDetail({ id: widget.id }))!.data.dashboards).toEqual([]);
+    });
+
     it('publishes v2 over v1 and rolls back to the archived v1', async () => {
       const owner = dashboardRouter.createCaller(context(ownerId));
       const widget = await createWidget(owner);
@@ -458,6 +475,69 @@ describe('dashboardRouter integration', () => {
       await owner.dryRun({ widgetId: agentWidget.id });
 
       expect(runSandbox.mock.calls[1][0].env).toEqual({ GITHUB_TOKEN: 'agent-token-789' });
+    });
+  });
+
+  describe('runAgentTool', () => {
+    it('scopes widgets to the conversation’s agent and project, ignoring foreign topics', async () => {
+      const { projects, topics } = await import('@lobechat/database/schemas');
+      const agentId = await createTestAgent(db, ownerId);
+      const coordinatorId = await createTestAgent(db, ownerId);
+      const [project] = await db
+        .insert(projects)
+        .values({
+          coordinatorAgentId: coordinatorId,
+          identifier: 'TOOL',
+          name: 'P',
+          userId: ownerId,
+        })
+        .returning();
+      await db.insert(topics).values([
+        { agentId, id: `tpc_own_${ownerId}`, projectId: project.id, userId: ownerId },
+        { id: `tpc_other_${memberId}`, projectId: project.id, userId: memberId },
+      ]);
+      const owner = dashboardRouter.createCaller(context(ownerId));
+      const createArgs = { ...statScript, description: 'Always 7', title: 'Seven' };
+
+      const created = await owner.runAgentTool({
+        apiName: 'createWidgetDraft',
+        args: createArgs,
+        context: { agentId, operationId: 'op_1', topicId: `tpc_own_${ownerId}` },
+      });
+      expect(created).toMatchObject({ success: true });
+      const [widget] = await db
+        .select()
+        .from(dashboardWidgets)
+        .where(eq(dashboardWidgets.id, created.state.widgetId));
+      expect(widget).toMatchObject({ agentId, projectId: project.id, userId: ownerId });
+
+      // Another user's topic id is dropped instead of leaking its project.
+      const foreign = await owner.runAgentTool({
+        apiName: 'createWidgetDraft',
+        args: createArgs,
+        context: { agentId, topicId: `tpc_other_${memberId}` },
+      });
+      const [foreignWidget] = await db
+        .select()
+        .from(dashboardWidgets)
+        .where(eq(dashboardWidgets.id, foreign.state.widgetId));
+      expect(foreignWidget).toMatchObject({ agentId, projectId: null });
+
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 7 }));
+      const dryRun = await owner.runAgentTool({
+        apiName: 'dryRunWidget',
+        args: { widgetId: widget.id },
+        context: { operationId: 'op_1' },
+      });
+      expect(dryRun).toMatchObject({ state: { status: 'succeeded' }, success: true });
+      expect(dryRun.content).toContain('"value": 7');
+    });
+
+    it('rejects unknown tool APIs', async () => {
+      const owner = dashboardRouter.createCaller(context(ownerId));
+      await expect(
+        owner.runAgentTool({ apiName: 'publish', args: {} } as any),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     });
   });
 

@@ -314,6 +314,24 @@ describe('DashboardModel', () => {
       ).toHaveLength(1);
     });
 
+    it('lists the readable, live boards a widget is placed on', async () => {
+      const model = new DashboardModel(serverDB, userId);
+      const widget = await new DashboardWidgetModel(serverDB, userId).create({ title: 'w' });
+      const first = await model.create({ sortOrder: 0, title: 'First' });
+      const second = await model.create({ sortOrder: 1, title: 'Second' });
+      const trashed = await model.create({ sortOrder: 2, title: 'Trashed' });
+      await model.create({ title: 'Unrelated' });
+      for (const board of [second, first, trashed]) await model.addItem(board.id, widget.id);
+      await model.trash(trashed.id);
+
+      expect(await model.listByWidget(widget.id)).toEqual([
+        { id: first.id, title: 'First' },
+        { id: second.id, title: 'Second' },
+      ]);
+      // another user sees none of this user's boards
+      expect(await new DashboardModel(serverDB, otherUserId).listByWidget(widget.id)).toEqual([]);
+    });
+
     it('removes placements when the board is hard deleted', async () => {
       const model = new DashboardModel(serverDB, userId);
       const dashboard = await model.create({ title: 'Home' });

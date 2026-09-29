@@ -102,7 +102,7 @@ export const openCreateDashboardModal = ({
   onCreated,
 }: {
   level?: DashboardLevelFilter;
-  onCreated?: (dashboard: { id: string }) => void;
+  onCreated?: (dashboard: { id: string; title: string }) => void;
 } = {}) =>
   createModal({
     content: (

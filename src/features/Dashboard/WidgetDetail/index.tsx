@@ -16,6 +16,7 @@ import StatusBadges from '../WidgetCard/StatusBadges';
 import WidgetOutputView from '../WidgetCard/views';
 import WidgetRefreshButton from '../WidgetRefreshButton';
 import RunHistory from './RunHistory';
+import VersionDiff from './VersionDiff';
 import VersionList from './VersionList';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -130,7 +131,45 @@ const WidgetData = memo<{ widget: DashboardWidgetItem }>(({ widget }) => {
 
 WidgetData.displayName = 'DashboardWidgetData';
 
-type DetailTab = 'data' | 'runs' | 'versions';
+type DetailTab = 'data' | 'diff' | 'runs' | 'versions';
+
+export interface WidgetDetailPanelProps {
+  /** Version the diff tab reviews first, e.g. the draft a conversation produced. */
+  diffTargetVersionId?: string;
+  widget: DashboardWidgetItem;
+}
+
+/**
+ * The full drill-down of one widget — freshness summary, then full data, run
+ * history with logs, versions and a version diff. Hosted by the board drawer
+ * and by the chat Portal.
+ */
+export const WidgetDetailPanel = memo<WidgetDetailPanelProps>(({ widget, diffTargetVersionId }) => {
+  const { t } = useTranslation('dashboard');
+  const [tab, setTab] = useState<DetailTab>('data');
+
+  return (
+    <Flexbox data-widget-detail={widget.id} gap={16}>
+      <WidgetSummary widget={widget} />
+      <Tabs
+        activeKey={tab}
+        items={[
+          { key: 'data', label: t('detail.tab.data') },
+          { key: 'runs', label: t('detail.tab.runs') },
+          { key: 'versions', label: t('detail.tab.versions') },
+          { key: 'diff', label: t('detail.tab.diff') },
+        ]}
+        onChange={(key) => setTab(key as DetailTab)}
+      />
+      {tab === 'data' && <WidgetData widget={widget} />}
+      {tab === 'runs' && <RunHistory widgetId={widget.id} />}
+      {tab === 'versions' && <VersionList widgetId={widget.id} />}
+      {tab === 'diff' && <VersionDiff targetVersionId={diffTargetVersionId} widgetId={widget.id} />}
+    </Flexbox>
+  );
+});
+
+WidgetDetailPanel.displayName = 'DashboardWidgetDetailPanel';
 
 export interface WidgetDetailDrawerProps {
   onClose: () => void;
@@ -138,40 +177,23 @@ export interface WidgetDetailDrawerProps {
   widget?: DashboardWidgetItem;
 }
 
-/** Drill-down of one widget: full data, run history with logs, and versions. */
-const WidgetDetailDrawer = memo<WidgetDetailDrawerProps>(({ widget, onClose }) => {
-  const { t } = useTranslation('dashboard');
-  const [tab, setTab] = useState<DetailTab>('data');
-
-  return (
-    <Drawer
-      open={!!widget}
-      placement={'right'}
-      title={widget?.title}
-      width={'min(92vw, 640px)'}
-      onClose={onClose}
-    >
-      {widget && (
-        <Flexbox data-widget-detail={widget.id} gap={16}>
-          {widget.description && <Text type={'secondary'}>{widget.description}</Text>}
-          <WidgetSummary widget={widget} />
-          <Tabs
-            activeKey={tab}
-            items={[
-              { key: 'data', label: t('detail.tab.data') },
-              { key: 'runs', label: t('detail.tab.runs') },
-              { key: 'versions', label: t('detail.tab.versions') },
-            ]}
-            onChange={(key) => setTab(key as DetailTab)}
-          />
-          {tab === 'data' && <WidgetData widget={widget} />}
-          {tab === 'runs' && <RunHistory widgetId={widget.id} />}
-          {tab === 'versions' && <VersionList widgetId={widget.id} />}
-        </Flexbox>
-      )}
-    </Drawer>
-  );
-});
+/** Drill-down of one widget on a board, in a drawer. */
+const WidgetDetailDrawer = memo<WidgetDetailDrawerProps>(({ widget, onClose }) => (
+  <Drawer
+    open={!!widget}
+    placement={'right'}
+    title={widget?.title}
+    width={'min(92vw, 640px)'}
+    onClose={onClose}
+  >
+    {widget && (
+      <Flexbox gap={16}>
+        {widget.description && <Text type={'secondary'}>{widget.description}</Text>}
+        <WidgetDetailPanel widget={widget} />
+      </Flexbox>
+    )}
+  </Drawer>
+));
 
 WidgetDetailDrawer.displayName = 'DashboardWidgetDetailDrawer';
 

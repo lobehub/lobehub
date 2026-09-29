@@ -7,6 +7,7 @@ import {
   type DashboardDetail,
   dashboardService,
   type DashboardWidgetItem,
+  type DashboardWidgetRunDetail,
 } from '@/services/dashboard';
 import type { StoreSetter } from '@/store/types';
 
@@ -22,6 +23,10 @@ const hasRunningWidget = (detail?: DashboardDetail) =>
 /** SWR matcher over every cached board detail — a widget can sit on several boards. */
 const isDashboardDetailKey = (key: unknown) =>
   Array.isArray(key) && key[0] === dashboardKeys.detail.root;
+
+/** SWR matcher over every cached board list, whatever level it lists. */
+const isDashboardListKey = (key: unknown) =>
+  Array.isArray(key) && key[0] === dashboardKeys.list.root;
 
 /**
  * Where a widget's trend comes from: a stat records one point per run into its
@@ -80,6 +85,42 @@ export class DashboardActionImpl {
         },
         refreshInterval: (data?: DashboardDetail) =>
           hasRunningWidget(data) ? RUNNING_POLL_INTERVAL : 0,
+      },
+    );
+
+  /** A widget on its own — e.g. a draft an agent just wrote, before any board shows it. */
+  useFetchWidgetDetail = (widgetId?: string) =>
+    useClientDataSWR(
+      widgetId ? dashboardKeys.widget(widgetId) : null,
+      () => dashboardService.widgetDetail(widgetId!),
+      {
+        onSuccess: (data) => {
+          this.#set(
+            (s) => ({ widgetDetailMap: { ...s.widgetDetailMap, [data.id]: data } }),
+            false,
+            'useFetchWidgetDetail/onSuccess',
+          );
+        },
+        refreshInterval: (data?: { lastRunStatus?: string | null }) =>
+          data?.lastRunStatus === 'running' ? RUNNING_POLL_INTERVAL : 0,
+      },
+    );
+
+  /** One run with its output and logs; polls until it settles. */
+  useFetchWidgetRun = (widgetId?: string, runId?: string) =>
+    useClientDataSWR(
+      widgetId && runId ? dashboardKeys.run(widgetId, runId) : null,
+      () => dashboardService.getRun(widgetId!, runId!),
+      {
+        onSuccess: (data) => {
+          this.#set(
+            (s) => ({ widgetRunDetailMap: { ...s.widgetRunDetailMap, [data.id]: data } }),
+            false,
+            'useFetchWidgetRun/onSuccess',
+          );
+        },
+        refreshInterval: (data?: DashboardWidgetRunDetail) =>
+          data?.status === 'running' ? RUNNING_POLL_INTERVAL : 0,
       },
     );
 
@@ -247,7 +288,60 @@ export class DashboardActionImpl {
     }
   };
 
+  /**
+   * Make a dry-run-proven version live, then run it once so every board shows
+   * live data right away. The server refuses a version whose exact content has
+   * not succeeded in a dry run; a failing first run leaves the publish in place.
+   */
+  publishWidgetVersion = async (widgetId: string, versionId: string) => {
+    this.#set(
+      (s) => ({ widgetPublishingIds: [...s.widgetPublishingIds, widgetId] }),
+      false,
+      'publishWidgetVersion/start',
+    );
+    try {
+      const result = await dashboardService.publish(widgetId, versionId);
+      await mutate(dashboardKeys.versions(widgetId));
+      await this.runWidget(widgetId).catch((error) => {
+        console.error('[dashboard] first run after publish failed', error);
+      });
+      return result;
+    } finally {
+      this.#set(
+        (s) => ({ widgetPublishingIds: s.widgetPublishingIds.filter((id) => id !== widgetId) }),
+        false,
+        'publishWidgetVersion/end',
+      );
+    }
+  };
+
+  addWidgetToDashboard = async (dashboardId: string, widgetId: string) => {
+    this.#set(
+      (s) => ({ widgetAddingIds: [...s.widgetAddingIds, widgetId] }),
+      false,
+      'addWidgetToDashboard/start',
+    );
+    try {
+      const item = await dashboardService.addItem(dashboardId, widgetId);
+      await Promise.all([
+        this.refreshDashboardDetail(dashboardId),
+        this.refreshWidgetDetail(widgetId),
+      ]);
+      return item;
+    } finally {
+      this.#set(
+        (s) => ({ widgetAddingIds: s.widgetAddingIds.filter((id) => id !== widgetId) }),
+        false,
+        'addWidgetToDashboard/end',
+      );
+    }
+  };
+
   // ── Refresh ──
+
+  refreshWidgetDetail = async (widgetId: string) => {
+    await mutate(dashboardKeys.widget(widgetId));
+  };
 
   refreshDashboards = async (level?: DashboardLevelFilter) => {
     await mutate(dashboardKeys.list(dashboardLevelKey(level)));
@@ -257,9 +351,24 @@ export class DashboardActionImpl {
     await mutate(dashboardKeys.detail(dashboardId));
   };
 
+  /**
+   * The agent placed a widget on a board server-side (possibly a board it just
+   * created): revalidate the widget's board membership, that board (every
+   * cached board when unknown), and every cached board list so open views pick
+   * it up without a reload.
+   */
+  refreshWidgetPlacement = async (widgetId: string, dashboardId?: string) => {
+    await Promise.all([
+      mutate(dashboardKeys.widget(widgetId)),
+      mutate(dashboardId ? dashboardKeys.detail(dashboardId) : isDashboardDetailKey),
+      mutate(isDashboardListKey),
+    ]);
+  };
+
   refreshWidget = async (widgetId: string) => {
     await Promise.all([
       mutate(isDashboardDetailKey),
+      mutate(dashboardKeys.widget(widgetId)),
       mutate(dashboardKeys.runs(widgetId)),
       mutate(
         (key: unknown) =>

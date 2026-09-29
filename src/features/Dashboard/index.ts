@@ -2,4 +2,7 @@ export { default as DashboardBoard } from './Board';
 export { default as DashboardBoardPage } from './BoardPage';
 export { default as DashboardListPage } from './List';
 export { default as WidgetCard } from './WidgetCard';
-export { default as WidgetDetailDrawer } from './WidgetDetail';
+export { default as WidgetDetailDrawer, WidgetDetailPanel } from './WidgetDetail';
+export { default as WidgetRunPreview } from './WidgetDetail/RunPreview';
+export { default as WidgetPreviewCard } from './WidgetPreview';
+export { default as WidgetPublishReview } from './WidgetPreview/PublishReview';

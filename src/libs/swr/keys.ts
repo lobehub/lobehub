@@ -369,6 +369,12 @@ export const dashboardKeys = {
   detail: def('dashboard:detail', (dashboardId: string) => ['dashboard:detail', dashboardId]),
   /** `level` identifies the direct ownership level, e.g. `personal` or `project:<id>`. */
   list: def('dashboard:list', (level: string) => ['dashboard:list', level]),
+  /** One run with its output and logs. */
+  run: def('dashboard:run', (widgetId: string, runId: string) => [
+    'dashboard:run',
+    widgetId,
+    runId,
+  ]),
   runs: def('dashboard:runs', (widgetId: string) => ['dashboard:runs', widgetId]),
   trend: def('dashboard:trend', (widgetId: string, source: string) => [
     'dashboard:trend',
@@ -376,6 +382,8 @@ export const dashboardKeys = {
     source,
   ]),
   versions: def('dashboard:versions', (widgetId: string) => ['dashboard:versions', widgetId]),
+  /** A widget with its draft / published versions and the boards it sits on. */
+  widget: def('dashboard:widget', (widgetId: string) => ['dashboard:widget', widgetId]),
 };
 
 export const goalKeys = {

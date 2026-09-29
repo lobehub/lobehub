@@ -11,11 +11,15 @@ export interface SeriesChartData {
 }
 
 const ISO_PREFIX = /^\d{4}-\d{2}-\d{2}/;
+/** A calendar day with no time of day, e.g. '2026-09-27'. */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 const formatLabel = (t: string, spansDays: boolean) => {
   if (!ISO_PREFIX.test(t)) return t;
   const date = dayjs(t);
   if (!date.isValid()) return t;
+  // A day has no time to show; formatting it as 'HH:mm' labels every point '00:00'.
+  if (DATE_ONLY.test(t)) return date.format('MM-DD');
   return date.format(spansDays ? 'MM-DD HH:mm' : 'HH:mm');
 };
 

@@ -1,8 +1,6 @@
-import {
-  DASHBOARD_VISIBILITIES,
-  DASHBOARD_WIDGET_RUNTIMES,
-  WIDGET_OUTPUT_TYPES,
-} from '@lobechat/types';
+import { DashboardApiName } from '@lobechat/builtin-tool-dashboard';
+import { DashboardExecutionRuntime } from '@lobechat/builtin-tool-dashboard/executionRuntime';
+import { DASHBOARD_VISIBILITIES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -16,7 +14,11 @@ import { DashboardScopeError } from '@/database/utils/dashboardScope';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DashboardWidgetFlowError, DashboardWidgetService } from '@/server/services/dashboard';
-import { DASHBOARD_SANDBOX_MAX_TIMEOUT_MS } from '@/server/services/dashboard/sandboxRunner';
+import {
+  createDashboardToolService,
+  resolveClientTopic,
+} from '@/server/services/dashboard/agentTool';
+import { widgetVersionContentSchema } from '@/server/services/dashboard/versionSchema';
 
 const dashboardProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -51,40 +53,6 @@ const layoutSchema = z.object({
   w: z.number().int().min(1).max(48),
   x: z.number().int().min(0).max(96),
   y: z.number().int().min(0),
-});
-
-const envName = z.string().regex(/^[A-Z_]\w*$/i, 'env names must be valid shell identifiers');
-const manifestSchema = z.object({
-  description: z.string().max(2000).optional(),
-  env: z
-    .array(
-      z.object({
-        connector: z.string().min(1).optional(),
-        description: z.string().max(500).optional(),
-        name: envName,
-        required: z.boolean().optional(),
-      }),
-    )
-    .max(20)
-    .optional(),
-  metric: z
-    .object({
-      key: z.string().min(1).max(100),
-      kind: z.enum(['gauge', 'counter']).optional(),
-      unit: z.string().max(50).optional(),
-      valuePath: z.string().max(200).optional(),
-    })
-    .optional(),
-  network: z.object({ allow: z.array(z.string().min(1).max(253)).max(50) }).optional(),
-  schedule: z.object({ pattern: z.string(), timezone: z.string().optional() }).optional(),
-  timeoutMs: z.number().int().positive().max(DASHBOARD_SANDBOX_MAX_TIMEOUT_MS).optional(),
-  title: z.string().max(200).optional(),
-});
-const viewSchema = z.object({
-  chart: z.enum(['line', 'bar', 'area']).optional(),
-  columns: z.array(z.string()).optional(),
-  limit: z.number().int().positive().max(500).optional(),
-  size: z.enum(['sm', 'md', 'lg']).optional(),
 });
 
 // ── Error mapping ──
@@ -295,22 +263,24 @@ export const dashboardRouter = router({
     }
   }),
 
-  /** A widget with its published and draft versions. */
+  /** A widget with its published and draft versions and the boards it is placed on. */
   widgetDetail: dashboardProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
       const widget = await ctx.widgetModel.findById(input.id);
       if (!widget) throw notFound('Widget');
-      const [publishedVersion, draftVersion] = await Promise.all([
+      const [publishedVersion, draftVersion, dashboards] = await Promise.all([
         widget.publishedVersionId
           ? ctx.widgetModel.findVersion(widget.id, widget.publishedVersionId)
           : undefined,
         widget.draftVersionId
           ? ctx.widgetModel.findVersion(widget.id, widget.draftVersionId)
           : undefined,
+        ctx.dashboardModel.listByWidget(widget.id),
       ]);
       return {
         data: {
           ...widget,
+          dashboards,
           draftVersion: draftVersion ?? null,
           publishedVersion: publishedVersion ?? null,
         },
@@ -449,20 +419,7 @@ export const dashboardRouter = router({
 
   /** Record script + contract as the widget's draft; identical content reuses the draft. */
   saveDraft: dashboardWriteProcedure
-    .input(
-      z.object({
-        changeNote: z.string().max(500).nullish(),
-        manifest: manifestSchema.nullish(),
-        outputType: z.enum(WIDGET_OUTPUT_TYPES),
-        runtime: z.enum(DASHBOARD_WIDGET_RUNTIMES),
-        script: z
-          .string()
-          .min(1)
-          .max(256 * 1024),
-        view: viewSchema.nullish(),
-        widgetId: uuid,
-      }),
-    )
+    .input(widgetVersionContentSchema.extend({ widgetId: uuid }))
     .mutation(async ({ ctx, input }) => {
       try {
         const { widgetId, ...version } = input;
@@ -509,6 +466,50 @@ export const dashboardRouter = router({
       } catch (error) {
         mapDashboardError(error, 'roll back widget version');
       }
+    }),
+
+  // ── Agent tool ──
+
+  /**
+   * Execute one `lobe-dashboard` tool call for an agent run driven by the
+   * client runtime. The server agent runtime executes the same runtime and
+   * service in-process; both scope created widgets to the conversation's
+   * agent and (for a project topic) project. Publishing still requires the
+   * user's approval, which the agent runtime enforces before dispatching.
+   */
+  runAgentTool: dashboardWriteProcedure
+    .input(
+      z.object({
+        apiName: z.enum(Object.values(DashboardApiName) as [string, ...string[]]),
+        args: z.record(z.string(), z.unknown()),
+        context: z
+          .object({
+            agentId: z.string().nullish(),
+            messageId: z.string().nullish(),
+            operationId: z.string().nullish(),
+            topicId: z.string().nullish(),
+          })
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const context = input.context ?? {};
+      const topic = await resolveClientTopic(ctx.serverDB, context.topicId, ctx.userId);
+      const runtime = new DashboardExecutionRuntime(
+        createDashboardToolService(ctx.serverDB, {
+          agentId: context.agentId ?? undefined,
+          messageId: context.messageId ?? undefined,
+          operationId: context.operationId ?? undefined,
+          projectId: topic.projectId,
+          topicId: topic.topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        }),
+      );
+      const method = runtime[input.apiName as keyof DashboardExecutionRuntime] as (
+        args: unknown,
+      ) => ReturnType<DashboardExecutionRuntime['listDashboards']>;
+      return method.call(runtime, input.args);
     }),
 
   // ── Runs ──

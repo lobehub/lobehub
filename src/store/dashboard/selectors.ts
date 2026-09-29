@@ -31,12 +31,28 @@ const widgetVersions = (widgetId?: string) => (s: DashboardStore) =>
 
 const widgetTrend = (widgetId: string) => (s: DashboardStore) => s.widgetTrendMap[widgetId];
 
+const widgetDetail = (widgetId?: string) => (s: DashboardStore) =>
+  widgetId ? s.widgetDetailMap[widgetId] : undefined;
+
+const widgetRunDetail = (runId?: string) => (s: DashboardStore) =>
+  runId ? s.widgetRunDetailMap[runId] : undefined;
+
+const isWidgetPublishing = (widgetId: string) => (s: DashboardStore) =>
+  s.widgetPublishingIds.includes(widgetId);
+
+const isWidgetAdding = (widgetId: string) => (s: DashboardStore) =>
+  s.widgetAddingIds.includes(widgetId);
+
 export const dashboardSelectors = {
   dashboardDetail,
   dashboardList,
   isLayoutSaving,
+  isWidgetAdding,
+  isWidgetPublishing,
   isWidgetRunning,
   widgetById,
+  widgetDetail,
+  widgetRunDetail,
   widgetRuns,
   widgetTrend,
   widgetVersions,

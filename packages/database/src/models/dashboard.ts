@@ -259,6 +259,16 @@ export class DashboardModel {
       .orderBy(asc(dashboardItems.sortOrder), asc(dashboardItems.createdAt));
   }
 
+  /** Readable boards a widget is placed on, in board order. */
+  async listByWidget(widgetId: string) {
+    return this.db
+      .select({ id: dashboards.id, title: dashboards.title })
+      .from(dashboardItems)
+      .innerJoin(dashboards, eq(dashboardItems.dashboardId, dashboards.id))
+      .where(and(eq(dashboardItems.widgetId, widgetId), this.readable()))
+      .orderBy(asc(dashboards.sortOrder), asc(dashboards.createdAt));
+  }
+
   /** Persist a drag-and-drop result; ignores ids that are not on this board. */
   async updateItemLayouts(dashboardId: string, patches: DashboardItemLayoutPatch[]) {
     const dashboard = await this.assertManageable(dashboardId);

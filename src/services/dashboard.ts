@@ -15,6 +15,7 @@ export type DashboardWidgetItem = DashboardBoardItem['widget'];
 export type DashboardWidgetDetail = QueryData<DashboardRouter['widgetDetail']>;
 export type DashboardWidgetVersionItem = QueryData<DashboardRouter['listVersions']>[number];
 export type DashboardWidgetRunItem = QueryData<DashboardRouter['listRuns']>[number];
+export type DashboardWidgetRunDetail = QueryData<DashboardRouter['getRun']>;
 
 export interface DashboardLayoutPatch {
   id: string;
@@ -65,6 +66,11 @@ class DashboardService {
 
   trash = async (id: string) => lambdaClient.dashboard.trash.mutate({ id });
 
+  addItem = async (dashboardId: string, widgetId: string) => {
+    const { data } = await lambdaClient.dashboard.addItem.mutate({ dashboardId, widgetId });
+    return data;
+  };
+
   updateItemLayouts = async (dashboardId: string, patches: DashboardLayoutPatch[]) =>
     lambdaClient.dashboard.updateItemLayouts.mutate({ dashboardId, patches });
 
@@ -83,6 +89,16 @@ class DashboardService {
     return data;
   };
 
+  getRun = async (widgetId: string, runId: string) => {
+    const { data } = await lambdaClient.dashboard.getRun.query({ runId, widgetId });
+    return data;
+  };
+
+  publish = async (widgetId: string, versionId: string) => {
+    const { data } = await lambdaClient.dashboard.publish.mutate({ versionId, widgetId });
+    return data;
+  };
+
   listRuns = async (widgetId: string, limit?: number) => {
     const { data } = await lambdaClient.dashboard.listRuns.query({ limit, widgetId });
     return data;
@@ -92,6 +108,18 @@ class DashboardService {
     const { data } = await lambdaClient.dashboard.listVersions.query({ widgetId });
     return data;
   };
+
+  /** Run one `lobe-dashboard` agent tool call server-side (client agent runtime). */
+  runAgentTool = async (
+    apiName: string,
+    args: unknown,
+    context: { agentId?: string; messageId?: string; operationId?: string; topicId?: string },
+  ) =>
+    lambdaClient.dashboard.runAgentTool.mutate({
+      apiName,
+      args: (args ?? {}) as Record<string, unknown>,
+      context,
+    });
 
   // ── Trend (metrics / metric_points, subject `dashboardWidget`) ──
 

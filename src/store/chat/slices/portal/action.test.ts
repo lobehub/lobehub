@@ -273,6 +273,32 @@ describe('chatDockSlice', () => {
     });
   });
 
+  describe('openDashboardWidget', () => {
+    it('opens the widget view, carrying the dry run it was opened from', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.clearPortalStack();
+        result.current.openDashboardWidget('widget-1', 'run-1');
+      });
+
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.dashboardWidgetView(result.current)).toEqual({
+        runId: 'run-1',
+        type: PortalViewType.DashboardWidget,
+        widgetId: 'widget-1',
+      });
+
+      act(() => {
+        result.current.openDashboardWidget('widget-2');
+      });
+      expect(chatPortalSelectors.dashboardWidgetView(result.current)).toEqual({
+        type: PortalViewType.DashboardWidget,
+        widgetId: 'widget-2',
+      });
+    });
+  });
+
   describe('openArtifact', () => {
     it('keeps a parent task portal addressable while its run artifact is open', () => {
       const { result } = renderHook(() => useChatStore());

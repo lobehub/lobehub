@@ -66,6 +66,25 @@ describe('buildSeriesChartData', () => {
     expect(data.rows[0]).not.toHaveProperty('a');
     expect(data.rows[1]).toMatchObject({ a: 2, b: 3 });
   });
+
+  it('labels calendar-day points by day instead of midnight', () => {
+    const data = buildSeriesChartData({
+      series: [
+        {
+          name: 'commits',
+          points: [
+            { t: '2026-09-28', v: 55 },
+            { t: '2026-09-27', v: 41 },
+          ],
+        },
+      ],
+      type: 'series',
+    });
+    expect(data.rows).toEqual([
+      { commits: 41, t: '09-27' },
+      { commits: 55, t: '09-28' },
+    ]);
+  });
 });
 
 describe('sparklinePoints', () => {
