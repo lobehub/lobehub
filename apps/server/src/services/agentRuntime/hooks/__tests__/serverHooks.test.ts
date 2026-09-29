@@ -46,9 +46,7 @@ describe('environment hooks through real HTTP transport', () => {
 
   beforeEach(async () => {
     requests.length = 0;
-    response = {
-      hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'allow' },
-    };
+    response = { decision: 'allow' };
     queueMode.mockReturnValue(false);
     await new Promise<void>((resolve) => receiver.listen(0, '127.0.0.1', resolve));
     url = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}/ingress`;
@@ -102,10 +100,9 @@ describe('environment hooks through real HTTP transport', () => {
       expect(await cold.evaluateToolCall(event.operationId, event, restored)).toMatchObject({
         status: 'allow',
       });
-      response = {
-        hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'deny' },
-      };
-      expect(await cold.evaluateToolCall(event.operationId, event, restored)).toMatchObject({
+      response = { decision: 'deny', reason: 'Denied by current env hook' };
+      expect(await cold.evaluateToolCall(event.operationId, event, restored)).toEqual({
+        reason: 'Denied by current env hook',
         status: 'blocked',
       });
       await cold.dispatch(
@@ -182,9 +179,7 @@ describe('environment hooks through real HTTP transport', () => {
         vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
         vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'ignore');
         vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'continue');
-        response = {
-          hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'deny' },
-        };
+        response = { decision: 'deny' };
         expect(await dispatcher.evaluateToolCall(event.operationId, event, legacy)).toEqual({
           status: 'allow',
         });
@@ -225,9 +220,7 @@ describe('environment hooks through real HTTP transport', () => {
         registered.register(event.operationId, [original]);
         const dispatcher = cold ? new HookDispatcher() : registered;
         vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', undefined);
-        response = {
-          hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'deny' },
-        };
+        response = { decision: 'deny' };
         expect(await dispatcher.evaluateToolCall(event.operationId, event, legacy)).toEqual({
           status: 'allow',
         });
@@ -270,9 +263,7 @@ describe('environment hooks through real HTTP transport', () => {
   it('defaults to notifications whose response cannot deny a tool', async () => {
     vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', undefined);
     vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', undefined);
-    response = {
-      hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'deny' },
-    };
+    response = { decision: 'deny' };
     const dispatcher = new HookDispatcher();
     dispatcher.register(event.operationId, []);
     expect(await dispatcher.evaluateToolCall(event.operationId, event)).toMatchObject({
@@ -292,10 +283,9 @@ describe('environment hooks through real HTTP transport', () => {
         webhook: { url: `${url}/internal` },
       },
     ];
-    response = {
-      hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'deny' },
-    };
-    expect(await cold.evaluateToolCall(event.operationId, event, restored)).toMatchObject({
+    response = { decision: 'deny', reason: 'Denied after restore' };
+    expect(await cold.evaluateToolCall(event.operationId, event, restored)).toEqual({
+      reason: 'Denied after restore',
       status: 'blocked',
     });
     await cold.dispatch(
