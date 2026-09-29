@@ -83,8 +83,7 @@ runs:
                 || echo "::warning::$platform core trees differ between runners; keeping the first"
               continue
             fi
-            mkdir -p release/core-ota/cas release/core-ota/core-v4
-            if [ -d "$dir"cas ]; then cp -R "$dir"cas/. release/core-ota/cas/; fi
+            mkdir -p release/core-ota/core-v4
             cp -R "$dir"core-v4/"$platform" release/core-ota/core-v4/
           done
         done
@@ -98,6 +97,7 @@ runs:
       uses: ./.github/actions/desktop-publish-core-ota
       with:
         core-dir: core-v4
+        app-version: ${{ inputs.version }}
         channel: ${{ inputs.channel }}
         release-dir: release/core-ota
         shell-json: release/shell.json

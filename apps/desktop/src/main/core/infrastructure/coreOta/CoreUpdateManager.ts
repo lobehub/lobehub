@@ -413,7 +413,11 @@ export class CoreUpdateManager {
   }
 
   private feedUrl() {
-    return `${FEED_BASE_URL}/${this.activeChannel}/${this.shell?.coreProtocol === 4 ? 'core-v4' : 'core'}/${process.platform}`;
+    const prefix =
+      this.shell?.coreProtocol === 4
+        ? `${encodeURIComponent(this.shell.shellVersion)}/core-v4`
+        : 'core';
+    return `${FEED_BASE_URL}/${this.activeChannel}/${prefix}/${process.platform}`;
   }
 
   private coreDirOf(version: string) {

@@ -5,9 +5,9 @@ name: Release Desktop Core OTA
 # ============================================
 # 门禁: HEAD 的 shellAbi 必须等于 <channel>/shell.json 的 shellAbi，
 #       否则 requires_full_release=true，由调用方走全量发版。
-# 产物: <channel>/core-v4/<platform>/packs/<sha>.pack           独立 Zstd 块
-#       <channel>/core-v4/<platform>/versions/<version>.json     签名快照
-#       <channel>/core-v4/<platform>/latest.json                 签名 manifest
+# 产物: <channel>/<appVersion>/core-v4/<platform>/packs/<sha>.pack           独立 Zstd 块
+#       <channel>/<appVersion>/core-v4/<platform>/versions/<version>.json     签名快照
+#       <channel>/<appVersion>/core-v4/<platform>/latest.json                 签名 manifest
 # ============================================
 
 on:
@@ -146,6 +146,7 @@ jobs:
         if: steps.gate.outputs.allowed == 'true'
         uses: ./.github/actions/desktop-core-seq
         with:
+          app-version: ${{ steps.base.outputs.app_version }}
           channel: ${{ inputs.channel }}
           update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
 
@@ -229,12 +230,13 @@ jobs:
         id: previous
         env:
           CHANNEL: ${{ inputs.channel }}
+          APP_VERSION: ${{ needs.gate.outputs.app_version }}
           FEED_BASE_URL: ${{ needs.gate.outputs.feed_base_url }}
           PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
           HTTP_STATUS=$(curl -sS --connect-timeout 10 --max-time 30 \
-            -o "$RUNNER_TEMP/previous-core.json" -w '%{http_code}' "$FEED_BASE_URL/$CHANNEL/core-v4/$PLATFORM/latest.json")
+            -o "$RUNNER_TEMP/previous-core.json" -w '%{http_code}' "$FEED_BASE_URL/$CHANNEL/$APP_VERSION/core-v4/$PLATFORM/latest.json")
           case "$HTTP_STATUS" in
             200)
               echo "Previous core: $(jq -er '.version' "$RUNNER_TEMP/previous-core.json")"
@@ -253,6 +255,7 @@ jobs:
         env:
           RENDERER_OTA_PRIVATE_KEY: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
           CHANNEL: ${{ inputs.channel }}
+          APP_VERSION: ${{ needs.gate.outputs.app_version }}
           FEED_BASE_URL: ${{ needs.gate.outputs.feed_base_url }}
           PLATFORM: ${{ matrix.platform }}
           PREVIOUS_ARGS: ${{ steps.previous.outputs.args }}
@@ -272,7 +275,7 @@ jobs:
             --seq="$SEQ" \
             --rollout="$ROLLOUT" \
             --shell-abi="$SHELL_ABI" \
-            --previous-base-url="$FEED_BASE_URL/$CHANNEL/core-v4/$PLATFORM" \
+            --previous-base-url="$FEED_BASE_URL/$CHANNEL/$APP_VERSION/core-v4/$PLATFORM" \
             --out=release/core-ota \
             $PREVIOUS_ARGS
           STATUS=$?
@@ -340,6 +343,7 @@ jobs:
         uses: ./.github/actions/desktop-publish-core-ota
         with:
           core-dir: core-v4
+          app-version: ${{ needs.gate.outputs.app_version }}
           channel: ${{ inputs.channel }}
           release-dir: release/core-ota
           aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}

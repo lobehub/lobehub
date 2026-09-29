@@ -194,7 +194,7 @@ v4 中 objects 的编码固定为独立 Zstd，patches 固定为当前 Zstd 字�
 v3 为严格 schema，不能直接向原 `latest.json` 塞入 v4 字段。
 
 - 旧客户端继续使用现有 v3 feed、独立 CAS 对象、补丁和 ZIP 全量包。ZIP 仅为旧协议兼容保留，不用于 v4。
-- v4 使用单独路径，例如 `<channel>/core-v4/<platform>/latest.json` 和 `versions/<version>.json`；pack 位于该协议空间下的 `packs/<sha256>.pack`。
+- v4 使用单独路径，例如 `<channel>/<appVersion>/core-v4/<platform>/latest.json` 和 `versions/<version>.json`；pack 位于该协议空间下的 `packs/<sha256>.pack`。
 - 第一版通过完整应用发布交付 ASAR 布局、新 loader 和 v4 客户端。旧客户端通过原完整应用更新链路迁移；不要求旧 loader 直接启动 v4 core。
 - 兼容期同一业务构建可同时生成 v3/v4 产物，分别使用其适用的 ABI 和 manifest，不混用严格 schema。
 - 发布顺序：全部 pack → 不可变版本 manifest → latest。保留现有 seq 防倒退、发布互斥与 channel/platform 隔离。
@@ -251,3 +251,11 @@ v3 为严格 schema，不能直接向原 `latest.json` 塞入 v4 字段。
 - [R2 S3 API 与 Range 支持](https://developers.cloudflare.com/r2/api/s3/api/)
 - [R2 Workers API range 参数](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)
 - [Cloudflare Range 请求与缓存行为](https://developers.cloudflare.com/cache/reference/range-requests/)
+
+### R2 发布目录与清理边界
+
+- 安装包与 OTA 统一归属于 `<channel>/<appVersion>/`。`appVersion` 是壳的 `shellVersion`，不是 OTA 的 `<appVersion>-core.<seq>`。客户端即使运行外置 core，也始终使用壳版本定位 feed。
+- 每个 App 版本的 `core-v4/<platform>/` 下保存 `latest.json`、`versions/<otaVersion>.json`、`packs/<sha256>.pack`；补丁只使用同一 App 版本的前序 manifest，seq 也仅在该版本所有平台中递增。pack 路径保持相对 feed，不跨 App 版本引用。
+- `<channel>/shell.json` 与完整安装包 updater manifest 是发现最新完整版本的固定入口，继续放在渠道根目录；`shell.json` 另存一份至 `<channel>/<appVersion>/shell.json`。v3 旧路径仅为已安装旧客户端保留，v4 不再向渠道根级 core 或全局 CAS 写入。
+- 本次上线不自动删除线上历史对象。完整版本上线并确认新客户端使用版本目录后，再盘点渠道根级旧 `core/`、`core-v4/`、历史 renderer OTA、全局 `cas/` 等引用；明确保留版本、回滚窗口和下载宽限期后单独执行清理。仍受支持的旧客户端所需对象不得仅因层级过时删除。
+- 淘汰某个 App 版本可整体删除 `<channel>/<appVersion>/`，同时检查渠道根级入口不再指向它。当前 App 版本内的 pack 不能按单个 OTA manifest 随意删除，需保留仍被支持快照引用的 pack。

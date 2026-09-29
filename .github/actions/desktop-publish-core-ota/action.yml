@@ -1,7 +1,11 @@
 name: Desktop Publish Core OTA
-description: Upload a buildCore.mjs output tree (cas + core/<platform>) to the update server
+description: Upload core releases to their app-version namespace (legacy v3 layout retained)
 
 inputs:
+  app-version:
+    description: Full application version owning the v4 OTA namespace
+    required: false
+    default: ''
   core-dir:
     description: 'Protocol directory (core for v3, core-v4 for v4)'
     required: false
@@ -55,12 +59,18 @@ runs:
         S3_BUCKET: ${{ inputs.s3-bucket }}
         S3_ENDPOINT: ${{ inputs.s3-endpoint }}
         CHANNEL: ${{ inputs.channel }}
+        APP_VERSION: ${{ inputs.app-version }}
         CORE_DIR: ${{ inputs.core-dir }}
         RELEASE_DIR: ${{ inputs.release-dir }}
         SHELL_JSON: ${{ inputs.shell-json }}
       run: |
         set -euo pipefail
         case "$CORE_DIR" in core|core-v4) ;; *) exit 1 ;; esac
+        PREFIX="$CHANNEL"
+        if [ "$CORE_DIR" = core-v4 ]; then
+          [[ "$APP_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]*$ ]] || { echo "::error::valid app-version required for v4"; exit 1; }
+          PREFIX="$CHANNEL/$APP_VERSION"
+        fi
         echo "published=false" >> "$GITHUB_OUTPUT"
         echo "platforms=" >> "$GITHUB_OUTPUT"
         if [ -z "$S3_BUCKET" ]; then
@@ -74,10 +84,10 @@ runs:
         IMMUTABLE=(--cache-control "public,max-age=31536000,immutable")
 
         # seq is allocated as max(published)+1 without a lock, so a concurrent publisher for the
-        # same channel may have landed first. Same seq + same version is a re-run and allowed.
+        # same app version and channel may have landed first. Same seq + same version is a re-run and allowed.
         assert_not_behind() {
           local platform=$1
-          local key="$CHANNEL/$CORE_DIR/$platform/latest.json"
+          local key="$PREFIX/$CORE_DIR/$platform/latest.json"
           aws s3 ls "s3://$S3_BUCKET/$key" "${ENDPOINT_ARGS[@]}" >/dev/null 2>&1 || return 0
           local remote local_json remote_seq remote_version local_seq local_version
           remote=$(aws s3 cp "s3://$S3_BUCKET/$key" - "${ENDPOINT_ARGS[@]}")
@@ -98,7 +108,7 @@ runs:
         done
 
         # Order matters for clients mid-download: objects → packs → snapshot → shell.json → latest.json.
-        if [ -d "$RELEASE_DIR/cas" ]; then
+        if [ "$CORE_DIR" = core ] && [ -d "$RELEASE_DIR/cas" ]; then
           echo "📦 Syncing CAS objects"
           aws s3 sync "$RELEASE_DIR/cas" "s3://$S3_BUCKET/cas" --size-only \
             --content-type application/zstd "${IMMUTABLE[@]}" "${ENDPOINT_ARGS[@]}"
@@ -108,7 +118,7 @@ runs:
         for platform_dir in "$RELEASE_DIR"/"$CORE_DIR"/*/; do
           [ -d "$platform_dir" ] || continue
           platform=$(basename "$platform_dir")
-          target="s3://$S3_BUCKET/$CHANNEL/$CORE_DIR/$platform"
+          target="s3://$S3_BUCKET/$PREFIX/$CORE_DIR/$platform"
           version=$(jq -r '.version' "$platform_dir/latest.json")
           echo "🚀 $platform: core $version → $target"
           PACK_TYPE=application/zip
@@ -120,7 +130,7 @@ runs:
           if [ "$CORE_DIR" = core-v4 ]; then
             # Verify uploaded bytes and a real S3 Range before exposing this version.
             while IFS=$'\t' read -r hash pack_path size offset length frame_hash; do
-              key="$CHANNEL/$CORE_DIR/$platform/$pack_path"
+              key="$PREFIX/$CORE_DIR/$platform/$pack_path"
               actual=$(aws s3 cp "s3://$S3_BUCKET/$key" - "${ENDPOINT_ARGS[@]}" | sha256sum | cut -d ' ' -f1)
               [ "$actual" = "$hash" ] || { echo "::error::pack hash mismatch: $key"; exit 1; }
               range_file=$(mktemp)
@@ -138,6 +148,11 @@ runs:
         done
 
         if [ -n "$SHELL_JSON" ]; then
+          if [ "$CORE_DIR" = core-v4 ]; then
+            [ "$(jq -r '.shellVersion' "$SHELL_JSON")" = "$APP_VERSION" ] || { echo "::error::shell version mismatch"; exit 1; }
+            aws s3 cp "$SHELL_JSON" "s3://$S3_BUCKET/$PREFIX/shell.json" \
+              --content-type application/json --cache-control no-store "${ENDPOINT_ARGS[@]}"
+          fi
           echo "📋 Publishing $CHANNEL/shell.json: $(cat "$SHELL_JSON")"
           aws s3 cp "$SHELL_JSON" "s3://$S3_BUCKET/$CHANNEL/shell.json" \
             --content-type application/json --cache-control no-store "${ENDPOINT_ARGS[@]}"
@@ -145,7 +160,7 @@ runs:
 
         for platform in $PLATFORMS; do
           assert_not_behind "$platform"
-          aws s3 cp "$RELEASE_DIR/$CORE_DIR/$platform/latest.json" "s3://$S3_BUCKET/$CHANNEL/$CORE_DIR/$platform/latest.json" \
+          aws s3 cp "$RELEASE_DIR/$CORE_DIR/$platform/latest.json" "s3://$S3_BUCKET/$PREFIX/$CORE_DIR/$platform/latest.json" \
             --content-type application/json --cache-control no-store "${ENDPOINT_ARGS[@]}"
         done
 

@@ -8,7 +8,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
@@ -23,6 +22,7 @@ const CDP_PORT = 9333;
 const PRODUCT = 'lobehub-core-ota-e2e';
 const CHANNEL = 'stable';
 const APP_VERSION = '1.0.0';
+const RELEASE = path.join(FEED, CHANNEL, APP_VERSION);
 const PLATFORM = 'darwin';
 const APP = path.join(WORK, 'app', 'mac-arm64', `${PRODUCT}.app`, 'Contents', 'MacOS', PRODUCT);
 const USER_DATA = path.join(os.homedir(), 'Library/Application Support', PRODUCT);
@@ -43,16 +43,16 @@ const manifestOf = (tag) =>
 const publish = (tag, { version, seq, previous }) => {
   const { shellAbi } = manifestOf(previous ?? tag);
   const previousArg = previous
-    ? `--previous-manifest=${path.join(FEED, 'core-v4', PLATFORM, 'versions', `${manifestOf(previous).version}.json`)}`
+    ? `--previous-manifest=${path.join(RELEASE, 'core-v4', PLATFORM, 'versions', `${manifestOf(previous).version}.json`)}`
     : '';
   sh(
     `node scripts/buildCore.mjs --protocol=4 --core=${coreDir(tag)} --platform=${PLATFORM} --channel=${CHANNEL} ` +
       `--version=${version} --seq=${seq} --shell-abi=${shellAbi} ` +
-      `--previous-base-url=http://127.0.0.1:${PORT}/${CHANNEL}/core-v4/${PLATFORM} --out=${FEED} ${previousArg}`,
+      `--previous-base-url=http://127.0.0.1:${PORT}/${CHANNEL}/${APP_VERSION}/core-v4/${PLATFORM} --out=${RELEASE} ${previousArg}`,
     { RENDERER_OTA_PRIVATE_KEY: keys().privateKey },
   );
   cpSync(
-    path.join(FEED, 'core-v4', PLATFORM, 'versions', `${version}.json`),
+    path.join(RELEASE, 'core-v4', PLATFORM, 'versions', `${version}.json`),
     path.join(coreDir(tag), 'manifest.json'),
   );
 };
@@ -99,8 +99,6 @@ const steps = {
     cpSync(path.join(DESKTOP_DIR, 'core-dist'), coreDir('v1'), { recursive: true });
     rmSync(FEED, { force: true, recursive: true });
     publish('v1', { seq: manifestOf('v1').seq, version: manifestOf('v1').version });
-    // buildCore writes core-v4/<platform>; the client reads <channel>/core-v4/<platform> (S3 adds the channel prefix).
-    symlinkSync('.', path.join(FEED, CHANNEL));
     console.log(`v1 app: ${APP}`);
   },
 

@@ -208,6 +208,7 @@ jobs:
         id: core_seq
         uses: ./.github/actions/desktop-core-seq
         with:
+          app-version: ${{ needs.check-stable.outputs.version }}
           channel: stable
           update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
 

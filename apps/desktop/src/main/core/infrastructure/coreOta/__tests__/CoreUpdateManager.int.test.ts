@@ -409,6 +409,25 @@ describe('CoreUpdateManager initialize', () => {
 });
 
 describe('CoreUpdateManager checkForUpdates', () => {
+  it.each(['1.0.0', '2.0.0-canary.1'])(
+    'isolates v4 feed by shell version %s even when an OTA core is running',
+    async (shellVersion) => {
+      const manifest = mainChanged('1.0.0-core.17', 17);
+      // A shared or another application's feed must never be used as a fallback.
+      served.set(`${SERVER}/stable/core-v4/${PLATFORM}/latest.json`, Buffer.from('{}'));
+      const { manager } = await loadManager(
+        makeApp(),
+        makeShell({ coreProtocol: 4, manifest, shellVersion, source: 'external' }),
+      );
+      await manager.checkForUpdates();
+      expect(fetchImpl).toHaveBeenCalledExactlyOnceWith(
+        `${SERVER}/stable/${shellVersion}/core-v4/${PLATFORM}/latest.json`,
+        { cache: 'no-store' },
+      );
+      expect(manager.getStatus().lastError).toBeNull();
+    },
+  );
+
   it('is up-to-date when remote seq does not increase', async () => {
     serveLatest(rendererOnly('1.0.1', 0));
     const { app, manager } = await loadManager();

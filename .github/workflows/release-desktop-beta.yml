@@ -115,6 +115,7 @@ jobs:
         id: core_seq
         uses: ./.github/actions/desktop-core-seq
         with:
+          app-version: ${{ needs.check-beta.outputs.version }}
           channel: beta
           update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
 

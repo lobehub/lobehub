@@ -284,6 +284,7 @@ jobs:
         id: core_seq
         uses: ./.github/actions/desktop-core-seq
         with:
+          app-version: ${{ needs.calculate-version.outputs.version }}
           channel: canary
           update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
 
