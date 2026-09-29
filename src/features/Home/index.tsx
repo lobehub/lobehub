@@ -137,13 +137,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   // Collapsed, the content takes part of the vacated rail track and re-centers
   // on what is left, so the page reads wider without going full-bleed.
+  // An enabled rail can render no cards; reclaim its space without changing preferences.
   contentCollapsed: css`
     @media (width > 1100px) {
-      transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
-      width: calc(100% + ${COLLAPSED_CONTENT_GAIN}px);
+      &[data-rail-collapsed='true'],
+      div:has(> #home-rail:empty) > & {
+        transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
+        width: calc(100% + ${COLLAPSED_CONTENT_GAIN}px);
 
-      &:dir(rtl) {
-        transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        &:dir(rtl) {
+          transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        }
       }
     }
   `,
@@ -169,10 +173,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   heroCollapsed: css`
     @media (width > 1100px) {
-      transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
+      &[data-rail-collapsed='true'],
+      div:has(> #home-rail:empty) > & {
+        transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
 
-      &:dir(rtl) {
-        transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        &:dir(rtl) {
+          transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        }
       }
     }
   `,
@@ -210,7 +217,8 @@ const styles = createStaticStyles(({ css }) => ({
         transform: translateX(-${COLLAPSED_CONTENT_OFFSET * 2}px);
       }
 
-      &[data-collapsed='true'] {
+      &[data-collapsed='true'],
+      div:has(> #home-rail:empty) > div > & {
         transform: none;
       }
     }
@@ -392,11 +400,8 @@ const Home = memo(() => {
   return (
     <Flexbox className={styles.grid}>
       <div
-        className={cx(
-          styles.hero,
-          portraitVisible && styles.heroWithSpeech,
-          railCollapsed && styles.heroCollapsed,
-        )}
+        className={cx(styles.hero, portraitVisible && styles.heroWithSpeech, styles.heroCollapsed)}
+        data-rail-collapsed={railCollapsed}
       >
         <div className={styles.header}>
           <HomeHeader />
@@ -415,7 +420,8 @@ const Home = memo(() => {
       </div>
 
       <Flexbox
-        className={cx(styles.main, styles.content, railCollapsed && styles.contentCollapsed)}
+        className={cx(styles.main, styles.content, styles.contentCollapsed)}
+        data-rail-collapsed={railCollapsed}
         data-testid={'home-main'}
         gap={24}
       >
