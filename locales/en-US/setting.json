@@ -1776,7 +1776,7 @@
   "trash.purgeConfirm.content": "Permanently delete \"{{title}}\"? This cannot be undone.",
   "trash.purgeConfirm.title": "Delete forever",
   "trash.restore.failed.notFound": "This item no longer exists.",
-  "trash.restore.failed.parentTrashed": "Restore the container it belongs to first — that item is also in the trash.",
+  "trash.restore.failed.parentTrashed": "Its agent, topic or previous message is still in the trash. Restore that first.",
   "trash.restore.success": "Restored",
   "trash.title": "Trash",
   "trash.type.agent": "Agent",
