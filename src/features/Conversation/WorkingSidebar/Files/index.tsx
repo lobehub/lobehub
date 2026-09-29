@@ -208,7 +208,6 @@ const Files = memo<FilesProps>(
     // sandbox both answer over the network, and neither can be handed to Electron
     // to reveal in a file manager.
     const isSandbox = !!sandboxTopicId || !!sandboxInstanceId;
-    const isRemote = !!deviceId || isSandbox;
     const { data, error, isLoading } = useProjectFiles(deviceId, workingDirectory, {
       instanceId: sandboxInstanceId,
       topicId: sandboxTopicId,
