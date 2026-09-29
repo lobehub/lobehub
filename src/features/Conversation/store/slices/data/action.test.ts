@@ -820,9 +820,98 @@ describe('DataSlice', () => {
 
   describe('useFetchMessages', () => {
     beforeEach(() => {
+      vi.restoreAllMocks();
       vi.clearAllMocks();
       clearMessageListClientCacheState();
       useChatStore.setState({ voiceMessageUploadMap: {} });
+    });
+
+    it.each(['approved', 'rejected', 'aborted'] as const)(
+      'observes a remote %s while preserving locally streaming content',
+      async (status) => {
+        vi.spyOn(operationSelectors, 'isAgentRuntimeRunningByContext').mockReturnValue(() => true);
+        const context = { agentId: 'test-session', threadId: null, topicId: 'test-topic' };
+        const pending: UIChatMessage = {
+          content: '',
+          createdAt: 1,
+          id: 'question',
+          role: 'tool',
+          tool_call_id: 'call-1',
+          updatedAt: 10,
+          pluginIntervention: { status: 'pending' },
+        };
+        const streaming: UIChatMessage = {
+          content: 'Streaming content that has not been persisted yet',
+          createdAt: 2,
+          id: 'assistant',
+          role: 'assistant',
+          updatedAt: 10,
+        };
+        const answered: UIChatMessage = {
+          ...pending,
+          content: 'Remote answer',
+          updatedAt: 1,
+          pluginIntervention: { status },
+        };
+        const store = createStore({ context });
+        const onMessagesChange = vi.fn();
+        store.setState({ dbMessages: [pending, streaming], messagesInit: true, onMessagesChange });
+        vi.mocked(messageService.getMessages).mockResolvedValue([
+          answered,
+          { ...streaming, content: '...' },
+        ]);
+
+        store.getState().useFetchMessages(context, { refreshInterval: 2000 });
+
+        await waitFor(() => expect(store.getState().dbMessages[0]).toEqual(answered));
+        expect(store.getState().dbMessages[1]).toBe(streaming);
+        expect(onMessagesChange).toHaveBeenCalledWith([answered, streaming], context, {
+          source: 'fetch',
+        });
+        expect(useClientDataSWRWithSync).toHaveBeenCalledWith(
+          expect.any(Array),
+          expect.any(Function),
+          expect.objectContaining({
+            dedupingInterval: 1000,
+            refreshInterval: 2000,
+            refreshWhenHidden: false,
+            refreshWhenOffline: false,
+          }),
+        );
+      },
+    );
+
+    it('settles a remote answer and permits an authoritative rollback at the same timestamp', async () => {
+      const context = { agentId: 'test-session', threadId: null, topicId: 'test-topic' };
+      const pending: UIChatMessage = {
+        content: '',
+        createdAt: 1,
+        id: 'question',
+        role: 'tool',
+        tool_call_id: 'call-1',
+        updatedAt: 10,
+        pluginIntervention: { status: 'pending' },
+      };
+      const answered: UIChatMessage = {
+        ...pending,
+        content: 'Remote answer',
+        updatedAt: 1,
+        pluginIntervention: { status: 'approved' },
+      };
+      const store = createStore({ context });
+      store.setState({ dbMessages: [pending] });
+      vi.mocked(messageService.getMessages).mockResolvedValue([answered]);
+      store.getState().useFetchMessages(context);
+      await waitFor(() => expect(store.getState().dbMessages).toEqual([answered]));
+
+      clearMessageListClientCacheState();
+      const rollback = { ...pending, updatedAt: 1 };
+      vi.mocked(messageService.getMessages).mockResolvedValue([rollback]);
+      store.getState().useFetchMessages(context);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(store.getState().dbMessages).toEqual([rollback]);
     });
 
     it('should pass threadId to messageService.getMessages', async () => {
