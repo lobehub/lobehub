@@ -221,23 +221,48 @@ export const withoutBuildVehicles = (sessions: SandboxSessionRecord[]): SandboxS
 };
 
 /**
- * Whether a run is still going, judged against the lease rather than the trail.
+ * Which runs are still going, judged against the lease and the execution
+ * plane's own one-session-per-instance rule rather than against the trail.
  *
  * "No end recorded" was the whole test, and it is not evidence of anything: a
  * sandbox that goes away without a teardown leaves its record open forever, so
  * the panel showed sessions running for half a day while the composer's own
- * menu offered their instance as free. The lease is what the composer reads,
- * and it is the one signal that expires on its own.
+ * menu offered their instance as free.
+ *
+ * Two things settle it, and one alone is not enough. The lease says whether
+ * anything holds the instance at all — it is what the composer reads and the
+ * one signal that expires by itself. But a lease is held by an INSTANCE, not
+ * by a session, so gating on it alone resurrected every abandoned record the
+ * moment one live run touched the same instance: three sessions on one
+ * instance all read "running", two of them showing 55 and 61 hours. The
+ * execution plane runs one session per instance at a time, so of the records
+ * left open on one instance only the newest can be the live one; the rest were
+ * replaced and never written down.
  *
  * `unknown` is not `false`. A lease store that did not answer says nothing,
  * and treating silence as "idle" would retire every live session on the page
- * the moment Redis hiccuped.
+ * the moment Redis hiccuped — so the lease gate is skipped, while the
+ * one-per-instance rule still applies.
  */
-export const isSessionRunning = (
-  session: SandboxSessionRecord,
+export const runningSessionIds = (
+  sessions: readonly SandboxSessionRecord[],
   occupancy: { held: Set<string>; unknown: boolean },
-): boolean =>
-  !session.endedAt && (occupancy.unknown || occupancy.held.has(session.environment ?? ''));
+): Set<number> => {
+  const newestOpen = new Map<string, SandboxSessionRecord>();
+
+  for (const session of sessions) {
+    if (session.endedAt) continue;
+    const instance = session.environment ?? '';
+    if (!occupancy.unknown && !occupancy.held.has(instance)) continue;
+
+    const held = newestOpen.get(instance);
+    if (!held || Date.parse(session.startedAt) > Date.parse(held.startedAt)) {
+      newestOpen.set(instance, session);
+    }
+  }
+
+  return new Set([...newestOpen.values()].map((session) => session.id));
+};
 
 const SessionHistorySection = memo<{ environmentId: string }>(({ environmentId }) => {
   const { t } = useTranslation('setting');
@@ -261,11 +286,10 @@ const SessionHistorySection = memo<{ environmentId: string }>(({ environmentId }
     // otherwise quietly retire every running session on the page.
     unknown: instanceData?.occupancyUnavailable ?? true,
   };
-  const isRunning = (session: SandboxSessionRecord) => isSessionRunning(session, occupancy);
-
   const sessions = withoutBuildVehicles(data?.sessions ?? []);
-  const active = sessions.filter(isRunning);
-  const history = sessions.filter((session) => !isRunning(session));
+  const running = runningSessionIds(sessions, occupancy);
+  const active = sessions.filter((session) => running.has(session.id));
+  const history = sessions.filter((session) => !running.has(session.id));
 
   return (
     <Flexbox gap={16}>

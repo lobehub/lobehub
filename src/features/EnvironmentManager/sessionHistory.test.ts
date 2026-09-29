@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isSessionRunning, withoutBuildVehicles } from './SessionHistorySection';
+import { runningSessionIds, withoutBuildVehicles } from './SessionHistorySection';
 
 const session = (overrides: Partial<any>): any => ({
   buildId: null,
@@ -73,32 +73,73 @@ describe('withoutBuildVehicles', () => {
   });
 });
 
-describe('isSessionRunning', () => {
+describe('runningSessionIds', () => {
   const free = { held: new Set<string>(), unknown: false };
-  const holding = (id: string) => ({ held: new Set([id]), unknown: false });
+  const holding = (...ids: string[]) => ({ held: new Set(ids), unknown: false });
+  const running = (rows: any[], occupancy: any) => [...runningSessionIds(rows, occupancy)];
 
   it('is running while its instance is actually held', () => {
-    expect(isSessionRunning(session({}), holding('inst-a'))).toBe(true);
+    expect(running([session({})], holding('inst-a'))).toEqual([1]);
   });
 
   // The bug this exists for: a sandbox that went away without a teardown never
   // gets an `endedAt`, so the row said "running" for twelve hours while the
   // composer's own menu offered the same instance as free.
   it('is not running once the lease on its instance has gone', () => {
-    expect(isSessionRunning(session({}), free)).toBe(false);
+    expect(running([session({})], free)).toEqual([]);
   });
 
   // "Not known" is not "free". A reader that collapses the two would retire
   // every live session on the page the moment the lease store hiccuped.
   it('stays running when the lease store did not answer', () => {
-    expect(isSessionRunning(session({}), { held: new Set(), unknown: true })).toBe(true);
+    expect(running([session({})], { held: new Set<string>(), unknown: true })).toEqual([1]);
   });
 
   it('is never running once an end was recorded, whoever holds the instance', () => {
     const ended = session({ endReason: 'idle', endedAt: '2026-09-24T03:00:00.000Z' });
 
-    expect(isSessionRunning(ended, holding('inst-a'))).toBe(false);
-    expect(isSessionRunning(ended, { held: new Set(['inst-a']), unknown: true })).toBe(false);
+    expect(running([ended], holding('inst-a'))).toEqual([]);
+    expect(running([ended], { held: new Set(['inst-a']), unknown: true })).toEqual([]);
+  });
+
+  // The second bug: the lease belongs to the INSTANCE, so one live run made
+  // every abandoned record on the same instance read "running" again — three
+  // rows at once, two of them 55 and 61 hours old. The execution plane runs one
+  // session per instance, so only the newest of them can be the live one.
+  it('marks only the newest open run on a held instance', () => {
+    const rows = [
+      session({ id: 1, startedAt: '2026-09-22T01:00:00.000Z' }),
+      session({ id: 2, startedAt: '2026-09-24T09:00:00.000Z' }),
+      session({ id: 3, startedAt: '2026-09-23T05:00:00.000Z' }),
+    ];
+
+    expect(running(rows, holding('inst-a'))).toEqual([2]);
+  });
+
+  it('picks the newest per instance, not one winner for the whole page', () => {
+    const rows = [
+      session({ environment: 'inst-a', id: 1, startedAt: '2026-09-22T01:00:00.000Z' }),
+      session({ environment: 'inst-a', id: 2, startedAt: '2026-09-24T09:00:00.000Z' }),
+      session({ environment: 'inst-b', id: 3, startedAt: '2026-09-23T05:00:00.000Z' }),
+    ];
+
+    expect(running(rows, holding('inst-a', 'inst-b')).sort()).toEqual([2, 3]);
+  });
+
+  // An ended run is not a candidate at all, so it cannot shadow the open one
+  // behind it just by being more recent.
+  it('ignores ended runs when picking the newest', () => {
+    const rows = [
+      session({ id: 1, startedAt: '2026-09-22T01:00:00.000Z' }),
+      session({
+        endReason: 'idle',
+        endedAt: '2026-09-24T10:00:00.000Z',
+        id: 2,
+        startedAt: '2026-09-24T09:00:00.000Z',
+      }),
+    ];
+
+    expect(running(rows, holding('inst-a'))).toEqual([1]);
   });
 
   // A build's own record is a run like any other, and it is held by the
@@ -106,11 +147,11 @@ describe('isSessionRunning', () => {
   it('judges a build the same way', () => {
     const build = session({ buildId: 'build-1', kind: 'build', management: true });
 
-    expect(isSessionRunning(build, holding('inst-a'))).toBe(true);
-    expect(isSessionRunning(build, free)).toBe(false);
+    expect(running([build], holding('inst-a'))).toEqual([1]);
+    expect(running([build], free)).toEqual([]);
   });
 
   it('does not match an instance it has no id for', () => {
-    expect(isSessionRunning(session({ environment: null }), holding('inst-a'))).toBe(false);
+    expect(running([session({ environment: null })], holding('inst-a'))).toEqual([]);
   });
 });

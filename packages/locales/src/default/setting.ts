@@ -4011,8 +4011,6 @@ When I am ___, I need ___
   // has a decision to make here, and a paragraph over a solved field reads as
   // a warning that something is about to go wrong.
   'environments.instances.directoryHint': 'Folder path. Cannot be changed once created.',
-  'environments.instances.notSavedYet': 'Not saved yet',
-  'environments.instances.nothingToSave': 'Nothing to save',
   'environments.sessions.stale': 'No end recorded',
   'environments.instances.remove': 'Delete instance',
   'environments.instances.rename': 'Rename instance',
@@ -4023,8 +4021,6 @@ When I am ___, I need ___
   'environments.instances.overlappingDirectory':
     "This folder is inside another instance's folder, or contains one",
   'environments.instances.createFailed': 'Could not create the instance',
-  'environments.instances.snapshotsUnavailable':
-    "Sizes unavailable — this instance's storage could not be reached",
   'environments.form.maintenance': 'Maintenance command',
   'environments.form.maintenanceHint':
     'Runs each time work resumes in an instance — refreshing a checkout, reapplying a migration. Not the setup command again: that one is expensive and is meant to run once.',
@@ -4106,6 +4102,9 @@ When I am ___, I need ___
   'environments.instances.buildStartFailed': 'Could not start the build',
   // Context-free on purpose: the same code refuses a rebuild and a delete, so
   // a sentence that only mentions rebuilding was wrong half the time.
+  'environments.instances.running': 'Running',
+  'environments.instances.occupancyUnavailable':
+    'Could not read which instances are running right now',
   'environments.instances.inUse':
     'A conversation is using this instance — try again once that run ends',
   'environments.instances.notBuilt': 'Not built yet — nothing has been cloned or installed',

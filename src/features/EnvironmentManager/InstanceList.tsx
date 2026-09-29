@@ -2,7 +2,7 @@
 
 import { Github } from '@lobehub/icons';
 import { Center, Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, confirmModal, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CircleAlertIcon,
@@ -17,8 +17,6 @@ import {
 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { formatSize } from '@/utils/format';
 
 import { openCreateInstanceModal, openEditInstanceModal } from './CreateInstanceModal';
 import { describeError } from './errorMessage';
@@ -84,14 +82,12 @@ interface InstanceListProps {
   editable: boolean;
   environmentId: string;
   instances: SandboxInstance[];
+  /** Nobody's occupancy could be read, so no row can claim to be free. */
+  occupancyUnavailable: boolean;
   onBuild: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
   /** `owner/name` of the environment's checkout, when it builds from one. */
   repository?: string;
-  /** Sizes are still on their way from the execution plane. */
-  snapshotsPending: boolean;
-  /** Sizes are missing rather than zero when the sandbox could not be reached. */
-  snapshotsUnavailable: boolean;
 }
 
 interface InstanceRowProps {
@@ -100,8 +96,6 @@ interface InstanceRowProps {
   onBuild: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
   repository?: string;
-  snapshotsPending: boolean;
-  snapshotsUnavailable: boolean;
 }
 
 /**
@@ -176,15 +170,7 @@ BuildLine.displayName = 'InstanceBuildLine';
  * so the one thing worth explaining was the one thing an inline editor hid.
  */
 const InstanceRow = memo<InstanceRowProps>(
-  ({
-    editable,
-    instance,
-    onBuild,
-    onRemove,
-    repository,
-    snapshotsPending,
-    snapshotsUnavailable,
-  }) => {
+  ({ editable, instance, onBuild, onRemove, repository }) => {
     const { t } = useTranslation('setting');
 
     // Worth following only while something is in flight. A settled instance
@@ -269,38 +255,27 @@ const InstanceRow = memo<InstanceRowProps>(
               {instance.workingDirectory}
             </Text>
           </Flexbox>
-          {/* How big the saved state is, and nothing else. It used to read
-        "not used yet" when there was no snapshot, which is a claim about the
-        instance rather than about its archive — and a false one: an
-        environment that installs nothing never produces an archive, so its
-        instances said "not used yet" after weeks of daily use.
+          {/* Whether a conversation is in this instance right now — the one
+        thing about a row that changes while someone is looking at it, and what
+        decides whether deleting or rebuilding it will be refused.
 
-        Four states. Still on its way from the execution plane is a wait, so it
-        looks like one — a dash there reads as a settled answer and this one
-        has not arrived. The dash is asked-for-and-not-obtained, which the line
-        under the list explains and this repeats on hover. The other two are
-        both "no archive", told apart by whether one is ever coming: a
-        definition that clones and installs nothing has nothing to keep, and
-        offering "not saved yet" there would promise a number that never
-        arrives. */}
-          {snapshotsPending ? (
-            <Skeleton.Text rows={1} style={{ height: 14, width: 44 }} />
-          ) : (
-            <Tooltip
-              title={
-                snapshotsUnavailable ? t('environments.instances.snapshotsUnavailable') : undefined
-              }
-            >
-              <Text fontSize={12} type={'secondary'}>
-                {snapshotsUnavailable
-                  ? '—'
-                  : instance.snapshot
-                    ? formatSize(instance.snapshot.bytes)
-                    : instance.buildable
-                      ? t('environments.instances.notSavedYet')
-                      : t('environments.instances.nothingToSave')}
-              </Text>
-            </Tooltip>
+        This slot used to carry the environment snapshot's size, which is a
+        property of the archive and not of the instance: an environment that
+        installs nothing never produces one, so the column sat at "nothing to
+        save" no matter how much work the instance held. The size that would
+        actually answer "how much is this using" — the instance's own directory
+        on the volume — is not measured per instance at all; the environment
+        row's total is where storage is reported.
+
+        Shown only while held, the way the composer's own menu badges it.
+        Labelling every idle row "idle" would put a word on each line to say
+        that nothing is happening. A lease store that did not answer says
+        nothing here either: the line under the list reports that, rather than
+        each row quietly implying it is free. */}
+          {instance.inUse && (
+            <Tag color={'processing'} size={'small'}>
+              {t('environments.instances.running')}
+            </Tag>
           )}
           {/* Reading what an instance kept is not an edit, so it stays
         available in an environment someone else published — that is
@@ -435,16 +410,7 @@ InstanceRow.displayName = 'InstanceRow';
  * have them overwrite each other's work.
  */
 const InstanceList = memo<InstanceListProps>(
-  ({
-    editable,
-    environmentId,
-    instances,
-    onBuild,
-    onRemove,
-    repository,
-    snapshotsPending,
-    snapshotsUnavailable,
-  }) => {
+  ({ editable, environmentId, instances, occupancyUnavailable, onBuild, onRemove, repository }) => {
     const { t } = useTranslation('setting');
 
     const add = () => openCreateInstanceModal({ environmentId });
@@ -487,8 +453,6 @@ const InstanceList = memo<InstanceListProps>(
                 instance={instance}
                 key={instance.id}
                 repository={repository}
-                snapshotsPending={snapshotsPending}
-                snapshotsUnavailable={snapshotsUnavailable}
                 onBuild={onBuild}
                 onRemove={onRemove}
               />
@@ -496,9 +460,12 @@ const InstanceList = memo<InstanceListProps>(
           </Flexbox>
         )}
 
-        {snapshotsUnavailable && instances.length > 0 && (
+        {/* Said once under the set rather than on each row: with occupancy
+            unread every row would otherwise look idle, which is the one
+            reading this must not offer. */}
+        {occupancyUnavailable && instances.length > 0 && (
           <Text fontSize={12} type={'secondary'}>
-            {t('environments.instances.snapshotsUnavailable')}
+            {t('environments.instances.occupancyUnavailable')}
           </Text>
         )}
 

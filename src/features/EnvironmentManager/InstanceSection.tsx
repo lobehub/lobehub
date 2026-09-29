@@ -44,9 +44,8 @@ const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId })
         editable={editable}
         environmentId={environmentId}
         instances={instances}
+        occupancyUnavailable={data?.occupancyUnavailable ?? false}
         repository={repository}
-        snapshotsPending={data?.snapshotsPending ?? false}
-        snapshotsUnavailable={data?.snapshotsUnavailable ?? false}
         onBuild={actions.rebuildInstance}
         onRemove={actions.removeInstance}
       />
