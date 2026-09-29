@@ -10,6 +10,7 @@ import {
   runMessageListQuery,
 } from '@/services/message/cache';
 import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/selectors';
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 
 import { createStore } from '../../index';
@@ -30,13 +31,18 @@ vi.mock('@lobechat/conversation-flow', () => ({
 }));
 
 // Mock messageService
-vi.mock('@/services/message', () => ({
-  messageService: {
-    getEarlierMessages: vi.fn(),
-    getMessages: vi.fn(),
-    updateMessageMetadata: vi.fn().mockResolvedValue({ success: true, messages: [] }),
-  },
-}));
+vi.mock('@/services/message', () => {
+  const getMessages = vi.fn();
+  return {
+    messageService: {
+      getEarlierMessages: vi.fn(),
+      // The list cache reads pages; tests stub the plain list underneath.
+      getMessageListPage: vi.fn((params) => getMessages(params)),
+      getMessages,
+      updateMessageMetadata: vi.fn().mockResolvedValue({ success: true, messages: [] }),
+    },
+  };
+});
 
 // Mock SWR
 vi.mock('@/libs/swr', () => ({
@@ -265,16 +271,20 @@ describe('DataSlice', () => {
 
     it('prepends the fetched round page below the live window rows', async () => {
       const store = createStore({
-        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-1', threadId: null },
+        context: {
+          agentId: 'agent-earlier',
+          topicId: 'topic-earlier-1',
+          threadId: 'thread-earlier',
+        },
       });
       store.getState().replaceMessages(windowMessages);
-      vi.mocked(messageService.getEarlierMessages).mockResolvedValueOnce(earlierPage);
+      vi.mocked(messageService.getEarlierMessages).mockResolvedValueOnce({ messages: earlierPage });
 
       await store.getState().loadEarlierMessages();
 
       expect(messageService.getEarlierMessages).toHaveBeenCalledWith(
         expect.objectContaining({ agentId: 'agent-earlier', topicId: 'topic-earlier-1' }),
-        { createdAt: new Date(1000), id: 'u2' },
+        { createdAt: new Date(1000).toISOString(), id: 'u2' },
       );
       expect(store.getState().dbMessages.map((m) => m.id)).toEqual(['u1', 'a1', 'u2', 'a2']);
       expect(store.getState().isLoadingEarlierMessages).toBe(false);
@@ -282,10 +292,14 @@ describe('DataSlice', () => {
 
     it('stops fetching once a page comes back empty (beginning reached)', async () => {
       const store = createStore({
-        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-2', threadId: null },
+        context: {
+          agentId: 'agent-earlier',
+          topicId: 'topic-earlier-2',
+          threadId: 'thread-earlier',
+        },
       });
       store.getState().replaceMessages(windowMessages);
-      vi.mocked(messageService.getEarlierMessages).mockResolvedValue([]);
+      vi.mocked(messageService.getEarlierMessages).mockResolvedValue({ messages: [] });
 
       await store.getState().loadEarlierMessages();
       await store.getState().loadEarlierMessages();
@@ -296,16 +310,24 @@ describe('DataSlice', () => {
 
     it('drops a page that resolves after the store switched conversations', async () => {
       const store = createStore({
-        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-3', threadId: null },
+        context: {
+          agentId: 'agent-earlier',
+          topicId: 'topic-earlier-3',
+          threadId: 'thread-earlier',
+        },
       });
       store.getState().replaceMessages(windowMessages);
       vi.mocked(messageService.getEarlierMessages).mockImplementationOnce(async () => {
         // Mimic the real switch path (StoreUpdater): ephemeral reset + context.
         store.setState({
           ...createEphemeralResetState(),
-          context: { agentId: 'agent-earlier', topicId: 'topic-earlier-other', threadId: null },
+          context: {
+            agentId: 'agent-earlier',
+            topicId: 'topic-earlier-other',
+            threadId: 'thread-earlier',
+          },
         } as any);
-        return earlierPage;
+        return { messages: earlierPage };
       });
 
       await store.getState().loadEarlierMessages();
@@ -316,13 +338,17 @@ describe('DataSlice', () => {
 
     it('surfaces a failed page fetch as state and only retries on explicit request', async () => {
       const store = createStore({
-        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-4', threadId: null },
+        context: {
+          agentId: 'agent-earlier',
+          topicId: 'topic-earlier-4',
+          threadId: 'thread-earlier',
+        },
       });
       store.getState().replaceMessages(windowMessages);
       const failure = new Error('network down');
       vi.mocked(messageService.getEarlierMessages)
         .mockRejectedValueOnce(failure)
-        .mockResolvedValueOnce(earlierPage);
+        .mockResolvedValueOnce({ messages: earlierPage });
 
       await expect(store.getState().loadEarlierMessages()).resolves.toBeUndefined();
       expect(store.getState().isLoadingEarlierMessages).toBe(false);
@@ -341,7 +367,11 @@ describe('DataSlice', () => {
 
     it('clears the failure on conversation switch', async () => {
       const store = createStore({
-        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-6', threadId: null },
+        context: {
+          agentId: 'agent-earlier',
+          topicId: 'topic-earlier-6',
+          threadId: 'thread-earlier',
+        },
       });
       store.getState().replaceMessages(windowMessages);
       vi.mocked(messageService.getEarlierMessages).mockRejectedValueOnce(new Error('boom'));
@@ -351,14 +381,22 @@ describe('DataSlice', () => {
 
       store.setState({
         ...createEphemeralResetState(),
-        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-7', threadId: null },
+        context: {
+          agentId: 'agent-earlier',
+          topicId: 'topic-earlier-7',
+          threadId: 'thread-earlier',
+        },
       } as any);
       expect(store.getState().earlierMessagesError).toBeUndefined();
     });
 
     it('merges the page into messages that changed while it was in flight', async () => {
       const store = createStore({
-        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-8', threadId: null },
+        context: {
+          agentId: 'agent-earlier',
+          topicId: 'topic-earlier-8',
+          threadId: 'thread-earlier',
+        },
       });
       store.getState().replaceMessages(windowMessages);
       const streamed = {
@@ -378,7 +416,7 @@ describe('DataSlice', () => {
       vi.mocked(messageService.getEarlierMessages).mockImplementationOnce(async () => {
         // Same conversation keeps updating: an edit/stream and a new message.
         store.getState().replaceMessages([windowMessages[0], streamed, appended]);
-        return earlierPage;
+        return { messages: earlierPage };
       });
 
       await store.getState().loadEarlierMessages();
@@ -390,17 +428,25 @@ describe('DataSlice', () => {
 
     it('does not clear the loading flag of the next conversation on late settle', async () => {
       const store = createStore({
-        context: { agentId: 'agent-earlier', topicId: 'topic-earlier-5', threadId: null },
+        context: {
+          agentId: 'agent-earlier',
+          topicId: 'topic-earlier-5',
+          threadId: 'thread-earlier',
+        },
       });
       store.getState().replaceMessages(windowMessages);
       vi.mocked(messageService.getEarlierMessages).mockImplementationOnce(async () => {
         store.setState({
           ...createEphemeralResetState(),
-          context: { agentId: 'agent-earlier', topicId: 'topic-earlier-next', threadId: null },
+          context: {
+            agentId: 'agent-earlier',
+            topicId: 'topic-earlier-next',
+            threadId: 'thread-earlier',
+          },
         } as any);
         // The next conversation starts its own page load while ours is in flight.
         store.setState({ isLoadingEarlierMessages: true });
-        return earlierPage;
+        return { messages: earlierPage };
       });
 
       await store.getState().loadEarlierMessages();
@@ -832,6 +878,97 @@ describe('DataSlice', () => {
 
       await waitFor(() => {
         expect(onMessagesChange).toHaveBeenCalledWith(mockMessages, context, { source: 'fetch' });
+      });
+    });
+
+    describe('while an agent run is in flight in this conversation', () => {
+      const context = { agentId: 'test-session', threadId: null, topicId: 'test-topic' };
+      const fetched: UIChatMessage[] = [
+        {
+          content: 'Run the script',
+          createdAt: 1000,
+          id: 'msg-user',
+          role: 'user',
+          updatedAt: 1000,
+        },
+      ];
+
+      it('still lands the first load, so a parked run does not leave a skeleton (G-05)', async () => {
+        // A group supervisor parked on a member's approval stays `running`
+        // indefinitely; dropping the first load there never initializes the list.
+        const running = vi
+          .spyOn(operationSelectors, 'isAgentRuntimeRunningByContext')
+          .mockReturnValue(() => true);
+        vi.mocked(messageService.getMessages).mockResolvedValue(fetched);
+        const store = createStore({ context });
+        store.setState({ messagesInit: false });
+
+        store.getState().useFetchMessages(context);
+
+        await waitFor(() => {
+          expect(store.getState().messagesInit).toBe(true);
+        });
+        expect(store.getState().dbMessages.map((m) => m.id)).toEqual(['msg-user']);
+        running.mockRestore();
+      });
+
+      it('keeps loaded rows but lands rows the list has never seen (G-05)', async () => {
+        // A stale cached first load can miss the parked member's rows; the fresh
+        // read that follows must still bring them in, without touching the
+        // rows the stream owns.
+        const running = vi
+          .spyOn(operationSelectors, 'isAgentRuntimeRunningByContext')
+          .mockReturnValue(() => true);
+        const streamed = {
+          content: 'streamed so far',
+          createdAt: 2000,
+          id: 'msg-supervisor',
+          role: 'assistant',
+          updatedAt: 2000,
+        } as UIChatMessage;
+        const memberTool = {
+          content: '',
+          createdAt: 3000,
+          id: 'msg-member-tool',
+          role: 'tool',
+          updatedAt: 3000,
+        } as UIChatMessage;
+        vi.mocked(messageService.getMessages).mockResolvedValue([
+          ...fetched,
+          { ...streamed, content: '' },
+          memberTool,
+        ]);
+        const store = createStore({ context });
+        store.setState({ dbMessages: [...fetched, streamed], messagesInit: true });
+
+        store.getState().useFetchMessages(context);
+
+        await waitFor(() => {
+          expect(store.getState().dbMessages.map((m) => m.id)).toContain('msg-member-tool');
+        });
+        expect(store.getState().dbMessages.find((m) => m.id === 'msg-supervisor')?.content).toBe(
+          'streamed so far',
+        );
+        running.mockRestore();
+      });
+
+      it('drops a refetch that brings nothing new', async () => {
+        const running = vi
+          .spyOn(operationSelectors, 'isAgentRuntimeRunningByContext')
+          .mockReturnValue(() => true);
+        vi.mocked(messageService.getMessages).mockResolvedValue(fetched);
+        const store = createStore({ context });
+        const loaded = [{ ...fetched[0], content: 'local' }];
+        store.setState({ dbMessages: loaded, messagesInit: true });
+
+        store.getState().useFetchMessages(context);
+
+        await waitFor(() => {
+          expect(messageService.getMessages).toHaveBeenCalled();
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(store.getState().dbMessages).toBe(loaded);
+        running.mockRestore();
       });
     });
 

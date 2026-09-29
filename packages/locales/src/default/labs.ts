@@ -31,6 +31,9 @@ export default {
     'Give a port on the working device a link, so a dev server running there can be opened from here. The link only works for people who can reach that device.',
   'features.deviceTunnel.title': 'Remote Port Links',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
+  'features.goals.desc':
+    'Hand the agent a goal: it breaks the goal into tasks, tracks progress, and delivers the result for you to review.',
+  'features.goals.title': 'Goals',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',
@@ -45,6 +48,9 @@ export default {
     'Show the Integrations settings page: connect the GitHub App so merged pull requests accept deliveries and failing checks or reviews reach the agent that opened them. Hidden by default.',
   'features.integrations.title': 'Integrations',
   'features.inputMarkdown.title': 'Input Markdown Rendering',
+  'features.memoryRules.desc':
+    'Adds "My rules" under Memory: the delivery rules distilled from the acceptance rounds you sent back, with ordering, grouping and block / remind controls.',
+  'features.memoryRules.title': 'My rules',
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
@@ -60,9 +66,6 @@ export default {
   'features.selfLearning.desc':
     'Show what each agent has learned from real practice — its rule base, which rules actually get used, and which layers are still blank.',
   'features.selfLearning.title': 'Self-evolving',
-  'features.topicAcceptance.desc':
-    'Author a delivery checklist for the current topic right above the composer, so the conversation is held to standards you can edit any time.',
-  'features.topicAcceptance.title': 'Topic Acceptance',
   'group.desktop': 'Desktop',
   'group.general': 'General',
   'stage.alpha.desc':

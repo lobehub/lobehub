@@ -43,7 +43,7 @@ describe('chainGoalDecompose', () => {
     const { messages } = chainGoalDecompose({ requirement });
     const prompt = messages[0].content;
 
-    expect(GOAL_DECOMPOSE_PROMPT_VERSION).toBe('v5');
+    expect(GOAL_DECOMPOSE_PROMPT_VERSION).toBe('v6');
     expect(messages[1].content).toContain(requirement);
     expect(prompt).toContain('a request to build, fix, or upgrade requires implementation');
     expect(prompt).toContain('It may pass when it proves a capability is missing');
@@ -53,5 +53,20 @@ describe('chainGoalDecompose', () => {
     expect(prompt).toContain('include dependent implementation tasks that consume its findings');
     expect(prompt).toContain('discovering a read-only viewer triggers implementation');
     expect(prompt).toContain('an investigation-only goal must not become an implementation task');
+  });
+
+  it('reports what it cannot determine and plans on answered clarifications', () => {
+    const plain = chainGoalDecompose({ requirement: '写一份发布说明' });
+    expect(plain.messages[0].content).toContain(
+      'every blocking question goes into that single round',
+    );
+    expect(plain.messages[1].content).not.toContain('Answered clarifications');
+
+    const { messages } = chainGoalDecompose({
+      clarifications: [{ answer: '开发者', question: '给谁看？' }],
+      requirement: '写一份发布说明',
+    });
+    expect(messages[1].content).toContain('## Answered clarifications');
+    expect(messages[1].content).toContain('- Q: 给谁看？\n  A: 开发者');
   });
 });

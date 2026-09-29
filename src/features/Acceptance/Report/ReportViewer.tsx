@@ -70,6 +70,7 @@ import {
   markdownTextEvidenceTypes,
   rendersAsMarkdown,
 } from './MarkdownEvidence';
+import { originTopicHref } from './originLink';
 import { readVisualizationManifest } from './visualization';
 import { VisualizationRenderer } from './VisualizationRenderer';
 
@@ -1182,7 +1183,7 @@ const CodingScopeCard = memo<{
   );
   const date = formatScopeDate(testedAt);
   const surfaces = renderableSurfaces(context.surfaces);
-  const originTopicId = origin?.topicId;
+  const originHref = originTopicHref(origin);
   const hasScope =
     Boolean(branch) ||
     Boolean(commit) ||
@@ -1190,7 +1191,7 @@ const CodingScopeCard = memo<{
     hasPullRequest ||
     surfaces.length > 0 ||
     Boolean(date) ||
-    Boolean(originTopicId);
+    Boolean(originHref);
 
   if (!hasScope) return null;
 
@@ -1266,10 +1267,10 @@ const CodingScopeCard = memo<{
         )}
         {/* Only ever rendered for the report's author — the server redacts `origin`
             from a bundle fetched by anyone else holding the shared link. */}
-        {originTopicId && (
+        {originHref && (
           <a
             className={cx(styles.scopeMetaItem, styles.originLink)}
-            href={`/chat?topic=${originTopicId}`}
+            href={originHref}
             rel="noreferrer"
             target="_blank"
             title={t('report.scope.origin')}

@@ -43,7 +43,12 @@ export interface Finding {
 }
 
 export const COMMENT_MARKER = '<!-- alint-summary -->';
-const FIXTURES_DIR = 'packages/alint/fixtures/';
+/**
+ * Calibration fixtures fire by design. Rules live in more than one place —
+ * repo-wide rules in `packages/alint`, package-level rules next to their
+ * package (`packages/<pkg>/alint`) — so match the fixtures directory of any.
+ */
+const isFixture = (file: string) => /^packages\/(?:[^/]+\/)?alint\/fixtures\//.test(file);
 
 /** alint JSON → findings relative to the repo root, fixtures dropped, errors first. */
 export const toFindings = (output: AlintOutput, rootDir: string): Finding[] =>
@@ -69,7 +74,7 @@ export const toFindings = (output: AlintOutput, rootDir: string): Finding[] =>
         suggestion: suggestion || undefined,
       };
     })
-    .filter((finding) => !finding.file.startsWith(FIXTURES_DIR))
+    .filter((finding) => !isFixture(finding.file))
     .sort(
       (a, b) =>
         Number(b.severity === 'error') - Number(a.severity === 'error') ||

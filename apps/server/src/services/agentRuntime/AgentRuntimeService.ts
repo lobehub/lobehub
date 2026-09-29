@@ -687,6 +687,14 @@ export class AgentRuntimeService {
   // ==================== Operation Interruption ====================
 
   /**
+   * Whether someone already asked this run to stop (the interrupt sentinel is
+   * set), even though it may still be finishing its current step.
+   */
+  async isOperationInterrupted(operationId: string): Promise<boolean> {
+    return this.coordinator.isInterrupted(operationId);
+  }
+
+  /**
    * Interrupt a running agent operation by setting its state to 'interrupted'.
    * The agent will stop at the next step boundary (cannot abort an in-flight LLM call).
    * Works with both Redis and InMemory state managers via the coordinator abstraction.
@@ -751,6 +759,16 @@ export class AgentRuntimeService {
   }
 
   /**
+   * Whether the client that started this operation declared it handles
+   * `member_runtime_end`. An unknown or expired operation reads as `false`, so
+   * a continuation then keeps the verbatim terminal every client understands.
+   */
+  async acceptsMemberRuntimeEnd(operationId: string): Promise<boolean> {
+    const metadata = await this.coordinator.getOperationMetadata(operationId).catch(() => null);
+    return metadata?.acceptsMemberRuntimeEnd === true;
+  }
+
+  /**
    * Record whether the client still holds user messages queued behind a run.
    * Only the run's owner may flag it; an unknown or foreign operation is a
    * no-op, so a caller cannot touch another user's run by guessing its id.
@@ -783,6 +801,52 @@ export class AgentRuntimeService {
   /** Load the authoritative runtime state for a deterministic intervention continuation. */
   async loadInterventionContinuationState(operationId: string): Promise<AgentState | null> {
     return this.coordinator.loadAgentState(operationId);
+  }
+
+  /**
+   * The completion bridge of a group member run: from its runtime snapshot
+   * while it lives, else from the durable copy recorded on the operation row
+   * at start. Undefined for any run that is not a group member.
+   */
+  async loadGroupMemberBridge(operationId: string): Promise<
+    | {
+        agentId: string;
+        bridge: Omit<GroupActionMemberBridgeParams, 'operationId' | 'reason'>;
+        groupId?: string;
+        threadId?: string;
+        topicId?: string;
+      }
+    | undefined
+  > {
+    const state = await this.coordinator.loadAgentState(operationId);
+    if (state) {
+      const origin = state.origin;
+      const bridge = state.host?.hooks?.find((hook) => hook.id === 'group-member-bridge')?.webhook
+        ?.body as Omit<GroupActionMemberBridgeParams, 'operationId' | 'reason'> | undefined;
+      if (origin?.lineage?.orchestrationRole !== 'member' || !origin.agentId || !bridge) {
+        return undefined;
+      }
+      return {
+        agentId: origin.agentId,
+        bridge,
+        groupId: origin.groupId ?? undefined,
+        threadId: origin.threadId ?? undefined,
+        topicId: origin.topicId ?? undefined,
+      };
+    }
+
+    const row = await this.agentOperationModel.findById(operationId);
+    const bridge = (row?.metadata as Record<string, unknown> | null | undefined)
+      ?.groupMemberBridge as
+      Omit<GroupActionMemberBridgeParams, 'operationId' | 'reason'> | undefined;
+    if (!row?.agentId || !bridge) return undefined;
+    return {
+      agentId: row.agentId,
+      bridge,
+      groupId: row.chatGroupId ?? undefined,
+      threadId: row.threadId ?? undefined,
+      topicId: row.topicId ?? undefined,
+    };
   }
 
   /**
@@ -1017,6 +1081,7 @@ export class AgentRuntimeService {
    */
   async createOperation(params: OperationCreationParams): Promise<OperationCreationResult> {
     const {
+      acceptsMemberRuntimeEnd,
       activeDeviceId,
       activeDeviceScope,
       operationId,
@@ -1066,6 +1131,11 @@ export class AgentRuntimeService {
     // ends of the persistence lifecycle (start row here, terminal update
     // in dispatchHooks) and swallows DB errors so runtime startup is never
     // blocked.
+    // A group member's completion bridge lives in the runtime snapshot, which
+    // expires (2h). Keep a durable copy on the row so a late approval or a
+    // stop can still reach the member's supervisor (`loadGroupMemberBridge`).
+    const groupMemberBridge = hooks?.find((hook) => hook.id === 'group-member-bridge')?.webhook
+      ?.body as Omit<GroupActionMemberBridgeParams, 'operationId' | 'reason'> | undefined;
     const operationStartPersisted = await this.completionLifecycle.recordStart({
       agentId: appContext?.agentId ?? null,
       appContext: {
@@ -1082,13 +1152,14 @@ export class AgentRuntimeService {
       // Persist the Agent Signal run marker on the operation row so server-side
       // self-iteration tools can read it back (operation.metadata.agentSignal) at tool-call
       // time — the trimmed appContext above intentionally drops it.
-      ...(appContext?.agentSignal || interventionResolution
+      ...(appContext?.agentSignal || interventionResolution || groupMemberBridge
         ? {
             metadata: {
               ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
               ...(interventionResolution
                 ? { agentInterventionContinuation: interventionResolution }
                 : {}),
+              ...(groupMemberBridge ? { groupMemberBridge } : {}),
             },
           }
         : {}),
@@ -1106,6 +1177,13 @@ export class AgentRuntimeService {
       throw new Error(
         `Failed to durably persist intervention continuation ${operationId} before dispatch`,
       );
+    }
+
+    // A member's durable bridge is what a Stop or a late approval falls back
+    // to once the runtime snapshot expires; a member without it could strand
+    // its supervisor, so fail the start instead.
+    if (groupMemberBridge && !operationStartPersisted) {
+      throw new Error(`Failed to durably persist group member ${operationId} before dispatch`);
     }
 
     if (interventionResolution) {
@@ -1282,6 +1360,7 @@ export class AgentRuntimeService {
       const mirrorToOperationId =
         appContext?.orchestrationRole === 'member' ? (parentOperationId ?? undefined) : undefined;
       await this.coordinator.createAgentOperation(operationId, {
+        acceptsMemberRuntimeEnd,
         agentConfig,
         // Persisted so a queue worker that never ran this op's init still
         // applies the owner-configured visitor redaction policy instead of the
@@ -3772,6 +3851,20 @@ export class AgentRuntimeService {
     } = params;
     const failed = reason === 'error' || reason === 'interrupted' || reason === 'timeout';
 
+    // Members answer to the supervisor's approval mode, so a member can park on
+    // a tool that needs the user's approval. That segment fires `onComplete`
+    // (so the approval surfaces), but the member has not answered yet: leave its
+    // anchor pending and the supervisor parked. The approval continuation
+    // inherits this bridge hook and reports the member's real outcome.
+    if (reason === 'waiting_for_human') {
+      log(
+        '[%s] group-member bridge: member parked for human approval, holding parent %s',
+        operationId,
+        parentOperationId,
+      );
+      return false;
+    }
+
     const finalState =
       params.finalState ?? (await this.coordinator.loadAgentState(operationId)) ?? undefined;
 
@@ -4021,7 +4114,7 @@ export class AgentRuntimeService {
   private async refreshMessagesFromDB(state: AgentState): Promise<AgentState['messages']> {
     const dbMessages = await this.queryMessagesFromDB(state);
 
-    const { flatList } = parse(dbMessages);
+    const { flatList } = parse(dbMessages, undefined, { threadId: state.origin?.threadId });
     return flatList as AgentState['messages'];
   }
 
@@ -4033,7 +4126,7 @@ export class AgentRuntimeService {
    */
   private async resolveLastAssistantMessageFromDB(state: AgentState): Promise<unknown> {
     const dbMessages = await this.queryMessagesFromDB(state);
-    const { flatList } = parse(dbMessages);
+    const { flatList } = parse(dbMessages, undefined, { threadId: state.origin?.threadId });
     const lastAssistant = findLastAssistantMessage(normalizeCompletionMessages(flatList));
     const lastAssistantId = typeof lastAssistant?.id === 'string' ? lastAssistant.id : undefined;
 
@@ -4141,7 +4234,7 @@ export class AgentRuntimeService {
                 fileService!.getFullFileUrl(file.url),
               )
             : messages;
-          const { flatList } = parse(resolved);
+          const { flatList } = parse(resolved, undefined, { threadId: state.origin?.threadId });
           if (flatList.length > 0) state.messages = flatList as AgentState['messages'];
         } catch (error) {
           console.error('[queryStepEntryMessages] Failed to hydrate runtime messages: %O', error);

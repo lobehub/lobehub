@@ -234,7 +234,7 @@ export class LocalMessageStore {
 
     if (!options.flatten) return matches;
 
-    const { flatList } = parse(matches as never);
+    const { flatList } = parse(matches as never, undefined, { threadId });
     return flatList as unknown as UIChatMessage[];
   }
 

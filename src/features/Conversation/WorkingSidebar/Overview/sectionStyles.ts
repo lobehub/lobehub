@@ -45,8 +45,6 @@ export const sectionStyles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 10.5px;
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
   `,
   skeleton: css`
     padding-block: 4px;

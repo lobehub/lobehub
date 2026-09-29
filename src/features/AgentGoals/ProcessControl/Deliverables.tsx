@@ -90,6 +90,32 @@ export const openTargetOf = (artifact: GoalArtifactView) => {
   return undefined;
 };
 
+/**
+ * Opens a deliverable where it lives: a document inside the app, a generated
+ * file or external resource at its canonical target.
+ */
+export const useOpenGoalArtifact = () => {
+  const openDocument = useChatStore((s) => s.openDocument);
+
+  return (artifact: GoalArtifactView) => {
+    const target = openTargetOf(artifact);
+    if (!target) return;
+    // `openDocument` takes the DOCUMENT id, not the agent-document binding id:
+    // `agentDocumentId` only establishes that a binding exists.
+    if (target.kind === 'document') {
+      openDocument(artifact.resourceId!, artifact.agentDocumentId);
+      return;
+    }
+    // A generated file and an external resource both leave for their canonical
+    // target. The file-preview Portal is not a substitute: it resolves a
+    // knowledge-base item, so an ordinary exported file loads forever in it.
+    window.open(target.url, '_blank', 'noopener,noreferrer');
+  };
+};
+
+export const artifactIconOf = (type: GoalArtifactView['type']) =>
+  type === 'document' ? FileText : type === 'file' ? FileDown : ExternalLink;
+
 const DeliverableRow = memo<{
   artifact: GoalArtifactView;
   onOpen: (artifact: GoalArtifactView) => void;
@@ -99,8 +125,7 @@ const DeliverableRow = memo<{
   const { text, title } = useActivityTime(artifact.createdAt);
   // A document opens inside the app; a generated file downloads; an external
   // resource leaves for its own site.
-  const icon =
-    artifact.type === 'document' ? FileText : artifact.type === 'file' ? FileDown : ExternalLink;
+  const icon = artifactIconOf(artifact.type);
 
   const openable = !!openTargetOf(artifact);
 
@@ -140,29 +165,9 @@ const DeliverableRow = memo<{
 
 DeliverableRow.displayName = 'GoalDeliverableRow';
 
-/** Opens a deliverable wherever it lives — see {@link openTargetOf}. */
-export const useOpenArtifact = () => {
-  const openDocument = useChatStore((s) => s.openDocument);
-
-  return (artifact: GoalArtifactView) => {
-    const target = openTargetOf(artifact);
-    if (!target) return;
-    // `openDocument` takes the DOCUMENT id, not the agent-document binding id:
-    // `agentDocumentId` only establishes that a binding exists.
-    if (target.kind === 'document') {
-      openDocument(artifact.resourceId!, artifact.agentDocumentId);
-      return;
-    }
-    // A generated file and an external resource both leave for their canonical
-    // target. The file-preview Portal is not a substitute: it resolves a
-    // knowledge-base item, so an ordinary exported file loads forever in it.
-    window.open(target.url, '_blank', 'noopener,noreferrer');
-  };
-};
-
 const Deliverables = memo<{ graph: GoalGraphView }>(({ graph }) => {
   const { t } = useTranslation('chat');
-  const open = useOpenArtifact();
+  const open = useOpenGoalArtifact();
 
   if (graph.artifacts.length === 0)
     return (

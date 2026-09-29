@@ -108,6 +108,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
   async createOperationMetadata(
     operationId: string,
     data: {
+      acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
       visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
@@ -118,6 +119,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     },
   ): Promise<void> {
     const metadata: AgentOperationMetadata = {
+      acceptsMemberRuntimeEnd: data.acceptsMemberRuntimeEnd,
       agentConfig: data.agentConfig,
       visitorRedaction: data.visitorRedaction,
       createdAt: new Date().toISOString(),

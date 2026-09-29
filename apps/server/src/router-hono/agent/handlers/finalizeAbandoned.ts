@@ -3,8 +3,8 @@ import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AbandonOperationService } from '@/server/services/agentRuntime';
-import { deliverWebhook } from '@/server/services/agentRuntime/hooks/HookDispatcher';
-import { AiAgentService } from '@/server/services/aiAgent';
+
+import { resumeAbandonedParent } from './resumeAbandonedParent';
 
 const log = debug('lobe-server:agent:finalize-abandoned');
 
@@ -34,70 +34,13 @@ export async function finalizeAbandoned(c: Context): Promise<Response> {
     const service = new AbandonOperationService(serverDB);
     const result = await service.finalizeAbandoned(operationId, reason);
 
-    // If the abandoned op was a sub-agent, resume its parent: the watchdog
-    // killed the child without firing its onComplete bridge, so the parent
-    // stays parked in `waiting_for_async_tool` until this runs.
-    //
-    // This endpoint is called by the DO inactivity watchdog EXACTLY ONCE and is
-    // never retried, so the resume must carry its own durability. A transient
-    // DB/Redis failure mid-bridge (the backfill in particular) cannot be
-    // recovered by the parent's async-tool verify watchdog — that only re-reads
-    // the barrier, it can't recreate the missing tool-message backfill. So in
-    // queue mode we hand off to the same QStash-backed `/subagent-callback` the
-    // normal completion path uses: QStash redelivers on non-2xx until the
-    // backfill + CAS-resume land (the callback re-resolves userId from the
-    // coordinator metadata, which `finalizeAbandoned` deliberately keeps alive
-    // for sub-agent ops). In local/dev (no queue) we run the bridge inline.
-    //
+    // If the abandoned op was a sub-agent, resume its parent. This endpoint is
+    // called by the DO inactivity watchdog EXACTLY ONCE and is never retried.
     // Failures intentionally propagate to the outer catch (→ non-2xx) instead of
     // being swallowed behind a 200: a 200 here would falsely report the parent
     // as handled while it stays parked forever.
     if (result.subAgentResume) {
-      const {
-        errorMessage,
-        parentOperationId,
-        streamOwnerUserId,
-        threadId,
-        toolMessageId,
-        userId,
-        workspaceId,
-      } = result.subAgentResume;
-      // Child reached a terminal failure (watchdog kill) → the bridge backfills
-      // the parent's tool slot with an error note rather than a stub answer.
-      const bridgeBody = {
-        errorMessage,
-        operationId,
-        parentOperationId,
-        reason: 'error',
-        threadId,
-        toolMessageId,
-      };
-      if (process.env.QSTASH_TOKEN) {
-        await deliverWebhook(
-          { delivery: 'qstash', fallback: 'none', url: '/api/agent/webhooks/subagent-callback' },
-          bridgeBody,
-        );
-        log('[%s] queued durable parent-resume for %s', operationId, parentOperationId);
-      } else {
-        // No durable queue configured: run the CAS-guarded, idempotent bridge
-        // inline through AiAgentService so the runtime's models stay
-        // workspace-scoped.
-        // Mirror the queue-mode `subagent-callback`: opt into visitor rows only
-        // when the parent op is a shared-agent visitor run (surfaced via
-        // `streamOwnerUserId`). Ordinary creator runs keep the default
-        // exclusion.
-        const aiAgentService = new AiAgentService(serverDB, userId, {
-          includeShareVisitor: Boolean(streamOwnerUserId),
-          workspaceId,
-        });
-        const won = await aiAgentService.completeSubAgentBridge(bridgeBody);
-        log(
-          '[%s] resumed parent %s inline (local mode, won=%s)',
-          operationId,
-          parentOperationId,
-          won,
-        );
-      }
+      await resumeAbandonedParent(serverDB, operationId, result.subAgentResume);
     }
 
     const executionTime = Date.now() - startTime;

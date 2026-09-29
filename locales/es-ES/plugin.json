@@ -872,7 +872,6 @@
   "protocolInstall.warning": "Verifica la fuente del Skill. Puedes desactivarlo o eliminarlo en la configuración.",
   "search.config.addKey": "Agregar clave",
   "search.config.close": "Eliminar",
-  "search.config.confirm": "Listo, reintentar",
   "search.crawPages.crawling": "Identificando enlaces",
   "search.crawPages.detail.preview": "Vista previa",
   "search.crawPages.detail.raw": "Texto sin formato",

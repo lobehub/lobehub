@@ -285,10 +285,12 @@ export class CoreUpdateManager {
     lastCheckAt: this.lastCheckAt,
     lastError: this.lastError,
     needsFullRelease: this.needsFullRelease,
+    running: this.shell?.manifest?.version ?? null,
     staged: this.staged?.version ?? null,
   });
 
-  checkForUpdates = () => {
+  checkForUpdates = ({ manual = false }: { manual?: boolean } = {}) => {
+    if (manual && this.staged) this.announceStaged();
     this.checkTask = this.checkTask.catch(() => {}).then(() => this.runCheck());
     return this.checkTask;
   };
@@ -339,10 +341,7 @@ export class CoreUpdateManager {
           : { staged: version },
       );
       this.lastError = null;
-      this.app.browserManager.broadcastToAllWindows('updateReady', {
-        kind: applyMode === 'relaunch' ? 'core-relaunch' : 'core-reload',
-        version,
-      });
+      this.announceStaged();
       this.gc();
       if (applyMode === 'reload') this.handleWindowBlur();
       outcome = 'staged';
@@ -361,6 +360,15 @@ export class CoreUpdateManager {
       if (generation === this.checkGeneration) this.busy = false;
       logger.info('Core OTA check finished', { channel: this.activeChannel, outcome });
     }
+  }
+
+  private announceStaged() {
+    if (!this.staged) return;
+    const { applyMode, version } = this.staged;
+    this.app.browserManager.broadcastToAllWindows('updateReady', {
+      kind: applyMode === 'relaunch' ? 'core-relaunch' : 'core-reload',
+      version,
+    });
   }
 
   private async fetchRemote(feedUrl: string, generation: number): Promise<CoreManifest | null> {

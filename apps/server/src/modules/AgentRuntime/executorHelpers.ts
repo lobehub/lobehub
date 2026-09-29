@@ -1,4 +1,4 @@
-import { type AgentState } from '@lobechat/agent-runtime';
+import { type AgentState, selectUserInterventionConfig } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
 import { getSubAgentChatConfigOverride, resolveSubAgentModel } from '@lobechat/const';
@@ -392,6 +392,13 @@ export const buildServerAgentMemberRunner = (
   state: AgentState,
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
+  /**
+   * The call's own pending tool row when it resumes after a human approval
+   * (`call_tool` with `skipCreateToolMessage`, where `parentMessageId` is that
+   * row). Reused as the group tool message instead of writing a second row
+   * with the same `tool_call_id` under it.
+   */
+  existingToolMessageId?: string,
 ): ServerAgentMemberRunner | undefined => {
   // Same share-visitor fail-close as `buildServerVirtualSubAgentRunner`:
   // member runs would not inherit the parent's shareGate.
@@ -427,19 +434,35 @@ export const buildServerAgentMemberRunner = (
       // 1. Group tool placeholder — the parked tool call the supervisor op waits
       //    on. Stamped with the barrier target + finish disposition so the resume
       //    path (and verify watchdog) resolve resume-vs-finish on their own.
-      const groupTool = await ctx.messageModel.create({
-        agentId,
-        content: '',
-        groupId,
-        ...(isCouncil ? { metadata: { agentCouncil: true } } : {}),
-        parentId: parentMessageId,
-        plugin: chatToolPayload as any,
-        pluginState: { expectedMembers, onComplete, status: 'pending' },
-        role: 'tool',
-        threadId: state.origin?.threadId,
-        tool_call_id: chatToolPayload.id,
-        topicId,
-      });
+      const existingToolMessage = existingToolMessageId
+        ? await ctx.messageModel.findById(existingToolMessageId)
+        : undefined;
+      // The supervisor assistant message owning this tool call. An approved
+      // call resumes with its own tool row as the parent, so step up from it.
+      const supervisorMessageId = existingToolMessage?.parentId ?? parentMessageId;
+      const groupTool = existingToolMessage
+        ? { id: existingToolMessage.id }
+        : await ctx.messageModel.create({
+            agentId,
+            content: '',
+            groupId,
+            ...(isCouncil ? { metadata: { agentCouncil: true } } : {}),
+            parentId: parentMessageId,
+            plugin: chatToolPayload as any,
+            pluginState: { expectedMembers, onComplete, status: 'pending' },
+            role: 'tool',
+            threadId: state.origin?.threadId,
+            tool_call_id: chatToolPayload.id,
+            topicId,
+          });
+      if (existingToolMessage) {
+        await ctx.messageModel.updatePluginState(groupTool.id, {
+          expectedMembers,
+          onComplete,
+          status: 'pending',
+        });
+        if (isCouncil) await ctx.messageModel.updateMetadata(groupTool.id, { agentCouncil: true });
+      }
 
       // 2. Per-member anchors. A single member collapses onto the group tool
       //    message; multiple members each get a child anchor under it. These
@@ -488,9 +511,10 @@ export const buildServerAgentMemberRunner = (
               parentOperationId: ctx.operationId,
               // The supervisor assistant message owning this tool call — council
               // members parent their response here (siblings of the council tool).
-              supervisorMessageId: parentMessageId,
+              supervisorMessageId,
               timeout,
               topicId,
+              userInterventionConfig: selectUserInterventionConfig(state),
             });
             if (result?.started) {
               startedCount += 1;
@@ -523,7 +547,10 @@ export const buildServerAgentMemberRunner = (
       // None started — no bridge will ever fire, so tear down the placeholders
       // and let the caller surface an inline tool error instead of parking.
       if (startedCount === 0) {
+        // A reused approved row is the call's own record — the caller writes
+        // the inline error into it, so only drop what this run created.
         for (const id of new Set([...anchorIds, groupTool.id])) {
+          if (id === existingToolMessage?.id) continue;
           try {
             // Runtime placeholder cleanup — see the sub-agent runner above.
             await ctx.messageModel.deleteMessage(id, { includeShareVisitor: true });

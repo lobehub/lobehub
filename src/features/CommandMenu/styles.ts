@@ -84,7 +84,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     font-weight: 500;
     color: ${cssVar.colorTextSecondary};
-    text-transform: uppercase;
   `,
   commandContainer: css`
     display: flex;

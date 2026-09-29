@@ -304,6 +304,29 @@ describe('AgentDocumentsService', () => {
       );
     });
 
+    it('names the document from its H1 when the tool call omits the title', async () => {
+      // Seen in production after #19969: a model sent only `content`, and
+      // `title.trim()` threw "Cannot read properties of undefined (reading 'trim')".
+      vi.mocked(extractMarkdownH1Title).mockReturnValueOnce({
+        content: 'body',
+        title: 'Research Notes V2',
+      });
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Research Notes V2' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument(
+        'agent-1',
+        undefined as unknown as string,
+        '# Research Notes V2\n\nbody',
+      );
+
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'Research Notes V2', 'body', {
+        editorData: { root: { children: [] } },
+        title: 'Research Notes V2',
+      });
+    });
+
     it('strips an H1 that duplicates the explicit title', async () => {
       vi.mocked(extractMarkdownH1Title).mockReturnValueOnce({
         content: 'body',

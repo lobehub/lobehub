@@ -20,7 +20,7 @@ import { useChatStore } from '@/store/chat';
 import { shinyTextStyles } from '@/styles';
 
 import { coordinatorNodeTitleKey } from './coordinatorCopy';
-import { openTargetOf, useOpenArtifact } from './Deliverables';
+import { openTargetOf, useOpenGoalArtifact } from './Deliverables';
 import type { GoalArtifactView, GoalGraphView, GoalNodeView } from './goalGraphViewModel';
 import {
   buildResultTrail,
@@ -577,7 +577,7 @@ interface ResultTrailProps {
 
 const ResultTrail = ({ documentId, graph, onSelect }: ResultTrailProps) => {
   const { t } = useTranslation('chat');
-  const openArtifact = useOpenArtifact();
+  const openArtifact = useOpenGoalArtifact();
   const openReport = useChatStore((s) => s.openGoalReport);
   const source = resultTrailSource(graph);
   const title = (

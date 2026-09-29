@@ -27,6 +27,7 @@ import {
 import { tasks } from '../schemas/task';
 import { works, workVersions } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { notTrashed } from '../utils/softDelete';
 import { buildWorkspaceWhere } from '../utils/workspace';
 import { workOwnership } from './work/context';
 
@@ -339,6 +340,7 @@ export class GoalGraphModel {
           eq(goalNodes.goalId, goalId),
           eq(goalNodes.kind, 'task'),
           inArray(tasks.status, ['running', 'scheduled']),
+          notTrashed(tasks.isDeleted),
         ),
       );
     return row?.count ?? 0;
@@ -537,12 +539,22 @@ export class GoalGraphModel {
     });
 
   /** Rewrite a node's description — e.g. the planner replacing the seeded requirement blob with its own problem statement. */
-  updateNodeDescription = async (goalId: string, nodeId: string, description: string) =>
+  /** `confidence` travels with the description when the planner re-reads the problem. */
+  updateNodeDescription = async (
+    goalId: string,
+    nodeId: string,
+    description: string,
+    confidence?: number,
+  ) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
       const [node] = await tx
         .update(goalNodes)
-        .set({ description, updatedAt: new Date() })
+        .set({
+          description,
+          ...(confidence === undefined ? {} : { confidence: confidence.toString() }),
+          updatedAt: new Date(),
+        })
         .where(and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId)))
         .returning();
       if (!node) return undefined;

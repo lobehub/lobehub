@@ -103,13 +103,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   detailLabel: css`
     flex-shrink: 0;
-
     width: 96px;
-
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   `,
   detailContent: css`
     display: flex;

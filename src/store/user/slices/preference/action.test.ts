@@ -29,6 +29,37 @@ describe('createPreferenceSlice', () => {
     });
   });
 
+  describe('updateLab', () => {
+    it('mirrors enableGoals into the legacy enableTopicAcceptance key for older clients', async () => {
+      const updatePreferenceSpy = vi
+        .spyOn(userService, 'updatePreference')
+        .mockResolvedValue(undefined as any);
+
+      act(() => {
+        useUserStore.setState({
+          preference: {
+            ...useUserStore.getState().preference,
+            lab: { enableTopicAcceptance: true },
+          },
+        });
+      });
+
+      await act(async () => {
+        await useUserStore.getState().updateLab({ enableGoals: false });
+      });
+
+      expect(useUserStore.getState().preference.lab).toMatchObject({
+        enableGoals: false,
+        enableTopicAcceptance: false,
+      });
+      expect(updatePreferenceSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          lab: expect.objectContaining({ enableGoals: false, enableTopicAcceptance: false }),
+        }),
+      );
+    });
+  });
+
   describe('updatePreference', () => {
     it('should update preference', () => {
       const { result } = renderHook(() => useUserStore());

@@ -1,6 +1,8 @@
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as FormatModule from '../utils/format';
+import { confirm } from '../utils/format';
 import { log } from '../utils/logger';
 import { registerGoalCommand } from './goal';
 
@@ -8,6 +10,7 @@ const { mockClient } = vi.hoisted(() => ({
   mockClient: {
     goal: {
       create: { mutate: vi.fn() },
+      delete: { mutate: vi.fn() },
       submitPlan: { mutate: vi.fn() },
       submitOperationPlan: { mutate: vi.fn() },
       graph: { query: vi.fn() },
@@ -20,6 +23,11 @@ const { mockClient } = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', () => ({
   readFile: async () => JSON.stringify({ action: 'verify', reason: 'Ready' }),
+}));
+
+vi.mock('../utils/format', async (importOriginal) => ({
+  ...(await importOriginal<typeof FormatModule>()),
+  confirm: vi.fn(),
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: vi.fn().mockResolvedValue(mockClient) }));
@@ -525,5 +533,35 @@ describe('goal set-budget command', () => {
         maxStepsPerRun: null,
       }),
     );
+  });
+});
+
+describe('goal delete', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(log, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('deletes the goal without prompting when --yes is passed', async () => {
+    mockClient.goal.delete.mutate.mockResolvedValue({ message: 'Goal deleted', success: true });
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'delete', 'goal-1', '--yes']);
+
+    expect(mockClient.goal.delete.mutate).toHaveBeenCalledWith({ id: 'goal-1' });
+    expect(log.info).toHaveBeenCalledWith('Goal deleted');
+  });
+
+  it('keeps the goal when the confirmation is declined', async () => {
+    vi.mocked(confirm).mockResolvedValue(false);
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'delete', 'goal-1']);
+
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(mockClient.goal.delete.mutate).not.toHaveBeenCalled();
   });
 });

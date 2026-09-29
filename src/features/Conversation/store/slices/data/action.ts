@@ -79,7 +79,7 @@ export interface DataAction {
 
   /**
    * Load one round-aligned page of history older than the server's
-   * newest-first window (LOBE-13716) and prepend it to the transcript.
+   * newest-first window and prepend it to the transcript.
    * Self-guarding: no-ops while a page is in flight, once the beginning has
    * been reached, or when the conversation has no server-backed messages yet.
    *
@@ -181,7 +181,7 @@ export const dataSlice: StateCreator<
     }
 
     // Re-parse for display order and grouping
-    const { flatList } = parse(newDbMessages);
+    const { flatList } = parse(newDbMessages, undefined, { threadId: get().context.threadId });
     // parse() rebuilds every message/block/tool reference, so pin unchanged
     // subtrees back to their previous identity to preserve memo bailouts.
     const stableFlatList = stabilizeReferences(get().displayMessages, flatList);
@@ -223,7 +223,7 @@ export const dataSlice: StateCreator<
         // or edit may have changed it meanwhile. A conversation switch yields
         // `undefined` so the other conversation's rows are never merged.
         () => (isSameConversationContext(context, get().context) ? get().dbMessages : undefined),
-        (before) =>
+        (cursor) =>
           messageService.getEarlierMessages(
             {
               agentId: context.agentId,
@@ -233,7 +233,7 @@ export const dataSlice: StateCreator<
               topicId: context.topicId,
               topicShareId: context.topicShareId,
             },
-            before,
+            cursor,
           ),
       );
       // `undefined` → nothing to prepend (no cursor, already loading, the
@@ -281,7 +281,7 @@ export const dataSlice: StateCreator<
     const prevDbMessages = get().dbMessages;
 
     // Parse messages using conversation-flow
-    const { flatList } = parse(messages);
+    const { flatList } = parse(messages, undefined, { threadId: get().context.threadId });
     const stableFlatList = stabilizeReferences(get().displayMessages, flatList);
 
     log(
@@ -340,7 +340,7 @@ export const dataSlice: StateCreator<
     return useClientDataSWRWithSync<UIChatMessage[]>(
       shouldFetch ? messageListKey(context) : null,
 
-      () => runMessageListQuery(context, messageService.getMessages),
+      () => runMessageListQuery(context, messageService.getMessageListPage),
       {
         ...getMessageListFetchPolicy(context),
         ...(revalidateOnFocus !== undefined && { revalidateOnFocus }),
@@ -374,21 +374,35 @@ export const dataSlice: StateCreator<
           // updatedAt tie-breaker handles most cases on its own, but the
           // updatedAt comparison degenerates when server's pushed snapshot
           // carries a DB updatedAt equal to a later stale fetch's row.
-          if (operationSelectors.isAgentRuntimeRunningByContext(context)(getChatStoreState()))
-            return;
-
+          //
+          // Only rows the store already holds are protected. The first load, and
+          // rows the store has never seen, still land: a run can stay `running`
+          // for a long time (a group supervisor parked on a member's approval),
+          // and dropping them left a reloaded list on its skeleton, or on a stale
+          // cached snapshot missing the parked member's rows, for good.
           const prevDbMessages = get().dbMessages;
+          let fetchedMessages = data;
+          if (
+            get().messagesInit &&
+            operationSelectors.isAgentRuntimeRunningByContext(context)(getChatStoreState())
+          ) {
+            const knownIds = new Set(prevDbMessages.map((m) => m.id));
+            const unseen = data.filter((m) => !knownIds.has(m.id));
+            if (unseen.length === 0) return;
+            fetchedMessages = [...prevDbMessages, ...unseen];
+          }
+
           const activeVoiceMessageIds = new Set(
             Object.keys(getChatStoreState().voiceMessageUploadMap),
           );
           const mergedMessages = mergeFetchedMessagesWithLocalState(
-            data,
+            fetchedMessages,
             prevDbMessages,
             activeVoiceMessageIds,
           );
 
           // Parse messages using conversation-flow
-          const { flatList } = parse(mergedMessages);
+          const { flatList } = parse(mergedMessages, undefined, { threadId: context.threadId });
           const stableFlatList = stabilizeReferences(get().displayMessages, flatList);
 
           log(

@@ -872,7 +872,6 @@
   "protocolInstall.warning": "Skill kaynağını doğrulayın. Ayarlardan istediğiniz zaman devre dışı bırakabilir veya kaldırabilirsiniz.",
   "search.config.addKey": "Anahtar ekle",
   "search.config.close": "Kaldır",
-  "search.config.confirm": "Tamam, tekrar dene",
   "search.crawPages.crawling": "Bağlantılar belirleniyor",
   "search.crawPages.detail.preview": "Önizleme",
   "search.crawPages.detail.raw": "Ham metin",

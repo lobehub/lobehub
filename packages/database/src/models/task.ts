@@ -258,6 +258,7 @@ export class TaskModel {
     buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
       {
+        isDeleted: tasks.isDeleted,
         userId: tasks.createdByUserId,
         visibility: tasks.visibility,
         workspaceId: tasks.workspaceId,
@@ -299,8 +300,9 @@ export class TaskModel {
     const prefix = alias ? sql.raw(`${alias}.`) : sql.raw('');
     return this.workspaceId
       ? sql`${prefix}workspace_id = ${this.workspaceId}
-            AND (${prefix}visibility = 'public' OR ${prefix}created_by_user_id = ${this.userId})`
-      : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL`;
+            AND (${prefix}visibility = 'public' OR ${prefix}created_by_user_id = ${this.userId})
+            AND ${prefix}is_deleted IS NOT TRUE`
+      : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL AND ${prefix}is_deleted IS NOT TRUE`;
   };
 
   private buildListConditions = ({
@@ -335,9 +337,9 @@ export class TaskModel {
 
   /**
    * Look up a task's visibility so child-row inserts (deps, docs, topics) can
-   * mirror it without forcing every call site to know the value. Defaults to
-   * `'public'` if the task is missing (keeps inserts idempotent — the
-   * onConflictDoNothing path stays valid).
+   * mirror it without forcing every call site to know the value. Missing or
+   * trashed parents fail closed so no child can be attached after deletion or
+   * through a model constructed for the wrong scope.
    */
   private async getTaskVisibility(taskId: string): Promise<'private' | 'public'> {
     const row = await this.db
@@ -345,7 +347,8 @@ export class TaskModel {
       .from(tasks)
       .where(and(eq(tasks.id, taskId), this.ownership()))
       .limit(1);
-    return row[0]?.visibility ?? 'public';
+    if (!row[0]) throw new Error(`Task not found: ${taskId}`);
+    return row[0].visibility;
   }
 
   // ========== CRUD ==========
@@ -576,7 +579,7 @@ export class TaskModel {
             inArray(works.resourceId, taskIds),
             buildWorkspaceWhere(
               { userId: this.userId, workspaceId: this.workspaceId },
-              { userId: works.userId, workspaceId: works.workspaceId },
+              { isDeleted: works.isDeleted, userId: works.userId, workspaceId: works.workspaceId },
             ),
           ),
         );
@@ -1949,9 +1952,8 @@ export class TaskModel {
 
   async addComment(data: Omit<NewTaskComment, 'id'>): Promise<TaskCommentItem> {
     // Mirror the parent task's visibility onto the comment so subsequent
-    // reads/writes can be filtered without a JOIN. Falls back to 'public'
-    // if the task is somehow not visible (defensive — the caller should
-    // already have validated the task via `resolveOrThrow`).
+    // reads/writes can be filtered without a JOIN. `getTaskVisibility` also
+    // provides the final live-parent write fence.
     const visibility = await this.getTaskVisibility(data.taskId);
     const [comment] = await this.db
       .insert(taskComments)

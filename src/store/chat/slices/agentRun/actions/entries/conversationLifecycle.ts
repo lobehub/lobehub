@@ -47,7 +47,7 @@ import {
 } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { agentService } from '@/services/agent';
-import { aiAgentService } from '@/services/aiAgent';
+import { aiAgentService, MAX_CLIENT_OPERATION_SNAPSHOT } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
@@ -824,15 +824,28 @@ export class ConversationLifecycleActionImpl {
       return;
     }
 
-    const replaceableGatewayOperationId = queueCandidateKeys
+    const serverRuntimeOperations = queueCandidateKeys
       .flatMap((key) => this.#get().operationsByContext[key] || [])
       .map((id) => this.#get().operations[id])
-      .findLast(
-        (operation) =>
-          operation?.type === 'execServerAgentRuntime' &&
-          operation.status === 'running' &&
-          (operation.metadata.isAborting || operation.metadata.visibleLoadingDone),
-      )?.metadata.serverOperationId;
+      .filter((operation) => operation?.type === 'execServerAgentRuntime');
+
+    const replaceableGatewayOperationId = serverRuntimeOperations.findLast(
+      (operation) =>
+        operation.status === 'running' &&
+        (operation.metadata.isAborting || operation.metadata.visibleLoadingDone),
+    )?.metadata.serverOperationId;
+
+    // What this client believes about the conversation's server runs. The
+    // server keeps it only when the send has to stop a run left live.
+    const clientOperations = serverRuntimeOperations
+      .filter((operation) => operation.metadata.serverOperationId)
+      .slice(-MAX_CLIENT_OPERATION_SNAPSHOT)
+      .map((operation) => ({
+        isAborting: operation.metadata.isAborting,
+        operationId: operation.metadata.serverOperationId!,
+        status: operation.status,
+        visibleLoadingDone: operation.metadata.visibleLoadingDone,
+      }));
 
     if (onlyAddUserMessage) {
       await this.#get().addUserMessage({
@@ -1806,6 +1819,7 @@ export class ConversationLifecycleActionImpl {
           onMessageAccepted: notifyMessageAccepted,
           onTopicCreated: context.isolatedTopic ? onTopicCreated : undefined,
           parentOperationId: operationId,
+          clientOperations,
           replacesOperationId: replaceableGatewayOperationId,
           optimisticTopic,
           // Forward @-mentioned tool ids so the server runtime enables them for

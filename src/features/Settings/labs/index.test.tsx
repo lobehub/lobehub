@@ -118,7 +118,7 @@ describe('Labs settings page', () => {
   it('renders the topic acceptance (tray) lab toggle', () => {
     renderPage();
 
-    expect(screen.getByText('features.topicAcceptance.title')).toBeDefined();
+    expect(screen.getByText('features.goals.title')).toBeDefined();
   });
 
   it('does not render released task verify as a lab toggle', () => {

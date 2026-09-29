@@ -8,6 +8,7 @@ import {
   RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
   UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
 } from '@lobechat/const';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { TRPCError } from '@trpc/server';
 import isEqual from 'fast-deep-equal';
 import pMap from 'p-map';
@@ -1015,7 +1016,21 @@ export const fileRouter = router({
       }
 
       if (Object.keys(updates).length > 0) {
-        await ctx.fileModel.update(id, updates);
+        const wsId = ctx.workspaceId ?? undefined;
+        await ctx.serverDB.transaction(async (tx) => {
+          const trx = tx as unknown as LobeChatDatabase;
+          // The knowledge-base tree reads `documents.parent_id`, so the file's
+          // backing document row(s) must move (and rename) together with it.
+          // Documents are written before the file, matching updateDocument's
+          // lock order so concurrent moves cannot deadlock.
+          if (updates.parentId !== undefined || updates.name !== undefined) {
+            await new DocumentModel(trx, ctx.userId, wsId).syncFromFile(id, {
+              name: updates.name,
+              parentId: updates.parentId,
+            });
+          }
+          await new FileModel(trx, ctx.userId, wsId).update(id, updates);
+        });
       }
 
       return { success: true };

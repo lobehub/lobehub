@@ -821,7 +821,18 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
           };
         }
 
-        if (groupId) await assertGroupEditable(groupId);
+        try {
+          if (groupId) await assertGroupEditable(groupId);
+
+          // Group edit alone is not enough (same rule as `updateAgentPrompt`):
+          // a linked standalone member keeps its own ACL, and model / provider /
+          // plugins are edit-level config that also apply outside this group.
+          if ((await getConfigAccess('agent', agentId)) !== 'full') {
+            return configAccessDenied(agentId);
+          }
+        } catch (error) {
+          return handleError(error, 'Failed to update agent config');
+        }
 
         return builder.updateConfig(rest, withEditingAgent(ctx, agentId));
       },
@@ -844,7 +855,15 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
           };
         }
 
-        if (groupId) await assertGroupEditable(groupId);
+        try {
+          if (groupId) await assertGroupEditable(groupId);
+
+          if ((await getConfigAccess('agent', agentId)) !== 'full') {
+            return configAccessDenied(agentId);
+          }
+        } catch (error) {
+          return handleError(error, 'Failed to install plugin');
+        }
 
         return builder.installPlugin(params, withEditingAgent(ctx, agentId));
       },

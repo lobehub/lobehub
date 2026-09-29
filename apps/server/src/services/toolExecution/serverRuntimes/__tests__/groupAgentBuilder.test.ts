@@ -6,6 +6,8 @@ import { groupAgentBuilderRuntime } from '../groupAgentBuilder';
 const {
   mockAddAgentsToGroup,
   mockBatchCreate,
+  mockAssertCanPerformResourceAction,
+  mockBuilderInstallPlugin,
   mockBuilderUpdateConfig,
   mockFindById,
   mockGetAccessLevel,
@@ -19,6 +21,8 @@ const {
 } = vi.hoisted(() => ({
   mockAddAgentsToGroup: vi.fn(),
   mockBatchCreate: vi.fn(),
+  mockAssertCanPerformResourceAction: vi.fn(),
+  mockBuilderInstallPlugin: vi.fn(),
   mockBuilderUpdateConfig: vi.fn(),
   mockFindById: vi.fn(),
   mockGetAccessLevel: vi.fn(),
@@ -77,7 +81,7 @@ vi.mock('@/server/services/agentGroup', () => ({
 }));
 
 vi.mock('@/server/services/resourcePermission', () => ({
-  assertCanPerformResourceAction: vi.fn(async () => undefined),
+  assertCanPerformResourceAction: mockAssertCanPerformResourceAction,
 }));
 
 vi.mock('@/server/routers/lambda/_helpers/resourceConfigGuard', () => ({
@@ -86,7 +90,10 @@ vi.mock('@/server/routers/lambda/_helpers/resourceConfigGuard', () => ({
 
 vi.mock('../agentBuilder', () => ({
   agentBuilderRuntime: {
-    factory: () => ({ updateConfig: mockBuilderUpdateConfig }),
+    factory: () => ({
+      installPlugin: mockBuilderInstallPlugin,
+      updateConfig: mockBuilderUpdateConfig,
+    }),
     identifier: 'lobe-agent-builder',
   },
 }));
@@ -109,6 +116,7 @@ describe('groupAgentBuilderRuntime', () => {
       { agentId: 'agt_sup', description: null, role: 'supervisor', title: 'Supervisor' },
     ]);
     mockGetResourceConfigAccess.mockResolvedValue('full');
+    mockAssertCanPerformResourceAction.mockResolvedValue(undefined);
   });
 
   // The bug: gateway mode executes every builtin tool server-side, and a missing
@@ -282,6 +290,94 @@ describe('groupAgentBuilderRuntime', () => {
         { model: 'gpt-5' },
         expect.objectContaining({ editingAgentId: 'agt_sup' }),
       );
+    });
+
+    // G-01: group edit + member view must not reconfigure the linked member —
+    // the same rule `updateAgentPrompt` and `agent.updateAgentConfig` enforce.
+    it('rejects a roster member whose config the caller cannot edit', async () => {
+      mockGetGroupAgentsWithMeta.mockResolvedValue([
+        { agentId: 'agt_sup', role: 'supervisor' },
+        { agentId: 'agt_alice', role: 'participant' },
+      ]);
+      mockGetResourceConfigAccess.mockImplementation(async (_ctx, _type, id) =>
+        id === 'agt_alice' ? 'profile' : 'full',
+      );
+
+      const result = await createRuntime('ws_1').updateConfig(
+        { agentId: 'agt_alice', model: 'gpt-4o-mini', provider: 'openai' },
+        groupCtx,
+      );
+
+      expect(mockGetResourceConfigAccess).toHaveBeenCalledWith(
+        expect.anything(),
+        'agent',
+        'agt_alice',
+      );
+      expect(result).toMatchObject({
+        content: 'No permission to access the configuration of agent "agt_alice"',
+        error: { type: 'Forbidden' },
+        success: false,
+      });
+      expect(mockBuilderUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    // N-1: a group-edit denial reads like every other builder tool instead of
+    // escaping as a raw TRPC FORBIDDEN error.
+    it('returns a tool failure when the group is not editable', async () => {
+      mockAssertCanPerformResourceAction.mockRejectedValue(
+        new Error('You do not have permission to edit this resource'),
+      );
+
+      const result = await createRuntime('ws_1').updateConfig({ model: 'gpt-5' }, groupCtx);
+
+      expect(result).toEqual({
+        content: 'Failed to update agent config: You do not have permission to edit this resource',
+        success: false,
+      });
+      expect(mockBuilderUpdateConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('installPlugin', () => {
+    it('installs onto the supervisor when the caller has full config access', async () => {
+      await createRuntime('ws_1').installPlugin(
+        { identifier: 'lobe-web-browsing', source: 'official' },
+        groupCtx,
+      );
+
+      expect(mockBuilderInstallPlugin).toHaveBeenCalledWith(
+        { identifier: 'lobe-web-browsing', source: 'official' },
+        expect.objectContaining({ editingAgentId: 'agt_sup' }),
+      );
+    });
+
+    it('rejects when the caller cannot edit the supervisor config', async () => {
+      mockGetResourceConfigAccess.mockResolvedValue('profile');
+
+      const result = await createRuntime('ws_1').installPlugin(
+        { identifier: 'lobe-web-browsing', source: 'official' },
+        groupCtx,
+      );
+
+      expect(result).toMatchObject({ error: { type: 'Forbidden' }, success: false });
+      expect(mockBuilderInstallPlugin).not.toHaveBeenCalled();
+    });
+
+    it('returns a tool failure when the group is not editable', async () => {
+      mockAssertCanPerformResourceAction.mockRejectedValue(
+        new Error('You do not have permission to edit this resource'),
+      );
+
+      const result = await createRuntime('ws_1').installPlugin(
+        { identifier: 'lobe-web-browsing', source: 'official' },
+        groupCtx,
+      );
+
+      expect(result).toEqual({
+        content: 'Failed to install plugin: You do not have permission to edit this resource',
+        success: false,
+      });
+      expect(mockBuilderInstallPlugin).not.toHaveBeenCalled();
     });
   });
 

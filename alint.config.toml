@@ -1,6 +1,8 @@
 # alint: model-backed rules that eslint cannot express.
-# Rules live in packages/alint/rules; each has calibration fixtures under
-# packages/alint/fixtures. Set up a provider with `bun run alint:setup`, then
+# Repo-wide rules live in packages/alint/rules (fixtures in packages/alint/fixtures).
+# Package-level rules live next to their package, in packages/<pkg>/alint/rules
+# (fixtures in packages/<pkg>/alint/fixtures), registered under their own plugin
+# prefix and scoped only to that package. Set up a provider with `bun run alint:setup`, then
 # `bun run check --alint` or `bun run alint --dirty`. See packages/alint/README.md.
 #
 # Scope rules with group `files`; never with `includeFiles` inside a rule
@@ -59,6 +61,100 @@ lobehub = "./packages/alint/rules"
 "lobehub/no-mode-flags" = "warn"
 
 
+# Browser code, everywhere: no third-party package that needs Node may be
+# imported where the SPA (or the Electron renderer) runs it. Node built-ins and
+# server / database aliases are enforced exactly by ESLint (the browser runtime
+# block in eslint.config.mjs); this rule only judges npm packages.
+# `src/app` and `src/libs` are left out on purpose: they mix Next.js shells and
+# server helpers (instrumentation, OIDC, MCP) with web code.
+[[config.group]]
+files = [
+  "src/business/**/*.ts",
+  "src/business/**/*.tsx",
+  "src/components/**/*.ts",
+  "src/components/**/*.tsx",
+  "src/features/**/*.ts",
+  "src/features/**/*.tsx",
+  "src/helpers/**/*.ts",
+  "src/helpers/**/*.tsx",
+  "src/hooks/**/*.ts",
+  "src/hooks/**/*.tsx",
+  "src/layout/**/*.ts",
+  "src/layout/**/*.tsx",
+  "src/routes/**/*.ts",
+  "src/routes/**/*.tsx",
+  "src/services/**/*.ts",
+  "src/services/**/*.tsx",
+  "src/spa/**/*.ts",
+  "src/spa/**/*.tsx",
+  "src/store/**/*.ts",
+  "src/store/**/*.tsx",
+  "src/utils/**/*.ts",
+  "src/utils/**/*.tsx",
+  "packages/*/src/**/*.tsx",
+]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/*.server.ts" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-node-in-browser" = "error"
+
+# Heterogeneous agents: the browser-reachable layer (root, adapters, …) stays
+# pure and I/O lives behind Node-only subpaths. A package-level rule, kept
+# next to the code it describes in packages/heterogeneous-agents/alint/rules.
+# Scoped to the browser-reachable layer plus the spawn pipeline: Node-only
+# files are free to use Node, and sending them only buys "no violation" noise.
+# The import graph itself is guarded deterministically by runtimeBoundary.test.ts and the eslint runtime-boundary pattern.
+[[config.group]]
+files = [
+  "packages/heterogeneous-agents/src/*.ts",
+  "packages/heterogeneous-agents/src/adapters/**/*.ts",
+  "packages/heterogeneous-agents/src/client/**/*.ts",
+  "packages/heterogeneous-agents/src/client/**/*.tsx",
+  "packages/heterogeneous-agents/src/errors/**/*.ts",
+  "packages/heterogeneous-agents/src/quota/**/*.ts",
+  "packages/heterogeneous-agents/src/utils/**/*.ts",
+  "packages/heterogeneous-agents/src/mainAgentCoordinator/**/*.ts",
+  "packages/heterogeneous-agents/src/subagentCoordinator/**/*.ts",
+  "packages/heterogeneous-agents/src/providerBinding/**/*.ts",
+  "packages/heterogeneous-agents/src/codex/protocol/**/*.ts",
+  "packages/heterogeneous-agents/src/kimiCode/usage.ts",
+  "packages/heterogeneous-agents/src/spawn/agentStreamPipeline.ts",
+  "packages/heterogeneous-agents/src/spawn/spawnAgent.ts",
+]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/generated.ts" ]
+
+[config.group.plugins]
+hetero = "./packages/heterogeneous-agents/alint/rules"
+
+[config.group.rules]
+"hetero/agent-layering" = "error"
+
+# Heterogeneous agents: a host capability (CLI credentials, process-failure
+# classification, quota sampling, spawn setup) sits behind a Node-only entry
+# even when it is pure; the fix is moving it, never a browser-portable rewrite.
+# Scoped to the files the browser entries own. Per file the model cannot see
+# who imports a symbol, so it reports only what the file itself proves.
+[[config.group]]
+files = [
+  "packages/heterogeneous-agents/src/*.ts",
+  "packages/heterogeneous-agents/src/client/**/*.ts",
+  "packages/heterogeneous-agents/src/client/**/*.tsx",
+  "packages/heterogeneous-agents/src/errors/**/*.ts",
+  "packages/heterogeneous-agents/src/quota/**/*.ts",
+  "packages/heterogeneous-agents/src/utils/**/*.ts",
+]
+# Barrels are left out: a re-export's browser consumers are not visible from the barrel.
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/generated.ts", "**/index.ts" ]
+
+[config.group.plugins]
+hetero = "./packages/heterogeneous-agents/alint/rules"
+
+[config.group.rules]
+"hetero/host-capability-placement" = "warn"
+
 # Calibration fixtures: one group per rule so a fixture only meets its own rule.
 [[config.group]]
 files = [ "packages/alint/fixtures/pmap-over-promise-all/**" ]
@@ -94,3 +190,24 @@ files = [ "packages/alint/fixtures/no-transactions-in-models/**" ]
 lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-transactions-in-models" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-node-in-browser/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-node-in-browser" = "warn"
+
+[[config.group]]
+files = [ "packages/heterogeneous-agents/alint/fixtures/agent-layering/**" ]
+[config.group.plugins]
+hetero = "./packages/heterogeneous-agents/alint/rules"
+[config.group.rules]
+"hetero/agent-layering" = "warn"
+
+[[config.group]]
+files = [ "packages/heterogeneous-agents/alint/fixtures/host-capability-placement/**" ]
+[config.group.plugins]
+hetero = "./packages/heterogeneous-agents/alint/rules"
+[config.group.rules]
+"hetero/host-capability-placement" = "warn"

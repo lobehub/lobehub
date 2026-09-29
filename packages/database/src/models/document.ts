@@ -15,6 +15,7 @@ import {
   inArray,
   isNull,
   ne,
+  notExists,
   notInArray,
   or,
   sum,
@@ -22,6 +23,7 @@ import {
 
 import type { DocumentItem, NewDocument } from '../schemas';
 import {
+  agentDocuments,
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
@@ -429,6 +431,51 @@ export class DocumentModel {
   };
 
   /**
+   * Mirror a file's placement / name onto the document row(s) backed by it
+   * (`documents.file_id = fileId`). The knowledge-base tree is rendered from
+   * `documents.parent_id`, so moving only the `files` row leaves the item under
+   * its old folder. Counterpart of the document → file sync in
+   * `DocumentService.updateDocument`.
+   */
+  syncFromFile = async (fileId: string, value: { name?: string; parentId?: string | null }) => {
+    const patch: Partial<DocumentItem> = {};
+    if (value.name !== undefined) {
+      patch.title = value.name;
+      patch.filename = value.name;
+    }
+    if (value.parentId !== undefined) patch.parentId = value.parentId;
+    if (Object.keys(patch).length === 0) return [];
+
+    return this.db
+      .update(documents)
+      .set({ ...patch, updatedAt: nextDocumentUpdatedAt() })
+      .where(
+        and(
+          this.readScope(),
+          eq(documents.fileId, fileId),
+          // Skip documents that are an agent's own copy of the file
+          // (AgentDocumentsService.importFile): they keep their collision-safe VFS filename and
+          // agent-folder parent. Such a copy is created together with its agent_documents
+          // binding in one transaction, so both rows share `created_at` (defaultNow() is fixed
+          // per transaction). `associateDocument` binds a document that already existed, so an
+          // associated knowledge-base mirror or page keeps following the file.
+          notExists(
+            this.db
+              .select({ id: agentDocuments.id })
+              .from(agentDocuments)
+              .where(
+                and(
+                  eq(agentDocuments.documentId, documents.id),
+                  eq(agentDocuments.createdAt, documents.createdAt),
+                ),
+              ),
+          ),
+        ),
+      )
+      .returning({ id: documents.id });
+  };
+
+  /**
    * Publish one private document into the workspace. Convenience wrapper
    * around `setVisibility(rootId, 'public')`; kept as a named method for the
    * TRPC `publishDocumentToWorkspace` procedure and existing callers.
@@ -501,7 +548,7 @@ export class DocumentModel {
             eq(works.resourceId, rootId),
             buildWorkspaceWhere(
               { userId: this.userId, workspaceId: this.workspaceId },
-              { userId: works.userId, workspaceId: works.workspaceId },
+              { isDeleted: works.isDeleted, userId: works.userId, workspaceId: works.workspaceId },
             ),
           ),
         );

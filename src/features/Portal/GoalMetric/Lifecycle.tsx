@@ -1,18 +1,23 @@
 import type { GoalEventType, GoalGraphEvent, GoalNodeKind } from '@lobechat/types';
 import { Empty, Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { GithubIcon } from '@lobehub/ui/icons';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
   Archive,
+  ArrowUpRight,
+  Ban,
   Check,
+  GitPullRequest,
   History,
   Link2,
   type LucideIcon,
+  PackageCheck,
+  Pause,
   Pencil,
   Play,
   Plus,
-  Settings2,
   Unlink,
   X,
 } from 'lucide-react';
@@ -20,14 +25,30 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AssigneeProfileAvatar from '@/features/AgentGoals/ProcessControl/AssigneeProfileAvatar';
+import {
+  artifactIconOf,
+  openTargetOf,
+  useOpenGoalArtifact,
+} from '@/features/AgentGoals/ProcessControl/Deliverables';
 import type {
+  GoalArtifactView,
   GoalGraphView,
   GoalNodeView,
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { KIND_ICON } from '@/features/AgentGoals/ProcessControl/shared';
 import { useGoalNodeSelect } from '@/features/AgentGoals/ProcessControl/useGoalProcessActions';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import UserAvatar from '@/features/User/UserAvatar';
 import { goalSelectors, useGoalStore } from '@/store/goal';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+
+import {
+  type LifecycleNote,
+  type LifecyclePresentation,
+  nodeTwinKey,
+  presentLifecycleEvent,
+} from './lifecycleEvent';
 
 /**
  * The goal's history as a timeline, newest first and grouped by day. Each event
@@ -39,8 +60,49 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
  */
 
 const BADGE = 20;
+/** The metric panel body's padding (`Body`), which is also the scroller's. */
+const PANEL_PADDING = 16;
+/** How much closer to the panel title a stuck day label sits than at rest. */
+const STUCK_LIFT = 12;
 
 const styles = createStaticStyles(({ css }) => ({
+  artifact: css`
+    margin: 0;
+    padding-block: 8px;
+    padding-inline: 10px;
+    border: none;
+    border-radius: ${cssVar.borderRadius};
+
+    font: inherit;
+    color: ${cssVar.colorText};
+    text-align: start;
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  artifactIcon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  artifactOpenable: css`
+    cursor: pointer;
+
+    &:hover {
+      background: ${cssVar.colorFillSecondary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
+    }
+  `,
   badge: css`
     display: flex;
     flex: none;
@@ -51,12 +113,18 @@ const styles = createStaticStyles(({ css }) => ({
     height: ${BADGE}px;
     border-radius: 50%;
   `,
+  // Sticks past the panel's top edge instead of at the scroller's padding edge,
+  // so rows scrolling by never show through a gap above it, and a stuck label
+  // sits close under the panel title rather than a full padding below it. The
+  // negative margin cancels the extra padding, leaving the resting layout as is.
+  // Each day's header is bounded by its own group, so the next day pushes it out.
   day: css`
     position: sticky;
     z-index: 1;
-    inset-block-start: 0;
+    inset-block-start: -${PANEL_PADDING + STUCK_LIFT}px;
 
-    padding-block: 6px;
+    margin-block-start: -${PANEL_PADDING}px;
+    padding-block: ${PANEL_PADDING + 6}px 6px;
 
     font-size: 12px;
     font-weight: 600;
@@ -67,6 +135,12 @@ const styles = createStaticStyles(({ css }) => ({
   item: css`
     position: relative;
     padding-block-end: 14px;
+
+    /* The next day's header reaches ${PANEL_PADDING}px up above it; the last
+       row leaves that much room so a card's bottom edge is never covered. */
+    &:last-child {
+      padding-block-end: ${PANEL_PADDING}px;
+    }
 
     /* The rail: runs from under this badge to the next one. */
     &:not(:last-child)::before {
@@ -98,6 +172,7 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
+    white-space: pre-line;
     overflow-wrap: anywhere;
 
     background: ${cssVar.colorFillQuaternary};
@@ -158,6 +233,13 @@ const EVENT_VISUAL: Record<GoalEventType, { icon: LucideIcon; tone: Tone }> = {
   retired: { icon: Archive, tone: NEUTRAL },
   unlinked: { icon: Unlink, tone: NEUTRAL },
   updated: { icon: Pencil, tone: NEUTRAL },
+};
+
+const ACTION_ICON: Record<string, LucideIcon> = {
+  paused: Pause,
+  resumed: Play,
+  taskCanceled: Ban,
+  work: PackageCheck,
 };
 
 /**
@@ -229,6 +311,71 @@ const Subject = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView }>
 
 Subject.displayName = 'GoalMetricLifecycleSubject';
 
+const parseUrl = (url: string | null) => {
+  if (!url) return null;
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The glyph and caption a deliverable card leads with. A GitHub link is named
+ * by its own glyph — a pull request as a PR — so its host would only repeat
+ * what the icon already says; any other external link keeps its host.
+ */
+const artifactLook = (artifact: GoalArtifactView) => {
+  const url = artifact.type === 'document' ? null : parseUrl(artifact.url);
+  if (url?.hostname === 'github.com')
+    return {
+      host: null,
+      icon: /\/pull\/\d+/.test(url.pathname) ? GitPullRequest : GithubIcon,
+    };
+  return { host: url?.host ?? null, icon: artifactIconOf(artifact.type) };
+};
+
+/**
+ * A deliverable the event attached, as a card on its own line: the row names
+ * the task that produced it, the card is the thing itself, opened where it
+ * lives.
+ */
+const ArtifactCard = memo<{ artifact: GoalArtifactView }>(({ artifact }) => {
+  const { t } = useTranslation('chat');
+  const open = useOpenGoalArtifact();
+  const openable = !!openTargetOf(artifact);
+  const label = artifact.title || artifact.identifier || t('goalProcess.deliverables.untitled');
+  const { host, icon } = artifactLook(artifact);
+
+  return (
+    <Flexbox
+      horizontal
+      align={'center'}
+      as={openable ? 'button' : 'div'}
+      className={cx(styles.artifact, openable && styles.artifactOpenable)}
+      gap={10}
+      {...(openable ? { onClick: () => open(artifact), type: 'button' as const } : {})}
+    >
+      <span className={styles.artifactIcon}>
+        <Icon color={cssVar.colorTextSecondary} icon={icon} size={16} />
+      </span>
+      <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+        <Text ellipsis fontSize={13} weight={500}>
+          {label}
+        </Text>
+        {host && (
+          <Text ellipsis fontSize={12} type={'secondary'}>
+            {host}
+          </Text>
+        )}
+      </Flexbox>
+      {openable && <Icon color={cssVar.colorTextQuaternary} icon={ArrowUpRight} size={14} />}
+    </Flexbox>
+  );
+});
+
+ArtifactCard.displayName = 'GoalMetricLifecycleArtifact';
+
 const AgentActor = memo<{ agentId: string }>(({ agentId }) => {
   const { t } = useTranslation('chat');
   const meta = useAgentDisplayMeta(agentId);
@@ -247,42 +394,84 @@ const AgentActor = memo<{ agentId: string }>(({ agentId }) => {
 
 AgentActor.displayName = 'GoalMetricLifecycleAgentActor';
 
-const Actor = memo<{ event: GoalGraphEvent }>(({ event }) => {
+const UserActor = memo<{ userId?: string | null }>(({ userId }) => {
   const { t } = useTranslation('chat');
-  if (event.actorType === 'agent' && event.actorId) return <AgentActor agentId={event.actorId} />;
+  const [currentUserId, nickName] = useUserStore((s) => [
+    userProfileSelectors.userId(s),
+    userProfileSelectors.nickName(s),
+  ]);
+
+  // Only the signed-in user can be shown by face; another member's event reads
+  // as "Member" rather than borrowing this user's identity or calling it "You".
+  if (userId && userId !== currentUserId)
+    return (
+      <Text fontSize={13} style={{ flex: 'none' }} weight={500}>
+        {t('goalProcess.actor.member')}
+      </Text>
+    );
 
   return (
     <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
-      {event.actorType === 'system' && (
-        <Icon color={cssVar.colorTextTertiary} icon={Settings2} size={14} />
-      )}
-      <Text fontSize={13} weight={500}>
-        {t(`goalProcess.actor.${event.actorType}` as const)}
+      <UserAvatar size={16} />
+      <Text ellipsis fontSize={13} style={{ maxWidth: 120 }} weight={500}>
+        {nickName || t('goalProcess.actor.user')}
       </Text>
     </Flexbox>
   );
 });
 
+UserActor.displayName = 'GoalMetricLifecycleUserActor';
+
+const Actor = memo<{ event: GoalGraphEvent }>(({ event }) => {
+  const { t } = useTranslation('chat');
+  if (event.actorType === 'agent' && event.actorId) return <AgentActor agentId={event.actorId} />;
+  if (event.actorType === 'user') return <UserActor userId={event.actorId} />;
+
+  // Automatic steps name no actor: the event reads as the action alone, so
+  // the rows a person or agent drove stand out.
+  if (event.actorType === 'system') return null;
+
+  return (
+    <Text fontSize={13} style={{ flex: 'none' }} weight={500}>
+      {t('goalProcess.actor.agent')}
+    </Text>
+  );
+});
+
 Actor.displayName = 'GoalMetricLifecycleActor';
+
+const noteText = (note: LifecycleNote, t: (key: any, options?: any) => string) => {
+  if (!('key' in note)) return note.text;
+  if (note.key === 'mainAgent') return t('goalProcess.lifecycle.note.mainAgent', { text: note.text });
+  return t(`goalProcess.lifecycle.note.${note.key}` as const);
+};
 
 const EventItem = memo<{
   event: GoalGraphEvent;
   graph: GoalGraphView;
   onSelect: (nodeId: string) => void;
-}>(({ event, graph, onSelect }) => {
+  presentation: Exclude<LifecyclePresentation, { hidden: true }>;
+}>(({ event, graph, onSelect, presentation }) => {
   const { t } = useTranslation('chat');
-  const { icon, tone } = EVENT_VISUAL[event.eventType] ?? {
-    icon: History,
-    tone: NEUTRAL,
-  };
+  const visual = EVENT_VISUAL[event.eventType] ?? { icon: History, tone: NEUTRAL };
+  const tone = visual.tone;
+  // A recognised event names what happened more precisely than its raw type:
+  // a canceled task or a delivered Work is not an "edit".
+  const icon = (presentation.action && ACTION_ICON[presentation.action.split('.')[0]]) || visual.icon;
   const subjects = subjectNodes(event, graph);
   const kind = eventKind(event, subjects);
   const phrase = `${event.eventType}.${kind}`;
-  const action = ACTION_PHRASES.has(phrase)
-    ? t(`goalProcess.lifecycle.action.${phrase}` as any)
-    : t(`goalProcess.lifecycle.action.${event.eventType}` as const, {
-        kind: kind ? t(`goalProcess.lifecycle.kind.${kind}` as const) : '',
-      }).trim();
+  const action = presentation.action
+    ? t(`goalProcess.lifecycle.action.${presentation.action}` as const)
+    : ACTION_PHRASES.has(phrase)
+      ? t(`goalProcess.lifecycle.action.${phrase}` as any)
+      : t(`goalProcess.lifecycle.action.${event.eventType}` as const, {
+          kind: kind ? t(`goalProcess.lifecycle.kind.${kind}` as const) : '',
+        }).trim();
+  const artifact = presentation.workVersion
+    ? graph.artifacts.find((item) => item.workVersionId === presentation.workVersion!.id)
+    : undefined;
+  const note = presentation.note ? noteText(presentation.note, t) : undefined;
 
   return (
     <Flexbox horizontal className={styles.item} gap={10}>
@@ -321,9 +510,10 @@ const EventItem = memo<{
             {dayjs(event.createdAt).format('HH:mm')}
           </Text>
         </Flexbox>
-        {event.reason && (
-          <div className={styles.reason} title={event.reason}>
-            {event.reason}
+        {artifact && <ArtifactCard artifact={artifact} />}
+        {note && (
+          <div className={styles.reason} title={note}>
+            {note}
           </div>
         )}
       </Flexbox>
@@ -354,15 +544,29 @@ const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, grap
   const onSelect = useGoalNodeSelect(goalId, graph);
 
   const days = useMemo(() => {
-    const sorted = [...(snapshot?.events ?? [])].sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    const events = snapshot?.events ?? [];
+    const workTypes = new Map(
+      (snapshot?.workVersions ?? []).map((link) => [link.workVersionId, link.work?.type]),
     );
-    const groups: { day: dayjs.Dayjs; events: GoalGraphEvent[] }[] = [];
+    const nodeTwins = new Set(
+      events.filter((event) => event.entityType === 'node' && event.reason).map(nodeTwinKey),
+    );
+    const sorted = [...events].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    type Row = { event: GoalGraphEvent; presentation: Exclude<LifecyclePresentation, { hidden: true }> };
+    const groups: { day: dayjs.Dayjs; rows: Row[] }[] = [];
     for (const event of sorted) {
+      const presentation = presentLifecycleEvent(event, {
+        hasNodeTwin: event.entityType === 'goal' && nodeTwins.has(nodeTwinKey(event)),
+        workTypeOf: (id) => workTypes.get(id),
+      });
+      // Bookkeeping rows are dropped before grouping so a day holding nothing
+      // else does not leave an empty header behind.
+      if (presentation.hidden) continue;
+      const row = { event, presentation };
       const day = dayjs(event.createdAt).startOf('day');
       const last = groups.at(-1);
-      if (last?.day.isSame(day)) last.events.push(event);
-      else groups.push({ day, events: [event] });
+      if (last?.day.isSame(day)) last.rows.push(row);
+      else groups.push({ day, rows: [row] });
     }
     return groups;
   }, [snapshot]);
@@ -371,13 +575,19 @@ const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, grap
     return <Empty description={t('goalProcess.metricDetail.lifecycle.empty')} icon={History} />;
 
   return (
-    <Flexbox gap={8}>
-      {days.map(({ day, events }) => (
-        <Flexbox gap={4} key={day.valueOf()}>
+    <Flexbox gap={0}>
+      {days.map(({ day, rows }) => (
+        <Flexbox gap={2} key={day.valueOf()}>
           <div className={styles.day}>{dayLabel(day)}</div>
           <Flexbox gap={0}>
-            {events.map((event) => (
-              <EventItem event={event} graph={graph} key={event.id} onSelect={onSelect} />
+            {rows.map(({ event, presentation }) => (
+              <EventItem
+                event={event}
+                graph={graph}
+                key={event.id}
+                presentation={presentation}
+                onSelect={onSelect}
+              />
             ))}
           </Flexbox>
         </Flexbox>

@@ -30,6 +30,7 @@ import {
   userSettings,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { notTrashed } from '../utils/softDelete';
 
 export const AGENT_INTERVENTION_INVALID_REVIEW_TOKEN_HASH =
   'AGENT_INTERVENTION_INVALID_REVIEW_TOKEN_HASH';
@@ -2049,6 +2050,7 @@ export class AgentInterventionModel {
           this.workspaceId
             ? eq(messages.workspaceId, this.workspaceId)
             : isNull(messages.workspaceId),
+          notTrashed(messages.isDeleted),
         ),
       )
       .limit(1)
@@ -2190,6 +2192,7 @@ export class AgentInterventionModel {
           this.workspaceId
             ? eq(messages.workspaceId, this.workspaceId)
             : isNull(messages.workspaceId),
+          notTrashed(messages.isDeleted),
         ),
       )
       .limit(1)

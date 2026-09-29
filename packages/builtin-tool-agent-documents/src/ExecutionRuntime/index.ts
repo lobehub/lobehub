@@ -182,6 +182,30 @@ export interface AgentDocumentsRuntimeOptions {
   onDocumentsMutated?: (params: { documentId?: string }) => MaybePromise<void>;
 }
 
+/**
+ * Models regularly echo the `documentId` field from listDocuments/createDocument
+ * back instead of `id`, or drop the id entirely. Accept `documentId` as an alias
+ * (reads resolve either identifier) and fail with an actionable message when
+ * neither is present, instead of looking up and reporting `undefined`.
+ */
+const UUID_PATTERN = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+
+const resolveTargetId = <T extends { id: string }>(
+  args: T,
+  apiName: string,
+): { args: T } | { error: BuiltinServerRuntimeOutput } => {
+  const { documentId: alias, ...rest } = args as T & { documentId?: unknown };
+  const id = typeof args.id === 'string' && args.id.trim() ? args.id : alias;
+  if (typeof id === 'string' && id.trim()) return { args: { ...rest, id } as T };
+
+  return {
+    error: {
+      content: `${apiName} requires \`id\`: pass the \`id\` field returned by listDocuments or createDocument (e.g. "3f2c…-uuid").`,
+      success: false,
+    },
+  };
+};
+
 export class AgentDocumentsExecutionRuntime {
   constructor(
     private service: AgentDocumentsRuntimeService,
@@ -197,6 +221,17 @@ export class AgentDocumentsExecutionRuntime {
    */
   notifyMutated(params: { documentId?: string } = {}): Promise<void> {
     return Promise.resolve(this.options.onDocumentsMutated?.(params));
+  }
+
+  /**
+   * Mutations without a pre-read (copy, load rule) key off the binding id, so a
+   * backing `docs_` id received through the `documentId` alias is resolved first.
+   */
+  private async resolveBindingId(agentId: string, id: string): Promise<string | undefined> {
+    if (UUID_PATTERN.test(id)) return id;
+
+    const existing = await this.service.readDocument({ agentId, id });
+    return existing?.id;
   }
 
   private resolveAgentId(context?: AgentDocumentOperationContext) {
@@ -393,6 +428,16 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
+    if (typeof args.content !== 'string') {
+      return {
+        content:
+          'createDocument requires `content` (the document body as markdown or plain text) and a `title`. Nothing was created.',
+        success: false,
+      };
+    }
+    // An omitted title falls back to the body's leading H1, then a default name.
+    if (typeof args.title !== 'string') args = { ...args, title: '' };
+
     const scope = args.scope ?? 'agent';
     const topicId = this.resolveTopicId(context);
     if (scope === 'currentTopic' && !topicId) {
@@ -433,9 +478,13 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async readDocument(
-    args: ReadDocumentArgs,
+    rawArgs: ReadDocumentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'readDocument');
+    if ('error' in target) return target.error;
+    const args = target.args;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -456,9 +505,13 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async replaceDocumentContent(
-    args: ReplaceDocumentContentArgs,
+    rawArgs: ReplaceDocumentContentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'replaceDocumentContent');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -469,6 +522,8 @@ export class AgentDocumentsExecutionRuntime {
 
     const existing = await this.service.readDocument({ agentId, id: args.id });
     if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
 
     if (this.isCurrentPageDocument(existing, context)) {
       return this.buildCurrentPageDocumentWriteBlockedResult('replaceDocumentContent');
@@ -501,9 +556,13 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async modifyNodes(
-    args: ModifyDocumentNodesArgs,
+    rawArgs: ModifyDocumentNodesArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'modifyNodes');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -514,6 +573,8 @@ export class AgentDocumentsExecutionRuntime {
 
     const existing = await this.service.readDocument({ agentId, id: args.id });
     if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
 
     if (this.isCurrentPageDocument(existing, context)) {
       return this.buildCurrentPageDocumentWriteBlockedResult('modifyNodes');
@@ -563,9 +624,13 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async removeDocument(
-    args: RemoveDocumentArgs,
+    rawArgs: RemoveDocumentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'removeDocument');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -580,6 +645,8 @@ export class AgentDocumentsExecutionRuntime {
     // impl previously ran this lookup imperatively for the delete registration).
     const existing = await this.service.readDocument({ agentId, id: args.id });
     if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
 
     const deleted = await this.service.removeDocument({
       ...args,
@@ -602,9 +669,13 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async renameDocument(
-    args: RenameDocumentArgs,
+    rawArgs: RenameDocumentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'renameDocument');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -615,6 +686,8 @@ export class AgentDocumentsExecutionRuntime {
 
     const existing = await this.service.readDocument({ agentId, id: args.id });
     if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
 
     if (this.isCurrentPageDocument(existing, context)) {
       return this.buildCurrentPageDocumentWriteBlockedResult('renameDocument');
@@ -644,9 +717,12 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async copyDocument(
-    args: CopyDocumentArgs,
+    rawArgs: CopyDocumentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'copyDocument');
+    if ('error' in target) return target.error;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -654,6 +730,10 @@ export class AgentDocumentsExecutionRuntime {
         success: false,
       };
     }
+
+    const bindingId = await this.resolveBindingId(agentId, target.args.id);
+    if (!bindingId) return { content: `Document not found: ${target.args.id}`, success: false };
+    const args = { ...target.args, id: bindingId };
 
     const copied = await this.service.copyDocument({
       ...args,
@@ -683,9 +763,12 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async updateLoadRule(
-    args: UpdateLoadRuleArgs,
+    rawArgs: UpdateLoadRuleArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'updateLoadRule');
+    if ('error' in target) return target.error;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -693,6 +776,10 @@ export class AgentDocumentsExecutionRuntime {
         success: false,
       };
     }
+
+    const bindingId = await this.resolveBindingId(agentId, target.args.id);
+    if (!bindingId) return { content: `Document not found: ${target.args.id}`, success: false };
+    const args = { ...target.args, id: bindingId };
 
     const updated = await this.service.updateLoadRule({ ...args, agentId });
     if (!updated) return { content: `Document not found: ${args.id}`, success: false };

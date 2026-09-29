@@ -104,8 +104,6 @@ const styles = createStaticStyles(({ css }) => ({
   sectionLabel: css`
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   `,
 }));
 

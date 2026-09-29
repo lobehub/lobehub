@@ -12,6 +12,7 @@ import {
   loadEarlierMessagePage,
   MESSAGE_LIST_VERIFICATION_INTERVAL,
   messageListKey,
+  type MessageListPage,
   runMessageListQuery,
 } from './cache';
 
@@ -248,40 +249,47 @@ describe('message list client cache', () => {
   });
 });
 
-describe('earlier history (round-cursor pages, LOBE-13716)', () => {
+describe('earlier history (round-cursor pages)', () => {
   const message = (id: string, createdAt: number, role = 'assistant') =>
     ({ content: id, createdAt, id, role, updatedAt: createdAt }) as unknown as UIChatMessage;
 
   const ids = (list: UIChatMessage[] | undefined) => list?.map((item) => item.id);
 
+  // Threads have no round-cursor read, so their pages derive the cursor from
+  // the oldest loaded row — the legacy path these cases pin down.
+  const threadContext = { ...context, threadId: 'thread-1' };
+
+  /** A page from a read path that reports no round cursor (older history unknown). */
+  const asPage = (messages: UIChatMessage[]): MessageListPage => ({ messages });
+
   it('fetches a page older than the oldest mainline row and returns the merged transcript', async () => {
     const window = [message('u2', 10, 'user'), message('a2', 11)];
-    const fetcher = vi.fn().mockResolvedValue([message('u1', 1, 'user'), message('a1', 2)]);
+    const fetcher = vi.fn().mockResolvedValue(asPage([message('u1', 1, 'user'), message('a1', 2)]));
 
-    const merged = await loadEarlierMessagePage(context, () => window, fetcher);
+    const merged = await loadEarlierMessagePage(threadContext, () => window, fetcher);
 
-    expect(fetcher).toHaveBeenCalledWith({ createdAt: new Date(10), id: 'u2' });
+    expect(fetcher).toHaveBeenCalledWith({ createdAt: new Date(10).toISOString(), id: 'u2' });
     expect(ids(merged)).toEqual(['u1', 'a1', 'u2', 'a2']);
   });
 
   it('never uses a synthetic group node as the round cursor', async () => {
     const window = [message('group-1', 5, 'compressedGroup'), message('u2', 10, 'user')];
-    const fetcher = vi.fn().mockResolvedValue([message('u1', 1, 'user')]);
+    const fetcher = vi.fn().mockResolvedValue(asPage([message('u1', 1, 'user')]));
 
-    await loadEarlierMessagePage(context, () => window, fetcher);
+    await loadEarlierMessagePage(threadContext, () => window, fetcher);
 
-    expect(fetcher).toHaveBeenCalledWith({ createdAt: new Date(10), id: 'u2' });
+    expect(fetcher).toHaveBeenCalledWith({ createdAt: new Date(10).toISOString(), id: 'u2' });
   });
 
   it('re-attaches loaded history to later revalidations of the same identity', async () => {
     const window = [message('u2', 10, 'user'), message('a2', 11)];
     await loadEarlierMessagePage(
-      context,
+      threadContext,
       () => window,
-      async () => [message('u1', 1, 'user')],
+      async () => asPage([message('u1', 1, 'user')]),
     );
 
-    const revalidated = await runMessageListQuery(context, async () => window);
+    const revalidated = await runMessageListQuery(threadContext, async () => window);
 
     expect(ids(revalidated)).toEqual(['u1', 'u2', 'a2']);
   });
@@ -289,15 +297,15 @@ describe('earlier history (round-cursor pages, LOBE-13716)', () => {
   it('drops cached pages when the fresh window slid past the join point', async () => {
     const window = [message('u2', 10, 'user'), message('a2', 11)];
     await loadEarlierMessagePage(
-      context,
+      threadContext,
       () => window,
-      async () => [message('u1', 1, 'user')],
+      async () => asPage([message('u1', 1, 'user')]),
     );
 
     // The window moved forward: u2 (the join point) fell out of it. Merging
     // would leave an invisible gap, so the transcript collapses to the window.
     const slidWindow = [message('u3', 20, 'user'), message('a3', 21)];
-    const revalidated = await runMessageListQuery(context, async () => slidWindow);
+    const revalidated = await runMessageListQuery(threadContext, async () => slidWindow);
 
     expect(revalidated).toBe(slidWindow);
   });
@@ -305,38 +313,38 @@ describe('earlier history (round-cursor pages, LOBE-13716)', () => {
   it('deduplicates rows the fresh window already contains', async () => {
     const window = [message('u2', 10, 'user'), message('a2', 11)];
     await loadEarlierMessagePage(
-      context,
+      threadContext,
       () => window,
-      async () => [message('u1', 1, 'user'), message('a1', 2)],
+      async () => asPage([message('u1', 1, 'user'), message('a1', 2)]),
     );
 
     // A later window that reaches further back overlaps the cached page.
     const extendedWindow = [message('a1', 2), message('u2', 10, 'user'), message('a2', 11)];
-    const revalidated = await runMessageListQuery(context, async () => extendedWindow);
+    const revalidated = await runMessageListQuery(threadContext, async () => extendedWindow);
 
     expect(ids(revalidated)).toEqual(['u1', 'a1', 'u2', 'a2']);
   });
 
   it('marks the identity exhausted only on an empty page and stops fetching', async () => {
     const window = [message('u1', 10, 'user')];
-    const fetcher = vi.fn().mockResolvedValue([]);
+    const fetcher = vi.fn().mockResolvedValue(asPage([]));
 
-    const merged = await loadEarlierMessagePage(context, () => window, fetcher);
+    const merged = await loadEarlierMessagePage(threadContext, () => window, fetcher);
 
     expect(merged).toBeUndefined();
-    expect(getEarlierHistoryStatus(context).exhausted).toBe(true);
+    expect(getEarlierHistoryStatus(threadContext).exhausted).toBe(true);
 
-    await loadEarlierMessagePage(context, () => window, fetcher);
+    await loadEarlierMessagePage(threadContext, () => window, fetcher);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it('ignores a second load while one page is in flight', async () => {
     const window = [message('u2', 10, 'user')];
     const firstPage = deferred<UIChatMessage[]>();
-    const fetcher = vi.fn().mockReturnValue(firstPage.promise);
+    const fetcher = vi.fn().mockReturnValue(firstPage.promise.then(asPage));
 
-    const first = loadEarlierMessagePage(context, () => window, fetcher);
-    const second = await loadEarlierMessagePage(context, () => window, fetcher);
+    const first = loadEarlierMessagePage(threadContext, () => window, fetcher);
+    const second = await loadEarlierMessagePage(threadContext, () => window, fetcher);
 
     expect(second).toBeUndefined();
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -350,9 +358,9 @@ describe('earlier history (round-cursor pages, LOBE-13716)', () => {
     const page = deferred<UIChatMessage[]>();
 
     const pending = loadEarlierMessagePage(
-      context,
+      threadContext,
       () => current,
-      () => page.promise,
+      () => page.promise.then(asPage),
     );
     // A stream appends a reply while the page is in flight.
     current = [message('u2', 10, 'user'), message('a2', 11)];
@@ -366,15 +374,15 @@ describe('earlier history (round-cursor pages, LOBE-13716)', () => {
     const page = deferred<UIChatMessage[]>();
 
     const pending = loadEarlierMessagePage(
-      context,
+      threadContext,
       () => window,
-      () => page.promise,
+      () => page.promise.then(asPage),
     );
     invalidateMessageListClientState(() => true);
     page.resolve([message('u1', 1, 'user')]);
 
     expect(await pending).toBeUndefined();
-    const revalidated = await runMessageListQuery(context, async () => window);
+    const revalidated = await runMessageListQuery(threadContext, async () => window);
     expect(revalidated).toBe(window);
   });
 
@@ -383,60 +391,140 @@ describe('earlier history (round-cursor pages, LOBE-13716)', () => {
     const page = deferred<UIChatMessage[]>();
 
     const pending = loadEarlierMessagePage(
-      context,
+      threadContext,
       () => current,
-      () => page.promise,
+      () => page.promise.then(asPage),
     );
     current = undefined;
     page.resolve([message('u1', 1, 'user')]);
 
     expect(await pending).toBeUndefined();
     // The page is still remembered for the next revalidation of this identity.
-    const revalidated = await runMessageListQuery(context, async () => [message('u2', 10, 'user')]);
+    const revalidated = await runMessageListQuery(threadContext, async () => [
+      message('u2', 10, 'user'),
+    ]);
     expect(ids(revalidated)).toEqual(['u1', 'u2']);
   });
 
   it('clears cached history on invalidation so stale rows cannot resurrect', async () => {
     const window = [message('u2', 10, 'user')];
     await loadEarlierMessagePage(
-      context,
+      threadContext,
       () => window,
-      async () => [message('u1', 1, 'user')],
+      async () => asPage([message('u1', 1, 'user')]),
     );
 
     invalidateMessageListClientState(() => true);
 
-    const revalidated = await runMessageListQuery(context, async () => window);
+    const revalidated = await runMessageListQuery(threadContext, async () => window);
     expect(revalidated).toBe(window);
+  });
+
+  describe('with a round cursor reported by the server', () => {
+    const cursorOf = (id: string, createdAt: string) => ({ createdAt, id });
+
+    it('waits for the server cursor instead of deriving one on a cursor-paged topic', async () => {
+      // A window restored from the persisted cache before its revalidation
+      // lands carries no server cursor yet.
+      const window = [message('u2', 10, 'user'), message('a2', 11)];
+      const fetcher = vi.fn();
+
+      expect(await loadEarlierMessagePage(context, () => window, fetcher)).toBeUndefined();
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(getEarlierHistoryStatus(context).exhausted).toBe(false);
+
+      // Once revalidation reports the lossless cursor, the next gesture pages.
+      const windowCursor = cursorOf('u2', '1970-01-01T00:00:00.010123Z');
+      await runMessageListQuery(context, async () => ({
+        messages: window,
+        olderCursor: windowCursor,
+      }));
+      fetcher.mockResolvedValue({ messages: [message('u1', 1, 'user')], olderCursor: null });
+
+      await loadEarlierMessagePage(context, () => window, fetcher);
+      expect(fetcher).toHaveBeenCalledWith(windowCursor);
+    });
+
+    it('never fetches when the window already holds the topic start', async () => {
+      const window = [message('u1', 10, 'user'), message('a1', 11)];
+      await runMessageListQuery(context, async () => ({ messages: window, olderCursor: null }));
+      const fetcher = vi.fn();
+
+      const merged = await loadEarlierMessagePage(context, () => window, fetcher);
+
+      expect(merged).toBeUndefined();
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(getEarlierHistoryStatus(context).exhausted).toBe(true);
+    });
+
+    it("pages from the window's lossless cursor instead of the oldest row", async () => {
+      const window = [message('u2', 10, 'user'), message('a2', 11)];
+      const windowCursor = cursorOf('u2', '1970-01-01T00:00:00.010123Z');
+      await runMessageListQuery(context, async () => ({
+        messages: window,
+        olderCursor: windowCursor,
+      }));
+      const fetcher = vi
+        .fn()
+        .mockResolvedValue({ messages: [message('u1', 1, 'user')], olderCursor: null });
+
+      const merged = await loadEarlierMessagePage(context, () => window, fetcher);
+
+      expect(fetcher).toHaveBeenCalledWith(windowCursor);
+      expect(ids(merged)).toEqual(['u1', 'u2', 'a2']);
+    });
+
+    it('stops after the page that reached the topic start', async () => {
+      const window = [message('u3', 20, 'user')];
+      await runMessageListQuery(context, async () => ({
+        messages: window,
+        olderCursor: cursorOf('u3', '1970-01-01T00:00:00.020Z'),
+      }));
+      const olderCursor = cursorOf('u2', '1970-01-01T00:00:00.010Z');
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce({ messages: [message('u2', 10, 'user')], olderCursor })
+        .mockResolvedValueOnce({ messages: [message('u1', 1, 'user')], olderCursor: null });
+
+      let current: UIChatMessage[] = window;
+      current = (await loadEarlierMessagePage(context, () => current, fetcher)) ?? current;
+      current = (await loadEarlierMessagePage(context, () => current, fetcher)) ?? current;
+      await loadEarlierMessagePage(context, () => current, fetcher);
+
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenLastCalledWith(olderCursor);
+      expect(ids(current)).toEqual(['u1', 'u2', 'u3']);
+      expect(getEarlierHistoryStatus(context).exhausted).toBe(true);
+    });
   });
 
   it('evicts the least-recently-used identity once the earlier-history cache is full', async () => {
     const window = [message('u2', 10, 'user')];
-    const oldest = { ...context, topicId: 'topic-evicted' };
+    const oldest = { ...threadContext, topicId: 'topic-evicted' };
     // Exhaust the first identity, then flood the cache with 30 more.
     await loadEarlierMessagePage(
       oldest,
       () => window,
-      async () => [],
+      async () => asPage([]),
     );
     expect(getEarlierHistoryStatus(oldest).exhausted).toBe(true);
 
     for (let i = 0; i < 30; i++) {
       await loadEarlierMessagePage(
-        { ...context, topicId: `topic-fill-${i}` },
+        { ...threadContext, topicId: `topic-fill-${i}` },
         () => window,
-        async () => [message('u1', 1, 'user')],
+        async () => asPage([message('u1', 1, 'user')]),
       );
     }
 
     // The exhausted marker was evicted with the entry: the identity fetches again.
     expect(getEarlierHistoryStatus(oldest).exhausted).toBe(false);
-    const fetcher = vi.fn().mockResolvedValue([]);
+    const fetcher = vi.fn().mockResolvedValue(asPage([]));
     await loadEarlierMessagePage(oldest, () => window, fetcher);
     expect(fetcher).toHaveBeenCalledTimes(1);
 
     // The most recent identity survives: its cached page still re-attaches.
-    const survivor = { ...context, topicId: 'topic-fill-29' };
+    const survivor = { ...threadContext, topicId: 'topic-fill-29' };
     const revalidated = await runMessageListQuery(survivor, async () => window);
     expect(ids(revalidated)).toEqual(['u1', 'u2']);
   });

@@ -1,4 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import { MergeStrategyEnum } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ToolExecutionContext } from '../../types';
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   recordUserMemoryLexicalSearchDecision: vi.fn(),
   searchMemory: vi.fn(),
   shouldRunUserMemoryLexicalSearch: vi.fn(),
+  updateIdentityEntry: vi.fn(),
 }));
 
 vi.mock('@/database/models/userMemory', () => ({
@@ -22,6 +24,7 @@ vi.mock('@/database/models/userMemory', () => ({
   UserMemoryModel: vi.fn().mockImplementation(function () {
     return {
       searchMemory: mocks.searchMemory,
+      updateIdentityEntry: mocks.updateIdentityEntry,
     };
   }),
 }));
@@ -190,6 +193,32 @@ describe('memoryRuntime', () => {
       decision: 'skipped_long_context',
       queryCharacters: Array.from(longQuery).length,
       source: 'tool',
+    });
+  });
+
+  // A tool call sends only the fields it changes; replace must not clear the rest.
+  it('updates only the identity fields the tool call sent, keeping the rest on replace', async () => {
+    mocks.embeddings.mockResolvedValueOnce([[0.1, 0.2, 0.3]]);
+    mocks.initModelRuntimeWithUserPayload.mockReturnValueOnce({
+      embeddings: mocks.embeddings,
+    });
+    mocks.updateIdentityEntry.mockResolvedValueOnce(true);
+
+    const runtime = await memoryRuntime.factory(createContext());
+
+    const result = await runtime.updateIdentityMemory({
+      id: 'mem_1',
+      mergeStrategy: MergeStrategyEnum.Replace,
+      set: { title: null, withIdentity: { description: null, role: 'lead maintainer' } },
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.updateIdentityEntry).toHaveBeenCalledWith({
+      base: undefined,
+      identity: { role: 'lead maintainer' },
+      identityId: 'mem_1',
+      mergeStrategy: 'replace',
+      preserveOmittedFields: true,
     });
   });
 });

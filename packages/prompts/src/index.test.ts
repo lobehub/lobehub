@@ -27,7 +27,6 @@ describe('Main Index Export', () => {
       'chainSummaryAgentName',
       'chainSummaryDescription',
       'chainSummaryGenerationTitle',
-      'chainSummaryHistory',
       'chainSummaryTags',
       'chainSummaryTitle',
       'chainTranslate',

@@ -102,6 +102,139 @@ describe('AgentDocumentsExecutionRuntime', () => {
     });
   });
 
+  describe('tool arguments the model gets wrong', () => {
+    it('reads by the `documentId` alias when `id` is missing', async () => {
+      // Production: readDocument({ documentId: "905d1809-…" }) returned
+      // "Document not found: undefined" for documents that existed.
+      const readDocument = vi.fn().mockResolvedValue({
+        content: 'Working notes',
+        documentId: 'docs_test_read',
+        id: '905d1809-b765-48bc-890e-84e82d9986e7',
+        title: 'Notes',
+      });
+      const runtime = createRuntime({ readDocument });
+
+      const result = await runtime.readDocument(
+        { documentId: '905d1809-b765-48bc-890e-84e82d9986e7', format: 'markdown' } as any,
+        { agentId: 'agent-1' },
+      );
+
+      expect(readDocument).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        format: 'markdown',
+        id: '905d1809-b765-48bc-890e-84e82d9986e7',
+      });
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Working notes');
+    });
+
+    it('mutates by the binding id when given a backing `docs_` id', async () => {
+      const readDocument = vi.fn().mockResolvedValue({
+        documentId: 'docs_test_write',
+        id: '6740f044-b58b-47eb-bdc0-21ade6c85eb2',
+        title: 'Design Directives',
+      });
+      const replaceDocumentContent = vi.fn().mockResolvedValue({ title: 'Design Directives' });
+      const runtime = createRuntime({ readDocument, replaceDocumentContent });
+
+      const result = await runtime.replaceDocumentContent(
+        { content: 'new body', documentId: 'docs_test_write' } as any,
+        { agentId: 'agent-1' },
+      );
+
+      expect(replaceDocumentContent).toHaveBeenCalledWith(
+        expect.objectContaining({ id: '6740f044-b58b-47eb-bdc0-21ade6c85eb2' }),
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it('copies and updates load rules by the binding id when given a backing `docs_` id', async () => {
+      const readDocument = vi.fn().mockResolvedValue({
+        documentId: 'docs_test_write',
+        id: '6740f044-b58b-47eb-bdc0-21ade6c85eb2',
+        title: 'Design Directives',
+      });
+      const copyDocument = vi.fn().mockResolvedValue({
+        documentId: 'docs_copy',
+        id: 'copy-binding',
+        title: 'Design Directives (copy)',
+      });
+      const updateLoadRule = vi.fn().mockResolvedValue({
+        documentId: 'docs_test_write',
+        title: 'Design Directives',
+      });
+      const runtime = createRuntime({ copyDocument, readDocument, updateLoadRule });
+
+      await runtime.copyDocument({ documentId: 'docs_test_write' } as any, {
+        agentId: 'agent-1',
+      });
+      await runtime.updateLoadRule(
+        { documentId: 'docs_test_write', rule: { rule: 'always' } } as any,
+        { agentId: 'agent-1' },
+      );
+
+      expect(copyDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ id: '6740f044-b58b-47eb-bdc0-21ade6c85eb2' }),
+      );
+      expect(updateLoadRule).toHaveBeenCalledWith(
+        expect.objectContaining({ id: '6740f044-b58b-47eb-bdc0-21ade6c85eb2' }),
+      );
+    });
+
+    it('does not pre-read when copy already has a binding id', async () => {
+      const readDocument = vi.fn();
+      const copyDocument = vi.fn().mockResolvedValue({ documentId: 'docs_c', id: 'c', title: 'C' });
+      const runtime = createRuntime({ copyDocument, readDocument });
+
+      await runtime.copyDocument({ id: '6740f044-b58b-47eb-bdc0-21ade6c85eb2' } as any, {
+        agentId: 'agent-1',
+      });
+
+      expect(readDocument).not.toHaveBeenCalled();
+    });
+
+    it('explains the missing `id` instead of reporting "Document not found: undefined"', async () => {
+      const readDocument = vi.fn();
+      const runtime = createRuntime({ readDocument });
+
+      const result = await runtime.readDocument({ format: 'xml' } as any, { agentId: 'agent-1' });
+
+      expect(readDocument).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.content).not.toContain('undefined');
+      expect(result.content).toContain('readDocument requires `id`');
+    });
+
+    it('rejects createDocument without content instead of crashing', async () => {
+      const createDocument = vi.fn();
+      const runtime = createRuntime({ createDocument });
+
+      const result = await runtime.createDocument({} as any, { agentId: 'agent-1' });
+
+      expect(createDocument).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('createDocument requires `content`');
+    });
+
+    it('passes an empty title through when the model omits it', async () => {
+      const createDocument = vi.fn().mockResolvedValue({
+        documentId: 'docs_new',
+        id: 'agent-doc-new',
+        title: 'Research Notes V2',
+      });
+      const runtime = createRuntime({ createDocument });
+
+      const result = await runtime.createDocument(
+        { content: '# Research Notes V2\n\nbody' } as any,
+        { agentId: 'agent-1' },
+      );
+
+      expect(createDocument).toHaveBeenCalledWith(expect.objectContaining({ title: '' }));
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Research Notes V2');
+    });
+  });
+
   it('surfaces the identity block and pre-reads documentId when removing a document', async () => {
     const readDocument = vi.fn().mockResolvedValue({
       documentId: 'backing-doc-1',

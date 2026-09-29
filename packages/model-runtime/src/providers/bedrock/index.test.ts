@@ -312,6 +312,36 @@ describe('LobeBedrockAI', () => {
         ]);
       });
 
+      it('should omit disabled thinking when the mapped Bedrock id always thinks', async () => {
+        // Sonnet 5 accepts `disabled`; a channel redirect to Sonnet 5.5 rejects it with a 400.
+        const mappedInstance = new LobeBedrockAI({
+          accessKeyId: 'test-access-key-id',
+          accessKeySecret: 'test-access-key-secret',
+          modelIdMapping: { 'claude-sonnet-5': 'global.anthropic.claude-sonnet-5-5' },
+          region: 'us-west-2',
+        });
+        const mockStream = new ReadableStream({
+          start(controller) {
+            controller.enqueue('Hello, world!');
+            controller.close();
+          },
+        });
+        vi.spyOn(mappedInstance['client'], 'send').mockResolvedValue(
+          Promise.resolve(mockStream) as any,
+        );
+
+        await mappedInstance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'claude-sonnet-5',
+          thinking: { type: 'disabled' },
+        } as any);
+
+        const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
+          .calls[0][0];
+        expect(commandInput.modelId).toBe('global.anthropic.claude-sonnet-5-5');
+        expect(JSON.parse(commandInput.body)).not.toHaveProperty('thinking');
+      });
+
       it('should drop assistant prefill when a logical id maps to a Claude 5 Bedrock id', async () => {
         // The channel modelIdMapping resolves the actually-sent Bedrock model
         // id; the prefill guard must follow it, not the logical id.

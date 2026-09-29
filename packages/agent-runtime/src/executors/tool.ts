@@ -442,6 +442,22 @@ const pauseForTools = async ({
   };
   newState.pendingToolsCalling = toolsCalling;
 
+  // Same rule as the human-approval pause: an approve resume seeds an assistant
+  // placeholder for its first `call_llm`, but an approved async tool (a group
+  // member task, a sub-agent) parks the run instead. The server-side resume
+  // writes its own reply once the tool lands, so the seed would stay behind as
+  // an empty "…" sibling that hides that reply. A client-tool pause keeps it:
+  // its result resumes this same turn and fills the seed.
+  if (reason === 'async_tool' && newState.pendingAssistantMessageId) {
+    const orphanId = newState.pendingAssistantMessageId;
+    newState.pendingAssistantMessageId = undefined;
+    try {
+      await host.transports.messages.deleteMessage(orphanId);
+    } catch {
+      // leaving the placeholder is cosmetic; parking correctly is not
+    }
+  }
+
   return {
     events: [
       {

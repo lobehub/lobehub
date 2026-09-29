@@ -24,9 +24,16 @@ vi.mock('@/hooks/usePermission', () => ({
   }),
 }));
 
+const { openRenameModal, updateThreadTitle } = vi.hoisted(() => ({
+  openRenameModal: vi.fn(),
+  updateThreadTitle: vi.fn(),
+}));
+
+vi.mock('@/components/RenameModal', () => ({ openRenameModal }));
+
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ removeThread: vi.fn() }),
+    selector({ removeThread: vi.fn(), updateThreadTitle }),
 }));
 
 const getMenuItem = (
@@ -37,11 +44,25 @@ const getMenuItem = (
 describe('useThreadItemDropdownMenu', () => {
   it('disables thread management actions for workspace viewers', () => {
     const { result } = renderHook(() =>
-      useThreadItemDropdownMenu({ id: 'thread-1', toggleEditing: vi.fn() }),
+      useThreadItemDropdownMenu({ id: 'thread-1', title: 'Thread' }),
     );
     const items = result.current();
 
     expect(getMenuItem(items, 'rename')).toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'delete')).toMatchObject({ disabled: true });
+  });
+
+  it('renames through a modal, not an inline popover', async () => {
+    const { result } = renderHook(() =>
+      useThreadItemDropdownMenu({ id: 'thread-1', title: 'Old title' }),
+    );
+    const rename = getMenuItem(result.current(), 'rename') as unknown as { onClick: () => void };
+    rename.onClick();
+
+    expect(openRenameModal).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultValue: 'Old title' }),
+    );
+    await openRenameModal.mock.calls[0][0].onSave('New title');
+    expect(updateThreadTitle).toHaveBeenCalledWith('thread-1', 'New title');
   });
 });

@@ -62,6 +62,19 @@ const log = debug('lobe-server:skills-runtime');
 const withoutReplay = <T extends { error?: unknown; success: boolean }>(result: T): T =>
   result.success ? result : { ...result, error: { ...toRecord(result.error), kind: 'stop' } };
 
+/**
+ * A prepare the gateway gave up on: its `{"error":"TIMEOUT"}` body, the
+ * transport's `DEVICE_RESPONSE_TIMEOUT` code (an empty-bodied 504), or our own
+ * HTTP deadline when the gateway never answered. Deliberately narrow: a device
+ * whose archive download itself failed (e.g. `504 Gateway Timeout` from the
+ * CDN) has finished, and must not be told the work is still continuing.
+ */
+const isPrepareTimeout = (error?: string) =>
+  !!error &&
+  (/"error"\s*:\s*"TIMEOUT"/.test(error) ||
+    error.startsWith('DEVICE_RESPONSE_TIMEOUT') ||
+    /aborted due to timeout/i.test(error));
+
 interface UserSettingsWithMarketToken {
   market?: {
     accessToken?: string;
@@ -479,6 +492,16 @@ class SkillServerRuntimeService implements SkillRuntimeService {
           if (prepared.error?.includes('Unknown device RPC method')) {
             log('Device %s predates prepareSkillDirectory, falling back', device.deviceId);
             return LEGACY_DEVICE_CLIENT;
+          }
+
+          // The gateway stopped waiting, not the device: it keeps downloading and
+          // unpacking (a multi-MB skill on a slow link outlasts the deadline), and
+          // the next call joins or reuses that work. "Your app may need an
+          // update" sent the model to the user instead of simply trying again.
+          if (isPrepareTimeout(prepared.error)) {
+            return fail(
+              `Preparing skill "${archive.name}" on the user's device did not finish in time. This is usually the device still downloading and unpacking the skill package (a large skill or a slow network); that continues in the background and the finished copy is reused. Wait about a minute, then run the same execScript again. If it keeps timing out, tell the user the device's network looks slow, or that the device may have gone to sleep.`,
+            );
           }
 
           return fail(

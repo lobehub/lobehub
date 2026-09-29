@@ -207,6 +207,11 @@ export const UserLabSchema = z.object({
    */
   enableProjects: z.boolean().optional(),
   /**
+   * show the "my rules" page under memory: the delivery rules distilled from rejected
+   * acceptance rounds, with ordering, grouping and enforcement controls
+   */
+  enableMemoryRules: z.boolean().optional(),
+  /**
    * show the per-agent self-learning (expertise) page and its sidebar entry
    */
   enableSelfLearning: z.boolean().optional(),
@@ -227,8 +232,13 @@ export const UserLabSchema = z.object({
    */
   enableGatewayMux: z.boolean().optional(),
   /**
-   * enable the per-topic acceptance tray above the composer (author a topic's
-   * delivery checklist inline)
+   * enable Goals: hand the agent a goal it plans into tasks, tracks and delivers
+   */
+  enableGoals: z.boolean().optional(),
+  /**
+   * @deprecated Renamed to `enableGoals`. Written alongside it, and read first,
+   * while older clients that only know this key are still around: their writes
+   * touch only this key, so it carries the latest choice.
    */
   enableTopicAcceptance: z.boolean().optional(),
   /**

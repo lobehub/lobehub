@@ -20,8 +20,13 @@ const DEFAULT_MAX_ATTEMPTS_PER_TASK = 8;
  * anyone sees a result.
  */
 const DEFAULT_MAX_CONCURRENT_TASKS = 3;
-/** Turns a goal's main Agent gets when its manager policy does not set its own. */
-export const DEFAULT_MANAGER_MAX_TURNS = 12;
+/**
+ * Turns a goal's main Agent gets when its manager policy does not set its own.
+ * A long-horizon goal re-plans after every round of tasks and every recovery,
+ * so a low cap paused goals mid-delivery with work still queued; the owner can
+ * still set a tighter cap per goal.
+ */
+export const DEFAULT_MANAGER_MAX_TURNS = 50;
 const MAX_CONCURRENT_TASKS_CEILING = 10;
 const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 // Agent runtime refreshes the durable operation lease every third 30-second

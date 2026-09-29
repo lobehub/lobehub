@@ -124,7 +124,12 @@ export class AbandonOperationService {
     const state = await this.coordinator.loadAgentState(operationId);
     if (!state) {
       log('[%s] no agent state in coordinator — already cleaned up', operationId);
-      await this.finalizeRunningOperationWithoutState(operationId, reason, result);
+      await this.finalizeRunningOperationWithoutState(
+        operationId,
+        reason,
+        result,
+        options?.settledAsAbandoned,
+      );
       return result;
     }
     result.found = true;
@@ -261,16 +266,18 @@ export class AbandonOperationService {
     // silently, and a throw inside it is swallowed as non-fatal. Any of those
     // used to leave the operation `running` forever — nothing else retires a
     // non-Goal op, so it stayed live on the dashboard and blocked its own
-    // recovery. `settleRunning` is idempotent and only matches rows still in
-    // `running`, so it cannot overwrite the richer outcome when the dispatch
-    // did happen.
+    // recovery. `settleLive` is idempotent and only matches rows still live, so
+    // it cannot overwrite the richer outcome when the dispatch did happen. It
+    // also covers a parked row (`waiting_for_human` / `waiting_for_async_tool`):
+    // a sub-agent child parked on its own nested call skips the dispatch above,
+    // and once abandoned nothing can ever resume it.
     if (origin.userId) {
       try {
         const settled = await new AgentOperationModel(
           this.db,
           origin.userId,
           origin.workspaceId,
-        ).settleRunning(operationId, 'error');
+        ).settleLive(operationId, 'error');
         if (settled) {
           log('[%s] durable row settled by abandon safety net', operationId);
         }
@@ -365,9 +372,19 @@ export class AbandonOperationService {
     operationId: string,
     reason: string,
     result: FinalizeAbandonedResult,
+    settledAsAbandoned?: boolean,
   ): Promise<void> {
     const op = await this.findOperationRow(operationId);
-    if (!op || !['running', 'waiting_for_human', 'waiting_for_async_tool'].includes(op.status)) {
+    // A caller that already claimed the row (`settleStaleRunning`) has moved it
+    // to `abandoned`, so that status still needs the topic / placeholder /
+    // hook side effects below — otherwise the row retires while the turn keeps
+    // loading.
+    const preClaimed = settledAsAbandoned === true && op?.status === 'abandoned';
+    if (
+      !op ||
+      (!preClaimed &&
+        !['running', 'waiting_for_human', 'waiting_for_async_tool'].includes(op.status))
+    ) {
       return;
     }
 
@@ -380,24 +397,27 @@ export class AbandonOperationService {
       type: AgentRuntimeErrorType.AgentRuntimeError,
     };
 
-    try {
-      await new AgentOperationModel(
-        this.db,
-        op.userId,
-        op.workspaceId ?? undefined,
-      ).recordCompletion(operationId, {
-        completedAt: new Date(),
-        completionReason: 'error',
-        error: { message, type: String(error.type) },
-        llmCalls: 0,
-        processingTimeMs: op.startedAt ? Date.now() - new Date(op.startedAt).getTime() : null,
-        status: 'error',
-        stepCount: 0,
-        toolCalls: 0,
-        totalTokens: 0,
-      });
-    } catch (e) {
-      log('[%s] no-state abandon: recordCompletion failed (non-fatal): %O', operationId, e);
+    // The pre-claim already wrote the terminal row; do not overwrite it.
+    if (!preClaimed) {
+      try {
+        await new AgentOperationModel(
+          this.db,
+          op.userId,
+          op.workspaceId ?? undefined,
+        ).recordCompletion(operationId, {
+          completedAt: new Date(),
+          completionReason: 'error',
+          error: { message, type: String(error.type) },
+          llmCalls: 0,
+          processingTimeMs: op.startedAt ? Date.now() - new Date(op.startedAt).getTime() : null,
+          status: 'error',
+          stepCount: 0,
+          toolCalls: 0,
+          totalTokens: 0,
+        });
+      } catch (e) {
+        log('[%s] no-state abandon: recordCompletion failed (non-fatal): %O', operationId, e);
+      }
     }
 
     const settled = await this.settleOperationTopic(op, operationId);
@@ -453,7 +473,11 @@ export class AbandonOperationService {
           userId: op.userId,
         },
         'error',
-        { skipErrorMessageWrite: true },
+        // Persist onto the pre-claimed `abandoned` row instead of being refused
+        // as a conflicting terminal owner, which would skip the hooks.
+        preClaimed
+          ? { settledAsAbandoned: true, skipErrorMessageWrite: true }
+          : { skipErrorMessageWrite: true },
       );
     } catch (e) {
       log('[%s] no-state abandon: lifecycle dispatch failed (non-fatal): %O', operationId, e);

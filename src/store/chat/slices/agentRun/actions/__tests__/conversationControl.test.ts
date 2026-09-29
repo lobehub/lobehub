@@ -16,7 +16,7 @@ import * as agentDispatcher from '../dispatch/agentDispatcher';
 import { createMockMessage, createMockResolvedAgentConfig, TEST_IDS } from './fixtures';
 import { resetTestEnvironment } from './helpers';
 
-// Mock the tRPC client & agentRuntimeService so the import chain doesn't pull
+// Mock the tRPC client so the import chain doesn't pull
 // server-only code (cloud business packages, redis envs) into the test env.
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
@@ -31,12 +31,6 @@ vi.mock('@/libs/trpc/client', () => ({
       },
       submitHeteroIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
     },
-  },
-}));
-
-vi.mock('@/services/agentRuntime', () => ({
-  agentRuntimeService: {
-    handleHumanIntervention: vi.fn().mockResolvedValue({ success: true }),
   },
 }));
 
@@ -980,6 +974,75 @@ describe('ConversationControl actions', () => {
         executeGatewayAgentSpy.mockRestore();
       });
 
+      it("keeps a group supervisor's live run when approving its member's tool (G-05)", async () => {
+        // The supervisor is not paused: it waits on the member whose tool is being
+        // approved, and streams the continuation plus its own closing on its open
+        // gateway channel. Retiring it dropped the closing from the screen.
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'agt_supervisor';
+        const groupId = 'cg_launch';
+        const topicId = 'tpc_group';
+        const context = { agentId, groupId, scope: 'group', threadId: null, topicId } as any;
+        const chatKey = messageMapKey(context);
+
+        const userMessage = createMockMessage({ id: 'group-user-msg', role: 'user' });
+        const memberAssistant = createMockMessage({
+          agentId: 'agt_carol',
+          id: 'carol-msg',
+          parentId: userMessage.id,
+          role: 'assistant',
+        } as any);
+        const memberTool = createMockMessage({
+          agentId: 'agt_carol',
+          id: 'carol-tool',
+          parentId: memberAssistant.id,
+          plugin: {
+            apiName: 'execScript',
+            arguments: '{"command":"echo hi"}',
+            identifier: 'lobe-skills',
+            type: 'builtin',
+          },
+          role: 'tool',
+          tool_call_id: 'call_carol',
+        } as any);
+
+        let supervisorOpId!: string;
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [userMessage, memberAssistant, memberTool] },
+            gatewayConnections: { 'server-supervisor-op': { status: 'connected' } } as any,
+            messagesMap: { [chatKey]: [userMessage, memberAssistant, memberTool] },
+          });
+          supervisorOpId = result.current.startOperation({
+            context,
+            metadata: { serverOperationId: 'server-supervisor-op' },
+            type: 'execServerAgentRuntime',
+          }).operationId;
+        });
+
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+
+        await act(async () => {
+          await result.current.approveToolCalling('carol-tool', 'group-1', context);
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resumeApproval: expect.objectContaining({ parentMessageId: 'carol-tool' }),
+          }),
+        );
+        expect(result.current.operations[supervisorOpId].status).toBe('running');
+
+        executeGatewayAgentSpy.mockRestore();
+      });
+
       it('uses the generic source claim for a durable edited approval and adopts its precreated op', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = 'server-agent';
@@ -1045,6 +1108,7 @@ describe('ConversationControl actions', () => {
           batchId: 'batch-durable',
           operationId: 'operation-durable',
           resolutionRequestId: expect.any(String),
+          streamFeatures: ['member_runtime_end'],
           targets: [{ toolCallId: 'call-durable', toolMessageId: 'tool-msg-durable' }],
         });
         expect(result.current.dbMessagesMap[chatKey][0].plugin?.arguments).toBe(
@@ -1624,6 +1688,31 @@ describe('ConversationControl actions', () => {
       expect(updateTopicStatusSpy).not.toHaveBeenCalledWith(
         expect.objectContaining({ status: 'active' }),
       );
+    });
+
+    // A stopped group member's card stayed on screen until a reload: its stop
+    // ends no stream this client listens on, so no refetch lands the aborted row.
+    it('settles the stopped card locally', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedDurableTerminalCard(result);
+      vi.spyOn(result.current, 'executeGatewayAgent').mockResolvedValue({} as any);
+      vi.mocked(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).mockResolvedValueOnce(
+        {
+          contractVersion: 2,
+          state: 'claimed',
+          status: 'stopped',
+          success: true,
+        },
+      );
+
+      await act(async () => {
+        await result.current.stopPendingApproval(['tool-msg-terminal-source']);
+      });
+
+      const row = result.current.dbMessagesMap[chatKey].find(
+        (message) => message.id === 'tool-msg-terminal-source',
+      );
+      expect(row?.pluginIntervention?.status).toBe('aborted');
     });
 
     it('completes only the local action when custom cancel wins the durable claim', async () => {
@@ -3044,6 +3133,7 @@ describe('ConversationControl actions', () => {
           batchId: `batch-${interactionKind}`,
           operationId: `server-operation-${interactionKind}`,
           resolutionRequestId: expect.any(String),
+          streamFeatures: ['member_runtime_end'],
           targets: [{ toolCallId: `call-${interactionKind}`, toolMessageId: toolMessage.id }],
         });
         const resolvingIntervention = {

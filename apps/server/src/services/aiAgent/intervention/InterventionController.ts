@@ -383,12 +383,27 @@ export class InterventionController {
       );
     }
 
+    // Read before the interrupt retires the runtime snapshot.
+    const groupMember = await this.deps.agentRuntimeService.loadGroupMemberBridge(operationId);
+
     if (operation.status !== 'interrupted') {
       await this.deps.agentRuntimeService.interruptOperation(operationId);
       await this.deps.agentOperationModel.recordCompletion(operationId, {
         completedAt: new Date(),
         completionReason: 'interrupted',
         status: 'interrupted',
+      });
+    }
+
+    // A group member stopped on its approval never reaches its own completion,
+    // so its bridge never fires and the supervisor stays parked on the member
+    // barrier. Report the stop through the bridge (idempotent: backfills and the
+    // supervisor resume are CAS-guarded, so a retried stop is safe).
+    if (groupMember) {
+      await this.deps.agentRuntimeService.completeGroupActionMember({
+        ...groupMember.bridge,
+        operationId,
+        reason: 'interrupted',
       });
     }
 

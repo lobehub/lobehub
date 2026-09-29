@@ -13,7 +13,7 @@ import type {
   ExperienceMemoryItemSchema,
   PreferenceMemoryItemSchema,
   RemoveIdentityActionSchema,
-  UpdateIdentityActionSchema,
+  UpdateIdentityToolInputSchema,
 } from '@lobechat/memory-user-memory/schemas';
 import type {
   AddActivityMemoryResult,
@@ -642,7 +642,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
   };
 
   updateIdentityMemory = async (
-    input: z.infer<typeof UpdateIdentityActionSchema>,
+    input: z.output<typeof UpdateIdentityToolInputSchema>,
   ): Promise<UpdateIdentityMemoryResult> => {
     try {
       const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
@@ -732,6 +732,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         identity: Object.keys(identityPayload).length > 0 ? identityPayload : undefined,
         identityId: input.id,
         mergeStrategy: input.mergeStrategy,
+        preserveOmittedFields: true,
       });
 
       if (!updated) {

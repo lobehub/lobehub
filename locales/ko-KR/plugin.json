@@ -872,7 +872,6 @@
   "protocolInstall.warning": "⚠️ 이 기능의 출처를 신뢰할 수 있는지 확인해 주세요. 악성 기능은 시스템 보안에 위협이 될 수 있습니다.",
   "search.config.addKey": "API 키 추가",
   "search.config.close": "삭제",
-  "search.config.confirm": "설정 완료 및 재시도",
   "search.crawPages.crawling": "링크 분석 중",
   "search.crawPages.detail.preview": "미리보기",
   "search.crawPages.detail.raw": "원본 텍스트",

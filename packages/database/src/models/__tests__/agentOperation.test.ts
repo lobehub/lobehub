@@ -421,6 +421,33 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('mergeMetadata', () => {
+    it('merges keys into existing metadata and is scoped to the owner', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-merge-metadata';
+      await model.recordStart({ operationId });
+      await serverDB
+        .update(agentOperations)
+        .set({ metadata: { existing: 1 } })
+        .where(eq(agentOperations.id, operationId));
+
+      expect(await model.mergeMetadata(operationId, { supersede: { kind: 'client_missed' } })).toBe(
+        true,
+      );
+      expect((await model.findById(operationId))!.metadata).toEqual({
+        existing: 1,
+        supersede: { kind: 'client_missed' },
+      });
+
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).mergeMetadata(operationId, {
+          foreign: true,
+        }),
+      ).toBe(false);
+      expect((await model.findById(operationId))!.metadata).not.toHaveProperty('foreign');
+    });
+  });
+
   describe('operation lease', () => {
     it('answers whether a run is still live on a given topic', async () => {
       // The ingest path falls back to this when a topic loses its
@@ -607,6 +634,60 @@ describe('AgentOperationModel', () => {
         assistantMessageId: 'asst-1',
         heteroIngestRejection: marker,
       });
+    });
+  });
+
+  describe('settleLive', () => {
+    it('retires running and parked rows but never rewrites a terminal one', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await model.recordStart({ operationId: 'op-live-running' });
+      await model.recordStart({ operationId: 'op-live-human' });
+      await model.recordCompletion('op-live-human', {
+        completionReason: 'waiting_for_human',
+        status: 'waiting_for_human',
+      });
+      await model.recordStart({ operationId: 'op-live-async' });
+      await model.recordCompletion('op-live-async', {
+        completionReason: 'waiting_for_async_tool',
+        status: 'waiting_for_async_tool',
+      });
+      await model.recordStart({ operationId: 'op-live-done' });
+      await model.settleRunning('op-live-done', 'done');
+
+      expect(await model.settleLive('op-live-running', 'error')).toBe(true);
+      expect(await model.settleLive('op-live-human', 'error')).toBe(true);
+      expect(await model.settleLive('op-live-async', 'error')).toBe(true);
+      expect(await model.settleLive('op-live-done', 'error')).toBe(false);
+
+      for (const id of ['op-live-running', 'op-live-human', 'op-live-async']) {
+        expect(await model.findById(id)).toMatchObject({
+          completionReason: 'error',
+          status: 'error',
+        });
+      }
+      expect((await model.findById('op-live-done'))?.status).toBe('done');
+    });
+
+    it('leaves parked rows alone through settleRunning', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await model.recordStart({ operationId: 'op-parked-kept' });
+      await model.recordCompletion('op-parked-kept', {
+        completionReason: 'waiting_for_human',
+        status: 'waiting_for_human',
+      });
+
+      expect(await model.settleRunning('op-parked-kept', 'error')).toBe(false);
+      expect((await model.findById('op-parked-kept'))?.status).toBe('waiting_for_human');
+    });
+
+    it("does not settle another user's row", async () => {
+      await new AgentOperationModel(serverDB, userId).recordStart({
+        operationId: 'op-live-foreign',
+      });
+
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).settleLive('op-live-foreign', 'error'),
+      ).toBe(false);
     });
   });
 

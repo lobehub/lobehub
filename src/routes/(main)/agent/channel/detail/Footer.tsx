@@ -160,7 +160,6 @@ const Footer = memo<FooterProps>(
               danger
               disabled={disabled || saving || connecting}
               icon={<Trash2 size={16} />}
-              type="primary"
               onClick={onDelete}
             >
               {t('channel.removeChannel')}

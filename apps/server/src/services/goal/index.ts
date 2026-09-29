@@ -1,9 +1,14 @@
 import type { GoalAdvanceEffect, GoalMetricCriteriaState } from '@lobechat/agent-tracing';
 import { buildGoalRequirement } from '@lobechat/builtin-tool-goal';
-import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
+import {
+  GOAL_CLARIFICATION_OPTION,
+  GOAL_CLARIFICATION_TITLE,
+  GOAL_COORDINATOR_ACTOR_ID,
+} from '@lobechat/const/goal';
 import type {
   GoalConfig,
   GoalCreateConfig,
+  GoalDecisionOption,
   GoalEdgeKind,
   GoalGraphNode,
   GoalGraphSnapshot,
@@ -81,6 +86,13 @@ import {
   toFrontierTaskState,
   toTraceGraphState,
 } from './traceObservation';
+import {
+  clarificationOptions,
+  collectClarificationAnswers,
+  hasAskedClarification,
+  normalizeUnderstanding,
+  UNDERSTANDING_CONFIDENCE,
+} from './understanding';
 
 const TASK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
 /**
@@ -1421,6 +1433,11 @@ export class GoalService {
     if (decision.options?.length && !decision.options.some((option) => option.id === optionId)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unknown decision option' });
     }
+    // The note *is* the answer for this option; an empty one would re-plan the
+    // goal on nothing and the question could never be asked again.
+    if (optionId === GOAL_CLARIFICATION_OPTION.answer && !resolution?.trim()) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'This answer needs a note' });
+    }
     const resolved = await this.graphModel.resolveDecision(
       goalId,
       decisionId,
@@ -1508,6 +1525,83 @@ export class GoalService {
     });
     await this.transitionStatus(graph.goal, 'running', reason, 'user');
     return goal.id;
+  };
+
+  /**
+   * Answer a goal's clarification round in one go. Each answer resolves like a
+   * single `decide`; the caller schedules one advance afterwards, so the
+   * re-plan sees every answer instead of running after the first.
+   */
+  answerClarifications = async (
+    goalId: string,
+    answers: Array<{ decisionId: string; optionId: string; resolution?: string }>,
+  ) => {
+    const graph = await this.requireGraph(goalId);
+    const decisions = new Map(graph.decisions.map((decision) => [decision.id, decision]));
+
+    // Check the whole round before writing any of it: one bad answer used to
+    // leave the ones before it resolved, and the client's retry then failed on
+    // those. An answer already recorded as given is a retry, not a conflict.
+    const toResolve = answers.filter((answer) => {
+      const decision = decisions.get(answer.decisionId);
+      if (!decision) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Pending decision not found' });
+      }
+      if (decision.status === 'resolved' && decision.resolvedOptionId === answer.optionId) {
+        return false;
+      }
+      if (decision.status !== 'pending') {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Decision was already resolved' });
+      }
+      if (decision.options?.length && !decision.options.some((o) => o.id === answer.optionId)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unknown decision option' });
+      }
+      if (answer.optionId === GOAL_CLARIFICATION_OPTION.answer && !answer.resolution?.trim()) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'This answer needs a note' });
+      }
+      return true;
+    });
+
+    for (const answer of toResolve) {
+      await this.decide(goalId, answer.decisionId, answer.optionId, answer.resolution);
+    }
+  };
+
+  /** Pending clarifications grouped by goal, for surfaces outside the goal page. */
+  pendingClarifications = async () => {
+    const rows = await this.goalModel.listPendingClarifications();
+    const byGoal = new Map<
+      string,
+      {
+        agentId: string | null;
+        goalId: string;
+        questions: Array<{
+          decisionId: string;
+          description: string | null;
+          options: GoalDecisionOption[];
+          question: string;
+        }>;
+        requirement: string | null;
+        title: string;
+      }
+    >();
+    for (const row of rows) {
+      const group = byGoal.get(row.goalId) ?? {
+        agentId: row.agentId,
+        goalId: row.goalId,
+        questions: [],
+        requirement: row.requirement,
+        title: row.goalTitle,
+      };
+      group.questions.push({
+        decisionId: row.decisionId,
+        description: row.description,
+        options: row.options ?? [],
+        question: row.question,
+      });
+      byGoal.set(row.goalId, group);
+    }
+    return [...byGoal.values()];
   };
 
   /**
@@ -2516,10 +2610,38 @@ export class GoalService {
       }
 
       const generator = new GoalCriteriaGeneratorService(this.db, this.userId, this.workspaceId);
-      const plan = await generator.decompose({ requirement }).catch(() => undefined);
+      const clarifications = collectClarificationAnswers(graph);
+      const plan = await generator
+        .decompose({ clarifications, requirement })
+        .catch(() => undefined);
+      // A graph without a problem node has nowhere to hang a question, so its
+      // questions are planned around as assumptions like a re-plan's would be.
+      const understanding = plan
+        ? normalizeUnderstanding(
+            plan,
+            hasAskedClarification(graph) || !problem,
+            clarifications.map((item) => item.question),
+          )
+        : undefined;
 
       const draftTasks: GoalDecompositionDraft['tasks'] = plan?.tasks ?? [
-        { instruction: problem?.description ?? requirement, title: graph.goal.title },
+        {
+          // The user's answers are authoritative; a planner failure after the
+          // clarification round must not start the work without them.
+          instruction: [
+            // After a clarification round, scope the work by the original request
+            // plus the answers — never by a summary a planner wrote earlier.
+            clarifications.length > 0 ? requirement : (problem?.description ?? requirement),
+            clarifications.length > 0
+              ? `Answered clarifications (authoritative):\n${clarifications
+                  .map((item) => `- Q: ${item.question}\n  A: ${item.answer}`)
+                  .join('\n')}`
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+          title: graph.goal.title,
+        },
       ];
 
       // Only the current lease owner may commit. The model call above does not
@@ -2550,10 +2672,55 @@ export class GoalService {
           return undefined;
         const committedEffects: GoalAdvanceEffect[] = [];
 
+        const asking = Boolean(understanding?.ask.length && currentProblem);
         if (plan && currentProblem) {
           // The node's description becomes the planner's own words for the core
-          // question — not the acceptance boilerplate the goal row keeps.
-          await writer.updateNodeDescription(goalId, currentProblem.id, plan.problemStatement);
+          // question — not the acceptance boilerplate the goal row keeps. A plan
+          // that stops to ask commits no tasks, so it keeps the user's own words:
+          // the re-plan, or its fallback, must still read the original request.
+          await writer.updateNodeDescription(
+            goalId,
+            currentProblem.id,
+            asking ? (currentProblem.description ?? plan.problemStatement) : plan.problemStatement,
+            understanding && UNDERSTANDING_CONFIDENCE[understanding.level],
+          );
+        }
+        if (understanding) {
+          await goalModel.updateUnderstanding(goalId, {
+            assumptions: understanding.assumptions,
+            level: understanding.level,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+
+        // A question only the user can answer is asked before anything runs:
+        // Tasks planned on a wrong reading of the goal are the most expensive
+        // way to find out. No Task is created, so the next plan — made with the
+        // answers — starts from the same empty graph.
+        if (asking && understanding && currentProblem) {
+          for (const question of understanding.ask) {
+            const node = await writer.createNode(goalId, {
+              description: question.impact,
+              kind: 'decision',
+              status: 'waiting',
+              title: GOAL_CLARIFICATION_TITLE,
+            });
+            if (!node) throw new Error('Failed to open a clarification decision');
+            await writer.createEdge(goalId, currentProblem.id, node.id, 'leads_to');
+            await writer.createDecision(goalId, node.id, {
+              authority: 'user',
+              options: clarificationOptions(question),
+              question: question.question,
+              requestedUserId: this.userId,
+            });
+            committedEffects.push({
+              detail: question.question,
+              nodeId: currentProblem.id,
+              targetId: node.id,
+              type: 'opened_decision',
+            });
+          }
+          return committedEffects;
         }
 
         const createdIds: string[] = [];
@@ -2611,6 +2778,15 @@ export class GoalService {
         };
       }
       effects.push(...committed);
+
+      const asked = committed.filter((effect) => effect.type === 'opened_decision').length;
+      if (asked > 0) {
+        return {
+          goalId,
+          message: `Asked ${asked} clarification question${asked > 1 ? 's' : ''} before planning`,
+          outcome: 'advanced' as const,
+        };
+      }
 
       return {
         goalId,

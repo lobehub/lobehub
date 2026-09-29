@@ -185,6 +185,47 @@ describe('runVerifyOnCompletion — verification claim', () => {
   });
 
   /**
+   * Regression (T-545): a CLI builder evidenced every criterion with
+   * `result submit`, but the plan also named `deliverable`-scoped text it never
+   * uploads. The handoff counted those as missing, so the builder's final
+   * report was pasted into every check even though the structural gate ignores
+   * that scope.
+   */
+  it('treats deliverable-scoped requirements as covered, like the structural gate', async () => {
+    findByOperation.mockResolvedValue({
+      ...confirmedRun,
+      plan: [
+        {
+          id: 'c1',
+          required: true,
+          verifierConfig: {
+            requiredEvidence: [
+              { scope: 'deliverable', type: 'text' },
+              { scope: 'deliverable', type: 'transcript' },
+            ],
+          },
+        },
+      ],
+    });
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: null,
+      provider: 'claude-code',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'transcript' }]);
+    claimEvidenceCollection.mockResolvedValue(true);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(recordHeterogeneousDeliverableEvidence).not.toHaveBeenCalled();
+    expect(startEvidenceSubmission).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  /**
    * Regression: attaching onto an acceptance whose newest round is still a draft
    * folds this run into it and deletes the source row, moving the operation id
    * across. Keeping the id we came in with meant claiming and reading a row that

@@ -487,6 +487,22 @@ describe('CoreUpdateManager checkForUpdates', () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
+  it('re-announces an already staged core on a manual check', async () => {
+    serveLatest(rendererOnly('1.0.1', 1));
+    const { app, manager } = await loadManager();
+    await manager.checkForUpdates();
+    vi.mocked(app.browserManager.broadcastToAllWindows).mockClear();
+
+    await manager.checkForUpdates();
+    expect(app.browserManager.broadcastToAllWindows).not.toHaveBeenCalled();
+
+    await manager.checkForUpdates({ manual: true });
+    expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
+      kind: 'core-reload',
+      version: '1.0.1',
+    });
+  });
+
   it('stages a main-process change as core-relaunch and switches pointer immediately', async () => {
     serveLatest(mainChanged('1.0.1', 1));
     const { app, manager } = await loadManager();

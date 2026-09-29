@@ -6,17 +6,40 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 
 ## Rules
 
-| Rule                          | Severity | Scope                                  | Source of the rule                              |
-| ----------------------------- | -------- | -------------------------------------- | ----------------------------------------------- |
-| `pmap-over-promise-all`       | error    | `apps/server/src`, `packages/database` | fan-out over a runtime-sized list needs `pMap`  |
-| `no-transactions-in-models`   | error    | `packages/database/src/models`         | cross-table write transactions use repositories |
-| `no-effect-fetching`          | error    | `src/**/*.tsx`                         | `data-fetching-architecture` skill              |
-| `no-dynamic-import-in-server` | warn     | `apps/server/src`, `packages/database` | backend code uses static top-level imports      |
-| `no-mode-flags`               | warn     | `src/**/*.tsx`                         | `compose-atoms` skill                           |
+| Rule                          | Severity | Scope                                                         | Source of the rule                                             |
+| ----------------------------- | -------- | ------------------------------------------------------------- | -------------------------------------------------------------- |
+| `pmap-over-promise-all`       | error    | `apps/server/src`, `packages/database`                        | fan-out over a runtime-sized list needs `pMap`                 |
+| `no-transactions-in-models`   | error    | `packages/database/src/models`                                | cross-aggregate write transactions use repositories            |
+| `no-effect-fetching`          | error    | `src/**/*.tsx`                                                | `data-fetching-architecture` skill                             |
+| `no-dynamic-import-in-server` | warn     | `apps/server/src`, `packages/database`                        | backend code uses static top-level imports                     |
+| `no-mode-flags`               | warn     | `src/**/*.tsx`                                                | `compose-atoms` skill                                          |
+| `no-node-in-browser`          | error    | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | no Node-only npm package where the SPA runs it (paths: ESLint) |
+
+Package-level rules, kept next to the package they describe:
+
+| Rule                               | Severity | Scope                                                                        | Lives in                                    |
+| ---------------------------------- | -------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
+| `hetero/agent-layering`            | error    | the browser-reachable layer of `heterogeneous-agents` and its spawn pipeline | `packages/heterogeneous-agents/alint/rules` |
+| `hetero/host-capability-placement` | warn     | files owned by the browser entries of `heterogeneous-agents` (not barrels)   | `packages/heterogeneous-agents/alint/rules` |
+
+`hetero/host-capability-placement` encodes two review rejections: code that only one Node host uses (the quota sampler, `lh hetero exec`, the desktop main process) moves behind a Node-only entry even when it is pure, and it is never made browser-portable to stay where it is. It reads one file, so it cannot see who imports a symbol; it reports only a host the file names itself, and misses host-only code whose docs do not say so.
 
 `error` is reserved for rules measured at zero false positives on real PRs; an error turns the ALint check red. A rule starts at `warn` and is promoted only after its findings have been read on real PRs. A rule whose findings are mostly true but not worth acting on per PR does not belong here: `test-the-exit-not-the-entry` was removed after five days because it produced 92% of all findings and drowned out the rest.
 
+**What belongs here, and what belongs in ESLint.** A check that an AST or a path list decides — an import path, a banned call, a naming pattern — goes into ESLint, where it is exact, free and runs in the editor. alint takes only what needs judgement: whether a list is runtime-sized, whether a table is another aggregate, whether an effect reads the server. Leaving a deterministic check to a model buys false positives: `no-node-in-browser` once flagged 34 imports on canary and 33 were type-only or browser-safe, while the same boundary written as `no-restricted-imports` (the browser runtime block in `eslint.config.mjs`) found exactly the one real violation. The model also emits findings whose own message concludes "no violation"; a prompt does not reliably suppress that, so every rule states its carve-outs as "return no finding".
+
 Scopes are declared as `[[config.group]]` entries in the root `alint.config.toml`. Never scope a rule with `includeFiles` inside `rule.alint.toml`: it only filters reports, so every file still runs (double the jobs), and it marks the rule uncacheable.
+
+## Where a rule lives
+
+Rules come in two layers, and each layer is registered as its own plugin in `alint.config.toml`:
+
+- **Repo-wide rules** live in `packages/alint/rules` under the `lobehub/` prefix. They state something true of a kind of code wherever it is, for example "browser code imports nothing Node-only" (`no-node-in-browser`).
+- **Package-level rules** live next to the package they describe, in `packages/<pkg>/alint/rules` with their fixtures in `packages/<pkg>/alint/fixtures`, under a prefix of their own (`hetero/` for `heterogeneous-agents`). They encode that package's architecture, for example which of its layers the web app reaches (`agent-layering`), and are only ever scoped to that package.
+
+A per-file rule cannot see an import graph. When a package's boundary matters, pair its package-level rule with a deterministic test of the graph: `heterogeneous-agents` lists its browser entries in `browser-entries.json`; `src/runtimeBoundary.test.ts` walks everything those entries reach and fails on Node built-ins, Node globals such as `Buffer`, or files owned by a Node-only entry, and the root ESLint config reads the same list to reject value imports of any other entry from `src/`.
+
+To add a package-level rule: register the directory as a plugin in the rule's `[[config.group]]`, add a fixture group for it, and add its fixtures directory with the plugin prefix to `FIXTURE_ROOTS` in `fixtures.test.ts`. CI already keys the cache on `packages/*/alint/rules/**` and runs calibration when `packages/*/alint/**` changes.
 
 ## Setup and run
 
@@ -25,8 +48,9 @@ export ALINT_API_KEY=...     # or DEEPSEEK_API_KEY
 bun run alint:setup          # writes .alint/config.toml (gitignored)
 bun run alint plugin install # registers ./packages/alint/rules (once, and after adding a rule)
 
-bun run check --alint          # changed files, alongside the other selectors
-bun run alint --dirty          # the same scope, alint's own reporter
+bun run check --alint          # changed lines of changed files, like CI
+bun run check --alint src/a.ts # explicit paths are linted whole
+bun run alint --dirty          # the same scope as the first line, alint's own reporter
 bun run alint src/features/Foo # any files or directories
 ```
 
@@ -56,10 +80,26 @@ The `alint ·` steps at the end of the "ALint & Test Desktop App" job in `.githu
 
 About 14 input tokens per source line per rule. Two cold runs over the same files differed by one finding; a finding can appear or vanish between runs, which is why fixtures exist and why only rules measured at zero false positives are promoted to `error`.
 
+## Whole-repo calibration, 2026-09-29
+
+Every rule was run cold over all of canary (apps/server, packages, src: 14.7k model calls, 40M input tokens, about 10 minutes at `--rule-concurrency 32`), and each finding was read or sampled. Findings are legacy code; CI and `check --alint` only report changed lines, so they surface when someone edits that line.
+
+| Rule                          | Before | After | What changed                                                                                                                                                        |
+| ----------------------------- | ------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `no-node-in-browser`          | 34     | 0     | 33 were type-only (`import { type X }` is erased without `verbatimModuleSyntax`) or browser-safe; the path part moved to ESLint, which found the one real violation |
+| `no-transactions-in-models`   | 109    | 51    | redefined on aggregates: owned child rows, event / history rows, link rows and cascade deletes are the same aggregate                                               |
+| `no-mode-flags`               | 98     | 17    | only flags that name a host (`inShare`, `embedded`, `mobile` page compositions) and gate fetching or editing                                                        |
+| `no-effect-fetching`          | 48     | 43    | writes then refresh, prefetch, auth / QR handshakes, locale chunks and repeat call sites dropped; store actions fetching on mount added                             |
+| `pmap-over-promise-all`       | 211    | 216   | high precision; code-level registries (adapter maps) no longer reported                                                                                             |
+| `no-dynamic-import-in-server` | 51     | 51    | matches the rule as written; left as `warn`                                                                                                                         |
+| `hetero/*`                    | 0      | 0     |                                                                                                                                                                     |
+
+Known remaining false positives: `no-transactions-in-models` still reports a subtype row deleted with its `user_memories` base row and a topic usage rollup recomputed after a message write (six findings) — one file at a time the model sees another table with its own Model.
+
 ## Adding a rule
 
 1. Create `rules/<name>/rule.alint.toml` with `name`, `builtInAgent = "basic-structured"`, and an `instruction`. Write the rule as the reviewer would: what to report, which line to anchor on, what the message and suggestion must contain, and an explicit "do not report" list. The carve-outs are where the false positives live.
 2. Add a `[[config.group]]` for its scope in `alint.config.toml`, and a fixture group `packages/alint/fixtures/<name>/**`.
 3. Add fixtures under `fixtures/<name>/`: at least one `bad-*` file with a standalone `// alint-expect` comment on the line above the one the finding must anchor to, and one `good-*` file per carve-out. Keep them short and realistic.
-4. Run `bun run alint plugin install`, then `cd packages/alint && bunx vitest run fixtures.test.ts` with a provider set up. The suite skips itself when there is no setup.
+4. Run `bun run alint plugin install`, then `cd packages/alint && bunx vitest run fixtures.test.ts` with a provider set up. The suite skips itself when there is no setup. Delete `.alintcache` after every rule edit while calibrating: the local cache is keyed by file content, so an edited rule otherwise replays the previous rule's findings.
 5. Before enabling the rule on a scope, run it over a few dozen real files and read every finding.

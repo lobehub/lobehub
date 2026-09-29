@@ -602,6 +602,68 @@ describe('AgentRuntimeService', () => {
       }
     });
 
+    // Codex P1 on #20093: the member bridge lived only in the 2h runtime
+    // snapshot, so a late approval continued the supervisor instead.
+    it("keeps a durable copy of a group member's completion bridge on the row", async () => {
+      const recordStart = vi
+        .spyOn(AgentOperationModel.prototype, 'recordStart')
+        .mockResolvedValue(undefined);
+      const bridge = {
+        anchorMessageId: 'msg-speak',
+        expectedMembers: 1,
+        groupToolMessageId: 'msg-speak',
+        mode: 'in_group',
+        onComplete: 'resume',
+        parentOperationId: 'op-supervisor',
+      };
+
+      await service.createOperation({
+        ...mockParams,
+        hooks: [
+          {
+            handler: vi.fn(),
+            id: 'group-member-bridge',
+            type: 'onComplete',
+            webhook: { body: bridge, url: '/api/agent/webhooks/group-member-callback' },
+          },
+        ],
+      } as any);
+
+      expect(recordStart.mock.calls[0][0].metadata).toMatchObject({ groupMemberBridge: bridge });
+    });
+
+    // Codex P2 on #20093: a transient start-row failure used to be swallowed,
+    // so the member ran without the durable bridge its Stop / late approval need.
+    it('refuses to start a group member whose bridge row could not be persisted', async () => {
+      vi.spyOn(AgentOperationModel.prototype, 'recordStart').mockRejectedValue(
+        new Error('db down'),
+      );
+
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          hooks: [
+            {
+              handler: vi.fn(),
+              id: 'group-member-bridge',
+              type: 'onComplete',
+              webhook: {
+                body: {
+                  anchorMessageId: 'msg-speak',
+                  expectedMembers: 1,
+                  groupToolMessageId: 'msg-speak',
+                  mode: 'in_group',
+                  onComplete: 'resume',
+                  parentOperationId: 'op-supervisor',
+                },
+                url: '/api/agent/webhooks/group-member-callback',
+              },
+            },
+          ],
+        } as any),
+      ).rejects.toThrow('Failed to durably persist group member');
+    });
+
     it('keeps the frozen model facts on the run state but out of durable storage', async () => {
       const recordStart = vi
         .spyOn(AgentOperationModel.prototype, 'recordStart')
@@ -3133,6 +3195,68 @@ describe('AgentRuntimeService', () => {
     });
   });
 
+  describe('loadGroupMemberBridge', () => {
+    const bridge = {
+      anchorMessageId: 'msg-speak',
+      expectedMembers: 1,
+      groupToolMessageId: 'msg-speak',
+      mode: 'isolated',
+      onComplete: 'resume',
+      parentOperationId: 'op-supervisor',
+      threadId: 'thd-1',
+    };
+
+    it('reads the member and its bridge from the live runtime snapshot', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        host: { hooks: [{ id: 'group-member-bridge', webhook: { body: bridge } }] },
+        origin: {
+          agentId: 'agt-carol',
+          groupId: 'cg-1',
+          lineage: { orchestrationRole: 'member' },
+          threadId: 'thd-1',
+          topicId: 'tpc-1',
+        },
+      });
+
+      expect(await service.loadGroupMemberBridge('op-carol')).toEqual({
+        agentId: 'agt-carol',
+        bridge,
+        groupId: 'cg-1',
+        threadId: 'thd-1',
+        topicId: 'tpc-1',
+      });
+    });
+
+    it('falls back to the durable row once the snapshot has expired', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        agentId: 'agt-carol',
+        chatGroupId: 'cg-1',
+        metadata: { groupMemberBridge: bridge },
+        threadId: 'thd-1',
+        topicId: 'tpc-1',
+      });
+
+      expect(await service.loadGroupMemberBridge('op-carol')).toEqual({
+        agentId: 'agt-carol',
+        bridge,
+        groupId: 'cg-1',
+        threadId: 'thd-1',
+        topicId: 'tpc-1',
+      });
+    });
+
+    it('is undefined for a run that is not a group member', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        agentId: 'agt-solo',
+        metadata: {},
+      });
+
+      expect(await service.loadGroupMemberBridge('op-solo')).toBeUndefined();
+    });
+  });
+
   describe('completeGroupActionMember', () => {
     const memberState = {
       messages: [
@@ -3153,6 +3277,30 @@ describe('AgentRuntimeService', () => {
       (service as any).messageModel.updateToolMessage = updateToolMessage;
       resumeSpy = vi.spyOn(service, 'tryResumeParentFromAsyncTool').mockResolvedValue(true);
     });
+
+    // G-05 follow-through: a member that inherits manual approval parks on
+    // `waiting_for_human`; that is a pause, not an answer, so the supervisor
+    // must stay parked until the approval continuation reports back.
+    it.each(['in_group', 'isolated'] as const)(
+      'holds the supervisor while a %s member waits for approval',
+      async (mode) => {
+        const won = await service.completeGroupActionMember({
+          anchorMessageId: 'grp-tool-1',
+          expectedMembers: 1,
+          finalState: { ...memberState, status: 'waiting_for_human' } as any,
+          groupToolMessageId: 'grp-tool-1',
+          mode,
+          onComplete: 'resume',
+          operationId: 'child-1',
+          parentOperationId: 'parent-1',
+          reason: 'waiting_for_human',
+        });
+
+        expect(won).toBe(false);
+        expect(updateToolMessage).not.toHaveBeenCalled();
+        expect(resumeSpy).not.toHaveBeenCalled();
+      },
+    );
 
     it('single in-group member: backfills a receipt onto the group tool and resumes', async () => {
       const won = await service.completeGroupActionMember({

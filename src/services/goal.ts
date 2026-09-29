@@ -93,6 +93,18 @@ class GoalService {
 
   resume = async (id: string) => lambdaClient.goal.resume.mutate({ id });
 
+  /** Answer a goal's whole clarification round; the goal re-plans once with every answer. */
+  answerClarifications = async (params: {
+    answers: Array<{ decisionId: string; optionId: string; resolution?: string }>;
+    id: string;
+  }) => lambdaClient.goal.answerClarifications.mutate(params);
+
+  /** Clarifications still waiting on the user, grouped by goal. */
+  pendingClarifications = async () => {
+    const { data } = await lambdaClient.goal.pendingClarifications.query();
+    return data ?? [];
+  };
+
   /** Resolve a pending decision gate. Does not resume a paused goal by itself. */
   decide = async (params: {
     decisionId: string;

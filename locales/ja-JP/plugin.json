@@ -872,7 +872,6 @@
   "protocolInstall.warning": "⚠️ このスキルの出所を信頼していることを確認してください。悪意のあるスキルはシステムの安全を脅かす可能性があります。",
   "search.config.addKey": "キーを追加",
   "search.config.close": "削除",
-  "search.config.confirm": "設定完了し再試行",
   "search.crawPages.crawling": "リンク認識中",
   "search.crawPages.detail.preview": "プレビュー",
   "search.crawPages.detail.raw": "生テキスト",

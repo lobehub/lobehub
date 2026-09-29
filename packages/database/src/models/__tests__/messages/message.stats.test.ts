@@ -1034,9 +1034,9 @@ describe('MessageModel Statistics Tests', () => {
     it('does not leak other users’ topics', async () => {
       const otherModel = new MessageModel(serverDB, otherUserId);
       const stats = await otherModel.topicMessageStats({ role: 'user' });
-      // otherUser only has the single leaked message in s-t1
-      expect(stats.topics).toBe(1);
-      expect(stats.totalMessages).toBe(1);
+      // The mismatched message snapshot cannot grant access to a topic owned by another user.
+      expect(stats.topics).toBe(0);
+      expect(stats.totalMessages).toBe(0);
     });
   });
 

@@ -872,7 +872,6 @@
   "protocolInstall.warning": "Проверьте источник навыка. Вы можете отключить или удалить его в настройках.",
   "search.config.addKey": "Добавить ключ",
   "search.config.close": "Удалить",
-  "search.config.confirm": "Готово, повторить",
   "search.crawPages.crawling": "Определение ссылок",
   "search.crawPages.detail.preview": "Предпросмотр",
   "search.crawPages.detail.raw": "Исходный текст",

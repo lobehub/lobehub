@@ -161,6 +161,17 @@ describe('DocumentCommentModel', () => {
     expect(root.comment.selectionAnchor).toBeNull();
   });
 
+  it('rejects a document in the recycle bin', async () => {
+    await serverDB
+      .update(documents)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(documents.id, documentId));
+
+    await expect(
+      authorModel.create({ clientId: 'trashed', content: 'no', documentId }),
+    ).rejects.toThrow(DOCUMENT_COMMENT_DOCUMENT_NOT_FOUND);
+  });
+
   it('rejects foreign parents and flattens replies to replies into the root thread', async () => {
     await expect(
       authorModel.create({ clientId: 'foreign', content: 'no', documentId: foreignDocumentId }),

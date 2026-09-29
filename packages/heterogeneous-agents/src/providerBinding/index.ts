@@ -1,4 +1,9 @@
 export {
+  CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
+  HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
+  HETEROGENEOUS_PROVIDER_BINDING_PERSONAL_ONLY_ERROR,
+} from './messages';
+export {
   formatHeterogeneousProviderBindingError,
   getHeterogeneousProviderBindingCapability,
   getProviderInferenceProtocols,

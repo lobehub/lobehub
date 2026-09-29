@@ -7,16 +7,16 @@ import {
   formatTextWindowNotice,
   type TextWindow,
 } from '@lobechat/prompts/textWindow';
+import {
+  ARCHIVE_BYPASS_IDENTIFIERS,
+  DEFAULT_TOOL_RESULT_MAX_LENGTH,
+  sliceToolResult,
+} from '@lobechat/prompts/toolResult';
 import debug from 'debug';
 import { sql } from 'drizzle-orm';
 
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
-import {
-  ARCHIVE_BYPASS_IDENTIFIERS,
-  DEFAULT_TOOL_RESULT_MAX_LENGTH,
-  sliceToolResult,
-} from '@/server/utils/truncateToolResult';
 
 import { TOOL_RESULTS_DIR_NAME } from './constants';
 

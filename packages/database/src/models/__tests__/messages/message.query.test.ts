@@ -662,7 +662,7 @@ describe('MessageModel Query Tests', () => {
       });
     });
 
-    describe('round-cursor before pages (LOBE-13716)', () => {
+    describe('round-cursor before pages', () => {
       // Like seedRounds, but with a per-round step count so one round can dwarf
       // the page size — the shape that amplifies the round-start trim.
       const seedVariableRounds = async (topicId: string, stepsPerRound: number[]) => {

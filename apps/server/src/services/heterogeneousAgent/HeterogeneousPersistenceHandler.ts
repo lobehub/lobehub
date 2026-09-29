@@ -18,11 +18,11 @@ import type {
 } from '@lobechat/heterogeneous-agents';
 import {
   createMainAgentRunState,
-  isHeteroStatusGuideErrorData,
   reduceMainAgent,
   rehydrateSubagentRunsState,
 } from '@lobechat/heterogeneous-agents';
 import { isEchoedErrorText } from '@lobechat/heterogeneous-agents/errors';
+import { isHeteroStatusGuideErrorData } from '@lobechat/heterogeneous-agents/processFailure';
 import { type ChatToolPayload, ThreadStatus, ThreadType } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
 import debug from 'debug';

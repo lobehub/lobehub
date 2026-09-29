@@ -66,8 +66,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 11px;
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   `,
 }));
 

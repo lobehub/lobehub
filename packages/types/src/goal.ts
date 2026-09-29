@@ -275,6 +275,22 @@ export interface GoalChangeRequest {
   taskId: string;
 }
 
+/**
+ * How well the coordinator understands what the user wants, as of the last
+ * decomposition. Derived from the concrete unknowns the planner reported rather
+ * than a self-rated score: `low` means a question was put to the user,
+ * `medium` means the plan proceeds on the listed assumptions, `high` means
+ * neither.
+ */
+export type GoalUnderstandingLevel = 'high' | 'medium' | 'low';
+
+export interface GoalUnderstanding {
+  /** What the plan takes as given where the goal did not say; shown for the user to correct. */
+  assumptions: string[];
+  level: GoalUnderstandingLevel;
+  updatedAt: string;
+}
+
 export interface GoalConfig {
   acceptance?: GoalAcceptancePolicy;
   /**
@@ -312,10 +328,15 @@ export interface GoalConfig {
    * Unset means the goal's agent does its own Tasks.
    */
   taskAgentId?: string;
+  /** Coordinator-owned; written by decomposition, never by a policy edit. */
+  understanding?: GoalUnderstanding;
 }
 
 /** Creation accepts planning options, never a runtime receipt. */
-export type GoalCreateConfig = Omit<GoalConfig, 'managerState' | 'report' | 'supervisorState'>;
+export type GoalCreateConfig = Omit<
+  GoalConfig,
+  'managerState' | 'report' | 'supervisorState' | 'understanding'
+>;
 
 /**
  * The goal entity as exposed to clients — a mirror of the `goals` table row.

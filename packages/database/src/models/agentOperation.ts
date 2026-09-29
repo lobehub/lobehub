@@ -351,6 +351,31 @@ export class AgentOperationModel {
     operationId: string,
     status: 'done' | 'error' | 'interrupted',
   ): Promise<boolean> {
+    return this.settleFrom(operationId, status, ['running']);
+  }
+
+  /**
+   * Like {@link settleRunning}, but also retires a row parked in
+   * `waiting_for_human` / `waiting_for_async_tool`. For callers that already
+   * know the run is dead: a parked row whose runtime was abandoned has nothing
+   * left that could ever resume it.
+   */
+  async settleLive(
+    operationId: string,
+    status: 'done' | 'error' | 'interrupted',
+  ): Promise<boolean> {
+    return this.settleFrom(operationId, status, [
+      'running',
+      'waiting_for_human',
+      'waiting_for_async_tool',
+    ]);
+  }
+
+  private async settleFrom(
+    operationId: string,
+    status: 'done' | 'error' | 'interrupted',
+    fromStatuses: AgentOperationStatus[],
+  ): Promise<boolean> {
     const [row] = await this.db
       .update(agentOperations)
       .set({
@@ -361,7 +386,7 @@ export class AgentOperationModel {
       .where(
         and(
           eq(agentOperations.id, operationId),
-          eq(agentOperations.status, 'running'),
+          inArray(agentOperations.status, fromStatuses),
           this.ownership(),
         ),
       )
@@ -392,6 +417,22 @@ export class AgentOperationModel {
           sql`NOT (coalesce(${agentOperations.metadata}, '{}'::jsonb) ? 'heteroIngestRejection')`,
         ),
       )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /**
+   * Shallow-merge top-level keys into the run's durable `metadata`, leaving
+   * every other key intact. Not gated on status: diagnostic records may land on
+   * a run that has already settled.
+   */
+  async mergeMetadata(operationId: string, patch: Record<string, unknown>): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+      })
+      .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .returning({ id: agentOperations.id });
     return Boolean(row);
   }

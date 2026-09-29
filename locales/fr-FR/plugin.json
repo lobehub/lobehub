@@ -872,7 +872,6 @@
   "protocolInstall.warning": "Vérifiez la source de la compétence. Vous pouvez la désactiver ou la supprimer à tout moment dans les paramètres.",
   "search.config.addKey": "Ajouter une clé",
   "search.config.close": "Supprimer",
-  "search.config.confirm": "Terminé, réessayer",
   "search.crawPages.crawling": "Identification des liens",
   "search.crawPages.detail.preview": "Aperçu",
   "search.crawPages.detail.raw": "Texte brut",

@@ -307,6 +307,8 @@ export interface GroupActionMemberBridgeParams {
    * collapse the anchor onto the group tool call itself).
    */
   anchorMessageId: string;
+  /** Member deadline (epoch ms), carried for approval continuations. */
+  deadlineAt?: number;
   /** Total members forked under this group tool call — the K=N barrier target. */
   expectedMembers: number;
   /** Child member op's final state — passed in local mode; loaded otherwise. */
@@ -381,6 +383,13 @@ export interface ExecGroupMemberParams {
   timeout?: number;
   /** Group topic id. */
   topicId: string;
+  /**
+   * The supervisor run's approval policy. Members answer to the same mode the
+   * user picked for the turn, so a `humanIntervention: 'required'` tool still
+   * asks for approval when a member calls it. Falls back to headless only when
+   * the supervisor carries none.
+   */
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 export interface ExecGroupMemberResult {
@@ -394,6 +403,13 @@ export interface ExecGroupMemberResult {
 }
 
 export interface OperationCreationParams {
+  /**
+   * The client starting this run handles `member_runtime_end` (declared via
+   * `aiAgent.execAgent`'s `streamFeatures`). Persisted on the op's metadata so
+   * the Gateway stream notifier renames the group member terminals it mirrors
+   * onto this op's channel only for a client that recognizes the new event.
+   */
+  acceptsMemberRuntimeEnd?: boolean;
   activeDeviceId?: string;
   /**
    * Principal pool the routed `activeDeviceId` lives in. `personal` when a

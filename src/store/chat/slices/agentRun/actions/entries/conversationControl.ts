@@ -314,8 +314,24 @@ export class ConversationControlActionImpl {
     })(this.#get());
     return ops.filter(
       (op) =>
-        op.type === 'execServerAgentRuntime' && op.status === 'running' && !op.metadata?.isAborting,
+        op.type === 'execServerAgentRuntime' &&
+        op.status === 'running' &&
+        !op.metadata?.isAborting &&
+        !(groupId && this.#isLiveGatewayOp(op)),
     );
+  };
+
+  /**
+   * Whether an op's gateway stream is still open. In a group chat that is the
+   * supervisor waiting on its members (e.g. a member parked on the approval
+   * being resolved): it is not paused, it will stream the members' continuation
+   * and its own closing, and retiring it would drop both from the screen.
+   */
+  #isLiveGatewayOp = (op: Operation) => {
+    const serverOperationId = op.metadata?.serverOperationId;
+    if (!serverOperationId) return false;
+    const status = this.#get().gatewayConnections[serverOperationId]?.status;
+    return !!status && status !== 'disconnected';
   };
 
   #resolveHeteroInterventionExecutionOperation = (
@@ -1000,6 +1016,12 @@ export class ConversationControlActionImpl {
           toolMessageIds: addressable,
           topicId,
         });
+      }
+      // Settle the cards locally. A group member's stop ends no stream this
+      // client still listens on, so no refetch would ever land the aborted rows
+      // and the card would stay on screen until a reload.
+      for (const id of addressable) {
+        this.#dispatchInterventionState(id, { status: 'aborted' }, { context: effectiveContext });
       }
       this.#completeOpsById(pausedOpIds);
     } catch (error) {

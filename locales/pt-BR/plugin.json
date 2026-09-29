@@ -872,7 +872,6 @@
   "protocolInstall.warning": "Verifique a fonte da habilidade. Você pode desativá-la ou removê-la a qualquer momento nas configurações.",
   "search.config.addKey": "Adicionar chave",
   "search.config.close": "Remover",
-  "search.config.confirm": "Concluído, tentar novamente",
   "search.crawPages.crawling": "Identificando links",
   "search.crawPages.detail.preview": "Pré-visualização",
   "search.crawPages.detail.raw": "Texto bruto",

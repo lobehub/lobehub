@@ -621,6 +621,347 @@ describe('GatewayMuxClient', () => {
       expect(sub.active).toBe(false);
     });
 
+    it('ignores the session end echoed after a mirrored member terminal (G-02)', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage(agentEvent('op-1', '1', 'agent_runtime_end', 'op-member'));
+      ws.simulateMessage({
+        id: '2',
+        operationId: 'op-1',
+        status: 'completed',
+        type: 'status_change',
+      });
+      ws.simulateMessage({ operationId: 'op-1', type: 'session_complete' } as any);
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(sub.active).toBe(true);
+
+      ws.simulateMessage(agentEvent('op-1', '3', 'agent_runtime_end'));
+      expect(onComplete).toHaveBeenCalledOnce();
+      expect(sub.active).toBe(false);
+    });
+
+    // Codex P1 on #20102: the resubscribe reply reports the status a member's
+    // mirrored terminal left on the supervisor's DO.
+    it('keeps a resubscribed supervisor alive on the status a replayed member terminal left (G-02)', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        } as any,
+        id: '1',
+        operationId: 'op-1',
+        type: 'agent_event',
+      });
+      ws.simulateMessage(agentEvent('op-1', '2', 'step_start'));
+      ws.simulateMessage({
+        gap: false,
+        operationId: 'op-1',
+        status: 'completed',
+        type: 'resume_complete',
+      });
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(sub.active).toBe(true);
+
+      // A status the member's terminal cannot explain still ends it.
+      ws.simulateMessage({
+        gap: false,
+        operationId: 'op-1',
+        status: 'error',
+        type: 'resume_complete',
+      });
+      expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'error' });
+      expect(sub.active).toBe(false);
+    });
+
+    // Codex P1 on #20102 (3rd pass): without the member terminal in THIS
+    // replay, or with part of the replay dropped, the DO's status wins.
+    it('trusts a gapped resume status even after a replayed member terminal', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        } as any,
+        id: '1',
+        operationId: 'op-1',
+        type: 'agent_event',
+      });
+      ws.simulateMessage({
+        gap: true,
+        operationId: 'op-1',
+        status: 'completed',
+        type: 'resume_complete',
+      });
+
+      expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
+    });
+
+    it('trusts the resubscribe status when the member terminal was only seen before the reconnect', async () => {
+      const { mux } = createMux();
+      const sub = mux.subscribe('op-1');
+      const ws = await connectAndReady(mux);
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage({
+        gap: false,
+        operationId: 'op-1',
+        status: 'running',
+        type: 'resume_complete',
+      });
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        } as any,
+        id: '1',
+        operationId: 'op-1',
+        type: 'agent_event',
+      });
+
+      ws.simulateClose();
+      await vi.advanceTimersByTimeAsync(500);
+      const ws2 = await settle();
+      ws2.simulateMessage(READY);
+      // Hibernated DO: empty replay, authoritative `completed`.
+      ws2.simulateMessage({
+        gap: false,
+        operationId: 'op-1',
+        status: 'completed',
+        type: 'resume_complete',
+      });
+
+      expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
+    });
+
+    // Codex P1 on #20102 (round 2): the member terminal was acknowledged before
+    // the socket dropped, so the resubscribe replays only its sequenced echo.
+    describe('carries an owed echo across a reconnect (G-02)', () => {
+      const memberEnd = (reason: string): MuxServerMessage => ({
+        event: {
+          data: { reason },
+          operationId: 'op-member',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        } as any,
+        id: '1',
+        operationId: 'op-1',
+        type: 'agent_event',
+      });
+
+      const reconnectAfterMemberEnd = async (reason: string) => {
+        const { mux } = createMux();
+        const sub = mux.subscribe('op-1');
+        const ws = await connectAndReady(mux);
+        const onComplete = vi.fn();
+        sub.on('session_complete', onComplete);
+        ws.simulateMessage(memberEnd(reason));
+
+        ws.simulateClose();
+        await vi.advanceTimersByTimeAsync(500);
+        const ws2 = await settle();
+        ws2.simulateMessage(READY);
+        return { onComplete, sub, ws2 };
+      };
+
+      it('reads a replayed session_complete echo and its stamped status as the member end', async () => {
+        const { onComplete, sub, ws2 } = await reconnectAfterMemberEnd('done');
+
+        ws2.simulateMessage({ id: '2', operationId: 'op-1', type: 'session_complete' } as any);
+        ws2.simulateMessage({
+          gap: false,
+          operationId: 'op-1',
+          status: 'completed',
+          type: 'resume_complete',
+        });
+
+        expect(onComplete).not.toHaveBeenCalled();
+        expect(sub.active).toBe(true);
+
+        ws2.simulateMessage(agentEvent('op-1', '3', 'agent_runtime_end'));
+        expect(onComplete).toHaveBeenCalledOnce();
+        expect(sub.active).toBe(false);
+      });
+
+      it('reads a replayed terminal status_change echo as the member end', async () => {
+        const { onComplete, sub, ws2 } = await reconnectAfterMemberEnd('error');
+
+        ws2.simulateMessage({
+          id: '2',
+          operationId: 'op-1',
+          status: 'error',
+          type: 'status_change',
+        });
+        ws2.simulateMessage({
+          gap: false,
+          operationId: 'op-1',
+          status: 'error',
+          type: 'resume_complete',
+        });
+
+        expect(onComplete).not.toHaveBeenCalled();
+        expect(sub.active).toBe(true);
+      });
+
+      it('stops owing an echo the replay did not deliver', async () => {
+        const { onComplete, ws2 } = await reconnectAfterMemberEnd('error');
+
+        ws2.simulateMessage({
+          gap: false,
+          operationId: 'op-1',
+          status: 'running',
+          type: 'resume_complete',
+        });
+        // A later watchdog error is the supervisor's genuine end.
+        ws2.simulateMessage({
+          id: '2',
+          operationId: 'op-1',
+          status: 'error',
+          type: 'status_change',
+        });
+
+        expect(onComplete).toHaveBeenCalledWith({ source: 'status_change', status: 'error' });
+      });
+    });
+
+    // Codex P2 on #20102: echoes are counted by order, not by a time window.
+    it('reads late echoes as the member terminal and honors the next end (G-02)', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage(agentEvent('op-1', '1', 'agent_runtime_end', 'op-member'));
+      await vi.advanceTimersByTimeAsync(30_000); // renderer suspended
+      ws.simulateMessage({
+        id: '2',
+        operationId: 'op-1',
+        status: 'completed',
+        type: 'status_change',
+      });
+      ws.simulateMessage({ operationId: 'op-1', type: 'session_complete' } as any);
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(sub.active).toBe(true);
+
+      // Echoes spent: a watchdog's terminal status now ends the supervisor.
+      ws.simulateMessage({ id: '3', operationId: 'op-1', status: 'error', type: 'status_change' });
+      expect(onComplete).toHaveBeenCalledWith({ source: 'status_change', status: 'error' });
+    });
+
+    // Codex P1 on #20102: v2 echoes a member ending with ONE signal, chosen by
+    // its status — only that one may be owed, or the leftover swallows the
+    // supervisor's own end.
+    describe('owes only the v2 echo the member status produces (G-02)', () => {
+      const memberEnd = (reason: string) =>
+        ({
+          event: {
+            data: { reason },
+            operationId: 'op-member',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'agent_runtime_end',
+          } as any,
+          id: '1',
+          operationId: 'op-1',
+          type: 'agent_event',
+        }) as MuxServerMessage;
+
+      it('interrupted member, then the supervisor completes via session_complete', async () => {
+        const { mux } = createMux();
+        const ws = await connectAndReady(mux);
+        const sub = mux.subscribe('op-1');
+        const onComplete = vi.fn();
+        sub.on('session_complete', onComplete);
+
+        ws.simulateMessage(memberEnd('interrupted'));
+        ws.simulateMessage({
+          id: '2',
+          operationId: 'op-1',
+          status: 'interrupted',
+          type: 'status_change',
+        });
+        expect(onComplete).not.toHaveBeenCalled();
+
+        ws.simulateMessage({ id: '3', operationId: 'op-1', type: 'session_complete' } as any);
+        expect(onComplete).toHaveBeenCalledWith({ source: 'raw_session_complete' });
+        expect(sub.active).toBe(false);
+      });
+
+      it('completed member, then the supervisor fails via status_change{error}', async () => {
+        const { mux } = createMux();
+        const ws = await connectAndReady(mux);
+        const sub = mux.subscribe('op-1');
+        const onComplete = vi.fn();
+        sub.on('session_complete', onComplete);
+
+        ws.simulateMessage(memberEnd('done'));
+        ws.simulateMessage({ id: '2', operationId: 'op-1', type: 'session_complete' } as any);
+        expect(onComplete).not.toHaveBeenCalled();
+
+        ws.simulateMessage({
+          id: '3',
+          operationId: 'op-1',
+          status: 'error',
+          type: 'status_change',
+        });
+        expect(onComplete).toHaveBeenCalledWith({ source: 'status_change', status: 'error' });
+        expect(sub.active).toBe(false);
+      });
+
+      it('errored member, then the supervisor is interrupted', async () => {
+        const { mux } = createMux();
+        const ws = await connectAndReady(mux);
+        const sub = mux.subscribe('op-1');
+        const onComplete = vi.fn();
+        sub.on('session_complete', onComplete);
+
+        ws.simulateMessage(memberEnd('error'));
+        ws.simulateMessage({
+          id: '2',
+          operationId: 'op-1',
+          status: 'error',
+          type: 'status_change',
+        });
+        expect(onComplete).not.toHaveBeenCalled();
+
+        ws.simulateMessage({
+          id: '3',
+          operationId: 'op-1',
+          status: 'interrupted',
+          type: 'status_change',
+        });
+        expect(onComplete).toHaveBeenCalledWith({ source: 'status_change', status: 'interrupted' });
+      });
+    });
+
     it('subscribe_failed emits auth_failed and ends the subscription', async () => {
       const { mux } = createMux();
       const ws = await connectAndReady(mux);

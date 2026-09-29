@@ -17,7 +17,6 @@ export interface ChatThreadState {
   threadInputMessage: string;
   threadLoadingIds: string[];
   threadMaps: Record<string, ThreadItem[]>;
-  threadRenamingId?: string;
   threadsInit?: boolean;
   /**
    * when open thread creator, set the message id to it

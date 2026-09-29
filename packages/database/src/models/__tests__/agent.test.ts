@@ -96,6 +96,17 @@ describe('AgentModel', () => {
       // Its actual creator passes.
       expect(await agentModel2.existsOwnedById(othersAgent)).toBe(true);
     });
+
+    it('rejects an agent owned by the caller when it is in the recycle bin', async () => {
+      const agentId = 'trashed-owned-agent-id';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB
+        .update(agents)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(agents.id, agentId));
+
+      expect(await agentModel.existsOwnedById(agentId)).toBe(false);
+    });
   });
 
   describe('getAgentConfigById', () => {

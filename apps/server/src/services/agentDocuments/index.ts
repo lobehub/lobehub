@@ -649,7 +649,9 @@ export class AgentDocumentsService {
     // The caller's explicit title wins; a leading H1 only names untitled documents.
     // The H1 is stripped from the body only when it duplicates the chosen title.
     const { title: extractedTitle, content: strippedContent } = extractMarkdownH1Title(content);
-    const finalTitle = title.trim() || extractedTitle || title;
+    // Tool callers do not always send `title` even though the schema asks for it.
+    const requestedTitle = typeof title === 'string' ? title.trim() : '';
+    const finalTitle = requestedTitle || extractedTitle || '';
     const finalContent = extractedTitle === finalTitle ? strippedContent : content;
     const metadata = options.hintIsSkill
       ? {

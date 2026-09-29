@@ -150,11 +150,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
               <Text fontSize={13} type={'secondary'}>
                 {t('goalList.loadErrorDescription')}
               </Text>
-              <Button
-                icon={RefreshCwIcon}
-                size={'small'}
-                onClick={() => void refreshGoals(scopeId)}
-              >
+              <Button icon={RefreshCwIcon} onClick={() => void refreshGoals(scopeId)}>
                 {t('goalList.retry')}
               </Button>
             </Flexbox>

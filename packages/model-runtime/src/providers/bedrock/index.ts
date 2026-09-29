@@ -338,6 +338,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     const resolvedThinking = resolveClaudeThinkingConfig({
       maxTokens: resolvedMaxTokens,
       model,
+      requestModel: this.resolveModelId(model),
       thinking,
     });
 

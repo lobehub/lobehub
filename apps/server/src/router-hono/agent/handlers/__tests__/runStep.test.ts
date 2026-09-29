@@ -14,6 +14,9 @@ const mockExecuteStep = vi.fn();
 const mockScheduleContinuation = vi.fn();
 const mockReleaseOperationLock = vi.fn();
 const mockGetServerDB = vi.hoisted(() => vi.fn());
+const mockFinalizeAbandoned = vi.hoisted(() => vi.fn());
+const mockSettleStaleRunning = vi.hoisted(() => vi.fn());
+const mockResumeAbandonedParent = vi.hoisted(() => vi.fn());
 // Lets a test force the step-boundary flush to report a timeout; undefined
 // means use the real implementation.
 const flushOverride = vi.hoisted(() => ({ settled: undefined as boolean | undefined }));
@@ -50,8 +53,24 @@ vi.mock('@/server/services/aiAgent', () => ({
   }),
 }));
 
+vi.mock('@/server/services/agentRuntime', () => ({
+  AbandonOperationService: vi.fn().mockImplementation(function () {
+    return { finalizeAbandoned: mockFinalizeAbandoned };
+  }),
+}));
+
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
+}));
+
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: vi.fn().mockImplementation(function () {
+    return { settleStaleRunning: mockSettleStaleRunning };
+  }),
+}));
+
+vi.mock('../resumeAbandonedParent', () => ({
+  resumeAbandonedParent: mockResumeAbandonedParent,
 }));
 
 function buildOperationDiagnosticDB(row?: any) {
@@ -113,6 +132,11 @@ describe('runStep handler', () => {
     mockScheduleContinuation.mockReset();
     mockReleaseOperationLock.mockReset();
     mockGetServerDB.mockResolvedValue({} as any);
+    mockFinalizeAbandoned.mockReset();
+    mockFinalizeAbandoned.mockResolvedValue({ abandoned: true, found: false });
+    mockSettleStaleRunning.mockReset();
+    mockSettleStaleRunning.mockResolvedValue(true);
+    mockResumeAbandonedParent.mockReset();
   });
 
   afterEach(() => {
@@ -168,6 +192,87 @@ describe('runStep handler', () => {
       upstashRetried: null,
     });
     warnSpy.mockRestore();
+  });
+
+  describe('orphaned operation settle', () => {
+    const orphanRow = (overrides: Record<string, unknown> = {}) =>
+      buildOperationDiagnosticDB({
+        completedAt: null,
+        startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        status: 'running',
+        stepCount: null,
+        traceS3Key: null,
+        updatedAt: new Date(Date.now() - 20 * 60 * 1000),
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+        ...overrides,
+      });
+
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      mockGetOperationMetadata.mockResolvedValue(null);
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(function () {});
+    });
+    afterEach(() => {
+      warnSpy.mockRestore();
+    });
+
+    it('claims the expired lease, then abandons onto the claimed row', async () => {
+      mockGetServerDB.mockResolvedValue(orphanRow());
+      const { ctx } = buildContext({ body: validBody });
+
+      const res = await runStep(ctx);
+
+      expect(res.status).toBe(401);
+      const staleBefore = mockSettleStaleRunning.mock.calls[0][1] as Date;
+      expect(mockSettleStaleRunning).toHaveBeenCalledWith('op-1', expect.any(Date));
+      expect(Date.now() - staleBefore.getTime()).toBeGreaterThanOrEqual(10 * 60 * 1000 - 1000);
+      expect(mockFinalizeAbandoned).toHaveBeenCalledWith('op-1', 'operation_metadata_missing', {
+        settledAsAbandoned: true,
+      });
+      expect(mockResumeAbandonedParent).not.toHaveBeenCalled();
+    });
+
+    it('leaves the run alone when a heartbeat wins the lease claim', async () => {
+      mockGetServerDB.mockResolvedValue(orphanRow({ updatedAt: new Date() }));
+      mockSettleStaleRunning.mockResolvedValue(false);
+      const { ctx } = buildContext({ body: validBody });
+
+      await runStep(ctx);
+
+      expect(mockFinalizeAbandoned).not.toHaveBeenCalled();
+    });
+
+    it('does not touch an operation that already reached a terminal status', async () => {
+      mockGetServerDB.mockResolvedValue(orphanRow({ status: 'error' }));
+      const { ctx } = buildContext({ body: validBody });
+
+      await runStep(ctx);
+
+      expect(mockSettleStaleRunning).not.toHaveBeenCalled();
+      expect(mockFinalizeAbandoned).not.toHaveBeenCalled();
+    });
+
+    it('resumes the parent when the abandoned run was a sub-agent', async () => {
+      // Regression: state and metadata are separate Redis keys, so a sub-agent
+      // child can reach the with-state abandon branch here. Dropping its
+      // `subAgentResume` left the parent parked in `waiting_for_async_tool`.
+      const db = orphanRow();
+      mockGetServerDB.mockResolvedValue(db);
+      const subAgentResume = {
+        errorMessage: 'abandoned',
+        parentOperationId: 'op-parent',
+        threadId: 'thd-1',
+        toolMessageId: 'msg-tool',
+        userId: 'user-1',
+      };
+      mockFinalizeAbandoned.mockResolvedValue({ found: true, subAgentResume });
+      const { ctx } = buildContext({ body: validBody });
+
+      await runStep(ctx);
+
+      expect(mockResumeAbandonedParent).toHaveBeenCalledWith(db, 'op-1', subAgentResume);
+    });
   });
 
   it('includes QStash retry and message IDs in missing metadata diagnostics', async () => {

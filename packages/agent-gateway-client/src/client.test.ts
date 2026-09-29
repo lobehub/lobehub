@@ -370,6 +370,76 @@ describe('AgentStreamClient', () => {
       expect(client.connectionStatus).toBe('disconnected');
     });
 
+    it('ignores the session_complete echo of a mirrored member terminal (G-02)', async () => {
+      // A gateway that ends a session on ANY agent_runtime_end answers a
+      // member's mirrored terminal with session_complete for the supervisor.
+      // That is the member's echo, not the supervisor's end.
+      const client = createClient(); // operationId: 'op-123'
+      const onComplete = vi.fn();
+      client.on('session_complete', onComplete);
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member-456',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+      ws.simulateMessage({ type: 'session_complete' });
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(client.connectionStatus).toBe('connected');
+
+      // The supervisor keeps streaming and still ends on its own terminal.
+      const events: any[] = [];
+      client.on('agent_event', (e) => events.push(e));
+      ws.simulateMessage({
+        event: {
+          data: { chunkType: 'text', content: 'SUP DONE' },
+          operationId: 'op-123',
+          stepIndex: 2,
+          timestamp: 2,
+          type: 'stream_chunk',
+        },
+        type: 'agent_event',
+      });
+      expect(events).toHaveLength(1);
+      ws.simulateMessage({ type: 'session_complete' });
+      expect(onComplete).toHaveBeenCalledOnce();
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
+    // Codex P2 on #20102: a suspended tab handles the queued echo late but in
+    // order; wall-clock time must not turn it into the supervisor's end.
+    it('still reads a late echo as the member terminal and honors the next end (G-02)', async () => {
+      const client = createClient(); // op-123
+      const onComplete = vi.fn();
+      client.on('session_complete', onComplete);
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({
+        event: {
+          data: { reason: 'done' },
+          operationId: 'op-member-456',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+      await vi.advanceTimersByTimeAsync(30_000); // renderer suspended
+      ws.simulateMessage({ type: 'session_complete' });
+      expect(onComplete).not.toHaveBeenCalled();
+
+      // The echo is spent: a further session end is the supervisor's own.
+      ws.simulateMessage({ type: 'session_complete' });
+      expect(onComplete).toHaveBeenCalledOnce();
+    });
+
     it('should emit session_complete and disconnect', async () => {
       const client = createClient();
       const onComplete = vi.fn();
@@ -461,6 +531,102 @@ describe('AgentStreamClient', () => {
       expect(onComplete).toHaveBeenCalledOnce();
       expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
       expect(client.connectionStatus).toBe('disconnected');
+    });
+
+    // Codex P1 on #20102: a gateway that ends on ANY agent_runtime_end also
+    // leaves its status terminal after a member's mirrored terminal, and a
+    // resubscribe then reported the running supervisor as finished.
+    describe('after a replayed mirrored member terminal (G-02)', () => {
+      const replay = (
+        ws: MockWebSocket,
+        id: string,
+        operationId: string,
+        type: string,
+        data = {},
+      ) =>
+        ws.simulateMessage({
+          event: { data, operationId, stepIndex: 0, timestamp: 1, type },
+          id,
+          type: 'agent_event',
+        });
+
+      it('keeps the supervisor subscribed on the status that member left behind', async () => {
+        const client = createClient({ resumeOnConnect: true }); // op-123
+        const onComplete = vi.fn();
+        client.on('session_complete', onComplete);
+
+        const ws = await connectAndAuthResume(client);
+        replay(ws, 'evt-1', 'op-member-456', 'agent_runtime_end', { reason: 'done' });
+        // The supervisor's continuation after the member — still no own terminal.
+        replay(ws, 'evt-2', 'op-123', 'step_start');
+        ws.simulateMessage({ status: 'completed', type: 'resume_complete' });
+
+        expect(onComplete).not.toHaveBeenCalled();
+        expect(client.connectionStatus).toBe('connected');
+
+        // The supervisor's own terminal still ends the session.
+        ws.simulateMessage({
+          event: {
+            data: { reason: 'done' },
+            operationId: 'op-123',
+            stepIndex: 3,
+            timestamp: 2,
+            type: 'agent_runtime_end',
+          },
+          id: 'evt-3',
+          type: 'agent_event',
+        });
+        expect(client.connectionStatus).toBe('disconnected');
+      });
+
+      it('still completes on a status the member terminal cannot explain', async () => {
+        const client = createClient({ resumeOnConnect: true });
+        const onComplete = vi.fn();
+        client.on('session_complete', onComplete);
+
+        const ws = await connectAndAuthResume(client);
+        replay(ws, 'evt-1', 'op-member-456', 'agent_runtime_end', { reason: 'done' });
+        // e.g. the inactivity watchdog failed the supervisor afterwards.
+        ws.simulateMessage({ status: 'error', type: 'resume_complete' });
+
+        expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'error' });
+      });
+
+      // Codex P1 on #20102 (3rd pass): a member terminal seen before the
+      // disconnect proves nothing about the resumed DO — it may have hibernated
+      // away the supervisor's own terminal while keeping `completed`.
+      it('trusts the status after an empty replay, even with a member terminal seen before', async () => {
+        const client = createClient({ resumeOnConnect: true });
+        const onComplete = vi.fn();
+        client.on('session_complete', onComplete);
+
+        const ws = await connectAndAuthResume(client);
+        ws.simulateMessage({ status: 'running', type: 'resume_complete' });
+        replay(ws, 'evt-1', 'op-member-456', 'agent_runtime_end', { reason: 'done' });
+
+        ws.simulateClose();
+        await vi.advanceTimersByTimeAsync(1000); // reconnect delay
+        await vi.advanceTimersByTimeAsync(1);
+        const ws2 = getLatestWs();
+        ws2.simulateMessage({ type: 'auth_success' });
+        // Hibernated buffer: nothing after evt-1 is replayed.
+        ws2.simulateMessage({ status: 'completed', type: 'resume_complete' });
+
+        expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
+      });
+
+      it('completes once the supervisor terminal was replayed after the member', async () => {
+        const client = createClient({ resumeOnConnect: true });
+        const onComplete = vi.fn();
+        client.on('session_complete', onComplete);
+
+        const ws = await connectAndAuthResume(client);
+        replay(ws, 'evt-1', 'op-member-456', 'agent_runtime_end', { reason: 'done' });
+        replay(ws, 'evt-2', 'op-123', 'agent_runtime_end', { reason: 'done' });
+        ws.simulateMessage({ status: 'completed', type: 'resume_complete' });
+
+        expect(client.connectionStatus).toBe('disconnected');
+      });
     });
 
     it('flushes replayed events before completing on a terminal status', async () => {

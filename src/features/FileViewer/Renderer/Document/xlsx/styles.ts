@@ -131,8 +131,6 @@ export const styles = createStaticStyles(({ css }) => ({
       font-weight: 500;
       color: ${cssVar.colorTextQuaternary};
       text-align: start;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
       white-space: nowrap;
     }
 

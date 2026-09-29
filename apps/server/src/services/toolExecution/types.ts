@@ -6,6 +6,7 @@ import {
   type ClientSecretPayload,
   type DeviceUnavailableErrorData,
   type ExecSubAgentParams,
+  type ExecutionPlan,
   type StepActivatedSkill,
   type StepContextTodoItem,
   type WorkRegistrationIntent,
@@ -245,6 +246,12 @@ export interface ToolExecutionContext {
    * flows; `lobe-agent.callSubAgent` uses the per-call `subAgent` runner below.
    */
   execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+  /**
+   * The run's resolved execution plan. Lets a runtime explain a gate the plan
+   * imposes (e.g. a device-locked run has no device picker) instead of the
+   * gated tool just looking missing.
+   */
+  executionPlan?: ExecutionPlan;
   /** Per-call execution timeout resolved by the agent runtime. */
   executionTimeoutMs?: number;
   /** Current group ID for group chat context */

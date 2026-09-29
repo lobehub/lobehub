@@ -51,8 +51,6 @@ const styles = createStaticStyles(({ css }) => ({
     font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
     color: ${cssVar.colorTextDescription};
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
 
     background: ${cssVar.colorFillQuaternary};
   `,

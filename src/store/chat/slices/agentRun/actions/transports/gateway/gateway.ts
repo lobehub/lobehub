@@ -37,6 +37,7 @@ import {
 import { trackProductUsageEvent } from '@/libs/analytics/productUsageEvent';
 import {
   aiAgentService,
+  type ClientOperationSnapshot,
   type ResumeApprovalParam,
   type ResumeToolResultParam,
 } from '@/services/aiAgent';
@@ -70,7 +71,7 @@ import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventBuffer } from './gatewayEventBuffer';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
 import { createGatewayEventRouter } from './gatewayEventRouter';
-import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
+import { createGatewayMemberStreamHandler, mergeGroupSnapshot } from './gatewayMemberStreamHandler';
 import {
   type GatewayMuxIdentity,
   getGatewayMux,
@@ -807,6 +808,8 @@ export class GatewayActionImpl {
     precreatedResult?: ExecAgentResult;
     /** Server operation whose visible output ended before this fresh turn. */
     replacesOperationId?: string;
+    /** Diagnostic snapshot of the conversation's server runs, see `ExecAgentTaskParams`. */
+    clientOperations?: ClientOperationSnapshot[];
     /**
      * Caller-owned operation that should be completed once the gateway side
      * has finished phase-1 init (network round-trip + child
@@ -863,6 +866,7 @@ export class GatewayActionImpl {
   }): Promise<ExecAgentResult> => {
     const {
       clientIds,
+      clientOperations,
       context: executionContext,
       fileIds,
       message,
@@ -964,7 +968,7 @@ export class GatewayActionImpl {
     // decided server-side by the share config, never by this client.
     const agentShareId = executionContext.agentShareId;
 
-    const result =
+    const serverResult =
       precreatedResult ??
       (agentShareId
         ? await shareChatService.execAgentTask(
@@ -1030,6 +1034,7 @@ export class GatewayActionImpl {
                 viewedGoal: executionContext.viewedGoal,
               },
               ...desktopDeviceHints,
+              clientOperations,
               fileIds,
               replacesOperationId,
               mentionedAgents,
@@ -1047,6 +1052,12 @@ export class GatewayActionImpl {
             },
             { signal: abortSignal },
           ));
+    // A member continuation names the supervisor's run as `operationId` (safe
+    // for older clients); this run is the member's continuation.
+    const result: ExecAgentResult =
+      serverResult.groupMemberContinuation && serverResult.memberOperationId
+        ? { ...serverResult, operationId: serverResult.memberOperationId }
+        : serverResult;
 
     // Persistence is the ownership boundary. Notify before later UI synchronization awaits and
     // before handling a late abort so callers never delete a file already attached server-side.
@@ -1314,7 +1325,13 @@ export class GatewayActionImpl {
     // useGatewayReconnect doesn't fire for a stale previous operation while the new
     // gateway connection is being established. Also disconnect any live reconnect
     // connection that was already established for the old operation.
-    if (result.topicId) {
+    //
+    // Not for an approval that continues a group member: the server runs it
+    // under the supervisor's run (flagged by the server; the member may be the
+    // supervisor agent itself), so the supervisor keeps the topic, and its open
+    // stream is what delivers the members' continuation and its own closing.
+    const continuesGroupMember = !!result.groupMemberContinuation;
+    if (result.topicId && !continuesGroupMember) {
       const existingTopic = topicSelectors.getTopicById(result.topicId)(this.#get());
       const staleOpId = existingTopic?.metadata?.runningOperation?.operationId;
       if (staleOpId && staleOpId !== result.operationId) {
@@ -1384,7 +1401,10 @@ export class GatewayActionImpl {
         parentMessageId: result.assistantMessageId,
         parentMessageType: 'assistant',
         runId: gatewayOpId,
-        runScope: (resolvedExecutionContext.scope === 'sub_agent'
+        // A member's approval continuation is nested inside the supervisor's
+        // run: top-level terminal effects (queue drain, unread, notification)
+        // belong to the supervisor's own terminal, not to the member's.
+        runScope: (resolvedExecutionContext.scope === 'sub_agent' || continuesGroupMember
           ? 'sub_agent'
           : 'top_level') as RunScope,
         runtimeType: 'gateway',
@@ -1438,7 +1458,8 @@ export class GatewayActionImpl {
           succeeded,
         });
 
-        if (result.topicId) {
+        // The supervisor still owns the topic while a member continuation ends.
+        if (result.topicId && !continuesGroupMember) {
           // The server already settled this topic: the runtime's `finish`
           // executor settles to 'unread' before it publishes the terminal event
           // this callback rides on, so by now the mark is legitimately gone and
@@ -1804,16 +1825,26 @@ export class GatewayActionImpl {
     context: ConversationContext,
     parentOperationId: string,
   ): ((memberOperationId: string) => (event: AgentStreamEvent) => void) => {
+    const liveMessageIds = new Set<string>();
+    const bucketKey = messageMapKey({
+      agentId: context.agentId ?? '',
+      groupId: context.groupId,
+      scope: context.scope,
+      threadId: context.threadId,
+      topicId: context.topicId,
+    });
+    // Rejects on failure so the approval refresh can retry. Keeps rows other
+    // member handlers are still streaming (see `mergeGroupSnapshot`).
+    const refreshGroup = () =>
+      messageService.getMessages(context).then((messages) => {
+        const current = this.#get().dbMessagesMap[bucketKey] ?? [];
+        this.#get().replaceMessages(mergeGroupSnapshot(messages, current, liveMessageIds), {
+          context,
+        });
+      });
     let hydration: Promise<void> | undefined;
     const ensureGroupHydrated = () => {
-      if (!hydration) {
-        hydration = messageService
-          .getMessages(context)
-          .then((messages) => {
-            this.#get().replaceMessages(messages, { context });
-          })
-          .catch(() => {});
-      }
+      if (!hydration) hydration = refreshGroup().catch(() => {});
       return hydration;
     };
 
@@ -1821,8 +1852,10 @@ export class GatewayActionImpl {
       createGatewayMemberStreamHandler(this.#get, {
         context,
         ensureGroupHydrated,
+        liveMessageIds,
         memberOperationId,
         parentOperationId,
+        refreshGroup,
       });
   };
 
@@ -2003,7 +2036,7 @@ export class GatewayActionImpl {
     // so a follow-up on an existing topic runs with a `null` local marker while
     // its optimistic `running` status is still in place. Requiring the marker to
     // match skipped the status write for every such run and left the sidebar
-    // spinner on until a later topic-list refetch (LOBE-14423).
+    // spinner on until a later topic-list refetch.
     const markerOperationId = existingTopic.metadata?.runningOperation?.operationId;
     if (markerOperationId && markerOperationId !== operationId) return false;
     if (!markerOperationId && this.#hasOtherLiveRunOnTopic(topicId, operationId)) return false;

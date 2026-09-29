@@ -1512,6 +1512,7 @@ table expertise_hits {
   evidence_id uuid
   operation_id text
   source_check_result_id uuid
+  source_message_id text
   user_decision text
   user_decision_at "timestamp with time zone"
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -1523,6 +1524,7 @@ table expertise_hits {
     run_id [name: 'expertise_hits_run_idx']
     (domain_id, outcome) [name: 'expertise_hits_domain_outcome_idx']
     operation_id [name: 'expertise_hits_operation_idx']
+    source_message_id [name: 'expertise_hits_source_message_idx']
   }
 }
 

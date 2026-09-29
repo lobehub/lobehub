@@ -253,9 +253,7 @@ const Content = memo<ContentProps>(({ agentId }) => {
         <Text fontSize={13} style={{ maxWidth: 380, textAlign: 'center' }} type="secondary">
           {t('heteroImport.empty.desc')}
         </Text>
-        <Button size="small" onClick={scan}>
-          {t('heteroImport.footer.rescan')}
-        </Button>
+        <Button onClick={scan}>{t('heteroImport.footer.rescan')}</Button>
       </Flexbox>
     );
 
@@ -267,9 +265,7 @@ const Content = memo<ContentProps>(({ agentId }) => {
         <Text fontSize={13} style={{ maxWidth: 380, textAlign: 'center' }} type="secondary">
           {t('heteroImport.error.desc')}
         </Text>
-        <Button size="small" onClick={scan}>
-          {t('heteroImport.footer.rescan')}
-        </Button>
+        <Button onClick={scan}>{t('heteroImport.footer.rescan')}</Button>
       </Flexbox>
     );
 

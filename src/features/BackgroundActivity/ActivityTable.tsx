@@ -96,8 +96,6 @@ const tableStyles = createStaticStyles(({ css }) => ({
     font-size: 11px;
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
   `,
   headNum: css`
     text-align: end;

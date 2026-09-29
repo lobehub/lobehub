@@ -1,3 +1,4 @@
+import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
 import { type ChatToolPayload } from '@lobechat/types';
 import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
@@ -18,10 +19,6 @@ import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceC
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
-import {
-  DEFAULT_TOOL_RESULT_MAX_LENGTH,
-  truncateToolResult,
-} from '@/server/utils/truncateToolResult';
 
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';

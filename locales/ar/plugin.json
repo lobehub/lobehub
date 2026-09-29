@@ -872,7 +872,6 @@
   "protocolInstall.warning": "تحقق من مصدر المهارة. يمكنك تعطيلها أو إزالتها في أي وقت من الإعدادات.",
   "search.config.addKey": "إضافة مفتاح",
   "search.config.close": "إزالة",
-  "search.config.confirm": "تم، أعد المحاولة",
   "search.crawPages.crawling": "جارٍ تحديد الروابط",
   "search.crawPages.detail.preview": "معاينة",
   "search.crawPages.detail.raw": "نص خام",

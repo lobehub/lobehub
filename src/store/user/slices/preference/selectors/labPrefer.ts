@@ -21,6 +21,7 @@ export const labPreferSelectors = {
   enableIntegrations: (s: UserState): boolean => s.preference.lab?.enableIntegrations ?? false,
   enableInputMarkdown: (s: UserState): boolean =>
     s.preference.lab?.enableInputMarkdown ?? DEFAULT_PREFERENCE.lab?.enableInputMarkdown ?? true,
+  enableMemoryRules: (s: UserState): boolean => s.preference.lab?.enableMemoryRules ?? false,
   enableMessageTextSelectionActions: (s: UserState): boolean =>
     s.preference.lab?.enableMessageTextSelectionActions ??
     DEFAULT_PREFERENCE.lab?.enableMessageTextSelectionActions ??
@@ -28,7 +29,9 @@ export const labPreferSelectors = {
   enableOAuthApps: (s: UserState): boolean => s.preference.lab?.enableOAuthApps ?? false,
   enableSelfLearning: (s: UserState): boolean => s.preference.lab?.enableSelfLearning ?? false,
   enableProjects: (s: UserState): boolean => s.preference.lab?.enableProjects ?? false,
+  // `updateLab` writes both keys, but older clients only write the legacy
+  // `enableTopicAcceptance` — so while both exist it holds the latest choice.
+  enableGoals: (s: UserState): boolean =>
+    s.preference.lab?.enableTopicAcceptance ?? s.preference.lab?.enableGoals ?? false,
   enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
-  enableTopicAcceptance: (s: UserState): boolean =>
-    s.preference.lab?.enableTopicAcceptance ?? false,
 };

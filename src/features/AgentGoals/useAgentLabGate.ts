@@ -8,7 +8,7 @@ import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors'
 /**
  * The lab gate every `/agent/:aid/goal*` route sits behind.
  *
- * `enableTopicAcceptance` reads `preference.lab`, which is `false` until
+ * `enableGoals` reads `preference.lab`, which is `false` until
  * `useInitUserState` resolves. Judging the gate before that settles renders a
  * white flash (`null` for the whole pane) and the redirect effect kicks
  * cold-boot visitors back to chat before their preference ever arrived.
@@ -18,7 +18,7 @@ import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors'
 export const useAgentLabGate = () => {
   const initError = useUserStore((s) => s.isUserStateInitError);
   const isPreferenceInit = useUserStore(preferenceSelectors.isPreferenceInit);
-  const enabled = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const enabled = useUserStore(labPreferSelectors.enableGoals);
 
   const initFailed = !!initError;
 

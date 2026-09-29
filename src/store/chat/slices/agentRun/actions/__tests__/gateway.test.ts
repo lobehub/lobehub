@@ -11,6 +11,8 @@ import { aiAgentService } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
 import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
+import { getChatGroupStoreState, useAgentGroupStore } from '@/store/agentGroup';
+import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import * as serverConfigStore from '@/store/serverConfig';
 
@@ -958,6 +960,226 @@ describe('GatewayActionImpl', () => {
         }),
         expect.anything(),
       );
+    });
+
+    // G-05: an approval on a group member's tool continues that member under
+    // the supervisor's run.
+    describe('group member approval continuation', () => {
+      const groupId = 'cg_team';
+      const execResult = {
+        agentId: 'agt_sup',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      } as const;
+      let previousGroupMap: ReturnType<typeof getChatGroupStoreState>['groupMap'];
+
+      beforeEach(() => {
+        previousGroupMap = getChatGroupStoreState().groupMap;
+        useAgentGroupStore.setState({
+          groupMap: {
+            ...previousGroupMap,
+            [groupId]: { id: groupId, supervisorAgentId: 'agt_sup' } as any,
+          },
+        });
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue(execResult as any);
+      });
+
+      afterEach(() => {
+        useAgentGroupStore.setState({ groupMap: previousGroupMap });
+      });
+
+      // An approval on a member's tool continues that member under the
+      // supervisor's run. The supervisor keeps the topic, and its open stream
+      // carries the continuation and the closing — taking the marker over and
+      // dropping that stream left a reloaded page with no closing and a run
+      // that never ended (G-05).
+      it("keeps the supervisor's marker and stream when an approval continues a member", async () => {
+        const { action, internalDispatchTopic } = createExecuteTestAction();
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          ...execResult,
+          agentId: 'agt_carol',
+          groupMemberContinuation: true,
+          memberOperationId: 'server-member-op',
+          operationId: 'server-supervisor-op',
+        } as any);
+        const topicSpy = vi.spyOn(topicSelectors, 'getTopicById').mockReturnValue(
+          () =>
+            ({
+              id: 'topic-1',
+              metadata: { runningOperation: { operationId: 'server-supervisor-op' } },
+            }) as any,
+        );
+        const disconnect = vi.spyOn(action, 'disconnectFromGateway');
+
+        await action.executeGatewayAgent({
+          context: {
+            agentId: 'agt_sup',
+            groupId,
+            scope: 'group',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: '',
+          parentMessageId: 'carol-tool',
+        });
+
+        expect(disconnect).not.toHaveBeenCalledWith('server-supervisor-op');
+        expect(internalDispatchTopic).not.toHaveBeenCalledWith(
+          expect.objectContaining({
+            value: expect.objectContaining({
+              metadata: expect.objectContaining({
+                runningOperation: expect.objectContaining({ operationId: 'server-member-op' }),
+              }),
+            }),
+          }),
+        );
+        topicSpy.mockRestore();
+      });
+
+      // Codex P2 on #20093: the supervisor can dispatch itself as a member, so
+      // the continuation is told apart by the server's flag, not by agent ids.
+      it("keeps the supervisor's marker when the continued member is the supervisor itself", async () => {
+        const { action, internalDispatchTopic } = createExecuteTestAction();
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          ...execResult,
+          groupMemberContinuation: true,
+          memberOperationId: 'server-member-op',
+          operationId: 'server-supervisor-op',
+        } as any);
+        const topicSpy = vi.spyOn(topicSelectors, 'getTopicById').mockReturnValue(
+          () =>
+            ({
+              id: 'topic-1',
+              metadata: { runningOperation: { operationId: 'server-supervisor-op' } },
+            }) as any,
+        );
+        const disconnect = vi.spyOn(action, 'disconnectFromGateway');
+
+        await action.executeGatewayAgent({
+          context: {
+            agentId: 'agt_sup',
+            groupId,
+            scope: 'group',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: '',
+          parentMessageId: 'sup-self-tool',
+        });
+
+        expect(disconnect).not.toHaveBeenCalledWith('server-supervisor-op');
+        expect(internalDispatchTopic).not.toHaveBeenCalledWith(
+          expect.objectContaining({
+            value: expect.objectContaining({
+              metadata: expect.objectContaining({
+                runningOperation: expect.objectContaining({ operationId: 'server-member-op' }),
+              }),
+            }),
+          }),
+        );
+        topicSpy.mockRestore();
+      });
+
+      // Codex P1 on #20093: the server names the supervisor's run as operationId
+      // so older clients keep following it; this client runs the member op.
+      it('follows the member continuation op the server sets aside', async () => {
+        const { action, connectToGateway } = createExecuteTestAction();
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          ...execResult,
+          agentId: 'agt_carol',
+          groupMemberContinuation: true,
+          memberOperationId: 'server-member-op',
+          operationId: 'server-supervisor-op',
+        } as any);
+
+        await action.executeGatewayAgent({
+          context: {
+            agentId: 'agt_sup',
+            groupId,
+            scope: 'group',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: '',
+          parentMessageId: 'carol-tool',
+        });
+
+        expect(connectToGateway.mock.calls[0][0]).toMatchObject({
+          operationId: 'server-member-op',
+        });
+      });
+
+      it("still takes over a stale marker for the supervisor's own new run", async () => {
+        const { action } = createExecuteTestAction();
+        const topicSpy = vi.spyOn(topicSelectors, 'getTopicById').mockReturnValue(
+          () =>
+            ({
+              id: 'topic-1',
+              metadata: { runningOperation: { operationId: 'server-old-op' } },
+            }) as any,
+        );
+        const disconnect = vi.spyOn(action, 'disconnectFromGateway');
+
+        await action.executeGatewayAgent({
+          context: {
+            agentId: 'agt_sup',
+            groupId,
+            scope: 'group',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: 'hi',
+        });
+
+        expect(disconnect).toHaveBeenCalledWith('server-old-op');
+        topicSpy.mockRestore();
+      });
+      // The continuation ends while the supervisor keeps running: the topic is
+      // still the supervisor's to settle (G-05).
+      it("leaves the topic settle to the supervisor when a member's continuation ends", async () => {
+        const { action, connectToGateway } = createExecuteTestAction();
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          ...execResult,
+          agentId: 'agt_carol',
+          groupMemberContinuation: true,
+          memberOperationId: 'server-member-op',
+          operationId: 'server-supervisor-op',
+        } as any);
+        (action as any).clearLocalRunningOperation = vi.fn();
+        vi.mocked(topicService.settleRunningOperation).mockClear();
+
+        await action.executeGatewayAgent({
+          context: {
+            agentId: 'agt_sup',
+            groupId,
+            scope: 'group',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: '',
+          parentMessageId: 'carol-tool',
+        });
+        const { onSessionComplete } = connectToGateway.mock.calls[0][0];
+        (action as any).completeOperation = vi.fn();
+
+        onSessionComplete({
+          authFailed: false,
+          completion: { source: 'resume_status', status: 'completed' },
+          succeeded: true,
+          terminalReceived: true,
+        });
+
+        expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+      });
     });
 
     it('should not include parentMessageId when not provided (normal send)', async () => {
@@ -2411,7 +2633,7 @@ describe('GatewayActionImpl', () => {
       });
     });
 
-    // LOBE-14423: a follow-up on an existing topic starts with no local
+    // A follow-up on an existing topic starts with no local
     // `runningOperation` marker (run start only rewrites a stale one), so the
     // terminal status write must not depend on the marker naming this run.
     describe('follow-up run on an existing topic without a local marker', () => {

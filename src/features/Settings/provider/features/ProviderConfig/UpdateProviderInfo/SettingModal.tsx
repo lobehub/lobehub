@@ -179,7 +179,7 @@ const SettingContent = memo<SettingContentProps>(({ initialValues, id }) => {
           padding: 0,
         }}
       >
-        <Button danger disabled={loading} type={'primary'} onClick={handleDelete}>
+        <Button danger disabled={loading} onClick={handleDelete}>
           {t('delete', { ns: 'common' })}
         </Button>
         <Button loading={loading} type={'primary'} onClick={() => form.submit()}>

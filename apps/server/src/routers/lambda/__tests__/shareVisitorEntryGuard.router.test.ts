@@ -89,6 +89,15 @@ vi.mock('@/database/models/file', () => ({
   }),
 }));
 
+// removeTopic moves the topic to the recycle bin; attachments flagged with
+// `removeFiles` are only dropped when that bin row is purged.
+const mockTrashTopics = vi.fn();
+vi.mock('@/server/services/trash', () => ({
+  TrashService: vi.fn(function () {
+    return { trashTopics: mockTrashTopics };
+  }),
+}));
+
 const mockDeleteFiles = vi.fn();
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(function () {
@@ -135,23 +144,25 @@ describe('agent-share visitor guards on creator-facing RPCs', () => {
   });
 
   describe('topic.removeTopic', () => {
-    it('does not delete attachments when the id is a visitor topic', async () => {
-      // The visitor topic is invisible to `findOwnTopicById`, and
-      // `TopicModel.delete` refuses to remove it — so its files must survive.
+    it('neither trashes nor touches attachments when the id is a visitor topic', async () => {
+      // The visitor topic is invisible to `findOwnTopicById`, so it must not
+      // reach the recycle bin and its files must survive.
       mockTopicFindOwnTopicById.mockResolvedValue(undefined);
 
       await topicCaller().removeTopic({ id: visitorTopicId, removeFiles: true });
 
+      expect(mockTrashTopics).not.toHaveBeenCalled();
       expect(mockFindDeletableFilesByTopicId).not.toHaveBeenCalled();
       expect(mockFileDeleteMany).not.toHaveBeenCalled();
       expect(mockDeleteFiles).not.toHaveBeenCalled();
     });
 
-    it('still deletes attachments of the creator’s own topic', async () => {
+    it('moves the creator’s own topic to the bin with its attachment removal deferred to purge', async () => {
       await topicCaller().removeTopic({ id: 'topic-1', removeFiles: true });
 
-      expect(mockFindDeletableFilesByTopicId).toHaveBeenCalledWith('topic-1');
-      expect(mockDeleteFiles).toHaveBeenCalledWith(['s3://file-1']);
+      expect(mockTrashTopics).toHaveBeenCalledWith(['topic-1'], { removeFiles: true });
+      // nothing is dropped from storage until the bin row is purged
+      expect(mockDeleteFiles).not.toHaveBeenCalled();
     });
   });
 

@@ -611,6 +611,38 @@ describe('tool executors', () => {
     );
   });
 
+  // An approved async tool (group member task / sub-agent) resumes with the
+  // approve op's seeded "…" placeholder still on state. Parking keeps nothing in
+  // it: the server-side resume writes its own reply, and the empty seed left
+  // under the tool hid that reply.
+  it('retires the resume-seeded placeholder when an approved async tool parks', async () => {
+    runTool.mockResolvedValue({
+      attempts: 1,
+      result: {
+        content: '',
+        deferred: true,
+        state: { status: 'pending', toolMessageId: 'approved-tool' },
+        success: true,
+      },
+    });
+
+    const result = await callTool(host)(
+      {
+        payload: {
+          parentMessageId: 'approved-tool',
+          skipCreateToolMessage: true,
+          toolCalling: createToolCall('task-call', 'lobe-group-management'),
+        },
+        type: 'call_tool',
+      },
+      createState({ pendingAssistantMessageId: 'seeded-placeholder' } as any),
+    );
+
+    expect(result.newState.status).toBe('waiting_for_async_tool');
+    expect(host.transports.messages.deleteMessage).toHaveBeenCalledWith('seeded-placeholder');
+    expect(result.newState.pendingAssistantMessageId).toBeUndefined();
+  });
+
   it('omits toolMessageIds when a deferred tool reports no placeholder', async () => {
     runTool.mockResolvedValue({
       attempts: 1,

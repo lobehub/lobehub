@@ -9,11 +9,12 @@ import {
 const decision = (ids: string[]) => ({ options: ids.map((id) => ({ id, label: id })) }) as any;
 
 describe('coordinatorGateKind', () => {
-  it('recognizes the two coordinator gate shapes and nothing else', () => {
+  it('recognizes the coordinator gate shapes and nothing else', () => {
     expect(coordinatorGateKind(decision(['retry', 'retire']))).toBe('recoverTask');
     expect(coordinatorGateKind(decision(['retry', 'fail']))).toBe('goalAcceptance');
     // The terminal acceptance gate also offers abandoning it.
     expect(coordinatorGateKind(decision(['retry', 'retire', 'fail']))).toBe('goalAcceptance');
+    expect(coordinatorGateKind(decision(['option-1', 'assume', 'answer']))).toBe('clarifyGoal');
     expect(coordinatorGateKind(decision(['approve', 'reject']))).toBeUndefined();
     expect(coordinatorGateKind(undefined)).toBeUndefined();
   });
