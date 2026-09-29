@@ -10097,6 +10097,414 @@ export type GetApiV1SignalsReceiptsResponses = {
 
 export type GetApiV1SignalsReceiptsResponse = GetApiV1SignalsReceiptsResponses[keyof GetApiV1SignalsReceiptsResponses];
 
+export type GetApiV1TasksData = {
+    body?: never;
+    path?: never;
+    query?: {
+        assigneeAgentId?: string;
+        limit?: number;
+        offset?: number;
+        projectId?: string;
+        statuses?: string;
+    };
+    url: '/api/v1/tasks';
+};
+
+export type GetApiV1TasksErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksError = GetApiV1TasksErrors[keyof GetApiV1TasksErrors];
+
+export type GetApiV1TasksResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksResponse = GetApiV1TasksResponses[keyof GetApiV1TasksResponses];
+
+export type PostApiV1TasksData = {
+    body: {
+        assigneeAgentId?: string;
+        assigneeUserId?: string;
+        automationMode?: 'heartbeat' | 'schedule';
+        config?: {
+            [key: string]: unknown;
+        };
+        createdByAgentId?: string;
+        description?: string;
+        instruction: string;
+        name?: string;
+        parentTaskId?: string;
+        priority?: number;
+        projectId?: string;
+        schedulePattern?: string;
+        scheduleTimezone?: string;
+        visibility?: 'private' | 'public';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/tasks';
+};
+
+export type PostApiV1TasksErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TasksError = PostApiV1TasksErrors[keyof PostApiV1TasksErrors];
+
+export type PostApiV1TasksResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TasksResponse = PostApiV1TasksResponses[keyof PostApiV1TasksResponses];
+
+export type DeleteApiV1TasksByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}';
+};
+
+export type DeleteApiV1TasksByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1TasksByIdError = DeleteApiV1TasksByIdErrors[keyof DeleteApiV1TasksByIdErrors];
+
+export type DeleteApiV1TasksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1TasksByIdResponse = DeleteApiV1TasksByIdResponses[keyof DeleteApiV1TasksByIdResponses];
+
+export type GetApiV1TasksByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}';
+};
+
+export type GetApiV1TasksByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksByIdError = GetApiV1TasksByIdErrors[keyof GetApiV1TasksByIdErrors];
+
+export type GetApiV1TasksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksByIdResponse = GetApiV1TasksByIdResponses[keyof GetApiV1TasksByIdResponses];
+
+export type PatchApiV1TasksByIdData = {
+    body: {
+        assigneeAgentId?: string | null;
+        assigneeUserId?: string | null;
+        automationMode?: 'heartbeat' | 'schedule' | null;
+        config?: {
+            [key: string]: unknown;
+        };
+        description?: string | null;
+        instruction?: string;
+        name?: string;
+        parentTaskId?: string | null;
+        priority?: number;
+        schedulePattern?: string | null;
+        scheduleTimezone?: string | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}';
+};
+
+export type PatchApiV1TasksByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1TasksByIdError = PatchApiV1TasksByIdErrors[keyof PatchApiV1TasksByIdErrors];
+
+export type PatchApiV1TasksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1TasksByIdResponse = PatchApiV1TasksByIdResponses[keyof PatchApiV1TasksByIdResponses];
+
+export type PatchApiV1TasksByIdStatusData = {
+    body: {
+        error?: string;
+        status: 'backlog' | 'running' | 'scheduled' | 'paused' | 'completed' | 'failed' | 'canceled';
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/status';
+};
+
+export type PatchApiV1TasksByIdStatusErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1TasksByIdStatusError = PatchApiV1TasksByIdStatusErrors[keyof PatchApiV1TasksByIdStatusErrors];
+
+export type PatchApiV1TasksByIdStatusResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1TasksByIdStatusResponse = PatchApiV1TasksByIdStatusResponses[keyof PatchApiV1TasksByIdStatusResponses];
+
 export type GetApiV1TopicsData = {
     body?: never;
     path?: never;

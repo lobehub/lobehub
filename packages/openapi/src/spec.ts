@@ -439,7 +439,7 @@ const ref = (schema: string): SchemaObject => ({ $ref: `#/components/schemas/${s
  * same policy as unnamed sub-operations: `additionalProperties` over a guessed
  * shape, so a generated client is never confidently mistyped.
  */
-const PERSONAL_AGENT_GROUPS = new Set(['goals', 'memories', 'notifications', 'signals']);
+const PERSONAL_AGENT_GROUPS = new Set(['goals', 'memories', 'notifications', 'signals', 'tasks']);
 
 const successEnvelope = (data: SchemaObject): SchemaObject => ({
   additionalProperties: false,
