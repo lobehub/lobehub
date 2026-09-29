@@ -1,4 +1,9 @@
-import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
+import type {
+  ChatErrorBudgetContext,
+  ChatErrorHeterogeneousContext,
+  ExecutionPlan,
+  ToolExecutor,
+} from '@lobechat/types';
 
 import type { ToolRunResult } from '../transport/tool';
 
@@ -154,57 +159,65 @@ export interface AgentHookEvent {
 }
 
 /**
- * Event payload for beforeToolCall hooks.
- * Call `mock()` to skip real tool execution and return a fake result.
+ * Correlation and routing facts shared by tool lifecycle notifications.
+ * The server transport supplies the native toolCallId on every invocation.
  */
-export interface ToolCallHookEvent {
+export interface ToolCallHookContext {
+  /** Device selected by the run's execution plan and access policy, if any. */
+  activeDeviceId?: string;
+  agentId?: string;
   apiName: string;
+  /** Effective arguments used for this invocation. */
   args: Record<string, any>;
+  /** Assistant message owning the call, distinct from the source user message. */
+  assistantMessageId: string;
   callIndex: number;
+  documentId?: string;
+  /** Effective run execution target, when the run has an execution plan. */
+  executionTarget?: ExecutionPlan['target'];
+  /** Transport dispatch destination; independent of the tool's origin. */
+  executor: ToolExecutor;
+  groupId?: string;
   identifier: string;
-  /** Returns false when an earlier hook already won the mock slot. */
-  mock: (result: ToolRunResult) => boolean;
   operationId: string;
+  /** Only present when the run has an actual parent operation in its lineage. */
+  parentOperationId?: string;
+  sessionId?: string;
+  sourceMessageId?: string;
   stepIndex: number;
+  taskId?: string;
+  threadId?: string;
+  /** Native model/runtime call id, never synthesized from callIndex. */
+  toolCallId: string;
+  /** Existing tool message on resume; absent before a new message is created. */
+  toolMessageId?: string;
+  toolSource?: string;
+  topicId?: string;
+  userId?: string;
+  workspaceId?: string;
 }
 
 /**
- * Event payload for beforeToolCall observation dispatch (webhook/logging).
- * Same fields as ToolCallHookEvent but without mock() — used for production webhook delivery.
+ * Event payload for beforeToolCall hooks.
+ * Call `mock()` to skip real tool execution and return a fake result.
  */
-export interface BeforeToolCallObservationEvent {
-  apiName: string;
-  args: Record<string, any>;
-  callIndex: number;
-  identifier: string;
-  operationId: string;
-  stepIndex: number;
-  userId?: string;
+export interface ToolCallHookEvent extends ToolCallHookContext {
+  /** Returns false when an earlier hook already won the mock slot. */
+  mock: (result: ToolRunResult) => boolean;
 }
 
-export interface AfterToolCallHookEvent {
-  apiName: string;
-  args: Record<string, any>;
-  callIndex: number;
-  content: string;
-  executionTimeMs: number;
-  identifier: string;
+/** beforeToolCall notification payload, without the local mock callback. */
+export type BeforeToolCallObservationEvent = ToolCallHookContext;
+
+export interface AfterToolCallHookEvent extends ToolCallHookContext {
+  /** Whether a beforeToolCall hook supplied the result through mock(). */
   mocked: boolean;
-  operationId: string;
-  stepIndex: number;
-  success: boolean;
-  userId?: string;
+  /** Structured result after archival, including errors and state (e.g. blocked). */
+  result: ToolRunResult;
 }
 
-export interface ToolCallErrorHookEvent {
-  apiName: string;
-  args: Record<string, any>;
-  callIndex: number;
+export interface ToolCallErrorHookEvent extends ToolCallHookContext {
   error: string;
-  identifier: string;
-  operationId: string;
-  stepIndex: number;
-  userId?: string;
 }
 
 export interface BeforeCompactHookEvent {

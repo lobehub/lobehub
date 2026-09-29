@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
+import * as ClientToolDispatch from '../dispatchClientTool';
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
 import type { StreamEvent } from '../StreamEventManager';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
@@ -6021,6 +6022,256 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     });
 
     describe('call_tool hooks', () => {
+      it.each([false, true])(
+        'keeps runtime owner identity in shared-session tool hooks (throws: %s)',
+        async (throws) => {
+          const mockDispatcher = {
+            dispatch: vi.fn().mockResolvedValue(undefined),
+            dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+          };
+          if (throws)
+            mockToolExecutionService.executeTool.mockRejectedValue(new Error('Tool failed'));
+          const state = createToolState({
+            principal: {
+              actor: {
+                shareVisitor: {
+                  agentId: 'shared-agent',
+                  shareId: 'share-1',
+                  visitorUserId: 'visitor-1',
+                },
+              },
+            },
+          });
+
+          await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any })
+            .call_tool!(createToolInstruction(), state);
+
+          expect(mockToolExecutionService.executeTool).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ userId: 'user-123' }),
+          );
+          expect(ctx.userId).toBe('user-123');
+          const identity = expect.objectContaining({ userId: 'user-123' });
+          expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith('op-123', identity);
+          expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+            'op-123',
+            'beforeToolCall',
+            identity,
+            undefined,
+          );
+          expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+            'op-123',
+            throws ? 'onToolCallError' : 'afterToolCall',
+            identity,
+            undefined,
+          );
+        },
+      );
+
+      it('should preserve native identity and structured results across tool notifications', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+        const toolResult = {
+          content: 'device output',
+          deviceExecutionTime: 17,
+          executionTime: 23,
+          state: { files: ['output.txt'], nested: { count: 1 } },
+          success: true,
+        };
+        mockToolExecutionService.executeTool.mockResolvedValue(toolResult);
+        const state = createToolState({
+          binding: { device: { id: 'device-1' } },
+          origin: {
+            agentId: 'child-agent',
+            documentId: 'document-1',
+            groupId: 'group-1',
+            lineage: { isSubAgent: true, parentOperationId: 'parent-operation' },
+            sessionId: 'session-1',
+            sourceMessageId: 'user-message',
+            taskId: 'task-1',
+            threadId: 'thread-1',
+            topicId: 'child-topic',
+            workspaceId: 'workspace-1',
+          },
+          plan: { execution: { deviceId: 'device-1', kind: 'device', target: 'device' } },
+        });
+        const instruction = createToolInstruction();
+        instruction.payload.toolCalling = { ...instruction.payload.toolCalling, source: 'mcp' };
+
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any }).call_tool!(
+          instruction,
+          state,
+        );
+
+        const identity = {
+          activeDeviceId: 'device-1',
+          userId: 'user-123',
+          agentId: 'child-agent',
+          apiName: 'search_tweets',
+          args: { query: 'test' },
+          assistantMessageId: 'parent-msg',
+          documentId: 'document-1',
+          executionTarget: 'device',
+          executor: 'server',
+          groupId: 'group-1',
+          identifier: 'twitter',
+          operationId: 'op-123',
+          parentOperationId: 'parent-operation',
+          sessionId: 'session-1',
+          sourceMessageId: 'user-message',
+          taskId: 'task-1',
+          threadId: 'thread-1',
+          toolCallId: 'tc-1',
+          toolSource: 'mcp',
+          topicId: 'child-topic',
+          workspaceId: 'workspace-1',
+        };
+        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining(identity),
+        );
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'beforeToolCall',
+          expect.objectContaining(identity),
+          undefined,
+        );
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({
+            ...identity,
+            mocked: false,
+            result: toolResult,
+          }),
+          undefined,
+        );
+        const after = mockDispatcher.dispatch.mock.calls.find(
+          ([, type]) => type === 'afterToolCall',
+        )![2];
+        for (const key of ['content', 'success', 'executionTimeMs']) {
+          expect(after).not.toHaveProperty(key);
+        }
+      });
+
+      it('should report structured blocked results as unsuccessful notifications, not exceptions', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+        const toolResult = {
+          content: 'Tool unavailable in this scope',
+          executionTime: 0,
+          state: { reason: 'tool_not_allowed', type: 'blocked' },
+          success: false,
+        };
+        mockToolExecutionService.executeTool.mockResolvedValue(toolResult);
+
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any }).call_tool!(
+          createToolInstruction(),
+          createToolState(),
+        );
+
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({
+            mocked: false,
+            result: toolResult,
+            toolCallId: 'tc-1',
+          }),
+          undefined,
+        );
+        expect(
+          mockDispatcher.dispatch.mock.calls.some(([, type]) => type === 'onToolCallError'),
+        ).toBe(false);
+        const before = mockDispatcher.dispatchBeforeToolCall.mock.calls[0][1];
+        expect(before.parentOperationId).toBeUndefined();
+        expect(before.rootOperationId).toBeUndefined();
+      });
+
+      it('should correlate repeated tool names in a batch by native call ids', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+        const tool = createToolInstruction().payload.toolCalling;
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any })
+          .call_tools_batch!(
+          {
+            payload: {
+              parentMessageId: 'batch-assistant',
+              toolsCalling: [tool, { ...tool, arguments: '{"query":"second"}', id: 'tc-2' }],
+            },
+            type: 'call_tools_batch',
+          },
+          createToolState(),
+        );
+
+        const afterEvents = mockDispatcher.dispatch.mock.calls
+          .filter(([, type]) => type === 'afterToolCall')
+          .map(([, , event]) => event);
+        expect(afterEvents).toHaveLength(2);
+        expect(afterEvents).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              args: { query: 'test' },
+              assistantMessageId: 'batch-assistant',
+              toolCallId: 'tc-1',
+            }),
+            expect.objectContaining({
+              args: { query: 'second' },
+              assistantMessageId: 'batch-assistant',
+              toolCallId: 'tc-2',
+            }),
+          ]),
+        );
+      });
+
+      it('should retain client routing and structured client results in notifications', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+        const result = {
+          content: 'client result',
+          executionTime: 11,
+          state: { path: 'client.txt' },
+          success: true,
+        };
+        const dispatchClient = vi
+          .spyOn(ClientToolDispatch, 'dispatchClientTool')
+          .mockResolvedValue(result);
+        const instruction = createToolInstruction();
+        instruction.payload.toolCalling = {
+          ...instruction.payload.toolCalling,
+          executor: 'client',
+          source: 'mcp',
+        };
+
+        await createRuntimeExecutors({
+          ...ctx,
+          hookDispatcher: mockDispatcher as any,
+          streamManager: { ...ctx.streamManager, sendToolExecute: vi.fn() },
+        }).call_tool!(instruction, createToolState());
+
+        expect(dispatchClient).toHaveBeenCalledOnce();
+        expect(mockToolExecutionService.executeTool).not.toHaveBeenCalled();
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({
+            executor: 'client',
+            result,
+            toolCallId: 'tc-1',
+            toolSource: 'mcp',
+          }),
+          undefined,
+        );
+      });
+
       it('should dispatch beforeToolCall and afterToolCall hooks', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
@@ -6049,7 +6300,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             apiName: 'search_tweets',
             identifier: 'twitter',
             mocked: false,
-            success: true,
+            result: expect.objectContaining({ success: true }),
           }),
           undefined,
         );
@@ -6141,7 +6392,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'op-123',
           'afterToolCall',
-          expect.objectContaining({ mocked: true, success: true }),
+          expect.objectContaining({
+            mocked: true,
+            result: expect.objectContaining({ success: true }),
+          }),
           undefined,
         );
 
@@ -6175,7 +6429,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'op-123',
           'afterToolCall',
-          expect.objectContaining({ mocked: true, success: false }),
+          expect.objectContaining({
+            mocked: true,
+            result: {
+              content: 'fixture error',
+              error: 'fixture error',
+              executionTime: 0,
+              success: false,
+            },
+            toolCallId: 'tc-1',
+          }),
           undefined,
         );
       });
@@ -6198,8 +6461,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           'onToolCallError',
           expect.objectContaining({
             apiName: 'search_tweets',
+            args: { query: 'test' },
             error: 'Connection refused',
             identifier: 'twitter',
+            assistantMessageId: 'parent-msg',
+            toolCallId: 'tc-1',
           }),
           undefined,
         );
