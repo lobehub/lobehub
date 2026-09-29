@@ -500,20 +500,28 @@ describe('AgentRuntimeService', () => {
     };
 
     it.each([undefined, 'parent-operation'])(
-      'persists server hooks for a run with parent %s',
+      'persists only caller hooks for a run with parent %s',
       async (parentOperationId) => {
         vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'http://webhook-service/ingress');
         vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-env-secret');
         vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'beforeToolCall, afterToolCall, beforeToolCall');
         vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
         vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
-        await service.createOperation({ ...mockParams, autoStart: false, parentOperationId });
+        const hooks = [
+          {
+            id: 'internal-callback',
+            type: 'afterToolCall' as const,
+            webhook: { url: 'http://webhook-service/internal' },
+          },
+        ];
+        await service.createOperation({
+          ...mockParams,
+          autoStart: false,
+          parentOperationId,
+          hooks,
+        });
         const state = await mockCoordinator.loadAgentState(mockParams.operationId);
-        expect(state.host.hooks).toHaveLength(2);
-        expect(state.host.hooks.map((hook: { type: string }) => hook.type)).toEqual([
-          'beforeToolCall',
-          'afterToolCall',
-        ]);
+        expect(state.host.hooks).toEqual(hooks);
         expect(JSON.stringify(state.host.hooks)).not.toContain('synthetic-env-secret');
         expect(hookDispatcher.hasHooks(mockParams.operationId)).toBe(true);
       },

@@ -2,9 +2,11 @@
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { serializedAgentHookSchema } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HookDispatcher } from '../HookDispatcher';
+import { getServerHooks } from '../serverHooks';
 import type { AgentHook, ToolCallHookEvent } from '../types';
 
 const { queueMode } = vi.hoisted(() => ({ queueMode: vi.fn(() => false) }));
@@ -69,7 +71,7 @@ describe('environment hooks through real HTTP transport', () => {
   });
 
   it.each([false, true])(
-    'persists templates, separates controls and notifications, restores once in queue=%s',
+    'uses current config without persisting environment hooks in queue=%s',
     async (queue) => {
       queueMode.mockReturnValue(queue);
       const dispatcher = new HookDispatcher();
@@ -77,7 +79,8 @@ describe('environment hooks through real HTTP transport', () => {
       dispatcher.register(event.operationId, []);
       const saved = JSON.stringify(dispatcher.getSerializedHooks(event.operationId));
       expect(saved).not.toContain('synthetic-secret-one');
-      const hooks = JSON.parse(saved);
+      expect(JSON.parse(saved)).toEqual([]);
+      const hooks = getServerHooks().map((hook) => serializedAgentHookSchema.parse(hook));
       expect(hooks).toHaveLength(3);
       expect(hooks[0].webhook).toEqual({
         allowedEnvVars: ['AGENT_HOOK_WEBHOOK_TOKEN'],
@@ -90,8 +93,7 @@ describe('environment hooks through real HTTP transport', () => {
       for (const hook of hooks.slice(1))
         expect(hook.webhook).toMatchObject({ onError: 'continue', responseHandling: 'ignore' });
 
-      // A cold worker needs only the persisted configs and its own token.
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', undefined);
+      // A cold worker uses its current configuration, ignoring legacy snapshot copies.
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-secret-two');
       const cold = new HookDispatcher();
       const restored = [...hooks, ...hooks];
@@ -144,9 +146,7 @@ describe('environment hooks through real HTTP transport', () => {
       { id: 'caller-handler', type: 'afterToolCall', handler },
     ];
     dispatcher.register(event.operationId, original);
-    const id = dispatcher
-      .getSerializedHooks(event.operationId)!
-      .find((hook) => hook.type === 'beforeToolCall')!.id;
+    const id = 'server-env-webhook:beforeToolCall';
     const replacement = vi.fn();
     dispatcher.register(event.operationId, [{ id, type: 'beforeToolCall', handler: replacement }]);
     await dispatcher.dispatchBeforeToolCall(event.operationId, event);
@@ -158,7 +158,89 @@ describe('environment hooks through real HTTP transport', () => {
     });
     expect(handler).toHaveBeenCalledTimes(1);
     expect(requests.map((request) => request.path)).toEqual(['/ingress/internal', '/ingress']);
-    expect(dispatcher.getSerializedHooks(event.operationId)).toHaveLength(4);
+    expect(dispatcher.getSerializedHooks(event.operationId)).toEqual([original[0]]);
+  });
+
+  describe.each([false, true])('configuration changes in queue=%s', (queue) => {
+    it.each([false, true])(
+      'removes unselected events and switches the endpoint (cold=%s)',
+      async (cold) => {
+        queueMode.mockReturnValue(queue);
+        const original: AgentHook = {
+          id: 'internal-callback',
+          type: 'afterToolCall',
+          webhook: { url: `${url}/internal` },
+        };
+        const legacy = [original, ...getServerHooks()].map((hook) =>
+          serializedAgentHookSchema.parse(hook),
+        );
+        const registered = new HookDispatcher();
+        registered.register(event.operationId, [original]);
+        const dispatcher = cold ? new HookDispatcher() : registered;
+
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', `${url}/new`);
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'ignore');
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'continue');
+        response = {
+          hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'deny' },
+        };
+        expect(await dispatcher.evaluateToolCall(event.operationId, event, legacy)).toEqual({
+          status: 'allow',
+        });
+        expect(dispatcher.canDeliver(event.operationId, 'beforeToolCall')).toBe(false);
+        await dispatcher.dispatch(
+          event.operationId,
+          'onToolCallError',
+          { ...event, error: 'test' },
+          legacy,
+        );
+        expect(requests).toHaveLength(0);
+        await dispatcher.dispatch(
+          event.operationId,
+          'afterToolCall',
+          { ...event, result: { content: 'ok', success: true }, mocked: false },
+          legacy,
+        );
+        expect(requests.map((request) => request.path)).toEqual([
+          '/ingress/internal',
+          '/ingress/new',
+        ]);
+      },
+    );
+
+    it.each([false, true])(
+      'disables environment hooks when URL is removed (cold=%s)',
+      async (cold) => {
+        queueMode.mockReturnValue(queue);
+        const original: AgentHook = {
+          id: 'internal-callback',
+          type: 'afterToolCall',
+          webhook: { url: `${url}/internal` },
+        };
+        const legacy = [original, ...getServerHooks()].map((hook) =>
+          serializedAgentHookSchema.parse(hook),
+        );
+        const registered = new HookDispatcher();
+        registered.register(event.operationId, [original]);
+        const dispatcher = cold ? new HookDispatcher() : registered;
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', undefined);
+        response = {
+          hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'deny' },
+        };
+        expect(await dispatcher.evaluateToolCall(event.operationId, event, legacy)).toEqual({
+          status: 'allow',
+        });
+        expect(dispatcher.canDeliver(event.operationId, 'beforeToolCall')).toBe(false);
+        await dispatcher.dispatch(
+          event.operationId,
+          'afterToolCall',
+          { ...event, result: { content: 'ok', success: true }, mocked: false },
+          legacy,
+        );
+        expect(requests.map((request) => request.path)).toEqual(['/ingress/internal']);
+      },
+    );
   });
 
   it('rejects invalid deployment configuration instead of silently registering nothing', () => {

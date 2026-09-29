@@ -37,12 +37,9 @@ export class CriticalHookDeliveryError extends Error {
 
 export { deliverWebhook } from './httpWebhook';
 
-/** Validate persisted configurations on every worker restore. */
+/** Discard legacy environment hooks and validate caller configs on every worker restore. */
 export function parseSerializedHooks(hooks: SerializedAgentHook[]): SerializedHook[] {
-  return mergeServerHooks(
-    hooks.map((hook) => serializedAgentHookSchema.parse(hook)),
-    [],
-  );
+  return mergeServerHooks(hooks, []).map((hook) => serializedAgentHookSchema.parse(hook));
 }
 
 /**
@@ -280,7 +277,7 @@ export class HookDispatcher {
    * announced twice, and one they cannot announce must not vanish.
    */
   canDeliver(operationId: string, type: AgentHookType): boolean {
-    const hooks = this.hooks.get(operationId)?.filter((hook) => hook.type === type) ?? [];
+    const hooks = this.resolveHooks(operationId).filter((hook) => hook.type === type);
 
     return isQueueAgentRuntimeEnabled() ? hooks.some((hook) => hook.webhook) : hooks.length > 0;
   }
@@ -328,7 +325,7 @@ export class HookDispatcher {
           hook.matcher !== undefined ? agentHookMatcherSchema.parse(hook.matcher) : undefined,
       };
     });
-    this.hooks.set(operationId, validatedHooks);
+    this.hooks.set(operationId, mergeServerHooks(validatedHooks, []));
 
     log(
       '[%s] Registered %d hooks: %s',

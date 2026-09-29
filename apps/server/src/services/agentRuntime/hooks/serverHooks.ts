@@ -31,19 +31,12 @@ export function getServerHooks(): AgentHook[] {
   });
 }
 
-/** Server configuration wins ID collisions; unrelated callbacks retain their original objects. */
+/** Replace all environment hooks with current configuration, preserving unrelated callbacks. */
 export function mergeServerHooks<T extends AgentHook | SerializedHook>(
   hooks: T[],
   configured: T[],
 ): T[] {
   const reserved = new Map(configured.map((hook) => [hook.id, hook]));
-  const seen = new Set<string>();
-  const retained = hooks.filter((hook) => {
-    if (reserved.has(hook.id)) return false;
-    if (!hook.id.startsWith(SERVER_HOOK_PREFIX)) return true;
-    if (seen.has(hook.id)) return false;
-    seen.add(hook.id);
-    return true;
-  });
+  const retained = hooks.filter((hook) => !hook.id.startsWith(SERVER_HOOK_PREFIX));
   return [...retained, ...reserved.values()];
 }
