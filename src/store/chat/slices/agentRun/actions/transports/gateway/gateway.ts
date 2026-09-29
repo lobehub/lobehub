@@ -2036,7 +2036,7 @@ export class GatewayActionImpl {
     // so a follow-up on an existing topic runs with a `null` local marker while
     // its optimistic `running` status is still in place. Requiring the marker to
     // match skipped the status write for every such run and left the sidebar
-    // spinner on until a later topic-list refetch (LOBE-14423).
+    // spinner on until a later topic-list refetch.
     const markerOperationId = existingTopic.metadata?.runningOperation?.operationId;
     if (markerOperationId && markerOperationId !== operationId) return false;
     if (!markerOperationId && this.#hasOtherLiveRunOnTopic(topicId, operationId)) return false;

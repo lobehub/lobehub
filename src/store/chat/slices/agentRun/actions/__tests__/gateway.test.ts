@@ -2633,7 +2633,7 @@ describe('GatewayActionImpl', () => {
       });
     });
 
-    // LOBE-14423: a follow-up on an existing topic starts with no local
+    // A follow-up on an existing topic starts with no local
     // `runningOperation` marker (run start only rewrites a stale one), so the
     // terminal status write must not depend on the marker naming this run.
     describe('follow-up run on an existing topic without a local marker', () => {

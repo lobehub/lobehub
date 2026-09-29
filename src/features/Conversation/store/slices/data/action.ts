@@ -79,7 +79,7 @@ export interface DataAction {
 
   /**
    * Load one round-aligned page of history older than the server's
-   * newest-first window (LOBE-13716) and prepend it to the transcript.
+   * newest-first window and prepend it to the transcript.
    * Self-guarding: no-ops while a page is in flight, once the beginning has
    * been reached, or when the conversation has no server-backed messages yet.
    *

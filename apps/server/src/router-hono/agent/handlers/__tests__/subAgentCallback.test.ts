@@ -91,7 +91,7 @@ describe('subAgentCallback handler', () => {
   });
 
   it('falls back to the durable operation row when the child metadata is gone', async () => {
-    // Regression (LOBE-14161): runStep's orphan recovery resumes the parent
+    // Regression: runStep's orphan recovery resumes the parent
     // precisely because the child's coordinator metadata expired, so a
     // metadata-only lookup 401'd every redelivery and stranded the parent.
     mockGetOperationMetadata.mockResolvedValue(null);

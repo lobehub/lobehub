@@ -248,7 +248,7 @@ describe('message list client cache', () => {
   });
 });
 
-describe('earlier history (round-cursor pages, LOBE-13716)', () => {
+describe('earlier history (round-cursor pages)', () => {
   const message = (id: string, createdAt: number, role = 'assistant') =>
     ({ content: id, createdAt, id, role, updatedAt: createdAt }) as unknown as UIChatMessage;
 

@@ -294,7 +294,7 @@ describe('AbandonOperationService', () => {
   });
 
   describe('no-state row pre-claimed by the caller', () => {
-    // Regression (LOBE-14161): runStep claims the expired lease with
+    // Regression: runStep claims the expired lease with
     // `settleStaleRunning` (row → `abandoned`) before abandoning. With both
     // state and metadata gone, the no-state guard used to accept only live
     // statuses, so the row retired while the turn kept loading.
@@ -921,7 +921,7 @@ describe('AbandonOperationService', () => {
   });
 
   it('settles a parked sub-agent row that the lifecycle dispatch skips', async () => {
-    // Regression (LOBE-14161): a sub-agent child parked on its own nested call
+    // Regression: a sub-agent child parked on its own nested call
     // skips `dispatchHooks`, and a `running`-only safety net left its row in
     // `waiting_for_async_tool` forever.
     const coord = buildCoordinator({

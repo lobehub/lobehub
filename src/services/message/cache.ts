@@ -32,7 +32,7 @@ const messageListClientStates = new Map<string, MessageListClientState>();
 
 /**
  * Client-held pages of history OLDER than the server's newest-first window
- * (LOBE-13716). The chat read path only ever fetches the newest round-aligned
+ * The chat read path only ever fetches the newest round-aligned
  * page; when the user walks back past it, the older pages are fetched once via
  * a round cursor and kept here so every later revalidation of the same
  * identity re-merges them instead of collapsing the view back to the window.
