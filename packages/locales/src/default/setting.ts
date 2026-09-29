@@ -1840,7 +1840,7 @@ When I am ___, I need ___
   'trash.purgeConfirm.title': 'Delete forever',
   'trash.restore.failed.notFound': 'This item no longer exists.',
   'trash.restore.failed.parentTrashed':
-    'Restore the container it belongs to first — that item is also in the trash.',
+    'Its agent, topic or previous message is still in the trash. Restore that first.',
   'trash.restore.success': 'Restored',
   'trash.purge.success': 'Deleted permanently',
   'trash.title': 'Trash',

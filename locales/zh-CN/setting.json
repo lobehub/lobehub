@@ -1776,7 +1776,7 @@
   "trash.purgeConfirm.content": "永久删除「{{title}}」？此操作无法撤销。",
   "trash.purgeConfirm.title": "彻底删除",
   "trash.restore.failed.notFound": "该项目已不存在。",
-  "trash.restore.failed.parentTrashed": "它所属的容器也在回收站中，请先恢复该容器。",
+  "trash.restore.failed.parentTrashed": "它所属的助手、话题或上一条消息还在回收站中，请先恢复它们。",
   "trash.restore.success": "已恢复",
   "trash.title": "回收站",
   "trash.type.agent": "助手",
