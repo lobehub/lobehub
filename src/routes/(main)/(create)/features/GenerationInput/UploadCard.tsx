@@ -87,6 +87,24 @@ export const uploadCardStyles = createStaticStyles(({ css }) => ({
     height: 100%;
     border-radius: 3px;
   `,
+  badge: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 4;
+    inset-block-end: 4px;
+    inset-inline-start: 4px;
+
+    padding-block: 1px;
+    padding-inline: 4px;
+    border-radius: 4px;
+
+    font-size: 10px;
+    line-height: 14px;
+    color: ${cssVar.colorWhite};
+
+    background: ${cssVar.colorBgMask};
+  `,
   label: css`
     padding-inline: 4px;
 
@@ -128,6 +146,8 @@ export const uploadCardStyles = createStaticStyles(({ css }) => ({
 }));
 
 interface UploadCardProps {
+  /** Short tag drawn on the filled preview, e.g. "Image 1" for prompt references. */
+  badge?: string;
   className?: string;
   closeClassName?: string;
   imageUrl?: string | null;
@@ -151,6 +171,7 @@ interface UploadCardProps {
 
 const UploadCard = memo<UploadCardProps>(
   ({
+    badge,
     imageUrl,
     label,
     loading = false,
@@ -269,6 +290,7 @@ const UploadCard = memo<UploadCardProps>(
                 src={uploadPreview || imageUrl!}
                 style={{ objectFit: 'cover' }}
               />
+              {badge && !uploading && <span className={uploadCardStyles.badge}>{badge}</span>}
               {uploading && (
                 <div className={uploadCardStyles.uploadOverlay}>
                   <Spin size="small" />

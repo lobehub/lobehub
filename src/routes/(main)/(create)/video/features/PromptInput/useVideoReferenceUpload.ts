@@ -13,7 +13,7 @@ import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
 import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
 
-const isSupportedParamSelector = videoGenerationConfigSelectors.isSupportedParam;
+const isSlotEnabledSelector = videoGenerationConfigSelectors.isImageInputSlotEnabled;
 
 /**
  * Video-page binding for the shared {@link useReferenceImageUpload} core.
@@ -22,15 +22,16 @@ const isSupportedParamSelector = videoGenerationConfigSelectors.isSupportedParam
  * (`imageUrl`) → reference array (`imageUrls`) → end frame (`endImageUrl`) — so a
  * drop fills them in order. Single-image models accept one; first/end-frame
  * models map a 2-image drop to start + end (the end frame's `requiresImageUrl`
- * is satisfied because the start frame slot fills first).
+ * is satisfied because the start frame slot fills first). Models accepting both
+ * frames and references only expose the active image input mode's slots.
  */
 export const useVideoReferenceUpload = () => {
   const { t } = useTranslation('video');
   const { allowed: canCreate } = usePermission('create_content');
 
-  const isSupportImageUrl = useVideoStore(isSupportedParamSelector('imageUrl'));
-  const isSupportImageUrls = useVideoStore(isSupportedParamSelector('imageUrls'));
-  const isSupportEndImageUrl = useVideoStore(isSupportedParamSelector('endImageUrl'));
+  const isSupportImageUrl = useVideoStore(isSlotEnabledSelector('imageUrl'));
+  const isSupportImageUrls = useVideoStore(isSlotEnabledSelector('imageUrls'));
+  const isSupportEndImageUrl = useVideoStore(isSlotEnabledSelector('endImageUrl'));
 
   const {
     value: imageUrl,

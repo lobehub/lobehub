@@ -1,5 +1,10 @@
 import { type RuntimeVideoGenParamsKeys } from 'model-bank';
 
+import {
+  getImageInputSlots,
+  supportsImageInputMode,
+  type VideoImageInputSlots,
+} from './imageInputMode';
 import { type VideoGenerationConfigState } from './initialState';
 
 const model = (s: VideoGenerationConfigState) => s.model;
@@ -15,7 +20,19 @@ const isSupportedParam = (paramName: RuntimeVideoGenParamsKeys) => {
   };
 };
 
+/** Whether the current model accepts both start frames and references, i.e. shows the mode toggle */
+const hasImageInputMode = (s: VideoGenerationConfigState) =>
+  supportsImageInputMode(s.parametersSchema);
+const imageInputMode = (s: VideoGenerationConfigState) => s.imageInputMode;
+/** Whether an upload slot is shown for the current model and active image input mode */
+const isImageInputSlotEnabled =
+  (slot: keyof VideoImageInputSlots) => (s: VideoGenerationConfigState) =>
+    getImageInputSlots(s.parametersSchema, s.imageInputMode)[slot];
+
 export const videoGenerationConfigSelectors = {
+  hasImageInputMode,
+  imageInputMode,
+  isImageInputSlotEnabled,
   isSupportedParam,
   model,
   parameters,

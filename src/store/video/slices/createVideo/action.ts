@@ -34,6 +34,7 @@ const EDIT_INPUT_PARAMETER_KEYS = new Set([
 ]);
 
 const cloneEditingDraft = (store: VideoStore): VideoEditingDraftSnapshot => ({
+  imageInputMode: store.imageInputMode,
   model: store.model,
   parameters: {
     ...store.parameters,
@@ -41,6 +42,7 @@ const cloneEditingDraft = (store: VideoStore): VideoEditingDraftSnapshot => ({
   },
   parametersSchema: store.parametersSchema,
   provider: store.provider,
+  stashedImageInputs: store.stashedImageInputs,
   uploadingImagePreviews: [...store.uploadingImagePreviews],
 });
 
@@ -54,10 +56,12 @@ const restoreEditingDraft = (state: VideoStore) => {
   return {
     editingDraftSnapshot: undefined,
     editingGenerationId: undefined,
+    imageInputMode: snapshot.imageInputMode,
     model: snapshot.model,
     parameters: snapshot.parameters,
     parametersSchema: snapshot.parametersSchema,
     provider: snapshot.provider,
+    stashedImageInputs: snapshot.stashedImageInputs,
     uploadingImagePreviews: snapshot.uploadingImagePreviews,
   };
 };
