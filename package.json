@@ -293,6 +293,7 @@
     "@lobechat/editor-runtime": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
+    "@lobechat/env": "workspace:*",
     "@lobechat/eval-dataset-parser": "workspace:*",
     "@lobechat/eval-rubric": "workspace:*",
     "@lobechat/fetch-sse": "workspace:*",
