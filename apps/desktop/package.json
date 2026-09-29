@@ -45,6 +45,7 @@
     "start:reuse": "electron .",
     "stylelint": "stylelint \"src/**/*.{js,jsx,ts,tsx}\" --fix",
     "test": "vitest --run",
+    "test:core-ota": "vitest run --config scripts/core-ota-test/vitest.config.mjs",
     "type-check": "tsgo --noEmit -p tsconfig.json",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
     "update-server": "sh scripts/update-test/run-test.sh"

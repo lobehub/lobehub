@@ -8,6 +8,16 @@
 app 名固定为 `lobehub-core-ota-e2e`，userData 在 `~/Library/Application Support/lobehub-core-ota-e2e`，
 日志在 `~/Library/Logs/lobehub-core-ota-e2e/main.log`，与开发实例互不干扰。
 
+## 手动 pack 集成验证
+
+```bash
+bun run test:core-ota
+```
+
+这组验证执行真实 zstd 压缩、打包和磁盘 staging，覆盖跨版本复用、401 个文件增量、Range、补丁和损坏拒绝。
+仅在修改 OTA 协议或发布前手动运行，不纳入默认 `test` / PR CI；独立配置允许每项最多 30 秒。
+它验证正确性，不测量性能指标，因此不作为 benchmark。
+
 ## 1. 构建 v1（一次，约 10 分钟）
 
 ```bash
