@@ -16,6 +16,7 @@ import { TopicTrigger } from '@/const/topic';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -383,15 +384,24 @@ export class GoalManagerService {
       // An adopted local desktop run has no server operation to watch exit; its
       // submitted plan is the only settlement the server can observe.
       const settledLocally = !!state.adopted && !operation && !!state.submitted;
-      // A dispatched turn that still has no operation after the timeout never
-      // started: the dispatch failed before the run was persisted, or the
-      // planning topic was busy and the prompt never became its own run. There
-      // is no process whose exit could be unconfirmed, so settle it like a turn
-      // that exited without a plan instead of pausing the Goal. Pausing left it
-      // stuck for good — every resume re-read this same turn and paused again.
-      // An adopted turn is exempt: it never has a server operation to find.
+      // A dispatched turn whose planning message was never written did not
+      // start: `execAgent` persists that message (`msg_goal_manager_<token>`)
+      // before it creates any operation, and the busy-topic gate — the planning
+      // topic can be the owner's own conversation — throws before it. With no
+      // run to confirm, settle the turn like one that exited without a plan
+      // instead of pausing: pausing left the Goal stuck for good, because every
+      // resume re-read this same turn and paused again.
+      //
+      // A missing operation row alone proves nothing — the runtime keeps going
+      // when that insert fails — so a turn whose message exists still pauses as
+      // unconfirmed. An adopted turn never has a dispatched message and is exempt.
       const neverStarted =
-        !state.adopted && !operation && Date.now() - Date.parse(state.startedAt) > TIMEOUT_MS;
+        !state.adopted &&
+        !operation &&
+        Date.now() - Date.parse(state.startedAt) > TIMEOUT_MS &&
+        !(await new MessageModel(this.db, this.userId, this.workspaceId).findById(
+          `${MANAGER_SOURCE_MESSAGE_PREFIX}${state.token}`,
+        ));
       if (
         !settledLocally &&
         !neverStarted &&

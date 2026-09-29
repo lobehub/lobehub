@@ -7,6 +7,7 @@ import { getTestDB } from '@/database/core/getTestDB';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import {
   acceptances,
@@ -17,6 +18,7 @@ import {
   goalNodeDecisions,
   goalNodes,
   goals,
+  messages,
   tasks,
   taskTopics,
   topics,
@@ -89,6 +91,7 @@ afterEach(async () => {
     goals,
     acceptances,
     agentOperations,
+    messages,
     taskTopics,
     topics,
     tasks,
@@ -691,8 +694,8 @@ describe('CLI main Agent planning', () => {
   });
 
   it('replaces a timed-out turn that never started instead of pausing on it', async () => {
-    // The dispatch reaches no operation: the planning topic was busy, or the
-    // call failed before the run was persisted. Nothing can still be running.
+    // The busy-topic gate throws before the planning message is written, so
+    // no run can exist for this turn.
     const original = vi.mocked(AiAgentService.prototype.execAgent).getMockImplementation()!;
     vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(async () => {
       throw new Error('Topic is busy');
@@ -714,6 +717,34 @@ describe('CLI main Agent planning', () => {
     expect(next.token).not.toBe(state.token);
     expect(next.turns).toBe(state.turns + 1);
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps pausing a timed-out turn whose message exists but whose operation row is missing', async () => {
+    // The runtime keeps running when its operation insert fails, so a written
+    // planning message with no operation is still an unconfirmed process.
+    vi.mocked(AiAgentService.prototype.execAgent).mockImplementationOnce(async (params) => {
+      await new MessageModel(db, userId).create(
+        {
+          agentId: params.agentId,
+          content: 'plan',
+          role: 'user',
+          topicId: params.appContext!.topicId!,
+        },
+        params.clientIds!.userMessageId,
+      );
+      throw new Error('Operation insert failed');
+    });
+    const { id, state, op } = await start();
+    expect(op).toBeUndefined();
+
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 21 * 60_000);
+    expect((await service().tick(id)).outcome).toBe('no_progress');
+    const fresh = (await model().findById(id))!;
+    expect(fresh.status).toBe('paused');
+    expect(fresh.config!.managerState!.token).toBe(state.token);
+    expect(fresh.config!.managerState!.consumed).not.toBe(true);
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
   });
 
   it('rejects an open human Gate without planning or dispatching work', async () => {
