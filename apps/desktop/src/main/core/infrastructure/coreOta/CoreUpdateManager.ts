@@ -83,6 +83,7 @@ export class CoreUpdateManager {
   private rollbackRendererDir: string | null = null;
   private pendingBootCheck = false;
   private coldBootCheck = false;
+  private deferredColdBootCheck = false;
   private mountedSeen = false;
   private bootCrashCount = 0;
   private bootCheckTimer: NodeJS.Timeout | null = null;
@@ -225,10 +226,13 @@ export class CoreUpdateManager {
     }
     logger.info(`Core ${this.pointer.current} boot check passed`);
     this.clearBootTimers();
+    const shouldRunDeferredCheck = this.deferredColdBootCheck;
     this.pendingBootCheck = false;
+    this.deferredColdBootCheck = false;
     this.bootCrashCount = 0;
     this.rollbackRendererDir = null;
     this.gc();
+    if (shouldRunDeferredCheck) this.checkForUpdates();
   };
 
   handleRendererCrash = () => {
@@ -299,6 +303,11 @@ export class CoreUpdateManager {
       logger.info('Core OTA check skipped', {
         reason: !this.enabled ? 'disabled' : this.busy ? 'busy' : 'already-staged',
       });
+      return;
+    }
+    if (this.pendingBootCheck && this.coldBootCheck) {
+      this.deferredColdBootCheck = true;
+      logger.info('Core OTA check deferred', { reason: 'cold-boot-check' });
       return;
     }
     const generation = this.checkGeneration;
@@ -451,6 +460,7 @@ export class CoreUpdateManager {
     const coldBoot = this.coldBootCheck;
     logger.warn('Core OTA rolled back', { coldBoot, failedVersion: bad, reason });
     this.pendingBootCheck = false;
+    this.deferredColdBootCheck = false;
     this.savePointer({
       blacklist: bad ? [...new Set([...this.pointer.blacklist, bad])] : this.pointer.blacklist,
       current: this.pointer.previous,
@@ -469,6 +479,7 @@ export class CoreUpdateManager {
   private armBootCheck({ cold = false } = {}) {
     this.pendingBootCheck = true;
     this.coldBootCheck = cold;
+    this.deferredColdBootCheck = false;
     this.bootCrashCount = 0;
     this.clearBootTimers();
     if (!cold) {

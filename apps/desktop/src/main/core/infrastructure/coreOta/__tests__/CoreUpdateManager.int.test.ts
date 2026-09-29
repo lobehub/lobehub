@@ -370,6 +370,57 @@ describe('CoreUpdateManager initialize', () => {
       }
     });
 
+    it('defers the startup update check until the cold boot check passes', async () => {
+      vi.useFakeTimers();
+      try {
+        serveLatest(mainChanged('1.0.2', 2));
+        const { manager } = await bootExternal({ failures: 1, version: '1.0.1' });
+        manager.startScheduledChecks();
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(fetchImpl).not.toHaveBeenCalled();
+        expect(readPointer(otaRoot(), ABI)).toMatchObject({ current: '1.0.1', previous: null });
+
+        manager.handleBootPing('mounted');
+        await vi.advanceTimersByTimeAsync(1);
+
+        expect(fetchImpl).toHaveBeenCalledExactlyOnceWith(
+          `${SERVER}/stable/core/${PLATFORM}/latest.json`,
+          { cache: 'no-store' },
+        );
+        await vi.waitFor(() => {
+          expect(readPointer(otaRoot(), ABI)).toMatchObject({
+            current: '1.0.2',
+            previous: '1.0.1',
+          });
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not stage a newer core before a cold boot timeout rollback', async () => {
+      vi.useFakeTimers();
+      try {
+        serveLatest(mainChanged('1.0.2', 2));
+        const { manager } = await bootExternal({ failures: 1, version: '1.0.1' });
+        manager.startScheduledChecks();
+
+        await vi.advanceTimersByTimeAsync(1);
+        await vi.advanceTimersByTimeAsync(61_000);
+
+        expect(fetchImpl).not.toHaveBeenCalled();
+        expect(readPointer(otaRoot(), ABI)).toMatchObject({
+          blacklist: ['1.0.1'],
+          current: null,
+          previous: null,
+        });
+        expect(electronMock.app.relaunch).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('does not arm when the renderer already mounted before scheduling', async () => {
       vi.useFakeTimers();
       try {
