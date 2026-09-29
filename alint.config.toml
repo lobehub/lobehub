@@ -305,3 +305,195 @@ files = [ "packages/alint/fixtures/ui-content-width/**" ]
 lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/ui-content-width" = "warn"
+
+# Security: no-unsafe-user-url-fetch.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/__mocks__/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-user-url-fetch" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unsafe-user-url-fetch/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-user-url-fetch" = "warn"
+
+# Security: no-unscoped-resource-mutation.
+[[config.group]]
+files = [ "packages/database/src/models/**/*.ts", "packages/database/src/repositories/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/__mocks__/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unscoped-resource-mutation" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unscoped-resource-mutation/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unscoped-resource-mutation" = "warn"
+
+# Security: no-untrusted-path-io.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "apps/desktop/src/main/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/__mocks__/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-untrusted-path-io" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-untrusted-path-io/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-untrusted-path-io" = "warn"
+
+# Security: no-shell-command-injection.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "apps/desktop/src/main/**/*.ts", "apps/cli/src/**/*.ts", "packages/agent-runtime/src/**/*.ts", "packages/local-file-shell/src/**/*.ts", "packages/heterogeneous-agents/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-shell-command-injection" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-shell-command-injection/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-shell-command-injection" = "warn"
+
+# Security: no-untrusted-code-execution.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "apps/desktop/src/main/**/*.ts", "packages/agent-runtime/src/**/*.ts", "packages/local-file-shell/src/**/*.ts", "packages/heterogeneous-agents/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-untrusted-code-execution" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-untrusted-code-execution/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-untrusted-code-execution" = "warn"
+
+# Security: no-unsafe-html-execution.
+[[config.group]]
+files = [ "src/**/*.ts", "src/**/*.tsx", "apps/server/src/**/*.ts", "packages/utils/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-html-execution" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unsafe-html-execution/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-html-execution" = "warn"
+
+# Security: no-unsafe-raw-sql.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "packages/database/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-raw-sql" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unsafe-raw-sql/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-raw-sql" = "warn"
+
+# Security: no-secret-exposure.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "apps/desktop/src/main/**/*.ts", "apps/cli/src/**/*.ts", "src/**/*.ts", "src/**/*.tsx", "packages/env/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-secret-exposure" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-secret-exposure/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-secret-exposure" = "warn"
+
+# Security: no-auth-verification-bypass.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "src/app/**/*.ts", "src/libs/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-auth-verification-bypass" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-auth-verification-bypass/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-auth-verification-bypass" = "warn"
+
+# Security: no-unvalidated-redirect.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "src/**/*.ts", "src/**/*.tsx" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unvalidated-redirect" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unvalidated-redirect/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unvalidated-redirect" = "warn"
+
+# Security: no-prototype-pollution.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "packages/utils/src/**/*.ts", "apps/desktop/src/main/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-prototype-pollution" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-prototype-pollution/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-prototype-pollution" = "warn"
+
+# Security: no-privileged-untrusted-electron.
+[[config.group]]
+files = [ "apps/desktop/src/main/**/*.ts", "apps/desktop/src/preload/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-privileged-untrusted-electron" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-privileged-untrusted-electron/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-privileged-untrusted-electron" = "warn"

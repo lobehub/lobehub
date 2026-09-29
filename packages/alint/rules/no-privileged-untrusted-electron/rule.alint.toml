@@ -1,0 +1,10 @@
+name = "no-privileged-untrusted-electron"
+builtInAgent = "basic-structured"
+instruction = """
+Review only this file. Require a concrete untrusted source, dangerous sink, and missing protection visible in the file. Follow local aliases and guards. Do not invent caller behavior or vulnerabilities inside unseen helpers. Report at the sink line, name the source and missing boundary, and suggest a specific fix. Do not include secret values or payloads in diagnostics. Findings are review warnings, not claims of proven exploitability.
+
+Prevent remote/user content obtaining Electron/Node capabilities (XSS-to-RCE boundary).
+Report BrowserWindow/BrowserView/WebContentsView that visibly loads remote/user content with nodeIntegration:true, contextIsolation:false together with a privileged preload, or webSecurity:false that exposes a privileged app origin. Report a preload contextBridge API exposing raw ipcRenderer.send/invoke, require, or arbitrary host command execution to remote/untrusted frames with no constrained channels/sender/access boundary visible in the file. Report a privileged IPC handler explicitly accepting all remote sender origins before executing host commands. Anchor at the dangerous preference or exposed bridge/handler.
+Recommend sandbox:true, nodeIntegration:false, contextIsolation:true for untrusted content; isolate previews from privileged preload; expose narrow typed operations/channel allowlists and validate the sender frame/origin and execution policy in main.
+Do not report local trusted app windows solely because they have a preload; no finding for omitted preferences alone (defaults may be secure). Do not report sandbox:false alone without a visible route to privileged capability. Accept narrow per-operation bridges with validated inputs and main-side policy contracts. Intentional approved terminal APIs are not blanket vulnerabilities. Require remote/untrusted provenance or a raw unrestricted capability bridge, not speculative navigation.
+"""
