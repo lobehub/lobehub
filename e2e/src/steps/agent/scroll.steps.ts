@@ -391,12 +391,6 @@ Then('视口应贴近聊天列表底部', async function (this: CustomWorld) {
   expect(snap!.distanceToBottom).toBeLessThanOrEqual(AT_BOTTOM_EPSILON);
 });
 
-Then('视口不应贴近聊天列表底部', async function (this: CustomWorld) {
-  const snap = await getScrollSnapshot(this);
-  expect(snap, 'failed to locate scroll container').not.toBeNull();
-  expect(snap!.distanceToBottom).toBeGreaterThan(AT_BOTTOM_EPSILON);
-});
-
 // Reset LLM mock timing overrides so the slowdown from scenario 3 does not
 // leak into later unrelated scenarios.
 After({ tags: '@scroll' }, async function (this: CustomWorld) {
