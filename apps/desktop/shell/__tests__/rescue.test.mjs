@@ -154,7 +154,7 @@ describe('rescue config', () => {
   ])('stored %s with builtin %s resolves to %s', (stored, built, expected) => {
     if (stored) writeJson(path.join(userData, 'lobehub-settings.json'), { updateChannel: stored });
     if (built)
-      writeJson(path.join(process.resourcesPath, 'core', 'manifest.json'), { channel: built });
+      writeJson(path.join(process.resourcesPath, 'core.asar', 'manifest.json'), { channel: built });
     expect(resolveChannel({ resourcesPath: process.resourcesPath, userData })).toBe(expected);
   });
 
@@ -191,6 +191,23 @@ describe('rescue config', () => {
 });
 
 describe('runRescue', () => {
+  it('checks the packaged canary feed before an update-channel setting exists', async () => {
+    writeJson(path.join(process.resourcesPath, 'core.asar', 'manifest.json'), {
+      channel: 'canary',
+    });
+    const electron = fakeElectron({ response: 2 });
+    const updater = fakeUpdater({ check: async () => ({ isUpdateAvailable: false }) });
+
+    await run(electron, updater);
+
+    expect(updater.channel).toBe('canary');
+    expect(updater.setFeedURL).toHaveBeenCalledWith({
+      provider: 'generic',
+      url: 'https://releases.example.com/canary',
+    });
+    expect(updater.checkForUpdates).toHaveBeenCalledOnce();
+  });
+
   it('downloads and installs an available update', async () => {
     const electron = fakeElectron();
     const updater = fakeUpdater({

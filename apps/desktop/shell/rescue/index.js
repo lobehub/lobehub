@@ -15,7 +15,7 @@ const readJson = (file) => {
 const resolveChannel = ({ resourcesPath, userData }) => {
   const stored = readJson(path.join(userData, 'lobehub-settings.json'))?.updateChannel;
   if (stored != null) return stored === 'canary' ? 'canary' : 'stable';
-  const built = readJson(path.join(resourcesPath, 'core', 'manifest.json'))?.channel;
+  const built = readJson(path.join(resourcesPath, 'core.asar', 'manifest.json'))?.channel;
   return built === 'canary' || built === 'beta' ? 'canary' : 'stable';
 };
 
