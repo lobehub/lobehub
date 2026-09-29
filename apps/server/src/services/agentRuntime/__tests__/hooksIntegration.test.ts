@@ -15,6 +15,9 @@ import { AgentRuntimeService } from '../AgentRuntimeService';
 import { hookDispatcher } from '../hooks';
 import type { AgentHookEvent } from '../hooks/types';
 
+const { hookFetch } = vi.hoisted(() => ({ hookFetch: vi.fn() }));
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: hookFetch }));
+
 // ── Mocks ──────────────────────────────────────────
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'http://localhost:3010' } }));
 vi.mock('@/database/models/message', () => ({
@@ -411,5 +414,191 @@ describe('Hooks integration — afterStep event is compatible with renderStepPro
     expect('totalToolCalls' in event).toBe(true);
 
     dispatchSpy.mockRestore();
+  });
+});
+
+describe('durable approval resolution notifications', () => {
+  it('drains persisted events once under the worker step lock, including a replacement worker', async () => {
+    vi.restoreAllMocks();
+    hookFetch.mockReset().mockResolvedValue(new Response('{}'));
+    const event = {
+      operationId: 'source',
+      action: 'approve' as const,
+      toolCallIds: ['native-1', 'native-2'],
+    };
+    let stored: any = {
+      operationId: 'continuation',
+      status: 'running',
+      stepCount: 1,
+      createdAt: '',
+      lastModified: '',
+      messages: [],
+      host: {
+        hooks: [
+          {
+            id: 'approval',
+            type: 'afterHumanIntervention',
+            webhook: { url: 'https://hooks.example/approval' },
+          },
+        ],
+        interventionHookEvents: [event],
+      },
+    };
+    const worker = (ownsLock = true) => {
+      const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+      const coordinator = (service as any).coordinator;
+      coordinator.tryClaimStep.mockResolvedValue(ownsLock);
+      coordinator.loadAgentState.mockImplementation(async () => structuredClone(stored));
+      coordinator.saveAgentState.mockImplementation(async (_op: string, state: any) => {
+        stored = structuredClone(state);
+      });
+      // stepCount already exceeds this delivery: only the durable hook ledger
+      // can be drained; the stale step cannot execute tools/LLM again.
+      return service;
+    };
+    // A worker that cannot enter the delivery boundary leaves the durable
+    // event untouched; a later owner can deliver it without regenerating it.
+    await worker(false).executeStep({
+      operationId: 'continuation',
+      stepIndex: 0,
+      context: { phase: 'user_input' } as any,
+    });
+    expect(hookFetch).not.toHaveBeenCalled();
+    expect(stored.host.interventionHookEvents).toEqual([event]);
+    await worker().executeStep({
+      operationId: 'continuation',
+      stepIndex: 0,
+      context: { phase: 'user_input' } as any,
+    });
+    expect(hookFetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(hookFetch.mock.calls[0][1].body)).toMatchObject({
+      action: 'approve',
+      toolCallIds: ['native-1', 'native-2'],
+      operationId: 'source',
+    });
+    expect(stored.host.interventionHookEvents).toEqual([]);
+    await worker().executeStep({
+      operationId: 'continuation',
+      stepIndex: 0,
+      context: { phase: 'user_input' } as any,
+    });
+    expect(hookFetch).toHaveBeenCalledTimes(1);
+  });
+  it('checkpoints each action group before delivery of the next group', async () => {
+    vi.restoreAllMocks();
+    const events = [
+      { operationId: 'source', action: 'approve', toolCallIds: ['one'] },
+      { operationId: 'source', action: 'reject', toolCallIds: ['two'] },
+    ];
+    let stored: any = {
+      operationId: 'continuation',
+      status: 'running',
+      stepCount: 1,
+      messages: [],
+      host: {
+        hooks: [
+          {
+            id: 'approval',
+            type: 'afterHumanIntervention',
+            webhook: { url: 'https://hooks.example/approval', fallback: 'none' },
+          },
+        ],
+        interventionHookEvents: events,
+      },
+    };
+    let secondAttempt = false;
+    const observed: unknown[][] = [];
+    hookFetch.mockReset().mockImplementation(async () => {
+      observed.push(structuredClone(stored.host.interventionHookEvents));
+      if (observed.length === 2 && !secondAttempt) return new Response('', { status: 503 });
+      return new Response('{}');
+    });
+    const run = async () => {
+      const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+      const coordinator = (service as any).coordinator;
+      coordinator.loadAgentState.mockImplementation(async () => structuredClone(stored));
+      coordinator.saveAgentState.mockImplementation(async (_op: string, state: any) => {
+        stored = structuredClone(state);
+      });
+      // This checkout deliberately does not own L's outer critical-error catch.
+      // Assert the durable handoff independently of its propagation policy.
+      await service
+        .executeStep({
+          operationId: 'continuation',
+          stepIndex: 0,
+          context: { phase: 'user_input' } as any,
+        })
+        .catch(() => undefined);
+    };
+    await run();
+    expect(observed).toEqual([events, [events[1]]]);
+    expect(stored.host.interventionHookEvents).toEqual([events[1]]);
+    secondAttempt = true;
+    await run();
+    expect(hookFetch.mock.calls.map(([, init]) => JSON.parse(init.body).action)).toEqual([
+      'approve',
+      'reject',
+      'reject',
+    ]);
+    expect(stored.host.interventionHookEvents).toEqual([]);
+  });
+
+  it('replays a delivered notification when the worker dies before saving consumption', async () => {
+    vi.restoreAllMocks();
+    hookFetch.mockReset().mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: 'beforeToolCall',
+              permissionDecision: 'deny',
+              updatedInput: { unexpected: true },
+            },
+          }),
+        ),
+    );
+    let stored: any = {
+      operationId: 'continuation',
+      status: 'running',
+      stepCount: 1,
+      messages: [],
+      host: {
+        hooks: [
+          {
+            id: 'approval',
+            type: 'afterHumanIntervention',
+            webhook: { url: 'https://hooks.example/approval' },
+          },
+        ],
+        interventionHookEvents: [
+          { operationId: 'source', action: 'approve', toolCallIds: ['one'] },
+        ],
+      },
+    };
+    const original = structuredClone(stored);
+    const run = async (crash: boolean) => {
+      const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+      const coordinator = (service as any).coordinator;
+      coordinator.loadAgentState.mockImplementation(async () => structuredClone(stored));
+      coordinator.saveAgentState.mockImplementation(async (_op: string, state: any) => {
+        if (crash) throw new Error('worker lost before durable save');
+        stored = structuredClone(state);
+      });
+      await service
+        .executeStep({
+          operationId: 'continuation',
+          stepIndex: 0,
+          context: { phase: 'user_input' } as any,
+        })
+        .catch(() => undefined);
+    };
+    await run(true);
+    expect(stored).toEqual(original);
+    expect(hookFetch).toHaveBeenCalledTimes(1);
+    await run(false);
+    expect(hookFetch).toHaveBeenCalledTimes(2);
+    expect(stored).toEqual({ ...original, host: { ...original.host, interventionHookEvents: [] } });
+    await run(false);
+    expect(hookFetch).toHaveBeenCalledTimes(2);
   });
 });

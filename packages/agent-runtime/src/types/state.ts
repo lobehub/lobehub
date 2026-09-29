@@ -30,6 +30,7 @@ import type {
 } from '@lobechat/types';
 
 import type { ToolCallPreparation } from '../transport/tool';
+import type { AfterHumanInterventionHookEvent } from './hooks';
 import type { AgentInstructionRequestHumanApprove } from './instruction';
 import type { Cost, CostLimit, Usage } from './usage';
 
@@ -173,6 +174,8 @@ export interface AgentRunHostEnvelope {
   hooks?: SerializedAgentHook[];
   /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
   includeFinalState?: boolean;
+  /** Settled approval notifications, drained by the first continuation worker under its step lock. */
+  interventionHookEvents?: AfterHumanInterventionHookEvent[];
   /** Queue retry policy for step scheduling. */
   queue?: { retries?: number; retryDelay?: string };
 }
@@ -426,6 +429,7 @@ export interface AgentState {
     supersedes?: {
       batchId: string;
       operationId: string;
+      reapprovedToolCallIds?: string[];
       toolCallIds: string[];
     };
   };

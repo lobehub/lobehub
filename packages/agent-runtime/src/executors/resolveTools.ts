@@ -97,25 +97,46 @@ export const resolveBlockedTools =
 
       let toolMessageId: string;
       try {
-        const toolMessage = await transports.messages.createToolMessage({
-          agentId,
-          content: result.content,
-          groupId,
-          metadata: { toolExecutionTimeMs: 0 },
-          parentId: payload.parentMessageId,
-          plugin: toolPayload as any,
-          pluginError: result.error,
-          pluginIntervention: {
+        const existingId = payload.existingToolMessageIds?.[toolPayload.id];
+        const preparation = state.toolPreparations?.[toolPayload.id];
+        if (existingId) {
+          toolMessageId = existingId;
+          await transports.messages.updateToolMessage(existingId, {
+            content: result.content,
+            pluginError: result.error,
+            pluginState: { ...result.state, hookPreparation: preparation },
+          });
+          await transports.messages.updateToolIntervention(existingId, {
             rejectedReason: blockedReason,
             status: 'rejected',
-          },
-          pluginState: result.state,
-          role: 'tool',
-          threadId,
-          tool_call_id: toolPayload.id,
-          topicId,
-        });
-        toolMessageId = toolMessage.id;
+          });
+          if (preparation)
+            await transports.messages.updateToolCall?.(
+              existingId,
+              toolPayload.arguments,
+              preparation,
+            );
+        } else {
+          const toolMessage = await transports.messages.createToolMessage({
+            agentId,
+            content: result.content,
+            groupId,
+            metadata: { toolExecutionTimeMs: 0 },
+            parentId: payload.parentMessageId,
+            plugin: toolPayload as any,
+            pluginError: result.error,
+            pluginIntervention: {
+              rejectedReason: blockedReason,
+              status: 'rejected',
+            },
+            pluginState: { ...result.state, hookPreparation: preparation },
+            role: 'tool',
+            threadId,
+            tool_call_id: toolPayload.id,
+            topicId,
+          });
+          toolMessageId = toolMessage.id;
+        }
         toolMessageIds.push(toolMessageId);
       } catch (error) {
         await publishPersistError(host, error);
@@ -126,6 +147,7 @@ export const resolveBlockedTools =
       newState.messages.push({
         content: result.content,
         id: toolMessageId,
+        pluginState: { ...result.state, hookPreparation: state.toolPreparations?.[toolPayload.id] },
         role: 'tool',
         tool_call_id: toolPayload.id,
       });

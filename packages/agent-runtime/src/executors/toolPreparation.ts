@@ -1,4 +1,5 @@
 import type { ChatToolPayload } from '@lobechat/types';
+import { isEqual } from 'es-toolkit';
 
 import type { AgentRuntimeHost, ToolCallPreparation, ToolRunContext } from '../transport';
 import type { AgentRuntimeContext, AgentState, RuntimeConfig } from '../types';
@@ -83,6 +84,7 @@ export const createRunContext = ({
     mode,
     operationId: host.operation.operationId,
     parentMessageId,
+    originalArgs: structuredClone(state.toolPreparations?.[tool.id]?.originalArgs),
     parsedArgs: parseToolArgs(tool),
     reuseExistingMessage,
     state,
@@ -114,7 +116,11 @@ export async function prepareToolCalls(
   }
   state.toolPreparations ??= {};
   for (const tool of calls) {
-    if (state.toolPreparations[tool.id]) continue;
+    if (state.toolPreparations[tool.id]) {
+      const effective = state.toolPreparations[tool.id].effectiveArgs;
+      if (effective) tool.arguments = JSON.stringify(effective);
+      continue;
+    }
     const context = createRunContext({
       host,
       mode: calls.length > 1 ? 'batch' : 'single',
@@ -125,7 +131,7 @@ export async function prepareToolCalls(
     });
     const signal = context.abortSignal;
     const cancelled: ToolCallPreparation = {
-      originalArgs: state.toolPreparations?.[tool.id]?.originalArgs ?? context.parsedArgs,
+      originalArgs: context.originalArgs ?? context.parsedArgs,
       status: 'cancelled',
     };
     const preparation = signal?.aborted
@@ -142,6 +148,9 @@ export async function prepareToolCalls(
           if (signal?.aborted) onAbort();
         });
     state.toolPreparations[tool.id] = signal?.aborted ? cancelled : preparation;
+    if (preparation.effectiveArgs && !signal?.aborted) {
+      tool.arguments = JSON.stringify(preparation.effectiveArgs);
+    }
     if (
       host.operation.abortSignal?.aborted ||
       state.toolPreparations[tool.id].status === 'cancelled'
@@ -162,14 +171,104 @@ export const createToolPreparation =
       approvedToolCall?: ChatToolPayload;
       approvedToolCalls?: ChatToolPayload[];
       parentMessageId: string;
+      toolMessageIds?: Record<string, string>;
+      invalidatedApprovalIds?: string[];
+      approvalParentMessageId?: string;
+      approvalSourceBatch?: { batchId: string; operationId: string };
+      pendingApprovalSiblings?: ChatToolPayload[];
     };
     const calls =
       payload.toolsCalling ??
       payload.approvedToolCalls ??
       (payload.approvedToolCall ? [payload.approvedToolCall] : []);
-    // Approval is a new control check; C2 owns original-input rewrites and approval invalidation.
+    const approvedArgs = new Map(calls.map((call) => [call.id, parseToolArgs(call)]));
+    const priorContexts = new Map<string, ToolCallPreparation['additionalContexts']>();
     if (context.phase === 'human_approved_tool') {
-      for (const call of calls) delete state.toolPreparations?.[call.id];
+      const rows = await host.transports.messages.query({
+        agentId: state.origin?.agentId,
+        groupId: state.origin?.groupId,
+        threadId: state.origin?.threadId,
+        topicId: state.origin?.topicId,
+      });
+      for (const call of calls) {
+        const row = rows.find(
+          (row) =>
+            row.role === 'tool' &&
+            row.tool_call_id === call.id &&
+            (row.parentId === payload.parentMessageId ||
+              row.id === payload.parentMessageId ||
+              row.id === payload.toolMessageIds?.[call.id]),
+        );
+        const previous = row?.pluginState?.hookPreparation as ToolCallPreparation | undefined;
+        const retained =
+          previous ??
+          (state.toolPreparationParentId === payload.parentMessageId
+            ? state.toolPreparations?.[call.id]
+            : undefined);
+        const reviewedArguments = row?.pluginIntervention?.approvedArguments;
+        if (reviewedArguments !== undefined) {
+          approvedArgs.set(call.id, parseToolArgs({ ...call, arguments: reviewedArguments }));
+        } else if (retained?.approvalArgs) {
+          approvedArgs.set(call.id, retained.approvalArgs);
+        } else if (row?.plugin?.arguments) {
+          approvedArgs.set(call.id, parseToolArgs({ ...call, arguments: row.plugin.arguments }));
+        }
+        priorContexts.set(call.id, retained?.additionalContexts);
+        if (retained) call.arguments = JSON.stringify(retained.originalArgs);
+        if (row) {
+          if (row.pluginIntervention?.batchId && row.pluginIntervention.operationId) {
+            payload.approvalSourceBatch = {
+              batchId: row.pluginIntervention.batchId,
+              operationId: row.pluginIntervention.operationId,
+            };
+          }
+          payload.approvalParentMessageId = row.parentId ?? undefined;
+          payload.toolMessageIds ??= {};
+          payload.toolMessageIds[call.id] = row.id;
+        }
+        delete state.toolPreparations?.[call.id];
+      }
+      payload.pendingApprovalSiblings = rows
+        .filter(
+          (row) =>
+            row.role === 'tool' &&
+            row.parentId === payload.approvalParentMessageId &&
+            row.pluginIntervention?.status === 'pending' &&
+            row.plugin &&
+            row.tool_call_id &&
+            !calls.some(({ id }) => id === row.tool_call_id),
+        )
+        .map((row) => ({
+          ...row.plugin!,
+          id: row.tool_call_id!,
+          intervention: row.pluginIntervention,
+        }));
     }
-    await prepareToolCalls(host, state, calls, payload.parentMessageId, context.stepContext);
+    await prepareToolCalls(
+      host,
+      state,
+      calls,
+      payload.approvalParentMessageId ?? payload.parentMessageId,
+      context.stepContext,
+    );
+    if (context.phase === 'human_approved_tool' && !host.operation.abortSignal?.aborted) {
+      payload.invalidatedApprovalIds = calls
+        .filter((call) => !isEqual(approvedArgs.get(call.id), parseToolArgs(call)))
+        .map(({ id }) => id);
+      for (const call of calls) {
+        const id = payload.toolMessageIds?.[call.id];
+        const preparation = state.toolPreparations?.[call.id];
+        if (preparation) preparation.approvalArgs = structuredClone(approvedArgs.get(call.id));
+        if (preparation && priorContexts.get(call.id)?.length) {
+          const fragments = new Map(
+            (priorContexts.get(call.id) ?? []).map((fragment) => [fragment.hookId, fragment]),
+          );
+          for (const fragment of preparation.additionalContexts ?? [])
+            fragments.set(fragment.hookId, fragment);
+          preparation.additionalContexts = [...fragments.values()];
+        }
+        if (id && preparation)
+          await host.transports.messages.updateToolCall?.(id, call.arguments, preparation);
+      }
+    }
   };

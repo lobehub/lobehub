@@ -228,6 +228,7 @@ describe('buildRuntimeInterventionNotification', () => {
           supersedes: {
             batchId: 'batch-1',
             operationId: 'operation-1',
+            reapprovedToolCallIds: ['call-1'],
             toolCallIds: ['call-1'],
           },
         },
@@ -245,6 +246,7 @@ describe('buildRuntimeInterventionNotification', () => {
       }),
       batchId: 'batch-1',
       operationId: 'operation-1',
+      reapprovedToolCallIds: ['call-1'],
       toolCallIds: ['call-1'],
     });
   });

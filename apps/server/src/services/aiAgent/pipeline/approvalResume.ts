@@ -41,6 +41,11 @@ export interface ClaimApprovalResumeInput {
 }
 
 export interface ClaimedApprovalResume {
+  approvalHookDecisions: {
+    action: 'approve' | 'reject' | 'rejectAndContinue';
+    rejectionReason?: string;
+    toolCallId: string;
+  }[];
   /** Assistant that emitted this batch — the pending tool rows' shared parent. */
   approvalOwnerAssistantId?: string;
   approvalResolutionRequestId?: string;
@@ -386,6 +391,16 @@ export const claimApprovalResume = async (
   }
 
   return {
+    approvalHookDecisions: validatedDecisions.map(({ entry }) => ({
+      action:
+        entry.decision === 'approved'
+          ? 'approve'
+          : entry.decision === 'rejected_continue'
+            ? 'rejectAndContinue'
+            : 'reject',
+      rejectionReason: entry.rejectionReason,
+      toolCallId: entry.toolCallId,
+    })),
     approvalOwnerAssistantId,
     approvalResolutionRequestId,
     approvalSourceOperationId,

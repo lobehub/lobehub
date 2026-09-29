@@ -301,6 +301,7 @@ export interface AgentInstructionResolveBlockedTools extends AgentInstructionBas
     blockedContent?: string;
     /** Optional machine-readable blocked reason */
     blockedReason?: string;
+    existingToolMessageIds?: Record<string, string>;
     /** Parent message ID (assistant message) */
     parentMessageId: string;
     /** Tool calls that were blocked and need tool results */
@@ -383,6 +384,7 @@ export interface AgentInstructionRequestHumanApprove extends AgentInstructionBas
   supersedes?: {
     batchId: string;
     operationId: string;
+    reapprovedToolCallIds?: string[];
     toolCallIds: string[];
   };
   type: 'request_human_approve';

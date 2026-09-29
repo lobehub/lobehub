@@ -1,3 +1,8 @@
+import {
+  type AgentState,
+  buildAfterHumanInterventionEvent,
+  buildHumanInterventionHookContext,
+} from '@lobechat/agent-runtime';
 import type { ExecAgentResult } from '@lobechat/types';
 import debug from 'debug';
 
@@ -6,9 +11,10 @@ import type { TopicModel } from '@/database/models/topic';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { isAbortError } from '@/server/services/agentRuntime/abort';
+import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
-import type { ApprovalClaimState } from './approvalResume';
+import type { ApprovalClaimState, ClaimedApprovalResume } from './approvalResume';
 import type { OperationPrepResult } from './operationPrep';
 import type { ToolDiscoveryResult } from './toolDiscovery';
 
@@ -26,7 +32,10 @@ export interface StartOperationDeps {
 
 export interface StartOperationInput {
   approvalClaim: ApprovalClaimState;
+  approvalHookDecisions?: ClaimedApprovalResume['approvalHookDecisions'];
   approvalSourceOperationId?: string;
+  /** Validated before turn setup; do not reload a source that may expire meanwhile. */
+  approvalSourceState: AgentState | null;
   approvalSourceToolMessageIds: string[];
   autoStart: boolean;
   botContext?: InternalExecAgentParams['botContext'];
@@ -95,6 +104,7 @@ export const startOperation = async (
   const {
     approvalClaim,
     approvalSourceOperationId,
+    approvalSourceState: sourceState,
     approvalSourceToolMessageIds,
     autoStart,
     botContext,
@@ -145,7 +155,33 @@ export const startOperation = async (
   // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
   // If createOperation fails, we still have valid messages that need error info
   try {
+    const continuationHooks = approvalSourceOperationId
+      ? hookDispatcher.getContinuationHooks(approvalSourceOperationId, sourceState?.host?.hooks)
+      : [];
+    const groups = new Map<string, NonNullable<StartOperationInput['approvalHookDecisions']>>();
+    for (const decision of input.approvalHookDecisions ?? []) {
+      const key = JSON.stringify([decision.action, decision.rejectionReason]);
+      groups.set(key, [...(groups.get(key) ?? []), decision]);
+    }
+    const interventionHookEvents =
+      sourceState && approvalSourceOperationId
+        ? [...groups.values()].map((decisions) =>
+            buildAfterHumanInterventionEvent(
+              buildHumanInterventionHookContext(sourceState, {
+                operationId: approvalSourceOperationId,
+                userId: deps.userId,
+              }),
+              {
+                action: decisions[0].action,
+                rejectionReason: decisions[0].rejectionReason,
+                toolCallIds: decisions.map(({ toolCallId }) => toolCallId),
+                ...(decisions.length === 1 && { toolCallId: decisions[0].toolCallId }),
+              },
+            ),
+          )
+        : [];
     const result = await deps.agentRuntimeService.createOperation({
+      interventionHookEvents,
       includeFinalState: input.includeFinalState,
       activeDeviceId: discovery.activeDeviceId,
       activeDeviceScope: discovery.activeDeviceScope,
@@ -294,7 +330,9 @@ export const startOperation = async (
         model,
         provider,
       },
-      hooks,
+      hooks: [...continuationHooks, ...(hooks ?? [])].filter(
+        (hook, index, list) => list.findIndex(({ id }) => id === hook.id) === index,
+      ),
       // Listed once during discovery: every step renders {{CREDS_LIST}} from
       // here instead of asking the Market API again. Awaited only now, so the
       // read overlapped with the operation preparation that ran in between.

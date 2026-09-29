@@ -81,8 +81,15 @@ export class HumanInterventionHandler {
       return { newState: state, nextContext: undefined };
     }
 
+    const reviewedTool =
+      (state.pendingToolsCalling as ChatToolPayload[] | undefined)?.find(
+        ({ id }) => id === approvedToolCall.id,
+      ) ?? approvedToolCall;
     await this.messageModel.updateMessagePlugin(toolMessageId, {
-      intervention: { status: 'approved' },
+      intervention: {
+        approvedArguments: reviewedTool.arguments,
+        status: 'approved',
+      },
     });
 
     const newState = structuredClone(state);
@@ -116,7 +123,7 @@ export class HumanInterventionHandler {
       newState,
       nextContext: {
         payload: {
-          approvedToolCall,
+          approvedToolCall: reviewedTool,
           parentMessageId: toolMessageId,
           skipCreateToolMessage: true,
         },

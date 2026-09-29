@@ -1304,6 +1304,12 @@ export class AgentRuntimeService {
       operationCreated = true;
 
       // Save initial state
+      if (params.interventionHookEvents?.length) {
+        initialState.host = {
+          ...initialState.host,
+          interventionHookEvents: params.interventionHookEvents,
+        };
+      }
       await this.coordinator.saveAgentState(operationId, initialState as any);
 
       // Register external hooks
@@ -1798,6 +1804,27 @@ export class AgentRuntimeService {
           throw new Error(`Agent state not found for operation ${operationId}`);
         }
 
+        // Claim/rollback do not deliver. A prepared continuation consumes its
+        // saved action groups under the existing step lock. Checkpoint each
+        // group so a later delivery failure does not replay an acknowledged
+        // earlier group. Delivery-before-save crashes can still repeat it;
+        // individual hook failures retain the dispatcher's existing policy.
+        while (agentState.host?.interventionHookEvents?.length) {
+          const [event, ...remaining] = agentState.host.interventionHookEvents;
+          await hookDispatcher.dispatch(
+            operationId,
+            'afterHumanIntervention',
+            event,
+            agentState.host.hooks,
+          );
+          await this.coordinator.saveAgentState(operationId, {
+            ...agentState,
+            host: { ...agentState.host, interventionHookEvents: remaining },
+          });
+          // Do not clear the in-memory ledger until its checkpoint succeeds.
+          agentState.host.interventionHookEvents = remaining;
+        }
+
         // A parked approval step is already durable before its generic Review
         // is published. When that final Review write fails, the request returns
         // non-2xx and QStash retries this SAME step with `upstash-retried > 0`.
@@ -2069,8 +2096,29 @@ export class AgentRuntimeService {
         };
         stepAbortPoll = setTimeout(pollForAbort, STEP_ABORT_POLL_INTERVAL_MS);
 
+        let toolCancellationReadError: Error | undefined;
         const { runtime } = await this.createAgentRuntime({
           abortSignal: stepAbortController.signal,
+          checkToolCancellation: async () => {
+            if (toolCancellationReadError) throw toolCancellationReadError;
+            if (stepAbortController.signal.aborted) return true;
+            // Tool boundaries cannot wait for the next poll. The closure is
+            // bound to this operation, independent of hook payload identity.
+            try {
+              const interrupted = await this.coordinator.isInterrupted(operationId);
+              if (toolCancellationReadError) throw toolCancellationReadError;
+              if (interrupted) stepAbortController.abort();
+              return interrupted;
+            } catch {
+              // A failed read poisons this step's remaining tool checkpoints.
+              // It must not become a recoverable tool error that starts the
+              // next sibling or LLM turn without knowing whether Stop landed.
+              toolCancellationReadError = new Error(
+                `Unable to verify operation cancellation for ${operationId}`,
+              );
+              throw toolCancellationReadError;
+            }
+          },
           agentState,
           operationId,
           stepIndex,
@@ -2237,6 +2285,8 @@ export class AgentRuntimeService {
         let stepResult = forcedFinishState
           ? { events: [], newState: forcedFinishState, nextContext: undefined }
           : await runtime.step(currentState, currentContext);
+
+        if (toolCancellationReadError) throw toolCancellationReadError;
 
         // Inner runtime.step() catches model-runtime exceptions and stuffs the
         // raw error into newState.error without re-throwing — so the outer
@@ -4213,6 +4263,7 @@ export class AgentRuntimeService {
    */
   private async createAgentRuntime({
     abortSignal,
+    checkToolCancellation,
     agentState,
     operationId,
     stepIndex,
@@ -4220,6 +4271,7 @@ export class AgentRuntimeService {
   }: {
     /** Cancels in-flight tool work when this step's operation is interrupted. */
     abortSignal?: AbortSignal;
+    checkToolCancellation?: () => Promise<boolean>;
     /**
      * Current runtime state, when the caller has it. Only consulted to decide
      * whether the early final-answer `visible_output_end` must be suppressed
@@ -4277,6 +4329,7 @@ export class AgentRuntimeService {
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
       abortSignal,
+      checkToolCancellation,
       // The factory may be a Graph-aware dispatcher that still returns the
       // default agent for ordinary conversations. Keep the early visible
       // output end behavior tied to the actual agent, not factory presence.

@@ -253,7 +253,6 @@ export interface CompactErrorHookEvent {
 export type HumanInterventionHookContext = Pick<
   ToolCallHookContext,
   | 'agentId'
-  | 'assistantMessageId'
   | 'documentId'
   | 'groupId'
   | 'operationId'
@@ -265,7 +264,7 @@ export type HumanInterventionHookContext = Pick<
   | 'topicId'
   | 'userId'
   | 'workspaceId'
->;
+> & { assistantMessageId?: string };
 
 export interface HumanInterventionPendingTool {
   apiName: string;

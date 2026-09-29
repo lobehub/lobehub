@@ -274,7 +274,18 @@ const probeRuntimeActionDispatch = async (
     const topicId =
       runtimeAction.type === 'stop' ? runtimeAction.topicId : runtimeAction.appContext.topicId;
     if (!operation || operation.topicId !== topicId) return { state: 'conflict' };
-    if (operation.status === 'interrupted') return { state: 'dispatched' };
+    if (operation.status === 'interrupted') {
+      // The business stop is durable before its awaited notification. A pending
+      // checkpoint is still part of this request's dispatch boundary; publishing
+      // now would swallow critical failures and make Cloud retries already_resolved.
+      const pendingBatch = operation.metadata?.pendingStopHookBatchId;
+      if (pendingBatch !== undefined) {
+        return pendingBatch === runtimeAction.batchId
+          ? { retry: 'stop', state: 'prepared' }
+          : { state: 'conflict' };
+      }
+      return { state: 'dispatched' };
+    }
     return operation.status === 'waiting_for_human'
       ? { retry: 'stop', state: 'prepared' }
       : { state: 'conflict' };
@@ -583,6 +594,18 @@ const dispatchClaimedAgentIntervention = async (
       switch (runtimeAction.type) {
         case 'execute_custom_interaction': {
           const customAction = runtimeAction.input.action;
+          if (dispatchProbe.state === 'prepared' && dispatchProbe.retry === 'stop') {
+            // This exact request already settled the custom cancellation. Retry
+            // only the stop/checkpoint, not the marketplace action itself.
+            await ctx.aiAgentService.stopPendingApproval({
+              approvalResolutionRequestId: resolution.resolutionRequestId,
+              batchId: runtimeAction.batchId,
+              operationId: runtimeAction.operationId,
+              toolMessageIds: runtimeAction.toolMessageIds,
+              topicId: runtimeAction.appContext.topicId,
+            });
+            break;
+          }
           const customResult = await executeAgentMarketplaceIntervention({
             action: customAction,
             actorUserId: ctx.userId,

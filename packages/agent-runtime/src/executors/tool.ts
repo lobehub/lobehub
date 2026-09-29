@@ -323,6 +323,29 @@ const pauseForTools = async ({
   toolMessageIds?: Record<string, string>;
   toolsCalling: ChatToolPayload[];
 }) => {
+  // Async/client completion can arrive on another worker. Preserve preparation
+  // on the same result row before publishing the handoff, not only in state.
+  const pendingMessageIds = { ...toolMessageIds };
+  for (const tool of toolsCalling) {
+    const preparation = state.toolPreparations?.[tool.id];
+    const parentMessageId = state.toolPreparationParentId;
+    if (!preparation || !parentMessageId) continue;
+    const id =
+      pendingMessageIds[tool.id] ??
+      (await host.transports.messages.findToolMessageIdByToolCallId(tool.id, parentMessageId)) ??
+      (
+        await createToolMessage({
+          host,
+          parentMessageId,
+          result: { content: '', success: true },
+          state,
+          tool,
+        })
+      ).id;
+    pendingMessageIds[tool.id] = id;
+    await host.transports.messages.updateToolCall?.(id, tool.arguments, preparation);
+  }
+  toolMessageIds = pendingMessageIds;
   await host.transports.stream.publishChunk({
     chunkType: 'tools_calling',
     stepIndex: host.operation.stepIndex,
@@ -387,7 +410,7 @@ const createToolMessage = async ({
       ...(result.state?.type === 'blocked' && {
         pluginIntervention: { rejectedReason: result.state.reason, status: 'rejected' },
       }),
-      pluginState: result.state,
+      pluginState: { ...result.state, hookPreparation: state.toolPreparations?.[tool.id] },
       role: 'tool',
       threadId: host.operation.threadId ?? state.origin?.threadId,
       tool_call_id: tool.id,
@@ -472,14 +495,18 @@ export const callTool =
       host,
       state,
       [tool],
-      payload.parentMessageId,
+      payload.skipCreateToolMessage
+        ? (state.toolPreparationParentId ?? payload.parentMessageId)
+        : payload.parentMessageId,
       runtimeContext?.stepContext,
     );
     const events: AgentEvent[] = [];
     const runContext = createRunContext({
       host,
       mode: 'single',
-      parentMessageId: payload.parentMessageId,
+      parentMessageId: payload.skipCreateToolMessage
+        ? (state.toolPreparationParentId ?? payload.parentMessageId)
+        : payload.parentMessageId,
       reuseExistingMessage: payload.skipCreateToolMessage,
       state,
       stepContext: runtimeContext?.stepContext,
@@ -615,6 +642,9 @@ export const callTool =
         toolMessageId = toolMessage.id;
       }
 
+      const preparation = state.toolPreparations?.[tool.id];
+      if (preparation)
+        await host.transports.messages.updateToolCall?.(toolMessageId, tool.arguments, preparation);
       const newState = structuredClone(state);
       if (execution.resultPersisted) {
         newState.messages = await host.transports.messages.query({
@@ -634,7 +664,7 @@ export const callTool =
           content: executionResult.content,
           id: toolMessageId,
           plugin: tool,
-          pluginState: executionResult.state,
+          pluginState: { ...executionResult.state, hookPreparation: preparation },
           role: 'tool',
           tool_call_id: tool.id,
         });
@@ -925,6 +955,14 @@ export const callToolsBatch =
           });
           toolMessageId = toolMessage.id;
         }
+
+        const preparation = state.toolPreparations?.[tool.id];
+        if (preparation)
+          await host.transports.messages.updateToolCall?.(
+            toolMessageId,
+            tool.arguments,
+            preparation,
+          );
 
         // `sourceMessageId` + `workRegistration` are carried so the
         // post-batch accumulate loop can persist the Work version ONCE with

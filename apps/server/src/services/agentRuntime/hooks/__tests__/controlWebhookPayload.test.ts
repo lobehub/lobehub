@@ -59,14 +59,16 @@ afterEach(() => {
 });
 
 describe('control webhook payload enrichment', () => {
-  it('enriches authoritative controls without applying body overrides or projections', async () => {
+  it('enriches original control input and discards supplied email', async () => {
     expect(await setup().prepareToolCall('op', event)).toEqual({
       originalArgs: event.originalArgs,
+      additionalContexts: [],
       status: 'ready',
     });
     expect(getEmailsByIds).toHaveBeenCalledWith({}, ['visitor']);
     expect(JSON.parse(fetchHook.mock.calls[0][1].body)).toMatchObject({
       ...event,
+      args: event.originalArgs,
       userEmail: 'visitor@example.test',
       hookId: 'control',
       hookType: 'beforeToolCall',

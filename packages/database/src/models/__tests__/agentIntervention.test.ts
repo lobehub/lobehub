@@ -1765,6 +1765,84 @@ describe('AgentInterventionModel', () => {
     });
   });
 
+  it.each([false, true])(
+    'reparks changed approvals with pending siblings atomically, same operation=%s',
+    async (sameOperation) => {
+      const original = await createRuntimeApprovalBatch({ batchId: 'rewrite-source', count: 2 });
+      // The legacy in-place approval updates the plugin row; the generic store
+      // can still be pending. Modern continuation has a durable generic claim.
+      if (!sameOperation) {
+        const claimed = await claim(original, { type: 'approve' }, { actorId: ownerId });
+        if (claimed.outcome !== 'applied') throw new Error('claim failed');
+      }
+      await serverDB
+        .update(agentOperations)
+        .set({ status: 'waiting_for_human' })
+        .where(eq(agentOperations.id, sameOperation ? operationId : secondOperationId));
+      const batch = createReparkBatchParams(original, {
+        batchId: 'rewrite-replacement',
+        operationId: sameOperation ? operationId : secondOperationId,
+      });
+      batch.items[0].requestRevisionHash = nextHash();
+      const supersedes = {
+        activityKey: original[0].activityKey,
+        batchId: original[0].batchId,
+        operationId,
+        reapprovedToolCallIds: [original[0].toolCallId],
+        toolCallIds: original.map(({ toolCallId }) => toolCallId),
+      };
+      await expect(
+        otherUserModel.createBatchWithSupersession({ batch, supersedes }),
+      ).rejects.toThrow();
+      const result = await model.createBatchWithSupersession({ batch, supersedes });
+      // The in-place row moved to a new batch; the cross-operation old row
+      // is terminal. Neither old token/revision can authorize the rewrite.
+      expect(await claim(original, { type: 'approve' }, { actorId: ownerId })).toMatchObject({
+        outcome: sameOperation ? 'not_found' : 'conflict',
+      });
+      const oldToken = await model.findByReviewTokenHash(original[0].reviewTokenHash);
+      if (sameOperation) expect(oldToken).toBeUndefined();
+      else expect(oldToken).toMatchObject({ status: 'session_ended' });
+      expect(result.interventions[0].reviewTokenHash).not.toBe(original[0].reviewTokenHash);
+      expect(result.interventions.map(({ status }) => status)).toEqual(['pending', 'pending']);
+      expect(result.superseded?.interventions.map(({ status }) => status)).toEqual([
+        'session_ended',
+        'session_ended',
+      ]);
+      expect((await model.createBatchWithSupersession({ batch, supersedes })).outcome).toBe(
+        'idempotent',
+      );
+      const [newOperation] = await serverDB
+        .select()
+        .from(agentOperations)
+        .where(eq(agentOperations.id, batch.operationId));
+      expect(newOperation.status).toBe('waiting_for_human');
+    },
+  );
+
+  it('refuses to revive an unchanged approval through reapproval supersession', async () => {
+    const original = await createRuntimeApprovalBatch({ batchId: 'unchanged-source', count: 1 });
+    await serverDB
+      .update(agentOperations)
+      .set({ status: 'waiting_for_human' })
+      .where(eq(agentOperations.id, secondOperationId));
+    const batch = createReparkBatchParams(original, { batchId: 'unchanged-replacement' });
+    await expect(
+      model.createBatchWithSupersession({
+        batch,
+        supersedes: {
+          activityKey: original[0].activityKey,
+          batchId: original[0].batchId,
+          operationId,
+          reapprovedToolCallIds: [original[0].toolCallId],
+          toolCallIds: [original[0].toolCallId],
+        },
+      }),
+    ).rejects.toThrow(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+    expect((await model.findBatch(operationId, 'unchanged-source')).interventions[0].status).toBe(
+      'pending',
+    );
+  });
   it('atomically supersedes a partial runtime batch even when the published hook is late', async () => {
     const original = await createRuntimeApprovalBatch({ batchId: 'superseded-batch', count: 2 });
     const claimed = await claim(original, { type: 'approve' }, { actorId: ownerId });

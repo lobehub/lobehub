@@ -5,6 +5,8 @@ import type { LobeToolRenderType } from '../../tool';
 
 // ToolIntervention must be defined first to avoid circular dependency
 export interface ToolIntervention {
+  /** Exact input covered by the human decision, retained across worker retries. */
+  approvedArguments?: string;
   /** Stable sealed batch id, bound to one parked operation + assistant turn. */
   batchId?: string;
   /** Declaration order inside the sealed batch. */
@@ -27,6 +29,7 @@ export interface ToolIntervention {
 }
 
 export const ToolInterventionSchema = z.object({
+  approvedArguments: z.string().optional(),
   batchId: z.string().optional(),
   itemIndex: z.number().int().nonnegative().optional(),
   operationId: z.string().optional(),

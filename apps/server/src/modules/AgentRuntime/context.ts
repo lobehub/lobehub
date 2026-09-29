@@ -41,6 +41,10 @@ export interface RuntimeExecutorContext {
    */
   allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
   botContext?: unknown;
+  /** Read the trusted operation's interruption sentinel before tool side effects.
+   * Rejections must fail closed; absence is for adapters without a persisted operation.
+   */
+  checkToolCancellation?: () => Promise<boolean>;
   /**
    * Callback to fork a group member ("call agent member") under a
    * `lobe-group-management` tool call. Injected by AiAgentService; powers the

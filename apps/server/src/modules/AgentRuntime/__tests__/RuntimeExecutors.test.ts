@@ -3750,7 +3750,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             skipCreateToolMessage: false,
             toolCalling: {
               apiName: 'search',
-              arguments: '{}',
+              arguments: '{"q":"test"}',
               id: 'tool-call-7',
               identifier: 'web-search',
               type: 'default' as const,
@@ -3762,7 +3762,19 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         await executors.call_tool!(instruction, state);
 
         expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
-        expect(mockMessageModel.updateToolMessage).not.toHaveBeenCalled();
+        expect(mockMessageModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            parentId: 'assistant-msg-7',
+            plugin: expect.objectContaining({ arguments: '{"q":"test"}' }),
+            tool_call_id: 'tool-call-7',
+          }),
+        );
+        // A fresh result row also needs the atomic preparation snapshot for
+        // approval/worker recovery; it is not an update to an old result row.
+        expect(mockMessageModel.updateToolMessage).toHaveBeenCalledExactlyOnceWith('msg-123', {
+          pluginArguments: '{"q":"test"}',
+          pluginState: { hookPreparation: { originalArgs: { q: 'test' }, status: 'ready' } },
+        });
       });
     });
   });
@@ -3891,16 +3903,36 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
     it('should skip message creation when skipCreateToolMessage is true', async () => {
       const executors = createRuntimeExecutors(ctx);
-      const state = createMockState();
+      const preparation = {
+        effectiveArgs: { q: 'reviewed' },
+        originalArgs: { q: 'test' },
+        status: 'ready' as const,
+      };
+      const state = createMockState({
+        toolPreparationParentId: 'assistant-msg-1',
+        toolPreparations: { 'tool-call-1': preparation },
+      });
+      const pending = makePendingTools();
+      pending[0].arguments = '{"q":"reviewed"}';
       mockMessageModel.query.mockResolvedValueOnce([
-        { id: 'existing-tool-1', role: 'tool', tool_call_id: 'tool-call-1' },
-        { id: 'existing-tool-2', role: 'tool', tool_call_id: 'tool-call-2' },
+        {
+          id: 'existing-tool-1',
+          parentId: 'assistant-msg-1',
+          role: 'tool',
+          tool_call_id: 'tool-call-1',
+        },
+        {
+          id: 'existing-tool-2',
+          parentId: 'assistant-msg-1',
+          role: 'tool',
+          tool_call_id: 'tool-call-2',
+        },
       ]);
 
       await executors.request_human_approve!(
         {
           parentMessageId: 'assistant-msg-1',
-          pendingToolsCalling: makePendingTools(),
+          pendingToolsCalling: pending,
           skipCreateToolMessage: true,
           type: 'request_human_approve' as const,
         },
@@ -3908,6 +3940,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       );
 
       expect(mockMessageModel.create).not.toHaveBeenCalled();
+      expect(mockMessageModel.updateToolMessage).toHaveBeenCalledExactlyOnceWith(
+        'existing-tool-1',
+        {
+          pluginArguments: '{"q":"reviewed"}',
+          pluginState: { hookPreparation: preparation },
+        },
+      );
       expect(mockMessageModel.updateMessagePlugin).toHaveBeenCalledTimes(2);
       expect(mockMessageModel.updateMessagePlugin).toHaveBeenNthCalledWith(1, 'existing-tool-1', {
         intervention: {
@@ -3926,6 +3965,37 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         'tool-call-2': 'existing-tool-2',
       });
     });
+
+    it.each([undefined, 'another-assistant'])(
+      'refuses resumed rows with a missing or foreign assistant owner: %s',
+      async (parentId) => {
+        const executors = createRuntimeExecutors(ctx);
+        const pending = makePendingTools();
+        mockMessageModel.query.mockResolvedValueOnce(
+          pending.map((tool, index) => ({
+            id: `existing-tool-${index + 1}`,
+            parentId,
+            role: 'tool',
+            tool_call_id: tool.id,
+          })),
+        );
+        await expect(
+          executors.request_human_approve!(
+            {
+              parentMessageId: 'assistant-msg-1',
+              pendingToolsCalling: pending,
+              skipCreateToolMessage: true,
+              type: 'request_human_approve',
+            },
+            createMockState(),
+          ),
+        ).rejects.toThrow('Missing durable tool message');
+        expect(mockMessageModel.create).not.toHaveBeenCalled();
+        expect(mockMessageModel.updateMessagePlugin).not.toHaveBeenCalled();
+        expect(mockMessageModel.updateToolMessage).not.toHaveBeenCalled();
+        expect(mockStreamManager.publishStreamChunk).not.toHaveBeenCalled();
+      },
+    );
 
     it('should throw if no parent assistant message can be found', async () => {
       const executors = createRuntimeExecutors(ctx);
@@ -6073,6 +6143,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             identity,
             undefined,
             undefined,
+            expect.any(Function),
           );
           expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith(
             'op-123',

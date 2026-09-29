@@ -103,7 +103,7 @@ describe('requestHumanApprove', () => {
       const hooks = [
         {
           id: 'before-human',
-          type: 'beforeHumanIntervention',
+          type: 'beforeHumanIntervention' as const,
           webhook: { url: 'https://example.com/hook' },
         },
       ];
@@ -216,7 +216,12 @@ describe('requestHumanApprove', () => {
     };
 
     query.mockResolvedValue([
-      { id: 'tool-msg-existing', role: 'tool', tool_call_id: 'call_ask_1' },
+      {
+        id: 'tool-msg-existing',
+        parentId: 'assistant-current',
+        role: 'tool',
+        tool_call_id: 'call_ask_1',
+      },
     ]);
 
     await requestHumanApprove(host)(instruction, createState());
@@ -253,8 +258,18 @@ describe('requestHumanApprove', () => {
       },
     };
     query.mockResolvedValue([
-      { id: 'tool-msg-existing-1', role: 'tool', tool_call_id: 'call_ask_1' },
-      { id: 'tool-msg-existing-2', role: 'tool', tool_call_id: 'call_ask_2' },
+      {
+        id: 'tool-msg-existing-1',
+        parentId: 'assistant-current',
+        role: 'tool',
+        tool_call_id: 'call_ask_1',
+      },
+      {
+        id: 'tool-msg-existing-2',
+        parentId: 'assistant-current',
+        role: 'tool',
+        tool_call_id: 'call_ask_2',
+      },
     ]);
 
     const result = await requestHumanApprove(host)(
@@ -330,7 +345,12 @@ describe('requestHumanApprove', () => {
 
     beforeEach(() => {
       query.mockResolvedValue([
-        { id: 'tool-msg-existing', role: 'tool', tool_call_id: 'call_ask_1' },
+        {
+          id: 'tool-msg-existing',
+          parentId: 'assistant-msg-1',
+          role: 'tool',
+          tool_call_id: 'call_ask_1',
+        },
       ]);
     });
 

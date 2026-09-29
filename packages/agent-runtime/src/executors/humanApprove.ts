@@ -84,7 +84,14 @@ export const requestHumanApprove =
     // pending tool messages or (in resumption mode) by looking up existing ones.
     const toolMessageIds: Record<string, string> = {};
     let approvalAssistantMessageId = parentMessageId;
-    let supersedes: { batchId: string; operationId: string; toolCallIds: string[] } | undefined;
+    let supersedes:
+      | {
+          batchId: string;
+          operationId: string;
+          reapprovedToolCallIds?: string[];
+          toolCallIds: string[];
+        }
+      | undefined;
 
     if (skipCreateToolMessage) {
       // The payloads came from the authoritative pending tool rows. Preserve
@@ -153,7 +160,10 @@ export const requestHumanApprove =
       }
       for (const toolPayload of pendingToolsCalling) {
         const existing = dbMessages.find(
-          (m: any) => m.role === 'tool' && m.tool_call_id === toolPayload.id,
+          (m: any) =>
+            m.role === 'tool' &&
+            m.tool_call_id === toolPayload.id &&
+            m.parentId === parentMessageId,
         );
         if (!existing) {
           throw new Error(
@@ -184,6 +194,17 @@ export const requestHumanApprove =
             stepIndex,
           }),
         ),
+      );
+      await Promise.all(
+        pendingToolsCalling.map(async (tool) => {
+          const preparation = state.toolPreparations?.[tool.id];
+          if (preparation)
+            await transports.messages.updateToolCall?.(
+              toolMessageIds[tool.id],
+              tool.arguments,
+              preparation,
+            );
+        }),
       );
     } else {
       // Resolve the assistant message that owns these tool calls.
@@ -267,6 +288,7 @@ export const requestHumanApprove =
           groupId: groupId ?? parentAssistant.groupId ?? undefined,
           parentId: parentAssistant.id,
           plugin: toolPayload as any,
+          pluginState: { hookPreparation: state.toolPreparations?.[toolPayload.id] },
           pluginIntervention: {
             batchId,
             itemIndex,

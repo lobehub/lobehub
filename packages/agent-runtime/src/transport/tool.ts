@@ -82,8 +82,11 @@ export interface ToolRunExecution {
   toolMessageId?: string;
 }
 
-/** Serializable control result. C2 extends this with effective input/context. */
+/** Serializable control result persisted with the tool record and execution state. */
 export interface ToolCallPreparation {
+  additionalContexts?: { hookId: string; text: string }[];
+  approvalArgs?: Record<string, unknown>;
+  effectiveArgs?: Record<string, unknown>;
   originalArgs: Record<string, unknown>;
   reason?: string;
   status: 'ready' | 'blocked' | 'cancelled';
@@ -118,6 +121,8 @@ export interface ToolRunContext {
   messageId?: string;
   mode: 'batch' | 'single';
   operationId: string;
+  /** Immutable preparation input, independent of effective and reviewed arguments. */
+  originalArgs?: Record<string, unknown>;
   parentMessageId: string;
   parsedArgs: Record<string, unknown>;
   /** Reuse the parent tool message when resuming after intervention. */

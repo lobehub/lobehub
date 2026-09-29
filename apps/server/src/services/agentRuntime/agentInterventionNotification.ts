@@ -360,6 +360,7 @@ export const buildRuntimeInterventionNotification = async ({
       }),
       batchId: batch.supersedes.batchId,
       operationId: batch.supersedes.operationId,
+      reapprovedToolCallIds: batch.supersedes.reapprovedToolCallIds,
       toolCallIds: previousToolCallIds,
     };
   }

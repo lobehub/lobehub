@@ -713,6 +713,7 @@ describe('MessageModel Update Tests', () => {
         .where(eq(messagePlugins.id, 'approval-preserves-identity'));
       expect(plugin.intervention).toEqual({
         ...pendingIdentity,
+        approvedArguments: '{"path":"/tmp/a"}',
         resolutionRequestId: 'resolution-1',
         status: 'approved',
       });
@@ -784,11 +785,22 @@ describe('MessageModel Update Tests', () => {
 
     it('restores the exact pre-claim snapshot only for the owning resolution request', async () => {
       await seedPendingTool('approval-rollback');
+      const effectiveArgs = { content: 'reviewed B', path: '/tmp/B.txt' };
+      const hookPreparation = {
+        additionalContexts: [{ hookId: 'control', text: 'context B' }],
+        effectiveArgs,
+        originalArgs: { content: 'original A', path: '/tmp/A.txt' },
+        status: 'ready',
+      };
+      await messageModel.updateToolMessage('approval-rollback', {
+        pluginArguments: JSON.stringify(effectiveArgs),
+        pluginState: { hookPreparation },
+      });
       const original = {
         content: 'pending content',
         id: 'approval-rollback',
         intervention: pendingIdentity,
-        pluginState: { preserved: true },
+        pluginState: { preserved: true, hookPreparation },
       };
 
       await messageModel.resolveHumanApproval([
@@ -810,6 +822,7 @@ describe('MessageModel Update Tests', () => {
         .where(eq(messagePlugins.id, original.id));
       expect(message.content).toBe('approved content');
       expect(plugin.intervention).toMatchObject({
+        approvedArguments: JSON.stringify(effectiveArgs),
         resolutionRequestId: 'resolution-owner',
         status: 'approved',
       });
@@ -826,10 +839,58 @@ describe('MessageModel Update Tests', () => {
       expect(message.content).toBe(original.content);
       expect(plugin.intervention).toEqual(original.intervention);
       expect(plugin.state).toEqual(original.pluginState);
+      // A startup failure must not replace the still-reviewed B with original A
+      // or discard its context when the owning legacy claim is rolled back.
+      expect(plugin.arguments).toBe(JSON.stringify(effectiveArgs));
+      expect(plugin.toolCallId).toBe('call-approval-rollback');
     });
   });
 
   describe('updateToolMessage', () => {
+    it('persists rewrite and original snapshot atomically while retaining the reviewed input', async () => {
+      const id = 'tool-hook-input';
+      await serverDB.insert(messages).values({ id, role: 'tool', content: '', userId });
+      await serverDB.insert(messagePlugins).values({
+        id,
+        userId,
+        arguments: '{"path":"reviewed"}',
+        intervention: { status: 'pending' },
+        state: { existing: true },
+      });
+      await messageModel.resolveHumanApproval([
+        { id, intervention: { status: 'approved', resolutionRequestId: 'approval-1' } },
+      ]);
+      const hookPreparation = {
+        originalArgs: { path: 'original' },
+        effectiveArgs: { path: 'rewritten' },
+        approvalArgs: { path: 'reviewed' },
+        status: 'ready',
+      };
+      expect(
+        (
+          await messageModel.updateToolMessage(id, {
+            pluginArguments: '{"path":"rewritten"}',
+            pluginState: { hookPreparation },
+          })
+        ).success,
+      ).toBe(true);
+      const plugin = await messageModel.findMessagePlugin(id);
+      expect(plugin).toMatchObject({
+        arguments: '{"path":"rewritten"}',
+        intervention: { approvedArguments: '{"path":"reviewed"}' },
+        state: { existing: true, hookPreparation },
+      });
+      const other = new MessageModel(serverDB, otherUserId);
+      expect(
+        (
+          await other.updateToolMessage(id, {
+            pluginArguments: '{}',
+            pluginState: { hookPreparation: {} },
+          })
+        ).success,
+      ).toBe(false);
+      expect((await messageModel.findMessagePlugin(id))?.arguments).toBe('{"path":"rewritten"}');
+    });
     it('should update content only', async () => {
       await serverDB.insert(messages).values({
         id: 'tool-msg-1',

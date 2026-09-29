@@ -3792,6 +3792,7 @@ export class MessageModel {
     return this.db.transaction(async (trx) => {
       const lockedRows = await trx
         .select({
+          arguments: messagePlugins.arguments,
           id: messagePlugins.id,
           intervention: messagePlugins.intervention,
           state: messagePlugins.state,
@@ -3841,7 +3842,12 @@ export class MessageModel {
             // authoritative operation/batch/item identity stamped when the
             // parked tool row was created so subsequent source reads, Stop,
             // and rollback still address the same sealed batch.
-            intervention: merge(row.intervention || {}, resolution.intervention),
+            intervention: merge(row.intervention || {}, {
+              ...resolution.intervention,
+              ...(resolution.intervention.status === 'approved' && typeof row.arguments === 'string'
+                ? { approvedArguments: row.arguments }
+                : {}),
+            }),
             ...(resolution.pluginState !== undefined && {
               state: resolution.replacePluginState
                 ? resolution.pluginState
@@ -4261,10 +4267,12 @@ export class MessageModel {
       heterogeneousToolState?: HeterogeneousToolStateSnapshot;
       metadata?: Record<string, any>;
       pluginError?: any;
+      pluginArguments?: string;
       pluginState?: Record<string, any>;
     },
   ): Promise<{ applied: boolean; snapshotSeq?: number; success: boolean }> => {
-    const { content, heterogeneousToolState, metadata, pluginState, pluginError } = params;
+    const { content, heterogeneousToolState, metadata, pluginState, pluginError, pluginArguments } =
+      params;
 
     // `undefined` while no branch has looked for the row yet; see `update` above
     // for why a write that matches nothing must not report success.
@@ -4345,8 +4353,13 @@ export class MessageModel {
         }
 
         // Update messagePlugins table (pluginState, pluginError)
-        if (pluginState !== undefined || pluginError !== undefined) {
+        if (
+          pluginState !== undefined ||
+          pluginError !== undefined ||
+          pluginArguments !== undefined
+        ) {
           const pluginUpdateData: Record<string, any> = {};
+          if (pluginArguments !== undefined) pluginUpdateData.arguments = pluginArguments;
 
           if (pluginState !== undefined) {
             // Snapshot writes replace the whole runtime state. Ordinary patches

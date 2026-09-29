@@ -4,6 +4,7 @@ import type {
   QueryMessagesInput,
   QueryMessagesOptions,
   RuntimeMessageRef,
+  ToolCallPreparation,
   UpdateToolMessageInput,
 } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
@@ -21,6 +22,13 @@ import { unwrapPgError } from '../pgError';
  * Server {@link MessageTransport} adapter — delegates to `MessageModel` (DB).
  */
 export class ServerMessageTransport implements MessageTransport {
+  async updateToolCall(id: string, args: string, preparation: ToolCallPreparation): Promise<void> {
+    const result = await this.messageModel.updateToolMessage(id, {
+      pluginArguments: args,
+      pluginState: { hookPreparation: preparation },
+    });
+    if (!result.success) throw new Error(`Failed to persist tool preparation: ${id}`);
+  }
   constructor(
     private readonly messageModel: MessageModel,
     private readonly options: {

@@ -1,5 +1,7 @@
 import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@lobechat/types';
 
+import type { ToolCallPreparation } from './tool';
+
 /** Minimal reference an executor needs back after creating a message. */
 export interface RuntimeMessageRef {
   agentId?: string | null;
@@ -93,6 +95,8 @@ export interface MessageTransport {
   query: (params?: QueryMessagesInput, options?: QueryMessagesOptions) => Promise<UIChatMessage[]>;
   update: (id: string, params: Partial<UpdateMessageParams>) => Promise<void>;
   updatePluginState: (id: string, state: Record<string, any>) => Promise<void>;
+  /** Persist the effective input and its immutable source on the existing tool row. */
+  updateToolCall?: (id: string, args: string, preparation: ToolCallPreparation) => Promise<void>;
   /**
    * Move an existing tool row out of its `pending` approval state.
    *

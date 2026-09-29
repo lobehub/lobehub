@@ -308,6 +308,77 @@ describe('AgentOperationModel', () => {
   });
 
   describe('recordCompletion', () => {
+    it('atomically persists the pending stop hook and consumes only the owned matching terminal batch', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const other = new AgentOperationModel(serverDB, otherUserId);
+      const operationId = 'op-stop-notice';
+      await model.recordStart({ operationId, metadata: { existing: 'preserved' } });
+      expect(
+        await model.recordCompletion(operationId, {
+          status: 'interrupted',
+          completionReason: 'interrupted',
+          pendingStopHookBatchId: 'batch-1',
+        }),
+      ).toBe(true);
+      expect(await model.findById(operationId)).toMatchObject({
+        status: 'interrupted',
+        metadata: { existing: 'preserved', pendingStopHookBatchId: 'batch-1' },
+      });
+      expect(await other.completeStopHookNotification(operationId, 'batch-1')).toBe(false);
+      expect(await model.completeStopHookNotification(operationId, 'other-batch')).toBe(false);
+      expect(await model.completeStopHookNotification(operationId, 'batch-1')).toBe(true);
+      expect(await model.findById(operationId)).toMatchObject({
+        status: 'interrupted',
+        metadata: { existing: 'preserved' },
+      });
+      expect((await model.findById(operationId))?.metadata).not.toHaveProperty(
+        'pendingStopHookBatchId',
+      );
+      expect(await model.completeStopHookNotification(operationId, 'batch-1')).toBe(false);
+    });
+
+    it('does not write a pending marker when ownership or the terminal transition rejects completion', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const other = new AgentOperationModel(serverDB, otherUserId);
+      const operationId = 'op-stop-atomic-failure';
+      await model.recordStart({ operationId, metadata: { existing: 'preserved' } });
+      const stopped = {
+        status: 'interrupted' as const,
+        completionReason: 'interrupted' as const,
+        pendingStopHookBatchId: 'batch-1',
+      };
+      expect(await other.recordCompletion(operationId, stopped)).toBe(false);
+      expect(await model.findById(operationId)).toMatchObject({
+        status: 'running',
+        metadata: { existing: 'preserved' },
+      });
+      expect((await model.findById(operationId))?.metadata).not.toHaveProperty(
+        'pendingStopHookBatchId',
+      );
+      await model.recordCompletion(operationId, { status: 'done' });
+      expect(await model.recordCompletion(operationId, stopped)).toBe(false);
+      expect(await model.findById(operationId)).toMatchObject({
+        status: 'done',
+        metadata: { existing: 'preserved' },
+      });
+      expect((await model.findById(operationId))?.metadata).not.toHaveProperty(
+        'pendingStopHookBatchId',
+      );
+    });
+
+    it('refuses to consume a matching stop marker while the operation is not interrupted', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-stop-nonterminal';
+      await model.recordStart({ operationId, metadata: { pendingStopHookBatchId: 'batch-1' } });
+      expect(await model.completeStopHookNotification(operationId, 'batch-1')).toBe(false);
+      expect(await model.findById(operationId)).toMatchObject({
+        status: 'running',
+        metadata: { pendingStopHookBatchId: 'batch-1' },
+      });
+      await model.recordCompletion(operationId, { status: 'interrupted' });
+      expect(await model.completeStopHookNotification(operationId, 'batch-1')).toBe(true);
+    });
+
     it('updates the row to a terminal status with aggregates and trace key', async () => {
       const model = new AgentOperationModel(serverDB, userId);
       const operationId = 'op-complete-1';

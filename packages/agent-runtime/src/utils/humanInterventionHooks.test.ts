@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type {
   AfterHumanInterventionHookEvent,
   BeforeHumanInterventionHookEvent,
   StopByHumanInterventionHookEvent,
+  ToolCallHookContext,
 } from '../types';
 import {
   buildAfterHumanInterventionEvent,
@@ -13,6 +14,15 @@ import {
 } from './humanInterventionHooks';
 
 describe('human intervention notification payloads', () => {
+  it('requires the tool caller identity without inventing one for run-level intervention', () => {
+    expectTypeOf<ToolCallHookContext['assistantMessageId']>().toEqualTypeOf<string>();
+    expectTypeOf<BeforeHumanInterventionHookEvent['assistantMessageId']>().toEqualTypeOf<
+      string | undefined
+    >();
+    const context = buildHumanInterventionHookContext({}, { operationId: 'op' });
+    expect(context).not.toHaveProperty('assistantMessageId');
+  });
+
   it('carries the real origin through all three events and uses the actual operation', () => {
     const origin = {
       agentId: 'agent',

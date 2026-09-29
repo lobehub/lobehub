@@ -1,6 +1,8 @@
 /**
  * @vitest-environment node
  */
+import type { AgentEvent } from '@lobechat/agent-runtime';
+import type * as AgentRuntimeModule from '@lobechat/agent-runtime';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import type { UIChatMessage } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
@@ -8,9 +10,11 @@ import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import type * as UserModelModule from '@/database/models/user';
 
 import { AgentRuntimeService, createEvalToolForwardingHook } from './AgentRuntimeService';
 import { hookDispatcher } from './hooks';
+import type { AgentHook } from './hooks/types';
 import {
   type AgentExecutionParams,
   type OperationCreationParams,
@@ -32,7 +36,25 @@ vi.mock('@lobechat/model-runtime', () => ({
   refineErrorCode: () => undefined,
 }));
 
-const { ssrfSafeFetch: mockSsrfSafeFetch } = vi.hoisted(() => ({ ssrfSafeFetch: vi.fn() }));
+const {
+  ssrfSafeFetch: mockSsrfSafeFetch,
+  cancellationEmailLookup,
+  cancellationVisibility,
+} = vi.hoisted(() => ({
+  ssrfSafeFetch: vi.fn(),
+  cancellationEmailLookup: vi.fn(),
+  cancellationVisibility: vi.fn(),
+}));
+vi.mock('@/database/models/user', async (importOriginal) => {
+  const actual = await importOriginal<typeof UserModelModule>();
+  return {
+    ...actual,
+    UserModel: class extends actual.UserModel {
+      static getEmailsByIds = cancellationEmailLookup;
+    },
+  };
+});
+vi.mock('@/database/server', () => ({ getServerDB: async () => ({}) }));
 vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
 
 // Mock trusted client to avoid server-side env access
@@ -64,6 +86,7 @@ vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(function () {
     return {
       getAgentConfigById: vi.fn(),
+      getAgentVisibility: cancellationVisibility,
     };
   }),
 }));
@@ -239,6 +262,8 @@ describe('AgentRuntimeService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    cancellationEmailLookup.mockReset().mockResolvedValue([]);
+    cancellationVisibility.mockReset().mockResolvedValue('private');
     process.env.AGENT_RUNTIME_BASE_URL = 'http://localhost:3010';
 
     // Mock database
@@ -1584,6 +1609,250 @@ describe('AgentRuntimeService', () => {
       expect(result.success).toBe(true);
       expect(result.nextStepScheduled).toBe(false); // Should not schedule next step when status is 'done'
     });
+
+    it.each([
+      { boundary: 'email', otherService: false, policy: 'continue' },
+      { boundary: 'email', otherService: true, policy: 'block' },
+      { boundary: 'between-controls', otherService: true, policy: 'continue' },
+      { boundary: 'before-execution', otherService: true, policy: 'block' },
+      { boundary: 'before-approval', otherService: true, policy: 'continue' },
+      { boundary: 'before-client-execution', otherService: true, policy: 'continue' },
+      { boundary: 'read-failure', otherService: false, policy: 'continue' },
+      { boundary: 'read-failure', otherService: false, policy: 'block' },
+      { boundary: 'launch-read-failure', otherService: false, policy: 'continue' },
+      { boundary: 'no-stop', otherService: false, policy: 'continue' },
+    ] as const)(
+      'checks persisted cancellation at $boundary, otherService=$otherService, onError=$policy',
+      async ({ boundary, otherService, policy }) => {
+        const { setupToolControlPipeline } =
+          await import('@/server/modules/AgentRuntime/adapters/toolControlTestFixture');
+        const { AgentRuntime: RealRuntime } =
+          await vi.importActual<typeof AgentRuntimeModule>('@lobechat/agent-runtime');
+        const { CalculatorExecutionRuntime } =
+          await import('@lobechat/builtin-tool-calculator/executionRuntime');
+        const calculator = new CalculatorExecutionRuntime();
+        let beforeNotificationEntered = false;
+        let auditEntered = false;
+        const hooks: AgentHook[] = ['rewrite', 'check'].map((id) => ({
+          id,
+          type: 'beforeToolCall' as const,
+          webhook: {
+            url: `https://hooks.example/${id}`,
+            responseHandling: 'toolCall' as const,
+            onError: policy,
+          },
+        }));
+        if (boundary === 'before-client-execution')
+          hooks.push({
+            id: 'observer',
+            type: 'beforeToolCall',
+            handler: async () => {
+              beforeNotificationEntered = true;
+              await gate;
+            },
+          });
+        const call = {
+          ...(boundary === 'before-client-execution' ? { executor: 'client' as const } : {}),
+          id: 'native-1',
+          identifier: 'lobe-calculator',
+          apiName: 'calculate',
+          type: 'builtin' as const,
+          arguments: '{"expression":"7*3"}',
+        };
+        const params: AgentExecutionParams = {
+          ...mockParams,
+          context: {
+            ...mockParams.context!,
+            phase: 'llm_result',
+            payload: { hasToolsCalling: true, parentMessageId: 'assistant', toolsCalling: [call] },
+          },
+        };
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        const emailWait = ['email', 'read-failure', 'no-stop'].includes(boundary);
+        cancellationEmailLookup.mockImplementation(async () => {
+          if (emailWait) await gate;
+          return [];
+        });
+        cancellationVisibility.mockImplementation(async () => {
+          if (boundary === 'before-execution' || boundary === 'launch-read-failure') await gate;
+          return 'private';
+        });
+        mockSsrfSafeFetch.mockReset().mockImplementation(async () => {
+          if (boundary === 'between-controls' && mockSsrfSafeFetch.mock.calls.length === 1)
+            await gate;
+          return new Response(
+            JSON.stringify({
+              hookSpecificOutput: {
+                hookEventName: 'beforeToolCall',
+                permissionDecision: 'allow',
+                updatedInput: { expression: '6*7' },
+                additionalContext: 'kept context',
+              },
+            }),
+          );
+        });
+        const fixtureOptions = {
+          operationId: params.operationId,
+          Runtime: RealRuntime,
+          serverPreparation: true,
+          ...(boundary === 'before-approval'
+            ? {
+                globalInterventionAudits: [
+                  {
+                    policy: 'always' as const,
+                    type: 'cancellation-test',
+                    resolver: async () => {
+                      auditEntered = true;
+                      await gate;
+                      return true;
+                    },
+                  },
+                ],
+              }
+            : {}),
+        };
+        const initial = setupToolControlPipeline(hooks, undefined, false, fixtureOptions);
+        if (boundary === 'email' && otherService)
+          initial.state.userInterventionConfig = { approvalMode: 'manual' };
+        mockCoordinator.loadAgentState.mockResolvedValue(initial.state);
+        await mockCoordinator.saveAgentState(params.operationId, initial.state);
+        const interrupter = otherService
+          ? new AgentRuntimeService(mockDb, mockUserId, {
+              coordinatorOptions: { stateManager: mockCoordinator.stateManager },
+              queueService: null,
+            })
+          : service;
+        let fixture: ReturnType<typeof setupToolControlPipeline> | undefined;
+        let signal: AbortSignal | undefined;
+        const clientDispatch = vi.fn();
+        const factory = vi
+          .spyOn(
+            service as unknown as {
+              createAgentRuntime: (args: {
+                abortSignal: AbortSignal;
+                checkToolCancellation?: () => Promise<boolean>;
+              }) => unknown;
+            },
+            'createAgentRuntime',
+          )
+          .mockImplementation(({ abortSignal, checkToolCancellation }) => {
+            signal = abortSignal;
+            fixture = setupToolControlPipeline(hooks, signal, false, {
+              ...fixtureOptions,
+              checkToolCancellation,
+            });
+            fixture.streamManager.sendToolExecute = clientDispatch;
+            fixture.execute.mockImplementation(async (tool) =>
+              calculator.calculate(JSON.parse(tool.arguments)),
+            );
+            return { runtime: fixture.runtime };
+          });
+        vi.useFakeTimers();
+        try {
+          const pending = service.executeStep(params).then(
+            (result) => ({ result, error: undefined }),
+            (error: unknown) => ({ result: undefined, error }),
+          );
+          await vi.advanceTimersByTimeAsync(0);
+          expect(signal).toBeDefined();
+          if (boundary === 'before-approval') expect(auditEntered).toBe(true);
+          if (emailWait) expect(cancellationEmailLookup).toHaveBeenCalledTimes(1);
+          if (boundary === 'before-client-execution') expect(beforeNotificationEntered).toBe(true);
+          if (boundary === 'between-controls') expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(1);
+          if (boundary === 'before-execution' || boundary === 'launch-read-failure')
+            expect(cancellationVisibility).toHaveBeenCalledTimes(1);
+          expect(fixture!.execute).not.toHaveBeenCalled();
+          if (boundary === 'read-failure' || boundary === 'launch-read-failure') {
+            mockCoordinator.isInterrupted.mockRejectedValueOnce(
+              new Error('injected cancellation read failure'),
+            );
+          } else if (boundary !== 'no-stop') {
+            expect(await interrupter.interruptOperation(params.operationId)).toBe(true);
+            expect(await mockCoordinator.isInterrupted(params.operationId)).toBe(true);
+            expect(signal?.aborted).toBe(false); // first 2s poll has not fired
+          }
+          // Release the real boundary after Stop/read-failure is visible. Email
+          // completion is controlled by its query, not a Hook-layer deadline.
+          release();
+          await vi.advanceTimersByTimeAsync(0);
+          const outcome = await pending;
+          if (boundary === 'read-failure' || boundary === 'launch-read-failure') {
+            expect(outcome.error).toBeInstanceOf(Error);
+            expect((outcome.error as Error).message).toContain(
+              'Unable to verify operation cancellation',
+            );
+            expect(fixture!.execute).not.toHaveBeenCalled();
+            expect(clientDispatch).not.toHaveBeenCalled();
+            expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(
+              boundary === 'launch-read-failure' ? 2 : 0,
+            );
+            expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+            expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+              params.operationId,
+              expect.objectContaining({ status: 'error' }),
+            );
+            return;
+          }
+          expect(outcome.error).toBeUndefined();
+          const result = outcome.result!;
+          if (boundary === 'no-stop') {
+            expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
+            expect(fixture!.execute).toHaveBeenCalledTimes(1);
+            expect(fixture!.rows).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  content: '42',
+                  pluginState: expect.objectContaining({
+                    hookPreparation: expect.objectContaining({
+                      originalArgs: { expression: '7*3' },
+                      effectiveArgs: { expression: '6*7' },
+                      additionalContexts: [
+                        { hookId: 'rewrite', text: 'kept context' },
+                        { hookId: 'check', text: 'kept context' },
+                      ],
+                    }),
+                  }),
+                }),
+              ]),
+            );
+            for (const [, request] of mockSsrfSafeFetch.mock.calls)
+              expect(JSON.parse(request.body)).not.toHaveProperty('userEmail');
+          } else {
+            expect(result.nextStepScheduled).toBe(false);
+            expect(fixture!.execute).not.toHaveBeenCalled();
+            expect(clientDispatch).not.toHaveBeenCalled();
+            expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(
+              boundary === 'before-execution' ||
+                boundary === 'before-client-execution' ||
+                boundary === 'before-approval'
+                ? 2
+                : boundary === 'between-controls'
+                  ? 1
+                  : 0,
+            );
+            expect(result.state.status).toBe('interrupted');
+            expect(
+              fixture!.rows.some(
+                (row) =>
+                  (row.pluginIntervention as { status?: string } | undefined)?.status === 'pending',
+              ),
+            ).toBe(false);
+            expect(
+              result.stepResult?.events.some(
+                (event: AgentEvent) => event.type === 'human_approve_required',
+              ),
+            ).toBe(false);
+          }
+        } finally {
+          release();
+          factory.mockRestore();
+          vi.useRealTimers();
+        }
+      },
+    );
 
     it('should detect interruption that occurred during step execution', async () => {
       const mockStepResult = {

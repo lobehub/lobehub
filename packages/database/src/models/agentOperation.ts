@@ -116,6 +116,8 @@ export interface RecordOperationCompletionParams {
    * heterogeneous run learns its real model from the CLI mid-stream). Omit to
    * keep the value seeded at `recordStart`. */
   model?: string | null;
+  /** Direct stop notification pending after the business operation is terminal. */
+  pendingStopHookBatchId?: string;
   processingTimeMs?: number | null;
   /** Backfill the executed provider — see {@link RecordOperationCompletionParams.model}. */
   provider?: string | null;
@@ -236,7 +238,13 @@ export class AgentOperationModel {
 
     const [row] = await this.db
       .update(agentOperations)
-      .set(updates)
+      .set({
+        ...updates,
+        // The retry marker and terminal business state commit together.
+        ...(params.pendingStopHookBatchId !== undefined && {
+          metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ pendingStopHookBatchId: params.pendingStopHookBatchId })}::jsonb`,
+        }),
+      })
       .where(
         and(
           eq(agentOperations.id, operationId),
@@ -253,6 +261,23 @@ export class AgentOperationModel {
       )
       .returning({ id: agentOperations.id });
 
+    return Boolean(row);
+  }
+
+  /** Consume a direct stop notice only after dispatch returned (including best-effort failures). */
+  async completeStopHookNotification(operationId: string, batchId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({ metadata: sql`${agentOperations.metadata} - 'pendingStopHookBatchId'` })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          eq(agentOperations.status, 'interrupted'),
+          sql`${agentOperations.metadata}->>'pendingStopHookBatchId' = ${batchId}`,
+        ),
+      )
+      .returning({ id: agentOperations.id });
     return Boolean(row);
   }
 

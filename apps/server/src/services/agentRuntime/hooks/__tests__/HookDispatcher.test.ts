@@ -1140,6 +1140,10 @@ describe('HookDispatcher', () => {
         {
           apiName: 'search',
           args: {},
+          assistantMessageId: 'assistant',
+          executor: 'server',
+          toolCallId: 'native',
+          result: { content: 'result', success: true },
           callIndex: 1,
           content: 'result',
           executionTimeMs: 100,

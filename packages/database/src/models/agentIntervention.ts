@@ -492,6 +492,8 @@ export interface AgentInterventionBatchSupersession {
   activityKey: string;
   batchId: string;
   operationId: string;
+  /** Server-validated approvals invalidated because the effective request changed. */
+  reapprovedToolCallIds?: readonly string[];
   toolCallIds: readonly string[];
 }
 
@@ -889,10 +891,14 @@ export class AgentInterventionModel {
     }
 
     const supersededToolCallIds = uniqueSorted(supersedes.toolCallIds);
+    const reapprovedIds = uniqueSorted(supersedes.reapprovedToolCallIds ?? []);
+    const sameOperation = batch.operationId === supersedes.operationId;
     const newToolCallIds = uniqueSorted(batch.items.map((item) => item.toolCallId));
     if (
       batch.source !== 'runtime' ||
-      batch.operationId === supersedes.operationId ||
+      (sameOperation && reapprovedIds.length === 0) ||
+      reapprovedIds.length !== (supersedes.reapprovedToolCallIds ?? []).length ||
+      reapprovedIds.some((id) => !supersededToolCallIds.includes(id)) ||
       batch.batchId === supersedes.batchId ||
       batch.activityKey === supersedes.activityKey ||
       supersededToolCallIds.length === 0 ||
@@ -976,6 +982,30 @@ export class AgentInterventionModel {
         .filter((row) => row.operationId === batch.operationId && row.batchId === batch.batchId)
         .sort((left, right) => left.itemIndex - right.itemIndex);
 
+      // The legacy in-place runtime retains (operation, native call) identity.
+      // Reissuing rotates the row's review token/version instead of inserting
+      // a second row under the same unique key. Its retry already lives in the
+      // replacement batch; the previous activity identity still closes it.
+      if (
+        sameOperation &&
+        existingNewRows.length > 0 &&
+        this.isSameCreateBatch(existingNewRows, batch)
+      ) {
+        if (oldRows.some((row) => ['pending', 'resolving', 'published'].includes(row.status))) {
+          throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+        }
+        return {
+          interventions: existingNewRows,
+          outcome: 'idempotent',
+          superseded: {
+            activityKey: supersedes.activityKey,
+            batchId: supersedes.batchId,
+            interventions: oldRows,
+            operationId: supersedes.operationId,
+          },
+        };
+      }
+
       if (
         oldRows.length === 0 ||
         oldRows.some(
@@ -1008,7 +1038,7 @@ export class AgentInterventionModel {
           activeOldRows.length > 0 ||
           movedRows.length !== supersededToolCallIds.length ||
           movedRows.some((row) => row.status !== 'session_ended') ||
-          oldOperation.status !== 'done'
+          (!sameOperation && oldOperation.status !== 'done')
         ) {
           throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
         }
@@ -1034,9 +1064,21 @@ export class AgentInterventionModel {
 
       if (
         !sameJson(
-          uniqueSorted(oldPendingRows.map((row) => row.toolCallId)),
-          supersededToolCallIds,
+          uniqueSorted(
+            oldPendingRows.map((row) => row.toolCallId).filter((id) => !reapprovedIds.includes(id)),
+          ),
+          supersededToolCallIds.filter((id) => !reapprovedIds.includes(id)),
         ) ||
+        reapprovedIds.some((id) => {
+          const old = oldRows.find((row) => row.toolCallId === id);
+          const replacement = batch.items.find((item) => item.toolCallId === id);
+          return (
+            !old ||
+            !replacement ||
+            !['pending', 'resolving', 'published', 'resolved'].includes(old.status) ||
+            old.requestRevisionHash === replacement.requestRevisionHash
+          );
+        }) ||
         activeResolutionIds.length > 1 ||
         activeOldRows.some((row) => !row.resolutionId)
       ) {
@@ -1108,7 +1150,13 @@ export class AgentInterventionModel {
           and(
             eq(agentInterventions.operationId, supersedes.operationId),
             eq(agentInterventions.batchId, supersedes.batchId),
-            eq(agentInterventions.status, 'pending'),
+            or(
+              eq(agentInterventions.status, 'pending'),
+              and(
+                eq(agentInterventions.status, 'resolved'),
+                inArray(agentInterventions.toolCallId, reapprovedIds),
+              ),
+            ),
             inArray(agentInterventions.toolCallId, supersededToolCallIds),
             this.ownership(),
           ),
@@ -1118,19 +1166,66 @@ export class AgentInterventionModel {
         throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
       }
 
-      await tx
-        .update(agentOperations)
-        .set({ completedAt: now, completionReason: 'done', status: 'done' })
-        .where(
-          and(
-            eq(agentOperations.id, supersedes.operationId),
-            eq(agentOperations.status, 'waiting_for_human'),
-            eq(agentOperations.userId, this.userId),
-            this.workspaceId
-              ? eq(agentOperations.workspaceId, this.workspaceId)
-              : isNull(agentOperations.workspaceId),
-          ),
-        );
+      if (sameOperation) {
+        const interventions: AgentInterventionItem[] = [];
+        for (const [itemIndex, item] of batch.items.entries()) {
+          const old = movedRows.find((row) => row.toolCallId === item.toolCallId)!;
+          const [updated] = await tx
+            .update(agentInterventions)
+            .set({
+              ...item,
+              activityKey: batch.activityKey,
+              allowedActions: [...item.allowedActions],
+              approvalMode: batch.approvalMode ?? null,
+              batchId: batch.batchId,
+              deadline: batch.deadline,
+              itemCount: batch.items.length,
+              itemIndex,
+              provider: item.provider ?? batch.provider ?? null,
+              publishedAt: null,
+              resolutionId: null,
+              resolvedAt: null,
+              resolvingAt: null,
+              producerAckAt: null,
+              reviewContext: normalizeDtoJson(item.reviewContext),
+              risk: item.risk === undefined ? null : normalizeDtoJson(item.risk),
+              sanitizedRequest: normalizeDtoJson(item.sanitizedRequest),
+              status: 'pending',
+              stepIndex: batch.stepIndex,
+              systemActionEligibility: batch.systemActionEligibility,
+              updatedAt: now,
+              version: sql`${agentInterventions.version} + 1`,
+            })
+            .where(and(eq(agentInterventions.id, old.id), this.ownership()))
+            .returning();
+          interventions.push(updated);
+        }
+        return {
+          interventions,
+          outcome: 'applied',
+          superseded: {
+            activityKey: supersedes.activityKey,
+            batchId: supersedes.batchId,
+            interventions: movedRows,
+            operationId: supersedes.operationId,
+          },
+        };
+      }
+
+      if (!sameOperation)
+        await tx
+          .update(agentOperations)
+          .set({ completedAt: now, completionReason: 'done', status: 'done' })
+          .where(
+            and(
+              eq(agentOperations.id, supersedes.operationId),
+              eq(agentOperations.status, 'waiting_for_human'),
+              eq(agentOperations.userId, this.userId),
+              this.workspaceId
+                ? eq(agentOperations.workspaceId, this.workspaceId)
+                : isNull(agentOperations.workspaceId),
+            ),
+          );
 
       const interventions = await this.createBatchInTransaction(tx, batch, newOperation.status);
       const supersededRows = await tx

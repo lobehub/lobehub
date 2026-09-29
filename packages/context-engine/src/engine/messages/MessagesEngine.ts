@@ -77,6 +77,7 @@ import {
   WorkspaceContextInjector,
 } from '../../providers';
 import { SelectedToolInjector } from '../../providers/SelectedToolInjector';
+import { ToolHookContextProvider } from '../../providers/ToolHookContextProvider';
 import type { ContextProcessor } from '../../types';
 import { ToolNameResolver } from '../tools';
 import type { MessagesEngineParams, MessagesEngineResult } from './types';
@@ -526,6 +527,7 @@ export class MessagesEngine {
       new TasksFlattenProcessor(),
       // Task message processing
       new TaskMessageProcessor(),
+      new ToolHookContextProvider(),
       // Second placeholder pass: the flatten steps above can expand "..."
       // residue hidden inside group/council/tasks children (invisible to the
       // Phase 0 pass, which only sees top-level messages), and

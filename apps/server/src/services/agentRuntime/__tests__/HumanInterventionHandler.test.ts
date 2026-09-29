@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
@@ -9,6 +10,7 @@ import { HumanInterventionHandler } from '../HumanInterventionHandler';
 vi.mock('@/server/services/queue/impls', () => ({
   isQueueAgentRuntimeEnabled: vi.fn(() => false),
 }));
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: vi.fn() }));
 
 const buildHandler = (
   pluginQuery: ReturnType<typeof vi.fn>,
@@ -62,9 +64,7 @@ describe('HumanInterventionHandler.process', () => {
     'delivers %s from serialized configs after a worker change without registration',
     async (action) => {
       vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
-      const fetch = vi
-        .spyOn(globalThis, 'fetch')
-        .mockResolvedValue(new Response(null, { status: 204 }));
+      const fetch = vi.mocked(ssrfSafeFetch).mockResolvedValue(new Response(null, { status: 204 }));
       const hookType = action === 'reject' ? 'onStopByHumanIntervention' : 'afterHumanIntervention';
       // Round-trip the persisted wire payload, as a fresh queue worker does.
       const serialized = JSON.stringify(
@@ -98,7 +98,7 @@ describe('HumanInterventionHandler.process', () => {
             },
       );
 
-      expect(fetch).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
       const payload = JSON.parse(fetch.mock.calls[0][1]!.body as string);
       expect(payload).toMatchObject({
         hookId: 'persisted-human',
@@ -198,7 +198,7 @@ describe('HumanInterventionHandler.process', () => {
       });
 
       expect(mockMessageModel.updateMessagePlugin).toHaveBeenCalledWith('tool-msg-1', {
-        intervention: { status: 'approved' },
+        intervention: { approvedArguments: '{}', status: 'approved' },
       });
     });
 
@@ -212,7 +212,7 @@ describe('HumanInterventionHandler.process', () => {
 
       expect(result.nextContext).toEqual({
         payload: {
-          approvedToolCall: { id: 'tool-call-1' },
+          approvedToolCall: state.pendingToolsCalling[0],
           parentMessageId: 'tool-msg-1',
           skipCreateToolMessage: true,
         },

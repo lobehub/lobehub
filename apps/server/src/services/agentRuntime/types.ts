@@ -1,4 +1,8 @@
-import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
+import type {
+  AfterHumanInterventionHookEvent,
+  AgentRuntimeContext,
+  AgentState,
+} from '@lobechat/agent-runtime';
 import type {
   AgentGroupConfig,
   BotPlatformContext,
@@ -527,6 +531,7 @@ export interface OperationCreationParams {
   initialMessages?: any[];
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;
+  interventionHookEvents?: AfterHumanInterventionHookEvent[];
   /**
    * Server-authored provenance for a continuation created from a durable human
    * intervention claim. It is persisted in both agent_operations.metadata and

@@ -503,6 +503,8 @@ export interface NotifyAgentInterventionRequiredParams {
     activityKey: string;
     batchId: string;
     operationId: string;
+    /** Approvals invalidated by a changed effective tool input. */
+    reapprovedToolCallIds?: string[];
     toolCallIds: string[];
   };
   /**

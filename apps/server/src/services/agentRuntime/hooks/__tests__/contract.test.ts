@@ -131,6 +131,9 @@ describe('hook registration and restoration', () => {
     const tool = {
       apiName: 'readFile',
       args: {},
+      assistantMessageId: 'assistant',
+      executor: 'server' as const,
+      toolCallId: 'native',
       callIndex: 0,
       identifier: 'other',
       operationId: 'op',
@@ -220,6 +223,9 @@ describe('registration snapshots', () => {
     await dispatcher.dispatch('op', 'beforeToolCall', {
       apiName: 'read',
       args: {},
+      assistantMessageId: 'assistant',
+      executor: 'server',
+      toolCallId: 'native',
       callIndex: 0,
       identifier: 'fs',
       operationId: 'op',

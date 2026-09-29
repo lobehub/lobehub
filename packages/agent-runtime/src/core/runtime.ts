@@ -102,7 +102,11 @@ export class AgentRuntime {
       }
 
       // Use provided context or create initial context
-      const runtimeContext = context || this.createInitialContext(newState);
+      // Preparation rewrites only this attempt's calls. A queued/local retry
+      // retaining the input context must start from the same original request.
+      const runtimeContext = context
+        ? structuredClone(context)
+        : this.createInitialContext(newState);
 
       await this.config.prepareTools?.(runtimeContext, newState);
 
@@ -124,6 +128,10 @@ export class AgentRuntime {
           skipCreateToolMessage?: boolean;
           /** `tool_call_id → pending tool message id`, batch path only. */
           toolMessageIds?: Record<string, string>;
+          invalidatedApprovalIds?: string[];
+          approvalParentMessageId?: string;
+          approvalSourceBatch?: { batchId: string; operationId: string };
+          pendingApprovalSiblings?: ChatToolPayload[];
         };
 
         // The resume seeded an assistant placeholder (assistantMessageId) for
@@ -138,8 +146,93 @@ export class AgentRuntime {
         }
 
         const approvedBatch = approvedPayload.approvedToolCalls ?? [];
+        const invalidatedIds = new Set(approvedPayload.invalidatedApprovalIds ?? []);
+        const allApproved =
+          approvedPayload.approvedToolCalls ??
+          (approvedPayload.approvedToolCall ? [approvedPayload.approvedToolCall] : []);
 
-        if (approvedBatch.length > 0) {
+        if (invalidatedIds.size > 0) {
+          // Approval covers the reviewed input only. Re-enter the ordinary
+          // permission/audit path for changed calls, preserving existing rows.
+          const parentMessageId =
+            approvedPayload.approvalParentMessageId ?? approvedPayload.parentMessageId;
+          const replanned = await this.agent.runner(
+            {
+              ...runtimeContext,
+              phase: 'llm_result',
+              payload: {
+                hasToolsCalling: true,
+                parentMessageId,
+                toolsCalling: allApproved.filter(({ id }) => invalidatedIds.has(id)),
+              },
+            },
+            newState,
+          );
+          rawInstructions = (Array.isArray(replanned) ? replanned : [replanned]).map(
+            (instruction) => {
+              if (instruction.type === 'request_human_approve') {
+                const pendingToolsCalling = [
+                  ...instruction.pendingToolsCalling,
+                  ...(approvedPayload.pendingApprovalSiblings ?? []),
+                ];
+                return {
+                  ...instruction,
+                  pendingToolsCalling,
+                  skipCreateToolMessage: true,
+                  ...(approvedPayload.approvalSourceBatch && {
+                    supersedes: {
+                      ...approvedPayload.approvalSourceBatch,
+                      reapprovedToolCallIds: instruction.pendingToolsCalling.map(({ id }) => id),
+                      toolCallIds: pendingToolsCalling.map(({ id }) => id),
+                    },
+                  }),
+                };
+              }
+              if (instruction.type === 'call_tool') {
+                const id = approvedPayload.toolMessageIds?.[instruction.payload.toolCalling.id];
+                return id
+                  ? {
+                      ...instruction,
+                      payload: {
+                        ...instruction.payload,
+                        parentMessageId: id,
+                        skipCreateToolMessage: true,
+                      },
+                    }
+                  : instruction;
+              }
+              if (instruction.type === 'call_tools_batch') {
+                return {
+                  ...instruction,
+                  payload: {
+                    ...instruction.payload,
+                    existingToolMessageIds: approvedPayload.toolMessageIds,
+                  },
+                };
+              }
+              if (instruction.type === 'resolve_blocked_tools') {
+                return {
+                  ...instruction,
+                  payload: {
+                    ...instruction.payload,
+                    existingToolMessageIds: approvedPayload.toolMessageIds,
+                  },
+                };
+              }
+              return instruction;
+            },
+          );
+          const unchanged = allApproved.filter(({ id }) => !invalidatedIds.has(id));
+          if (unchanged.length)
+            rawInstructions.unshift({
+              type: 'call_tools_batch',
+              payload: {
+                parentMessageId,
+                toolsCalling: unchanged,
+                existingToolMessageIds: approvedPayload.toolMessageIds ?? {},
+              },
+            });
+        } else if (approvedBatch.length > 0) {
           // Run every approved tool in ONE batch, exactly as the original
           // (pre-approval) `call_tools_batch` would have. Approving them one at
           // a time instead means one LLM continuation per tool, each seeing the

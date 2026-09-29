@@ -1078,6 +1078,14 @@ export class FlatListBuilder {
 
             const toolWithResult: ChatToolPayloadWithResult = {
               ...tool,
+              // Controls persist effective input on the matched tool row. The
+              // assistant retains the model's original call; cards and reloaded
+              // LLM context must use the same durable input as execution.
+              arguments:
+                toolMsg.pluginState?.hookPreparation &&
+                typeof toolMsg.plugin?.arguments === 'string'
+                  ? toolMsg.plugin.arguments
+                  : tool.arguments,
               intervention: toolMsg.pluginIntervention,
               result,
               result_msg_id: toolMsg.id,
