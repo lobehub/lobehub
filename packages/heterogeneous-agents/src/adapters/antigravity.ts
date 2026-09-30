@@ -1,6 +1,6 @@
 import { isRecord, pickString, toRecord, type UnknownRecord } from '@lobechat/utils/object';
 
-import { classifyHeteroProcessFailure } from '../spawn/classifyProcessFailure';
+import { classifyCliMessageError } from '../errors/classifyCliMessageError';
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
@@ -287,7 +287,7 @@ export class AntigravityAdapter implements AgentEventAdapter {
       events.push(
         this.event(
           'error',
-          classifyHeteroProcessFailure({ agentType: IDENTIFIER, detail }) ?? {
+          classifyCliMessageError({ agentType: IDENTIFIER, detail }) ?? {
             agentType: IDENTIFIER,
             code: 'antigravity_run_error',
             message: detail,
