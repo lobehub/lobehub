@@ -55,6 +55,12 @@ coverage:
         threshold: '0.5%'
     patch: off
 
+# Pull requests only upload the flags whose tests ran (see plan-affected-tests.cjs);
+# the rest carry forward from the base commit instead of reading as a coverage drop.
+flag_management:
+  default_rules:
+    carryforward: true
+
 ignore:
   - src/app/**/*.tsx
   - packages/python-interpreter/**

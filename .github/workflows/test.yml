@@ -41,13 +41,73 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi'
+
 jobs:
+  # Pull requests run only the tests whose import graph reaches the diff (vitest
+  # --changed) and the packages downstream of it (pnpm ...[base]); pushes run
+  # everything and own the Codecov baselines.
+  plan:
+    name: Plan Tests
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      base: ${{ steps.base.outputs.sha }}
+      app_shards: ${{ steps.plan.outputs.app_shards }}
+      app_total: ${{ steps.plan.outputs.app_total }}
+      server_shards: ${{ steps.plan.outputs.server_shards }}
+      server_total: ${{ steps.plan.outputs.server_total }}
+      packages: ${{ steps.plan.outputs.packages }}
+      windows_shell: ${{ steps.plan.outputs.windows_shell }}
+
+    steps:
+      - name: Checkout
+        env:
+          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "${REF_SHA}"
+          git checkout --force FETCH_HEAD
+
+      - name: Resolve merge base
+        id: base
+        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:full-test')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}" --jq .merge_base_commit.sha || true)
+          if [ -n "$sha" ] && git fetch --no-tags --depth=1 "https://github.com/${GITHUB_REPOSITORY}.git" "$sha"; then
+            # `vitest --changed` diffs `base...HEAD`, which needs a merge base the shallow
+            # clone lacks (git exits 128 and vitest reads that as "no changes"). Re-parent
+            # an identical tree onto the base so the merge base is the base itself.
+            git checkout -q "$(git -c user.name=ci -c user.email=ci@localhost commit-tree 'HEAD^{tree}' -p "$sha" -m 'diff base')"
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup environment
+        if: steps.base.outputs.sha != ''
+        uses: ./.github/actions/setup-env
+
+      - name: Install deps
+        if: steps.base.outputs.sha != ''
+        run: pnpm install
+
+      - name: Plan
+        id: plan
+        env:
+          PLAN_BASE: ${{ steps.base.outputs.sha }}
+        run: node .github/scripts/plan-affected-tests.cjs
+
   # Package tests - all packages in single job to save runner resources
   test-packages:
+    needs: plan
     runs-on: ubuntu-latest
     name: Test Packages
-    env:
-      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi'
 
     steps:
       - name: Checkout
@@ -65,7 +125,8 @@ jobs:
           node --test \
             .github/scripts/vercel-ignored-build-step.test.cjs \
             .github/scripts/bundle-size-gate.test.cjs \
-            .github/scripts/size-gate-comment.test.cjs
+            .github/scripts/size-gate-comment.test.cjs \
+            .github/scripts/plan-affected-tests.test.cjs
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -82,8 +143,10 @@ jobs:
         working-directory: apps/cli
 
       - name: Test packages with coverage
+        env:
+          AFFECTED_PACKAGES: ${{ needs.plan.outputs.packages }}
         run: |
-          for package in $PACKAGES; do
+          for package in $AFFECTED_PACKAGES; do
             echo "::group::Testing $package"
             bun run --filter $package test:coverage
             echo "::endgroup::"
@@ -185,10 +248,12 @@ jobs:
 
   # App tests - run sharded tests
   test-app:
+    needs: plan
+    if: needs.plan.outputs.app_total != '0'
     strategy:
       matrix:
-        shard: [1, 2, 3]
-    name: Test App (shard ${{ matrix.shard }}/3)
+        shard: ${{ fromJSON(needs.plan.outputs.app_shards) }}
+    name: Test App (shard ${{ matrix.shard }}/${{ needs.plan.outputs.app_total }})
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -207,14 +272,27 @@ jobs:
       - name: Install deps
         run: pnpm install
 
+      - name: Fetch merge base
+        if: needs.plan.outputs.mode == 'affected'
+        env:
+          BASE: ${{ needs.plan.outputs.base }}
+        run: |
+          git fetch --no-tags --depth=1 "https://github.com/${GITHUB_REPOSITORY}.git" "$BASE"
+          git checkout -q "$(git -c user.name=ci -c user.email=ci@localhost commit-tree 'HEAD^{tree}' -p "$BASE" -m 'diff base')"
+
       - name: Run tests
-        run: bunx vitest --coverage --silent='passed-only' --reporter=default --project app --shard=${{ matrix.shard }}/3
+        env:
+          MODE: ${{ needs.plan.outputs.mode }}
+          BASE: ${{ needs.plan.outputs.base }}
+        run: |
+          if [ "$MODE" = full ]; then set -- --coverage; else set -- --changed "$BASE" --passWithNoTests; fi
+          bunx vitest "$@" --silent='passed-only' --reporter=default --project app --shard=${{ matrix.shard }}/${{ needs.plan.outputs.app_total }}
 
       # Codecov scores a flag on whatever uploads it has, so a shard uploading
       # alone reports a fraction of the coverage as a drop. Hand the report to
       # `upload-sharded-coverage`, which uploads all shards together.
       - name: Save App Coverage shard
-        if: success()
+        if: success() && needs.plan.outputs.mode == 'full'
         uses: actions/upload-artifact@v6
         with:
           name: coverage-app-${{ matrix.shard }}
@@ -229,6 +307,8 @@ jobs:
   # node builtins, so this job skips the monorepo install entirely.
   test-windows-shell:
     name: Test Windows Shell
+    needs: plan
+    if: needs.plan.outputs.windows_shell == 'true'
 
     runs-on: windows-latest
 
@@ -363,10 +443,12 @@ jobs:
           fi
 
   test-server:
+    needs: plan
+    if: needs.plan.outputs.server_total != '0'
     strategy:
       matrix:
-        shard: [1, 2]
-    name: Test Server (shard ${{ matrix.shard }}/2)
+        shard: ${{ fromJSON(needs.plan.outputs.server_shards) }}
+    name: Test Server (shard ${{ matrix.shard }}/${{ needs.plan.outputs.server_total }})
 
     runs-on: ubuntu-latest
 
@@ -387,12 +469,25 @@ jobs:
       - name: Install deps
         run: pnpm install
 
-      - name: Test Server Coverage
-        run: bunx vitest --coverage --silent='passed-only' --reporter=default --coverage.reportsDirectory=./apps/server/coverage --project server --shard=${{ matrix.shard }}/2
+      - name: Fetch merge base
+        if: needs.plan.outputs.mode == 'affected'
+        env:
+          BASE: ${{ needs.plan.outputs.base }}
+        run: |
+          git fetch --no-tags --depth=1 "https://github.com/${GITHUB_REPOSITORY}.git" "$BASE"
+          git checkout -q "$(git -c user.name=ci -c user.email=ci@localhost commit-tree 'HEAD^{tree}' -p "$BASE" -m 'diff base')"
+
+      - name: Test Server
+        env:
+          MODE: ${{ needs.plan.outputs.mode }}
+          BASE: ${{ needs.plan.outputs.base }}
+        run: |
+          if [ "$MODE" = full ]; then set -- --coverage --coverage.reportsDirectory=./apps/server/coverage; else set -- --changed "$BASE" --passWithNoTests; fi
+          bunx vitest "$@" --silent='passed-only' --reporter=default --project server --shard=${{ matrix.shard }}/${{ needs.plan.outputs.server_total }}
 
       # See the App shard above: uploaded together by `upload-sharded-coverage`.
       - name: Save Server Coverage shard
-        if: success()
+        if: success() && needs.plan.outputs.mode == 'full'
         uses: actions/upload-artifact@v6
         with:
           name: coverage-server-${{ matrix.shard }}
@@ -405,8 +500,8 @@ jobs:
   # (e.g. -25% after 1/3 app shards) until the remaining shards landed.
   upload-sharded-coverage:
     name: Upload Sharded Coverage
-    needs: [test-app, test-server]
-    if: ${{ !cancelled() }}
+    needs: [plan, test-app, test-server]
+    if: ${{ !cancelled() && needs.plan.outputs.mode == 'full' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
