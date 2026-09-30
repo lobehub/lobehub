@@ -18,7 +18,8 @@ import {
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { ClaudeCodeLiveInput } from './claudeCodeLiveInput';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
-import { resolveCliSpawnPlan } from './cliSpawn';
+import { buildAntigravityArgs } from './antigravity';
+import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import {
   buildCodexLobeHubContextArgs,
@@ -390,6 +391,9 @@ export const buildQoderArgs = ({
 
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {
+    case 'antigravity': {
+      return buildAntigravityArgs(params);
+    }
     case 'amp': {
       return buildAmpArgs(params);
     }
