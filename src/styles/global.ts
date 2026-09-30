@@ -19,6 +19,10 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
 
     @media (device-width >= 576px) {
       overflow: hidden;
+
+      /* The root cannot scroll here, and a root 'none' also suppresses the
+         elastic overscroll of inner scrollers in Chromium on macOS. */
+      overscroll-behavior: auto;
     }
   }
 
