@@ -15,10 +15,10 @@ import {
   spawnTraeAcpAgent,
 } from './acpSpawnAgent';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { buildAntigravityArgs } from './antigravity';
 import { ClaudeCodeLiveInput } from './claudeCodeLiveInput';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
-import { buildAntigravityArgs } from './antigravity';
-import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
+import { resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import {
   buildCodexLobeHubContextArgs,
