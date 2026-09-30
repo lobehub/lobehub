@@ -1,23 +1,14 @@
 'use client';
 
 import type { GoalGraphDecision } from '@lobechat/types';
-import { Flexbox, Icon, Markdown, Tooltip } from '@lobehub/ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
 import { Button, confirmModal, Text, TextArea, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import {
-  ArrowRight,
-  BadgeCheck,
-  CircleAlert,
-  CircleCheck,
-  CircleX,
-  RefreshCw,
-  Undo2,
-} from 'lucide-react';
+import { ArrowRight, CircleCheck, Undo2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import CollapsibleContent from '@/components/CollapsibleContent';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
 import { useGoalStore } from '@/store/goal';
@@ -33,18 +24,19 @@ import {
   findGoalAcceptanceGate,
   findOpenChangeRequest,
   type GoalAcceptanceGate,
-  type GoalResultStatus,
   type GoalSignOffState,
 } from './goalResultState';
 import { openRequestChangesModal } from './RequestChangesModal';
 import type { GoalResultData } from './useGoalResultData';
 
 /**
- * The first screen of a finished Goal: where it stands, the one-line result
- * (only when the wrap-up report wrote one), what was asked, how big the run
- * was, and the one action it waits on — signing off the delivery. Sign-off is
- * the Goal-level acceptance's own accept / reject, so the acceptance page and
- * this strip can never disagree.
+ * The first screen of a finished Goal: the one-line result (only when the
+ * wrap-up report wrote one), how big the run was, and the one action it waits
+ * on — signing off the delivery. Sign-off is the Goal-level acceptance's own
+ * accept / reject, so the acceptance page and this strip can never disagree.
+ *
+ * Where the result stands reads from the acceptance itself, below: 验收标准
+ * says what was met, and this strip says what to do about it.
  */
 
 const styles = createStaticStyles(({ css }) => ({
@@ -55,22 +47,6 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
 }));
-
-const STATUS_ICON: Record<GoalResultStatus, typeof CircleCheck> = {
-  awaitingDecision: CircleX,
-  awaitingSignOff: CircleCheck,
-  partial: CircleAlert,
-  revising: RefreshCw,
-  signedOff: BadgeCheck,
-};
-
-const STATUS_COLOR: Record<GoalResultStatus, string> = {
-  awaitingDecision: cssVar.colorError,
-  awaitingSignOff: cssVar.colorSuccess,
-  partial: cssVar.colorWarning,
-  revising: cssVar.colorInfo,
-  signedOff: cssVar.colorPrimary,
-};
 
 const SIGN_OFF_TEXT: Record<GoalSignOffState, string> = {
   accepted: 'goalProcess.result.signOff.accepted',
@@ -299,28 +275,10 @@ const GoalResultHeader = ({ data, graph, onContinue }: GoalResultHeaderProps) =>
 
   return (
     <Flexbox data-goal-result-status={status} gap={14}>
-      <Flexbox horizontal align={'center'} gap={8}>
-        <Icon color={STATUS_COLOR[status]} icon={STATUS_ICON[status]} size={18} />
-        <Text fontSize={14} style={{ color: STATUS_COLOR[status] }} weight={600}>
-          {t(`goalProcess.result.status.${status}`)}
-        </Text>
-      </Flexbox>
       {headline && (
         <Text fontSize={20} style={{ lineHeight: 1.4 }} weight={600}>
           {headline}
         </Text>
-      )}
-      {goal.requirement && (
-        <Flexbox gap={4}>
-          <Text fontSize={12} type={'secondary'} weight={500}>
-            {t('goalProcess.result.requirement')}
-          </Text>
-          <CollapsibleContent maxHeight={120}>
-            <Markdown fontSize={14} variant={'chat'}>
-              {goal.requirement}
-            </Markdown>
-          </CollapsibleContent>
-        </Flexbox>
       )}
       <Text fontSize={13} type={'secondary'}>
         {scale.join(' · ')}
