@@ -50,13 +50,7 @@ const EmptyState = memo<EmptyStateProps>(({ onAddDataset }) => {
           {t('dataset.empty.description')}
         </Text>
       </Flexbox>
-      <Button
-        icon={Plus}
-        size="small"
-        style={{ marginTop: 16 }}
-        type="primary"
-        onClick={onAddDataset}
-      >
+      <Button icon={Plus} style={{ marginTop: 16 }} type="primary" onClick={onAddDataset}>
         {t('dataset.actions.addDataset')}
       </Button>
     </Card>

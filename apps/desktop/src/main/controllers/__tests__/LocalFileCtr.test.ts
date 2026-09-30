@@ -43,6 +43,8 @@ vi.mock('electron', () => ({
 vi.mock('node:fs/promises', () => ({
   access: vi.fn(),
   chmod: vi.fn(),
+  cp: vi.fn(),
+  lstat: vi.fn(),
   mkdir: vi.fn(),
   readFile: vi.fn(),
   readdir: vi.fn(),
@@ -148,8 +150,9 @@ describe('LocalFileCtr', () => {
   };
 
   afterEach(() => {
-    // clearAllMocks keeps implementations; drop the disk so it cannot leak.
-    for (const fn of ['readFile', 'writeFile', 'rename'] as const) {
+    // clearAllMocks keeps implementations; drop the disk and the per-test
+    // existence probes so they cannot leak into later tests.
+    for (const fn of ['readFile', 'writeFile', 'rename', 'lstat', 'cp', 'mkdir'] as const) {
       vi.mocked(mockFsPromises[fn]).mockReset();
     }
   });
@@ -649,6 +652,125 @@ describe('LocalFileCtr', () => {
     });
   });
 
+  describe('handleMoveFiles', () => {
+    it('should refuse to move onto an existing entry', async () => {
+      vi.mocked(mockFsPromises.access).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.lstat).mockImplementation(async (target: string) => ({
+        dev: 1,
+        ino: target === '/p/a.txt' ? 10 : 20,
+      }));
+
+      const result = await localFileCtr.handleMoveFiles({
+        items: [{ newPath: '/p/sub/a.txt', oldPath: '/p/a.txt' }],
+      });
+
+      expect(result).toEqual([
+        {
+          error: 'An item already exists at the target path: /p/sub/a.txt.',
+          newPath: undefined,
+          sourcePath: '/p/a.txt',
+          success: false,
+        },
+      ]);
+      expect(mockFsPromises.rename).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleCreateFile', () => {
+    it('creates the file exclusively so an existing one is never overwritten', async () => {
+      vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+
+      const result = await localFileCtr.handleCreateFile({ path: '/p/new.ts' });
+
+      expect(result).toEqual({ path: '/p/new.ts', success: true });
+      expect(mockFsPromises.writeFile).toHaveBeenCalledWith('/p/new.ts', '', { flag: 'wx' });
+    });
+
+    it('reports an existing file as an error', async () => {
+      vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.writeFile).mockRejectedValue(
+        Object.assign(new Error('exists'), { code: 'EEXIST' }),
+      );
+
+      const result = await localFileCtr.handleCreateFile({ content: 'x', path: '/p/taken.ts' });
+
+      expect(result).toEqual({
+        error: 'An item already exists at /p/taken.ts.',
+        path: '/p/taken.ts',
+        success: false,
+      });
+    });
+  });
+
+  describe('handleCreateDirectory', () => {
+    it('creates the final folder non-recursively', async () => {
+      vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
+
+      const result = await localFileCtr.handleCreateDirectory({ path: '/p/new-dir' });
+
+      expect(result).toEqual({ path: '/p/new-dir', success: true });
+      expect(mockFsPromises.mkdir).toHaveBeenCalledTimes(1);
+      expect(mockFsPromises.mkdir).toHaveBeenCalledWith('/p/new-dir', { recursive: false });
+    });
+
+    it('reports an existing folder as an error', async () => {
+      vi.mocked(mockFsPromises.mkdir).mockRejectedValueOnce(
+        Object.assign(new Error('exists'), { code: 'EEXIST' }),
+      );
+
+      const result = await localFileCtr.handleCreateDirectory({ path: '/p/src' });
+
+      expect(result).toEqual({
+        error: 'An item already exists at /p/src.',
+        path: '/p/src',
+        success: false,
+      });
+    });
+  });
+
+  describe('handleCopyFiles', () => {
+    const enoent = () => Object.assign(new Error('missing'), { code: 'ENOENT' });
+
+    it('duplicates in place under a Finder-style name when targetPath is omitted', async () => {
+      const existing = new Set(['/p/a.ts', '/p/a copy.ts']);
+      vi.mocked(mockFsPromises.lstat).mockImplementation(async (target: string) => {
+        if (!existing.has(target)) throw enoent();
+        return { isDirectory: () => false };
+      });
+      vi.mocked(mockFsPromises.cp).mockResolvedValue(undefined);
+
+      const result = await localFileCtr.handleCopyFiles({ items: [{ sourcePath: '/p/a.ts' }] });
+
+      expect(result).toEqual([
+        { sourcePath: '/p/a.ts', success: true, targetPath: '/p/a copy 2.ts' },
+      ]);
+      expect(mockFsPromises.cp).toHaveBeenCalledWith('/p/a.ts', '/p/a copy 2.ts', {
+        errorOnExist: true,
+        force: false,
+        recursive: true,
+        verbatimSymlinks: true,
+      });
+    });
+
+    it('refuses an explicit target that already exists without copying', async () => {
+      vi.mocked(mockFsPromises.lstat).mockResolvedValue({ isDirectory: () => true });
+
+      const result = await localFileCtr.handleCopyFiles({
+        items: [{ sourcePath: '/p/src', targetPath: '/p/dst' }],
+      });
+
+      expect(result).toEqual([
+        {
+          error: 'An item already exists at the target path: /p/dst.',
+          sourcePath: '/p/src',
+          success: false,
+        },
+      ]);
+      expect(mockFsPromises.cp).not.toHaveBeenCalled();
+    });
+  });
+
   describe('auditSafePaths', () => {
     it('should treat real temporary paths as safe', async () => {
       vi.mocked(mockFsPromises.access).mockResolvedValue(undefined);
@@ -848,6 +970,22 @@ describe('LocalFileCtr', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('File or directory not found');
+    });
+
+    it('should refuse to overwrite an existing sibling instead of renaming over it', async () => {
+      vi.mocked(mockFsPromises.lstat).mockImplementation(async (target: string) => ({
+        dev: 1,
+        ino: target === '/test/old.txt' ? 10 : 20,
+      }));
+
+      const result = await localFileCtr.handleRenameFile({
+        path: '/test/old.txt',
+        newName: 'taken.txt',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('already exists');
+      expect(mockFsPromises.rename).not.toHaveBeenCalled();
     });
 
     it('should handle file already exists error', async () => {

@@ -50,6 +50,7 @@ import { composioRouter } from './composio';
 import { configRouter } from './config';
 import { connectorRouter } from './connector';
 import { deviceRouter } from './device';
+import { deviceMetricRouter } from './deviceMetric';
 import { documentRouter } from './document';
 import { documentCommentRouter } from './documentComment';
 import { documentLikeRouter } from './documentLike';
@@ -93,6 +94,7 @@ import { taskRouter } from './task';
 import { threadRouter } from './thread';
 import { topicRouter } from './topic';
 import { topicCommentRouter } from './topicComment';
+import { trashRouter } from './trash';
 import { uploadRouter } from './upload';
 import { usageRouter } from './usage';
 import { userRouter } from './user';
@@ -134,6 +136,7 @@ export const lambdaRouter = router({
   config: configRouter,
   connector: connectorRouter,
   device: deviceRouter,
+  deviceMetric: deviceMetricRouter,
   document: documentRouter,
   documentComment: documentCommentRouter,
   documentLike: documentLikeRouter,
@@ -179,6 +182,7 @@ export const lambdaRouter = router({
   task: taskRouter,
   thread: threadRouter,
   topic: topicRouter,
+  trash: trashRouter,
   topicComment: topicCommentRouter,
   upload: uploadRouter,
   usage: usageRouter,

@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { LobeChatDatabase } from '@/database/type';
+
 import { TopicAutoSummaryService } from './index';
 
 const mocks = vi.hoisted(() => ({
   generateObject: vi.fn(),
   getUserSettings: vi.fn(),
+  resolveSystemAgentModelConfig: vi.fn(),
   updateSummaryIfCurrent: vi.fn(),
 }));
 
@@ -25,10 +28,7 @@ vi.mock('@/server/services/aiGeneration', () => ({
   },
 }));
 vi.mock('@/server/services/systemAgent/modelConfig', () => ({
-  resolveSystemAgentModelConfig: vi.fn().mockResolvedValue({
-    model: 'deepseek-v4-flash',
-    provider: 'deepseek',
-  }),
+  resolveSystemAgentModelConfig: mocks.resolveSystemAgentModelConfig,
 }));
 
 const createDb = (
@@ -44,7 +44,7 @@ const createDb = (
     ],
   ],
 ) => {
-  return {
+  const db = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
@@ -53,7 +53,9 @@ const createDb = (
         })),
       })),
     })),
-  } as never;
+  };
+
+  return db as typeof db & LobeChatDatabase;
 };
 
 describe('TopicAutoSummaryService', () => {
@@ -63,6 +65,10 @@ describe('TopicAutoSummaryService', () => {
       systemAgent: { topicAutoSummary: { enabled: true } },
     });
     mocks.generateObject.mockResolvedValue({ description: 'Next steps', summary: 'Combined' });
+    mocks.resolveSystemAgentModelConfig.mockResolvedValue({
+      model: 'deepseek-v4-flash',
+      provider: 'deepseek',
+    });
     mocks.updateSummaryIfCurrent.mockResolvedValue(true);
   });
 
@@ -108,6 +114,19 @@ describe('TopicAutoSummaryService', () => {
     const result = await service.summarize('shared-topic');
 
     expect(result).toEqual({ reason: 'disabled', summarized: false });
+    expect(mocks.generateObject).not.toHaveBeenCalled();
+    expect(mocks.updateSummaryIfCurrent).not.toHaveBeenCalled();
+  });
+
+  it('stops before reading messages or resolving a model when the topic was trashed', async () => {
+    const db = createDb([[]]);
+    const service = new TopicAutoSummaryService(db, 'user-1');
+
+    const result = await service.summarize('trashed-topic');
+
+    expect(result).toEqual({ reason: 'stale', summarized: false });
+    expect(db.select).toHaveBeenCalledTimes(1);
+    expect(mocks.resolveSystemAgentModelConfig).not.toHaveBeenCalled();
     expect(mocks.generateObject).not.toHaveBeenCalled();
     expect(mocks.updateSummaryIfCurrent).not.toHaveBeenCalled();
   });

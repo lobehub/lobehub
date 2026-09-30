@@ -1,3 +1,5 @@
+import type { CoreUpdateStatus } from '@lobechat/electron-client-ipc';
+
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 class RendererOtaService {
@@ -9,7 +11,7 @@ class RendererOtaService {
     return ensureElectronIpc().rendererOta.applyNow();
   };
 
-  getStatus = async () => {
+  getStatus = async (): Promise<CoreUpdateStatus> => {
     return ensureElectronIpc().rendererOta.getStatus();
   };
 }

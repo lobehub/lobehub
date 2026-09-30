@@ -24,6 +24,7 @@ import {
   setWindowsShellPreference,
   ShellProcessManager,
 } from '@lobechat/local-file-shell/shell';
+import { managedProcessEnvironment, spawnManagedFor } from '@lobechat/utils/managedProcess';
 
 import { createLogger } from '@/utils/logger';
 
@@ -241,6 +242,25 @@ export default class ShellCommandCtr extends ControllerModule {
 
   @IpcMethod()
   async handleRunCommand(params: RunCommandParams): Promise<RunCommandResult> {
+    const spawnProcess = spawnManagedFor({
+      topicId: params.topicId,
+      agentId: params.agentId,
+      label: params.description || 'Shell',
+    });
+    params = {
+      ...params,
+      env: {
+        ...params.env,
+        ...managedProcessEnvironment(
+          {
+            topicId: params.topicId,
+            agentId: params.agentId,
+            label: params.description || 'Shell',
+          },
+          params.env?.AGENT_BROWSER_SESSION,
+        ),
+      },
+    };
     if (SIMPLE_LH_PREFIX.test(params.command)) {
       const cliCtr = this.app.getController(CliCtr);
       if (cliCtr) {
@@ -260,11 +280,11 @@ export default class ShellCommandCtr extends ControllerModule {
         // credentials it authenticates with.
         logger.debug('Running lh command with the embedded CLI environment');
         const env = await cliCtr.buildCliEnv(params.env);
-        return runCommand({ ...params, env }, { logger, processManager });
+        return runCommand({ ...params, env }, { logger, processManager, spawnProcess });
       }
     }
 
-    if (!params.sandbox) return runCommand(params, { logger, processManager });
+    if (!params.sandbox) return runCommand(params, { logger, processManager, spawnProcess });
 
     // Sandboxed run. The policy is scoped to the run's working directory, so
     // without one there is nothing to scope to — refuse rather than fall back
@@ -310,6 +330,7 @@ export default class ShellCommandCtr extends ControllerModule {
       logger,
       onSandboxUnavailable: (error) => this.downgradeSandboxCapability(error),
       processManager,
+      spawnProcess,
       sandboxPolicy: createLocalSandboxPolicy(params.cwd, {
         allowNetwork: params.sandboxNetwork === true,
       }),

@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, goalNodes, goals, users, workspaces } from '../../schemas';
+import { agents, goalNodes, goals, topics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
 import { GoalGraphModel } from '../goalGraph';
@@ -228,6 +228,39 @@ describe('GoalGraphModel', () => {
     // Personal mode: the Work ownership predicate the workspace case needs must
     // not hide the owner's own deliverable from their own goal.
     expect(links?.[0].work).toMatchObject({ type: 'task', workId: work!.id });
+  });
+
+  it('hydrates what a file deliverable needs to be downloaded and cited', async () => {
+    // The result page's reader shows a file's format and size on its download
+    // card, and matches acceptance evidence to the file by its file-store id.
+    await serverDB.insert(topics).values({ id: 'goal-graph-file-topic', userId });
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'File goal' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Export sheet' });
+    const work = await new WorkModel(serverDB, userId).registerFile({
+      filePath: '/mnt/data/pricing.xlsx',
+      metadata: {
+        fileId: 'file-pricing',
+        filePath: '/mnt/data/pricing.xlsx',
+        fileSize: 4096,
+        fileUrl: 'https://cdn.example.com/pricing.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
+      title: 'pricing.xlsx',
+      toolIdentifier: 'goal-test',
+      toolName: 'writeFile',
+      topicId: 'goal-graph-file-topic',
+      userId,
+    });
+    await graphModel.attachWorkVersion(goal.id, node!.id, work.currentVersionId!, 'produced');
+
+    const links = (await graphModel.getGraph(goal.id))?.workVersions;
+    expect(links?.[0].work).toMatchObject({
+      fileId: 'file-pricing',
+      fileSize: 4096,
+      fileUrl: 'https://cdn.example.com/pricing.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      type: 'file',
+    });
   });
 
   it('hydrates a linked Work only for a viewer allowed to see it', async () => {

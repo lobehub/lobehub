@@ -41,6 +41,7 @@ vi.mock('../acceptanceService', async (original) => ({
   }),
 }));
 vi.mock('../reviewPredictor', () => ({
+  GATE_REVIEW_MAX_VISUALS: 12,
   REVIEW_PREDICT_CONCURRENCY: 4,
   VerifyReviewPredictorService: vi.fn(function () {
     return { predict: mocks.predict };
@@ -102,7 +103,12 @@ describe('Goal automatic Acceptance review', () => {
       goalReview: { status: 'passed', predictionIds: ['p1'], feedback: '' },
     });
     expect(mocks.predict).toHaveBeenCalledWith(
-      expect.objectContaining({ includeTextEvidence: true, checkResultId: 'result1' }),
+      expect.objectContaining({
+        checkResultId: 'result1',
+        includeTextEvidence: true,
+        // The gate must not judge on the shadow lane's three-frame sample.
+        maxVisuals: 12,
+      }),
     );
   });
 
@@ -177,6 +183,69 @@ describe('Goal automatic Acceptance review', () => {
       status: 'rejected',
       predictionIds: ['p1', 'p2'],
     });
+  });
+
+  it('ignores a result filed under an id that no round ever planned', async () => {
+    mocks.rounds.mockResolvedValue({
+      runs: [
+        { id: 'r1', roundIndex: 1, plan: [check] },
+        { id: 'r2', roundIndex: 2, plan: [check] },
+      ],
+      results: [
+        { ...result, id: 'orphan', checkItemId: 'pglite-classification', verifyRunId: 'r1' },
+        { ...result, id: 'result2', verifyRunId: 'r2' },
+      ],
+    });
+    mocks.predict.mockImplementation(async ({ checkResultId }: { checkResultId: string }) =>
+      checkResultId === 'orphan'
+        ? { id: 'p-orphan', status: 'judged', action: 'reject', comment: 'Stale evidence.' }
+        : { id: 'p1', status: 'judged', action: 'accept' },
+    );
+
+    expect(await reviewGoalDelivery(db, 'u1', 't1', 'op1')).toMatchObject({
+      status: 'passed',
+      predictionIds: ['p1'],
+    });
+    expect(mocks.predict).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores an off-plan result whose id collides with a planned sourceCriterionId', async () => {
+    mocks.rounds.mockResolvedValue({
+      runs: [{ id: 'r1', roundIndex: 1, plan: [{ ...check, sourceCriterionId: 'criterion-1' }] }],
+      results: [result, { ...result, id: 'orphan', checkItemId: 'criterion-1' }],
+    });
+    mocks.predict.mockImplementation(async ({ checkResultId }: { checkResultId: string }) =>
+      checkResultId === 'orphan'
+        ? { id: 'p-orphan', status: 'judged', action: 'reject', comment: 'Stale evidence.' }
+        : { id: 'p1', status: 'judged', action: 'accept' },
+    );
+
+    expect(await reviewGoalDelivery(db, 'u1', 't1', 'op1')).toMatchObject({
+      status: 'passed',
+      predictionIds: ['p1'],
+    });
+    expect(mocks.predict).toHaveBeenCalledWith(
+      expect.objectContaining({ checkResultId: 'result1' }),
+    );
+    expect(mocks.predict).not.toHaveBeenCalledWith(
+      expect.objectContaining({ checkResultId: 'orphan' }),
+    );
+  });
+
+  it('does not fall back to a required orphan when every planned check is optional', async () => {
+    mocks.rounds.mockResolvedValue({
+      runs: [{ id: 'r1', roundIndex: 1, plan: [{ ...check, required: false }] }],
+      results: [
+        { ...result, required: false },
+        { ...result, id: 'orphan', checkItemId: 'pglite-classification' },
+      ],
+    });
+
+    expect(await reviewGoalDelivery(db, 'u1', 't1', 'op1')).toMatchObject({
+      status: 'errored',
+      feedback: expect.stringContaining('Goal Acceptance has no required checks'),
+    });
+    expect(mocks.predict).not.toHaveBeenCalled();
   });
 
   it('sends missing evidence back and does not mistake skipped review for approval', async () => {

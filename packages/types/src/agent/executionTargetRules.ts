@@ -43,3 +43,21 @@ export const isDeviceCapablePlan = (plan: ExecutionPlan): boolean =>
 export const isDeviceLockedPlan = (plan: ExecutionPlan): boolean =>
   plan.kind === 'device' ||
   (plan.kind === 'device-unrouted' && plan.reason === 'bound-device-offline');
+
+/**
+ * What the model is told when it reaches for the remote-device picker on a
+ * locked run. The picker is walled off (see {@link isDeviceLockedPlan}), so
+ * without this it only looks missing ("Not found", "no available tool") and
+ * the model keeps retrying, or gives up without telling the user that switching
+ * devices is theirs to do.
+ */
+export const describeLockedDevicePicker = (plan: ExecutionPlan): string | undefined => {
+  if (!isDeviceLockedPlan(plan)) return;
+
+  const switchHint =
+    'You cannot activate another device from here. If the user wants a different device, tell them to pick it in the device selector of the chat input and send the message again.';
+
+  return plan.kind === 'device'
+    ? `Device switching is off for this run: it is locked to device "${plan.deviceId}", where the Local System tools already run. ${switchHint}`
+    : `Device switching is off for this run: it is locked to the user's bound device, which is offline. Tell the user to reconnect it (LobeHub desktop app or \`lh connect\`). ${switchHint}`;
+};

@@ -6,6 +6,7 @@ import {
   BubblesIcon,
   CalendarClockIcon,
   HeartPulseIcon,
+  ScaleIcon,
   SearchIcon,
   SignatureIcon,
 } from 'lucide-react';
@@ -18,6 +19,8 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useGlobalStore } from '@/store/global';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/slices/preference/selectors/labPrefer';
 import { isModifierClick } from '@/utils/navigation';
 
 interface Item {
@@ -34,6 +37,7 @@ enum MemoryTabKey {
   Home = 'home',
   Identities = 'identities',
   Preferences = 'preferences',
+  Rules = 'rules',
 }
 
 const useActiveTabKey = () => {
@@ -47,11 +51,13 @@ const Nav = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('memory');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
+  const enableRules = useUserStore(labPreferSelectors.enableMemoryRules);
 
   /**
-   * Groups separated by space rather than rules: what the whole section is (home), who the
-   * person is (identity, preferences), and what is going on around them (contexts, activities).
-   * Search sits above all of them because it is an action, not a destination.
+   * Four groups, separated by space rather than rules: what the whole section is (home), what it
+   * requires of a delivery (rules), who the person is (identity, preferences), and what is
+   * going on around them (contexts, activities). Search sits above all of them because it is an
+   * action, not a destination.
    */
   const groups: Item[][] = useMemo(
     () => [
@@ -73,6 +79,20 @@ const Nav = memo(() => {
           url: '/memory',
         },
       ],
+      // Rules are still an alpha lab: the group disappears with the flag rather than sitting
+      // there disabled, so the sidebar of everyone else reads exactly as before.
+      ...(enableRules
+        ? [
+            [
+              {
+                icon: ScaleIcon,
+                key: MemoryTabKey.Rules,
+                title: t('tab.rules'),
+                url: '/memory/rules',
+              },
+            ],
+          ]
+        : []),
       [
         {
           icon: SignatureIcon,
@@ -102,7 +122,7 @@ const Nav = memo(() => {
         },
       ],
     ],
-    [t, toggleCommandMenu],
+    [t, toggleCommandMenu, enableRules],
   );
 
   return (

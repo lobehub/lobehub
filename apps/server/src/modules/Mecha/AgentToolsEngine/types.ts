@@ -120,6 +120,8 @@ export interface ServerCreateAgentToolsEngineParams {
   globalMemoryEnabled?: boolean;
   /** Whether agent has enabled knowledge bases */
   hasEnabledKnowledgeBases?: boolean;
+  /** Whether an attached or agent-assigned file is previewed because it is too long to inline */
+  hasOversizedFiles?: boolean;
   /** Whether the request originates from a bot conversation (auto-enables message tool) */
   isBotConversation?: boolean;
   /**

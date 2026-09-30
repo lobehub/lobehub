@@ -159,6 +159,7 @@
   "localFiles.open": "باز کردن",
   "localFiles.openFile": "باز کردن فایل",
   "localFiles.openFolder": "باز کردن پوشه",
+  "localFiles.openInPanel": "در پانل کناری باز کنید",
   "localFiles.outOfScope.requestedPaths": "مسیرهای درخواست‌شده",
   "localFiles.outOfScope.warning": "هشدار: مسیر(های) زیر خارج از پوشه کاری پیکربندی‌شده هستند. لطفاً تأیید کنید که می‌خواهید دسترسی را مجاز کنید.",
   "localFiles.outOfScope.workingDirectory": "پوشه کاری",

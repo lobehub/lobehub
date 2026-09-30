@@ -51,7 +51,7 @@ const EmptyState = memo<EmptyStateProps>(({ onCreate }) => {
           {t('run.empty.descriptionBenchmark')}
         </Text>
       </Flexbox>
-      <Button icon={Plus} size="small" type="primary" onClick={onCreate}>
+      <Button icon={Plus} type="primary" onClick={onCreate}>
         {t('run.actions.create')}
       </Button>
     </Flexbox>

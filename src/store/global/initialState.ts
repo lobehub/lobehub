@@ -1,7 +1,5 @@
 import { type NavigateFunction } from 'react-router';
 
-import { type MigrationSQL, type MigrationTableItem } from '@/types/clientDB';
-import { DatabaseLoadingState } from '@/types/clientDB';
 import { type LocaleMode } from '@/types/locale';
 import { SessionDefaultGroup } from '@/types/session';
 import { type TopicGroupMode } from '@/types/topic';
@@ -98,6 +96,7 @@ export enum SettingsTabs {
   Storage = 'storage',
   SystemTools = 'system-tools',
   Tools = 'tools',
+  Trash = 'trash',
   /** @deprecated Use ServiceModel instead */
   TTS = 'tts',
   Usage = 'usage',
@@ -234,10 +233,6 @@ export interface SystemStatus {
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   imageTopicViewMode?: 'grid' | 'list';
-  /**
-   * Do not enable PGLite on app initialization, only enable when user manually turns it on
-   */
-  isEnablePglite?: boolean;
   isShowCredit?: boolean;
   knowledgeBaseModalViewMode?: 'list' | 'masonry';
   language?: LocaleMode;
@@ -479,18 +474,6 @@ export const createNavigationRef = (): GlobalNavigationRef => ({ current: null }
 
 export interface GlobalState {
   hasNewVersion?: boolean;
-  initClientDBError?: Error;
-  initClientDBMigrations?: {
-    sqls: MigrationSQL[];
-    tableRecords: MigrationTableItem[];
-  };
-
-  initClientDBProcess?: { costTime?: number; phase: 'wasm' | 'dependencies'; progress: number };
-  /**
-   * Client database initialization state
-   * Idle on startup, Ready when complete, Error on failure
-   */
-  initClientDBStage: DatabaseLoadingState;
   isMobile?: boolean;
   /**
    * Server version is too old, does not support /api/version endpoint
@@ -635,7 +618,6 @@ export const createInitialSystemStatus = (): SystemStatus => {
 };
 
 export const initialState: GlobalState = {
-  initClientDBStage: DatabaseLoadingState.Idle,
   isMobile: false,
   isStatusInit: false,
   navigationRef: createNavigationRef(),

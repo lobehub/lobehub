@@ -159,6 +159,7 @@
   "localFiles.open": "Openen",
   "localFiles.openFile": "Bestand openen",
   "localFiles.openFolder": "Map openen",
+  "localFiles.openInPanel": "Openen in zijpaneel",
   "localFiles.outOfScope.requestedPaths": "Aangevraagde paden",
   "localFiles.outOfScope.warning": "Waarschuwing: De volgende pad(en) vallen buiten de geconfigureerde werkmap. Bevestig of je toegang wilt toestaan.",
   "localFiles.outOfScope.workingDirectory": "Werkmap",

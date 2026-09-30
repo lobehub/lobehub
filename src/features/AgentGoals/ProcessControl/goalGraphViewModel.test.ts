@@ -16,6 +16,7 @@ import {
   isRunningNode,
   isTroubledTaskNode,
   opensOnResultSurface,
+  scopeGraphView,
 } from './goalGraphViewModel';
 
 const T0 = new Date('2026-08-01T00:00:00Z');
@@ -122,6 +123,33 @@ describe('buildGoalGraphView', () => {
     expect(view.byId.w1.seq).toBe(1);
     expect(view.byId.w2.seq).toBe(2);
     expect(view.byId.p1.seq).toBeUndefined();
+  });
+
+  /**
+   * Regression: a task retired before any attempt started had no attempt to
+   * carry the reason, so the result page listed it as dropped with no why.
+   */
+  it('records why a node was given up, even without an attempt', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [
+          event('w1', 'updated', 5, 'Store API rate-limited twice'),
+          event('w1', 'retired', 10, 'Switched to public reviews'),
+          event('w2', 'updated', 5, 'Discount data has no public source'),
+          event('w2', 'rejected', 10),
+        ],
+        nodes: [
+          node('w1', { status: 'retired', updatedAt: at(10) }),
+          node('w2', { status: 'rejected', updatedAt: at(10) }),
+          node('w3', { status: 'resolved', updatedAt: at(10) }),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.closedReason).toBe('Switched to public reviews');
+    expect(view.byId.w2.closedReason).toBe('Discount data has no public source');
+    expect(view.byId.w3.closedReason).toBeUndefined();
   });
 
   it('builds the attempt ledger from the event trail', () => {
@@ -456,6 +484,66 @@ describe('buildGoalGraphView', () => {
       agentDocumentId: 'a719df25-40c8-4b1c-a24d-6d38cedef82b',
       resourceId: 'docs_NRoMGzwytmhHCLSt',
     });
+  });
+
+  /**
+   * Regression: the wrap-up report is registered as a `goal_report` Work
+   * produced by the wrap-up node, and surfaced as one more deliverable — in the
+   * 交付物 list and as a step of the derived 探索过程. It describes the result;
+   * the page reads it from `report`.
+   */
+  it('keeps the goal report out of the deliverables', () => {
+    const work = (type: 'document' | 'goal_report', id: string) => ({
+      identifier: null,
+      resourceId: type === 'document' ? 'docs_1' : null,
+      status: null,
+      title: id,
+      type,
+      url: null,
+      workId: `wk-${id}`,
+    });
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [node('w1'), node('wrap')],
+        workVersions: [
+          {
+            createdAt: at(5),
+            id: 'l1',
+            nodeId: 'w1',
+            relation: 'produced',
+            work: work('document', 'deliverable'),
+            workVersionId: 'v1',
+          },
+          {
+            createdAt: at(6),
+            id: 'l2',
+            nodeId: 'wrap',
+            relation: 'produced',
+            work: work('goal_report', 'report'),
+            workVersionId: 'v2',
+          },
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.artifacts.map((artifact) => artifact.workVersionId)).toEqual(['v1']);
+    expect(view.byId.wrap.artifacts).toEqual([]);
+  });
+
+  it('narrows a view to a set of nodes with only the edges inside it', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        edges: [edge('w2', 'w1', 'depends_on'), edge('w3', 'w2', 'depends_on')],
+        nodes: [node('w1'), node('w2'), node('w3')],
+      }),
+      NOW,
+    );
+    const scoped = scopeGraphView(view, new Set(['w1', 'w2']));
+
+    expect(scoped.nodes.map((item) => item.node.id)).toEqual(['w1', 'w2']);
+    expect(scoped.edges.map((item) => item.id)).toEqual(['w2-w1-depends_on']);
+    expect(scoped.frontier.every((item) => item.view.node.id !== 'w3')).toBe(true);
   });
 
   it('opens a generated file at the url its version metadata carries', () => {

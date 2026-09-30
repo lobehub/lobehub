@@ -24,7 +24,7 @@ import { groupCommentThreads, threadsForCheck } from '../Comments/threads';
 import { useAcceptanceCommentList } from '../Comments/useAcceptanceCommentList';
 import { EvidenceList } from '../Evidence/EvidenceList';
 import type { EvidenceOverlayMap } from '../Evidence/overlay';
-import { useAcceptanceBundle } from '../useAcceptanceBundle';
+import { useAcceptanceBundle, useEvidenceUrlRefresh } from '../useAcceptanceBundle';
 import { ReadComment } from './Discussion';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -70,6 +70,7 @@ const ReadCheck = ({
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data: discussion } = useAcceptanceCommentList(acceptanceId);
+  const refreshEvidenceUrl = useEvidenceUrlRefresh(acceptanceId);
   const meta = checkHeadMeta(check);
   const threads = threadsForCheck(groupCommentThreads(discussion?.items ?? []), check.id);
   const comments = threads.flatMap(({ root, replies }) => [root, ...replies]);
@@ -104,7 +105,12 @@ const ReadCheck = ({
           <Text style={{ whiteSpace: 'pre-wrap' }}>{check.result.toulmin.evidence}</Text>
         )}
         {visualization && <VisualizationRenderer manifest={visualization} />}
-        <EvidenceList evidence={check.evidence} overlays={overlays} />
+        <EvidenceList
+          evidence={check.evidence}
+          overlays={overlays}
+          reviewNotes={activeReview?.action === 'reject' ? activeReview.annotations : undefined}
+          onRefreshEvidenceUrl={refreshEvidenceUrl}
+        />
         {check.state === 'not_executed' ? (
           <Text fontSize={12} type={'secondary'}>
             {t('acceptance.focus.verifierDescription.notExecuted')}

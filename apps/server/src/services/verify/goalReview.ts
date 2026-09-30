@@ -9,7 +9,11 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AcceptanceService, buildAcceptanceCheckUnion } from './acceptanceService';
 import { mapWithConcurrency } from './concurrency';
 import { resolveGoalReviewModelConfig } from './goalReviewModelConfig';
-import { REVIEW_PREDICT_CONCURRENCY, VerifyReviewPredictorService } from './reviewPredictor';
+import {
+  GATE_REVIEW_MAX_VISUALS,
+  REVIEW_PREDICT_CONCURRENCY,
+  VerifyReviewPredictorService,
+} from './reviewPredictor';
 
 /**
  * The startup failures this review can name back to a person. Everything else that
@@ -58,13 +62,26 @@ export const reviewGoalDelivery = async (
     // draft, or one a CLI-driven verification was appended past — and its
     // result-less items would otherwise each read as missing evidence and turn a
     // passing delivery into a rejection.
+    const confirmed = runs.filter((round) => !isDraftVerifyRun(round));
+    // A result filed under an id its round never planned surfaces as a row of its
+    // own, required by default. No later round plans it, so the builder is never
+    // asked to re-answer it and it is never flagged as carried forward — its
+    // stale evidence was re-judged on every attempt until the budget ran out. The
+    // planned checklist is the contract, so each round keeps only the results that
+    // answer its own plan items, matched on the exact id: the union keys planned
+    // rows by `sourceCriterionId`, which an off-plan id could otherwise collide
+    // with. Only a plan-less Acceptance is judged on its results alone.
+    const hasPlan = confirmed.some((round) => (round.plan ?? []).length > 0);
     const checks = buildAcceptanceCheckUnion(
-      runs
-        .filter((round) => !isDraftVerifyRun(round))
-        .map((round) => ({
-          results: results.filter((result) => result.verifyRunId === round.id),
+      confirmed.map((round) => {
+        const roundResults = results.filter((result) => result.verifyRunId === round.id);
+        if (!hasPlan) return { results: roundResults, run: round };
+        const planIds = new Set(((round.plan ?? []) as { id: string }[]).map((item) => item.id));
+        return {
+          results: roundResults.filter((result) => planIds.has(result.checkItemId)),
           run: round,
-        })),
+        };
+      }),
     ).filter((check) => check.required);
     if (!checks.length) throw new Error(REVIEW_BLOCKERS.noRequiredChecks);
 
@@ -130,6 +147,9 @@ export const reviewGoalDelivery = async (
             checkResultId,
             includeTextEvidence: true,
             instructionDocumentId: check.planItem?.documentId,
+            // This review gates the Task, so it must see the frames the check
+            // carries rather than the shadow lane's cost-capped sample.
+            maxVisuals: GATE_REVIEW_MAX_VISUALS,
             modelConfig,
             requirement: acceptance.requirement,
             surface: check.surface,

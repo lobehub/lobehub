@@ -331,9 +331,11 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       }),
     );
 
+    // An explicit request device outranks the topic's own machine.
     await service.execAgent({
       agentId: 'agent-1',
       appContext: { topicId: 'topic-1' },
+      deviceId: DEVICE_ID,
       prompt: 'Hello',
     });
 
@@ -341,6 +343,70 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       'topic-1',
       expect.objectContaining({ workingDirectory: expect.anything() }),
     );
+  });
+
+  it('runs a reused topic on the device it is bound to, not the agent default', async () => {
+    // The topic ran on dev-2; the agent was switched to dev-1 afterwards. The
+    // next turn must stay on dev-2, where the topic's work lives.
+    mockQueryDeviceList.mockResolvedValue([
+      { deviceId: DEVICE_ID, hostname: 'My Mac', online: true, platform: 'darwin' },
+      { deviceId: 'dev-2', hostname: 'Other Mac', online: true, platform: 'darwin' },
+    ]);
+    mockTopicFindById.mockResolvedValue({ id: 'topic-1', metadata: { boundDeviceId: 'dev-2' } });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({
+        boundDeviceId: DEVICE_ID,
+        executionTarget: 'device',
+        workingDirByDevice: { [DEVICE_ID]: { path: SOURCE_PATH }, 'dev-2': { path: '/repo/two' } },
+      }),
+    );
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      workingDirectory: '/repo/two',
+      workingDirectoryConfig: { path: '/repo/two' },
+    });
+  });
+
+  it('stamps the run device on a topic that has a directory but no device yet', async () => {
+    mockTopicFindById.mockResolvedValue({
+      id: 'topic-1',
+      metadata: {
+        workingDirectory: SOURCE_PATH,
+        workingDirectoryConfig: { path: SOURCE_PATH },
+      },
+    });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', { boundDeviceId: DEVICE_ID });
+  });
+
+  it('pins the topic to the run device even when no directory resolves there', async () => {
+    mockTopicFindById.mockResolvedValue({ id: 'topic-1', metadata: {} });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', { boundDeviceId: DEVICE_ID });
   });
 
   it('leaves the topic unbound when neither the agent nor the device has a directory', async () => {

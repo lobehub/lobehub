@@ -6,9 +6,8 @@ import type {
   HeteroSessionDirPref,
   HeteroSessionImportStatus,
 } from '@lobechat/types';
-import { Flexbox, Icon, NeuralNetworkLoading, ScrollShadow, SearchBar } from '@lobehub/ui';
-import { Button, Checkbox, Text, useModalContext } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Flexbox, Icon, ScrollShadow, SearchBar } from '@lobehub/ui';
+import { Button, Checkbox, Progress, Spin, Text, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Check, FolderSearch, TriangleAlert, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -241,7 +240,7 @@ const Content = memo<ContentProps>(({ agentId }) => {
   if (phase === 'scanning')
     return (
       <Flexbox align="center" gap={16} justify="center" style={{ height: CONTENT_HEIGHT }}>
-        <NeuralNetworkLoading size={48} />
+        <Spin size="large" />
         <Text type="secondary">{t('heteroImport.scanning')}</Text>
       </Flexbox>
     );
@@ -254,9 +253,7 @@ const Content = memo<ContentProps>(({ agentId }) => {
         <Text fontSize={13} style={{ maxWidth: 380, textAlign: 'center' }} type="secondary">
           {t('heteroImport.empty.desc')}
         </Text>
-        <Button size="small" onClick={scan}>
-          {t('heteroImport.footer.rescan')}
-        </Button>
+        <Button onClick={scan}>{t('heteroImport.footer.rescan')}</Button>
       </Flexbox>
     );
 
@@ -268,9 +265,7 @@ const Content = memo<ContentProps>(({ agentId }) => {
         <Text fontSize={13} style={{ maxWidth: 380, textAlign: 'center' }} type="secondary">
           {t('heteroImport.error.desc')}
         </Text>
-        <Button size="small" onClick={scan}>
-          {t('heteroImport.footer.rescan')}
-        </Button>
+        <Button onClick={scan}>{t('heteroImport.footer.rescan')}</Button>
       </Flexbox>
     );
 

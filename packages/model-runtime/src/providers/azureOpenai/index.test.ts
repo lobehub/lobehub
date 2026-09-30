@@ -527,6 +527,125 @@ describe('LobeAzureOpenAI', () => {
     });
   });
 
+  describe('transcribe', () => {
+    const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+
+    /** The SDK probes FormData support with a `data:` fetch before the real POST. */
+    const getTranscriptionRequest = (fetch: Mock): [string, RequestInit] => {
+      const calls = fetch.mock.calls.filter(([, init]) => init?.method === 'POST');
+      expect(calls).toHaveLength(1);
+      return calls[0] as [string, RequestInit];
+    };
+
+    beforeEach(() => {
+      vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
+    });
+
+    const createTranscribeInstance = (
+      fetch: Mock,
+      options: { baseURL?: string; modelIdMapping?: Record<string, string> } & Record<
+        string,
+        unknown
+      > = {},
+    ) =>
+      new LobeAzureOpenAI({
+        apiKey: 'test_key',
+        fetch,
+        maxRetries: 0,
+        ...options,
+        baseURL: options.baseURL ?? 'https://test.cognitiveservices.azure.com/',
+      });
+
+    it('should call the deployments transcription path with api-version and api-key', async () => {
+      const fetch = vi.fn().mockResolvedValue(
+        Response.json({
+          text: '你好世界',
+          usage: { input_tokens: 151, output_tokens: 12, total_tokens: 163, type: 'tokens' },
+        }),
+      );
+      const onUsage = vi.fn();
+      const runtime = createTranscribeInstance(fetch);
+
+      const result = await runtime.transcribe({ file, model: 'gpt-4o-transcribe' }, { onUsage });
+
+      expect(result).toEqual({ text: '你好世界' });
+      const [url, init] = getTranscriptionRequest(fetch);
+      const requestURL = new URL(url);
+      expect(requestURL.origin + requestURL.pathname).toBe(
+        'https://test.cognitiveservices.azure.com/openai/deployments/gpt-4o-transcribe/audio/transcriptions',
+      );
+      expect(requestURL.searchParams.get('api-version')).toBe('2025-03-01-preview');
+      expect(new Headers(init.headers).get('api-key')).toBe('test_key');
+      expect(onUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ inputAudioTokens: 151, totalInputTokens: 151 }),
+      );
+    });
+
+    it('should use the mapped deployment name and keep a custom openai path prefix', async () => {
+      const fetch = vi.fn().mockResolvedValue(Response.json({ text: 'ok' }));
+      const runtime = createTranscribeInstance(fetch, {
+        baseURL: 'https://test.openai.azure.com/openai/v1/',
+        modelIdMapping: { 'gpt-4o-mini-transcribe': 'prod-mini-transcribe' },
+      });
+
+      await runtime.transcribe({ file, model: 'gpt-4o-mini-transcribe' });
+
+      const requestURL = new URL(getTranscriptionRequest(fetch)[0]);
+      expect(requestURL.pathname).toBe(
+        '/openai/deployments/prod-mini-transcribe/audio/transcriptions',
+      );
+    });
+
+    it('should forward client options such as dangerouslyAllowBrowser (client BYOK path)', async () => {
+      // The OpenAI SDK refuses to construct a client in a browser without this flag.
+      vi.stubGlobal('window', { document: {} });
+      try {
+        const fetch = vi.fn().mockResolvedValue(Response.json({ text: 'ok' }));
+        const runtime = createTranscribeInstance(fetch, { dangerouslyAllowBrowser: true });
+
+        await expect(runtime.transcribe({ file, model: 'gpt-4o-transcribe' })).resolves.toEqual({
+          text: 'ok',
+        });
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('should keep chat requests on the v1 surface', async () => {
+      const fetch = vi.fn().mockResolvedValue(Response.json({ text: 'ok' }));
+      const runtime = createTranscribeInstance(fetch);
+
+      await runtime.transcribe({ file, model: 'gpt-4o-transcribe' });
+
+      expect(runtime.baseURL).toBe('https://test.cognitiveservices.azure.com/openai/v1');
+      expect(runtime.client.baseURL).toBe('https://test.cognitiveservices.azure.com/openai/v1');
+    });
+
+    it('should attach the deployment id and deployments endpoint to DeploymentNotFound errors', async () => {
+      const fetch = vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            { error: { code: 'DeploymentNotFound', message: 'Deployment not found' } },
+            { status: 404 },
+          ),
+        );
+      const runtime = createTranscribeInstance(fetch, {
+        modelIdMapping: { 'gpt-4o-transcribe': 'prod-transcribe' },
+      });
+
+      await expect(runtime.transcribe({ file, model: 'gpt-4o-transcribe' })).rejects.toMatchObject({
+        error: expect.objectContaining({
+          code: 'DeploymentNotFound',
+          deployId: 'prod-transcribe',
+        }),
+        // Transcription bypasses the `/openai/v1` baseURL, so the error must not report it.
+        endpoint: 'https://***.cognitiveservices.azure.com/openai',
+        provider: 'azure',
+      });
+    });
+  });
+
   describe('createImage', () => {
     beforeEach(() => {
       // ensure images namespace exists and is spy-able

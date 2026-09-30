@@ -9,6 +9,9 @@ import {
   documentHistories,
   documents,
   files,
+  messages,
+  messagesFiles,
+  topics,
   users,
   workspaces,
 } from '../../schemas';
@@ -695,6 +698,81 @@ describe('DocumentModel', () => {
     });
   });
 
+  describe('hasFileDocumentsOverChars', () => {
+    const attachToTopic = async (fileId: string) => {
+      await serverDB.insert(topics).values({ id: 'tpc_large', userId });
+      await serverDB.insert(messages).values({
+        id: 'msg_large',
+        role: 'user',
+        topicId: 'tpc_large',
+        userId,
+      });
+      await serverDB.insert(messagesFiles).values({ fileId, messageId: 'msg_large', userId });
+    };
+
+    it('detects an oversized document among the given files', async () => {
+      const { file } = await createTestDocument(documentModel, fileModel, 'x'.repeat(20));
+
+      await expect(
+        documentModel.hasFileDocumentsOverChars({ fileIds: [file.id], minChars: 10 }),
+      ).resolves.toBe(true);
+      await expect(
+        documentModel.hasFileDocumentsOverChars({ fileIds: [file.id], minChars: 20 }),
+      ).resolves.toBe(false);
+    });
+
+    it('detects an oversized document attached earlier in the topic', async () => {
+      const { file } = await createTestDocument(documentModel, fileModel, 'x'.repeat(20));
+      await attachToTopic(file.id);
+
+      await expect(
+        documentModel.hasFileDocumentsOverChars({ minChars: 10, topicId: 'tpc_large' }),
+      ).resolves.toBe(true);
+      await expect(
+        documentModel.hasFileDocumentsOverChars({ minChars: 10, topicId: 'tpc_other' }),
+      ).resolves.toBe(false);
+    });
+
+    it('detects a short document whose stored text was cut at parse time', async () => {
+      const { documentId, file } = await createTestDocument(
+        documentModel,
+        fileModel,
+        'x'.repeat(5),
+      );
+      await documentModel.update(documentId, { metadata: { originalCharCount: 50 } });
+
+      // Below the size threshold, but prompts still preview it because the text is incomplete.
+      await expect(
+        documentModel.hasFileDocumentsOverChars({ fileIds: [file.id], minChars: 10 }),
+      ).resolves.toBe(true);
+    });
+
+    it('ignores malformed originalCharCount metadata instead of failing', async () => {
+      const { documentId, file } = await createTestDocument(
+        documentModel,
+        fileModel,
+        'x'.repeat(5),
+      );
+
+      for (const originalCharCount of ['not-a-number', '1e30', 1.5, { n: 1 }]) {
+        await documentModel.update(documentId, { metadata: { originalCharCount } });
+
+        await expect(
+          documentModel.hasFileDocumentsOverChars({ fileIds: [file.id], minChars: 10 }),
+        ).resolves.toBe(false);
+      }
+    });
+
+    it('ignores other users documents and returns false without inputs', async () => {
+      const { file } = await createTestDocument(documentModel, fileModel, 'x'.repeat(20));
+
+      await expect(
+        documentModel2.hasFileDocumentsOverChars({ fileIds: [file.id], minChars: 10 }),
+      ).resolves.toBe(false);
+      await expect(documentModel.hasFileDocumentsOverChars({ minChars: 10 })).resolves.toBe(false);
+    });
+  });
+
   describe('findByFileId', () => {
     it('should find document by fileId', async () => {
       const { documentId, file } = await createTestDocument(
@@ -843,6 +921,77 @@ describe('DocumentModel', () => {
 
       const found = await documentModel.findByFileId(file.id);
       expect(found?.id).toBe('document-tie-a');
+    });
+
+    describe('file-backed agent-document placeholder', () => {
+      const createUploadedMarkdown = async () => {
+        const { id } = await fileModel.create({
+          fileType: 'text/markdown',
+          name: 'product-spec.md',
+          size: 329_028,
+          url: 'files/product-spec.md',
+        });
+        const file = await fileModel.findById(id);
+        if (!file) throw new Error('File not found after creation');
+        return file;
+      };
+
+      // Shape `AgentDocumentsService.importFile` writes: empty content, the file's own MIME type.
+      const insertPlaceholder = (fileId: string, url: string) =>
+        documentModel.create({
+          content: '',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          fileId,
+          fileType: 'text/markdown',
+          filename: 'product-spec.md',
+          source: url,
+          sourceType: 'file',
+          title: 'product-spec.md',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        });
+
+      it('should not treat the placeholder as a parse result', async () => {
+        const file = await createUploadedMarkdown();
+        await insertPlaceholder(file.id, file.url);
+
+        await expect(documentModel.findByFileId(file.id)).resolves.toBeUndefined();
+      });
+
+      it('should return the parse cache written after the placeholder', async () => {
+        const file = await createUploadedMarkdown();
+        await insertPlaceholder(file.id, file.url);
+        const { id: parsedId } = await documentModel.create({
+          content: '# Product Spec',
+          createdAt: new Date('2026-01-02T00:00:00.000Z'),
+          fileId: file.id,
+          fileType: 'custom/document',
+          source: file.url,
+          sourceType: 'file',
+          totalCharCount: 14,
+          totalLineCount: 1,
+        });
+
+        const found = await documentModel.findByFileId(file.id);
+        expect(found?.id).toBe(parsedId);
+        expect(found?.content).toBe('# Product Spec');
+      });
+
+      it('should still return a parse cache of an empty file', async () => {
+        const file = await createUploadedMarkdown();
+        const { id: parsedId } = await documentModel.create({
+          content: '',
+          fileId: file.id,
+          fileType: 'custom/document',
+          source: file.url,
+          sourceType: 'file',
+          totalCharCount: 0,
+          totalLineCount: 1,
+        });
+
+        const found = await documentModel.findByFileId(file.id);
+        expect(found?.id).toBe(parsedId);
+      });
     });
 
     it('should handle different file types', async () => {

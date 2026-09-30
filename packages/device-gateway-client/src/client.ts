@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import os from 'node:os';
 
+import type { DeviceMetricSample } from '@lobechat/types';
 import WebSocket from 'ws';
 
 import { DeviceTunnelHost } from './tunnel';
@@ -36,6 +37,7 @@ const MAX_MISSED_HEARTBEATS = 3; // Force reconnect after 3 missed acks
  * stalling a reconnect for 15+ minutes while the device sat offline.
  */
 const CONNECT_TIMEOUT = 15_000; // 15s
+const METRICS_ACK_TIMEOUT_MS = 15_000;
 
 // ─── Logger Interface ───
 
@@ -109,6 +111,10 @@ export class GatewayClient extends EventEmitter {
   private reconnectDelay = INITIAL_RECONNECT_DELAY;
   private missedHeartbeats = 0;
   private status: ConnectionStatus = 'disconnected';
+  private pendingMetricAcks = new Map<
+    string,
+    { reject: (error: Error) => void; resolve: () => void }
+  >();
   private intentionalDisconnect = false;
   private deviceId: string;
   private connectionId: string;
@@ -224,6 +230,36 @@ export class GatewayClient extends EventEmitter {
     this.sendMessage({
       ...response,
       type: 'message_api_response',
+    });
+  }
+
+  /**
+   * Push a batch of health samples to the gateway (its only store) and resolve
+   * once the gateway acks it. Rejects when not connected, when the connection
+   * drops mid-flight, or when no ack arrives in time — the caller keeps the
+   * batch and retries later.
+   */
+  reportMetrics(samples: DeviceMetricSample[]): Promise<void> {
+    if (this.status !== 'connected' || this.ws?.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error('Gateway not connected'));
+    }
+    const batchId = randomUUID();
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingMetricAcks.delete(batchId);
+        reject(new Error('Timed out waiting for device_metrics_ack'));
+      }, METRICS_ACK_TIMEOUT_MS);
+      this.pendingMetricAcks.set(batchId, {
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+      });
+      this.sendMessage({ batchId, samples, type: 'device_metrics' });
     });
   }
 
@@ -406,6 +442,13 @@ export class GatewayClient extends EventEmitter {
           break;
         }
 
+        case 'device_metrics_ack': {
+          const pending = this.pendingMetricAcks.get(message.batchId);
+          this.pendingMetricAcks.delete(message.batchId);
+          pending?.resolve();
+          break;
+        }
+
         case 'tunnel_open':
         case 'tunnel_data':
         case 'tunnel_ack':
@@ -439,6 +482,7 @@ export class GatewayClient extends EventEmitter {
     // In-flight tunnels can't survive the socket: their frames have nowhere to
     // go and the browser side is already being failed by the gateway.
     this.tunnelHost?.closeAll('DEVICE_DISCONNECTED');
+    this.rejectPendingMetricAcks();
     // `handshakeTimeout` closes the socket on its own, so the watchdog must be
     // disarmed here or it would fire later and force a SECOND reconnect on top
     // of the one this close already scheduled.
@@ -563,11 +607,20 @@ export class GatewayClient extends EventEmitter {
     }
   }
 
+  /** An ack can no longer arrive on this socket; fail the batches so the sampler retries. */
+  private rejectPendingMetricAcks() {
+    for (const pending of this.pendingMetricAcks.values()) {
+      pending.reject(new Error('Gateway connection closed'));
+    }
+    this.pendingMetricAcks.clear();
+  }
+
   private closeWebSocket() {
     // Every teardown funnels through here — including `forceReconnect`, which
     // detaches `handleClose` — so tunnels must be released here or a forced
     // reconnect would leave loopback fetches running and slots consumed.
     this.tunnelHost?.closeAll('DEVICE_DISCONNECTED');
+    this.rejectPendingMetricAcks();
     if (!this.ws) {
       return;
     }

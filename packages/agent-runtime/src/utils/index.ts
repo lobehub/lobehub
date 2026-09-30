@@ -2,6 +2,7 @@ export * from './llmErrorClassifier';
 export * from './messageSelectors';
 export * from './normalizeAgentState';
 export * from './operationToolSet';
+export * from './redactResultForEvents';
 export * from './replay';
 export * from './runtimeRetry';
 export * from './stateSlots';

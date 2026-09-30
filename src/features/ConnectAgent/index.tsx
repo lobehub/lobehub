@@ -830,12 +830,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               <Text style={{ textAlign: 'center' }} type={'secondary'}>
                 {t('connectAgent.create.noneDetectedHint')}
               </Text>
-              <Button
-                icon={<Icon icon={RefreshCw} size={13} />}
-                size={'small'}
-                type={'primary'}
-                onClick={rescan}
-              >
+              <Button icon={<Icon icon={RefreshCw} size={13} />} type={'primary'} onClick={rescan}>
                 {t('connectAgent.create.rescanDevice')}
               </Button>
             </Flexbox>

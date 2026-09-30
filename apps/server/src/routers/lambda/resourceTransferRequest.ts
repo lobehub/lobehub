@@ -25,6 +25,7 @@ import { buildMemberTransferManifest } from '@/database/repositories/resourceTra
 import type { ResourceTransferRequestItem } from '@/database/schemas';
 import { agents, chatGroups, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
@@ -131,7 +132,13 @@ const enrichRequests = async (db: LobeChatDatabase, requests: ResourceTransferRe
             title: agents.title,
           })
           .from(agents)
-          .where(and(inArray(agents.id, agentIds), eq(agents.workspaceId, requestWorkspaceId)))
+          .where(
+            and(
+              inArray(agents.id, agentIds),
+              eq(agents.workspaceId, requestWorkspaceId),
+              notTrashed(agents.isDeleted),
+            ),
+          )
       : Promise.resolve([]),
     groupIds.length > 0
       ? db
@@ -143,7 +150,11 @@ const enrichRequests = async (db: LobeChatDatabase, requests: ResourceTransferRe
           })
           .from(chatGroups)
           .where(
-            and(inArray(chatGroups.id, groupIds), eq(chatGroups.workspaceId, requestWorkspaceId)),
+            and(
+              inArray(chatGroups.id, groupIds),
+              eq(chatGroups.workspaceId, requestWorkspaceId),
+              notTrashed(chatGroups.isDeleted),
+            ),
           )
       : Promise.resolve([]),
   ]);

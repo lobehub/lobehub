@@ -1,4 +1,6 @@
 export default {
+  'builtins.lobe-attachments.apiName.readAttachment': 'Read attachment',
+  'builtins.lobe-attachments.title': 'Attachments',
   'builtins.lobe-goal-supervisor.apiName.inspectGoal': 'Inspect goal',
   'builtins.lobe-goal-supervisor.apiName.inspectTask': 'Inspect interrupted task',
   'builtins.lobe-goal-supervisor.apiName.readArtifact': 'Read goal artifact',
@@ -362,6 +364,9 @@ export default {
   'builtins.lobe-knowledge-base.apiName.searchKnowledgeBase': 'Search Library',
   'builtins.lobe-knowledge-base.inspector.andMoreFiles': 'and {{count}} more',
   'builtins.lobe-knowledge-base.inspector.noResults': 'No results',
+  'builtins.lobe-knowledge-base.inspector.noScope': 'No enabled library',
+  'builtins.lobe-knowledge-base.render.noScope':
+    'No enabled library is attached to this agent, so nothing was searched. Attach a library, or turn on an attached one, to let it search your files.',
   'builtins.lobe-knowledge-base.title': 'Library',
   'builtins.lobe-local-system.apiName.editFile': 'Edit file',
   'builtins.lobe-local-system.apiName.getCommandOutput': 'Get command output',
@@ -890,7 +895,6 @@ export default {
   'protocolInstall.warning': 'Verify the Skill source. Disable or remove anytime in settings.',
   'search.config.addKey': 'Add key',
   'search.config.close': 'Remove',
-  'search.config.confirm': 'Done, retry',
   'search.crawPages.crawling': 'Identifying links',
   'search.crawPages.detail.preview': 'Preview',
   'search.crawPages.detail.raw': 'Raw text',

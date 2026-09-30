@@ -271,6 +271,7 @@ describe('AgentRuntimeService', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     delete process.env.AGENT_RUNTIME_BASE_URL;
     hookDispatcher.unregister('test-operation-1');
   });
@@ -301,7 +302,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
         'https://mock.test/tool-calls',
@@ -327,7 +328,7 @@ describe('AgentRuntimeService', () => {
         'case-42',
       );
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(JSON.parse(mockSsrfSafeFetch.mock.calls[0][1].body)).toMatchObject({
         metadata: { caseId: 'case-42' },
@@ -342,7 +343,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(event.mock).toHaveBeenCalledWith({
         content: 'fixture unavailable',
@@ -357,7 +358,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(event.mock).toHaveBeenCalledWith({ content: 'No tool result', success: true });
     });
@@ -370,7 +371,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(event.mock).toHaveBeenCalledWith({ content: 'No tool result', success: true });
     });
@@ -381,7 +382,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(event.mock).toHaveBeenCalledWith({
         content: expect.stringContaining('SyntaxError'),
@@ -396,7 +397,7 @@ describe('AgentRuntimeService', () => {
         twitter: { endpoint: 'https://mock.test/tool-calls' },
       });
 
-      await hook.handler(event as any);
+      await hook.handler!(event as any);
 
       expect(event.mock).toHaveBeenCalledWith({
         content: 'SSRF blocked',
@@ -497,6 +498,34 @@ describe('AgentRuntimeService', () => {
       autoStart: true,
       initialMessages: [],
     };
+
+    it.each([undefined, 'parent-operation'])(
+      'persists only caller hooks for a run with parent %s',
+      async (parentOperationId) => {
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'http://webhook-service/ingress');
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-env-secret');
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'beforeToolCall, afterToolCall, beforeToolCall');
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
+        const hooks = [
+          {
+            id: 'internal-callback',
+            type: 'afterToolCall' as const,
+            webhook: { url: 'http://webhook-service/internal' },
+          },
+        ];
+        await service.createOperation({
+          ...mockParams,
+          autoStart: false,
+          parentOperationId,
+          hooks,
+        });
+        const state = await mockCoordinator.loadAgentState(mockParams.operationId);
+        expect(state.host.hooks).toEqual(hooks);
+        expect(JSON.stringify(state.host.hooks)).not.toContain('synthetic-env-secret');
+        expect(hookDispatcher.hasHooks(mockParams.operationId)).toBe(true);
+      },
+    );
 
     it.each([undefined, false, true])(
       'persists the snapshot opt-in for resumed steps (%s)',
@@ -602,6 +631,68 @@ describe('AgentRuntimeService', () => {
       }
     });
 
+    // Codex P1 on #20093: the member bridge lived only in the 2h runtime
+    // snapshot, so a late approval continued the supervisor instead.
+    it("keeps a durable copy of a group member's completion bridge on the row", async () => {
+      const recordStart = vi
+        .spyOn(AgentOperationModel.prototype, 'recordStart')
+        .mockResolvedValue(undefined);
+      const bridge = {
+        anchorMessageId: 'msg-speak',
+        expectedMembers: 1,
+        groupToolMessageId: 'msg-speak',
+        mode: 'in_group',
+        onComplete: 'resume',
+        parentOperationId: 'op-supervisor',
+      };
+
+      await service.createOperation({
+        ...mockParams,
+        hooks: [
+          {
+            handler: vi.fn(),
+            id: 'group-member-bridge',
+            type: 'onComplete',
+            webhook: { body: bridge, url: '/api/agent/webhooks/group-member-callback' },
+          },
+        ],
+      } as any);
+
+      expect(recordStart.mock.calls[0][0].metadata).toMatchObject({ groupMemberBridge: bridge });
+    });
+
+    // Codex P2 on #20093: a transient start-row failure used to be swallowed,
+    // so the member ran without the durable bridge its Stop / late approval need.
+    it('refuses to start a group member whose bridge row could not be persisted', async () => {
+      vi.spyOn(AgentOperationModel.prototype, 'recordStart').mockRejectedValue(
+        new Error('db down'),
+      );
+
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          hooks: [
+            {
+              handler: vi.fn(),
+              id: 'group-member-bridge',
+              type: 'onComplete',
+              webhook: {
+                body: {
+                  anchorMessageId: 'msg-speak',
+                  expectedMembers: 1,
+                  groupToolMessageId: 'msg-speak',
+                  mode: 'in_group',
+                  onComplete: 'resume',
+                  parentOperationId: 'op-supervisor',
+                },
+                url: '/api/agent/webhooks/group-member-callback',
+              },
+            },
+          ],
+        } as any),
+      ).rejects.toThrow('Failed to durably persist group member');
+    });
+
     it('keeps the frozen model facts on the run state but out of durable storage', async () => {
       const recordStart = vi
         .spyOn(AgentOperationModel.prototype, 'recordStart')
@@ -631,6 +722,52 @@ describe('AgentRuntimeService', () => {
         'test-operation-1',
         expect.objectContaining({ modelRuntimeConfig: { model: 'gpt-4' } }),
       );
+    });
+
+    it('waits for dependent records before dispatch without losing the prepared context', async () => {
+      let release!: () => void;
+      const prepared = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const onOperationCreated = vi.fn<(operationId: string) => Promise<void>>(
+        async () => prepared,
+      );
+      const initialContext = {
+        ...mockParams.initialContext,
+        payload: {
+          assistantMessageId: 'repair-assistant',
+          parentMessageId: 'verify-card',
+        },
+      } as OperationCreationParams['initialContext'];
+      const creation = service.createOperation({
+        ...mockParams,
+        initialContext,
+        onOperationCreated,
+      });
+      try {
+        await vi.waitFor(() =>
+          expect(onOperationCreated).toHaveBeenCalledWith(mockParams.operationId),
+        );
+        expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+      } finally {
+        release();
+      }
+      await creation;
+      expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ context: initialContext }),
+      );
+    });
+
+    it('does not dispatch when dependent record preparation fails', async () => {
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          onOperationCreated: async () => {
+            throw new Error('Plan unavailable');
+          },
+        }),
+      ).rejects.toThrow('Plan unavailable');
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
     });
 
     it('should create operation successfully with autoStart=false', async () => {
@@ -1049,6 +1186,62 @@ describe('AgentRuntimeService', () => {
       expect(step.mock.calls[0][0].binding?.device).toBeUndefined();
     });
 
+    describe('activateDevice after a device is already bound', () => {
+      const activation = (id: string, deviceId: string): UIChatMessage =>
+        ({
+          content: `Device "${deviceId}" activated successfully.`,
+          createdAt: 3,
+          id,
+          pluginState: { metadata: { activeDeviceId: deviceId } },
+          role: 'tool',
+          updatedAt: 3,
+        }) as UIChatMessage;
+
+      const runStep = async (execution: Record<string, unknown>) => {
+        const state = {
+          ...mockState,
+          binding: { device: { id: 'device-a' } },
+          messages: [],
+          origin: { agentId: 'agent-1', topicId: 'topic-1' },
+          plan: { execution },
+        };
+        mockCoordinator.loadAgentState.mockResolvedValue(state);
+        // The model activated device-a first, then device-b.
+        (service as any).messageModel.query.mockResolvedValue([
+          ...buildPersistedToolChain('answer'),
+          activation('activate-a', 'device-a'),
+          activation('activate-b', 'device-b'),
+        ]);
+        vi.spyOn((service as any).messageService, 'prepareUiMessages').mockResolvedValue([]);
+        const step = vi.fn().mockImplementation(async (input) => ({
+          events: [],
+          newState: { ...input, stepCount: 2 },
+          nextContext: mockParams.context,
+        }));
+        vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({ runtime: { step } });
+
+        const result = await service.executeStep(mockParams);
+        expect(result.success).toBe(true);
+        return step.mock.calls[0][0].binding?.device?.id;
+      };
+
+      it('follows the latest activation while the plan leaves the device open', async () => {
+        const deviceId = await runStep({
+          kind: 'device-unrouted',
+          reason: 'ambiguous-online-devices',
+          target: 'auto',
+        });
+
+        expect(deviceId).toBe('device-b');
+      });
+
+      it('keeps a locked run on its device even if history names another one', async () => {
+        const deviceId = await runStep({ deviceId: 'device-a', kind: 'device', target: 'device' });
+
+        expect(deviceId).toBe('device-a');
+      });
+    });
+
     it('shares one DB read while UI preparation is still pending', async () => {
       const state = {
         ...mockState,
@@ -1273,6 +1466,61 @@ describe('AgentRuntimeService', () => {
         }),
         expect.objectContaining({
           payload: { parentMessageId: 'tool-msg-2' },
+          phase: 'user_input',
+        }),
+      );
+    });
+
+    // Approving a callSubAgent starts a resume op that seeds its assistant
+    // placeholder, runs the tool, then parks on the deferred sub-agent. The
+    // resumed turn must fill that seed; a second assistant left the seed as an
+    // empty "…" branch that hid the real answer.
+    it('fills the seeded assistant placeholder when resuming from an async tool', async () => {
+      const parkedState = {
+        ...mockState,
+        interruption: {
+          canResume: true,
+          interruptedAt: new Date().toISOString(),
+          reason: 'async_tool',
+        },
+        pendingAssistantMessageId: 'seeded-assistant-1',
+        pendingToolsCalling: [
+          {
+            apiName: 'callSubAgent',
+            arguments: '{}',
+            id: 'tool-call-1',
+            identifier: 'lobe-agent',
+            type: 'builtin',
+          },
+        ],
+        status: 'waiting_for_async_tool',
+      };
+      const refreshedMessages = [
+        { content: 'research', id: 'user-msg-1', role: 'user' },
+        {
+          id: 'assistant-msg-1',
+          role: 'assistant',
+          tools: [{ id: 'tool-call-1', result_msg_id: 'tool-msg-1' }],
+        },
+      ];
+      const mockRuntime = {
+        step: vi.fn().mockResolvedValue({
+          events: [],
+          newState: { ...parkedState, pendingToolsCalling: [], status: 'done', stepCount: 2 },
+          nextContext: null,
+        }),
+      };
+
+      mockCoordinator.loadAgentState.mockResolvedValue(parkedState);
+      vi.spyOn(service as any, 'refreshMessagesFromDB').mockResolvedValue(refreshedMessages);
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      await service.executeStep({ ...mockParams, resumeAsyncTool: true });
+
+      expect(mockRuntime.step).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          payload: { assistantMessageId: 'seeded-assistant-1', parentMessageId: 'tool-msg-1' },
           phase: 'user_input',
         }),
       );
@@ -2504,6 +2752,57 @@ describe('AgentRuntimeService', () => {
         expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
       },
     );
+
+    describe('running operation whose runtime state is gone', () => {
+      let settleStale: MockInstance<AgentOperationModel['settleStaleRunning']>;
+
+      beforeEach(() => {
+        mockCoordinator.loadAgentState.mockResolvedValue(null);
+        settleStale = vi.spyOn(AgentOperationModel.prototype, 'settleStaleRunning');
+      });
+
+      afterEach(() => {
+        settleStale.mockRestore();
+      });
+
+      it('retires a dead operation so the stop is confirmed', async () => {
+        const updatedAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+        findOperation.mockResolvedValue({
+          id: 'op-dead',
+          status: 'running',
+          updatedAt,
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        settleStale.mockResolvedValue(true);
+
+        expect(await service.interruptOperation('op-dead')).toBe(true);
+        expect(settleStale).toHaveBeenCalledWith('op-dead', expect.any(Date));
+        const staleBefore = settleStale.mock.calls[0][1];
+        expect(staleBefore.getTime()).toBeGreaterThan(updatedAt.getTime());
+        expect(staleBefore.getTime()).toBeLessThan(Date.now() - 5 * 60 * 1000);
+      });
+
+      it('keeps refusing while the lease is fresh', async () => {
+        findOperation.mockResolvedValue({
+          id: 'op-live',
+          status: 'running',
+          updatedAt: new Date(Date.now() - 60 * 1000),
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+
+        expect(await service.interruptOperation('op-live')).toBe(false);
+        expect(settleStale).not.toHaveBeenCalled();
+      });
+
+      it('keeps refusing when a heartbeat wins the retirement race', async () => {
+        findOperation.mockResolvedValue({
+          id: 'op-race',
+          status: 'running',
+          updatedAt: new Date(Date.now() - 60 * 60 * 1000),
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        settleStale.mockResolvedValue(false);
+
+        expect(await service.interruptOperation('op-race')).toBe(false);
+      });
+    });
   });
 
   // Stream events at step / operation boundaries should carry the canonical
@@ -2925,6 +3224,68 @@ describe('AgentRuntimeService', () => {
     });
   });
 
+  describe('loadGroupMemberBridge', () => {
+    const bridge = {
+      anchorMessageId: 'msg-speak',
+      expectedMembers: 1,
+      groupToolMessageId: 'msg-speak',
+      mode: 'isolated',
+      onComplete: 'resume',
+      parentOperationId: 'op-supervisor',
+      threadId: 'thd-1',
+    };
+
+    it('reads the member and its bridge from the live runtime snapshot', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        host: { hooks: [{ id: 'group-member-bridge', webhook: { body: bridge } }] },
+        origin: {
+          agentId: 'agt-carol',
+          groupId: 'cg-1',
+          lineage: { orchestrationRole: 'member' },
+          threadId: 'thd-1',
+          topicId: 'tpc-1',
+        },
+      });
+
+      expect(await service.loadGroupMemberBridge('op-carol')).toEqual({
+        agentId: 'agt-carol',
+        bridge,
+        groupId: 'cg-1',
+        threadId: 'thd-1',
+        topicId: 'tpc-1',
+      });
+    });
+
+    it('falls back to the durable row once the snapshot has expired', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        agentId: 'agt-carol',
+        chatGroupId: 'cg-1',
+        metadata: { groupMemberBridge: bridge },
+        threadId: 'thd-1',
+        topicId: 'tpc-1',
+      });
+
+      expect(await service.loadGroupMemberBridge('op-carol')).toEqual({
+        agentId: 'agt-carol',
+        bridge,
+        groupId: 'cg-1',
+        threadId: 'thd-1',
+        topicId: 'tpc-1',
+      });
+    });
+
+    it('is undefined for a run that is not a group member', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        agentId: 'agt-solo',
+        metadata: {},
+      });
+
+      expect(await service.loadGroupMemberBridge('op-solo')).toBeUndefined();
+    });
+  });
+
   describe('completeGroupActionMember', () => {
     const memberState = {
       messages: [
@@ -2945,6 +3306,30 @@ describe('AgentRuntimeService', () => {
       (service as any).messageModel.updateToolMessage = updateToolMessage;
       resumeSpy = vi.spyOn(service, 'tryResumeParentFromAsyncTool').mockResolvedValue(true);
     });
+
+    // G-05 follow-through: a member that inherits manual approval parks on
+    // `waiting_for_human`; that is a pause, not an answer, so the supervisor
+    // must stay parked until the approval continuation reports back.
+    it.each(['in_group', 'isolated'] as const)(
+      'holds the supervisor while a %s member waits for approval',
+      async (mode) => {
+        const won = await service.completeGroupActionMember({
+          anchorMessageId: 'grp-tool-1',
+          expectedMembers: 1,
+          finalState: { ...memberState, status: 'waiting_for_human' } as any,
+          groupToolMessageId: 'grp-tool-1',
+          mode,
+          onComplete: 'resume',
+          operationId: 'child-1',
+          parentOperationId: 'parent-1',
+          reason: 'waiting_for_human',
+        });
+
+        expect(won).toBe(false);
+        expect(updateToolMessage).not.toHaveBeenCalled();
+        expect(resumeSpy).not.toHaveBeenCalled();
+      },
+    );
 
     it('single in-group member: backfills a receipt onto the group tool and resumes', async () => {
       const won = await service.completeGroupActionMember({
@@ -3533,6 +3918,103 @@ describe('AgentRuntimeService', () => {
           pluginState: expect.objectContaining({ status: 'error' }),
         }),
       );
+    });
+
+    // A watchdog-abandoned child's reloaded state has no error; the abandon
+    // hand-off passes it explicitly. Without it the parent got a bare "(error).".
+    it('explains a watchdog-abandoned child from the hand-off error message', async () => {
+      await service.completeSubAgentBridge({
+        ...bridgeParams,
+        errorMessage: 'Operation abandoned: inactivity_watchdog',
+        finalState: { ...childState, error: undefined } as any,
+        reason: 'error',
+      });
+
+      const call = updateToolMessage.mock.calls.at(-1)?.[1];
+      expect(call.content).toBe(
+        'Sub-agent did not complete (error): the sub-agent stopped making progress and the platform ended it (inactivity_watchdog). ' +
+          'Anything it already did (searches, pages read, documents written) is kept in its thread.',
+      );
+      expect(call.pluginError).toEqual({ message: 'Operation abandoned: inactivity_watchdog' });
+    });
+
+    // "Budget exceeded" alone reads like a per-sub-agent allowance, so parents
+    // retried or fanned out more sub-agents against the same exhausted limit.
+    describe('billing-limit failures', () => {
+      const budgetError = (type: string, budgetTypeAtError?: string) => ({
+        body: {
+          budget: {
+            availableCredits: 24_659,
+            budgetTypeAtError,
+            requiredCredits: 50_638,
+          },
+          message: 'Budget exceeded',
+        },
+        message: 'Budget exceeded',
+        type,
+      });
+      const bridgeContent = async (error: unknown) => {
+        await service.completeSubAgentBridge({
+          ...bridgeParams,
+          finalState: { ...childState, error } as any,
+          reason: 'error',
+        });
+        return updateToolMessage.mock.calls.at(-1)?.[1];
+      };
+
+      it('explains a personal credit shortfall without quoting the balance', async () => {
+        const error = budgetError('InsufficientBudgetForModel', 'subscription');
+        const call = await bridgeContent(error);
+
+        expect(call.content).toBe(
+          'Sub-agent did not complete (error): stopped by a LobeHub billing limit (InsufficientBudgetForModel): ' +
+            "the account's LobeHub credits are too low for this model; the account owner has to top up or upgrade. " +
+            'This limit is shared by every sub-agent and by this conversation, so retrying or dispatching more sub-agents on the same model will not get past it; ' +
+            'a sub-agent that runs on a less expensive model may still fit. ' +
+            'Otherwise finish with what you already have and tell the user about the limit.',
+        );
+        expect(call.content).not.toMatch(/24659|24,659|50638/);
+        expect(call.pluginError).toEqual(error);
+      });
+
+      it.each([
+        [
+          'workspace',
+          "the workspace's shared LobeHub credits can't cover this model's estimated cost",
+        ],
+        [
+          'workspace_member',
+          "this member's workspace credit allowance can't cover this model's estimated cost",
+        ],
+      ])('names the %s allowance as the one to raise', async (scope, expected) => {
+        const call = await bridgeContent(budgetError('InsufficientBudgetForModel', scope));
+
+        expect(call.content).toContain(expected);
+        expect(call.content).not.toContain('top up');
+      });
+
+      it('points plan-limit failures at the plan, not at credits', async () => {
+        const call = await bridgeContent(budgetError('SubscriptionPlanLimit', 'subscription'));
+
+        expect(call.content).toContain(
+          'plan limit was reached or the plan does not cover this model',
+        );
+      });
+
+      // InsufficientBudgetForModel still leaves credits in the allowance, so a
+      // cheaper model can fit; only an exhausted plan makes every dispatch futile.
+      it('keeps the cheaper-model path open for a model-cost shortfall only', async () => {
+        const shortfall = await bridgeContent(
+          budgetError('InsufficientBudgetForModel', 'workspace_member'),
+        );
+        expect(shortfall.content).toContain('on the same model will not get past it');
+        expect(shortfall.content).toContain('less expensive model may still fit');
+
+        const exhausted = await bridgeContent(budgetError('FreePlanLimit', 'workspace'));
+        expect(exhausted.content).toContain("the workspace's shared LobeHub credits are used up");
+        expect(exhausted.content).toContain('more sub-agents will not get past it');
+        expect(exhausted.content).not.toContain('less expensive model');
+      });
     });
 
     it('truncates an oversized child error so it cannot bloat the parent context', async () => {

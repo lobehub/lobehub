@@ -530,6 +530,7 @@
   "gemini-3.8-flash.description": "Gemini 3.8 Flash는 Google의 가장 지능적인 Flash 모델로, 장기 소프트웨어 엔지니어링, 자율 에이전트 및 복잡한 엔터프라이즈 워크플로를 위해 설계되었습니다.",
   "gemini-flash-latest.description": "gemini-3.7-flash를 가리킵니다.",
   "gemini-flash-lite-latest.description": "gemini-3.1-flash-lite를 가리킵니다.",
+  "gemini-omni-1.1-flash.description": "Gemini Omni Flash는 텍스트-비디오, 이미지-비디오, 참조-비디오 및 대화형 비디오 편집을 위한 네이티브 멀티모달 모델입니다.",
   "gemini-pro-latest.description": "gemini-3.1-pro-preview를 가리킵니다.",
   "gemma-4-31B-it.description": "Gemma 4 31B IT는 텍스트, 이미지 및 비디오 이해를 지원하는 Google의 최신 멀티모달 모델입니다. 평가 목적으로만 제공되는 프리뷰 모델입니다.",
   "gemma-4-31b.description": "이 모델은 스크린샷, 문서, 다이어그램 및 디자인 자산에 걸친 멀티모달 추론에서 뛰어난 성능을 발휘합니다. 시각적 에이전트 워크플로우, 이미지 인식 코파일럿 및 폐쇄형 멀티모달 API에서 오픈 모델로의 전환을 고려하는 팀에 이상적입니다.",

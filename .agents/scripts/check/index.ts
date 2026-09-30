@@ -128,7 +128,7 @@ export const runCli = async (config: CheckConfig) => {
 
   /* ---- Model-backed rules (opt-in) ---- */
   if (wantAlint && files.length > 0) {
-    const outcome = await runAlint(files);
+    const outcome = await runAlint(files, { changedLinesOnly: fileArgs.length === 0 });
     problems.push(...outcome.problems);
     fatal.push(...outcome.fatal);
   }

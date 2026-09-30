@@ -10,6 +10,8 @@ Report each `Promise.all` or `Promise.allSettled` whose input is built by mappin
 Do not report:
 - `Promise.all` over a literal tuple of fixed calls, even when that tuple sits inside a `for` loop: the loop is sequential and the tuple is fixed.
 - Collections that are provably bounded by a small constant in the same file (a fixed enum, a hard-coded list).
+- Collections built from a code-level registry whose entries are fixed when the code is written: adapter or handler maps, `Object.values(SOME_CONST)`, a list returned by `resolve*Adapters()` / `get*Handlers()` over registered types. Their size changes only with a code change, not with data.
+- Iterations that do no I/O at all (pure synchronous transforms wrapped in `async`).
 - Code that already goes through `pMap`, a queue, or another concurrency limiter.
 
 If uncertain, use low confidence rather than forcing a finding.

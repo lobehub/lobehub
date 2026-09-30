@@ -385,6 +385,11 @@ export function createGroupActionMemberBridgeHook(
   agentRuntimeService: AgentRuntimeService,
   params: {
     anchorMessageId: string;
+    /**
+     * Absolute member deadline (epoch ms). Carried in the serialized bridge so
+     * an approval continuation can re-arm the timeout watchdog.
+     */
+    deadlineAt?: number;
     expectedMembers: number;
     groupToolMessageId: string;
     mode: GroupActionMemberMode;
@@ -395,6 +400,7 @@ export function createGroupActionMemberBridgeHook(
 ): AgentHook {
   const {
     anchorMessageId,
+    deadlineAt,
     expectedMembers,
     groupToolMessageId,
     mode,
@@ -430,6 +436,7 @@ export function createGroupActionMemberBridgeHook(
     webhook: {
       body: {
         anchorMessageId,
+        ...(deadlineAt && { deadlineAt }),
         expectedMembers,
         groupToolMessageId,
         mode,

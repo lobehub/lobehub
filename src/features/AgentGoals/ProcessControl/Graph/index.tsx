@@ -32,14 +32,20 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import { type GoalGraphNodeKind, graphNodeKind, graphNodeLabel } from '../../Experiments/model';
-import { type GoalGraphView, type GoalNodeView, isRunningNode } from '../goalGraphViewModel';
+import {
+  type GoalGraphView,
+  type GoalNodeView,
+  isRunningNode,
+  scopeGraphView,
+} from '../goalGraphViewModel';
 import { KindDot } from '../shared';
 import { edgeDirection } from './edgeRouting';
 import ExperimentGroup, { type ExperimentGroupData } from './ExperimentGroup';
 import ExplorationEdge from './ExplorationEdge';
 import { explorationMap } from './explorationMap';
 import GraphNodeView, { GhostNodeView, type GraphNodeData } from './GraphNode';
-import { hideKinds, layoutGraph, NODE_WIDTH } from './layout';
+import { type GraphBridge, hideKinds, layoutGraph, NODE_WIDTH } from './layout';
+import { type EdgeTone, edgeTone, isNodeDimmed, nodeEmphasis, resolveMainline } from './mainline';
 import { type MeasuredSizes, mergeMeasuredSizes } from './measuredSizes';
 import { revealCenter } from './revealNode';
 import { useExplorationNavigation } from './useExplorationNavigation';
@@ -80,9 +86,32 @@ const styles = createStaticStyles(({ css }) => ({
       stroke-dasharray: 5 4;
     }
 
+    /* The wrap-up report's mainline: the path reads as one bold line, and
+       everything off it steps back. Selection still lights a muted edge. */
+    .react-flow__edge.goal-mainline .react-flow__edge-path {
+      stroke: ${cssVar.colorPrimary};
+      stroke-width: 2.5;
+    }
+
+    /* A chapter map's detours: the line into a stray card reads in the same
+       orange dash as the card's own frame. */
+    .react-flow__edge.goal-detour .react-flow__edge-path {
+      stroke: ${cssVar.colorWarning};
+      stroke-dasharray: 6 4;
+      stroke-width: 1.75;
+    }
+
+    .react-flow__edge.goal-muted:not(.goal-hot) {
+      opacity: 0.3;
+    }
+
     .react-flow__edge.goal-hot .react-flow__edge-path {
       stroke: ${cssVar.colorPrimary};
       stroke-width: 1.75;
+    }
+
+    .react-flow__edge.goal-mainline.goal-hot .react-flow__edge-path {
+      stroke-width: 2.5;
     }
 
     .react-flow__edge-textbg {
@@ -121,6 +150,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   /* A hidden kind stays in the legend as a dimmed toggle — the way back must
      be exactly where the way in was. */
+  /** Not a kind filter: it names the bold line and ring the mainline is drawn with. */
+  legendMainline: css`
+    cursor: default;
+    color: ${cssVar.colorText};
+  `,
+  legendMainlineSwatch: css`
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+    background: ${cssVar.colorPrimary};
+  `,
   legendOff: css`
     opacity: 0.35;
 
@@ -182,6 +222,11 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface GraphProps {
+  /**
+   * Schematic links the host adds for a route through nodes it left off the
+   * map — a report chapter joining a detour to where it forked.
+   */
+  bridges?: GraphBridge[];
   /** Header actions after the legend — e.g. a host without fullscreen links out to the goal page. */
   extra?: ReactNode;
   /**
@@ -192,6 +237,8 @@ interface GraphProps {
    */
   fullscreen?: boolean;
   graph: GoalGraphView;
+  /** Nodes to call out on the map — a chapter's detours in the report's local map. */
+  highlightedIds?: ReadonlySet<string>;
   onFullscreenChange?: (fullscreen: boolean) => void;
   onSelect: (nodeId: string) => void;
   /** The coordinator is still decomposing: show ghost task cards under the problem. */
@@ -287,7 +334,10 @@ const GHOST_RANK_GAP = 56;
 const GHOST_HEIGHT = 88;
 
 const Canvas = memo<
-  Pick<GraphProps, 'graph' | 'onSelect' | 'planning' | 'selectedId'> & {
+  Pick<
+    GraphProps,
+    'bridges' | 'graph' | 'highlightedIds' | 'onSelect' | 'planning' | 'selectedId'
+  > & {
     className: string;
     fullscreen: boolean;
     hiddenKinds: ReadonlySet<GoalGraphNodeKind>;
@@ -301,10 +351,12 @@ const Canvas = memo<
   }
 >(
   ({
+    bridges: hostBridges,
     className,
     fullscreen,
     graph,
     hiddenKinds,
+    highlightedIds,
     onSelect,
     planning,
     refitKey,
@@ -353,10 +405,14 @@ const Canvas = memo<
       : graph.nodes
           .map((item) => item.node)
           .filter((node) => view === 'all' || stageNodeIds(graph).has(node.id));
-    const { bridges, visibleIds } = useMemo(
-      () => hideKinds(baseNodes, graph.edges, hiddenKinds),
-      [baseNodes, graph.edges, hiddenKinds],
-    );
+    const { bridges, visibleIds } = useMemo(() => {
+      const hidden = hideKinds(baseNodes, graph.edges, hiddenKinds);
+      const shown = (hostBridges ?? []).filter(
+        (bridge) =>
+          hidden.visibleIds.has(bridge.sourceNodeId) && hidden.visibleIds.has(bridge.targetNodeId),
+      );
+      return { ...hidden, bridges: [...hidden.bridges, ...shown] };
+    }, [baseNodes, graph.edges, hiddenKinds, hostBridges]);
     // A card's height follows its content — a long title wraps to four lines —
     // so the per-kind estimate stacked the next rank into the cards above it.
     // The first pass lays out on the estimate; once React Flow has measured the
@@ -418,6 +474,18 @@ const Canvas = memo<
       [ghosts],
     );
 
+    const mainline = useMemo(() => resolveMainline(graph), [graph]);
+    const emphasisById = useMemo(() => {
+      const result = new Map<string, ReturnType<typeof nodeEmphasis>>();
+      if (!mainline) return result;
+      const shape = { nodes: graph.nodes.map((view) => view.node), edges: graph.edges };
+      for (const node of baseNodes) {
+        const members = node.kind === 'experiment' ? experimentMembers(shape, node.id, false) : [];
+        result.set(node.id, nodeEmphasis(mainline, node, members));
+      }
+      return result;
+    }, [mainline, graph, baseNodes]);
+
     const flowNodes: FlowNode[] = useMemo(
       () =>
         baseNodes
@@ -426,10 +494,19 @@ const Canvas = memo<
             const item = graph.byId[node.id];
             const box = positions[item.node.id];
             const isGate = item.node.kind === 'decision' && item.node.status === 'waiting';
+            const emphasis = emphasisById.get(item.node.id);
+            const highlighted = highlightedIds?.has(item.node.id) ?? false;
             const data: GraphNodeData = {
               // Not started and still blocked — it is context, not the story.
-              dim: item.node.status === 'proposed' && item.blockers.length > 0,
+              // Once the report marked a mainline, everything off it is context too.
+              dim: isNodeDimmed({
+                blocked: item.node.status === 'proposed' && item.blockers.length > 0,
+                emphasis,
+                highlighted,
+              }),
+              highlighted,
               isGate,
+              mainline: emphasis === 'mainline',
               memberCount: experimentMembers(
                 { nodes: graph.nodes.map((view) => view.node), edges: graph.edges },
                 item.node.id,
@@ -481,6 +558,7 @@ const Canvas = memo<
       [
         graph,
         baseNodes,
+        highlightedIds,
         visibleIds,
         positions,
         selectedId,
@@ -493,6 +571,7 @@ const Canvas = memo<
         hasExperiments,
         map.parents,
         measuredSizes,
+        emphasisById,
       ],
     );
 
@@ -503,6 +582,13 @@ const Canvas = memo<
         type: MarkerType.ArrowClosed,
         width: 12,
       };
+      const mainlineMarker = { ...marker, color: cssVar.colorPrimary };
+      const detourMarker = { ...marker, color: cssVar.colorWarning };
+      const isMainlineCard = (id: string) => emphasisById.get(id) === 'mainline';
+      const toneOf = (edge: Parameters<typeof edgeTone>[1]) =>
+        edgeTone(mainline, edge, isMainlineCard, highlightedIds);
+      const markerOf = (tone: EdgeTone) =>
+        tone === 'mainline' ? mainlineMarker : tone === 'detour' ? detourMarker : marker;
       const lanes = new Map<string, number>();
       const direct = (hasExperiments ? map.edges : graph.edges)
         .filter((edge) => visibleIds.has(edge.sourceNodeId) && visibleIds.has(edge.targetNodeId))
@@ -512,11 +598,13 @@ const Canvas = memo<
           const lane = lanes.get(pair) ?? 0;
           lanes.set(pair, lane + 1);
           const hot = selectedId === edge.sourceNodeId || selectedId === edge.targetNodeId;
+          const tone = toneOf(edge);
           return {
             className: cx(
               (edge.kind === 'depends_on' || ('projected' in edge && edge.projected === true)) &&
                 'goal-dep',
               hot && 'goal-hot',
+              tone && `goal-${tone}`,
             ),
             id: edge.id,
             label:
@@ -526,7 +614,7 @@ const Canvas = memo<
                   })
                 : edgeLabel(edge.kind),
             labelShowBg: true,
-            markerEnd: marker,
+            markerEnd: markerOf(tone),
             source,
             target,
             type: hasExperiments ? 'exploration' : 'default',
@@ -534,21 +622,41 @@ const Canvas = memo<
           } satisfies FlowEdge;
         });
       // A bridge stands in for a chain through hidden nodes: dashed like other
-      // indirect relations, and unlabeled — any word would claim a relation the
-      // hidden hop may not have.
+      // indirect relations, and never named — any relation word would claim
+      // something the hidden hop may not have. Only how far it skips is said.
       const bridged = bridges.map((bridge) => {
         const hot = selectedId === bridge.sourceNodeId || selectedId === bridge.targetNodeId;
+        const id = `bridge:${bridge.sourceNodeId}:${bridge.targetNodeId}`;
+        const tone = toneOf({ ...bridge, bridge: true, id });
         return {
-          className: cx('goal-dep', hot && 'goal-hot'),
-          id: `bridge:${bridge.sourceNodeId}:${bridge.targetNodeId}`,
-          markerEnd: marker,
+          className: cx('goal-dep', hot && 'goal-hot', tone && `goal-${tone}`),
+          id,
+          ...(bridge.hops
+            ? {
+                label: t('goalProcess.graph.bridgeHops', { count: bridge.hops }),
+                labelShowBg: true,
+              }
+            : {}),
+          markerEnd: markerOf(tone),
           source: bridge.sourceNodeId,
           target: bridge.targetNodeId,
           type: 'default',
         } satisfies FlowEdge;
       });
       return [...direct, ...bridged];
-    }, [graph, visibleIds, bridges, selectedId, edgeLabel, hasExperiments, map.edges, t]);
+    }, [
+      graph,
+      visibleIds,
+      bridges,
+      selectedId,
+      edgeLabel,
+      hasExperiments,
+      map.edges,
+      t,
+      mainline,
+      emphasisById,
+      highlightedIds,
+    ]);
 
     const ghostFlowEdges: FlowEdge[] = useMemo(
       () =>
@@ -688,13 +796,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
   const { collapsed, scopeId } = navigation;
   const scopeIds = new Set(navigation.nodes.map((node) => node.id));
   const scopedGraph: GoalGraphView = scopeId
-    ? {
-        ...props.graph,
-        nodes: props.graph.nodes.filter((item) => scopeIds.has(item.node.id)),
-        edges: navigation.edges,
-        frontier: props.graph.frontier.filter((item) => scopeIds.has(item.view.node.id)),
-        blocked: props.graph.blocked.filter((item) => scopeIds.has(item.node.id)),
-      }
+    ? scopeGraphView(props.graph, scopeIds, navigation.edges)
     : props.graph;
   const openNode = useChatStore((s) => s.openGoalNode);
   const [preferredView, setView] = useState<GraphViewMode>('stage');
@@ -799,8 +901,21 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       {!fullscreen && toggle}
     </>
   );
+  const hasMainline = !!resolveMainline(props.graph);
   const legend = (
     <Flexbox horizontal align={'center'} className={styles.legend} gap={10}>
+      {hasMainline && (
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={styles.legendMainline}
+          gap={4}
+          title={t('goalProcess.graph.legend.mainlineHint')}
+        >
+          <span className={styles.legendMainlineSwatch} />
+          <span>{t('goalProcess.graph.legend.mainline')}</span>
+        </Flexbox>
+      )}
       {(
         [
           'problem',

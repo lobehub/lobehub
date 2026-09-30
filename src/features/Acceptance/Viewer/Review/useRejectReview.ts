@@ -1,5 +1,6 @@
 'use client';
 
+import { FULL_FRAME_RECT } from '@lobechat/const/verify';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import { useModalContext } from '@lobehub/ui/base-ui';
 import { useEffect, useState } from 'react';
@@ -38,6 +39,12 @@ export interface RejectReviewInput {
   /** Feedback already typed in the focused detail before opening annotation. */
   initialComment?: string;
   initialEvidenceId?: string;
+  /**
+   * Evidence this layout cannot edit (videos on a phone). Its annotations are
+   * restored and submitted untouched — a reject replaces the whole decision
+   * detail, so dropping them here would silently delete that feedback.
+   */
+  keptEvidence?: RejectableEvidence[];
   /** Perform the reject; resolve true to close, false to stay open. */
   onConfirm: (value: {
     annotations: AcceptanceReviewAnnotation[];
@@ -47,6 +54,8 @@ export interface RejectReviewInput {
   previousAnnotations?: AcceptanceReviewAnnotation[];
   previousAttachments?: PendingAttachment[];
   previousComment?: string;
+  /** A freshly signed URL for one evidence, for recovering an expired video. */
+  refreshEvidenceUrl?: (evidenceId: string) => Promise<string | undefined>;
 }
 
 /**
@@ -63,10 +72,12 @@ export const useRejectReview = ({
   initialAnnotations,
   initialComment,
   initialEvidenceId,
+  keptEvidence = [],
   onConfirm,
   previousAnnotations,
   previousAttachments,
   previousComment,
+  refreshEvidenceUrl,
 }: RejectReviewInput) => {
   const { close, setCanDismissByClickOutside } = useModalContext();
   const [draft] = useState(() => readDraft(draftKey));
@@ -91,10 +102,12 @@ export const useRejectReview = ({
       initialAnnotations?.length
         ? initialAnnotations
         : (draft?.annotations ?? previousAnnotations ?? []),
-      evidence,
+      [...evidence, ...keptEvidence],
     ),
   );
   const [zoom, setZoom] = useState(1);
+  /** The video note being written — its frame is highlighted on the timeline. */
+  const [activeNoteKey, setActiveNoteKey] = useState<number>();
 
   // Your own screenshots (paste or upload) — attached to the reject alongside
   // the note and any circled regions.
@@ -112,6 +125,10 @@ export const useRejectReview = ({
   const activeIndex = evidence.findIndex((item) => item.id === activeEvidenceId);
   const activeEvidence = evidence.find((item) => item.id === activeEvidenceId);
   const activeAnnotations = annotations.filter((item) => item.evidenceId === activeEvidenceId);
+  /** The notes this layout can show and edit; kept ones ride along unseen. */
+  const editableAnnotations = annotations.filter((item) =>
+    evidence.some((entry) => entry.id === item.evidenceId),
+  );
 
   const selectEvidence = (index: number) => {
     if (!evidence[index]) return;
@@ -137,6 +154,8 @@ export const useRejectReview = ({
     close,
     comment,
     drawing: step === 'draw',
+    editableAnnotations,
+    refreshEvidenceUrl,
     evidence,
     failed,
     hasEvidence: evidence.length > 0,
@@ -167,6 +186,32 @@ export const useRejectReview = ({
       },
     },
 
+    activeNoteKey,
+    /**
+     * A note on the active video: a region on one frame, a whole frame, or a
+     * span. A note without a region covers the whole frame. Returns its key so
+     * the stage can focus the note that was just made.
+     */
+    addVideoNote: (note: {
+      disputes?: AcceptanceReviewAnnotation['disputes'];
+      rect?: AcceptanceReviewAnnotation['rect'];
+      time: NonNullable<AcceptanceReviewAnnotation['time']>;
+    }) => {
+      const key = nextAnnotationKey();
+      setAnnotations((previous) => [
+        ...previous,
+        {
+          comment: '',
+          disputes: note.disputes,
+          evidenceId: activeEvidence!.id,
+          key,
+          rect: note.rect ?? { ...FULL_FRAME_RECT },
+          time: note.time,
+        },
+      ]);
+      setActiveNoteKey(key);
+      return key;
+    },
     editAnnotation: (key: number, value: string) =>
       setAnnotations((previous) =>
         previous.map((item) => (item.key === key ? { ...item, comment: value } : item)),
@@ -176,6 +221,7 @@ export const useRejectReview = ({
       selectEvidence(evidence.findIndex((item) => item.id === evidenceId));
       advance('edit-region');
     },
+    setActiveNoteKey,
     removeAnnotation: (key: number) =>
       setAnnotations((previous) => previous.filter((item) => item.key !== key)),
     removeAttachment: remove,

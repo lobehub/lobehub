@@ -7,7 +7,6 @@ import { viteCompletionSounds } from '../../plugins/vite/completionSounds';
 import { viteOsPlatformResolve } from '../../plugins/vite/osPlatformResolve';
 import { externalRuntimeModules } from './external-runtime-deps.config.mjs';
 import { getNativeExternalDependencies } from './native-deps.config.mjs';
-import { rendererMainHashArtifact, resolveMainHash } from './scripts/mainHash.mjs';
 import {
   applyDesktopViteConfigExtension,
   isCloudDesktopBuild,
@@ -25,7 +24,6 @@ export default defineConfig(async (env) => {
   const isDev = mode === 'development';
   const updateChannel = process.env.UPDATE_CHANNEL;
   const isCloudDesktop = isCloudDesktopBuild();
-  const mainHash = await resolveMainHash(mode);
   const externalNavigationHosts =
     process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS ?? (isCloudDesktop ? 'stripe.com' : '');
 
@@ -58,6 +56,7 @@ export default defineConfig(async (env) => {
         ],
         output: {
           assetFileNames: 'chunks/[name]-[hash].[ext]',
+          dynamicImportInCjs: false,
           // Rolldown hoists chunk requires above any entry statement, so the V8
           // compile cache has to be switched on from a banner to cover `main-app`.
           banner: (chunk) =>
@@ -118,7 +117,6 @@ export default defineConfig(async (env) => {
     define: {
       ...processEnvDefine,
       'process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS': JSON.stringify(externalNavigationHosts),
-      'process.env.MAIN_HASH': JSON.stringify(mainHash),
       'process.env.RENDERER_OTA_PUBLIC_KEY': JSON.stringify(process.env.RENDERER_OTA_PUBLIC_KEY),
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),
       'process.env.UPDATE_SERVER_URL': JSON.stringify(process.env.UPDATE_SERVER_URL),
@@ -126,7 +124,6 @@ export default defineConfig(async (env) => {
     plugins: [
       viteOsPlatformResolve(),
       zodCompiler(),
-      rendererMainHashArtifact(mainHash),
       viteCompletionSounds({ aiffDir: path.resolve(__dirname, 'resources/sounds') }),
     ],
     publicDir: false,

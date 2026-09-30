@@ -1,8 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
-import type { GoalStatus } from '@lobechat/const/goal';
-import type { GoalNodeStatus, GoalSupervisionState } from '@lobechat/types';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { GOAL_CLARIFICATION_TITLE, type GoalStatus } from '@lobechat/const/goal';
+import type {
+  GoalDecisionOption,
+  GoalNodeStatus,
+  GoalSupervisionState,
+  GoalUnderstanding,
+} from '@lobechat/types';
+import { and, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 
 import type { GoalItem, NewGoal } from '../schemas/goal';
 import { goals } from '../schemas/goal';
@@ -137,6 +142,21 @@ export class GoalModel {
     return row as GoalItem | undefined;
   };
 
+  /**
+   * Patch only `config.understanding`, for the same reason as
+   * `updatePauseReason`: decomposition writes it while the user may be editing
+   * budget or acceptance on the same column.
+   */
+  updateUnderstanding = async (id: string, understanding: GoalUnderstanding): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{understanding}', ${JSON.stringify(understanding)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
   /** Compare-and-swap only the supervisor namespace; concurrent budget edits survive. */
   updateSupervisorState = async (
     id: string,
@@ -171,12 +191,13 @@ export class GoalModel {
         // policy edits cannot replace the concurrently written incident ledger.
         ...(value.config !== undefined
           ? {
-              config: sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState')
+              config: sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding')
                 || jsonb_strip_nulls(jsonb_build_object(
                   'planningCheckpoint', ${goals.config}->'planningCheckpoint',
                   'planningProtocol', ${goals.config}->'planningProtocol',
                   'supervisorState', ${goals.config}->'supervisorState',
-                  'managerState', ${goals.config}->'managerState'
+                  'managerState', ${goals.config}->'managerState',
+                  'understanding', ${goals.config}->'understanding'
                 ))`,
             }
           : {}),
@@ -272,6 +293,40 @@ export class GoalModel {
       status,
     });
   };
+
+  /**
+   * Every clarification the coordinator is still waiting on, across the
+   * caller's goals — what a surface outside the goal page needs to ask them.
+   * Oldest first, so the question that has waited longest is asked first.
+   */
+  listPendingClarifications = async (): Promise<PendingGoalClarificationRow[]> =>
+    this.db
+      .select({
+        agentId: goals.agentId,
+        decisionId: goalNodeDecisions.id,
+        description: goalNodes.description,
+        goalId: goals.id,
+        goalTitle: goals.title,
+        options: goalNodeDecisions.options,
+        requirement: goals.requirement,
+        question: goalNodeDecisions.question,
+      })
+      .from(goalNodeDecisions)
+      .innerJoin(goalNodes, eq(goalNodeDecisions.nodeId, goalNodes.id))
+      .innerJoin(goals, eq(goalNodes.goalId, goals.id))
+      .where(
+        and(
+          this.ownership(),
+          // Only a goal parked on its questions asks them; one the user paused
+          // or ended keeps its open questions without nagging about them.
+          notInArray(goals.status, ['paused', 'achieved', 'failed', 'canceled']),
+          eq(goalNodeDecisions.status, 'pending'),
+          eq(goalNodes.title, GOAL_CLARIFICATION_TITLE),
+        ),
+      )
+      // A round's questions share one transaction timestamp; the id keeps
+      // their order stable across reads so "question 1" stays question 1.
+      .orderBy(goalNodeDecisions.createdAt, goalNodeDecisions.id);
 
   delete = async (id: string) => {
     return this.db.delete(goals).where(and(eq(goals.id, id), this.ownership()));
@@ -491,4 +546,17 @@ export interface GoalListItem {
   taskTotal: number;
   totalRunCost: number;
   totalRunDuration: number;
+}
+
+export interface PendingGoalClarificationRow {
+  agentId: string | null;
+  decisionId: string;
+  /** What changes with the answer (the decision node's description). */
+  description: string | null;
+  goalId: string;
+  goalTitle: string;
+  options: GoalDecisionOption[] | null;
+  question: string;
+  /** What the goal asks for, so a surface away from its page can say which goal this is. */
+  requirement: string | null;
 }

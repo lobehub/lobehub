@@ -13,6 +13,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { notShareVisitorMessage } from '../../utils/shareVisitor';
+import { notTrashed } from '../../utils/softDelete';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 const parseAggregateTimestamp = (value: Date | string) =>
@@ -143,7 +144,7 @@ export class AgentSignalReviewContextModel {
         updatedAt: userMemories.updatedAt,
       })
       .from(userMemories)
-      .where(eq(userMemories.userId, this.userId))
+      .where(and(eq(userMemories.userId, this.userId), notTrashed(userMemories.isDeleted)))
       .orderBy(desc(userMemories.updatedAt))
       .limit(options.limit);
   };

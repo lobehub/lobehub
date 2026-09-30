@@ -6,6 +6,7 @@ import type {
   ModifyNodesArgs,
   ReplaceTextArgs,
 } from '@lobechat/editor-runtime';
+import { formatModifyNodesResult } from '@lobechat/editor-runtime';
 import type { BuiltinToolResult, ToolAfterCallContext } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
@@ -322,19 +323,7 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
     try {
       const result = await this.runtime.modifyNodes(params);
 
-      // Build summary message
-      const actionSummary = params.operations.reduce(
-        (acc, op) => {
-          acc[op.action] = (acc[op.action] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>,
-      );
-
-      const summaryParts = Object.entries(actionSummary).map(
-        ([action, count]) => `${count} ${action}${count > 1 ? 's' : ''}`,
-      );
-      const content = `Successfully executed ${summaryParts.join(', ')} (${result.successCount}/${result.totalCount} operations succeeded).`;
+      const content = formatModifyNodesResult(result);
 
       const state: ModifyNodesState = {
         results: result.results,

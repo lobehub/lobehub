@@ -21,6 +21,12 @@ Call submitEvidence once for each criterion. This is evidence collection only: d
  * External CLI agents cannot call server builtin tools. Preserve their final
  * handoff as inline evidence instead of starting an evidence-only hetero turn
  * that can never reach `submitEvidence`.
+ *
+ * Only criteria the builder left without any evidence get the handoff. A
+ * criterion it already evidenced through `lh acceptance run result submit`
+ * keeps exactly what it submitted, as an Acceptance round does: the final
+ * report is not evidence for a specific check and is already handed to the
+ * verifier as the deliverable.
  */
 export const recordHeterogeneousDeliverableEvidence = async (params: {
   db: LobeChatDatabase;
@@ -34,7 +40,15 @@ export const recordHeterogeneousDeliverableEvidence = async (params: {
   const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(operation.id);
   if (!run) throw new Error('Verification run is missing for heterogeneous evidence');
 
+  const evidenced = new Set(
+    (await new VerifyEvidenceModel(db, userId, workspaceId).listByRun(run.id)).map(
+      (row) => row.checkItemId,
+    ),
+  );
+
   for (const item of plan) {
+    if (evidenced.has(item.id)) continue;
+
     const result = await new VerifyCheckResultModel(db, userId, workspaceId).upsertByCheckItem({
       checkItemId: item.id,
       checkItemIndex: item.index,

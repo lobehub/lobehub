@@ -17,6 +17,7 @@ import {
 } from '../../core/providerDiagnostics';
 import { GoogleGenerativeAIStream } from '../../core/streams';
 import { LOBE_ERROR_KEY } from '../../core/streams/google';
+import { convertGoogleAIUsage } from '../../core/usageConverters/google-ai';
 import type {
   ASROptions,
   ASRPayload,
@@ -382,11 +383,18 @@ export class LobeGoogleAI implements LobeRuntimeAI {
    */
   async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
     try {
-      return await createGoogleTranscription(
+      const { text, usageMetadata } = await createGoogleTranscription(
         this.client,
         withMappedModelId(payload, this.modelIdMappingOptions),
         options,
       );
+
+      if (options?.onUsage && usageMetadata) {
+        const pricing = await getModelPricing(payload.model, this.provider, options.pricingContext);
+        await options.onUsage(convertGoogleAIUsage(usageMetadata, pricing));
+      }
+
+      return { text };
     } catch (e) {
       const err = e as Error;
 

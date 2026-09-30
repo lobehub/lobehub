@@ -1,3 +1,4 @@
+import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
@@ -57,6 +58,10 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
   const searchMode = agent.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = request.useApplicationBuiltinSearchTool ?? searchMode !== 'off';
   const kbEnabled = request.hasEnabledKnowledgeBases ?? false;
+  // Oversized attachments are sent as previews that can be paged with `readAttachment`; only that
+  // read-only tool is enabled, not the knowledge-base tool with its search and write APIs. The
+  // preview names it only when it survives into the final tool set (see `MessagesEngine`).
+  const attachmentsEnabled = request.hasOversizedFiles ?? false;
   const memoryEnabled = request.memoryEnabled ?? false;
   // Image generation is never auto-injected: the user opts in by pinning the
   // tool, and a model with native image output never gets the fallback.
@@ -74,6 +79,7 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
   // Chat mode: a strict outer whitelist. No always-on tools, no runtime
   // injection, no activator — each entry still passes its own gate.
   const chatModeRules = {
+    [AttachmentsManifest.identifier]: attachmentsEnabled,
     [ImageGenerationManifest.identifier]: imageGenerationEnabled,
     [VideoGenerationManifest.identifier]: videoGenerationEnabled,
     [KnowledgeBaseManifest.identifier]: kbEnabled,
@@ -90,6 +96,7 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
     // System rules may override the user's selection for specific tools.
     // Auto mode lets the model pick the sandbox or the routed device per
     // call, so the dedicated sandbox tool is offered there too.
+    [AttachmentsManifest.identifier]: attachmentsEnabled,
     [CloudSandboxManifest.identifier]: runtimeMode === 'cloud' || executionTarget === 'auto',
     [KnowledgeBaseManifest.identifier]: kbEnabled,
     [LocalSystemManifest.identifier]: localToolsEnabled,

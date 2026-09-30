@@ -44,6 +44,12 @@ import type {
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
+// Imported from the module itself: tests mock the `agentRuntime` barrel.
+import {
+  isForegroundOperationTrigger,
+  type SupersedeKind,
+  type SupersedeRecord,
+} from '@/server/services/agentRuntime/foregroundOperation';
 import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
@@ -54,10 +60,18 @@ import { MarketService } from '@/server/services/market';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { createGraphAwareAgentFactory } from './helpers/agentFactory';
-import { createGroupActionMemberBridgeHook } from './hooks/threadRunHooks';
+import {
+  createGroupActionMemberBridgeHook,
+  createThreadHooks,
+  pickThreadUsageBaseline,
+} from './hooks/threadRunHooks';
 import { InterventionController } from './intervention/InterventionController';
 import type { ApprovalClaimState } from './pipeline/approvalResume';
 import { claimApprovalResume, tryReuseInterventionContinuation } from './pipeline/approvalResume';
+import {
+  type GroupMemberBridgeParams,
+  resolveGroupMemberApprovalContinuation,
+} from './pipeline/groupMemberApproval';
 import { dispatchHeteroAgent } from './pipeline/heteroDispatch';
 import { buildOperationInitRequest, runOperationInit } from './pipeline/operationInit';
 import { createHistoryMessagesLoader } from './pipeline/operationPrep';
@@ -68,7 +82,7 @@ import { createRunFacts, type RunFacts } from './runFacts';
 import { applyShareGateToAgentConfig } from './shareGate';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import { execAgentMember, execAgentThreadRun } from './subAgentRuns';
-import { acquireTopicStartReservation } from './topicStartReservation';
+import { acquireTopicStartReservation, TopicStartReservationError } from './topicStartReservation';
 import type {
   BindTopicWorkingDirectoryParams,
   ExecRunContext,
@@ -274,23 +288,44 @@ export class AiAgentService {
    * names one) — that is what lets another device skip it. A topic already
    * bound to a different device is left unpinned rather than given this
    * device's path.
+   *
+   * An unbound topic that already carries a cwd (the client's initial
+   * metadata, or a pre-binding row) still gets the device stamped: the run
+   * just used that cwd here, and the binding is what keeps later turns and the
+   * device picker on this machine.
    */
   private async bindTopicWorkingDirectory(params: BindTopicWorkingDirectoryParams): Promise<void> {
     const { config, currentDeviceId, currentWorkingDirectory, deviceId, topicId } = params;
-    if (currentWorkingDirectory || !config) return;
+    if (!config) {
+      // No directory resolved on this machine (no agent pick, no device
+      // default), so the caller never read the topic either. The run still
+      // happened here — pin an unbound topic to it all the same.
+      if (deviceId) await this.stampTopicDevice(topicId, deviceId);
+      return;
+    }
     if (currentDeviceId && deviceId && currentDeviceId !== deviceId) return;
-    const path = getWorkingDirEffectivePath(config);
-    if (!path) return;
+    const stampDevice = !!deviceId && !currentDeviceId;
+    const path = currentWorkingDirectory ? undefined : getWorkingDirEffectivePath(config);
+    if (!path && !stampDevice) return;
 
     try {
       await this.topicModel.updateMetadata(topicId, {
-        ...(deviceId && !currentDeviceId && { boundDeviceId: deviceId }),
-        workingDirectory: path,
-        workingDirectoryConfig: config,
+        ...(stampDevice && { boundDeviceId: deviceId }),
+        ...(path && { workingDirectory: path, workingDirectoryConfig: config }),
       });
     } catch (err) {
       // Metadata bookkeeping must never fail a run that is otherwise fine.
       log('execAgent: bindTopicWorkingDirectory failed (non-fatal): %O', err);
+    }
+  }
+
+  private async stampTopicDevice(topicId: string, deviceId: string): Promise<void> {
+    try {
+      const topic = await this.topicModel.findById(topicId);
+      if (!topic || topic.metadata?.boundDeviceId) return;
+      await this.topicModel.updateMetadata(topicId, { boundDeviceId: deviceId });
+    } catch (err) {
+      log('execAgent: stampTopicDevice failed (non-fatal): %O', err);
     }
   }
 
@@ -493,6 +528,46 @@ export class AiAgentService {
    *   → AgentRuntimeService.createOperation(...)
    */
   async execAgent(inputParams: InternalExecAgentParams): Promise<ExecAgentResult> {
+    // An approval on a group member's tool continues that member, not the
+    // conversation's supervisor (see `resolveGroupMemberApprovalContinuation`).
+    const memberContinuation = await resolveGroupMemberApprovalContinuation(
+      {
+        createBridgeHook: (bridge) =>
+          createGroupActionMemberBridgeHook(this.agentRuntimeService, bridge),
+        createThreadHooks: async (threadId) => {
+          const thread = await this.threadModel.findById(threadId);
+          if (!thread?.sourceMessageId) return [];
+          return createThreadHooks(
+            this.agentRuntimeService,
+            this.threadModel,
+            this.messageModel,
+            thread.id,
+            thread.metadata?.startedAt ?? new Date().toISOString(),
+            thread.sourceMessageId,
+            'execVirtualSubAgent',
+            pickThreadUsageBaseline(thread.metadata),
+          );
+        },
+        findMessagePlugin: (messageId) => this.messageModel.findMessagePlugin(messageId),
+        loadMember: (operationId) => this.agentRuntimeService.loadGroupMemberBridge(operationId),
+      },
+      inputParams,
+    );
+    if (memberContinuation) {
+      log(
+        'execAgent: approval targets group member %s, continuing it under supervisor op %s',
+        memberContinuation.agentId,
+        memberContinuation.parentOperationId,
+      );
+      const continuation = await this.execAgent(memberContinuation);
+      await this.rearmGroupMemberDeadline(memberContinuation, continuation);
+      return {
+        ...continuation,
+        groupMemberContinuation: true,
+        supervisorOperationId: memberContinuation.parentOperationId,
+      };
+    }
+
     // Creating the thread here (rather than inside the turn) means a run that
     // asked for one is already a thread run by the time the reservation check
     // below reads `appContext.threadId` — same isolation as a follow-up inside
@@ -534,13 +609,17 @@ export class AiAgentService {
       return withCreatedThread(await this.execAgentWithApprovalRollback(params));
     }
 
+    const replacesOperationId = isInterventionThreadStart
+      ? undefined
+      : await this.resolveReplacedOperationId(params, topicId);
+
     // A replacement is allowed to take over the topic marker, but the device
     // process that owned the old marker may still hold a native Codex/CC writer.
     // Settle that physical run before reserving and dispatching the replacement;
     // otherwise two `lh hetero exec` wrappers can resume the same thread.
-    if (params.replacesOperationId && !isInterventionThreadStart) {
+    if (replacesOperationId) {
       const interruption = await this.interruptTask({
-        operationId: params.replacesOperationId,
+        operationId: replacesOperationId,
         topicId,
       });
       if (interruption.deviceCancellationConfirmed === false) {
@@ -549,7 +628,7 @@ export class AiAgentService {
     }
     const reserved = await acquireTopicStartReservation({
       allowSameReservationReentry: !params.approvalResolutionRequestId,
-      replacesOperationId: isInterventionThreadStart ? undefined : params.replacesOperationId,
+      replacesOperationId,
       allowRunningOperationId: params.topicStartOwnerOperationId,
       // A thread continuation shares the topic row but never owns/replaces its
       // main runningOperation anchor. It uses only the short initializer fence.
@@ -560,13 +639,141 @@ export class AiAgentService {
     });
 
     if (!reserved) {
-      throw new Error(`Topic not found: ${topicId}`);
+      throw new TopicStartReservationError(`Topic not found: ${topicId}`);
     }
 
     try {
-      return withCreatedThread(await this.execAgentWithApprovalRollback(params));
+      const superseded =
+        params.interactiveStart && !isInterventionThreadStart
+          ? await this.supersedeRunningForegroundOperation(topicId, [
+              replacesOperationId,
+              params.topicStartOwnerOperationId,
+            ])
+          : undefined;
+      const result = await this.execAgentWithApprovalRollback(params);
+      if (superseded) {
+        await this.recordSupersede(topicId, result.operationId, superseded, params);
+      }
+      return withCreatedThread(result);
     } finally {
       await this.topicModel.releaseTaskCallbackReservation(topicId, reservationId);
+    }
+  }
+
+  /**
+   * The run this start replaces. A composer send names it from client state, so
+   * it is honored only when it is one of this user's runs on the same topic;
+   * server-derived continuations are trusted as given.
+   */
+  private async resolveReplacedOperationId(
+    params: InternalExecAgentParams,
+    topicId: string,
+  ): Promise<string | undefined> {
+    const { replacesOperationId } = params;
+    if (!replacesOperationId || !params.interactiveStart) return replacesOperationId;
+
+    const replaced = await this.agentOperationModel.findById(replacesOperationId);
+    return replaced?.topicId === topicId ? replacesOperationId : undefined;
+  }
+
+  /**
+   * Retire the foreground run that still owns the topic's `runningOperation`
+   * before an interactive send starts the next one.
+   *
+   * The client is expected to stop a live run before sending (Stop / Send now)
+   * or to queue the send until the run yields. When it misses one, nothing else
+   * stops that run: `startOperation` overwrites the marker, and both runs keep
+   * reading the same topic, interleave writes, and invalidate each other's
+   * prompt cache, multiplying the conversation's cost for as long as the old
+   * run lives.
+   *
+   * Runs inside the topic-start reservation so two fast sends cannot both read
+   * the same stale holder. Only a `running` foreground run is retired; these
+   * keep the existing behavior:
+   * - a parked run (`waiting_for_human` etc.) — the send may be its answer;
+   * - a background producer's run (task, cron, bot, …), see
+   *   `BACKGROUND_OPERATION_TRIGGERS` in `agentRuntime/foregroundOperation`;
+   * - a device-hosted Claude Code / Codex run: cancelling it waits up to 10s
+   *   for the device, far past the reservation's ~3s retry budget, so a
+   *   concurrent send would fail. Those settle through `replacesOperationId`
+   *   before reserving.
+   *
+   * @returns the retired run and whether it had already been asked to stop, so
+   * the caller can record the overlap on the new run.
+   */
+  private async supersedeRunningForegroundOperation(
+    topicId: string,
+    alreadyHandledOperationIds: (string | undefined)[],
+  ): Promise<{ holderId: string; kind: SupersedeKind } | undefined> {
+    const topic = await this.topicModel.findById(topicId);
+    const marker = topic?.metadata?.runningOperation;
+    const holderId = marker?.operationId;
+    if (!holderId || marker.heteroType || alreadyHandledOperationIds.includes(holderId)) return;
+
+    const holder = await this.agentOperationModel.findById(holderId);
+    if (holder?.status !== 'running') return;
+    if (!isForegroundOperationTrigger(holder.trigger)) return;
+
+    // Read before interrupting: afterwards the sentinel is always set. The
+    // read is diagnostic only, so a failure must not fail the send.
+    let kind: SupersedeKind;
+    try {
+      kind = (await this.agentRuntimeService.isOperationInterrupted(holderId))
+        ? 'already_stopping'
+        : 'client_missed';
+    } catch (error) {
+      console.error('[execAgent] failed to read interrupt state of %s:', holderId, error);
+      kind = 'unknown';
+    }
+
+    log(
+      'execAgent: superseding running foreground operation %s on topic %s (%s)',
+      holderId,
+      topicId,
+      kind,
+    );
+    const interrupted = await this.interruptTask({ operationId: holderId, topicId });
+    // Unconfirmed only when the run has no runtime state left but its row has
+    // not settled yet: nothing executes its next step, so the send proceeds
+    // rather than failing on a run that cannot spend any more.
+    if (!interrupted.success) {
+      console.warn('[execAgent] supersede of %s was not confirmed', holderId, { topicId });
+    }
+    return { holderId, kind };
+  }
+
+  /**
+   * Persist the supersede on the new run's `metadata.supersede`, with the
+   * client's view of its runs at send time. A `client_missed` supersede means
+   * the client let a live run keep going — the case to investigate — so it is
+   * also warned. Diagnostic only: a failure here never fails the send.
+   */
+  private async recordSupersede(
+    topicId: string,
+    operationId: string,
+    superseded: { holderId: string; kind: SupersedeKind },
+    params: InternalExecAgentParams,
+  ): Promise<void> {
+    const record: SupersedeRecord = {
+      client: params.clientRunSnapshot,
+      kind: superseded.kind,
+      supersededAt: new Date().toISOString(),
+      supersededOperationId: superseded.holderId,
+    };
+
+    if (superseded.kind === 'client_missed') {
+      console.warn('[execAgent] client missed a running foreground operation', {
+        client: params.clientRunSnapshot,
+        operationId,
+        supersededOperationId: superseded.holderId,
+        topicId,
+      });
+    }
+
+    try {
+      await this.agentOperationModel.mergeMetadata(operationId, { supersede: record });
+    } catch (error) {
+      console.error('[execAgent] failed to record supersede on %s:', operationId, error);
     }
   }
 
@@ -1059,6 +1266,7 @@ export class AiAgentService {
       resolvedAgentId,
       runFacts,
       shareGate,
+      topicEditingGroupId: turn.topicEditingGroupId,
       topicId,
       trigger,
       userMessageId: turn.userMessageId,
@@ -1089,10 +1297,11 @@ export class AiAgentService {
           maxSteps,
           memberDeviceOverride,
           operationTaskId,
+          onOperationCreated: params.onOperationCreated,
           parentOperationId,
           pinnedHeterogeneousTopicModel: turn.pinnedHeterogeneousTopicModel,
           requestTrigger: requestTriggerMetadata.trigger,
-          requestedDeviceId,
+          requestedDeviceId: turn.requestedDeviceId,
           runAttachments,
           selfMessageIds,
           topicStartOwnerOperationId: params.topicStartOwnerOperationId,
@@ -1210,7 +1419,7 @@ export class AiAgentService {
       operationId,
       parentMessageId,
       requestTrigger: requestTriggerMetadata.trigger,
-      requestedDeviceId,
+      requestedDeviceId: turn.requestedDeviceId,
       resumeApproval,
       resumeApprovalPlugin,
       resumeApprovals,
@@ -1307,10 +1516,12 @@ export class AiAgentService {
       },
       runContext,
       {
+        acceptsMemberRuntimeEnd: params.acceptsMemberRuntimeEnd,
         approvalClaim,
         approvalSourceOperationId,
         approvalSourceToolMessageIds,
         autoStart,
+        onOperationCreated: params.onOperationCreated,
         botContext,
         botPlatformContext,
         clientIp,
@@ -1479,6 +1690,33 @@ export class AiAgentService {
     });
 
   /**
+   * An approval continuation retires the parked member op, which silently
+   * disarms the timeout watchdog scheduled for it. Re-arm the same absolute
+   * deadline on the continuation (immediately when it has already passed).
+   */
+  private rearmGroupMemberDeadline = async (
+    continuationParams: InternalExecAgentParams,
+    continuation: ExecAgentResult,
+  ): Promise<void> => {
+    const bridge = continuationParams.hooks?.find((hook) => hook.id === 'group-member-bridge')
+      ?.webhook?.body as GroupMemberBridgeParams | undefined;
+    if (!bridge?.deadlineAt || !continuation.success || !continuation.operationId) return;
+
+    await this.agentRuntimeService.scheduleGroupMemberTimeout(
+      {
+        anchorMessageId: bridge.anchorMessageId,
+        expectedMembers: bridge.expectedMembers,
+        groupToolMessageId: bridge.groupToolMessageId,
+        memberOperationId: continuation.operationId,
+        mode: bridge.mode,
+        onComplete: bridge.onComplete,
+        parentOperationId: bridge.parentOperationId,
+      },
+      Math.max(1, bridge.deadlineAt - Date.now()),
+    );
+  };
+
+  /**
    * Fork a single group member ("call agent member") under a `lobe-group-management`
    * tool call. Dispatches to the in-group (non-isolated, shared group session)
    * or isolated (own thread) path, installing the group-action member completion
@@ -1491,6 +1729,8 @@ export class AiAgentService {
     if (params.mode === 'isolated') {
       // Isolated members reuse the sub-agent isolation-thread machinery, swapping
       // in the group-action member bridge (K=N barrier + resume/finish).
+      const deadlineAt =
+        params.timeout && params.timeout > 0 ? Date.now() + params.timeout : undefined;
       const result = await execAgentThreadRun(
         this.subAgentRunDeps,
         {
@@ -1507,6 +1747,7 @@ export class AiAgentService {
           bridgeHookFactory: (threadId) =>
             createGroupActionMemberBridgeHook(this.agentRuntimeService, {
               anchorMessageId: params.anchorMessageId,
+              deadlineAt,
               expectedMembers: params.expectedMembers,
               groupToolMessageId: params.groupToolMessageId,
               mode: 'isolated',
@@ -1520,6 +1761,7 @@ export class AiAgentService {
           // resume through the group bridge (its own timeout), not the sub-agent one.
           orchestrationRole: 'member',
           resumeParentOnComplete: true,
+          userInterventionConfig: params.userInterventionConfig,
         },
       );
 

@@ -20,6 +20,11 @@ import { registerDocumentWork } from './document';
 import { registerExternalWork } from './external';
 import { findFileWorkVersionByToolCall, registerFileWork } from './file';
 import { normalizeGithubShellToolResult, normalizeGithubToolResult } from './githubToolResult';
+import {
+  findLatestGoalReportVersion,
+  registerGoalReportWork,
+  type RegisterGoalReportWorkParams,
+} from './goalReport';
 import { normalizeLinearToolResult } from './linearToolResult';
 import * as queries from './queries';
 import { registerTaskWork } from './task';
@@ -75,6 +80,11 @@ export class WorkModel {
 
   registerFile = (params: RegisterFileWorkParams): Promise<WorkItem> =>
     registerFileWork(this.ctx, params);
+
+  registerGoalReport = (params: RegisterGoalReportWorkParams): Promise<WorkItem> =>
+    registerGoalReportWork(this.ctx, params);
+
+  findLatestGoalReport = (goalId: string) => findLatestGoalReportVersion(this.ctx, goalId);
 
   /**
    * Existence probe for a file Work's one-version-per-operation dedup key, so

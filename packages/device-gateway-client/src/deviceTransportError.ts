@@ -177,20 +177,23 @@ const isTimeoutError = (error: unknown): boolean => {
   return name === 'TimeoutError' || name === 'AbortError';
 };
 
-const NETWORK_ERROR_MARKERS = [
-  'fetch failed',
-  'socket hang up',
+// Only failures that happen before the request leaves the server prove the
+// gateway never saw it. A reset or peer close (`ECONNRESET`, undici's
+// `UND_ERR_SOCKET` "other side closed", "socket hang up") can land after the
+// gateway already relayed the call, and the device may have run it — those
+// fall through to the "unclear" branch so the model checks state before
+// repeating a write.
+const CONNECT_FAILURE_MARKERS = [
   'connection refused',
-  'connection reset',
   'econnrefused',
-  'econnreset',
   'enotfound',
   'eai_again',
-  'etimedout',
-  'network',
+  'und_err_connect_timeout',
+  // Bun's fetch reports a failed connect with this message and no code.
+  'unable to connect',
 ];
 
-const isNetworkError = (error: unknown, message: string): boolean => {
+const isConnectFailure = (error: unknown, message: string): boolean => {
   const code = (error as { cause?: { code?: unknown }; code?: unknown } | null)?.code;
   const causeCode = (error as { cause?: { code?: unknown } } | null)?.cause?.code;
   const haystack = [message, code, causeCode]
@@ -198,12 +201,13 @@ const isNetworkError = (error: unknown, message: string): boolean => {
     .join(' ')
     .toLowerCase();
 
-  return NETWORK_ERROR_MARKERS.some((marker) => haystack.includes(marker));
+  return CONNECT_FAILURE_MARKERS.some((marker) => haystack.includes(marker));
 };
 
 /**
  * Describe a failure that happened before any HTTP status existed — the request
- * timed out client-side, or the gateway host could not be reached at all.
+ * timed out client-side, the gateway host could not be reached at all, or the
+ * connection dropped before the response arrived.
  *
  * A client-side timeout is the same situation as a 504 (the call may have been
  * delivered and may still be running), so it carries the same warning.
@@ -222,7 +226,7 @@ export const describeGatewayRequestFailure = (
     };
   }
 
-  if (isNetworkError(error, message)) {
+  if (isConnectFailure(error, message)) {
     return {
       code: DeviceTransportErrorCode.GatewayUnreachable,
       content: `Could not reach the device gateway to relay this ${operation}, so it never ran on the device. This is a network failure between the server and the gateway. Retry once; if it persists, report it to the user rather than retrying in a loop.`,

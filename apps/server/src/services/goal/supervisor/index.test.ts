@@ -118,12 +118,13 @@ const failedGoal = async (enabled = true, error = 'fetch failed: ECONNRESET') =>
 };
 
 /**
- * The run itself settled cleanly and something around it broke: the device link
- * dropped, or verification could not run. The Task is left `paused`, not `failed`,
- * and its operation is `done`, not `error`.
+ * The run itself settled cleanly and something around it broke: the device
+ * gateway errored, or verification could not run. The Task is left `paused`, not
+ * `failed`, and its operation is `done`, not `error`. (An offline device is not
+ * supervision's: the coordinator's offline retry schedule owns that failure.)
  */
 const pipelineFailureGoal = async (
-  error = '{"error":"DEVICE_OFFLINE","success":false}',
+  error = '{"error":"DEVICE_GATEWAY_ERROR","success":false}',
   withRun = true,
 ) => {
   const graph = await service().create({
@@ -517,7 +518,10 @@ describe('Goal Supervisor integration', () => {
     // Routed as `paused`; a person then marks it `failed` without supplying a new
     // error, so the run's transport reason survives and the policy still accepts it.
     // Only claiming against the status the incident was opened on keeps this decision.
-    const { goalId, taskId } = await failedGoal(true, '{"error":"DEVICE_OFFLINE","success":false}');
+    const { goalId, taskId } = await failedGoal(
+      true,
+      '{"error":"DEVICE_GATEWAY_ERROR","success":false}',
+    );
     await taskModel.update(taskId, { status: 'paused' });
     expect((await service().tick(goalId)).outcome).toBe('waiting_external');
     await diagnose(goalId);

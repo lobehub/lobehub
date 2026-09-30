@@ -1,4 +1,12 @@
-import type { ContextNode, IdNode, Message, MessageNode, SignalCallbacksNode } from '../types';
+import { isInThreadScope } from '../indexing';
+import type {
+  ContextNode,
+  IdNode,
+  Message,
+  MessageNode,
+  SignalCallbacksNode,
+  ThreadScope,
+} from '../types';
 import { BranchResolver } from './BranchResolver';
 
 /**
@@ -57,7 +65,24 @@ export class MessageCollector {
     private messageMap: Map<string, Message>,
     private childrenMap: Map<string | null, string[]>,
     private branchResolver: BranchResolver = new BranchResolver(messageMap),
+    /** See `ThreadScope`. Defaults to every message in scope. */
+    private threadScope: ThreadScope = undefined,
   ) {}
+
+  /**
+   * Every message the current scope may walk.
+   *
+   * Chain classification has to see exactly what chain collection will be given: if a
+   * threaded reply counts as the continuation that makes an assistant a tool-chain head,
+   * but collection then cannot reach it, the assistant renders as an empty one-message
+   * group instead of its own bubble.
+   */
+  private scopedMessages(): Message[] {
+    const messages = [...this.messageMap.values()];
+    if (this.threadScope === undefined) return messages;
+
+    return messages.filter((message) => isInThreadScope(message, this.threadScope));
+  }
 
   /**
    * Collect all messages belonging to a message group
@@ -135,7 +160,7 @@ export class MessageCollector {
     if (parent?.role !== 'user') return false;
 
     const groupAgentId = assistant.agentId;
-    const allMessages = [...this.messageMap.values()];
+    const allMessages = this.scopedMessages();
     const visited = new Set<string>([assistant.id]);
     let current: Message = assistant;
 
@@ -150,9 +175,11 @@ export class MessageCollector {
   }
 
   /**
-   * Recursively collect the entire assistant chain
+   * Collect the entire assistant chain
    * (assistant -> tools -> assistant -> tools -> ...)
    * Only collects messages from the SAME agent (matching agentId)
+   *
+   * Walked iteratively: a long run is one chain thousands of steps deep.
    */
   collectAssistantChain(
     currentAssistant: Message,
@@ -161,10 +188,33 @@ export class MessageCollector {
     allToolMessages: Message[],
     processedIds: Set<string>,
   ): void {
+    let current: Message | undefined = currentAssistant;
+    while (current) {
+      current = this.collectAssistantChainStep(
+        current,
+        allMessages,
+        assistantChain,
+        allToolMessages,
+        processedIds,
+      );
+    }
+  }
+
+  /**
+   * Append one tool-using step (plus any toolless steps after it) to the chain
+   * and return the next tool-using assistant to continue with.
+   */
+  private collectAssistantChainStep(
+    currentAssistant: Message,
+    allMessages: Message[],
+    assistantChain: Message[],
+    allToolMessages: Message[],
+    processedIds: Set<string>,
+  ): Message | undefined {
     if (processedIds.has(currentAssistant.id)) return;
 
     // Mark visited up front so duplicated tool_call_ids (the same tool result
-    // reachable from multiple assistants) can't recurse forever.
+    // reachable from multiple assistants) can't loop forever.
     processedIds.add(currentAssistant.id);
 
     // Add current assistant to chain
@@ -189,17 +239,8 @@ export class MessageCollector {
     );
     if (!continuation) return;
 
-    if (continuation.tools && continuation.tools.length > 0) {
-      // Continue the chain (recursion marks it processed at the top)
-      this.collectAssistantChain(
-        continuation,
-        allMessages,
-        assistantChain,
-        allToolMessages,
-        processedIds,
-      );
-      return;
-    }
+    // Continue the chain (the next step marks it processed at the top)
+    if (continuation.tools && continuation.tools.length > 0) return continuation;
 
     // Toolless continuations are still part of the same hetero-agent run. The
     // model can emit several prose-only progress updates before the next tool
@@ -222,15 +263,7 @@ export class MessageCollector {
       );
     }
 
-    if (toollessContinuation) {
-      this.collectAssistantChain(
-        toollessContinuation,
-        allMessages,
-        assistantChain,
-        allToolMessages,
-        processedIds,
-      );
-    }
+    return toollessContinuation;
   }
 
   /**
@@ -461,7 +494,7 @@ export class MessageCollector {
   }
 
   /**
-   * Recursively collect assistant messages for an AssistantGroup (contextTree version)
+   * Collect assistant messages for an AssistantGroup (contextTree version)
    * Only collects messages from the SAME agent (matching agentId)
    */
   collectAssistantGroupMessages(
@@ -473,6 +506,24 @@ export class MessageCollector {
     // Get the agentId of the first assistant in the group (the group owner)
     const agentId = groupAgentId ?? message.agentId;
 
+    // Walked iteratively: a group's chain can be thousands of steps long.
+    let currentMessage: Message | undefined = message;
+    let currentNode: IdNode | undefined = idNode;
+    while (currentMessage && currentNode) {
+      currentNode = this.collectAssistantGroupStep(currentMessage, currentNode, children, agentId);
+      currentMessage = currentNode ? this.messageMap.get(currentNode.id) : undefined;
+    }
+  }
+
+  /**
+   * Append one assistant step to the group and return the next step's IdNode.
+   */
+  private collectAssistantGroupStep(
+    message: Message,
+    idNode: IdNode,
+    children: ContextNode[],
+    agentId: string | undefined,
+  ): IdNode | undefined {
     // Get tool message IDs if this assistant has tools
     const toolIds = idNode.children
       .filter((child) => {
@@ -492,11 +543,7 @@ export class MessageCollector {
     children.push(messageNode);
 
     // Find the next step's assistant (dual-form aware, see findChainContinuationNode)
-    const nextNode = this.findChainContinuationNode(idNode, agentId);
-    if (nextNode) {
-      const nextMsg = this.messageMap.get(nextNode.id)!;
-      this.collectAssistantGroupMessages(nextMsg, nextNode, children, agentId);
-    }
+    return this.findChainContinuationNode(idNode, agentId);
   }
 
   /**
@@ -718,8 +765,14 @@ export class MessageCollector {
    * continuation or a direct non-tool continuation in the current storage form.
    */
   private findLastAssistantNodeInGroup(idNode: IdNode, groupAgentId?: string): IdNode {
-    const nextNode = this.findChainContinuationNode(idNode, groupAgentId);
-    return nextNode ? this.findLastAssistantNodeInGroup(nextNode, groupAgentId) : idNode;
+    // Iterative: a group's chain can be thousands of steps long.
+    let current = idNode;
+    let nextNode = this.findChainContinuationNode(current, groupAgentId);
+    while (nextNode) {
+      current = nextNode;
+      nextNode = this.findChainContinuationNode(current, groupAgentId);
+    }
+    return current;
   }
 
   /**

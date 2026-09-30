@@ -9,7 +9,7 @@ import { isAgentOperationInFlight } from '@lobechat/types';
 import type { AgentOperationItem } from '@/database/schemas/agentOperations';
 import { HETERO_DISPATCH_ERROR_HEADLINES } from '@/server/services/aiAgent/helpers/heteroErrors';
 
-import { resolveTaskAttemptBudget } from '../recoveryPolicy';
+import { countChargedTaskAttempts, resolveTaskAttemptBudget } from '../recoveryPolicy';
 
 export const SUPERVISOR_DIAGNOSIS_TIMEOUT_MS = 10 * 60 * 1000;
 export const MAX_SUPERVISION_INCIDENTS = 100;
@@ -93,6 +93,8 @@ export const recoveryEligibility = (
   operation?: AgentOperationItem,
   /** Whether the Task's current status was written by a person or an agent tool. */
   actorAuthoredStatus = false,
+  /** Runs the Task's device lost; they are not charged to its attempt budget. */
+  deviceOfflineRuns = 0,
 ): { eligible: boolean; reason: string } => {
   if (!graph.goal.config?.supervision?.enabled && !graph.goal.config?.manager)
     return { eligible: false, reason: 'Supervision is disabled' };
@@ -120,7 +122,7 @@ export const recoveryEligibility = (
   if (actorAuthoredStatus) {
     return { eligible: false, reason: 'Someone set this status themselves' };
   }
-  if ((task.totalTopics ?? 0) >= resolveTaskAttemptBudget(graph.goal)) {
+  if (countChargedTaskAttempts(task, deviceOfflineRuns) >= resolveTaskAttemptBudget(graph.goal)) {
     return { eligible: false, reason: 'Task attempt budget exhausted' };
   }
   const error = `${operation?.error?.type ?? ''} ${operation?.error?.message ?? ''} ${task.error ?? ''}`;

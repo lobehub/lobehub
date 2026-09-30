@@ -2,6 +2,7 @@ import type {
   HeteroSessionImportPayload,
   HeteroSessionImportResult,
   HeteroSessionImportStatus,
+  UpdateTopicMetadataInput,
 } from '@lobechat/types';
 
 import { INBOX_SESSION_ID } from '@/const/session';
@@ -43,12 +44,6 @@ export interface TopicListItem extends ChatTopic {
 }
 
 export type TopicBatchDeleteScope = 'own' | 'workspace';
-
-type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
-
-type UpdateTopicMetadataInput = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> & {
-  onboardingSession?: OnboardingSessionMetadataPatch;
-};
 
 export class TopicService {
   cancelRateLimitContinuation = (id: string) =>

@@ -93,6 +93,10 @@ export const createHistoryMessagesLoader = (
   // it, a non-share run pointed at a leaked visitor topicId would still load
   // the visitor's transcript into the owner's model context.
   const historyQueryOptions = { allowShareVisitor: deps.isShareVisitorRun, postProcessUrl };
+  // Group runs must scope the query by `groupId`: without it `query()` falls
+  // into its standard branch (`groupId IS NULL`) and returns none of the group
+  // conversation, so a group supervisor's run starts with no history and loses
+  // everything derived from it (e.g. cross-operation tool-activation restore).
 
   return async () => {
     if (historyMessagesCache) return historyMessagesCache;
@@ -100,6 +104,7 @@ export const createHistoryMessagesLoader = (
     if (existingMessageIds.length > 0) {
       const messages = await deps.messageModel.query(
         {
+          groupId: appContext?.groupId ?? undefined,
           sessionId: appContext?.sessionId,
           threadId: appContext?.threadId,
           topicId: appContext?.topicId ?? undefined,
@@ -115,6 +120,7 @@ export const createHistoryMessagesLoader = (
       // as the in-memory `userMessage`, so leaving it in would double-count it.
       const messages = await deps.messageModel.query(
         {
+          groupId: appContext?.groupId ?? undefined,
           sessionId: appContext?.sessionId,
           threadId: appContext?.threadId,
           topicId: appContext?.topicId,

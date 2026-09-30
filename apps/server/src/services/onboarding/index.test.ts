@@ -94,10 +94,12 @@ describe('OnboardingService', () => {
     updateUser: ReturnType<typeof vi.fn>;
   };
   let transactionUpdateCalls: Array<{
+    returning: ReturnType<typeof vi.fn>;
     set: ReturnType<typeof vi.fn>;
     table: unknown;
     where: ReturnType<typeof vi.fn>;
   }>;
+  let transactionTopicUpdateRows: unknown[];
 
   beforeEach(() => {
     persistedUserState = {
@@ -110,6 +112,7 @@ describe('OnboardingService', () => {
     };
     persistedTopics = {};
     transactionUpdateCalls = [];
+    transactionTopicUpdateRows = [{ id: 'topic-1' }];
 
     mockDb = {
       delete: vi.fn(function () {
@@ -129,12 +132,13 @@ describe('OnboardingService', () => {
         callback({
           execute: vi.fn(async () => undefined),
           update: vi.fn(function (table) {
-            const where = vi.fn(async () => undefined);
+            const returning = vi.fn(async () => transactionTopicUpdateRows);
+            const where = vi.fn(() => ({ returning }));
             const set = vi.fn(function () {
               return { where };
             });
 
-            transactionUpdateCalls.push({ set, table, where });
+            transactionUpdateCalls.push({ returning, set, table, where });
 
             return { set };
           }),
@@ -637,6 +641,28 @@ describe('OnboardingService', () => {
       selectedTemplateIds: ['template-1'],
       status: 'submitted',
     });
+  });
+
+  it('does not re-parent children when the topic is trashed after the pre-read', async () => {
+    persistedUserState.agentOnboarding = {
+      activeTopicId: 'topic-1',
+      version: CURRENT_ONBOARDING_VERSION,
+    };
+    persistedTopics['topic-1'] = {
+      agentId: 'web-onboarding-agent',
+      id: 'topic-1',
+      metadata: {},
+    };
+    // Simulate the live-row guarded topic update losing a race with trashing.
+    transactionTopicUpdateRows = [];
+
+    const service = new OnboardingService(mockDb as any, userId);
+    const result = await service.finishOnboarding();
+
+    expect(result.success).toBe(true);
+    expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+    expect(transactionUpdateCalls).toHaveLength(1);
+    expect(transactionUpdateCalls[0].returning).toHaveBeenCalledWith({ id: expect.anything() });
   });
 
   it('is idempotent when finishOnboarding is called after completion', async () => {

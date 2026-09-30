@@ -15,6 +15,7 @@ import {
   DEFAULT_MANAGER_MAX_TURNS,
   managerTurnsSpent,
 } from '@/server/services/goal/recoveryPolicy';
+import { GoalReportStore, type SubmitGoalReportInput } from '@/server/services/goal/reportStore';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import {
   HeteroOperationPrincipalError,
@@ -41,6 +42,18 @@ const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 );
 const goalWriteProcedure = goalProcedure.use(withScopedPermission('agent:update'));
 const idInput = z.object({ id: z.string() });
+/**
+ * A wrap-up report submitted from a run. The metadata passes through as a
+ * record: `GoalReportStore.submit` parses it with the report schema and checks
+ * every reference against the Goal graph.
+ */
+const reportInput = idInput.extend({
+  operationId: z.string().min(1),
+  report: z.object({
+    content: z.string(),
+    metadata: z.record(z.string(), z.unknown()),
+  }),
+});
 
 /** Everything a goal is created from except who owns it. */
 const conversationGoalInput = z.object({
@@ -190,6 +203,50 @@ export const goalRouter = router({
       });
       return { data, success: true };
     }),
+  // The wrap-up report of a heterogeneous agent's run: server tools never reach
+  // a device run, so its report arrives through the CLI instead of the tool.
+  submitOperationReport: heteroAuthedProcedure
+    .use(serverDatabase)
+    .input(reportInput)
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.heteroAuthKind !== 'operation' || !ctx.heteroOperation) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'An operation-bound token is required',
+        });
+      }
+      let principal;
+      try {
+        principal = await resolveActiveHeteroOperationPrincipal({
+          capability: 'hetero:ingest',
+          claims: ctx.heteroOperation,
+          db: ctx.serverDB,
+          operationId: input.operationId,
+        });
+      } catch (error) {
+        if (!(error instanceof HeteroOperationPrincipalError)) throw error;
+        throw new TRPCError({
+          cause: error,
+          code:
+            error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
+          message: error.message,
+        });
+      }
+      const data = await new GoalReportStore(
+        ctx.serverDB,
+        principal.userId,
+        principal.workspaceId,
+      ).submitFromOperation(input.id, input.report as SubmitGoalReportInput, input.operationId);
+      return { data, success: true };
+    }),
+  submitReport: goalWriteProcedure.input(reportInput).mutation(async ({ ctx, input }) => {
+    const data = await new GoalReportStore(
+      ctx.serverDB,
+      ctx.userId,
+      ctx.workspaceId ?? undefined,
+    ).submitFromOperation(input.id, input.report as SubmitGoalReportInput, input.operationId);
+    return { data, success: true };
+  }),
   submitPlan: goalWriteProcedure
     .input(
       idInput.extend({
@@ -371,6 +428,39 @@ export const goalRouter = router({
       },
     ),
 
+  /**
+   * Answer a goal's clarification round at once. One advance follows all the
+   * answers, so the re-plan never starts with half of them.
+   */
+  answerClarifications: goalWriteProcedure
+    .input(
+      idInput.extend({
+        answers: z
+          .array(
+            z.object({
+              decisionId: z.string().uuid(),
+              optionId: z.string(),
+              resolution: z.string().optional(),
+            }),
+          )
+          .min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.goalService.answerClarifications(input.id, input.answers);
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'decide',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { message: 'Clarifications answered', success: true };
+      } catch (error) {
+        mapGoalError(error, 'answer clarifications for');
+      }
+    }),
+
   decide: goalWriteProcedure
     .input(
       idInput.extend({
@@ -521,6 +611,15 @@ export const goalRouter = router({
     }
   }),
 
+  /** Clarifications still waiting on the user, grouped by goal. */
+  pendingClarifications: goalProcedure.query(async ({ ctx }) => {
+    try {
+      return { data: await ctx.goalService.pendingClarifications(), success: true };
+    } catch (error) {
+      mapGoalError(error, 'list clarifications for');
+    }
+  }),
+
   graph: goalProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
       return { data: await ctx.goalService.graph(input.id), success: true };
@@ -555,26 +654,42 @@ export const goalRouter = router({
     }
   }),
 
-  resume: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
-    try {
-      const data = await ctx.goalService.resume(input.id);
-      await scheduleGoalAdvance({
-        goalId: input.id,
-        trigger: 'resume',
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
-      // Resuming does not give the main Agent more turns, so a goal it paused
-      // for running out would stop again on the next tick. Say how to continue
-      // it instead of leaving the caller to replace it with a new goal.
-      const message = managerTurnsSpent(data.config)
-        ? `Goal resumed, but its main Agent has used all ${data.config?.manager?.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS} turns and it will pause again. Raise the cap with: lh goal set-budget ${input.id} --max-manager-turns <n>`
-        : 'Goal resumed';
-      return { data, message, success: true };
-    } catch (error) {
-      mapGoalError(error, 'resume');
-    }
-  }),
+  resume: goalWriteProcedure
+    .input(
+      idInput.extend({
+        /**
+         * The owner confirms the planning turn the Goal paused on has ended, so
+         * it is settled before resuming instead of pausing the Goal again.
+         */
+        confirmExit: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        if (input.confirmExit)
+          await new GoalManagerService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ).confirmTurnExit(input.id);
+        const data = await ctx.goalService.resume(input.id);
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'resume',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        // Resuming does not give the main Agent more turns, so a goal it paused
+        // for running out would stop again on the next tick. Say how to continue
+        // it instead of leaving the caller to replace it with a new goal.
+        const message = managerTurnsSpent(data.config)
+          ? `Goal resumed, but its main Agent has used all ${data.config?.manager?.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS} turns and it will pause again. Raise the cap with: lh goal set-budget ${input.id} --max-manager-turns <n>`
+          : 'Goal resumed';
+        return { data, message, success: true };
+      } catch (error) {
+        mapGoalError(error, 'resume');
+      }
+    }),
 
   /**
    * Start every unfinished Task node over (cancel stale runs, back to

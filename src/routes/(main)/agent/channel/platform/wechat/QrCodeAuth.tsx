@@ -2,14 +2,13 @@
 
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, type ButtonProps, Text } from '@lobehub/ui/base-ui';
+import { Alert, Button, type ButtonProps, Spin, Text } from '@lobehub/ui/base-ui';
 import { QRCode } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { QrCode, RefreshCw } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { agentBotProviderService } from '@/services/agentBotProvider';
 
 const QR_CODE_SIZE = 220;
@@ -164,7 +163,7 @@ const QrCodeAuth = memo<QrCodeAuthProps>(
               {t('channel.wechatGenerateQrCode')}
             </Button>
           )}
-          {state.stage === 'loading' && <NeuralNetworkLoading size={48} />}
+          {state.stage === 'loading' && <Spin size="large" />}
           {state.stage === 'ready' && <QRCode size={QR_CODE_SIZE} value={state.imageUrl} />}
           {state.stage === 'error' && (
             <Flexbox className={styles.error} gap={12}>

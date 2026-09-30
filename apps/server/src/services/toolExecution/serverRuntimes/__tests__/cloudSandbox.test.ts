@@ -34,7 +34,10 @@ vi.mock('@/server/services/sandbox', () => ({
 }));
 
 vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
-  isLhCommand: (command: string) => command.startsWith('lh'),
+  // Mirrors the real split: the shim predicate matches any mention, the refusal
+  // predicate only an `lh` in command position.
+  isDirectLhInvocation: (command: string) => command.startsWith('lh'),
+  isLhCommand: (command: string) => /\blh\b/.test(command),
   preprocessLhCommand: mocks.preprocessLhCommand,
   SHARE_VISITOR_LH_BLOCKED_MESSAGE: 'The LobeHub CLI is unavailable in shared conversations.',
 }));
@@ -157,6 +160,24 @@ describe('cloudSandboxRuntime', () => {
     expect(mocks.preprocessLhCommand).not.toHaveBeenCalled();
     expect(mocks.sandboxService.callTool).not.toHaveBeenCalled();
     expect(result.state).toMatchObject({ success: false });
+  });
+
+  // Regression: the refusal used the shim's permissive predicate, so a
+  // visitor's harmless command that merely mentions `lh` was rejected outright.
+  it('does not refuse a share-visitor command that only mentions lh', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    const runtime = await cloudSandboxRuntime.factory(
+      buildContext({ agentShareVisitor: { agentId: 'agent-1' } }),
+    );
+
+    const command = "echo 'the lh CLI is unavailable here'";
+    await runtime.runCommand({ command, description: 'echo' });
+
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(command, 'user-1', undefined, true);
+    expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
+      'runCommand',
+      expect.objectContaining({ command }),
+    );
   });
 
   // Belt-and-braces: even though the short-circuit above already stops an

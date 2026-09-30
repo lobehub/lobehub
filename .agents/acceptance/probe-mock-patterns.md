@@ -38,7 +38,7 @@ drive / probe / capture / publish. Skip a row only when its surface AND runtime 
 | P14 | web, electron | hetero          | fixture        | Seed `agency_config.heterogeneousProvider` with SQL, then cold-load; the store write drops it                                                                |
 | P15 | web           | any             | fixture        | Derive day boundaries from the browser's `resolvedOptions().timeZone`, never an assumed zone                                                                 |
 | P16 | web, electron | any             | fixture        | Clear cache tiers in the NEW document via `addScriptToEvaluateOnNewDocument`; the outgoing page re-flushes on reload                                         |
-| P17 | web           | any             | drive          | Goals live at `/agent/:aid/goals` behind the Labs toggle `enableTopicAcceptance`                                                                             |
+| P17 | web           | any             | drive          | Goals live at `/agent/:aid/goals` behind the Labs toggle `enableGoals`                                                                                       |
 | P18 | electron      | hetero          | fixture        | Local-execution CC agent plus a four-table ledger fixture keyed to the live CLI identity                                                                     |
 | P19 | web           | any             | auth           | Seed a second user and sign in from inside a run-specific session; a signed-out context hits `/signin`                                                       |
 | P20 | cli           | any             | fixture        | Strip ambient topic/agent/operation ids for a LOCAL ingest; keep them for the production publish                                                             |
@@ -413,7 +413,7 @@ client view model has its own `DEFAULT_LEASE_TIMEOUT_MS = 15 min` and only honor
 goal with an explicit `--operation-lease-timeout-ms`. Liveness = the newer of the
 node row and `runHeartbeats` (the running operation's `updated_at` served by
 `goal.graph`), so the A/B is: node stale + op fresh → 运行中；both stale → 失联.
-Restore the forced rows (node/task/task\_topics/operation status + timestamps) after
+Restore the forced rows (node/task/task_topics/operation status + timestamps) after
 capturing.
 
 #### P13 · A CLI-created topic has no trigger/status and is filtered out of the Agent paged view
@@ -542,7 +542,7 @@ the skeleton, the cache tier is proven to be what the render reads.
 **Doesn't work:** opening `/agent/goals` directly. The goals route is nested under
 `/agent/:aid/goals`, so `goals` is parsed as an agentId and the page reports
 "assistant unavailable". The page is also gated behind the Labs toggle
-`enableTopicAcceptance`; while it is off, the route silently replaces back to
+`enableGoals`; while it is off, the route silently replaces back to
 `/agent/:aid`.
 
 **Works:** look up the seeded user's agentId
@@ -551,7 +551,7 @@ public store action (it persists to user preferences and applies for the whole
 session):
 
 ```js
-window.__LOBE_STORES.user().updateLab({ enableTopicAcceptance: true });
+window.__LOBE_STORES.user().updateLab({ enableGoals: true });
 ```
 
 Then open `/agent/<agentId>/goals`. In the create-Goal dialog, "start from blank"
@@ -1366,7 +1366,7 @@ second message AND ends on a tool round, so the first turn renders as an
 - Pointing the openai provider at the chat-completions `llm-stub.mjs`. The openai
   provider calls `/v1/responses` (the stub 404s and the turn dies with
   `ProviderBizError … retrying 4/6`). Side requests (topic title) hit the same endpoint
-  with `stream: false` and a `text.format` json\_schema — answer them with a JSON
+  with `stream: false` and a `text.format` json_schema — answer them with a JSON
   `{"title":…}` string, never with SSE.
 - Setting `model: 'gpt-4o'` on the agent. Only models present in
   `aiInfra().enabledAiModels` for the provider carry `abilities.functionCall`; an
@@ -1417,8 +1417,8 @@ for the `agencyConfig.heterogeneousProvider` SQL seed, and the Electron auth/por
 command: 'claude' }` and call `selectRuntimeType(ctx, { isDesktop: true })`.
 
 Line order that streams live: `system/init` → `stream_event message_start` → `assistant`
-(tool\_use Bash) → `user` (tool\_result) → `stream_event message_start` → `content_block_delta`
-text\_delta ×N → `assistant` (full text) → `result`. The op shows as `execHeterogeneousAgent`,
+(tool_use Bash) → `user` (tool_result) → `stream_event message_start` → `content_block_delta`
+text_delta ×N → `assistant` (full text) → `result`. The op shows as `execHeterogeneousAgent`,
 the bubble shows "Claude Code is running…", and the topic persists user → assistant(Bash) →
 tool → assistant(text) rows. Capture mid-turn by polling the top-level `[data-index]` rows,
 not `body.innerText`, and key turn-2 captures on the store/DOM state you assert rather than a
@@ -2522,7 +2522,7 @@ rate-limit (429) or ship JSON-disabled (HTML back).
 `SEARCH_PROVIDERS=searxng SEARXNG_URL=http://localhost:8888`. It aggregates real
 engines, so the whole product path (server search impl → result cards → tool
 message persistence) is genuine. English queries return results more reliably
-than Chinese ones. One trap when the model is a tool\_call-emitting stub AND a
+than Chinese ones. One trap when the model is a tool_call-emitting stub AND a
 synthetic context injector is active (e.g. `getGoalContext`): "last message is a
 tool result → answer" fires on the injected pair and skips the search — key the
 stub's answer-mode off the NAME of the last `function_call` instead.
@@ -2581,7 +2581,7 @@ adapter's seeded CLI profile (§4 CLI) points at the wrong backend, and cloud's
 **Doesn't work:** `dev:runtime:auth` for the CLI (cookies, not a token); an
 interactive device-code login (hijacks the user's browser and is forbidden).
 
-**Works:** insert an api\_keys row into the runtime's main database and use it as
+**Works:** insert an api_keys row into the runtime's main database and use it as
 `LOBEHUB_CLI_API_KEY`. `key_hash` is `HMAC-SHA256(key, KEY_VAULTS_SECRET)`;
 `key` is the same plaintext AES-GCM encrypted with that secret as
 `iv:authTag:ciphertext` hex — the shapes `init-dev-env.sh seed-user` uses. Read
@@ -2683,7 +2683,7 @@ the code as the variable.
 Vite server, letting HMR settle between measurements — same route, same data,
 same viewport, same injected state. In a shared working tree take the "after"
 copy with `cp` first and restore from it (never `git stash`, see
-\[\[feedback\_no\_git\_stash\_shared\_worktrees]] in the user memory); recover the
+\[\[feedback_no_git_stash_shared_worktrees]] in the user memory); recover the
 "before" with `git show HEAD:<path>`. When the tree sits on an unrelated branch,
 write the PR branch's exact file content in for the capture and record the
 sha256 of both sides in the evidence.

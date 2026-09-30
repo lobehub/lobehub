@@ -1,10 +1,10 @@
 import type { ChildProcess } from 'node:child_process';
-import { spawn } from 'node:child_process';
 import { platform } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { spawnManaged } from '@lobechat/utils/managedProcess';
 
 import type { AskUserBridge } from '../askUser/AskUserBridge';
 import { resolveHeterogeneousAgentCommand } from '../config';
@@ -708,7 +708,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
 
   const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
   const detached = platform() !== 'win32' && (options.detached ?? true);
-  const proc = spawn(cliSpawnPlan.command, cliSpawnPlan.args, {
+  const proc = spawnManaged(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
     detached,
     env: childEnv,
@@ -799,6 +799,12 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
         const { code } = await exit;
         if (code === 0 && !killedByUs) {
           for (const event of pipeline.validateCompletion()) queue.push(event);
+        }
+        // Kimi Code reports usage only via its on-disk session wire log, so
+        // it can only be collected now that the process has exited. The hook
+        // is a no-op for every other agent type.
+        for (const event of await pipeline.collectPostRunUsage({ env: childEnv })) {
+          queue.push(event);
         }
       } catch (err) {
         streamError = err instanceof Error ? err : new Error(String(err));

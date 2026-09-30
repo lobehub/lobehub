@@ -9,9 +9,11 @@ import { useTranslation } from 'react-i18next';
 import { isDesktop } from '@/const/version';
 
 import ApprovalCard from './ApprovalCard';
+import GoalClarificationCard from './GoalClarificationCard';
 import { styles } from './styles';
 import { useApprovalIslandCollapse } from './useApprovalIslandCollapse';
 import { useGlobalPendingApprovals } from './useGlobalPendingApprovals';
+import { usePendingGoalClarifications } from './usePendingGoalClarifications';
 
 const SPRING = { damping: 30, stiffness: 320, type: 'spring' } as const;
 
@@ -29,15 +31,20 @@ const TOP_OFFSET = isDesktop ? TITLE_BAR_HEIGHT + 8 : 16;
 const GlobalApprovalNotification = memo(() => {
   const { t } = useTranslation('chat');
   const groups = useGlobalPendingApprovals();
-  const [collapsed, setCollapsed] = useApprovalIslandCollapse(groups.length);
+  // A goal waiting on its clarification round asks through the same island.
+  // Run approvals go first: a run is blocked mid-turn, a goal has not started.
+  const goalGroups = usePendingGoalClarifications();
+  const total = groups.length + goalGroups.length;
+  const [collapsed, setCollapsed] = useApprovalIslandCollapse(total);
 
-  const hasApprovals = groups.length > 0;
+  const hasApprovals = total > 0;
   // Only ONE card is actionable at a time: the reused `ApprovalActions`
   // registers window-level Enter/1/2 shortcuts, so mounting a card per group
   // would let a single Enter submit every pending approval at once. Extra
   // approvals queue behind a count and surface as each one resolves.
   const top = groups[0];
-  const extraCount = groups.length - 1;
+  const topGoal = top ? undefined : goalGroups[0];
+  const extraCount = total - 1;
 
   return (
     <div className={styles.wrapper} style={{ '--global-approval-top': `${TOP_OFFSET}px` } as any}>
@@ -55,7 +62,7 @@ const GlobalApprovalNotification = memo(() => {
               onClick={() => setCollapsed(false)}
             >
               <span className={styles.pillDot} />
-              {t('globalApproval.pendingCount', { count: groups.length })}
+              {t('globalApproval.pendingCount', { count: total })}
             </m.div>
           ) : (
             <m.div
@@ -79,6 +86,19 @@ const GlobalApprovalNotification = memo(() => {
                     transition={SPRING}
                   >
                     <ApprovalCard group={top} onCollapse={() => setCollapsed(true)} />
+                  </m.div>
+                )}
+                {topGoal && (
+                  <m.div
+                    layout
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: -16 }}
+                    initial={{ opacity: 0, scale: 0.96, y: -16 }}
+                    key={`goal:${topGoal.goalId}`}
+                    style={{ pointerEvents: 'auto', width: '100%' }}
+                    transition={SPRING}
+                  >
+                    <GoalClarificationCard group={topGoal} onCollapse={() => setCollapsed(true)} />
                   </m.div>
                 )}
               </AnimatePresence>

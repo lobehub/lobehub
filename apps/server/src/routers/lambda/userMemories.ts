@@ -2,7 +2,6 @@ import { BRANDING_PROVIDER, ENABLE_BUSINESS_FEATURES } from '@lobechat/business-
 import {
   DEFAULT_SEARCH_USER_MEMORY_TOP_K,
   DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM,
-  MEMORY_SEARCH_TOP_K_LIMITS,
 } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
@@ -12,7 +11,7 @@ import {
   ExperienceMemoryItemSchema,
   PreferenceMemoryItemSchema,
   RemoveIdentityActionSchema,
-  UpdateIdentityActionSchema,
+  UpdateIdentityToolInputSchema,
 } from '@lobechat/memory-user-memory';
 import type { QueryTaxonomyOptionsResult, SearchMemoryResult } from '@lobechat/types';
 import { LayersEnum, queryTaxonomyOptionsSchema, searchMemorySchema } from '@lobechat/types';
@@ -45,6 +44,7 @@ import {
   userMemoriesPreferences,
   userSettings,
 } from '@/database/schemas';
+import { notTrashed } from '@/database/utils/softDelete';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
@@ -56,7 +56,10 @@ import {
 } from '@/server/services/ftsSearch/observability';
 import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
 import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
-import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
+import {
+  normalizeSearchMemoryParams,
+  resolveMemorySearchTopK,
+} from '@/server/services/memory/userMemory/searchParams';
 
 const EMPTY_SEARCH_RESULT: SearchMemoryResult = {
   activities: [],
@@ -102,28 +105,6 @@ const normalizeMemoryEffort = (value: unknown): MemoryEffort => {
   return 'medium';
 };
 
-const applySearchLimitsByEffort = (
-  effort: MemoryEffort,
-  requested: {
-    activities: number;
-    contexts: number;
-    experiences: number;
-    identities: number;
-    preferences: number;
-  },
-) => {
-  const limit = MEMORY_SEARCH_TOP_K_LIMITS[effort];
-  const identityLimit = effort === 'high' ? 4 : effort === 'low' ? 1 : 2;
-
-  return {
-    activities: Math.min(requested.activities, limit.activities),
-    contexts: Math.min(requested.contexts, limit.contexts),
-    experiences: Math.min(requested.experiences, limit.experiences),
-    identities: Math.min(requested.identities, identityLimit),
-    preferences: Math.min(requested.preferences, limit.preferences),
-  };
-};
-
 const searchUserMemories = async (
   ctx: MemorySearchContext,
   input: z.infer<typeof searchMemorySchema>,
@@ -155,19 +136,7 @@ const searchUserMemories = async (
   });
 
   const effectiveEffort = normalizeMemoryEffort(normalizedInput.effort ?? ctx.memoryEffort);
-  const effortDefaults = MEMORY_SEARCH_TOP_K_LIMITS[effectiveEffort];
-
-  const requestedLimits = {
-    activities: normalizedInput.topK?.activities ?? effortDefaults.activities,
-    contexts: normalizedInput.topK?.contexts ?? effortDefaults.contexts,
-    experiences: normalizedInput.topK?.experiences ?? effortDefaults.experiences,
-    identities:
-      normalizedInput.topK?.identities ??
-      (effectiveEffort === 'high' ? 4 : effectiveEffort === 'low' ? 1 : 2),
-    preferences: normalizedInput.topK?.preferences ?? effortDefaults.preferences,
-  };
-
-  const effortConstrainedLimits = applySearchLimitsByEffort(effectiveEffort, requestedLimits);
+  const effortConstrainedLimits = resolveMemorySearchTopK(effectiveEffort, normalizedInput);
   return ctx.memoryModel.searchMemory(
     { ...normalizedInput, queries: normalizedQueries, topK: effortConstrainedLimits },
     queryEmbeddings,
@@ -540,6 +509,7 @@ export const userMemoriesRouter = router({
         await run('userMemories', async () => {
           const where = combineConditions([
             eq(userMemories.userId, ctx.userId),
+            notTrashed(userMemories.isDeleted),
             options.startDate ? gte(userMemories.createdAt, options.startDate) : undefined,
             options.endDate ? lte(userMemories.createdAt, options.endDate) : undefined,
           ]);
@@ -1348,7 +1318,7 @@ export const userMemoriesRouter = router({
     }),
 
   toolUpdateIdentityMemory: memoryWriteProcedure
-    .input(UpdateIdentityActionSchema)
+    .input(UpdateIdentityToolInputSchema)
     .mutation(async ({ input, ctx }) => {
       try {
         const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
@@ -1437,6 +1407,7 @@ export const userMemoriesRouter = router({
           identity: Object.keys(identityPayload).length > 0 ? identityPayload : undefined,
           identityId: input.id,
           mergeStrategy: input.mergeStrategy,
+          preserveOmittedFields: true,
         });
 
         if (!updated) {

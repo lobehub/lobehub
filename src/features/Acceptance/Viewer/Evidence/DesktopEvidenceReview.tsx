@@ -1,10 +1,10 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
+import { Flexbox, Icon, TextArea } from '@lobehub/ui';
 import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { ZoomIn, ZoomOut } from 'lucide-react';
-import { memo } from 'react';
+import { Film, ZoomIn, ZoomOut } from 'lucide-react';
+import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ZOOM_STEPS } from '../Review/rejectDraft';
@@ -12,6 +12,9 @@ import type { RejectReviewModel } from '../Review/useRejectReview';
 import { AttachmentStrip, AttachmentUploadButton } from './attachments';
 import { EvidenceStage } from './EvidenceStage';
 import { RegionNotes } from './RegionNotes';
+import { VideoNotes } from './Video/VideoNotes';
+import type { VideoReviewStageHandle } from './Video/VideoReviewStage';
+import { VideoReviewStage } from './Video/VideoReviewStage';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -61,6 +64,16 @@ const styles = createStaticStyles(({ css }) => ({
       height: 100%;
       object-fit: cover;
     }
+  `,
+  /** A video has no poster to thumbnail without decoding it — an icon tile says what it is. */
+  videoThumb: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: #fff;
+
+    background: #000;
   `,
   thumbActive: css`
     border-color: ${cssVar.colorPrimary};
@@ -122,6 +135,8 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
     uploading,
     zoom,
   } = model;
+  const videoStage = useRef<VideoReviewStageHandle>(null);
+  const isVideo = activeEvidence?.type === 'video';
 
   return (
     <div className={styles.body}>
@@ -146,57 +161,97 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
                     )}
                     onClick={() => model.selectEvidence(index)}
                   >
-                    <img alt={''} src={item.fileUrl} />
+                    {item.type === 'video' ? (
+                      <span className={styles.videoThumb} style={{ height: '100%' }}>
+                        <Icon icon={Film} size={18} />
+                      </span>
+                    ) : (
+                      <img alt={''} src={item.fileUrl} />
+                    )}
                   </button>
                 ))}
               </Flexbox>
             )}
             <div className={styles.stageRow} style={{ position: 'relative' }}>
-              <EvidenceStage
-                drawing
-                annotations={activeAnnotations}
-                src={activeEvidence.fileUrl}
-                zoom={zoom}
-                onDraw={canvas.onDraw}
-                onRemove={canvas.onRemove}
-                onUpdate={canvas.onUpdate}
-              />
-              <div className={styles.zoomBar}>
-                <ActionIcon
-                  disabled={zoom <= ZOOM_STEPS[0]}
-                  icon={ZoomOut}
-                  size={'small'}
-                  title={t('acceptance.review.zoomOut')}
-                  onClick={() => model.stepZoom(-1)}
+              {isVideo ? (
+                <VideoReviewStage
+                  activeNoteKey={model.activeNoteKey}
+                  chapters={activeEvidence.chapters ?? []}
+                  handleRef={videoStage}
+                  key={activeEvidence.id}
+                  notes={activeAnnotations}
+                  src={activeEvidence.fileUrl}
+                  onAddNote={model.addVideoNote}
+                  onSelectNote={model.setActiveNoteKey}
+                  onRefreshSource={
+                    model.refreshEvidenceUrl
+                      ? () => model.refreshEvidenceUrl!(activeEvidence.id)
+                      : undefined
+                  }
                 />
-                <span className={styles.zoomLabel}>{Math.round(zoom * 100)}%</span>
-                <ActionIcon
-                  disabled={zoom >= ZOOM_STEPS.at(-1)!}
-                  icon={ZoomIn}
-                  size={'small'}
-                  title={t('acceptance.review.zoomIn')}
-                  onClick={() => model.stepZoom(1)}
+              ) : (
+                <EvidenceStage
+                  drawing
+                  annotations={activeAnnotations}
+                  src={activeEvidence.fileUrl}
+                  zoom={zoom}
+                  onDraw={canvas.onDraw}
+                  onRemove={canvas.onRemove}
+                  onUpdate={canvas.onUpdate}
                 />
-              </div>
+              )}
+              {!isVideo && (
+                <div className={styles.zoomBar}>
+                  <ActionIcon
+                    disabled={zoom <= ZOOM_STEPS[0]}
+                    icon={ZoomOut}
+                    size={'small'}
+                    title={t('acceptance.review.zoomOut')}
+                    onClick={() => model.stepZoom(-1)}
+                  />
+                  <span className={styles.zoomLabel}>{Math.round(zoom * 100)}%</span>
+                  <ActionIcon
+                    disabled={zoom >= ZOOM_STEPS.at(-1)!}
+                    icon={ZoomIn}
+                    size={'small'}
+                    title={t('acceptance.review.zoomIn')}
+                    onClick={() => model.stepZoom(1)}
+                  />
+                </div>
+              )}
               <div className={styles.notes}>
                 <Flexbox gap={2}>
                   <Text strong fontSize={13}>
                     {t('acceptance.review.regionComments')}
                   </Text>
                   <Text fontSize={12} type={'secondary'}>
-                    {t('acceptance.review.annotateHint')}
+                    {isVideo
+                      ? t('acceptance.video.annotateHint')
+                      : t('acceptance.review.annotateHint')}
                   </Text>
                 </Flexbox>
                 {activeAnnotations.length === 0 && (
                   <Text fontSize={12} type={'secondary'}>
-                    {t('acceptance.review.regionCommentsEmpty')}
+                    {isVideo
+                      ? t('acceptance.video.notesEmpty')
+                      : t('acceptance.review.regionCommentsEmpty')}
                   </Text>
                 )}
-                <RegionNotes
-                  annotations={activeAnnotations}
-                  onChange={model.editAnnotation}
-                  onRemove={model.removeAnnotation}
-                />
+                {isVideo ? (
+                  <VideoNotes
+                    activeNoteKey={model.activeNoteKey}
+                    notes={activeAnnotations}
+                    onChange={model.editAnnotation}
+                    onFocusNote={(note) => videoStage.current?.focusNote(note)}
+                    onRemove={model.removeAnnotation}
+                  />
+                ) : (
+                  <RegionNotes
+                    annotations={activeAnnotations}
+                    onChange={model.editAnnotation}
+                    onRemove={model.removeAnnotation}
+                  />
+                )}
               </div>
             </div>
           </Flexbox>

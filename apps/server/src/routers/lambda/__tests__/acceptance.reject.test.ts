@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as RbacPermissionModule from '@/business/server/trpc-middlewares/rbacPermission';
 import type * as AcceptanceModelModule from '@/database/models/acceptance';
 import type * as GoalModelModule from '@/database/models/goal';
+import type * as GoalServiceModule from '@/server/services/goal';
 
 import { acceptanceRouter } from '../acceptance';
 import { cleanupTestUser, createTestContext, createTestUser } from './integration/setup';
@@ -59,6 +60,20 @@ vi.mock('@/database/models/goal', async (importOriginal) => {
   }
   return { ...actual, GoalModel };
 });
+const mockReopenForChanges = vi.fn();
+vi.mock('@/server/services/goal', async (importOriginal) => {
+  const actual = await importOriginal<typeof GoalServiceModule>();
+  return {
+    ...actual,
+    GoalService: vi.fn().mockImplementation(function () {
+      return { reopenForChanges: mockReopenForChanges };
+    }),
+  };
+});
+const mockScheduleGoalAdvance = vi.fn();
+vi.mock('@/server/services/goal/scheduler', () => ({
+  scheduleGoalAdvance: (...args: unknown[]) => mockScheduleGoalAdvance(...args),
+}));
 vi.mock('@/database/models/acceptance', async (importOriginal) => {
   const actual = await importOriginal<typeof AcceptanceModelModule>();
   class AcceptanceModel extends actual.AcceptanceModel {
@@ -108,6 +123,8 @@ describe('acceptanceRouter reject', () => {
 
   afterEach(async () => {
     mockExecAgent.mockReset();
+    mockReopenForChanges.mockReset();
+    mockScheduleGoalAdvance.mockReset();
     flags.denyMessageCreate = false;
     flags.failRepairingStamp = false;
     flags.goalOwnsTask = false;
@@ -222,6 +239,41 @@ describe('acceptanceRouter reject', () => {
       expect(result.repairDispatch).toEqual({ dispatched: false, reason: 'goal_coordinator' });
       expect(result.status).toBe('rejected');
       expect(mockExecAgent).not.toHaveBeenCalled();
+    });
+
+    it('reopens the Goal a rejected Goal-level acceptance ended, and queues its rework', async () => {
+      await serverDB
+        .update(acceptances)
+        .set({ subjectId: 'task_goal_acceptance', subjectType: 'task' })
+        .where(eq(acceptances.id, acceptanceId));
+      flags.goalOwnsTask = true;
+      mockReopenForChanges.mockResolvedValue('goal_1');
+
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+      const result = await caller.reject({ comment: 'Add a day-one agenda', id: acceptanceId });
+
+      expect(result.repairDispatch).toEqual({ dispatched: false, reason: 'goal_coordinator' });
+      expect(mockReopenForChanges).toHaveBeenCalledWith(
+        'task_goal_acceptance',
+        'Add a day-one agenda',
+      );
+      expect(mockScheduleGoalAdvance).toHaveBeenCalledWith(
+        expect.objectContaining({ goalId: 'goal_1', trigger: 'decide', userId }),
+      );
+    });
+
+    it('does not queue an advance when the Goal was not reopened', async () => {
+      await serverDB
+        .update(acceptances)
+        .set({ subjectId: 'task_goal', subjectType: 'task' })
+        .where(eq(acceptances.id, acceptanceId));
+      flags.goalOwnsTask = true;
+      mockReopenForChanges.mockResolvedValue(undefined);
+
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+      await caller.reject({ comment: 'Rework the draft', id: acceptanceId });
+
+      expect(mockScheduleGoalAdvance).not.toHaveBeenCalled();
     });
 
     it('still reports the dispatch when the repairing stamp fails after the run started', async () => {

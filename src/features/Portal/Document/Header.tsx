@@ -1,19 +1,17 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu, Skeleton, Text } from '@lobehub/ui/base-ui';
+import { Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, MoreHorizontal, Pencil } from 'lucide-react';
-import { type ChangeEvent, memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { type ChangeEvent, memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AutoSaveHint from './AutoSaveHint';
-import CopyLinkMenuItem from './CopyLinkMenuItem';
-import { TITLE_MAX_LENGTH, usePortalDocumentTitle } from './usePortalDocumentHeader';
+import { usePortalDocumentTitleState } from './titleContext';
+import { TITLE_MAX_LENGTH } from './usePortalDocumentHeader';
 
 const styles = createStaticStyles(({ css }) => ({
   root: css`
-    flex: 1;
     min-width: 0;
   `,
   separator: css`
@@ -85,7 +83,7 @@ interface HeaderProps {
 }
 
 const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
-  const { t } = useTranslation(['chat', 'file', 'common']);
+  const { t } = useTranslation('file');
   const {
     cancelEdit,
     commitEdit,
@@ -97,7 +95,7 @@ const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
     startEdit,
     syncIdleDraft,
     titleFallback,
-  } = usePortalDocumentTitle();
+  } = usePortalDocumentTitleState();
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -106,11 +104,13 @@ const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
     syncIdleDraft(editing);
   }, [editing, syncIdleDraft]);
 
-  const beginEdit = useCallback(() => {
-    startEdit();
-    // The input mounts during this render; focus once it exists.
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, [startEdit]);
+  // Rename from the header's `…` menu flips the same shared edit state, so
+  // focus follows the flag rather than the click that started it.
+  useEffect(() => {
+    if (!editing) return;
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [editing]);
 
   const handleTitleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -130,96 +130,52 @@ const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
     [cancelEdit],
   );
 
-  const menuItems = useMemo<DropdownItem[]>(() => {
-    const items: DropdownItem[] = [];
-
-    if (!metaLocked) {
-      items.push({
-        icon: <Icon icon={Pencil} />,
-        key: 'rename',
-        label: t('rename', { ns: 'common' }),
-        onClick: beginEdit,
-      });
-    }
-
-    return items;
-  }, [beginEdit, metaLocked, t]);
-
   if (isLoading) {
-    return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        flex={1}
-        gap={12}
-        justify={'space-between'}
-        width={'100%'}
-      >
-        <Flexbox flex={1}>
-          <Skeleton height={16} width={180} />
-        </Flexbox>
-      </Flexbox>
-    );
+    return <Skeleton height={16} width={180} />;
   }
 
   return (
+    // Hug the title so the shared `…` rides right behind it; only an open
+    // editor claims the free width to type into.
     <Flexbox
       horizontal
       align={'center'}
       className={styles.root}
-      flex={1}
-      gap={6}
-      justify={'space-between'}
-      width={'100%'}
+      flex={editing ? 1 : '0 1 auto'}
+      gap={4}
     >
-      <Flexbox horizontal align={'center'} flex={1} gap={4} style={{ minWidth: 0 }}>
-        {/* Navigable crumb gets a real button (keyboard reachable); a plain
+      {/* Navigable crumb gets a real button (keyboard reachable); a plain
             notebook document renders a noninteractive label with no affordance. */}
-        {onOpenDocumentsIndex ? (
-          <button className={styles.crumbButton} type={'button'} onClick={onOpenDocumentsIndex}>
-            {t('menu.allPages', { ns: 'file' })}
-          </button>
-        ) : (
-          <Text className={styles.crumbLabel} color={cssVar.colorTextQuaternary}>
-            {t('menu.allPages', { ns: 'file' })}
-          </Text>
-        )}
-        <Icon className={styles.separator} icon={ChevronRight} size={14} />
-        {editing ? (
-          <input
-            className={styles.titleInput}
-            maxLength={TITLE_MAX_LENGTH}
-            ref={inputRef}
-            value={draft}
-            onBlur={commitEdit}
-            onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value)}
-            onKeyDown={handleTitleKeyDown}
-          />
-        ) : (
-          <Text
-            className={styles.title}
-            ellipsis={{ tooltip: draft || titleFallback }}
-            style={{ minWidth: 0 }}
-            onClick={metaLocked ? undefined : beginEdit}
-          >
-            {draft || titleFallback}
-          </Text>
-        )}
-      </Flexbox>
-      <Flexbox horizontal align={'center'} gap={8}>
-        {!metaLocked && <AutoSaveHint />}
-        <CopyLinkMenuItem />
-        {menuItems.length > 0 && (
-          <DropdownMenu
-            iconSpaceMode={'group'}
-            items={menuItems}
-            placement={'bottomRight'}
-            popupProps={{ style: { minWidth: 200 } }}
-          >
-            <ActionIcon icon={MoreHorizontal} size={'small'} />
-          </DropdownMenu>
-        )}
-      </Flexbox>
+      {onOpenDocumentsIndex ? (
+        <button className={styles.crumbButton} type={'button'} onClick={onOpenDocumentsIndex}>
+          {t('menu.allPages', { ns: 'file' })}
+        </button>
+      ) : (
+        <Text className={styles.crumbLabel} color={cssVar.colorTextQuaternary}>
+          {t('menu.allPages', { ns: 'file' })}
+        </Text>
+      )}
+      <Icon className={styles.separator} icon={ChevronRight} size={14} />
+      {editing ? (
+        <input
+          className={styles.titleInput}
+          maxLength={TITLE_MAX_LENGTH}
+          ref={inputRef}
+          value={draft}
+          onBlur={commitEdit}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(event.target.value)}
+          onKeyDown={handleTitleKeyDown}
+        />
+      ) : (
+        <Text
+          className={styles.title}
+          ellipsis={{ tooltip: draft || titleFallback }}
+          style={{ minWidth: 0 }}
+          onClick={metaLocked ? undefined : startEdit}
+        >
+          {draft || titleFallback}
+        </Text>
+      )}
     </Flexbox>
   );
 });

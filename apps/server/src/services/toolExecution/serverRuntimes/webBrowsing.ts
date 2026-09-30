@@ -1,3 +1,4 @@
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing/executionRuntime';
 
@@ -20,6 +21,7 @@ export const webBrowsingRuntime: ServerRuntimeRegistration = {
       userId && serverDB ? await getUserChannelPreferences(serverDB, userId) : undefined;
 
     return new WebBrowsingExecutionRuntime({
+      canReadSavedDocuments: !!context.enabledToolIds?.includes(AgentDocumentsIdentifier),
       documentService: canSaveDocuments
         ? {
             associateDocument: async (documentId) => {
@@ -29,7 +31,7 @@ export const webBrowsingRuntime: ServerRuntimeRegistration = {
                 context.workspaceId,
                 agentVisibility,
               );
-              await service.associateDocument(agentId, documentId);
+              return service.associateDocument(agentId, documentId);
             },
             createDocument: async (params) => {
               // Same service the client trpc procedure uses — dedupe by URL,

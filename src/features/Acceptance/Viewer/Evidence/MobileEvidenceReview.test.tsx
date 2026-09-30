@@ -37,6 +37,7 @@ const buildModel = (overrides: Partial<RejectReviewModel> = {}): RejectReviewMod
     activeEvidence: undefined,
     activeIndex: -1,
     annotations: [],
+    editableAnnotations: [],
     attachments: [],
     canSubmit: false,
     canvas: { onDraw: vi.fn(), onRemove: vi.fn(), onUpdate: vi.fn() },
@@ -133,7 +134,11 @@ describe('MobileEvidenceReview notes button', () => {
   });
 
   it('keeps marked regions visible without auto-opening the notes', () => {
-    render(<MobileEvidenceReview model={buildModel({ annotations: [region] })} />);
+    render(
+      <MobileEvidenceReview
+        model={buildModel({ annotations: [region], editableAnnotations: [region] })}
+      />,
+    );
 
     // Regions have their own always-visible section; the notes stay closed.
     expect(screen.getByText('acceptance.review.regionComments')).toBeInTheDocument();
@@ -214,7 +219,12 @@ describe('MobileEvidenceReview marking mode', () => {
   it('lists the circled regions for their notes while marking', () => {
     render(
       <MobileEvidenceReview
-        model={withImage({ activeAnnotations: [region], annotations: [region], drawing: true })}
+        model={withImage({
+          activeAnnotations: [region],
+          annotations: [region],
+          drawing: true,
+          editableAnnotations: [region],
+        })}
       />,
     );
 

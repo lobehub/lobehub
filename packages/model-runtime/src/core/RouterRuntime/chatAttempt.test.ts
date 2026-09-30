@@ -351,6 +351,45 @@ describe('observeChatAttempt', () => {
   });
 
   it.each([
+    {
+      error: {
+        body: { message: 'The content was blocked for safety reasons.', provider: 'google' },
+        type: 'ProviderContentPolicyViolation',
+      },
+      expected: 'The content was blocked for safety reasons.',
+    },
+    {
+      error: { message: 'Internal error encountered.', name: 'Stream parsing error' },
+      expected: 'Internal error encountered.',
+    },
+  ])(
+    'keeps the provider message when a plain error payload interrupts visible output',
+    async ({ error, expected }) => {
+      const finished = vi.fn();
+      const response = await observeChatAttempt(
+        async ({ callback }) => {
+          await callback?.onText?.('partial');
+          await callback?.onError?.(error);
+          await callback?.onFinal?.({ text: 'partial' });
+          return new Response('done');
+        },
+        undefined,
+        attempt,
+        true,
+        finished,
+      );
+      await response.text();
+
+      const streamError = finished.mock.calls[0][0].error;
+      expect(streamError).toMatchObject({
+        error: { cause: error, message: expected, name: 'StreamChunkError' },
+        message: expected,
+        name: 'StreamChunkError',
+      });
+    },
+  );
+
+  it.each([
     { expectedOutcome: 'completed', text: 'I cannot help with that.' },
     { expectedOutcome: 'empty', text: '' },
   ])(

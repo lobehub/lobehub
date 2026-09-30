@@ -272,6 +272,26 @@ export interface WorkspaceScanDeps {
  * - The CLI uses the portable defaults exported from this package
  *   (`defaultGetLocalFilePreview`, `defaultGetProjectFileIndex`).
  */
+// ─── Trash ───
+
+/** Mirrors `@lobechat/electron-client-ipc` `TrashLocalFilesParams`. */
+export interface TrashLocalFilesParams {
+  paths: string[];
+}
+
+export interface TrashLocalFilesResultItem {
+  error?: string;
+  /** The path as it was requested, so the caller can reconcile its own rows. */
+  path: string;
+  success: boolean;
+}
+
+/** Per-path outcome in request order; `success` is true only when every path was trashed. */
+export interface TrashLocalFilesResult {
+  items: TrashLocalFilesResultItem[];
+  success: boolean;
+}
+
 export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
   /**
    * Start an app update check on this client; an available update downloads
@@ -314,6 +334,13 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   ) => Promise<ExternalAssetForPublishResult>;
   /** Search project files without shipping the whole index to the caller. */
   searchProjectFiles: (params: ProjectFileSearchParams) => Promise<ProjectFileSearchResult>;
+  /**
+   * Move files/folders to the OS trash. Optional: only a host with a desktop
+   * shell (Electron `shell.trashItem`) has a recoverable trash, so the CLI omits
+   * it and the dispatcher fails the RPC with {@link TRASH_UNSUPPORTED_MESSAGE}
+   * rather than degrading to a permanent delete.
+   */
+  trashLocalFiles?: (params: TrashLocalFilesParams) => Promise<TrashLocalFilesResult>;
   /**
    * Drop this machine's enrollment in a workspace pool: close the
    * workspace-principal connection and clear any persisted auto-reconnect

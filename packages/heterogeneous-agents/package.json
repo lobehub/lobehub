@@ -10,6 +10,7 @@
     "./errors": "./src/errors/index.ts",
     "./client": "./src/client/index.ts",
     "./models": "./src/models/index.ts",
+    "./processFailure": "./src/spawn/classifyProcessFailure.ts",
     "./protocol": "./src/protocol/index.ts",
     "./quota": "./src/quota/index.ts",
     "./quota-sampler": "./src/quota-sampler/index.ts",

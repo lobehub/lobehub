@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { UpdateIdentityMemoryParams } from '../types';
 import { MemoryExecutionRuntime, type MemoryRuntimeService } from './index';
 
 const createService = (overrides: Partial<MemoryRuntimeService> = {}): MemoryRuntimeService =>
@@ -80,5 +81,102 @@ describe('MemoryExecutionRuntime', () => {
     expect(result.success).toBe(false);
     expect(result.content).toContain('addPreferenceMemory with error detail');
     expect(addPreferenceMemory).not.toHaveBeenCalled();
+  });
+
+  describe('updateIdentityMemory', () => {
+    const run = async (params: unknown) => {
+      const updateIdentityMemory = vi
+        .fn()
+        .mockResolvedValue({ identityId: 'mem_1', message: 'updated', success: true });
+      const runtime = new MemoryExecutionRuntime({
+        service: createService({ updateIdentityMemory }),
+      });
+      const result = await runtime.updateIdentityMemory(params as UpdateIdentityMemoryParams);
+      return { result, updateIdentityMemory };
+    };
+
+    // The manifest only requires `set.withIdentity`, so a partial update is valid.
+    it('accepts a partial update that omits the optional fields', async () => {
+      const { result, updateIdentityMemory } = await run({
+        id: 'mem_1',
+        mergeStrategy: 'merge',
+        set: {
+          withIdentity: {
+            description: 'Senior platform engineer at Acme',
+            extractedLabels: ['platform-engineer'],
+            role: 'platform engineer',
+          },
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(updateIdentityMemory).toHaveBeenCalledWith({
+        id: 'mem_1',
+        mergeStrategy: 'merge',
+        set: {
+          withIdentity: {
+            description: 'Senior platform engineer at Acme',
+            extractedLabels: ['platform-engineer'],
+            role: 'platform engineer',
+          },
+        },
+      });
+    });
+
+    // The manifest says "use null for omitting the field": a null must leave the
+    // stored value alone instead of being written over it.
+    it('treats null fields as omitted rather than as values to store', async () => {
+      const { result, updateIdentityMemory } = await run({
+        id: 'mem_1',
+        mergeStrategy: 'merge',
+        set: {
+          details: null,
+          memoryCategory: null,
+          memoryType: 'people',
+          summary: null,
+          tags: null,
+          title: null,
+          withIdentity: {
+            description: 'Married on 2026-08-22',
+            episodicDate: null,
+            extractedLabels: ['spouse'],
+            relationship: 'spouse',
+            role: 'wife',
+            scoreConfidence: 0.95,
+            sourceEvidence: null,
+            sourceIds: null,
+            type: null,
+          },
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(updateIdentityMemory).toHaveBeenCalledWith({
+        id: 'mem_1',
+        mergeStrategy: 'merge',
+        set: {
+          memoryType: 'people',
+          withIdentity: {
+            description: 'Married on 2026-08-22',
+            extractedLabels: ['spouse'],
+            relationship: 'spouse',
+            role: 'wife',
+            scoreConfidence: 0.95,
+          },
+        },
+      });
+    });
+
+    it('still rejects an update without withIdentity', async () => {
+      const { result, updateIdentityMemory } = await run({
+        id: 'mem_1',
+        mergeStrategy: 'merge',
+        set: { description: 'flattened by mistake' },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('withIdentity');
+      expect(updateIdentityMemory).not.toHaveBeenCalled();
+    });
   });
 });

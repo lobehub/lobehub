@@ -13,6 +13,7 @@ import type {
 
 import type { EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentConfigWithId } from '@/server/services/agent';
+import type { ClientRunSnapshot } from '@/server/services/agentRuntime/foregroundOperation';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type { EvalRuntimeContext } from '@/server/services/agentRuntime/types';
 
@@ -59,6 +60,8 @@ export interface ExecRunContext {
    * ordinary (non-share) run.
    */
   shareGate?: AgentShareGate;
+  /** The group a reused Group Agent Builder topic was opened on — see `TurnSetupResult`. */
+  topicEditingGroupId?: string;
   /** Topic id — guaranteed to exist by the time pipeline stages run. */
   topicId: string;
   trigger?: string;
@@ -71,6 +74,12 @@ export interface ExecRunContext {
  * This extends the public ExecAgentParams with server-side only options
  */
 export interface InternalExecAgentParams extends ExecAgentParams {
+  /**
+   * The calling client handles `member_runtime_end`, derived from the
+   * `streamFeatures` it declared on `aiAgent.execAgent`. See
+   * `OperationCreationParams.acceptsMemberRuntimeEnd`.
+   */
+  acceptsMemberRuntimeEnd?: boolean;
   /** Additional plugin IDs to inject (e.g., task tool during task execution) */
   additionalPluginIds?: string[];
   /**
@@ -100,6 +109,11 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * set by the callSubAgent thread-run path, never client-passable.
    */
   chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
+  /**
+   * The composer's view of this conversation's runs at send time. Diagnostic
+   * only: persisted when this start supersedes a live run, never used to decide.
+   */
+  clientRunSnapshot?: ClientRunSnapshot;
   /**
    * Thread `execAgent` materialised from `appContext.newThread` for THIS turn.
    * Internal-only: set by the wrapper after it creates the row, never
@@ -175,6 +189,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * instead of answering itself. Mirrors the client runtime's mention wiring.
    */
   mentionedAgents?: RuntimeMentionedAgent[];
+  /** Prepare dependent records after the operation is persisted, before any execution dispatch. */
+  onOperationCreated?: (operationId: string) => Promise<void>;
   /** Parent message ID to continue from. Only takes effect when resume is true */
   parentMessageId?: string;
   queueRetries?: number;

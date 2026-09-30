@@ -138,6 +138,55 @@ export const UpdateIdentityActionSchema = z
   })
   .strict();
 
+type WithoutNullFields<T> = { [K in keyof T]?: Exclude<T[K], null> };
+
+/** Drop null-valued keys, narrowing the nullable input shape to the optional output one. */
+const dropNullFields = <T extends Record<string, unknown>>(value: T) =>
+  Object.fromEntries(
+    Object.entries(value).filter(([, field]) => field !== null),
+  ) as WithoutNullFields<T>;
+
+/**
+ * Input of the updateIdentityMemory tool. The tool manifest only requires `set.withIdentity`
+ * and tells the model to "use null for omitting the field", so every other field is optional
+ * and a null leaves the stored value untouched instead of being written over it.
+ * UpdateIdentityActionSchema keeps every field present because the extractor feeds it to
+ * strict structured output, which requires that.
+ *
+ * Use `z.input` for the raw tool arguments (nulls allowed) and `z.output` for the parsed
+ * value handed to services (nulls dropped).
+ */
+export const UpdateIdentityToolInputSchema = z
+  .object({
+    id: z.string(),
+    mergeStrategy: z.nativeEnum(MergeStrategyEnum),
+    set: z
+      .object({
+        details: z.string().nullish(),
+        memoryCategory: z.string().nullish(),
+        memoryType: MemoryTypeSchema.nullish(),
+        summary: z.string().nullish(),
+        tags: z.array(z.string()).nullish(),
+        title: z.string().nullish(),
+        withIdentity: z
+          .object({
+            description: z.string().nullish(),
+            episodicDate: z.string().nullish(),
+            extractedLabels: z.array(z.string()).nullish(),
+            relationship: z.string().nullish(),
+            role: z.string().nullish(),
+            scoreConfidence: z.number().nullish(),
+            sourceIds: z.array(z.string()).nullish(),
+            sourceEvidence: z.string().nullish(),
+            type: z.string().nullish(),
+          })
+          .strict()
+          .transform(dropNullFields),
+      })
+      .transform(({ withIdentity, ...rest }) => ({ ...dropNullFields(rest), withIdentity })),
+  })
+  .strict();
+
 export const RemoveIdentityActionSchema = z
   .object({
     id: z.string(),
@@ -171,4 +220,8 @@ export const WithIdentitySchema = z
 export type IdentityActions = z.infer<typeof IdentityActionsSchema>;
 export type AddIdentityAction = z.infer<typeof AddIdentityActionSchema>;
 export type UpdateIdentityAction = z.infer<typeof UpdateIdentityActionSchema>;
+/** Raw tool arguments as the model sends them; nullable fields mean "leave unchanged". */
+export type UpdateIdentityToolInput = z.input<typeof UpdateIdentityToolInputSchema>;
+/** Parsed tool arguments with null fields dropped. */
+export type UpdateIdentityToolParsed = z.output<typeof UpdateIdentityToolInputSchema>;
 export type RemoveIdentityAction = z.infer<typeof RemoveIdentityActionSchema>;

@@ -1,5 +1,7 @@
 'use client';
 
+import { readEvidenceChapters } from '@lobechat/const/verify';
+import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import { Flexbox, Image } from '@lobehub/ui';
 import { useResponsive } from 'antd-style';
 import { memo } from 'react';
@@ -23,6 +25,7 @@ import { ScreenshotTiles } from '../Evidence/ScreenshotTiles';
 import { IMAGE_EVIDENCE, imageRatio, isVisual } from './evidence';
 import type { EvidenceOverlayMap } from './overlay';
 import { styles } from './styles';
+import { VideoEvidencePlayer } from './Video/VideoEvidencePlayer';
 
 /** Flat media for a comparison side — the card frames it, so no own border/radius. */
 const comparisonContent = (item: AcceptanceEvidence) => {
@@ -69,7 +72,11 @@ export const EvidenceList = memo<{
    * in one row), the boxes land on the image that is already here.
    */
   overlays?: EvidenceOverlayMap;
-}>(({ evidence, overlays, onReviewEvidence }) => {
+  /** A freshly signed URL for one evidence — lets a video recover an expired link. */
+  onRefreshEvidenceUrl?: (evidenceId: string) => Promise<string | undefined>;
+  /** The standing reject's notes — video ones are pinned to the player's timeline. */
+  reviewNotes?: AcceptanceReviewAnnotation[];
+}>(({ evidence, overlays, onRefreshEvidenceUrl, onReviewEvidence, reviewNotes }) => {
   const { md = true } = useResponsive();
   const sorted = [...evidence].sort((a, b) => (isVisual(b) ? 1 : 0) - (isVisual(a) ? 1 : 0));
   if (sorted.length === 0) return null;
@@ -125,14 +132,16 @@ export const EvidenceList = memo<{
         const caption = description && <span className={styles.caption}>{description}</span>;
         if (item.fileUrl && item.type === 'video')
           return (
-            <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
-              <video
-                controls
-                src={item.fileUrl}
-                style={{ borderRadius: 8, maxHeight: 360, maxWidth: '100%', width: 'auto' }}
-              />
-              {caption}
-            </Flexbox>
+            <VideoEvidencePlayer
+              caption={caption}
+              chapters={readEvidenceChapters(item.metadata)}
+              key={item.id}
+              notes={reviewNotes?.filter((note) => note.evidenceId === item.id)}
+              src={item.fileUrl}
+              onRefreshSource={
+                onRefreshEvidenceUrl ? () => onRefreshEvidenceUrl(item.id) : undefined
+              }
+            />
           );
         if (item.fileUrl && item.type === 'audio')
           return (

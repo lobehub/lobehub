@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
 import { FULL_STRIP_REDACTION, sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
 import type { StreamChunkData } from '../StreamEventManager';
-import type { IStreamEventManager } from '../types';
+import type { IStreamEventManager, PublishAgentRuntimeEndParams } from '../types';
 
 // Mock global fetch
 const mockFetch = vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
@@ -666,6 +666,61 @@ describe('GatewayStreamNotifier', () => {
       expect(body.event.data.reasonDetail).toBe('Custom detail');
     });
 
+    describe('recordError', () => {
+      const endEventData = async (
+        params: Omit<PublishAgentRuntimeEndParams, 'operationId' | 'stepIndex'>,
+      ) => {
+        await notifier.publishAgentRuntimeEnd({ operationId: 'op-1', stepIndex: 0, ...params });
+        await new Promise((r) => setTimeout(r, 50));
+        const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+        return JSON.parse(pushCall![1].body).event.data;
+      };
+
+      it('keeps a user-side error off the gateway board', async () => {
+        const data = await endEventData({
+          finalState: {
+            error: { message: 'insufficient quota', type: 'InsufficientQuota' },
+            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'openai' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(false);
+      });
+
+      it('files a provider rate limit on our own provider', async () => {
+        const data = await endEventData({
+          finalState: {
+            error: { message: '429', type: 'RateLimitExceeded' },
+            modelRuntimeConfig: { model: 'claude-opus-5', provider: 'lobehub' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(true);
+      });
+
+      it('classifies by the configured provider, not the upstream named in the error body', async () => {
+        // On our provider the normalized error names the upstream the router
+        // reached, never `lobehub` — trusting it would hide our own rate limit.
+        const data = await endEventData({
+          finalState: {
+            error: { body: { provider: 'azure' }, message: '429', type: 'RateLimitExceeded' },
+            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'lobehub' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(true);
+      });
+
+      it('omits the flag on a non-error end', async () => {
+        const data = await endEventData({ finalState: {}, reason: 'completed' });
+
+        expect(data).not.toHaveProperty('recordError');
+      });
+    });
+
     it('includes errorType from finalState.error.type', async () => {
       const finalState = {
         error: { message: 'Budget exceeded', type: 'InsufficientBudgetForModel' },
@@ -1074,6 +1129,83 @@ describe('GatewayStreamNotifier', () => {
 
       const pushes = pushEventCalls().filter((b) => b.event?.data?.content === 'plain');
       expect(pushes.map((p) => p.operationId)).toEqual(['op-plain']);
+    });
+
+    it('mirrors a member terminal as a non-terminal member_runtime_end so the supervisor channel stays open (G-02)', async () => {
+      await notifier.publishAgentRuntimeInit('op-supervisor', { acceptsMemberRuntimeEnd: true });
+      await notifier.publishAgentRuntimeInit('op-member', { mirrorToOperationId: 'op-supervisor' });
+
+      await notifier.publishAgentRuntimeEnd({
+        finalState: {} as any,
+        operationId: 'op-member',
+        reason: 'done',
+        stepIndex: 1,
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const ends = pushEventCalls().filter(
+        (b) => b.event?.type === 'agent_runtime_end' || b.event?.type === 'member_runtime_end',
+      );
+      // The member's own channel still gets its real terminal.
+      expect(ends.filter((p) => p.operationId === 'op-member').map((p) => p.event.type)).toEqual([
+        'agent_runtime_end',
+      ]);
+      // The supervisor's channel must NOT receive an `agent_runtime_end`: the
+      // gateway DO treats any such event as the end of ITS session and
+      // broadcasts `session_complete`, cutting the supervisor stream short.
+      const mirrored = ends.filter((p) => p.operationId === 'op-supervisor');
+      expect(mirrored.map((p) => p.event.type)).toEqual(['member_runtime_end']);
+      expect(mirrored[0].event.operationId).toBe('op-member');
+      expect(mirrored[0].event.data.reason).toBe('done');
+    });
+
+    // Codex P1 on #20102: a client released before the rename (desktop, or a web
+    // tab from before a rolling deploy) only retires a member column on
+    // `agent_runtime_end`; renaming it for that client left the column running.
+    it('keeps the verbatim agent_runtime_end for a supervisor whose client predates member_runtime_end', async () => {
+      await notifier.publishAgentRuntimeInit('op-supervisor', {});
+      await notifier.publishAgentRuntimeInit('op-member', { mirrorToOperationId: 'op-supervisor' });
+
+      await notifier.publishAgentRuntimeEnd({
+        finalState: {} as any,
+        operationId: 'op-member',
+        reason: 'done',
+        stepIndex: 1,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const mirrored = pushEventCalls().filter(
+        (b) =>
+          b.operationId === 'op-supervisor' &&
+          (b.event?.type === 'agent_runtime_end' || b.event?.type === 'member_runtime_end'),
+      );
+      expect(mirrored.map((p) => p.event.type)).toEqual(['agent_runtime_end']);
+      expect(mirrored[0].event.operationId).toBe('op-member');
+    });
+
+    it('queue worker path: reads the supervisor client declaration from persisted metadata', async () => {
+      const resolveAccepts = vi.fn(async (op: string) => op === 'op-supervisor-q');
+      const workerNotifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        async (op) => (op === 'op-member-q' ? 'op-supervisor-q' : undefined),
+        undefined,
+        { resolveAcceptsMemberRuntimeEnd: resolveAccepts },
+      );
+
+      await workerNotifier.publishAgentRuntimeEnd({
+        finalState: {} as any,
+        operationId: 'op-member-q',
+        reason: 'done',
+        stepIndex: 1,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const mirrored = pushEventCalls().filter((b) => b.operationId === 'op-supervisor-q');
+      expect(mirrored.map((p) => p.event.type)).toEqual(['member_runtime_end']);
+      expect(resolveAccepts).toHaveBeenCalledWith('op-supervisor-q');
     });
 
     it('stops mirroring after the member op reaches a terminal state', async () => {

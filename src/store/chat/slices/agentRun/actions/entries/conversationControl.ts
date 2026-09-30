@@ -16,7 +16,11 @@ import {
   ensureAgentManagementAccess,
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
-import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import {
+  applyTopicDeviceBinding,
+  getTopicBoundDeviceId,
+  resolveWorkspaceScoped,
+} from '@/helpers/executionTarget';
 import { lambdaClient } from '@/libs/trpc/client';
 import {
   type AgentInterventionSourceAction,
@@ -25,7 +29,7 @@ import {
 } from '@/services/aiAgent';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { displayMessageSelectors } from '@/store/chat/selectors';
+import { displayMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import {
   type AgentRuntimeType,
   selectRuntimeType,
@@ -37,6 +41,7 @@ import type { Operation } from '@/store/chat/slices/operation/types';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { getElectronStoreState } from '@/store/electron';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -252,11 +257,23 @@ export class ConversationControlActionImpl {
     const deviceOverride = agent?.workspaceId
       ? useUserStore.getState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
       : undefined;
-    const agencyConfig = resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
-      canManage,
-      visibility: agent?.visibility,
-      workspaceId: agent?.workspaceId,
-    });
+    // Same topic machine binding as sendMessage, so the resume takes the path
+    // the paused run was dispatched on.
+    const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
+      {
+        agencyConfig: resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
+          canManage,
+          visibility: agent?.visibility,
+          workspaceId: agent?.workspaceId,
+        }),
+        workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+      },
+      getTopicBoundDeviceId(
+        context.topicId ? topicSelectors.getTopicById(context.topicId)(this.#get()) : undefined,
+        agentId,
+      ),
+      getElectronStoreState().gatewayDeviceInfo?.deviceId,
+    );
     const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
     const heterogeneousProvider =
       agencyConfig?.heterogeneousProvider ??
@@ -271,7 +288,7 @@ export class ConversationControlActionImpl {
         heterogeneousProvider,
         isGatewayMode,
         isWorkspaceAgent: !!agent?.workspaceId,
-        workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+        workspaceScoped,
       }) === 'gateway'
     );
   };
@@ -297,8 +314,24 @@ export class ConversationControlActionImpl {
     })(this.#get());
     return ops.filter(
       (op) =>
-        op.type === 'execServerAgentRuntime' && op.status === 'running' && !op.metadata?.isAborting,
+        op.type === 'execServerAgentRuntime' &&
+        op.status === 'running' &&
+        !op.metadata?.isAborting &&
+        !(groupId && this.#isLiveGatewayOp(op)),
     );
+  };
+
+  /**
+   * Whether an op's gateway stream is still open. In a group chat that is the
+   * supervisor waiting on its members (e.g. a member parked on the approval
+   * being resolved): it is not paused, it will stream the members' continuation
+   * and its own closing, and retiring it would drop both from the screen.
+   */
+  #isLiveGatewayOp = (op: Operation) => {
+    const serverOperationId = op.metadata?.serverOperationId;
+    if (!serverOperationId) return false;
+    const status = this.#get().gatewayConnections[serverOperationId]?.status;
+    return !!status && status !== 'disconnected';
   };
 
   #resolveHeteroInterventionExecutionOperation = (
@@ -983,6 +1016,12 @@ export class ConversationControlActionImpl {
           toolMessageIds: addressable,
           topicId,
         });
+      }
+      // Settle the cards locally. A group member's stop ends no stream this
+      // client still listens on, so no refetch would ever land the aborted rows
+      // and the card would stay on screen until a reload.
+      for (const id of addressable) {
+        this.#dispatchInterventionState(id, { status: 'aborted' }, { context: effectiveContext });
       }
       this.#completeOpsById(pausedOpIds);
     } catch (error) {

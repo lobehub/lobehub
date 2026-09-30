@@ -15,13 +15,18 @@ import {
   agentSignalReviewManifest,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
+import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
-import { GoalManifest, GoalSupervisorManifest } from '@lobechat/builtin-tool-goal';
+import {
+  GoalManifest,
+  GoalReportManifest,
+  GoalSupervisorManifest,
+} from '@lobechat/builtin-tool-goal';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
@@ -63,6 +68,7 @@ export const defaultToolIds = [
   SkillStoreManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
+  AttachmentsManifest.identifier,
   MemoryManifest.identifier,
   LocalSystemManifest.identifier,
   BrowserManifest.identifier,
@@ -126,6 +132,7 @@ export const manualModeExcludeToolIds = [
  * `allowExplicitActivation` so the activator can't smuggle other tools in.
  */
 export const chatModeAllowedToolIds = [
+  AttachmentsManifest.identifier,
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   WebBrowsingManifest.identifier,
@@ -169,6 +176,7 @@ export const groupSupervisorToolIds = [GroupManagementManifest.identifier];
  * `src/helpers/toolEngineering/index.ts`.
  */
 export const runtimeManagedToolIds = [
+  AttachmentsManifest.identifier,
   BrowserManifest.identifier,
   CloudSandboxManifest.identifier,
   KnowledgeBaseManifest.identifier,
@@ -430,6 +438,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    discoverable: false,
+    hidden: true,
+    identifier: AttachmentsManifest.identifier,
+    manifest: AttachmentsManifest,
+    type: 'builtin',
+  },
+  {
     // Opt-in image generation: chat mode no longer auto-injects it, so the
     // Tools popover must expose a pin/disable control.
     identifier: ImageGenerationManifest.identifier,
@@ -523,6 +538,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: GoalSupervisorManifest.identifier,
     manifest: GoalSupervisorManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: GoalReportManifest.identifier,
+    manifest: GoalReportManifest,
     type: 'builtin',
   },
   {

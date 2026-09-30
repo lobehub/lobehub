@@ -530,6 +530,7 @@
   "gemini-3.8-flash.description": "Gemini 3.8 Flash to najinteligentniejszy model Flash Google, zaprojektowany do długoterminowego inżynierii oprogramowania, autonomicznych agentów i złożonych przepływów pracy w przedsiębiorstwach.",
   "gemini-flash-latest.description": "Wskazuje na gemini-3.7-flash",
   "gemini-flash-lite-latest.description": "Wskazuje na gemini-3.1-flash-lite",
+  "gemini-omni-1.1-flash.description": "Gemini Omni Flash to natywnie multimodalny model do tekstu na wideo, obrazu na wideo, odniesienia na wideo i konwersacyjnej edycji wideo.",
   "gemini-pro-latest.description": "Wskazuje na gemini-3.1-pro-preview",
   "gemma-4-31B-it.description": "Gemma 4 31B IT to najnowszy multimodalny model Google obsługujący tekst, obrazy i wideo. Model w wersji próbnej do celów oceny.",
   "gemma-4-31b.description": "Ten model wyróżnia się multimodalnym rozumowaniem w kontekście zrzutów ekranu, dokumentów, diagramów i zasobów projektowych. Idealny do wizualnych przepływów pracy agentów, współpracowników uwzględniających obrazy oraz zespołów migrujących z zamkniętych API multimodalnych na otwarty model.",

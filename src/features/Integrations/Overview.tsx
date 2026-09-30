@@ -19,8 +19,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
   `,
   strip: css`
     display: grid;

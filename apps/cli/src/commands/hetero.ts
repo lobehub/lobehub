@@ -532,6 +532,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const agentType = options.type;
   let sink: TrpcIngestSink | undefined;
   let serverIngester: CoalescingBatchIngester | undefined;
+  // Set for the duration of each spawn attempt (see `runOneAgent`): stops the
+  // running agent when the server tells us its output is being discarded.
+  let abortForIngestLoss: ((error: Error) => void) | undefined;
   // Uploader for tool_result images (CC `Read` on an image file). Reuses the
   // CLI's authenticated lambda client so the persisted event carries a
   // `{ fileId, url }` reference instead of heavy base64. Only wired in
@@ -548,7 +551,15 @@ const exec = async (options: ExecOptions): Promise<void> => {
       options.topic!,
       process.env.LOBEHUB_ASSISTANT_MESSAGE_ID,
     );
-    serverIngester = new CoalescingBatchIngester(sink);
+    serverIngester = new CoalescingBatchIngester(sink, undefined, (error) => {
+      // The server has stopped storing this run's events (its topic marker was
+      // settled underneath it, or the operation is already terminal) and every
+      // later batch would be discarded the same way. Waiting for `drain()` to
+      // report that means the agent keeps working — for minutes, on a long task
+      // — to produce output nobody will ever see. Stop it now; the drain below
+      // still raises the same error, so the finish leg reports a failed run.
+      abortForIngestLoss?.(error);
+    });
 
     uploadImage = createFileStoreImageUploader(async () => {
       const lambda = await getTrpcClient();
@@ -797,11 +808,25 @@ const exec = async (options: ExecOptions): Promise<void> => {
       await Promise.all(cancellations);
       if (cancellationError) throw cancellationError;
     };
-    const applyCancellation = (signal: NodeJS.Signals) => {
-      cancellationSignal = signal;
-      if (inheritsWrapperProcessGroup) return;
+    // Deliberately NOT `interrupted`: the user did not stop this run, so the
+    // finish leg must report `error` (with the ingest failure as its detail)
+    // rather than `cancelled`, which would leave the operation running on the
+    // server with nothing left to drive it.
+    let ingestLoss: Error | undefined;
+    // Inside an inherited wrapper group an external SIGINT/SIGTERM already
+    // reaches the agent, so forwarding it would signal twice. An ingest-loss
+    // abort has no OS signal behind it — the CLI decided on its own — so it
+    // must always deliver the signal itself, or the agent keeps running (the
+    // desktop and connected-device dispatches are exactly the inherited case).
+    const ownsSignalDelivery = () => !inheritsWrapperProcessGroup || ingestLoss !== undefined;
+    const signalAgent = (signal: NodeJS.Signals) => {
       if (startupControl) cancelStartup(startupControl, signal);
       else handle?.kill(signal);
+    };
+    const applyCancellation = (signal: NodeJS.Signals) => {
+      cancellationSignal = signal;
+      if (!ownsSignalDelivery()) return;
+      signalAgent(signal);
     };
     const onSigint = () => {
       const signal = interrupted ? 'SIGKILL' : 'SIGINT';
@@ -815,9 +840,17 @@ const exec = async (options: ExecOptions): Promise<void> => {
     const removeSignalListeners = () => {
       process.off('SIGINT', onSigint);
       process.off('SIGTERM', onSigterm);
+      abortForIngestLoss = undefined;
     };
     process.on('SIGINT', onSigint);
     process.on('SIGTERM', onSigterm);
+
+    abortForIngestLoss = (error) => {
+      if (ingestLoss) return;
+      ingestLoss = error;
+      log.error('Server is discarding this run output, stopping the agent:', error.message);
+      applyCancellation('SIGTERM');
+    };
 
     // One raw-dump file pair per spawn attempt (the resume retry is a second
     // attempt). The stdout tee runs inside `spawnAgent` before the adapter.
@@ -830,11 +863,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
     try {
       handle = await spawnAgentOrRuntime(spawnOpts, dumpAttempt?.writeStdout, (control) => {
         startupControl = control;
-        if (cancellationSignal && !inheritsWrapperProcessGroup) {
+        if (cancellationSignal && ownsSignalDelivery()) {
           cancelStartup(control, cancellationSignal);
         }
       });
-      if (cancellationSignal && !startupControl && !inheritsWrapperProcessGroup) {
+      if (cancellationSignal && !startupControl && ownsSignalDelivery()) {
         handle.kill(cancellationSignal);
       }
     } catch (err) {
@@ -846,9 +879,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
       }
       if (cancellationSignal) {
         return {
-          cancelled: true,
+          cancelled: !ingestLoss,
           code: null,
-          ingestError: false,
+          ingestError: ingestLoss !== undefined,
           resumeNotFound: false,
           sawTerminalError: false,
           sessionId: undefined,
@@ -912,7 +945,6 @@ const exec = async (options: ExecOptions): Promise<void> => {
     let sawTerminalError = false;
     let terminalErrorMessage: string | undefined;
     let terminalErrorData: Record<string, unknown> | undefined;
-    const ingestError = false;
     try {
       for await (const event of handle.events) {
         if (interceptResumeErrors && event.type === 'error') {
@@ -1013,7 +1045,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
     return {
       cancelled: interrupted,
       code,
-      ingestError,
+      // The shared ingester is permanently failed once the server refused a
+      // batch, so the caller must neither retry this run (every event of a
+      // retry would be dropped, with no second abort to stop it) nor report it
+      // as anything but failed.
+      ingestError: ingestLoss !== undefined,
       resumeNotFound,
       sawTerminalError,
       sessionId: handle.sessionId,
@@ -1090,7 +1126,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // fresh session.  The server's `heteroSessionId` is updated with the new id,
   // breaking the stale-session loop.
   let result = first;
-  if (!first.cancelled && first.resumeNotFound) {
+  if (!first.cancelled && !first.ingestError && first.resumeNotFound) {
     log.info('Resume failed (session not found or context overflow) — retrying without --resume');
     result = await runOneAgent(
       {

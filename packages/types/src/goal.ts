@@ -1,3 +1,4 @@
+import type { GoalReportDispatch, GoalReportState } from './goalReport';
 import type { InitialGoalOverviewContext } from './stepContext';
 import type { AcceptanceStatus } from './verify';
 import type { WorkType } from './work';
@@ -236,6 +237,13 @@ export interface GoalManagerState {
    */
   adoptedOperationId?: string;
   consumed?: boolean;
+  /**
+   * Set when the dispatch for this turn was refused its topic reservation — the
+   * one failure raised before anything of the run is written — so no run exists
+   * and none can start. Decided from the error itself, never from rows the
+   * owner can edit.
+   */
+  dispatchNeverStarted?: boolean;
   operationId?: string;
   /**
    * The problem this turn was invited to take over, when the coordinator handed
@@ -262,8 +270,41 @@ export interface GoalManagerState {
   turns: number;
 }
 
+/**
+ * The owner's 提出修改 on a delivered Goal: rejecting the Goal-level acceptance
+ * reopens the Goal, and this is what the rework answers to.
+ */
+export interface GoalChangeRequest {
+  /** The owner's feedback, which also reaches the next attempt's prompt. */
+  comment?: string;
+  requestedAt: string;
+  /** The Goal-level acceptance Task sent back for rework. */
+  taskId: string;
+}
+
+/**
+ * How well the coordinator understands what the user wants, as of the last
+ * decomposition. Derived from the concrete unknowns the planner reported rather
+ * than a self-rated score: `low` means a question was put to the user,
+ * `medium` means the plan proceeds on the listed assumptions, `high` means
+ * neither.
+ */
+export type GoalUnderstandingLevel = 'high' | 'medium' | 'low';
+
+export interface GoalUnderstanding {
+  /** What the plan takes as given where the goal did not say; shown for the user to correct. */
+  assumptions: string[];
+  level: GoalUnderstandingLevel;
+  updatedAt: string;
+}
+
 export interface GoalConfig {
   acceptance?: GoalAcceptancePolicy;
+  /**
+   * The owner's latest request for changes. Kept after the rework lands: the
+   * result page reads it as 修改中 only while the Goal is open again.
+   */
+  changeRequest?: GoalChangeRequest;
 
   exploration?: GoalExplorationConfig;
   manager?: GoalManagerPolicy;
@@ -282,6 +323,8 @@ export interface GoalConfig {
   /** Retained after release to distinguish lease-aware retries from legacy planners. */
   planningProtocol?: 'lease-v1';
   recovery?: GoalRecoveryPolicy;
+  /** Coordinator-owned receipt of the latest wrap-up report dispatch. */
+  report?: GoalReportDispatch;
   schedule?: GoalSchedulePolicy;
   supervision?: GoalSupervisionPolicy;
   /** Durable supervisor topic and bounded incident ledger. */
@@ -292,10 +335,15 @@ export interface GoalConfig {
    * Unset means the goal's agent does its own Tasks.
    */
   taskAgentId?: string;
+  /** Coordinator-owned; written by decomposition, never by a policy edit. */
+  understanding?: GoalUnderstanding;
 }
 
 /** Creation accepts planning options, never a runtime receipt. */
-export type GoalCreateConfig = Omit<GoalConfig, 'managerState' | 'supervisorState'>;
+export type GoalCreateConfig = Omit<
+  GoalConfig,
+  'managerState' | 'report' | 'supervisorState' | 'understanding'
+>;
 
 /**
  * The goal entity as exposed to clients — a mirror of the `goals` table row.
@@ -472,9 +520,15 @@ export interface GoalGraphWorkVersionDisplay {
    * route resolves {@link resourceId}.
    */
   agentDocumentId?: string;
+  /** File-store identity of a `file` Work — what acceptance evidence cites it by. */
+  fileId?: string;
+  /** Size in bytes of a `file` Work, when it was persisted. */
+  fileSize?: number;
   /** Durable download target of a `file` Work, which keeps it out of `url`. */
   fileUrl?: string;
   identifier: string | null;
+  /** MIME type of a `file` Work, when it was persisted. */
+  mimeType?: string;
   /** Canonical resource identity — the document id an in-app link addresses. */
   resourceId: string | null;
   status: string | null;
@@ -517,6 +571,12 @@ export interface GoalGraphSnapshot {
   events: GoalGraphEvent[];
   goal: GoalItem;
   nodes: GoalGraphNode[];
+  /**
+   * The wrap-up report: whether it is being written, done or failed, and the
+   * newest submitted version. Absent until the Goal-level acceptance has ended
+   * and a wrap-up was dispatched.
+   */
+  report?: GoalReportState;
   /**
    * Live heartbeat per active task node id: the `agent_operations.updatedAt`
    * of the run behind it. The runtime refreshes that lease every ~90s, while

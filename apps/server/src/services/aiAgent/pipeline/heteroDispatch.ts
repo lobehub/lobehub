@@ -53,7 +53,11 @@ import {
   supportsCloudHeterogeneousSandbox,
 } from '../helpers/heteroErrors';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
-import type { BindTopicWorkingDirectoryParams, ExecRunContext } from '../types';
+import type {
+  BindTopicWorkingDirectoryParams,
+  ExecRunContext,
+  InternalExecAgentParams,
+} from '../types';
 import { heteroOperationCapabilities } from './heteroOperationCapabilities';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -269,6 +273,7 @@ export interface HeteroDispatchInput {
   localDeviceId?: string;
   maxSteps?: number;
   memberDeviceOverride?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>;
+  onOperationCreated?: InternalExecAgentParams['onOperationCreated'];
   operationTaskId?: string;
   parentOperationId?: string;
   pinnedHeterogeneousTopicModel?: HeterogeneousTopicPin;
@@ -339,7 +344,7 @@ export const dispatchHeteroAgent = async (
   // Hooks belong to this operation's lifecycle. Persist their serializable
   // form on the durable operation row before dispatch; runningOperation below
   // remains a compatibility mirror for older terminal consumers.
-  if (hooks?.length) hookDispatcher.register(operationId, hooks);
+  hookDispatcher.register(operationId, hooks ?? []);
   const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
 
   // Persist a first-class agent_operations row for the hetero run. The id is
@@ -375,6 +380,8 @@ export const dispatchHeteroAgent = async (
     hookDispatcher.unregister(operationId);
     throw new Error('Failed to persist heterogeneous agent operation');
   }
+
+  await input.onOperationCreated?.(operationId);
 
   // Read resume session id for next-turn continuity.
   const heteroService = new HeterogeneousAgentService(deps.db, deps.userId, {
@@ -1026,6 +1033,7 @@ export const dispatchHeteroAgent = async (
         ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
         : await deviceGateway.dispatchAgentRun({
             ...heteroParams,
+            agentId: resolvedAgentId,
             args: heteroExecArgs,
             cwd: deviceCwd,
             deviceId: dispatchDeviceId,

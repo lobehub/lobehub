@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "لینک کپی شد",
   "actions.copySessionId": "کپی شناسه جلسه",
   "actions.copySessionIdSuccess": "شناسه جلسه کپی شد",
+  "actions.copyTopicPrompt": "کپی کردن درخواست موضوع",
+  "actions.copyTopicPromptSuccess": "درخواست موضوع کپی شد",
   "actions.copyWorkingDirectory": "کپی مسیر کاری",
   "actions.copyWorkingDirectorySuccess": "مسیر کاری کپی شد",
   "actions.diagnose": "بررسی زنجیره پیام",

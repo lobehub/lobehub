@@ -25,6 +25,8 @@ export interface StartOperationDeps {
 }
 
 export interface StartOperationInput {
+  /** See {@link InternalExecAgentParams.acceptsMemberRuntimeEnd}. */
+  acceptsMemberRuntimeEnd?: boolean;
   approvalClaim: ApprovalClaimState;
   approvalSourceOperationId?: string;
   approvalSourceToolMessageIds: string[];
@@ -45,6 +47,7 @@ export interface StartOperationInput {
   initialContext: OperationPrepResult['initialContext'];
   initialStepCount?: number;
   maxSteps?: number;
+  onOperationCreated?: InternalExecAgentParams['onOperationCreated'];
   operationId: string;
   operationTaskId?: string;
   parentOperationId?: string;
@@ -86,11 +89,13 @@ export const startOperation = async (
     provider,
     resolvedAgentId,
     shareGate,
+    topicEditingGroupId,
     topicId,
     trigger,
     userMessageId,
   } = ctx;
   const {
+    acceptsMemberRuntimeEnd,
     approvalClaim,
     approvalSourceOperationId,
     approvalSourceToolMessageIds,
@@ -124,6 +129,12 @@ export const startOperation = async (
     userTimezone,
   } = input;
   const { audio, video, vision } = discovery.modelMediaCapabilities;
+  // A builder topic continued from another surface (scope `main`, an approval
+  // resume) arrives without the group it edits; the group the topic was opened
+  // on stands in, so the run still knows its target.
+  const editingGroupId =
+    (appContext?.scope === 'group_agent_builder' ? appContext.editingGroupId : undefined) ||
+    topicEditingGroupId;
 
   log(
     'execAgent: creating operation %s — agentDocuments=%d, knowledgeBases=%s, tools=%d, skills=%d',
@@ -137,7 +148,17 @@ export const startOperation = async (
   // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
   // If createOperation fails, we still have valid messages that need error info
   try {
+    // A server-internal approval continuation (no client of its own declared
+    // anything — client-facing routes always pass a boolean) streams to the
+    // parked operation's client: carry its `member_runtime_end` declaration over
+    // (read here, before the parked operation is retired below).
+    const memberRuntimeEndAccepted =
+      acceptsMemberRuntimeEnd ??
+      (approvalSourceOperationId
+        ? await deps.agentRuntimeService.acceptsMemberRuntimeEnd(approvalSourceOperationId)
+        : undefined);
     const result = await deps.agentRuntimeService.createOperation({
+      acceptsMemberRuntimeEnd: memberRuntimeEndAccepted,
       includeFinalState: input.includeFinalState,
       activeDeviceId: discovery.activeDeviceId,
       activeDeviceScope: discovery.activeDeviceScope,
@@ -214,9 +235,7 @@ export const startOperation = async (
         // owned by the builtin builder agent, so the edited group only rides
         // here. Read by the group-agent-builder server runtime and by the
         // `<current_group_context>` injector.
-        ...(appContext?.scope === 'group_agent_builder' && appContext?.editingGroupId
-          ? { editingGroupId: appContext.editingGroupId }
-          : {}),
+        ...(editingGroupId ? { editingGroupId } : {}),
         // Run-scoped Agent Signal marker for background self-iteration / memory
         // runs — lands in state.origin.signal so the completion path can
         // project receipts/briefs. Undefined for ordinary chat runs.
@@ -242,6 +261,7 @@ export const startOperation = async (
         trigger,
       },
       autoStart,
+      onOperationCreated: input.onOperationCreated,
       botContext,
       botPlatformContext,
       deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },

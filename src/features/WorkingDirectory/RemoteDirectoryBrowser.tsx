@@ -1,13 +1,12 @@
 'use client';
 
 import { Flexbox, Input } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Spin, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { ArrowUpIcon, HouseIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useFetchDeviceDirectory } from '@/store/device/directoryHooks';
 
@@ -96,7 +95,7 @@ export const RemoteDirectoryBrowser = ({
       >
         {isLoading ? (
           <Flexbox align={'center'} flex={1} gap={8} justify={'center'}>
-            <NeuralNetworkLoading />
+            <Spin size="small" />
             <Text type={'secondary'}>{t('workingDirectory.foldersLoading')}</Text>
           </Flexbox>
         ) : (

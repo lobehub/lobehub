@@ -302,6 +302,32 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
   const findUserMessageCreate = () =>
     mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
 
+  it('prepares dependent records before dispatching the heterogeneous process', async () => {
+    let release!: () => void;
+    const prepared = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const onOperationCreated = vi.fn<(operationId: string) => Promise<void>>(async () => prepared);
+    const execution = service.execAgent({ agentId: 'agent-1', prompt: 'Fix', onOperationCreated });
+    try {
+      await vi.waitFor(() => expect(onOperationCreated).toHaveBeenCalledTimes(1));
+      expect(recordStartSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: onOperationCreated.mock.calls[0][0] }),
+      );
+      expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+      expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+    } finally {
+      release();
+    }
+    const result = await execution;
+    expect(result.autoStarted).toBe(true);
+    expect(
+      mockDispatchAgentRun.mock.calls.length +
+        mockSpawnHeteroSandbox.mock.calls.length +
+        mockExecuteToolCall.mock.calls.length,
+    ).toBeGreaterThan(0);
+  });
+
   it('does not dispatch a heterogeneous run when its durable operation row fails', async () => {
     recordStartSpy.mockResolvedValueOnce(false);
 
@@ -788,6 +814,28 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect.objectContaining({
         args: ['--agent-arg=-c', '--agent-arg=model = "gpt-5.4"', '--effort', 'xhigh'],
       }),
+    );
+  });
+
+  it('dispatches a reused topic to the device it ran on after the agent moved to the sandbox', async () => {
+    heteroAgentConfig.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { type: 'claude-code' },
+    } as any;
+    topicMock.findById.mockResolvedValue({
+      id: 'topic-existing',
+      metadata: { boundDeviceId: 'device-2', workingDirectory: '/Users/alice/work' },
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-existing' },
+      prompt: 'Keep going where you were',
+    } as any);
+
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/Users/alice/work', deviceId: 'device-2' }),
     );
   });
 

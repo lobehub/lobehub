@@ -138,6 +138,11 @@ export interface ToolRunContext {
  * client adapter wraps `internal_invokeDifferentTypePlugin`.
  */
 export interface ToolTransport {
+  /** Execution-entry control; a returned result settles this call without launching it. */
+  beforeToolCall?: (
+    call: ChatToolPayload,
+    context: ToolRunContext,
+  ) => Promise<ToolRunExecution | undefined>;
   /** This runtime can execute tools whose source is the client directly. */
   canRunClientTools?: boolean;
   getCost?: (toolName: string) => number;

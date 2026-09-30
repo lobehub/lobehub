@@ -52,7 +52,7 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 | 配置项类型 | 示例                                                                                                                | 解释                                             |
 | ----- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | 基本键值对 | `model=gpt-4`                                                                                                     | 设置模型为 `gpt-4`。                                 |
-| 嵌套字段  | `tts.sttLocale=en-US`                                                                                             | 设置文本到语音服务的语言区域为 `en-US`。                       |
+| 嵌套字段  | `tts.voice.openai=nova`                                                                                           | 设置 OpenAI 文本转语音的默认音色为 `nova`。                    |
 | 数组    | `plugins=search-engine,lobe-image-designer`                                                                       | 启用 `search-engine` 和 `lobe-image-designer` 插件。 |
 | 中文逗号  | `plugins=search-engine，lobe-image-designer`                                                                       | 同上，演示支持中文逗号分隔。                                 |
 | 多个配置项 | `model=glm-4;provider=zhipu`                                                                                      | 设置模型为 `glm-4` 且模型服务商为 `zhipu`。                 |

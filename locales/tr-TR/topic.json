@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "Bağlantı kopyalandı",
   "actions.copySessionId": "Oturum Kimliğini Kopyala",
   "actions.copySessionIdSuccess": "Oturum kimliği kopyalandı",
+  "actions.copyTopicPrompt": "Konu İsteğini Kopyala",
+  "actions.copyTopicPromptSuccess": "Konu isteği kopyalandı",
   "actions.copyWorkingDirectory": "Çalışma Dizinini Kopyala",
   "actions.copyWorkingDirectorySuccess": "Çalışma dizini kopyalandı",
   "actions.diagnose": "Mesaj Zincirini Kontrol Et",

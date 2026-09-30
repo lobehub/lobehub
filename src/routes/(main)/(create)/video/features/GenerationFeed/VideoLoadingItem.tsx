@@ -1,8 +1,7 @@
 'use client';
 
-import { LoadingOutlined } from '@ant-design/icons';
 import { Block, Center } from '@lobehub/ui';
-import { Progress, Spin } from 'antd';
+import { Progress, Spin } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import { MAX_ESTIMATED_PROGRESS, useEstimatedProgress } from '@/hooks/useEstimatedProgress';
@@ -44,11 +43,7 @@ const VideoLoadingItem = memo<VideoLoadingItemProps>(
         }}
       >
         <Center gap={8}>
-          {progress !== null ? (
-            <Progress percent={progress} size={48} type="circle" />
-          ) : (
-            <Spin indicator={<LoadingOutlined spin />} />
-          )}
+          {progress !== null ? <Progress percent={progress} size={48} type="circle" /> : <Spin />}
           {progress === MAX_ESTIMATED_PROGRESS && (
             <ElapsedTime generationId={generation.id} isActive={isGenerating} />
           )}

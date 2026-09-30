@@ -101,7 +101,15 @@ export const createStreamEventManager = (
         if (!meta?.streamOwnerUserId) return null;
         return meta.visitorRedaction ?? FULL_STRIP_REDACTION;
       },
-      options,
+      {
+        ...options,
+        // Same again for the supervisor's `member_runtime_end` declaration: the
+        // worker mirroring a member's terminal may never have seen its init.
+        resolveAcceptsMemberRuntimeEnd: async (operationId) => {
+          const meta = await stateManager.getOperationMetadata(operationId);
+          return meta?.acceptsMemberRuntimeEnd === true;
+        },
+      },
     );
   }
 

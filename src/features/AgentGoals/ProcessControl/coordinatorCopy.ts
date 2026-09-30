@@ -1,4 +1,4 @@
-import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
+import { GOAL_ACCEPTANCE_TASK_TITLE, GOAL_CLARIFICATION_OPTION } from '@lobechat/const/goal';
 import type { GoalGraphDecision } from '@lobechat/types';
 
 import type { GoalNodeView } from './goalGraphViewModel';
@@ -11,7 +11,7 @@ import type { GoalNodeView } from './goalGraphViewModel';
  * not recognize renders verbatim.
  */
 
-export type CoordinatorGateKind = 'goalAcceptance' | 'recoverTask';
+export type CoordinatorGateKind = 'clarifyGoal' | 'goalAcceptance' | 'recoverTask';
 
 export interface LocalizedCopyRef {
   key: string;
@@ -25,8 +25,12 @@ export const coordinatorGateKind = (
   decision?: GoalGraphDecision | null,
 ): CoordinatorGateKind | undefined => {
   const ids = idsOf(decision);
-  if (ids.has('retry') && ids.has('retire')) return 'recoverTask';
+  // `fail` only ever appears on the terminal acceptance gate, which may also
+  // offer `retire` — check it first.
   if (ids.has('retry') && ids.has('fail')) return 'goalAcceptance';
+  if (ids.has('retry') && ids.has('retire')) return 'recoverTask';
+  if (ids.has(GOAL_CLARIFICATION_OPTION.assume) && ids.has(GOAL_CLARIFICATION_OPTION.answer))
+    return 'clarifyGoal';
   return undefined;
 };
 
@@ -58,6 +62,7 @@ export const coordinatorNodeTitleKey = (view: GoalNodeView): string | undefined 
 const QUESTION_TAILS = [
   /\.?\s*Retry or retire this task node\?$/,
   /\.?\s*Retry Goal acceptance or fail this Goal\?$/,
+  /\.?\s*Retry Goal acceptance, abandon it, or fail this Goal\?$/,
 ];
 
 export const coordinatorGateReason = (question?: string | null): string | undefined => {
@@ -102,6 +107,14 @@ const REASON_PATTERNS: Array<{
     key: 'goalProcess.gate.reason.recoveryFailed',
     pattern:
       /^Automatic recovery could not (start the next attempt|restart an abandoned operation)$/,
+  },
+  {
+    // A run that failed outright leaves its runtime error type as the reason
+    // (e.g. `InvalidProviderAPIKey`). The code stays visible for support; the
+    // sentence around it is the user's language.
+    key: 'goalProcess.gate.reason.runError',
+    param: 'code',
+    pattern: /^([A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*)$/,
   },
 ];
 

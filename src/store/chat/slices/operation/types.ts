@@ -51,7 +51,6 @@ export type OperationType =
   // === (sub-operations of executeToolCall) ===
   | 'pluginApi' // Plugin API call
   | 'builtinToolSearch' // Builtin tool: search
-  | 'builtinToolInterpreter' // Builtin tool: code interpreter
   | 'builtinToolLocalSystem' // Builtin tool: local system
   | 'builtinToolKnowledgeBase' // Builtin tool: knowledge base
   | 'builtinToolMemory' // Builtin tool: user memory
@@ -61,8 +60,6 @@ export type OperationType =
 
   // === Group Chat ===
   | 'supervisorDecision' // Supervisor decision
-  | 'groupAgentGenerate' // Group agent generate (deprecated, use groupAgentStream)
-  | 'groupAgentStream' // Group agent SSE stream (sub-operation of execServerAgentRuntime)
 
   // === Sub-Agent (Desktop only) ===
   | 'execClientSubAgent' // Dispatch single sub-agent on the desktop client

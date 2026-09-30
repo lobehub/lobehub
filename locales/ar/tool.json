@@ -159,6 +159,7 @@
   "localFiles.open": "فتح",
   "localFiles.openFile": "فتح ملف",
   "localFiles.openFolder": "فتح مجلد",
+  "localFiles.openInPanel": "افتح في اللوحة الجانبية",
   "localFiles.outOfScope.requestedPaths": "المسارات المطلوبة",
   "localFiles.outOfScope.warning": "تحذير: المسار(ات) التالية تقع خارج دليل العمل المُحدد. يرجى التأكيد إذا كنت ترغب في السماح بالوصول.",
   "localFiles.outOfScope.workingDirectory": "دليل العمل",

@@ -8,7 +8,10 @@ const resolveCliSpawnPlanMock = vi.hoisted(() => vi.fn());
 const spawnMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./cliSpawn', () => ({ resolveCliSpawnPlan: resolveCliSpawnPlanMock }));
-vi.mock('node:child_process', () => ({ spawn: spawnMock }));
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  spawn: spawnMock,
+}));
 
 describe('resolveClaudeSdkExecutablePath', () => {
   beforeEach(() => {

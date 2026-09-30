@@ -14,7 +14,11 @@ import type {
   AgentState,
   InstructionExecutor,
 } from '../types';
-import { extractActivatedSkillsFromMessages, extractTodosFromMessages } from '../utils';
+import {
+  extractActivatedSkillsFromMessages,
+  extractTodosFromMessages,
+  redactResultForEvents,
+} from '../utils';
 import { selectToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
 import { settleAbortedToolRows } from './abortedToolRows';
 
@@ -43,21 +47,6 @@ interface ToolResultEntry {
 }
 
 const nowIso = () => new Date().toISOString();
-
-/**
- * Skill work-registration intents carry the UNTRUNCATED tool payload
- * (`data`/`args`) solely for server-side Work registration, which reads it
- * off the in-process `executionResult` before anything leaves the executor.
- * Strip it from every copy that DOES leave: realtime `tool_end` stream events
- * (clients only read `workRegistration` as a presence flag, see
- * gatewayEventHandler) and the recorded step `tool_result` events
- * (AgentStateManager serializes those into Redis, where the raw payload would
- * bloat the capped event blob).
- */
-const redactResultForEvents = (result: ToolRunResult): ToolRunResult =>
-  result.workRegistration?.type === 'skill'
-    ? { ...result, workRegistration: { ...result.workRegistration, args: undefined, data: null } }
-    : result;
 
 const markPersistFatal = <T>(error: T): T => {
   if (error && typeof error === 'object') persistFatalErrors.add(error);
@@ -442,6 +431,22 @@ const pauseForTools = async ({
   };
   newState.pendingToolsCalling = toolsCalling;
 
+  // Same rule as the human-approval pause: an approve resume seeds an assistant
+  // placeholder for its first `call_llm`, but an approved async tool (a group
+  // member task, a sub-agent) parks the run instead. The server-side resume
+  // writes its own reply once the tool lands, so the seed would stay behind as
+  // an empty "…" sibling that hides that reply. A client-tool pause keeps it:
+  // its result resumes this same turn and fills the seed.
+  if (reason === 'async_tool' && newState.pendingAssistantMessageId) {
+    const orphanId = newState.pendingAssistantMessageId;
+    newState.pendingAssistantMessageId = undefined;
+    try {
+      await host.transports.messages.deleteMessage(orphanId);
+    } catch {
+      // leaving the placeholder is cosmetic; parking correctly is not
+    }
+  }
+
   return {
     events: [
       {
@@ -484,6 +489,9 @@ const createToolMessage = async ({
       parentId: parentMessageId,
       plugin: tool as any,
       pluginError: result.error,
+      ...(result.state?.type === 'blocked' && {
+        pluginIntervention: { rejectedReason: result.state.reason, status: 'rejected' },
+      }),
       pluginState: result.state,
       role: 'tool',
       threadId: host.operation.threadId ?? state.origin?.threadId,
@@ -512,6 +520,12 @@ const updateExistingToolMessage = async ({
       pluginError: result.error,
       pluginState: result.state,
     });
+    if (result.state?.type === 'blocked') {
+      await host.transports.messages.updateToolIntervention(toolMessageId, {
+        rejectedReason: result.state.reason,
+        status: 'rejected',
+      });
+    }
   } catch (error) {
     await publishError(host, error, TOOL_MESSAGE_PERSIST_PHASE);
     throw markPersistFatal(error);
@@ -577,55 +591,43 @@ export const callTool =
       type: 'tool_start',
     });
 
-    if (runContext.toolSource === 'client' && !tools.canRunClientTools) {
-      // Parking is only meaningful if something will come back for it. Once the
-      // operation is aborted nothing resumes this run, so the pause would leave
-      // the call with no row at all — settle it instead.
-      if (host.operation.abortSignal?.aborted) {
-        return settleAbortedCall({
-          events,
-          existingToolMessageId: payload.skipCreateToolMessage
-            ? payload.parentMessageId
-            : undefined,
-          host,
-          parentMessageId: payload.parentMessageId,
-          state,
-          tool,
-        });
-      }
-
-      const paused = await pauseForTools({
-        host,
-        instruction,
-        reason: 'client_tool_execution',
-        state,
-        toolsCalling: [tool],
-      });
-
-      // Stop can arrive while the chunk is being published. Do not return a
-      // parked state after that asynchronous gap: no client result will ever
-      // resume an operation that has already been interrupted.
-      if (host.operation.abortSignal?.aborted) {
-        return settleAbortedCall({
-          events,
-          existingToolMessageId: payload.skipCreateToolMessage
-            ? payload.parentMessageId
-            : undefined,
-          host,
-          parentMessageId: payload.parentMessageId,
-          state,
-          tool,
-        });
-      }
-
-      return paused;
-    }
-
     try {
-      const execution = await raceToolAbort(
-        () => tools.run(tool, runContext),
+      const intercepted = await raceToolAbort(
+        () => tools.beforeToolCall?.(tool, runContext) ?? Promise.resolve(undefined),
         host.operation.abortSignal,
       );
+      if (host.operation.abortSignal?.aborted) throw new ToolAbortedError();
+      if (!intercepted && runContext.toolSource === 'client' && !tools.canRunClientTools) {
+        const paused = await pauseForTools({
+          host,
+          instruction,
+          reason: 'client_tool_execution',
+          state,
+          toolsCalling: [tool],
+        });
+
+        // Stop can arrive while the chunk is being published. Do not return a
+        // parked state after that asynchronous gap: no client result will ever
+        // resume an operation that has already been interrupted.
+        if (host.operation.abortSignal?.aborted) {
+          return settleAbortedCall({
+            events,
+            existingToolMessageId: payload.skipCreateToolMessage
+              ? payload.parentMessageId
+              : undefined,
+            host,
+            parentMessageId: payload.parentMessageId,
+            state,
+            tool,
+          });
+        }
+
+        return paused;
+      }
+
+      const execution =
+        intercepted ??
+        (await raceToolAbort(() => tools.run(tool, runContext), host.operation.abortSignal));
 
       if (execution.interrupted) {
         // The transport bailed after creating its optimistic row but before a
@@ -663,7 +665,10 @@ export const callTool =
           executionTime,
           isSuccess,
           attempts: execution.attempts,
-          maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
+          maxAttempts:
+            executionResult.state?.type === 'blocked'
+              ? 0
+              : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
           payload,
           phase: TOOL_EXECUTION_PHASE,
           result: redactResultForEvents(executionResult),
@@ -724,7 +729,8 @@ export const callTool =
         type: 'tool_result',
       });
 
-      const toolCost = tools.getCost?.(runContext.toolName) ?? 0;
+      const toolCost =
+        executionResult.state?.type === 'blocked' ? 0 : (tools.getCost?.(runContext.toolName) ?? 0);
       const { usage, cost } = UsageCounter.accumulateTool({
         cost: newState.cost,
         executionTime,
@@ -856,7 +862,11 @@ export const callToolsBatch =
     const serverTools: ChatToolPayload[] = [];
 
     for (const tool of toolsCalling) {
-      if (resolveToolSource(state, tool) === 'client' && !tools.canRunClientTools)
+      if (
+        !tools.beforeToolCall &&
+        resolveToolSource(state, tool) === 'client' &&
+        !tools.canRunClientTools
+      )
         clientTools.push(tool);
       else serverTools.push(tool);
     }
@@ -917,7 +927,9 @@ export const callToolsBatch =
     const toolsToExecute = serverTools.length > 0 ? serverTools : toolsCalling;
 
     const runOne = async (tool: ChatToolPayload) => {
-      const existingMessageId = existingToolMessageIds[tool.id];
+      const existingMessageId = Object.hasOwn(existingToolMessageIds, tool.id)
+        ? existingToolMessageIds[tool.id]
+        : undefined;
       const runContext = createRunContext({
         host,
         mode: 'batch',
@@ -936,10 +948,18 @@ export const callToolsBatch =
       });
 
       try {
-        const execution = await raceToolAbort(
-          () => tools.run(tool, runContext),
+        const intercepted = await raceToolAbort(
+          () => tools.beforeToolCall?.(tool, runContext) ?? Promise.resolve(undefined),
           host.operation.abortSignal,
         );
+        if (host.operation.abortSignal?.aborted) throw new ToolAbortedError();
+        if (!intercepted && runContext.toolSource === 'client' && !tools.canRunClientTools) {
+          clientTools.push(tool);
+          return;
+        }
+        const execution =
+          intercepted ??
+          (await raceToolAbort(() => tools.run(tool, runContext), host.operation.abortSignal));
 
         if (execution.interrupted) {
           abortedTools.push(tool);
@@ -962,7 +982,10 @@ export const callToolsBatch =
             executionTime,
             isSuccess,
             attempts: execution.attempts,
-            maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
+            maxAttempts:
+              executionResult.state?.type === 'blocked'
+                ? 0
+                : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
             payload: { parentMessageId, toolCalling: tool },
             phase: TOOL_EXECUTION_PHASE,
             result: redactResultForEvents(executionResult),
@@ -1013,7 +1036,10 @@ export const callToolsBatch =
           type: 'tool_result',
         });
 
-        const toolCost = tools.getCost?.(runContext.toolName) ?? 0;
+        const toolCost =
+          executionResult.state?.type === 'blocked'
+            ? 0
+            : (tools.getCost?.(runContext.toolName) ?? 0);
         resultEntry.usageParams = {
           executionTime,
           success: isSuccess,
@@ -1054,8 +1080,8 @@ export const callToolsBatch =
       }),
     );
 
-    // Client tools in a mixed batch never entered `toolsToExecute` — they were
-    // waiting for the pause below to hand them to the client. Once the operation
+    // Allowed client tools are waiting for the pause below to hand them to the
+    // client; they have not launched any work. Once the operation
     // is aborted that pause parks calls into a run nothing will resume, so their
     // tool_call_ids would keep no rows at all. Settle them alongside the ones
     // caught mid-flight, and skip the pause entirely.

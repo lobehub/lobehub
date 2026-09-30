@@ -96,6 +96,17 @@ describe('AgentModel', () => {
       // Its actual creator passes.
       expect(await agentModel2.existsOwnedById(othersAgent)).toBe(true);
     });
+
+    it('rejects an agent owned by the caller when it is in the recycle bin', async () => {
+      const agentId = 'trashed-owned-agent-id';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB
+        .update(agents)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(agents.id, agentId));
+
+      expect(await agentModel.existsOwnedById(agentId)).toBe(false);
+    });
   });
 
   describe('getAgentConfigById', () => {
@@ -137,6 +148,96 @@ describe('AgentModel', () => {
       expect(result!.files).toHaveLength(1);
       expect(result!.files[0].content).toBe('This is document content');
       expect(result!.files[0].enabled).toBe(true);
+    });
+
+    it('should report the original size of a document cut at parse time', async () => {
+      const agentId = 'test-agent-with-cut-doc';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      await serverDB.insert(documents).values({
+        content: 'Kept head',
+        fileId: '1',
+        fileType: 'application/pdf',
+        id: 'doc-cut',
+        metadata: { originalCharCount: 9_000_000, truncated: true },
+        source: 'document.pdf',
+        sourceType: 'file',
+        totalCharCount: 9,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      expect(result!.files[0].originalCharCount).toBe(9_000_000);
+    });
+
+    it('should pick the oldest document when a file owns several', async () => {
+      const agentId = 'test-agent-with-two-docs';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      const doc = {
+        fileId: '1',
+        fileType: 'text/plain',
+        source: 'notes.txt',
+        sourceType: 'file',
+        totalCharCount: 10,
+        totalLineCount: 1,
+        userId,
+      } as const;
+      // Inserted newest first: without an explicit order, a first-wins read would take the newer copy.
+      await serverDB.insert(documents).values({
+        ...doc,
+        content: 'page-editor copy',
+        createdAt: new Date('2026-02-01'),
+        id: 'doc-new',
+      });
+      await serverDB.insert(documents).values({
+        ...doc,
+        content: 'parse cache',
+        createdAt: new Date('2026-01-01'),
+        id: 'doc-old',
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      // Same document `DocumentModel.findByFileId` returns, which `readAttachment` pages through.
+      expect(result!.files[0].content).toBe('parse cache');
+    });
+
+    it('should skip an agent-document upload placeholder in favor of the parse cache', async () => {
+      const agentId = 'test-agent-with-placeholder';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+      // Older empty row written by `AgentDocumentsService.importFile`; bytes live in the file.
+      await serverDB.insert(documents).values({
+        content: '',
+        createdAt: new Date('2026-01-01'),
+        fileId: '1',
+        fileType: 'text/markdown',
+        id: 'doc-placeholder',
+        source: 'notes.md',
+        sourceType: 'file',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      });
+      await serverDB.insert(documents).values({
+        content: 'parsed notes',
+        createdAt: new Date('2026-02-01'),
+        fileId: '1',
+        fileType: 'custom/document',
+        id: 'doc-parsed',
+        source: 'notes.md',
+        sourceType: 'file',
+        totalCharCount: 12,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      expect(result!.files[0].content).toBe('parsed notes');
     });
 
     it('should not include content for disabled files', async () => {

@@ -9,12 +9,17 @@ import {
   agentSignalReviewManifest,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
+import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
-import { GoalManifest, GoalSupervisorManifest } from '@lobechat/builtin-tool-goal';
+import {
+  GoalManifest,
+  GoalReportManifest,
+  GoalSupervisorManifest,
+} from '@lobechat/builtin-tool-goal';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
@@ -39,6 +44,7 @@ export const builtinToolIdentifiers: string[] = [
   AgentBuilderManifest.identifier,
   AgentDocumentsManifest.identifier,
   AgentManagementManifest.identifier,
+  AttachmentsManifest.identifier,
   AuvManifest.identifier,
   CalculatorManifest.identifier,
   CloudSandboxManifest.identifier,
@@ -47,6 +53,7 @@ export const builtinToolIdentifiers: string[] = [
   GroupManagementManifest.identifier,
   GoalManifest.identifier,
   GoalSupervisorManifest.identifier,
+  GoalReportManifest.identifier,
   ImageGenerationManifest.identifier,
   VideoGenerationManifest.identifier,
   KnowledgeBaseManifest.identifier,

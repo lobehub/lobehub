@@ -19,7 +19,9 @@ const run = (ipcSessionId: string, extra?: Partial<HeteroInflightRun>): HeteroIn
   agentType: 'claude-code',
   ipcSessionId,
   operationId: `op-${ipcSessionId}`,
-  startedAt: new Date('2026-09-21T02:00:00.000Z').toISOString(),
+  // Relative to now: `claim` defaults to `Date.now()`, so a hard-coded date
+  // turns stale 48h (HETERO_INFLIGHT_RUN_MAX_AGE_MS) after it was written.
+  startedAt: new Date().toISOString(),
   topicId: 'topic-1',
   ...extra,
 });

@@ -35,6 +35,7 @@ import { timestamps, timestamptz, varchar255 } from './_helpers';
 import { agents } from './agent';
 import { agentOperations } from './agentOperations';
 import { documents } from './file';
+import { messages } from './message';
 import { projects } from './project';
 import { users } from './user';
 import { verifyCheckResults, verifyCriteria, verifyEvidence } from './verify';
@@ -619,6 +620,16 @@ export const expertiseHits = pgTable(
       onDelete: 'set null',
     }),
 
+    /**
+     * For a hit observed in a conversation, the message it was observed in — the conversation
+     * counterpart of `sourceCheckResultId`, so the reviewer can jump from a rule to the exact turn
+     * that taught it. Resolved from a verbatim excerpt at ingestion time, so it is null whenever
+     * the excerpt could not be found (and for every hit written before the column existed).
+     */
+    sourceMessageId: text('source_message_id').references(() => messages.id, {
+      onDelete: 'set null',
+    }),
+
     /** A person overruling it → feeds use-it-or-lose-it, so this lesson is more conservative next time. */
     userDecision: text('user_decision', { enum: EXPERTISE_HIT_USER_DECISIONS }),
     userDecisionAt: timestamptz('user_decision_at'),
@@ -640,6 +651,10 @@ export const expertiseHits = pgTable(
     index('expertise_hits_run_idx').on(t.runId),
     index('expertise_hits_domain_outcome_idx').on(t.domainId, t.outcome),
     index('expertise_hits_operation_idx').on(t.operationId),
+    // Deleting a message has to find the hits to null out; without this every delete scans.
+    index('expertise_hits_source_message_idx')
+      .on(t.sourceMessageId)
+      .where(isNotNull(t.sourceMessageId)),
   ],
 );
 

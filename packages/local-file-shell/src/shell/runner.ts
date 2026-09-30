@@ -30,6 +30,7 @@ export interface RunCommandOptions {
   onSandboxUnavailable?: (error: Error) => void;
   processManager: ShellProcessManager;
   sandboxPolicy?: SandboxPolicy;
+  spawnProcess?: typeof spawn;
 }
 
 /**
@@ -57,7 +58,13 @@ export async function runCommand(
     run_in_background,
     timeout = DEFAULT_OBSERVATION_TIMEOUT_MS,
   }: RunCommandParams,
-  { processManager, logger, onSandboxUnavailable, sandboxPolicy }: RunCommandOptions,
+  {
+    processManager,
+    logger,
+    onSandboxUnavailable,
+    sandboxPolicy,
+    spawnProcess = spawn,
+  }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   if (!command) {
     return { error: 'command is required', success: false };
@@ -121,7 +128,7 @@ export async function runCommand(
     const shellId = processManager.createShellId();
     const shellOutputFiles = processManager.createOutputFiles(shellId);
     outputFiles = shellOutputFiles;
-    const childProcess = spawn(launchCommand.cmd, launchCommand.args, {
+    const childProcess = spawnProcess(launchCommand.cmd, launchCommand.args, {
       cwd,
       detached: process.platform !== 'win32',
       env: launchEnv,

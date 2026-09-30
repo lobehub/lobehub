@@ -400,7 +400,9 @@ describe('userMemories.retrieveMemory', () => {
     );
     expect(searchMemory.mock.calls[0][0]).toStrictEqual({
       queries: ['Project Atlas'],
-      topK: { activities: 1, contexts: 0, experiences: 0, identities: 1, preferences: 1 },
+      // An explicit topK.contexts opts in to context memories even at medium
+      // effort; experience memory stays retired.
+      topK: { activities: 1, contexts: 1, experiences: 0, identities: 1, preferences: 1 },
     });
     expect(searchMemory.mock.calls[0][1]).toStrictEqual([[1]]);
 
@@ -528,7 +530,7 @@ describe('userMemories.retrieveMemory', () => {
         },
         topK: {
           activities: 3,
-          contexts: 0,
+          contexts: 2,
           experiences: 0,
           identities: 2,
           preferences: 3,

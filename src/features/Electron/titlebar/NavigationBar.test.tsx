@@ -5,6 +5,8 @@ import NavigationBar from './NavigationBar';
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, () => void>(),
+  leftPanelVisible: false,
+  leftPanelWidth: 0,
   navigate: vi.fn(),
   openAllAgentsDrawer: vi.fn(),
 }));
@@ -15,7 +17,7 @@ vi.mock('@lobechat/electron-client-ipc', () => ({
 
 vi.mock('antd-style', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  createStaticStyles: () => ({ clock: 'clock' }),
+  createStaticStyles: () => ({ clock: 'clock', root: 'root' }),
 }));
 
 vi.mock('@/features/NavPanel/ToggleLeftPanelButton', () => ({ default: () => null }));
@@ -23,8 +25,15 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mocks.navigate,
 }));
 vi.mock('@/services/electron/system', () => ({ electronSystemService: {} }));
-vi.mock('@/store/global', () => ({ useGlobalStore: () => 0 }));
-vi.mock('@/store/global/selectors', () => ({ systemStatusSelectors: {} }));
+vi.mock('@/store/global', () => ({
+  useGlobalStore: (selector: (state: unknown) => unknown) => selector({}),
+}));
+vi.mock('@/store/global/selectors', () => ({
+  systemStatusSelectors: {
+    leftPanelWidth: () => mocks.leftPanelWidth,
+    showLeftPanel: () => mocks.leftPanelVisible,
+  },
+}));
 vi.mock('@/store/home', () => ({
   getHomeStoreState: () => ({ openAllAgentsDrawer: mocks.openAllAgentsDrawer }),
 }));
@@ -48,6 +57,8 @@ vi.mock('./TrayMenu/useTrayMenuSync', () => ({ useTrayMenuSync: vi.fn() }));
 describe('NavigationBar tray broadcasts', () => {
   beforeEach(() => {
     mocks.handlers.clear();
+    mocks.leftPanelVisible = false;
+    mocks.leftPanelWidth = 0;
     vi.clearAllMocks();
   });
 
@@ -66,5 +77,19 @@ describe('NavigationBar tray broadcasts', () => {
 
     expect(mocks.navigate).toHaveBeenCalledWith('/acme', { escape: true });
     expect(mocks.openAllAgentsDrawer).toHaveBeenCalled();
+  });
+
+  it('keeps titlebar navigation width animatable when the sidebar is collapsed', () => {
+    const { container, unmount } = render(<NavigationBar />);
+    const navigationBar = container.querySelector('.root') as HTMLElement;
+
+    expect(navigationBar).toHaveStyle({ width: '150px' });
+    unmount();
+
+    mocks.leftPanelVisible = true;
+    mocks.leftPanelWidth = 280;
+    const expanded = render(<NavigationBar />);
+
+    expect(expanded.container.querySelector('.root')).toHaveStyle({ width: '268px' });
   });
 });

@@ -7,6 +7,7 @@ export {
 } from './createGoalInput';
 export { isGoalPrompt, stripGoalCommand } from './goalPrompt';
 export { GoalIdentifier, GoalManifest } from './manifest';
+export * from './report';
 export * from './supervisor';
 export { systemPrompt } from './systemRole';
 export * from './types';

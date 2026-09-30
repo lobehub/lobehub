@@ -1,10 +1,9 @@
 import type { AcceptanceCommentItem } from '@lobechat/types';
 import { Empty, Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
+import { Avatar, Button, Spin, Text } from '@lobehub/ui/base-ui';
 import { BadgeCheck, GitCommitHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useActivityTime } from '@/hooks/useActivityTime';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
@@ -64,7 +63,7 @@ const ReadDiscussion = () => {
   const { data: bundle } = useAcceptanceBundle(acceptanceId);
   const { data, error, isLoading, mutate } = useAcceptanceCommentList(acceptanceId);
 
-  if (!data && isLoading) return <NeuralNetworkLoading size={32} />;
+  if (!data && isLoading) return <Spin size="middle" />;
   if (!data && error)
     return (
       <Empty description={t('acceptance.comments.loadFailed')}>

@@ -795,6 +795,9 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
       '  A criterion with a visible surface is proved by a screenshot or recording, and `screenshot`/`video` evidence must reference a real artifact by fileId. Never label prose as a visual artifact: if you could not capture one, say what you observed as `text` and name the blocker.',
     );
     taskLines.push(
+      '  Caption each artifact in the language this Task is written in, in 1–3 short sentences saying what it shows for that criterion. Never paste your final report into a criterion: it already reaches the verifier as the deliverable.',
+    );
+    taskLines.push(
       '  Produce concrete evidence while you work, and include artifact paths, commands, and observed results in your final response.',
     );
     taskLines.push(

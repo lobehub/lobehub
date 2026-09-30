@@ -1,5 +1,6 @@
 'use client';
 
+import { readEvidenceChapters } from '@lobechat/const/verify';
 import type { AcceptanceCommentThread } from '@lobechat/types';
 import { copyToClipboard, Flexbox, Icon, TextArea, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Button, Tag, Text } from '@lobehub/ui/base-ui';
@@ -38,14 +39,19 @@ import { openEvidenceCommentModal } from '../Comments/EvidenceCommentModal';
 import { useAcceptanceComments } from '../Comments/hooks';
 import ThreadEvidence from '../Comments/ThreadEvidence';
 import { threadsForCheck } from '../Comments/threads';
-import { evidenceCounts, hasAnnotatableEvidence, isAnnotatable } from '../Evidence/evidence';
+import {
+  canMarkEvidence,
+  evidenceCounts,
+  hasAnnotatableEvidence,
+  isRejectable,
+} from '../Evidence/evidence';
 import { EvidenceList } from '../Evidence/EvidenceList';
 import type { EvidenceOverlayMap } from '../Evidence/overlay';
 import { openCheckRejectModal } from '../Review/CheckRejectModal';
 import type { CheckProposal } from '../Review/proposal';
 import { classifyProposalEdit } from '../Review/proposal';
 import ProposalCard from '../Review/ProposalCard';
-import { useAcceptanceBundle } from '../useAcceptanceBundle';
+import { useAcceptanceBundle, useEvidenceUrlRefresh } from '../useAcceptanceBundle';
 import { canCommentOnAcceptanceEvidence } from '../visibility';
 import {
   AcceptedNote,
@@ -151,6 +157,7 @@ export const AcceptanceCheckRow = memo<{
     // viewer — the row also renders in hosts with no acceptance scope.
     const scope = useOptionalAcceptanceScope();
     const { data: bundle } = useAcceptanceBundle(scope?.acceptanceId ?? '');
+    const refreshEvidenceUrl = useEvidenceUrlRefresh(scope?.acceptanceId);
     const comments = useAcceptanceComments(scope?.acceptanceId);
     const authorColor = useAcceptanceAuthorColor();
     const viewerId = useUserStore(userProfileSelectors.userId);
@@ -259,12 +266,16 @@ export const AcceptanceCheckRow = memo<{
         previousAnnotations:
           activeReview?.action === 'reject' ? activeReview.annotations : undefined,
         previousComment: activeReview?.action === 'reject' ? activeReview.comment : undefined,
+        refreshEvidenceUrl,
         checkDescription: check.planItem?.description,
         checkTitle: `C${check.seq} · ${title}`,
         draftKey: `${check.result?.id ?? 'unexecuted'}:${check.id}`,
-        evidence: check.evidence
-          .filter((item) => isAnnotatable(item))
-          .map((item) => ({ fileUrl: item.fileUrl!, id: item.id })),
+        evidence: check.evidence.filter(isRejectable).map((item) => ({
+          chapters: item.type === 'video' ? readEvidenceChapters(item.metadata) : undefined,
+          fileUrl: item.fileUrl!,
+          id: item.id,
+          type: item.type,
+        })),
         initialAnnotations: fromProposal?.annotations ?? undefined,
         initialComment: fromProposal?.comment ?? reviewComment,
         onConfirm: async ({ annotations, comment, fileIds }) => {
@@ -641,6 +652,8 @@ export const AcceptanceCheckRow = memo<{
             <EvidenceList
               evidence={check.evidence}
               overlays={commentOverlays}
+              reviewNotes={activeReview?.action === 'reject' ? activeReview.annotations : undefined}
+              onRefreshEvidenceUrl={refreshEvidenceUrl}
               onReviewEvidence={canReview ? (id) => openReject(undefined, id) : undefined}
             />
             {staleThreads.length > 0 && (
@@ -829,7 +842,7 @@ export const AcceptanceCheckRow = memo<{
               not a verdict. The rounds this check already went through then
               sit between that and the verdict buttons: context for the
               decision, never an appendix to one already made. */}
-            {detailMode && reviewable && !activeReview && hasAnnotatableEvidence(check) && (
+            {detailMode && reviewable && !activeReview && canMarkEvidence(check, desktop) && (
               <Button
                 outdent
                 icon={<Icon icon={Images} />}

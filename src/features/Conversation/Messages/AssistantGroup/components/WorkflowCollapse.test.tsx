@@ -88,10 +88,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/components/NeuralNetworkLoading', () => ({
-  default: () => <div>loading</div>,
-}));
-
 vi.mock('@/hooks/useAutoScroll', () => ({
   useAutoScroll: () => ({
     handleScroll: vi.fn(),

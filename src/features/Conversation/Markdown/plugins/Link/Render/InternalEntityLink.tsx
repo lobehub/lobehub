@@ -170,6 +170,13 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
         return;
       }
 
+      // The mobile portal is a modal over the chat, too cramped to read or edit
+      // a page in — open the standalone page route instead, so back returns here.
+      if (reference.type === 'document' && typeof __MOBILE__ !== 'undefined' && __MOBILE__) {
+        navigate(reference.pathname);
+        return;
+      }
+
       switch (reference.type) {
         case 'acceptance': {
           // The conversation is the working surface — the acceptance opens

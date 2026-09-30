@@ -5,9 +5,9 @@ import {
   useWatchBroadcast,
 } from '@lobechat/electron-client-ipc';
 import { Block, Flexbox } from '@lobehub/ui';
-import { Button, Tag } from '@lobehub/ui/base-ui';
+import { Button, Skeleton, Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, Suspense, use, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
@@ -15,6 +15,7 @@ import { CHANGELOG_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
 import { CURRENT_VERSION } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
+import { rendererOtaService } from '@/services/electron/rendererOta';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import {
@@ -24,6 +25,25 @@ import {
 } from '@/utils/devDockUnlock';
 
 import { APP_VERSION } from './appVersion';
+import { formatOtaVersionLabel, getDisplayedOtaVersion } from './otaVersion';
+
+let otaVersionPromise: Promise<string | null> | undefined;
+
+const getOtaVersion = () => {
+  otaVersionPromise ??= rendererOtaService.getStatus().then(getDisplayedOtaVersion);
+
+  return otaVersionPromise;
+};
+
+const OtaVersionTag = memo(() => {
+  const otaVersion = use(getOtaVersion());
+
+  if (!otaVersion) return null;
+
+  return <Tag style={{ minWidth: 60 }}>{formatOtaVersionLabel(otaVersion)}</Tag>;
+});
+
+OtaVersionTag.displayName = 'OtaVersionTag';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   logo: css`
@@ -180,6 +200,12 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
             >
               v{APP_VERSION}
             </Tag>
+
+            {isDesktop && (
+              <Suspense fallback={<Skeleton height={22} radius={6} width={60} />}>
+                <OtaVersionTag />
+              </Suspense>
+            )}
 
             {buildChannel && buildChannel !== 'stable' && (
               <Tag color={'gold'}>

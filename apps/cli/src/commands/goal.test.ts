@@ -1,6 +1,8 @@
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as FormatModule from '../utils/format';
+import { confirm } from '../utils/format';
 import { log } from '../utils/logger';
 import { registerGoalCommand } from './goal';
 
@@ -8,9 +10,13 @@ const { mockClient } = vi.hoisted(() => ({
   mockClient: {
     goal: {
       create: { mutate: vi.fn() },
+      delete: { mutate: vi.fn() },
       submitPlan: { mutate: vi.fn() },
       submitOperationPlan: { mutate: vi.fn() },
+      submitOperationReport: { mutate: vi.fn() },
+      submitReport: { mutate: vi.fn() },
       graph: { query: vi.fn() },
+      resume: { mutate: vi.fn() },
       setBudget: { mutate: vi.fn() },
       supervision: { query: vi.fn() },
       tick: { mutate: vi.fn() },
@@ -20,6 +26,11 @@ const { mockClient } = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', () => ({
   readFile: async () => JSON.stringify({ action: 'verify', reason: 'Ready' }),
+}));
+
+vi.mock('../utils/format', async (importOriginal) => ({
+  ...(await importOriginal<typeof FormatModule>()),
+  confirm: vi.fn(),
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: vi.fn().mockResolvedValue(mockClient) }));
@@ -94,6 +105,77 @@ describe('goal plan authentication', () => {
       expect(other.mutate).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('goal report authentication', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.mocked(console.log).mockRestore();
+  });
+
+  it.each(['hetero-operation', undefined])(
+    'routes %s credentials to the appropriate report endpoint',
+    async (purpose) => {
+      vi.clearAllMocks();
+      vi.stubEnv(
+        'LOBEHUB_JWT',
+        purpose
+          ? `header.${Buffer.from(JSON.stringify({ purpose })).toString('base64url')}.signature`
+          : undefined,
+      );
+      vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-wrapup');
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      mockClient.goal.submitReport.mutate.mockResolvedValue({ data: {} });
+      mockClient.goal.submitOperationReport.mutate.mockResolvedValue({ data: {} });
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'goal',
+        'report',
+        'goal-1',
+        '--metadata-file',
+        'report.json',
+        '--content-file',
+        'report.md',
+      ]);
+      const [selected, other] =
+        purpose === 'hetero-operation'
+          ? [mockClient.goal.submitOperationReport, mockClient.goal.submitReport]
+          : [mockClient.goal.submitReport, mockClient.goal.submitOperationReport];
+      // The mocked readFile returns the same text for both files.
+      expect(selected.mutate).toHaveBeenCalledWith({
+        id: 'goal-1',
+        operationId: 'op-wrapup',
+        report: {
+          content: JSON.stringify({ action: 'verify', reason: 'Ready' }),
+          metadata: { action: 'verify', reason: 'Ready' },
+        },
+      });
+      expect(other.mutate).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('goal resume', () => {
+  it('asks the server to settle the stuck planning turn only with --confirm-exit', async () => {
+    vi.clearAllMocks();
+    mockClient.goal.resume.mutate.mockResolvedValue({ message: 'Goal resumed' });
+    await createProgram().parseAsync(['node', 'test', 'goal', 'resume', 'goal-1']);
+    expect(mockClient.goal.resume.mutate).toHaveBeenLastCalledWith({ id: 'goal-1' });
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'goal',
+      'resume',
+      'goal-1',
+      '--confirm-exit',
+    ]);
+    expect(mockClient.goal.resume.mutate).toHaveBeenLastCalledWith({
+      confirmExit: true,
+      id: 'goal-1',
+    });
+  });
 });
 
 describe('goal run command', () => {
@@ -525,5 +607,35 @@ describe('goal set-budget command', () => {
         maxStepsPerRun: null,
       }),
     );
+  });
+});
+
+describe('goal delete', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(log, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('deletes the goal without prompting when --yes is passed', async () => {
+    mockClient.goal.delete.mutate.mockResolvedValue({ message: 'Goal deleted', success: true });
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'delete', 'goal-1', '--yes']);
+
+    expect(mockClient.goal.delete.mutate).toHaveBeenCalledWith({ id: 'goal-1' });
+    expect(log.info).toHaveBeenCalledWith('Goal deleted');
+  });
+
+  it('keeps the goal when the confirmation is declined', async () => {
+    vi.mocked(confirm).mockResolvedValue(false);
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'delete', 'goal-1']);
+
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(mockClient.goal.delete.mutate).not.toHaveBeenCalled();
   });
 });

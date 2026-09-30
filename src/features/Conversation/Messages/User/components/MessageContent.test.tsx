@@ -7,6 +7,10 @@ vi.mock('@/features/Conversation/Markdown', () => ({
   default: ({ children }: any) => <div data-testid="markdown-message">{children}</div>,
 }));
 
+vi.mock('../../../hooks/useStartTopicConversation', () => ({
+  useStartTopicConversation: () => undefined,
+}));
+
 vi.mock('../useMarkdown', () => ({
   useMarkdown: () => ({}),
 }));

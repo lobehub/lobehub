@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import { type ChildProcess } from 'node:child_process';
 
 import type {
   Options as ClaudeAgentSdkOptions,
@@ -9,6 +9,7 @@ import type {
   SpawnOptions as SdkSpawnOptions,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { spawnManaged } from '@lobechat/utils/managedProcess';
 
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { resolveCliSpawnPlan } from './cliSpawn';
@@ -194,7 +195,7 @@ export const spawnClaudeCodeCliProcess = (
   },
   platform: NodeJS.Platform = process.platform,
 ): SdkSpawnedProcess => {
-  const child: ChildProcess = spawn(options.command, options.args, {
+  const child: ChildProcess = spawnManaged(options.command, options.args, {
     cwd: options.cwd,
     detached: platform !== 'win32',
     // The SDK types env as a plain string map; this repo augments ProcessEnv

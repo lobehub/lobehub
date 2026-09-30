@@ -4,6 +4,7 @@ export {
   DEVICE_RPC_METHODS,
   type DeviceRpcMethod,
   executeDeviceRpc,
+  TRASH_UNSUPPORTED_MESSAGE,
 } from './dispatch';
 export {
   defaultCopyAssetForPublish,
@@ -18,6 +19,12 @@ export {
   type ListListeningPortsParams,
   type ListListeningPortsResult,
 } from './listeningPorts';
+export {
+  deviceMetricsBacklogFileName,
+  DeviceMetricsSampler,
+  type DeviceMetricsSamplerOptions,
+  pushMetrics,
+} from './metrics';
 export {
   defaultGetProjectFileIndex,
   defaultListProjectDirectory,

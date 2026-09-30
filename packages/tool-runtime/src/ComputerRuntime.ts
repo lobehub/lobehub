@@ -164,7 +164,7 @@ export abstract class ComputerRuntime {
       };
 
       // Number every returned line (1-based gutter) and, when the window
-      // stops before EOF, prefix a `(lines 1-1000 of 2545)` marker. Rendering
+      // stops before EOF, append the shared window notice with the next call. Rendering
       // only the caller-supplied args here meant a default-window read looked
       // identical to a full read, and the model had to burn extra turns
       // discovering the file was truncated.
@@ -188,10 +188,24 @@ export abstract class ComputerRuntime {
       // returned line's 1-based number is loc[0] + 1 or startLine.
       const firstLineNumber = hasLoc ? r.loc[0] + 1 : (args.startLine ?? 1);
 
+      // Name the next call in the argument shape this tool takes: local reads
+      // page with a 0-based end-exclusive `loc` of the same span; cloud sandbox
+      // reads with 1-based `startLine`/`endLine`.
+      const span = lineRange ? Math.max(lineRange[1] - lineRange[0], 1) : undefined;
+      const continueFrom = hasLoc
+        ? (line: number) =>
+            `call readFile again with path="${args.path}" and loc=[${line - 1}, ${line - 1 + span!}]`
+        : (line: number) =>
+            args.endLine === undefined
+              ? `call readFile again with path="${args.path}" and startLine=${line}`
+              : `call readFile again with path="${args.path}", startLine=${line} and endLine=${line + span! - 1}`;
+
       const content = formatFileContent({
         content: fileContent,
+        continueFrom,
         firstLineNumber,
         lineRange,
+        totalChars: r.totalCharCount,
         totalLines: r.totalLineCount ?? r.totalLines,
         // When the service cut the content at its char cap, the window's tail
         // was never delivered — a "(lines 1-1000 of N)" marker would claim

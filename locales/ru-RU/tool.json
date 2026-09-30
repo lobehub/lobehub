@@ -159,6 +159,7 @@
   "localFiles.open": "Открыть",
   "localFiles.openFile": "Открыть файл",
   "localFiles.openFolder": "Открыть папку",
+  "localFiles.openInPanel": "Открыть в боковой панели",
   "localFiles.outOfScope.requestedPaths": "Запрошенные пути",
   "localFiles.outOfScope.warning": "Предупреждение: Следующие пути находятся за пределами настроенной рабочей директории. Пожалуйста, подтвердите, что вы хотите разрешить доступ.",
   "localFiles.outOfScope.workingDirectory": "Рабочая директория",

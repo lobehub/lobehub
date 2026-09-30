@@ -638,6 +638,27 @@ describe('verifyRouter', () => {
         }),
       );
     });
+
+    it('rejects a check item that is not in the run plan instead of minting a required row', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({
+        id: 'run-1',
+        plan: [{ id: 'item-1', index: 0, required: true, title: 'gateway matrix' }],
+      });
+
+      await expect(
+        createCaller().submitCheckEvidence({
+          checkItemId: 'pglite-classification',
+          evidence: [{ content: 'grep output', type: 'text' }],
+          verdict: 'passed',
+          verifyRunId: 'run-1',
+        }),
+      ).rejects.toThrow(
+        'Check item "pglite-classification" is not in this verification run\'s plan. Use one of: item-1 (gateway matrix)',
+      );
+
+      expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+      expect(modelMocks.createEvidence).not.toHaveBeenCalled();
+    });
   });
 
   describe('uploadEvidence', () => {
@@ -650,6 +671,42 @@ describe('verifyRouter', () => {
           type: 'text',
         }),
       ).rejects.toThrow('Provide exactly one of `content` or `fileId`.');
+    });
+
+    it('stores only well-formed chapters, and only on video evidence', async () => {
+      const chapters = [
+        { kind: 'check', note: 'no skeleton after scroll #3', t: 7.9 },
+        { kind: 'step', label: 'Scroll #1', t: 2 },
+        { kind: 'check', t: 3 }, // a claim without a note says nothing
+        { kind: 'guess', note: 'unknown kind', t: 4 },
+        { kind: 'flag', note: 'negative time', t: -1 },
+      ];
+      modelMocks.findResultById.mockResolvedValue({ id: 'result-1' });
+
+      await createCaller().uploadEvidence({
+        checkResultId: 'result-1',
+        fileId: 'files-video',
+        metadata: { chapters, comparison: { id: 'pair', role: 'after' } },
+        type: 'video',
+      });
+      await createCaller().uploadEvidence({
+        checkResultId: 'result-1',
+        fileId: 'files-shot',
+        metadata: { chapters },
+        type: 'screenshot',
+      });
+
+      expect(modelMocks.createEvidence.mock.calls.map(([row]) => row.metadata)).toEqual([
+        {
+          chapters: [
+            { kind: 'step', label: 'Scroll #1', t: 2 },
+            { kind: 'check', note: 'no skeleton after scroll #3', t: 7.9 },
+          ],
+          comparison: { id: 'pair', role: 'after' },
+        },
+        null,
+      ]);
+      modelMocks.findResultById.mockReset();
     });
 
     it('rejects evidence without inline content or fileId', async () => {

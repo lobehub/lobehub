@@ -530,6 +530,7 @@
   "gemini-3.8-flash.description": "Gemini 3.8 Flash là mô hình Flash thông minh nhất của Google, được thiết kế cho kỹ thuật phần mềm dài hạn, các ajan tự động và các quy trình công việc doanh nghiệp phức tạp.",
   "gemini-flash-latest.description": "Chỉ đến gemini-3.7-flash",
   "gemini-flash-lite-latest.description": "Trỏ đến gemini-3.1-flash-lite",
+  "gemini-omni-1.1-flash.description": "Gemini Omni Flash là một mô hình đa phương thức tự nhiên cho văn bản thành video, hình ảnh thành video, tham chiếu thành video và chỉnh sửa video hội thoại.",
   "gemini-pro-latest.description": "Trỏ đến gemini-3.1-pro-preview",
   "gemma-4-31B-it.description": "Gemma 4 31B IT là mô hình đa phương thức mới nhất của Google hỗ trợ hiểu văn bản, hình ảnh và video. Mô hình xem trước chỉ dành cho mục đích đánh giá.",
   "gemma-4-31b.description": "Mô hình này xuất sắc trong lý luận đa phương tiện trên ảnh chụp màn hình, tài liệu, biểu đồ và tài sản thiết kế. Lý tưởng cho các quy trình làm việc tác nhân hình ảnh, đồng hành nhận thức hình ảnh và các nhóm chuyển đổi từ API đa phương tiện đóng sang mô hình mở.",

@@ -36,6 +36,12 @@ export interface UseAskUserFormParams {
   onInteractionAction?: BuiltinInterventionProps<AskUserQuestionArgs>['onInteractionAction'];
   /** Raw persisted draft blob read from the host's store (coerced internally). */
   persistedDraft: unknown;
+  /**
+   * Whether Submit waits for every question. Defaults to `true`; a host whose
+   * questions are all optional (task intent) passes `false` so answering one
+   * of three is still a submission.
+   */
+  requireAllAnswered?: boolean;
   /** Persist the full draft; host wires this to its own store. */
   writeDraft: (draft: AskUserDraft) => void;
 }
@@ -99,6 +105,7 @@ export const useAskUserForm = ({
   disabled = false,
   onInteractionAction,
   persistedDraft,
+  requireAllAnswered = true,
   writeDraft,
 }: UseAskUserFormParams): AskUserFormApi => {
   const questions = useMemo(() => normalizeAskUserQuestions(args), [args]);
@@ -425,8 +432,11 @@ export const useAskUserForm = ({
   }, [awaitProducerAck, disabled, onInteractionAction, submitting]);
 
   const allAnswered = useMemo(
-    () => questions.every((q) => isQuestionAnswered(q, picks, custom)),
-    [picks, custom, questions],
+    () =>
+      requireAllAnswered
+        ? questions.every((q) => isQuestionAnswered(q, picks, custom))
+        : questions.some((q) => isQuestionAnswered(q, picks, custom)),
+    [picks, custom, questions, requireAllAnswered],
   );
 
   // Timeout fallback for legacy question forms: shortly BEFORE the deadline,

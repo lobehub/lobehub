@@ -1,4 +1,4 @@
-import { type AgentState } from '@lobechat/agent-runtime';
+import { type AgentState, selectUserInterventionConfig } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
 import { getSubAgentChatConfigOverride, resolveSubAgentModel } from '@lobechat/const';
@@ -58,6 +58,7 @@ export const archiveRuntimeToolResult = async (
   result: ToolExecutionResultResponse,
   {
     agentId,
+    canReadArchive,
     identifier,
     limit,
     serverDB,
@@ -67,6 +68,7 @@ export const archiveRuntimeToolResult = async (
     workspaceId,
   }: {
     agentId?: string | null;
+    canReadArchive?: boolean;
     identifier?: string;
     limit?: number;
     serverDB: LobeChatDatabase;
@@ -78,6 +80,7 @@ export const archiveRuntimeToolResult = async (
 ): Promise<ToolExecutionResultResponse> => {
   const archive = await archiveToolResultIfNeeded({
     agentId,
+    canReadArchive,
     content: result.content,
     identifier,
     limit,
@@ -219,6 +222,13 @@ export const buildServerVirtualSubAgentRunner = (
   state: AgentState,
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
+  /**
+   * The row this tool call already owns — set when the call went through human
+   * approval, whose intervention row is then executed in place. The sub-agent
+   * must report into that row: a second placeholder left the approved row empty
+   * forever, so the parent's barrier never cleared and it was never resumed.
+   */
+  existingToolMessageId?: string,
 ): ServerSubAgentRunner | undefined => {
   // Share-visitor runs never get a sub-agent runner: the child run spawned
   // here does not thread the parent's shareGate, so it would execute with the
@@ -268,25 +278,31 @@ export const buildServerVirtualSubAgentRunner = (
         ? undefined
         : getSubAgentChatConfigOverride(parentAgentConfig?.agencyConfig?.subagent);
 
-      // 1. Create the pending placeholder tool message (mirrors the normal
+      // 1. Create (or, after approval, reuse) the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
       //    and renders a loading state until the bridge backfills it.
-      const placeholder = await ctx.messageModel.create({
-        agentId,
-        content: '',
-        groupId: state.origin?.groupId ?? undefined,
-        parentId: parentMessageId,
-        plugin: chatToolPayload as any,
-        // A continued sub-agent already has its thread, so the card can link to
-        // it while the new turn is still running.
-        pluginState: subAgentId
-          ? { status: 'pending', threadId: subAgentId }
-          : { status: 'pending' },
-        role: 'tool',
-        threadId: state.origin?.threadId,
-        tool_call_id: chatToolPayload.id,
-        topicId,
-      });
+      const pendingState = subAgentId
+        ? { status: 'pending', threadId: subAgentId }
+        : { status: 'pending' };
+      if (existingToolMessageId) {
+        await ctx.messageModel.updatePluginState(existingToolMessageId, pendingState);
+      }
+      const placeholder = existingToolMessageId
+        ? { id: existingToolMessageId }
+        : await ctx.messageModel.create({
+            agentId,
+            content: '',
+            groupId: state.origin?.groupId ?? undefined,
+            parentId: parentMessageId,
+            plugin: chatToolPayload as any,
+            // A continued sub-agent already has its thread, so the card can link to
+            // it while the new turn is still running.
+            pluginState: pendingState,
+            role: 'tool',
+            threadId: state.origin?.threadId,
+            tool_call_id: chatToolPayload.id,
+            topicId,
+          });
 
       // 2. Fork the virtual child op anchored to the placeholder. The virtual
       //    entry marks the child as `isSubAgent` and registers the completion
@@ -314,6 +330,16 @@ export const buildServerVirtualSubAgentRunner = (
       //    `started: false` (with the underlying reason) so callSubAgent surfaces
       //    an inline tool error instead.
       if (!result?.success) {
+        // A reused approval row is the call's own result slot: the runtime writes
+        // this failure into it, so it must not be deleted.
+        if (existingToolMessageId) {
+          return {
+            error: result?.error,
+            started: false,
+            subOperationId: result?.operationId,
+            threadId: '',
+          };
+        }
         try {
           // Runtime placeholder cleanup — also valid inside an agent-share
           // visitor topic, hence the explicit opt-in.
@@ -366,6 +392,13 @@ export const buildServerAgentMemberRunner = (
   state: AgentState,
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
+  /**
+   * The call's own pending tool row when it resumes after a human approval
+   * (`call_tool` with `skipCreateToolMessage`, where `parentMessageId` is that
+   * row). Reused as the group tool message instead of writing a second row
+   * with the same `tool_call_id` under it.
+   */
+  existingToolMessageId?: string,
 ): ServerAgentMemberRunner | undefined => {
   // Same share-visitor fail-close as `buildServerVirtualSubAgentRunner`:
   // member runs would not inherit the parent's shareGate.
@@ -401,19 +434,35 @@ export const buildServerAgentMemberRunner = (
       // 1. Group tool placeholder — the parked tool call the supervisor op waits
       //    on. Stamped with the barrier target + finish disposition so the resume
       //    path (and verify watchdog) resolve resume-vs-finish on their own.
-      const groupTool = await ctx.messageModel.create({
-        agentId,
-        content: '',
-        groupId,
-        ...(isCouncil ? { metadata: { agentCouncil: true } } : {}),
-        parentId: parentMessageId,
-        plugin: chatToolPayload as any,
-        pluginState: { expectedMembers, onComplete, status: 'pending' },
-        role: 'tool',
-        threadId: state.origin?.threadId,
-        tool_call_id: chatToolPayload.id,
-        topicId,
-      });
+      const existingToolMessage = existingToolMessageId
+        ? await ctx.messageModel.findById(existingToolMessageId)
+        : undefined;
+      // The supervisor assistant message owning this tool call. An approved
+      // call resumes with its own tool row as the parent, so step up from it.
+      const supervisorMessageId = existingToolMessage?.parentId ?? parentMessageId;
+      const groupTool = existingToolMessage
+        ? { id: existingToolMessage.id }
+        : await ctx.messageModel.create({
+            agentId,
+            content: '',
+            groupId,
+            ...(isCouncil ? { metadata: { agentCouncil: true } } : {}),
+            parentId: parentMessageId,
+            plugin: chatToolPayload as any,
+            pluginState: { expectedMembers, onComplete, status: 'pending' },
+            role: 'tool',
+            threadId: state.origin?.threadId,
+            tool_call_id: chatToolPayload.id,
+            topicId,
+          });
+      if (existingToolMessage) {
+        await ctx.messageModel.updatePluginState(groupTool.id, {
+          expectedMembers,
+          onComplete,
+          status: 'pending',
+        });
+        if (isCouncil) await ctx.messageModel.updateMetadata(groupTool.id, { agentCouncil: true });
+      }
 
       // 2. Per-member anchors. A single member collapses onto the group tool
       //    message; multiple members each get a child anchor under it. These
@@ -462,9 +511,10 @@ export const buildServerAgentMemberRunner = (
               parentOperationId: ctx.operationId,
               // The supervisor assistant message owning this tool call — council
               // members parent their response here (siblings of the council tool).
-              supervisorMessageId: parentMessageId,
+              supervisorMessageId,
               timeout,
               topicId,
+              userInterventionConfig: selectUserInterventionConfig(state),
             });
             if (result?.started) {
               startedCount += 1;
@@ -497,7 +547,10 @@ export const buildServerAgentMemberRunner = (
       // None started — no bridge will ever fire, so tear down the placeholders
       // and let the caller surface an inline tool error instead of parking.
       if (startedCount === 0) {
+        // A reused approved row is the call's own record — the caller writes
+        // the inline error into it, so only drop what this run created.
         for (const id of new Set([...anchorIds, groupTool.id])) {
+          if (id === existingToolMessage?.id) continue;
           try {
             // Runtime placeholder cleanup — see the sub-agent runner above.
             await ctx.messageModel.deleteMessage(id, { includeShareVisitor: true });

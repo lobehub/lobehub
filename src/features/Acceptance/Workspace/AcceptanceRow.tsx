@@ -32,6 +32,7 @@ import { verifyKeys } from '@/libs/swr/keys';
 import type { AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 
+import { acceptanceListPath } from '../Viewer/routes';
 import { getAcceptanceStatusActions } from '../Viewer/statusActions';
 import { openAcceptanceDeleteConfirm } from './AcceptanceDeleteConfirm';
 import { openMergeAcceptanceModal } from './MergeAcceptanceModal';
@@ -233,7 +234,7 @@ const AcceptanceRow = memo<{
         setMutating(true);
         try {
           await verifyService.deleteAcceptance(item.id, purge);
-          if (active) navigate('/acceptance', { replace: true });
+          if (active) navigate(acceptanceListPath(), { replace: true });
           await onChanged();
           toast.success(t('acceptance.workspace.deleteSuccess'));
         } finally {

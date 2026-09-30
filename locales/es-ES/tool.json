@@ -159,6 +159,7 @@
   "localFiles.open": "Abrir",
   "localFiles.openFile": "Abrir Archivo",
   "localFiles.openFolder": "Abrir Carpeta",
+  "localFiles.openInPanel": "Abrir en panel lateral",
   "localFiles.outOfScope.requestedPaths": "Rutas solicitadas",
   "localFiles.outOfScope.warning": "Advertencia: Las siguientes rutas están fuera del directorio de trabajo configurado. Por favor, confirma si deseas permitir el acceso.",
   "localFiles.outOfScope.workingDirectory": "Directorio de trabajo",

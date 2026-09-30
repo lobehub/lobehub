@@ -92,6 +92,48 @@ describe('buildTaskPrompt Goal loop context', () => {
   });
 });
 
+describe('buildTaskPrompt owner change request', () => {
+  it('keeps the owner reject comment when the rework already opened a new round', async () => {
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({ instruction: 'Complete full Goal acceptance' });
+    await taskModel.update(task.id, { totalTopics: 2 });
+    const goal = await new GoalModel(db, userId).create({
+      subjectType: 'standalone',
+      title: 'Reworked delivery',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const taskNode = await graphModel.createNode(goal.id, {
+      kind: 'task',
+      title: 'Complete full Goal acceptance',
+    });
+    await graphModel.bindTask(goal.id, taskNode!.id, task.id);
+    const acceptance = await new AcceptanceModel(db, userId).create({
+      subjectId: task.id,
+      subjectType: 'task',
+    });
+    const runModel = new VerifyRunModel(db, userId);
+    const rejected = await runModel.create({ acceptanceId: acceptance.id, roundIndex: 1 });
+    await runModel.setDecision(rejected.id, 'reject', {
+      comment: 'Add a day-one agenda',
+      decidedAt: new Date().toISOString(),
+      decidedBy: userId,
+    });
+    // The rework's first attempt planned its own round, then failed to run.
+    await runModel.create({ acceptanceId: acceptance.id, roundIndex: 2 });
+
+    const result = await buildTaskPrompt((await taskModel.findById(task.id))!, {
+      briefModel: new BriefModel(db, userId),
+      db,
+      taskModel,
+      taskTopicModel: new TaskTopicModel(db, userId),
+      userId,
+    });
+
+    expect(result.prompt).toContain('Review feedback on the last delivery');
+    expect(result.prompt).toContain('"Add a day-one agenda"');
+  });
+});
+
 describe('buildTaskPrompt delivery acceptance', () => {
   const buildFor = async (taskId: string) => {
     const taskModel = new TaskModel(db, userId);

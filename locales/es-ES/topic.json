@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "Enlace copiado",
   "actions.copySessionId": "Copiar ID de sesión",
   "actions.copySessionIdSuccess": "ID de sesión copiado",
+  "actions.copyTopicPrompt": "Copiar el mensaje del tema",
+  "actions.copyTopicPromptSuccess": "Mensaje del tema copiado",
   "actions.copyWorkingDirectory": "Copiar directorio de trabajo",
   "actions.copyWorkingDirectorySuccess": "Directorio de trabajo copiado",
   "actions.diagnose": "Verificar cadena de mensajes",
