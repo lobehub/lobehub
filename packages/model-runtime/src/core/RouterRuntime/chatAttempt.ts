@@ -33,7 +33,7 @@ const getReasoningContent = (data: OnFinishData | undefined) =>
 /**
  * Stream errors are often plain runtime payloads such as
  * `{ type: 'ProviderContentPolicyViolation', body: { message } }`; `String()` would turn them
- * into `[object Object]` and lose the provider reason in error logs (LOBE-14421).
+ * into `[object Object]` and lose the provider reason in error logs.
  */
 const streamErrorMessage = (error: unknown): string =>
   (error instanceof Error ? error.message : extractErrorMessage(error)) ?? String(error);
