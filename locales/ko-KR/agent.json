@@ -315,7 +315,7 @@
   "channel.wechatUserIdHint": "인증 흐름에서 반환된 WeChat 계정 식별자입니다.",
   "share.entry": "이 에이전트를 공유하기",
   "share.settings.limits.desc": "방문자 실행은 귀하의 계정에 청구되므로 이러한 제한은 공유 링크가 청구서를 과도하게 증가시키는 것을 방지합니다. 항상 적용되며 숫자를 변경할 수 있지만 끌 수는 없습니다.",
-  "share.settings.limits.maxFileStorage": "파일 저장 한도",
+  "share.settings.limits.maxFileStorage": "파일 저장 한도 (MB)",
   "share.settings.limits.maxFileStorageHint": "방문자가 첨부한 파일은 귀하의 계정에 저장됩니다. 업로드는 총 한도에 도달하면 중지됩니다. 첨부 파일을 비활성화하려면 0으로 설정하세요.",
   "share.settings.limits.maxFileStorageWorkspaceHint": "방문자가 첨부한 파일은 작업 공간에 저장됩니다. 업로드는 총 용량에 도달하면 중지됩니다. 첨부 파일을 비활성화하려면 0으로 설정하세요.",
   "share.settings.limits.maxTopicsPerVisitor": "방문자당 대화 수",

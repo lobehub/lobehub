@@ -315,7 +315,7 @@
   "channel.wechatUserIdHint": "Định danh tài khoản WeChat được trả về bởi quy trình ủy quyền.",
   "share.entry": "Chia sẻ Agent này",
   "share.settings.limits.desc": "Mỗi lần chạy của khách truy cập đều được tính vào tài khoản của bạn, vì vậy các giới hạn này giúp ngăn một liên kết chia sẻ làm tăng chi phí của bạn. Chúng luôn được áp dụng — bạn có thể thay đổi số lượng, nhưng không thể tắt chúng.",
-  "share.settings.limits.maxFileStorage": "Giới hạn lưu trữ tệp",
+  "share.settings.limits.maxFileStorage": "Giới hạn lưu trữ tệp (MB)",
   "share.settings.limits.maxFileStorageHint": "Các tệp mà khách truy cập đính kèm sẽ được lưu trữ trên tài khoản của bạn. Việc tải lên sẽ dừng lại khi đạt đến tổng số này; đặt 0 để tắt đính kèm.",
   "share.settings.limits.maxFileStorageWorkspaceHint": "Các tệp mà khách truy cập đính kèm được lưu trữ trong Không gian làm việc. Việc tải lên sẽ dừng khi đạt đến tổng số này; đặt 0 để tắt tệp đính kèm.",
   "share.settings.limits.maxTopicsPerVisitor": "Cuộc trò chuyện mỗi khách truy cập",

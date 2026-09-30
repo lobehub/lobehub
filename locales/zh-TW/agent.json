@@ -315,7 +315,7 @@
   "channel.wechatUserIdHint": "授權流程返回的微信帳號標識符。",
   "share.entry": "分享此代理",
   "share.settings.limits.desc": "每次訪客執行都會計入您的帳戶，因此這些限制是為了防止共享連結導致您的帳單激增。這些限制始終適用——您可以更改數字，但無法關閉它們。",
-  "share.settings.limits.maxFileStorage": "檔案儲存限制",
+  "share.settings.limits.maxFileStorage": "檔案儲存限制（MB）",
   "share.settings.limits.maxFileStorageHint": "訪客附加的檔案會儲存在您的帳戶中。一旦上傳達到此總量，將停止上傳；設為 0 可關閉附件功能。",
   "share.settings.limits.maxFileStorageWorkspaceHint": "訪客附加的檔案存儲在工作區中。一旦達到此總量，將停止上傳；設置為 0 可關閉附件功能。",
   "share.settings.limits.maxTopicsPerVisitor": "每位訪客的對話數",

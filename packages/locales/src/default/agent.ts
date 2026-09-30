@@ -403,9 +403,11 @@ export default {
   'share.entry': 'Share this Agent',
   'share.settings.limits.desc':
     'Every visitor run is billed to your account, so these caps are what keep a shared link from running up your bill. They always apply — you can change the numbers, but not turn them off.',
-  'share.settings.limits.maxFileStorage': 'File storage limit',
   'share.settings.limits.maxFileStorageHint':
     'Files visitors attach are stored on your account. Uploads stop once they reach this total; set 0 to turn attachments off.',
+  // Renamed from `maxFileStorage` when the MB unit moved into an input suffix: a new key lets
+  // auto-i18n translate it, which it never does for a changed value under an existing key.
+  'share.settings.limits.maxFileStorageLabel': 'File storage limit',
   'share.settings.limits.maxFileStorageWorkspaceHint':
     'Files visitors attach are stored in the Workspace. Uploads stop once they reach this total; set 0 to turn attachments off.',
   'share.settings.limits.maxTopicsPerVisitor': 'Topics per visitor',
