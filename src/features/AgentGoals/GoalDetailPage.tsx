@@ -18,6 +18,7 @@ import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import RightPanel from '@/features/RightPanel';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
+import { useWorkspaceSidePanel } from '@/features/RightPanel/WorkspaceSidePanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
@@ -71,6 +72,9 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
 
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
   const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
+  // On the agent-less `/goal/:goalId` route an ancestor layout already owns the
+  // side panel; mounting ours as well would give the surface two portal hosts.
+  const hasWorkspaceSidePanel = useWorkspaceSidePanel();
   const chat = useGoalChatPanel(goalId, agentId);
   const clearPortalStack = useChatStore((s) => s.clearPortalStack);
 
@@ -254,38 +258,45 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
           (metric / node → task detail → topic) rides its view stack, and the
           header's back arrow and close come for free. When no drill-down is
           open, the panel hosts the conversation with the goal's responsible
-          agent so a user can just ask about progress. */}
-      <RightPanel
-        expand={(showPortal || chatVisible) && !graphFullscreen}
-        maxWidth={maxWidth}
-        minWidth={minWidth}
-        width={width}
-        onSizeChange={(size) => updateWidth(size?.width)}
-        onExpandChange={(next) => {
-          if (!next) clearPortalStack();
-          chat.setOpen(next);
-        }}
-      >
-        {graphFullscreen ? null : showPortal ? (
-          <PortalContent />
-        ) : chat.agentId && chat.topicId ? (
-          <GoalSupervision
-            agentId={chat.agentId}
-            goalId={goalId}
-            key={`${goalId}:${chat.agentId}:${chat.request}`}
-            topicId={chat.topicId}
-            onCollapse={() => chat.setOpen(false)}
-          />
-        ) : chat.agentId ? (
-          <GoalChat
-            agentId={chat.agentId}
-            goalId={goalId}
-            initialTopicId={chat.topicId}
-            key={`${goalId}:${chat.agentId}:${chat.request}`}
-            onCollapse={() => chat.setOpen(false)}
-          />
-        ) : null}
-      </RightPanel>
+          agent so a user can just ask about progress.
+
+          Only when this page is the surface's one portal host: on the
+          agent-less route the task workspace already mounts its own panel, and
+          a second host would render the same detail twice while squeezing the
+          goal column to nothing beside it. */}
+      {hasWorkspaceSidePanel ? null : (
+        <RightPanel
+          expand={(showPortal || chatVisible) && !graphFullscreen}
+          maxWidth={maxWidth}
+          minWidth={minWidth}
+          width={width}
+          onSizeChange={(size) => updateWidth(size?.width)}
+          onExpandChange={(next) => {
+            if (!next) clearPortalStack();
+            chat.setOpen(next);
+          }}
+        >
+          {graphFullscreen ? null : showPortal ? (
+            <PortalContent />
+          ) : chat.agentId && chat.topicId ? (
+            <GoalSupervision
+              agentId={chat.agentId}
+              goalId={goalId}
+              key={`${goalId}:${chat.agentId}:${chat.request}`}
+              topicId={chat.topicId}
+              onCollapse={() => chat.setOpen(false)}
+            />
+          ) : chat.agentId ? (
+            <GoalChat
+              agentId={chat.agentId}
+              goalId={goalId}
+              initialTopicId={chat.topicId}
+              key={`${goalId}:${chat.agentId}:${chat.request}`}
+              onCollapse={() => chat.setOpen(false)}
+            />
+          ) : null}
+        </RightPanel>
+      )}
     </Flexbox>
   );
 });
