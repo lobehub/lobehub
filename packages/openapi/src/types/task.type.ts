@@ -1,6 +1,11 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { z } from 'zod';
 
+import {
+  schedulePatternSchema,
+  scheduleTimezoneSchema,
+} from '@/server/services/task/scheduleValidation';
+
 export const TaskIdParamSchema = z.object({
   id: z.string().min(1),
 });
@@ -38,8 +43,10 @@ export const CreateTaskRequestSchema = z.object({
   parentTaskId: z.string().optional(),
   priority: z.number().int().min(0).max(4).optional(),
   projectId: z.string().optional(),
-  schedulePattern: z.string().optional(),
-  scheduleTimezone: z.string().optional(),
+  // Same write-time cron/timezone validation as the tRPC create boundary, so a
+  // schedule the dispatcher cannot evaluate is refused instead of stored.
+  schedulePattern: schedulePatternSchema.optional(),
+  scheduleTimezone: scheduleTimezoneSchema.optional(),
   visibility: z.enum(['private', 'public']).optional(),
 });
 export type CreateTaskRequest = z.infer<typeof CreateTaskRequestSchema>;
@@ -55,8 +62,8 @@ export const UpdateTaskRequestSchema = z
     name: z.string().optional(),
     parentTaskId: z.string().nullish(),
     priority: z.number().int().min(0).max(4).optional(),
-    schedulePattern: z.string().nullish(),
-    scheduleTimezone: z.string().nullish(),
+    schedulePattern: schedulePatternSchema.nullish(),
+    scheduleTimezone: scheduleTimezoneSchema.nullish(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {

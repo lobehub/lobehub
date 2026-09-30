@@ -441,6 +441,37 @@ const ref = (schema: string): SchemaObject => ({ $ref: `#/components/schemas/${s
  */
 const PERSONAL_AGENT_GROUPS = new Set(['goals', 'memories', 'notifications', 'signals', 'tasks']);
 
+/**
+ * Handlers whose success status is not 200. A controller's return code is not
+ * visible to the generator, so every non-200 success has to be declared here —
+ * otherwise the document (and the SDK generated from it) advertises a status
+ * the runtime never sends, and status-discriminating clients branch wrongly.
+ */
+const CREATED_OPERATIONS = new Set([
+  'POST agent-groups',
+  'POST agents/{id}/duplicate',
+  'POST api-keys',
+  'POST eval/benchmarks',
+  'POST eval/datasets',
+  'POST eval/datasets/{datasetId}/test-cases',
+  'POST goals',
+  'POST mcp-servers',
+  'POST tasks',
+]);
+
+const ACCEPTED_OPERATIONS = new Set([
+  'POST eval/runs',
+  'POST signals/source-events',
+  'POST signals/trigger',
+]);
+
+const successStatusFor = (group: string, rest: string, method: string): number => {
+  const operation = `${method.toUpperCase()} ${group}${rest ? `/${rest}` : ''}`;
+  if (ACCEPTED_OPERATIONS.has(operation)) return 202;
+  if (CREATED_OPERATIONS.has(operation)) return 201;
+  return 200;
+};
+
 const successEnvelope = (data: SchemaObject): SchemaObject => ({
   additionalProperties: false,
   properties: {
@@ -793,16 +824,15 @@ export const buildSpecDocument = async (app: GenerateSpecsApp) => {
         successContent['text/event-stream'] = { schema: { type: 'string' } };
       }
 
-      const successStatus =
-        group === 'eval' && method === 'post' && rest === 'runs'
-          ? 202
-          : method === 'post' &&
-              ((['agent-groups', 'api-keys', 'mcp-servers'].includes(group) && rest === '') ||
-                (group === 'agents' && rest === '{id}/duplicate') ||
-                (group === 'eval' &&
-                  ['benchmarks', 'datasets', 'datasets/{datasetId}/test-cases'].includes(rest)))
-            ? 201
-            : 200;
+      const successStatus = successStatusFor(group, rest, method);
+      // `hono-openapi` fills a contentless 200 into operations that declare a
+      // request body but no responses. When the handler actually answers
+      // 201/202 that placeholder is not a real response and must go, or the
+      // document keeps advertising a status the runtime never sends.
+      const placeholder200 = op.responses[200] as { content?: unknown } | undefined;
+      if (successStatus !== 200 && placeholder200 && !placeholder200.content) {
+        delete op.responses[200];
+      }
       const currentSuccess = (op.responses[successStatus] ?? {}) as Record<string, unknown>;
       op.responses[successStatus] = {
         ...currentSuccess,

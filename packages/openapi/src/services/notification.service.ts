@@ -1,5 +1,11 @@
 import { NotificationModel } from '@/database/models/notification';
 import type { LobeChatDatabase } from '@/database/type';
+import {
+  type InboxCountContext,
+  type NotificationNavigationCount,
+  resolveNavigationCounts,
+  resolveUnreadCount,
+} from '@/server/services/notification/inboxCounts';
 
 import { BaseService } from '../common/base.service';
 import type { ServiceResult } from '../types';
@@ -10,7 +16,10 @@ import type { NotificationListQuery } from '../types/notification.type';
  *
  * The inbox is scoped exactly like the in-app one: personal scope sees only
  * rows with `workspace_id IS NULL`, a workspace scope sees only its own rows,
- * so the two contexts never leak into each other.
+ * so the two contexts never leak into each other. The unread and per-category
+ * counts go through the same live-transfer reconciliation the tRPC router uses,
+ * so a pending transfer request keeps prompting here too instead of the two
+ * surfaces disagreeing.
  */
 export class NotificationRestService extends BaseService {
   private readonly notificationModel: NotificationModel;
@@ -20,6 +29,15 @@ export class NotificationRestService extends BaseService {
     this.notificationModel = new NotificationModel(db, userId ?? '', {
       workspaceId: workspaceId ?? null,
     });
+  }
+
+  private inboxCountContext(): InboxCountContext {
+    return {
+      notificationModel: this.notificationModel,
+      serverDB: this.db,
+      userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
+    };
   }
 
   async listNotifications(query: NotificationListQuery): ServiceResult<unknown> {
@@ -33,11 +51,11 @@ export class NotificationRestService extends BaseService {
   }
 
   async getUnreadCount(): ServiceResult<number> {
-    return this.notificationModel.getUnreadCount();
+    return resolveUnreadCount(this.inboxCountContext());
   }
 
-  async getNavigationCounts(): ServiceResult<unknown> {
-    return this.notificationModel.getNavigationCounts();
+  async getNavigationCounts(): ServiceResult<NotificationNavigationCount[]> {
+    return resolveNavigationCounts(this.inboxCountContext());
   }
 
   async markAsRead(ids: string[]): ServiceResult<unknown> {

@@ -1141,8 +1141,6 @@ paths:
               required:
                 - name
       responses:
-        "200":
-          description: Response
         "201":
           content:
             application/json:
@@ -2735,8 +2733,6 @@ paths:
                 - name
               additionalProperties: false
       responses:
-        "200":
-          description: Response
         "201":
           content:
             application/json:
@@ -11802,7 +11798,7 @@ paths:
               required:
                 - title
       responses:
-        "200":
+        "201":
           content:
             application/json:
               schema:
@@ -19498,7 +19494,7 @@ paths:
       tags:
         - signals
       responses:
-        "200":
+        "202":
           content:
             application/json:
               schema:
@@ -19616,7 +19612,7 @@ paths:
       tags:
         - signals
       responses:
-        "200":
+        "202":
           content:
             application/json:
               schema:
@@ -20009,7 +20005,7 @@ paths:
               required:
                 - instruction
       responses:
-        "200":
+        "201":
           content:
             application/json:
               schema:

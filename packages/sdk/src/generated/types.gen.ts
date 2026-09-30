@@ -478,10 +478,6 @@ export type PostApiV1AgentGroupsError = PostApiV1AgentGroupsErrors[keyof PostApi
 
 export type PostApiV1AgentGroupsResponses = {
     /**
-     * Response
-     */
-    200: unknown;
-    /**
      * Successful response
      */
     201: {
@@ -1314,10 +1310,6 @@ export type PostApiV1ApiKeysErrors = {
 export type PostApiV1ApiKeysError = PostApiV1ApiKeysErrors[keyof PostApiV1ApiKeysErrors];
 
 export type PostApiV1ApiKeysResponses = {
-    /**
-     * Response
-     */
-    200: unknown;
     /**
      * Successful response
      */
@@ -5350,7 +5342,7 @@ export type PostApiV1GoalsResponses = {
     /**
      * Successful response
      */
-    200: {
+    201: {
         data?: Array<unknown> | {
             [key: string]: unknown;
         } | null;
@@ -9949,7 +9941,7 @@ export type PostApiV1SignalsSourceEventsResponses = {
     /**
      * Successful response
      */
-    200: {
+    202: {
         data?: Array<unknown> | {
             [key: string]: unknown;
         } | null;
@@ -10019,7 +10011,7 @@ export type PostApiV1SignalsTriggerResponses = {
     /**
      * Successful response
      */
-    200: {
+    202: {
         data?: Array<unknown> | {
             [key: string]: unknown;
         } | null;
@@ -10228,7 +10220,7 @@ export type PostApiV1TasksResponses = {
     /**
      * Successful response
      */
-    200: {
+    201: {
         data?: Array<unknown> | {
             [key: string]: unknown;
         } | null;

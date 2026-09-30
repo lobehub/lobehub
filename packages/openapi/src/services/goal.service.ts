@@ -128,7 +128,11 @@ export class GoalRestService extends BaseService {
 
   /** Restart every unfinished task node, optionally under a different agent. */
   async restartGoal(id: string, input: RestartGoalRequest): ServiceResult<unknown> {
-    await this.requireGoal(id);
+    const goal = await this.requireGoal(id);
+    // `AGENT_UPDATE` says the member may change goals; it does not say whose.
+    // Without this any member could reset a colleague's goal and cancel its
+    // live runs — the same creator-or-owner gate the tRPC mutation applies.
+    await this.assertRowManageable(goal.userId, 'AGENT_UPDATE', 'goal');
     const data = await this.goalService.restart(id, { agentId: input.agentId });
     await scheduleGoalAdvance({
       goalId: id,
@@ -162,7 +166,10 @@ export class GoalRestService extends BaseService {
   }
 
   async deleteGoal(id: string): ServiceResult<void> {
-    await this.requireGoal(id);
+    const goal = await this.requireGoal(id);
+    // Same rule as `restart`: visibility is not manageability, so only the
+    // goal's creator (or a workspace owner) may cascade its graph away.
+    await this.assertRowManageable(goal.userId, 'AGENT_UPDATE', 'goal');
     await this.goalService.delete(id);
   }
 }

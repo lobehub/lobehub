@@ -1,11 +1,6 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type { TaskListItem, TaskParticipant, TaskVerifyConfig } from '@lobechat/types';
-import {
-  isValidTimezone,
-  validateCronPattern,
-  validateScheduleUpdate,
-} from '@lobechat/utils/cronEval';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -29,6 +24,11 @@ import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
 import { TaskIntentService } from '@/server/services/task/intent';
+import {
+  assertResultingScheduleValid,
+  schedulePatternSchema,
+  scheduleTimezoneSchema,
+} from '@/server/services/task/scheduleValidation';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
@@ -78,23 +78,6 @@ const taskVerifyConfigPatchSchema = z.object({
   verifierAgentId: z.string().nullish(),
   verifyCriteriaIds: z.array(z.string()).nullish(),
   verifyRubricId: z.string().nullish(),
-});
-
-// Reject cron the schedule dispatcher cannot evaluate at write time, instead of
-// storing it and letting it silently never fire. An empty string still clears.
-const schedulePatternSchema = z.string().superRefine((pattern, ctx) => {
-  if (!pattern) return;
-  const result = validateCronPattern(pattern, null);
-  if (!result.valid) {
-    ctx.addIssue({
-      code: 'custom',
-      message: `Invalid schedulePattern "${pattern}": ${result.error}`,
-    });
-  }
-});
-
-const scheduleTimezoneSchema = z.string().refine((tz) => !tz || isValidTimezone(tz), {
-  message: 'scheduleTimezone must be an IANA timezone such as "Asia/Shanghai"',
 });
 
 // Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
@@ -214,29 +197,6 @@ const groupListSchema = z
   });
 
 // Helper: resolve id/identifier and throw if not found
-/**
- * The field schemas check `schedulePattern` and `scheduleTimezone` one at a
- * time; this checks the pair the task ends up with, filling any field the
- * input leaves out from the stored row, so e.g. a pattern-only update cannot
- * keep a legacy invalid timezone and still report success.
- */
-function assertResultingScheduleValid(
-  stored: { schedulePattern?: string | null; scheduleTimezone?: string | null } | null,
-  input: {
-    automationMode?: string | null;
-    schedulePattern?: string | null;
-    scheduleTimezone?: string | null;
-  },
-) {
-  const result = validateScheduleUpdate(
-    stored ? { pattern: stored.schedulePattern, timezone: stored.scheduleTimezone } : null,
-    input,
-  );
-  if (result && !result.valid) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: `Invalid schedule: ${result.error}` });
-  }
-}
-
 async function resolveOrThrow(model: TaskModel, id: string) {
   const task = await model.resolve(id);
   if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
