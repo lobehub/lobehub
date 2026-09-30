@@ -150,6 +150,23 @@ describe('AntigravityAdapter', () => {
     );
   });
 
+  it('preserves quota guidance when the terminal error also mentions authentication', () => {
+    const adapter = new AntigravityAdapter();
+    const detail = "Authentication required: You've hit your weekly limit. Resets tomorrow.";
+    expect(adapter.adapt(result({ status: 'ERROR', error: detail }))).toContainEqual(
+      expect.objectContaining({
+        type: 'error',
+        data: expect.objectContaining({
+          agentType: 'antigravity',
+          code: 'rate_limit',
+          details: { kind: 'usage_limit' },
+          message: detail,
+          rateLimitInfo: { rateLimitType: 'seven_day', status: 'rejected' },
+        }),
+      }),
+    );
+  });
+
   it.each(['ERROR', 'CANCELED', 'INTERRUPTED', 'INVALID', 'WAITING', 'RUNNING'])(
     'does not treat terminal %s as success',
     (status) => {

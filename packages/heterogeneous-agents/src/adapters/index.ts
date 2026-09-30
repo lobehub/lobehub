@@ -1,7 +1,7 @@
 export { AmpAdapter } from './amp';
+export { AntigravityAdapter } from './antigravity';
 export { ClaudeCodeAdapter } from './claudeCode';
 export { ClaudeCodeSdkAdapter } from './claudeCodeSdk';
-export { AntigravityAdapter } from './antigravity';
 export { CodeBuddyAdapter } from './codeBuddy';
 export { CodexAdapter } from './codex';
 export { CodexAppServerAdapter } from './codexAppServer';
