@@ -3,6 +3,8 @@ import { type RuntimeVideoGenParamsKeys } from 'model-bank';
 import {
   getImageInputSlots,
   supportsImageInputMode,
+  type VideoImageInputMode,
+  type VideoImageInputs,
   type VideoImageInputSlots,
 } from './imageInputMode';
 import { type VideoGenerationConfigState } from './initialState';
@@ -29,9 +31,16 @@ const isImageInputSlotEnabled =
   (slot: keyof VideoImageInputSlots) => (s: VideoGenerationConfigState) =>
     getImageInputSlots(s.parametersSchema, s.imageInputMode)[slot];
 
+/** Image inputs of `mode`: the submitted parameters when it is active, otherwise its stash */
+const imageInputsOfMode =
+  (mode: VideoImageInputMode) =>
+  (s: VideoGenerationConfigState): VideoImageInputs =>
+    mode === s.imageInputMode ? s.parameters : (s.stashedImageInputs[mode] ?? {});
+
 export const videoGenerationConfigSelectors = {
   hasImageInputMode,
   imageInputMode,
+  imageInputsOfMode,
   isImageInputSlotEnabled,
   isSupportedParam,
   model,

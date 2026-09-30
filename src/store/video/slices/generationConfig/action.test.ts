@@ -8,6 +8,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useVideoStore } from '@/store/video';
+import { videoGenerationConfigSelectors } from '@/store/video/selectors';
 
 const modelASchema: VideoModelParamsSchema = {
   prompt: { default: '' },
@@ -228,6 +229,33 @@ describe('image input mode', () => {
       endImageUrl: null,
       imageUrl: null,
       imageUrls: ['ref.png'],
+    });
+  });
+
+  it('lands an upload that finishes after a mode switch in the mode it started in', () => {
+    setMinimaxH3({ imageUrl: null, imageUrls: [], prompt: 'p' } as RuntimeVideoGenParams);
+    const { result } = renderHook(() => useVideoStore());
+
+    act(() => {
+      result.current.setImageInputMode('reference');
+    });
+    // The user switches to Frames while a References upload is still in flight.
+    act(() => {
+      result.current.setImageInputMode('frames');
+      result.current.setImageInputForMode('reference', 'imageUrls', ['late-ref.png']);
+    });
+    expect(result.current.parameters).toMatchObject({ imageUrl: null, imageUrls: [] });
+    expect(
+      videoGenerationConfigSelectors.imageInputsOfMode('reference')(useVideoStore.getState()),
+    ).toEqual({ imageUrls: ['late-ref.png'] });
+
+    act(() => {
+      result.current.setImageInputForMode('frames', 'imageUrl', 'start.png');
+      result.current.setImageInputMode('reference');
+    });
+    expect(result.current.parameters).toMatchObject({
+      imageUrl: null,
+      imageUrls: ['late-ref.png'],
     });
   });
 

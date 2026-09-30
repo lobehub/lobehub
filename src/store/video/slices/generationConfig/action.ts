@@ -23,6 +23,7 @@ import {
   normalizeImageInputMode,
   pickImageInputs,
   type VideoImageInputMode,
+  type VideoImageInputs,
 } from './imageInputMode';
 
 export function getVideoModelAndDefaults(model: string, provider: string) {
@@ -197,6 +198,34 @@ export class GenerationConfigActionImpl {
       },
       false,
       `setImageInputMode/${mode}`,
+    );
+  };
+
+  /**
+   * Set one image input of `mode`. Uploads land here with the mode they started in: when the user
+   * switched modes while they were in flight, the images join that mode's stash instead of the
+   * submitted parameters, which would otherwise mix both modes and change the provider endpoint.
+   */
+  setImageInputForMode = <K extends keyof VideoImageInputs>(
+    mode: VideoImageInputMode,
+    key: K,
+    value: VideoImageInputs[K],
+  ): void => {
+    const { imageInputMode, stashedImageInputs } = this.#get();
+    if (mode === imageInputMode) {
+      this.setParamOnInput(key, value as RuntimeVideoGenParamsValue);
+      return;
+    }
+
+    this.#set(
+      {
+        stashedImageInputs: {
+          ...stashedImageInputs,
+          [mode]: { ...stashedImageInputs[mode], [key]: value },
+        },
+      },
+      false,
+      `setImageInputForMode/${mode}/${key}`,
     );
   };
 
