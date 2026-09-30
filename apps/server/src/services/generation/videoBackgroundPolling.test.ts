@@ -217,7 +217,7 @@ describe('videoBackgroundPolling', () => {
       await processBackgroundVideoPolling(mockDb, mockParams);
 
       // fal billed 39.815K tokens for this image-to-video output
-      const tokens = (710 * 592 * 97) / 1024;
+      const tokens = 39_815;
       expect(chargeAfterGenerate).toHaveBeenCalledWith(
         expect.objectContaining({
           model: 'bytedance/seedance-2.5',

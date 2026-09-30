@@ -242,7 +242,7 @@ const falVideoModels: AIVideoModelCard[] = [
       imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
       imageUrls: { default: [], maxCount: 30, maxFileSize: 30 * 1024 * 1024 },
       prompt: { default: '' },
-      resolution: { default: '720p', enum: ['480p', '720p'] },
+      resolution: { default: '720p', enum: ['480p', '720p', '1080p'] },
       seed: { default: null },
     },
     pricing: {
@@ -251,10 +251,15 @@ const falVideoModels: AIVideoModelCard[] = [
       units: [
         {
           // Output tokens: width × height × (24 × seconds + 1) / 1024, with or without audio
-          // (see meterVideoOutputTokens); input images are not billed
+          // (see meterVideoOutputTokens); input images are not billed. fal lists $0.0214 / 1K
+          // tokens but bills 1080p at 1.094× the tokens (measured on every aspect ratio), so
+          // its rate is 21.4 × 1.094
+          lookup: {
+            prices: { '1080p': 23.4116, '480p': 21.4, '720p': 21.4 },
+            pricingParams: ['resolution'],
+          },
           name: 'videoGeneration',
-          rate: 21.4,
-          strategy: 'fixed',
+          strategy: 'lookup',
           unit: 'millionTokens',
         },
       ],

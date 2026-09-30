@@ -114,4 +114,30 @@ describe('resolveVideoSinglePrice with output tokens', () => {
       resolveVideoSinglePrice(pricing, { duration: 4 }, { estimatedOutputTokens: 40_000 }),
     ).toEqual({ approximatePrice: expect.closeTo(0.856, 10) });
   });
+
+  it('rates 1080p tokens by resolution', () => {
+    const lookupPricing: Pricing = {
+      approximatePricePerVideo: 2.33,
+      units: [
+        {
+          lookup: {
+            prices: { '1080p': 23.4116, '480p': 21.4, '720p': 21.4 },
+            pricingParams: ['resolution'],
+          },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    };
+
+    // fal billed 214.88895K units × $0.0214 for 1920×1080, 97 frames
+    expect(
+      resolveVideoSinglePrice(
+        lookupPricing,
+        { duration: 4, resolution: '1080p' },
+        { outputTokens: 196_425 },
+      ),
+    ).toEqual({ approximatePrice: 2.33, price: 4.59862353 });
+  });
 });

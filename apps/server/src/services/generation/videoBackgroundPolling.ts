@@ -3,7 +3,7 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
-import { countVideoOutputTokens, type VideoGenerationUsage } from '@lobechat/model-runtime';
+import type { VideoGenerationUsage } from '@lobechat/model-runtime';
 import { RequestTrigger, type SpendOrigin, type VideoGenerationRoute } from '@lobechat/types';
 import debug from 'debug';
 import type { RuntimeVideoGenParams } from 'model-bank';
@@ -16,11 +16,9 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
-import {
-  VideoGenerationService,
-  type VideoProcessResult,
-} from '@/server/services/generation/video';
+import { VideoGenerationService } from '@/server/services/generation/video';
 import { buildVideoGenerationFilePayload } from '@/server/services/generation/videoFile';
+import { measureVideoOutputUsage } from '@/server/services/generation/videoOutputUsage';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import { FileSource } from '@/types/files';
 import type { VideoGenerationAsset } from '@/types/generation';
@@ -44,20 +42,6 @@ interface BackgroundPollingParams {
   userId: string;
   workspaceId?: string;
 }
-
-/**
- * Usage of a video whose provider reports none but bills output tokens (fal Seedance 2.5): the
- * tokens follow the downloaded video's frame size and frame count, exactly what the provider bills.
- */
-const measureVideoOutputUsage = (
-  model: string,
-  { frames, height, width }: Pick<VideoProcessResult, 'frames' | 'height' | 'width'>,
-): VideoGenerationUsage | undefined => {
-  if (!frames) return undefined;
-
-  const tokens = countVideoOutputTokens(model, { frames, height, width });
-  return tokens === undefined ? undefined : { completionTokens: tokens, totalTokens: tokens };
-};
 
 export async function processBackgroundVideoPolling(
   db: LobeChatDatabase,

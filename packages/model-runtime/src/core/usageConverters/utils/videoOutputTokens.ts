@@ -21,7 +21,7 @@ interface OutputTokenMeter {
 /**
  * Output frame sizes of fal Seedance 2.5 text-to-video and reference-to-video, measured from
  * real outputs and their billed units on 2026-09-30. fal's published table matches except for
- * 480p 16:9/9:16, which render at 854×480 instead of 864×496.
+ * 480p 16:9/9:16, which render at 854×480 instead of 864×496, and lacks 1080p.
  */
 const SEEDANCE_2_5_FRAME_SIZES: OutputTokenMeter['frameSizes'] = {
   '480p_1:1': [640, 640],
@@ -36,6 +36,12 @@ const SEEDANCE_2_5_FRAME_SIZES: OutputTokenMeter['frameSizes'] = {
   '720p_3:4': [834, 1112],
   '720p_4:3': [1112, 834],
   '720p_9:16': [720, 1280],
+  '1080p_1:1': [1440, 1440],
+  '1080p_16:9': [1920, 1080],
+  '1080p_21:9': [2206, 946],
+  '1080p_3:4': [1248, 1664],
+  '1080p_4:3': [1664, 1248],
+  '1080p_9:16': [1080, 1920],
 };
 
 /**
@@ -54,7 +60,8 @@ const OUTPUT_TOKEN_METERS: Record<string, OutputTokenMeter> = {
 const getMeter = (model: string) =>
   Object.hasOwn(OUTPUT_TOKEN_METERS, model) ? OUTPUT_TOKEN_METERS[model] : undefined;
 
-const toTokens = ({ frames, height, width }: VideoOutputFrames) => (width * height * frames) / 1024;
+const toTokens = ({ frames, height, width }: VideoOutputFrames) =>
+  Math.floor((width * height * frames) / 1024);
 
 /**
  * Count the output tokens a generated video is billed, or `undefined` when the model is not
