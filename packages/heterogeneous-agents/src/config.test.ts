@@ -14,6 +14,7 @@ import { getHeterogeneousTypeLabel, HETEROGENEOUS_TYPE_LABELS } from './labels';
 describe('heterogeneous agent config', () => {
   it('defines create config for all registered agent types', () => {
     expect(HETEROGENEOUS_AGENT_CONFIGS.map((config) => config.type)).toEqual([
+      'antigravity',
       'amp',
       'claude-code',
       'codebuddy',
@@ -178,6 +179,7 @@ describe('heterogeneous agent config', () => {
 
   it('derives display labels from the shared config source', () => {
     expect(HETEROGENEOUS_TYPE_LABELS).toEqual({
+      'antigravity': 'Antigravity',
       'amp': 'Amp',
       'claude-code': 'Claude Code',
       'codebuddy': 'CodeBuddy',
