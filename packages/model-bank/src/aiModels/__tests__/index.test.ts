@@ -197,7 +197,7 @@ describe('MiniMax video models', () => {
         parameters: expect.objectContaining({
           aspectRatio: expect.objectContaining({ default: '16:9' }),
           duration: expect.objectContaining({ max: 15, min: 4 }),
-          imageUrls: expect.objectContaining({ maxCount: 7 }),
+          imageUrls: expect.objectContaining({ maxCount: 9 }),
           resolution: expect.objectContaining({ default: '768P', enum: ['768P', '2K'] }),
         }),
         releasedAt: '2026-07-31',
@@ -206,26 +206,14 @@ describe('MiniMax video models', () => {
     );
   });
 
-  it('keeps the combined MiniMax-H3 reference capacity within the v2 limit of 9', () => {
+  it('lets References mode fill the whole MiniMax-H3 reference pool of 9', () => {
     const h3 = LOBE_DEFAULT_MODEL_LIST.find(
       (model) => model.providerId === ModelProvider.Minimax && model.id === 'MiniMax-H3',
     );
 
-    const parameters = (h3?.parameters ?? {}) as {
-      endImageUrl?: unknown;
-      imageUrl?: unknown;
-      imageUrls?: { maxCount?: number };
-    };
-
-    // The first-frame (imageUrl), reference-list (imageUrls), and last-frame
-    // (endImageUrl) slots all normalize into a single reference pool that the
-    // runtime caps at 9. The combined upload capacity must stay within that
-    // limit so the UI can never assemble a payload createVideo would reject.
-    const firstFrameSlots = parameters.imageUrl === undefined ? 0 : 1;
-    const lastFrameSlots = parameters.endImageUrl === undefined ? 0 : 1;
-    const referenceSlots = parameters.imageUrls?.maxCount ?? 0;
-
-    expect(firstFrameSlots + referenceSlots + lastFrameSlots).toBeLessThanOrEqual(9);
+    // The UI's References mode clears the frame slots and submits only imageUrls, so the
+    // reference slot alone must allow the full pool the v2 API accepts.
+    expect((h3?.parameters as { imageUrls?: { maxCount?: number } })?.imageUrls?.maxCount).toBe(9);
   });
 });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, InputNumber } from '@lobehub/ui';
-import { ActionIcon, SliderWithInput, Switch, Tabs, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Segmented, SliderWithInput, Switch, Tabs, Text } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { Clock3, Dices } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -40,6 +40,7 @@ import {
   videoGenerationTopicSelectors,
 } from '@/store/video/selectors';
 import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
+import type { VideoImageInputMode } from '@/store/video/slices/generationConfig/imageInputMode';
 import type { VideoGenerationAsset } from '@/types/generation';
 import { generateUniqueSeeds } from '@/utils/number';
 
@@ -54,6 +55,7 @@ interface PromptInputProps {
 }
 
 const isSupportedParamSelector = videoGenerationConfigSelectors.isSupportedParam;
+const isImageInputSlotEnabledSelector = videoGenerationConfigSelectors.isImageInputSlotEnabled;
 
 const AspectRatioItem = memo(() => {
   const { allowed: canCreate } = usePermission('create_content');
@@ -340,9 +342,12 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   );
   const { notice: modelNotice, isModelUnavailable } = useVideoGenerationModelNotice();
   const isInit = useVideoStore((s) => s.isInit);
-  const isSupportImageUrl = useVideoStore(isSupportedParamSelector('imageUrl'));
-  const isSupportImageUrls = useVideoStore(isSupportedParamSelector('imageUrls'));
-  const isSupportEndImageUrl = useVideoStore(isSupportedParamSelector('endImageUrl'));
+  const isSupportImageUrl = useVideoStore(isImageInputSlotEnabledSelector('imageUrl'));
+  const isSupportImageUrls = useVideoStore(isImageInputSlotEnabledSelector('imageUrls'));
+  const isSupportEndImageUrl = useVideoStore(isImageInputSlotEnabledSelector('endImageUrl'));
+  const hasImageInputMode = useVideoStore(videoGenerationConfigSelectors.hasImageInputMode);
+  const imageInputMode = useVideoStore(videoGenerationConfigSelectors.imageInputMode);
+  const setImageInputMode = useVideoStore((s) => s.setImageInputMode);
   const isSupportAspectRatio = useVideoStore(isSupportedParamSelector('aspectRatio'));
   const isSupportResolution = useVideoStore(isSupportedParamSelector('resolution'));
   const isSupportSize = useVideoStore(isSupportedParamSelector('size'));
@@ -472,6 +477,13 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     [imageUrl, imageUrls],
   );
   const hasRefImages = framePreviewUrls.length > 0 || Boolean(endImageUrl);
+  const isReferenceMode = hasImageInputMode && imageInputMode === 'reference';
+  /**
+   * Frame-mode requests of models with both frames and references (MiniMax H3) take the output
+   * aspect ratio from the frames, so the selector would have no effect.
+   */
+  const aspectRatioFollowsFrames =
+    hasImageInputMode && imageInputMode === 'frames' && (!!imageUrl || !!endImageUrl);
   const editingGeneration = editingBatch?.generations.find(
     (generation) => generation.id === editingGenerationId,
   );
@@ -582,26 +594,46 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             }
             inlineContent={
               !editingGenerationId && showInlineFrames ? (
-                <InlineVideoFrames
-                  endImageUrl={endImageUrl}
-                  imageUrl={imageUrl}
-                  imageUrls={imageUrls}
-                  isSupportEndImage={isSupportEndImageUrl}
-                  maxCount={maxCount}
-                  maxFileSize={imageUrlsMaxFileSize ?? imageUrlMaxFileSize}
-                  uploadingPreviews={uploadingPreviews}
-                  onEndImageChange={handleEndImageChange}
-                  onImageUrlsChange={handleAddImage}
-                  onRemoveImageUrl={handleRemoveImage}
-                  onUploadFiles={handleUploadFiles}
-                  onImageChange={(data) => {
-                    if (data === null) {
-                      handleRemoveImage(imageUrl || '');
-                      return;
+                <Flexbox gap={6}>
+                  {hasImageInputMode && (
+                    <Segmented<VideoImageInputMode>
+                      disabled={!canCreate}
+                      size={'small'}
+                      value={imageInputMode}
+                      options={[
+                        { label: t('config.imageInputMode.frames'), value: 'frames' },
+                        { label: t('config.imageInputMode.reference'), value: 'reference' },
+                      ]}
+                      onChange={setImageInputMode}
+                    />
+                  )}
+                  <InlineVideoFrames
+                    endImageUrl={endImageUrl}
+                    imageUrl={imageUrl}
+                    imageUrls={imageUrls}
+                    isSupportEndImage={isSupportEndImageUrl}
+                    maxCount={maxCount}
+                    maxFileSize={imageUrlsMaxFileSize ?? imageUrlMaxFileSize}
+                    numberReferences={isReferenceMode}
+                    uploadingPreviews={uploadingPreviews}
+                    addLabel={
+                      hasImageInputMode && !isReferenceMode && !imageUrl
+                        ? t('config.imageUrl.label')
+                        : undefined
                     }
-                    handleAddImage(data);
-                  }}
-                />
+                    onEndImageChange={handleEndImageChange}
+                    onImageUrlsChange={handleAddImage}
+                    onRemoveImageUrl={handleRemoveImage}
+                    onUploadFiles={handleUploadFiles}
+                    onImageChange={(data) => {
+                      if (data === null) {
+                        handleRemoveImage(imageUrl || '');
+                        return;
+                      }
+                      handleAddImage(data);
+                    }}
+                  />
+                </Flexbox>
               ) : undefined
             }
             leftActions={
@@ -653,7 +685,13 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                       {isSupportAspectRatio && (
                         <Flexbox gap={6}>
                           <Text fontSize={12}>{t('config.aspectRatio.label')}</Text>
-                          <AspectRatioItem />
+                          {aspectRatioFollowsFrames ? (
+                            <Text fontSize={12} type={'secondary'}>
+                              {t('config.aspectRatio.followStartFrame')}
+                            </Text>
+                          ) : (
+                            <AspectRatioItem />
+                          )}
                         </Flexbox>
                       )}
                       {isSupportResolution && (
@@ -720,9 +758,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             placeholder={
               editingGenerationId
                 ? t('config.prompt.editPlaceholder')
-                : hasRefImages
-                  ? t('config.prompt.placeholderWithRef')
-                  : t('config.prompt.placeholder')
+                : isReferenceMode && hasRefImages
+                  ? t('config.prompt.placeholderWithReference')
+                  : hasRefImages
+                    ? t('config.prompt.placeholderWithRef')
+                    : t('config.prompt.placeholder')
             }
             rightActions={
               <>

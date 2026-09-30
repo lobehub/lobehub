@@ -27,6 +27,7 @@ import { generationBatches } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { VideoGenerationService } from '@/server/services/generation/video';
+import { measureVideoOutputUsage } from '@/server/services/generation/videoOutputUsage';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 const log = debug('lobe-video:webhook');
@@ -326,6 +327,7 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
     try {
       await chargeAfterGenerate({
         computePriceParams: {
+          duration: (batch?.config as RuntimeVideoGenParams)?.duration,
           generateAudio: (batch?.config as RuntimeVideoGenParams)?.generateAudio,
           resolution: (batch?.config as RuntimeVideoGenParams)?.resolution,
         },
@@ -340,7 +342,7 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
         model: resolvedModelId,
         prechargeResult: metadata?.precharge as any,
         provider,
-        usage: result.usage,
+        usage: result.usage ?? measureVideoOutputUsage(resolvedModelId, processResult),
         userId: asyncTask.userId,
         workspaceId: asyncTask.workspaceId ?? undefined,
       });

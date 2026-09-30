@@ -13,7 +13,7 @@ import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
 import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
 
-const isSupportedParamSelector = videoGenerationConfigSelectors.isSupportedParam;
+const isSlotEnabledSelector = videoGenerationConfigSelectors.isImageInputSlotEnabled;
 
 /**
  * Video-page binding for the shared {@link useReferenceImageUpload} core.
@@ -22,39 +22,38 @@ const isSupportedParamSelector = videoGenerationConfigSelectors.isSupportedParam
  * (`imageUrl`) → reference array (`imageUrls`) → end frame (`endImageUrl`) — so a
  * drop fills them in order. Single-image models accept one; first/end-frame
  * models map a 2-image drop to start + end (the end frame's `requiresImageUrl`
- * is satisfied because the start frame slot fills first).
+ * is satisfied because the start frame slot fills first). Models accepting both
+ * frames and references only expose the active image input mode's slots.
  */
 export const useVideoReferenceUpload = () => {
   const { t } = useTranslation('video');
   const { allowed: canCreate } = usePermission('create_content');
 
-  const isSupportImageUrl = useVideoStore(isSupportedParamSelector('imageUrl'));
-  const isSupportImageUrls = useVideoStore(isSupportedParamSelector('imageUrls'));
-  const isSupportEndImageUrl = useVideoStore(isSupportedParamSelector('endImageUrl'));
+  const isSupportImageUrl = useVideoStore(isSlotEnabledSelector('imageUrl'));
+  const isSupportImageUrls = useVideoStore(isSlotEnabledSelector('imageUrls'));
+  const isSupportEndImageUrl = useVideoStore(isSlotEnabledSelector('endImageUrl'));
 
-  const {
-    value: imageUrl,
-    setValue: setImageUrl,
-    maxFileSize: imageUrlMaxFileSize,
-  } = useVideoGenerationConfigParam('imageUrl');
+  const { value: imageUrl, maxFileSize: imageUrlMaxFileSize } =
+    useVideoGenerationConfigParam('imageUrl');
   const {
     value: imageUrls,
-    setValue: setImageUrls,
     maxCount: imageUrlsMaxCount,
     maxFileSize: imageUrlsMaxFileSize,
   } = useVideoGenerationConfigParam('imageUrls');
-  const {
-    value: endImageUrl,
-    setValue: setEndImageUrl,
-    maxFileSize: endImageUrlMaxFileSize,
-  } = useVideoGenerationConfigParam('endImageUrl');
+  const { value: endImageUrl, maxFileSize: endImageUrlMaxFileSize } =
+    useVideoGenerationConfigParam('endImageUrl');
+  const imageInputMode = useVideoStore(videoGenerationConfigSelectors.imageInputMode);
+  const setImageInputForMode = useVideoStore((s) => s.setImageInputForMode);
 
   const uploadingPreviews = useVideoStore(videoGenerationConfigSelectors.uploadingImagePreviews);
   const addUploadingImagePreviews = useVideoStore((s) => s.addUploadingImagePreviews);
   const removeUploadingImagePreviews = useVideoStore((s) => s.removeUploadingImagePreviews);
 
+  // Slots are bound to the mode active when the upload starts, so an upload that lands after a
+  // mode switch fills the mode it was dropped into rather than the one now shown.
   const slots = useMemo<ReferenceUploadSlot[]>(() => {
-    const readParams = () => videoGenerationConfigSelectors.parameters(useVideoStore.getState());
+    const readParams = () =>
+      videoGenerationConfigSelectors.imageInputsOfMode(imageInputMode)(useVideoStore.getState());
     const list: ReferenceUploadSlot[] = [];
     if (isSupportImageUrl) {
       list.push({
@@ -63,7 +62,7 @@ export const useVideoReferenceUpload = () => {
           const v = readParams()?.imageUrl;
           return v ? [v] : [];
         },
-        set: (urls) => setImageUrl((urls[0] ?? null) as any),
+        set: (urls) => setImageInputForMode(imageInputMode, 'imageUrl', urls[0] ?? null),
         values: imageUrl ? [imageUrl] : [],
       });
     }
@@ -74,7 +73,7 @@ export const useVideoReferenceUpload = () => {
           const v = readParams()?.imageUrls;
           return Array.isArray(v) ? v : [];
         },
-        set: (urls) => setImageUrls(urls as any),
+        set: (urls) => setImageInputForMode(imageInputMode, 'imageUrls', urls),
         values: imageUrls ?? [],
       });
     }
@@ -85,7 +84,7 @@ export const useVideoReferenceUpload = () => {
           const v = readParams()?.endImageUrl;
           return v ? [v] : [];
         },
-        set: (urls) => setEndImageUrl((urls[0] ?? null) as any),
+        set: (urls) => setImageInputForMode(imageInputMode, 'endImageUrl', urls[0] ?? null),
         values: endImageUrl ? [endImageUrl] : [],
       });
     }
@@ -98,9 +97,8 @@ export const useVideoReferenceUpload = () => {
     imageUrls,
     endImageUrl,
     imageUrlsMaxCount,
-    setImageUrl,
-    setImageUrls,
-    setEndImageUrl,
+    imageInputMode,
+    setImageInputForMode,
   ]);
 
   const onLimitExceeded = useCallback(

@@ -982,6 +982,7 @@
   "minimax-m2.5.description": "MiniMax M2.5 — efficient coding model with strong reasoning abilities.",
   "minimax-m2.7.description": "MiniMax M2.7 — latest MiniMax coding model with improved reasoning and tool use.",
   "minimax-m3.description": "MiniMax M3 — latest MiniMax model with vision support, strong reasoning, and improved tool use.",
+  "minimax/h3-max.description": "fal's post-trained MiniMax H3 with stronger prompt adherence and aesthetics, supporting text-to-video, first/last-frame image-to-video, and reference-to-video with native audio.",
   "minimax/minimax-m2.1.description": "MiniMax-M2.1 is a lightweight, cutting-edge large language model optimized for coding, proxy workflows, and modern application development, providing cleaner, more concise output and faster perceptual response times.",
   "minimax/minimax-m2.description": "MiniMax-M2 is a high-value model that excels at coding and agent tasks for many engineering scenarios.",
   "minimaxai/minimax-m2.7.description": "MiniMax M2.7 is a 229B-parameter MoE model (~10B active) built for agentic workflows and real-world software engineering. It interleaves thinking with actions across multi-step tasks and is available on Groq for Enterprise customers.",
