@@ -231,6 +231,7 @@ describe('shareRouter', () => {
       userViewCount: 42,
       visibility: 'link',
       workspaceId: null,
+      workspaceSlug: null,
     };
 
     beforeEach(() => {

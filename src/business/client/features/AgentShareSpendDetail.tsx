@@ -1,5 +1,5 @@
 export interface AgentShareSpendDetailProps {
-  agentId: string;
+  shareId: string;
 }
 
 /**
