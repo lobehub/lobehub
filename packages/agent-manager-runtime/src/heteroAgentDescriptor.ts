@@ -41,6 +41,13 @@ const CODING_CAPABILITIES = [
 ];
 
 const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
+  'antigravity': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "Antigravity — Google's native CLI coding agent (agy). It uses its own signed-in account, models and built-in tools to read and edit files and run permitted commands in a working directory. Command execution follows the user's Antigravity permission policy.",
+    displayName: 'Antigravity',
+    kind: 'cli',
+  },
   'amp': {
     capabilities: CODING_CAPABILITIES,
     description:

@@ -352,6 +352,8 @@ const MODEL_FLAGS_ENCODING = { flags: ['-m', '--model'], kind: 'flag' } as const
  * user-authored args already cover a dimension.
  */
 export const HETERO_SELECTOR_CAPABILITIES = {
+  // Use the user's agy model/settings; custom --model/--effort args still pass through.
+  'antigravity': {},
   'amp': {
     mode: {
       encodings: [{ flags: ['--mode'], kind: 'flag' }],

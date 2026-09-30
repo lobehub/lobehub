@@ -7,6 +7,7 @@
 
 import {
   AmpAdapter,
+  AntigravityAdapter,
   ClaudeCodeAdapter,
   ClaudeCodeSdkAdapter,
   CodeBuddyAdapter,
@@ -31,6 +32,9 @@ interface AgentRegistryEntry {
 }
 
 const localAgentRegistry = {
+  'antigravity': {
+    createAdapter: () => new AntigravityAdapter(),
+  },
   'amp': {
     createAdapter: () => new AmpAdapter(),
   },

@@ -1,6 +1,7 @@
 import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 
 import { ampDriver } from './drivers/amp';
+import { antigravityDriver } from './drivers/antigravity';
 import { claudeCodeDriver } from './drivers/claudeCode';
 import { codeBuddyDriver } from './drivers/codeBuddy';
 import { codexDriver } from './drivers/codex';
@@ -16,6 +17,7 @@ import { traeDriver } from './drivers/trae';
 import type { HeterogeneousAgentDriver } from './types';
 
 const heterogeneousAgentDrivers = {
+  'antigravity': antigravityDriver,
   'amp': ampDriver,
   'claude-code': claudeCodeDriver,
   'codebuddy': codeBuddyDriver,
