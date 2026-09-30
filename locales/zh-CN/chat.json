@@ -1790,7 +1790,7 @@
   "sharePage.pill.edit": "编辑",
   "sharePage.pill.openInApp": "在 {{appName}} 中打开",
   "sharePage.pill.sharedVia": "分享自 {{appName}}",
-  "sharePageDisclaimer": "由用户分享，仅代表其个人观点，不代表 LobeHub 立场；LobeHub 不对该内容承担责任。",
+  "sharePageDisclaimer": "由用户分享，仅代表其个人观点，不代表 {{appName}} 立场；{{appName}} 不对该内容承担责任。",
   "signalCallbacks.collapse": "隐藏详情",
   "signalCallbacks.empty": "没有回调消息",
   "signalCallbacks.expand": "显示详情",
