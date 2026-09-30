@@ -240,6 +240,7 @@ export const shareRouter = router({
         demoCases: share.shareConfig.demoCases ?? [],
         featuredWorks,
         isOwner,
+        ownerWorkspaceSlug: isOwner ? (share.workspaceSlug ?? null) : null,
         shareId: share.shareId,
         slug: share.shareConfig.slug ?? null,
         stats: { ...stats, ...deliveryStats, views: share.userViewCount },
