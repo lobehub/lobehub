@@ -1,6 +1,7 @@
 import {
   getModelParameters,
   getModelPricing,
+  getVideoOutputTokenParamNames,
   getVideoPricingParamNames,
 } from '@lobechat/model-runtime';
 import type { VideoModelParamsSchema } from 'model-bank';
@@ -16,7 +17,12 @@ export const fillVideoPricingDefaults = async <T extends Record<string, unknown>
   provider: string;
 }): Promise<T> => {
   const { model, provider } = params;
-  const names = getVideoPricingParamNames(await getModelPricing(model, provider));
+  const names = [
+    ...new Set([
+      ...getVideoPricingParamNames(await getModelPricing(model, provider)),
+      ...getVideoOutputTokenParamNames(model),
+    ]),
+  ];
   if (names.length === 0) return params.params;
 
   const schema = (await getModelParameters(model, provider)) as VideoModelParamsSchema | undefined;

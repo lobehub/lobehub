@@ -69,3 +69,30 @@ describe('fillVideoPricingDefaults', () => {
     expect(getModelParameters).not.toHaveBeenCalled();
   });
 });
+
+describe('fillVideoPricingDefaults for output-token models', () => {
+  it('fills the params the output-token meter reads', async () => {
+    vi.mocked(getModelPricing).mockResolvedValue({
+      units: [{ name: 'videoGeneration', rate: 21.4, strategy: 'fixed', unit: 'millionTokens' }],
+    } as any);
+    vi.mocked(getModelParameters).mockResolvedValue({
+      aspectRatio: { default: '16:9', enum: ['16:9', '1:1'] },
+      duration: { default: 5, max: 30, min: 4 },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['480p', '720p'] },
+    } as any);
+
+    const result = await fillVideoPricingDefaults({
+      model: 'bytedance/seedance-2.5',
+      params: { prompt: 'a kite', resolution: '480p' },
+      provider: 'lobehub',
+    });
+
+    expect(result).toEqual({
+      aspectRatio: '16:9',
+      duration: 5,
+      prompt: 'a kite',
+      resolution: '480p',
+    });
+  });
+});

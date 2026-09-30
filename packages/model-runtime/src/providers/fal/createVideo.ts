@@ -7,11 +7,35 @@ import type { CreateVideoResult, PollVideoStatusResult } from '../../types/video
 
 const log = debug('lobe-video:fal');
 
+interface FalVideoModelSpec {
+  /** Model-specific input fields sent with every task */
+  buildBaseInput: (params: RuntimeVideoGenParams) => Record<string, unknown>;
+  /** fal takes `duration` as a string enum (e.g. `"4"`–`"30"`) instead of a number */
+  durationAsString?: boolean;
+  /** Input field of the reference-to-video endpoint that holds the reference images */
+  referenceImagesField: string;
+}
+
 /**
  * Video model cards that map to one fal app with a separate endpoint per task. The runtime picks
  * the endpoint from the request params, so the user sees a single model.
  */
-const TASK_ROUTED_VIDEO_MODELS = new Set(['minimax/h3-max']);
+const FAL_VIDEO_MODELS: Record<string, FalVideoModelSpec> = {
+  'bytedance/seedance-2.5': {
+    buildBaseInput: ({ generateAudio }) =>
+      typeof generateAudio === 'boolean' ? { generate_audio: generateAudio } : {},
+    durationAsString: true,
+    referenceImagesField: 'image_urls',
+  },
+  'minimax/h3-max': {
+    buildBaseInput: ({ promptExtend }) => ({
+      enable_safety_checker: false,
+      // Required by fal; the model card exposes the three modes through `promptExtend`.
+      prompt_expansion_mode: typeof promptExtend === 'string' ? promptExtend : 'balanced',
+    }),
+    referenceImagesField: 'reference_image_urls',
+  },
+};
 
 /**
  * fal queue requests live at `<owner>/<app>/requests/<id>`. Using that path as the inference id
@@ -20,7 +44,7 @@ const TASK_ROUTED_VIDEO_MODELS = new Set(['minimax/h3-max']);
  */
 const REQUEST_PATH_SEPARATOR = '/requests/';
 
-export const isFalVideoModel = (model: string) => TASK_ROUTED_VIDEO_MODELS.has(model);
+export const isFalVideoModel = (model: string) => Object.hasOwn(FAL_VIDEO_MODELS, model);
 
 export const toFalVideoInferenceId = (appId: string, requestId: string) =>
   `${appId}${REQUEST_PATH_SEPARATOR}${requestId}`;
@@ -43,25 +67,14 @@ export const parseFalVideoInferenceId = (inferenceId: string) => {
  * - otherwise → `/text-to-video`
  */
 export const buildFalVideoRequest = (model: string, params: RuntimeVideoGenParams) => {
-  const {
-    aspectRatio,
-    duration,
-    endImageUrl,
-    imageUrl,
-    imageUrls,
-    prompt,
-    promptExtend,
-    resolution,
-    seed,
-  } = params;
+  const spec = isFalVideoModel(model) ? FAL_VIDEO_MODELS[model] : undefined;
+  if (!spec) throw new Error(`Unsupported fal video model: ${model}`);
 
-  const input: Record<string, unknown> = {
-    enable_safety_checker: false,
-    prompt,
-    // Required by fal; the model card exposes the three modes through `promptExtend`.
-    prompt_expansion_mode: typeof promptExtend === 'string' ? promptExtend : 'balanced',
-  };
-  if (duration) input.duration = duration;
+  const { aspectRatio, duration, endImageUrl, imageUrl, imageUrls, prompt, resolution, seed } =
+    params;
+
+  const input: Record<string, unknown> = { ...spec.buildBaseInput(params), prompt };
+  if (duration) input.duration = spec.durationAsString ? String(duration) : duration;
   if (resolution) input.resolution = resolution;
   if (typeof seed === 'number' && seed >= 0) input.seed = seed;
 
@@ -69,7 +82,11 @@ export const buildFalVideoRequest = (model: string, params: RuntimeVideoGenParam
   if (imageUrls?.length) {
     task = 'reference-to-video';
     // Shared with pricing so the billed reference tokens cover every image sent
-    input.reference_image_urls = getVideoReferenceImages({ endImageUrl, imageUrl, imageUrls });
+    input[spec.referenceImagesField] = getVideoReferenceImages({
+      endImageUrl,
+      imageUrl,
+      imageUrls,
+    });
     if (aspectRatio) input.aspect_ratio = aspectRatio;
   } else if (imageUrl || endImageUrl) {
     task = 'image-to-video';

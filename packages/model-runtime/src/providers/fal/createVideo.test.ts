@@ -98,6 +98,49 @@ describe('buildFalVideoRequest', () => {
     expect(input.reference_image_urls).toEqual(['https://img/a.png', 'https://img/last.png']);
   });
 
+  describe('Seedance 2.5', () => {
+    const SEEDANCE = 'bytedance/seedance-2.5';
+
+    it('sends audio and a string duration without H3-only fields', () => {
+      expect(
+        buildFalVideoRequest(SEEDANCE, {
+          aspectRatio: '21:9',
+          duration: 12,
+          generateAudio: false,
+          prompt: 'a kite',
+          resolution: '480p',
+        }),
+      ).toEqual({
+        endpoint: 'bytedance/seedance-2.5/text-to-video',
+        input: {
+          aspect_ratio: '21:9',
+          duration: '12',
+          generate_audio: false,
+          prompt: 'a kite',
+          resolution: '480p',
+        },
+      });
+    });
+
+    it('sends reference images as image_urls', () => {
+      const { endpoint, input } = buildFalVideoRequest(SEEDANCE, {
+        aspectRatio: '16:9',
+        imageUrls: ['https://img/a.png'],
+        prompt: '@Image1 on a beach',
+      });
+
+      expect(endpoint).toBe('bytedance/seedance-2.5/reference-to-video');
+      expect(input).toMatchObject({ aspect_ratio: '16:9', image_urls: ['https://img/a.png'] });
+      expect(input).not.toHaveProperty('reference_image_urls');
+    });
+  });
+
+  it('rejects a model without a fal video spec', () => {
+    expect(() => buildFalVideoRequest('unknown/model', { prompt: 'p' })).toThrow(
+      'Unsupported fal video model',
+    );
+  });
+
   it('skips an unset random seed', () => {
     expect(buildFalVideoRequest(MODEL, { prompt: 'p', seed: null }).input).not.toHaveProperty(
       'seed',

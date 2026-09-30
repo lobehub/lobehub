@@ -34,6 +34,13 @@ export {
 export { resolveImageSinglePrice } from './utils/resolveImageSinglePrice';
 export { resolveVideoSinglePrice } from './utils/resolveVideoSinglePrice';
 export {
+  countVideoOutputTokens,
+  getVideoOutputTokenParamNames,
+  meterVideoOutputTokens,
+  type VideoOutputFrames,
+  type VideoOutputTokenEstimate,
+} from './utils/videoOutputTokens';
+export {
   countVideoReferenceImageTokens,
   type ImageDimensions,
 } from './utils/videoReferenceImageTokens';

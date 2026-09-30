@@ -25,6 +25,13 @@ export interface VideoGenerationParams {
  * (e.g. by reading the reference images' dimensions).
  */
 export interface VideoRequestPricingInputs {
+  /**
+   * Output-token estimate used only to size the hold when the output size follows an input image
+   * (see `meterVideoOutputTokens`); never charged as is
+   */
+  estimatedOutputTokens?: number;
+  /** Output video tokens, known before the request when the output size follows the params */
+  outputTokens?: number;
   /** Reference-image tokens, counted by {@link countVideoReferenceImageTokens} */
   referenceImageTokens?: number;
 }
@@ -146,6 +153,9 @@ const resolveRequestQuantity = (
     }
     case 'videoGeneration:video': {
       return 1;
+    }
+    case 'videoGeneration:millionTokens': {
+      return inputs.outputTokens;
     }
     case 'imageInput:image': {
       return countReferenceImages(params);

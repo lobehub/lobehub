@@ -94,3 +94,24 @@ describe('resolveVideoSinglePrice with request pricing', () => {
     });
   });
 });
+
+describe('resolveVideoSinglePrice with output tokens', () => {
+  // fal Seedance 2.5: $0.0214 per 1K output tokens
+  const pricing: Pricing = {
+    approximatePricePerVideo: 2.33,
+    units: [{ name: 'videoGeneration', rate: 21.4, strategy: 'fixed', unit: 'millionTokens' }],
+  };
+
+  it('prices the request exactly from metered output tokens', () => {
+    expect(resolveVideoSinglePrice(pricing, { duration: 4 }, { outputTokens: 40_000 })).toEqual({
+      approximatePrice: 2.33,
+      price: expect.closeTo(0.856, 10),
+    });
+  });
+
+  it('sizes the hold from an estimate without an exact price', () => {
+    expect(
+      resolveVideoSinglePrice(pricing, { duration: 4 }, { estimatedOutputTokens: 40_000 }),
+    ).toEqual({ approximatePrice: expect.closeTo(0.856, 10) });
+  });
+});

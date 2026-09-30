@@ -224,6 +224,46 @@ const falImageModels: AIImageModelCard[] = [
 const falVideoModels: AIVideoModelCard[] = [
   {
     description:
+      "ByteDance's Seedance 2.5 on fal, generating up to 30-second single-shot videos with native audio from text, first/last frames, or up to 30 reference images.",
+    displayName: 'Seedance 2.5',
+    enabled: true,
+    // One card for the fal app; the runtime picks text-to-video, image-to-video or
+    // reference-to-video from the supplied images.
+    id: 'bytedance/seedance-2.5',
+    organization: 'ByteDance',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+      },
+      duration: { default: 5, max: 30, min: 4, step: 1 },
+      endImageUrl: { default: null, maxFileSize: 30 * 1024 * 1024, requiresImageUrl: true },
+      generateAudio: { default: true },
+      imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
+      imageUrls: { default: [], maxCount: 30, maxFileSize: 30 * 1024 * 1024 },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['480p', '720p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      // 5 seconds at the default 720p 16:9
+      approximatePricePerVideo: 2.33,
+      units: [
+        {
+          // Output tokens: width × height × (24 × seconds + 1) / 1024, with or without audio
+          // (see meterVideoOutputTokens); input images are not billed
+          name: 'videoGeneration',
+          rate: 21.4,
+          strategy: 'fixed',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-08-12',
+    type: 'video',
+  },
+  {
+    description:
       "fal's post-trained MiniMax H3 with stronger prompt adherence and aesthetics, supporting text-to-video, first/last-frame image-to-video, and reference-to-video with native audio.",
     displayName: 'H3 Max',
     enabled: true,
