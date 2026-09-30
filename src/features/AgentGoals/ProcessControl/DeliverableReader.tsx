@@ -9,6 +9,7 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import { EntityLinkHostProvider, useEntityMarkdown } from '@/features/EntityLink';
 import { isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useClientDataSWR } from '@/libs/swr';
@@ -157,6 +158,7 @@ const SidebarItem = ({
 };
 
 const DocumentBody = ({ documentId }: { documentId: string }) => {
+  const markdownProps = useEntityMarkdown();
   const { data: document, isLoading } = useClientDataSWR(
     portalKeys.documentHeader(documentId),
     () => documentService.getDocumentById(documentId),
@@ -174,7 +176,9 @@ const DocumentBody = ({ documentId }: { documentId: string }) => {
 
   return (
     <div className={styles.doc} data-testid={'deliverable-reader-document'}>
-      <Markdown variant={'chat'}>{document?.content ?? ''}</Markdown>
+      <Markdown variant={'chat'} {...markdownProps}>
+        {document?.content ?? ''}
+      </Markdown>
     </div>
   );
 };
@@ -416,7 +420,11 @@ const DeliverableReader = ({ index, items, onClose, onIndexChange }: Deliverable
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Header index={index} item={current} total={items.length} onIndexChange={onIndexChange} />
         <div className={styles.body}>
-          <Body item={current} key={current.artifact.workVersionId} />
+          {/* The reader covers the page it was opened from, so a detail opened
+              in a side panel would be invisible — entity links navigate. */}
+          <EntityLinkHostProvider portal={false}>
+            <Body item={current} key={current.artifact.workVersionId} />
+          </EntityLinkHostProvider>
         </div>
       </Flexbox>
     </div>,

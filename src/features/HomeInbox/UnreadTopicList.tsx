@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import UnreadDot from '@/components/UnreadDot';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useEntityMarkdown } from '@/features/EntityLink';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -17,7 +18,6 @@ import { useChatStore } from '@/store/chat';
 
 import AuthorChip from './AuthorChip';
 import { sanitizeInboxPreview } from './sanitizeInboxPreview';
-import { useHomeInboxMarkdown } from './useHomeInboxMarkdown';
 import { type InboxTopic } from './useHomeInboxTopics';
 
 const MarkdownMessage = lazy(() => import('@/features/Conversation/Markdown'));
@@ -111,7 +111,7 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
     const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
     const sendMessage = useChatStore((s) => s.sendMessage);
     const prefetchMessages = useChatStore((s) => s.prefetchMessages);
-    const markdownProps = useHomeInboxMarkdown(topic.id);
+    const markdownProps = useEntityMarkdown();
     const assistantPreview = sanitizeInboxPreview(topic.lastAssistantMessage ?? '');
 
     const [expanded, setExpanded] = useState(false);

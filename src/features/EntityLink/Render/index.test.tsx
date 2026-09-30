@@ -5,6 +5,7 @@ import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { EntityLinkHostProvider, type EntityLinkPortalScope } from '../host';
 import Render from './index';
 import { InternalEntityPreview } from './InternalEntityPreview';
 
@@ -119,6 +120,16 @@ const renderLink = (properties: Record<string, unknown>) =>
     <Render id="msg-1" node={{ properties }} tagName="lobeLink" type="element">
       {null}
     </Render>,
+  );
+
+/** The same link inside a host that declares what it can open in a panel. */
+const renderLinkInHost = (properties: Record<string, unknown>, portal: EntityLinkPortalScope) =>
+  render(
+    <EntityLinkHostProvider portal={portal}>
+      <Render id="msg-1" node={{ properties }} tagName="lobeLink" type="element">
+        {null}
+      </Render>
+    </EntityLinkHostProvider>,
   );
 
 afterEach(() => {
@@ -613,5 +624,45 @@ describe('Link Render — open an external link in the side browser', () => {
 
     expect(mockNavigate).toHaveBeenCalledWith('/agent/agt_other/docs/docs_1', { escape: true });
     expect(mockOpenDocument).not.toHaveBeenCalled();
+  });
+});
+
+describe('Link Render — host portal scope', () => {
+  it('navigates instead of opening a detail when the host has no panel', () => {
+    const { getByRole } = renderLinkInHost(
+      { linkHref: '/acceptance/acceptance-1', linkKind: 'generic', linkLabel: 'Acceptance' },
+      false,
+    );
+
+    fireEvent.click(getByRole('link', { name: 'Acceptance' }));
+
+    // A full-screen reader covers the page: a panel opened behind it would be
+    // invisible, so the entity's own route is the only destination that works.
+    expect(mockNavigate).toHaveBeenCalledWith('/acceptance/acceptance-1');
+    expect(mockOpenAcceptance).not.toHaveBeenCalled();
+  });
+
+  it('navigates entity kinds the host cannot present', () => {
+    const { getByRole } = renderLinkInHost(
+      { linkHref: '/task/T-198', linkKind: 'generic', linkLabel: 'T-198' },
+      ['acceptance'],
+    );
+
+    fireEvent.click(getByRole('link', { name: 'T-198' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/task/T-198');
+    expect(mockOpenTaskDetail).not.toHaveBeenCalled();
+  });
+
+  it('still opens the kinds the host can present', () => {
+    const { getByRole } = renderLinkInHost(
+      { linkHref: '/acceptance/acceptance-1', linkKind: 'generic', linkLabel: 'Acceptance' },
+      ['acceptance'],
+    );
+
+    fireEvent.click(getByRole('link', { name: 'Acceptance' }));
+
+    expect(mockOpenAcceptance).toHaveBeenCalledWith('acceptance-1');
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
