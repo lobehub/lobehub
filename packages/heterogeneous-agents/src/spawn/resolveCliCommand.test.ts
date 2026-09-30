@@ -115,6 +115,71 @@ describe('resolveCliCommand', () => {
       platformMock.mockReturnValue('darwin');
     });
 
+    it('detects Antigravity stream-json and preserves prerelease/build versions', async () => {
+      callExecFile('/Users/x/.local/bin/agy\n');
+      callExecFile('1.2.13-beta.1+build.5');
+      callExecFile('', '--input-format --output-format stream-json --conversation');
+      const { detectHeterogeneousCliCommand } = await importModule();
+      expect(await detectHeterogeneousCliCommand('antigravity', 'agy')).toMatchObject({
+        available: true,
+        path: '/Users/x/.local/bin/agy',
+        version: '1.2.13-beta.1+build.5',
+      });
+    });
+
+    it('rejects older agy versions that cannot stream input or resume', async () => {
+      callExecFile('1.0.7');
+      callExecFile('Usage: agy --print --output-format json');
+      const { detectHeterogeneousCliCommand } = await importModule();
+      expect(await detectHeterogeneousCliCommand('antigravity', '/tmp/old-agy')).toMatchObject({
+        available: false,
+      });
+    });
+
+    it('finds agy in the official Unix user install directory', async () => {
+      const originalShell = process.env.SHELL;
+      delete process.env.SHELL;
+      try {
+        callExecFileError(new Error('not found'));
+        callExecFile('1.2.13');
+        callExecFile('--input-format --output-format stream-json --conversation');
+        const { detectHeterogeneousCliCommand } = await importModule();
+        expect(await detectHeterogeneousCliCommand('antigravity', 'agy')).toMatchObject({
+          available: true,
+          path: path.join(os.homedir(), '.local', 'bin', 'agy'),
+        });
+      } finally {
+        if (originalShell !== undefined) process.env.SHELL = originalShell;
+      }
+    });
+
+    it('finds the native Windows agy executable outside inherited PATH', async () => {
+      platformMock.mockReturnValue('win32');
+      const originalLocal = process.env.LOCALAPPDATA;
+      const originalPath = process.env.PATH;
+      process.env.LOCALAPPDATA = 'C:\\Users\\Test User\\AppData\\Local';
+      process.env.PATH = 'C:\\Windows';
+      const binary = 'C:\\Users\\Test User\\AppData\\Local\\agy\\bin\\agy.exe';
+      existingFiles({ [binary]: true });
+      try {
+        callExecFileError(new Error('not found'));
+        callExecFileError(new Error('no registry PATH'));
+        callExecFileError(new Error('no registry PATH'));
+        callExecFile('1.2.13');
+        callExecFile('--input-format --output-format stream-json --conversation');
+        const { detectHeterogeneousCliCommand } = await importModule();
+        expect(await detectHeterogeneousCliCommand('antigravity', 'agy')).toMatchObject({
+          available: true,
+          path: binary,
+        });
+        expect(execMock).not.toHaveBeenCalled();
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalLocal === undefined) delete process.env.LOCALAPPDATA;
+        else process.env.LOCALAPPDATA = originalLocal;
+      }
+    });
+
     it('resolves Amp on PATH and reports its normalized version', async () => {
       callExecFile('/Users/x/.local/bin/amp\n');
       callExecFile('Amp CLI\n\nUsage: amp [options] [command]');
