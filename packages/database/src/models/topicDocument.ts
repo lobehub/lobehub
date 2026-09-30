@@ -108,6 +108,42 @@ export class TopicDocumentModel {
   };
 
   /**
+   * A document this topic already holds under the same title and the same body.
+   *
+   * The notebook surface and the agent-documents surface answer one intent with
+   * two tools, and an agent that writes the same report through both used to
+   * leave two rows behind: two entries in the topic's document list and two
+   * deliverable cards on the goal graph, for one report. A matching title alone
+   * is weak (two documents may share one), so the body has to match too —
+   * byte-identical identity plus byte-identical content is the same document
+   * written twice, and the second write reuses the row.
+   */
+  findVerbatimTwin = async (params: {
+    content: string;
+    title: string;
+    topicId: string;
+  }): Promise<DocumentItem | undefined> => {
+    const [twin] = await this.db
+      .select({ document: documents })
+      .from(topicDocuments)
+      .innerJoin(documents, eq(topicDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(topicDocuments.topicId, params.topicId),
+          eq(documents.title, params.title),
+          eq(documents.content, params.content),
+          this.ownership(),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+          documentMatchesAccessScope(documents.metadata, this.documentAccessScope),
+        ),
+      )
+      .orderBy(desc(topicDocuments.createdAt))
+      .limit(1);
+
+    return twin?.document;
+  };
+
+  /**
    * Get all topics associated with a document
    */
   findByDocumentId = async (documentId: string): Promise<string[]> => {

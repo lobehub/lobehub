@@ -98,6 +98,19 @@ export const notebookRouter = router({
         ? await resolveRootOperation((id) => ctx.operationModel.findOwnOperationById(id), operation)
         : null;
 
+      // One report written twice — through the agent documents tool and through
+      // this one — used to land as two documents: two entries in the topic's
+      // document list, two Works, and two deliverable cards on the goal graph,
+      // all for one piece of work. A byte-identical document already in this
+      // topic is that second write, so it reuses the row instead of forking the
+      // document. Nothing changed, so nothing is registered either.
+      const twin = await ctx.topicDocumentModel.findVerbatimTwin({
+        content: input.content,
+        title: input.title,
+        topicId: input.topicId,
+      });
+      if (twin) return twin;
+
       // Create the document
       const document = await ctx.documentModel.create({
         content: input.content,

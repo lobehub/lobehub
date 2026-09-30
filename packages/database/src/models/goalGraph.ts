@@ -337,6 +337,32 @@ export class GoalGraphModel {
     });
 
   /**
+   * Work ids this goal already declares as produced, on any node.
+   *
+   * The claim predicate for deliverables: one Work is one deliverable, and it
+   * belongs to the node that first delivered it. A later round that merely
+   * revises the same resource (a shared document every task appends to is the
+   * common case) must not re-declare it on its own node, or the goal history
+   * repeats one deliverable under every task and its Works list counts one
+   * artifact several times.
+   *
+   * Read from the database rather than from a graph snapshot because the
+   * harvest of one settle has to see the links an earlier settle — possibly in
+   * the same tick — already wrote. Ticks of one goal are serialized by the
+   * dispatch advisory lock, so this read-then-write needs no extra guard.
+   */
+  listProducedWorkIds = async (goalId: string): Promise<Set<string>> => {
+    const rows = await this.db
+      .select({ workId: workVersions.workId })
+      .from(goalNodeWorkVersions)
+      .innerJoin(goalNodes, eq(goalNodeWorkVersions.nodeId, goalNodes.id))
+      .innerJoin(workVersions, eq(goalNodeWorkVersions.workVersionId, workVersions.id))
+      .where(and(eq(goalNodes.goalId, goalId), eq(goalNodeWorkVersions.relation, 'produced')));
+
+    return new Set(rows.map((row) => row.workId));
+  };
+
+  /**
    * How many of a goal's tasks are occupying a concurrency slot.
    *
    * Counted in the database rather than from a graph snapshot so it can be read

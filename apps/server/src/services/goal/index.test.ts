@@ -18,6 +18,7 @@ import {
   acceptances,
   agentOperations,
   agents,
+  documents,
   goalEdges,
   goalEvents,
   goalNodeDecisions,
@@ -677,6 +678,151 @@ describe('GoalService', () => {
       (link) => link.nodeId === created.nodeId && link.work?.title === 'Delivered once',
     );
     expect(delivered).toHaveLength(1);
+    // The execution container is claimed once per node too, not once per
+    // settle: re-linking the completed version added a second identical row for
+    // the same task, which is where half of a goal's Work links came from.
+    expect(
+      snapshot.workVersions.filter(
+        (link) => link.nodeId === created.nodeId && link.work?.type === 'task',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('does not declare a shared document a task only revised', async () => {
+    // A backlog document every task appends to used to be declared as the
+    // output of every task that touched it, because a Work registered during a
+    // run counted as that run's deliverable. Only a Work one of the task's own
+    // runs created is one; a revision is not a delivery.
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const graph = await service.create({
+      tasks: ['Deliver me'],
+      title: 'Revisions are not deliveries',
+    });
+    const created = await service.tick(graph.goal.id);
+    const [backlog] = await serverDB
+      .insert(documents)
+      .values({
+        content: 'Shared backlog body',
+        fileType: 'markdown',
+        filename: 'Shared backlog',
+        source: 'notebook',
+        sourceType: 'api',
+        title: 'Shared backlog',
+        totalCharCount: 19,
+        totalLineCount: 1,
+        userId,
+      })
+      .returning();
+    // Written by an earlier task's run; this task only appends to it.
+    await workModel.registerDocument({
+      changeType: 'created',
+      documentId: backlog.id,
+      rootOperationId: 'op-wrote-it-first',
+      toolIdentifier: 'lobehub-notebook',
+      toolName: 'createDocument',
+    });
+    await serverDB.insert(taskTopics).values({
+      handoff: { summary: 'Delivered', title: 'Delivered title' },
+      operationId: 'op-delivered',
+      seq: 1,
+      status: 'completed',
+      taskId: created.taskId!,
+      userId,
+    });
+    await workModel.registerDocument({
+      changeType: 'updated',
+      documentId: backlog.id,
+      rootOperationId: 'op-delivered',
+      toolIdentifier: 'lobe-agent-documents',
+      toolName: 'modifyNodes',
+    });
+    await taskModel.updateStatus(created.taskId!, 'completed');
+
+    await service.tick(graph.goal.id);
+
+    const snapshot = await service.graph(graph.goal.id);
+    expect(
+      snapshot.workVersions.filter(
+        (link) => link.nodeId === created.nodeId && link.work?.resourceId === backlog.id,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('declares a deliverable once, on the node that delivered it', async () => {
+    // The flare case behind the reported duplicate deliverables: one document
+    // delivered by a node, then written again by another node's run, appeared
+    // as a deliverable of both.
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const graph = await service.create({
+      tasks: ['First delivery', 'Second delivery'],
+      title: 'One claim per deliverable',
+    });
+    const [backlog] = await serverDB
+      .insert(documents)
+      .values({
+        content: 'Shared backlog body',
+        fileType: 'markdown',
+        filename: 'Shared backlog',
+        source: 'notebook',
+        sourceType: 'api',
+        title: 'Shared backlog',
+        totalCharCount: 19,
+        totalLineCount: 1,
+        userId,
+      })
+      .returning();
+
+    const first = await service.tick(graph.goal.id);
+    await serverDB.insert(taskTopics).values({
+      handoff: { summary: 'Delivered', title: 'Delivered title' },
+      operationId: 'op-first',
+      seq: 1,
+      status: 'completed',
+      taskId: first.taskId!,
+      userId,
+    });
+    await workModel.registerDocument({
+      changeType: 'created',
+      documentId: backlog.id,
+      rootOperationId: 'op-first',
+      toolIdentifier: 'lobe-agent-documents',
+      toolName: 'createDocument',
+    });
+    await taskModel.updateStatus(first.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+
+    const second = await service.tick(graph.goal.id);
+    expect(second.taskId).toBeTruthy();
+    await serverDB.insert(taskTopics).values({
+      handoff: { summary: 'Delivered again', title: 'Delivered again' },
+      operationId: 'op-second',
+      seq: 1,
+      status: 'completed',
+      taskId: second.taskId!,
+      userId,
+    });
+    // The second node's run writes the same document (a new version of the same
+    // Work), which is what a shared backlog looks like from the graph's side.
+    await workModel.registerDocument({
+      changeType: 'created',
+      documentId: backlog.id,
+      rootOperationId: 'op-second',
+      toolIdentifier: 'lobehub-notebook',
+      toolName: 'createDocument',
+    });
+    await taskModel.updateStatus(second.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+
+    const snapshot = await service.graph(graph.goal.id);
+    const claims = snapshot.workVersions.filter(
+      (link) => link.work?.resourceId === backlog.id && link.relation === 'produced',
+    );
+    expect(claims).toHaveLength(1);
+    expect(claims[0].nodeId).toBe(first.nodeId);
   });
 
   it('leaves a fresh dispatch claim alone', async () => {
