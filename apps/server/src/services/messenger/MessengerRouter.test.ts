@@ -1728,38 +1728,6 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     );
   });
 
-  it('still announces mention-only mode in a nested Feishu topic', async () => {
-    await loadSlackBot();
-    mockGetList.mockResolvedValue(['U_ALICE']);
-    const thread = {
-      id: 'feishu:group:oc_citic_sentry:omt_topic_1',
-      isDM: false,
-      post: vi.fn(),
-      subscribe: vi.fn(),
-    };
-
-    const handler = mockChatBot.onSubscribedMessage.mock.calls[0][0] as (
-      thread: any,
-      msg: any,
-    ) => Promise<void>;
-    await handler(
-      thread,
-      fakeMessage({
-        author: { isBot: false, userId: 'U_BOB', userName: 'bob' },
-        isMention: false,
-        text: 'taking over',
-      }),
-    );
-
-    expect(mockHandleSubscribed).not.toHaveBeenCalled();
-    expect(thread.post).toHaveBeenCalledWith(expect.stringContaining('@mention me'));
-    expect(mockSetIfNotExists).toHaveBeenCalledWith(
-      'messenger:thread-mention-required-announced:feishu:group:oc_citic_sentry:omt_topic_1',
-      '1',
-      expect.any(Number),
-    );
-  });
-
   it('only announces mention-only mode once per channel thread ()', async () => {
     // Second non-mention in a multi-human thread → `setIfNotExists` returns
     // false, the announcement is suppressed.

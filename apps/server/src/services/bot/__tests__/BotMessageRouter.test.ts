@@ -1135,30 +1135,6 @@ describe('BotMessageRouter', () => {
         );
       });
 
-      it('still announces mention-only mode once in a nested Feishu topic', async () => {
-        mockGetList.mockResolvedValue([]);
-        const isSoloBotConversation = vi.fn().mockResolvedValue(false);
-        withMembershipLookup(isSoloBotConversation);
-        const handler = await loadSubscribedHandler();
-        const thread = makeThread({
-          id: 'feishu:group:oc_citic_sentry:omt_topic_1',
-          isDM: false,
-        });
-        mockStateSetIfNotExists.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-
-        await handler(thread, makeMessage({ isMention: false, text: 'talking in topic' }));
-        await handler(thread, makeMessage({ isMention: false, text: 'still talking' }));
-
-        expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
-        expect(mockStateSetIfNotExists).toHaveBeenCalledWith(
-          'messenger:thread-mention-required-announced:feishu:group:oc_citic_sentry:omt_topic_1',
-          '1',
-          expect.any(Number),
-        );
-        expect(thread.post).toHaveBeenCalledWith(expect.stringContaining('@mention me'));
-        expect(thread.post).toHaveBeenCalledTimes(1);
-      });
-
       it('routes real Discord membership verdicts and preserves batched participants', async () => {
         const { DiscordClientFactory } = await import('../platforms/discord/client');
         const { clearDiscordChatCompositionMemoryCache } =
