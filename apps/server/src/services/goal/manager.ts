@@ -10,6 +10,7 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq, sql } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { TopicTrigger } from '@/const/topic';
@@ -151,11 +152,15 @@ export class GoalManagerService {
     // spent in the conversations it left behind still belong to the Goal, so
     // they are summed too instead of dropping out of its budget.
     const goalTokenPrefix = `${MANAGER_SOURCE_MESSAGE_PREFIX}${goalId}_`;
-    const reads = await Promise.all(
-      [state.topicId, ...(state.previousTopicIds ?? [])].map(async (topicId, index) => ({
+    // One read per conversation the Goal planned in. The list grows with every
+    // handoff, so the fan-out is capped rather than left to the history length.
+    const reads = await pMap(
+      [state.topicId, ...(state.previousTopicIds ?? [])],
+      async (topicId, index) => ({
         current: index === 0,
         operations: await model.listByTopic(topicId, 100),
-      })),
+      }),
+      { concurrency: 5 },
     );
     const operations = reads.flatMap(({ current, operations: topicOperations }) =>
       topicOperations.filter((op) => {
