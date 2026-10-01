@@ -2,7 +2,6 @@
 
 import { Block, Flexbox, Icon } from '@lobehub/ui';
 import { Input, Tag } from '@lobehub/ui/base-ui';
-import { Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDown, ChevronRight, SearchIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -125,7 +124,7 @@ const ApiItem = memo<ApiItemProps>(({ api }) => {
           ) : (
             <>
               <div className={styles.params}>{t('dev.preview.api.params')}</div>
-              <Space direction="vertical" style={{ width: '100%' }}>
+              <Flexbox gap={8} width={'100%'}>
                 {params.map(([name, param]) => {
                   const isRequired = api.parameters.required?.includes(name);
                   return (
@@ -139,7 +138,7 @@ const ApiItem = memo<ApiItemProps>(({ api }) => {
                     </div>
                   );
                 })}
-              </Space>
+              </Flexbox>
             </>
           )}
         </Flexbox>
@@ -173,13 +172,13 @@ const ApiVisualizer = memo<ApiVisualizerProps>(({ apis = [] }) => {
         />
       </div>
 
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Flexbox gap={8} width={'100%'}>
         {filteredApis.length > 0 ? (
           filteredApis.map((api, index) => <ApiItem api={api} key={index} />)
         ) : (
           <div className={styles.emptyState}>{t('dev.preview.api.noResults')}</div>
         )}
-      </Space>
+      </Flexbox>
     </Flexbox>
   );
 });

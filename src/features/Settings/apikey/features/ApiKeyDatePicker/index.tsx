@@ -1,5 +1,5 @@
+import { Flexbox } from '@lobehub/ui';
 import { DatePicker, type DatePickerProps } from '@lobehub/ui/base-ui';
-import { Flex } from 'antd';
 import { type Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { type FC } from 'react';
@@ -47,7 +47,7 @@ const ApiKeyDatePicker: FC<ApiKeyDatePickerProps> = ({
       placeholder={t('apikey.form.fields.expiresAt.placeholder')}
       footer={
         showNeverExpiresFooter && (
-          <Flex justify="center">
+          <Flexbox horizontal justify={'center'}>
             <a
               role="button"
               style={{ cursor: 'pointer' }}
@@ -62,7 +62,7 @@ const ApiKeyDatePicker: FC<ApiKeyDatePickerProps> = ({
             >
               {t('apikey.display.neverExpires')}
             </a>
-          </Flex>
+          </Flexbox>
         )
       }
       onChange={handleOnChange}

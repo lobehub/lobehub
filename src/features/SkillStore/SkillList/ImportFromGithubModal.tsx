@@ -7,11 +7,11 @@ import {
   createModal,
   Input,
   type ModalInstance,
+  Text,
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';
 import { GithubIcon } from '@lobehub/ui/icons';
-import { Typography } from 'antd';
 import { ArrowLeftRight, Sparkles } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -65,19 +65,19 @@ const ImportFromGithubContent = memo(() => {
         </Flexbox>
 
         <Flexbox align="center" gap={4}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
+          <Text as={'h4'} style={{ margin: 0 }}>
             {t('agentSkillModal.github.title')}
-          </Typography.Title>
-          <Typography.Text style={{ textAlign: 'center' }} type="secondary">
+          </Text>
+          <Text align={'center'} type={'secondary'}>
             {t('agentSkillModal.github.desc')}
-          </Typography.Text>
+          </Text>
         </Flexbox>
       </Flexbox>
 
       {error && <Alert showIcon title={t('agentSkillModal.importError', { error })} type="error" />}
 
       <Flexbox gap={8}>
-        <Typography.Text strong>URL</Typography.Text>
+        <Text strong>URL</Text>
         <Input
           disabled={!canCreate}
           placeholder={t('agentSkillModal.github.urlPlaceholder')}

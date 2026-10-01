@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Tooltip, useModalContext } from '@lobehub/ui';
-import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Avatar, Button, Text, useModalContext } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Plus, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';

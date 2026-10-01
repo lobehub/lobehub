@@ -1,6 +1,6 @@
 'use client';
 
-import { type AnchorProps } from 'antd';
+import { type AnchorProps } from '@lobehub/ui/base-ui';
 import { unionBy } from 'es-toolkit/compat';
 import { type FC, type PropsWithChildren } from 'react';
 import { createContext, use, useState } from 'react';
@@ -53,7 +53,7 @@ export function createTOCTree(items: TOCItem[]): AnchorProps['items'] {
   let index = 1;
 
   for (const item of unionBy(items, 'href')) {
-    const tocItem = { href: item.href, key: index, title: item.title };
+    const tocItem = { href: item.href, key: String(index), title: item.title };
 
     const preNode = tocTree.at(-1);
 

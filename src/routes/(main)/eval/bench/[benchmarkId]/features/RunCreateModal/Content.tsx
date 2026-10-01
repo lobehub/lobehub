@@ -13,7 +13,7 @@ import {
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Form, Space } from 'antd';
+import { Form } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
@@ -296,14 +296,14 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
             variant="filled"
             options={datasetList.map((ds) => ({
               label: (
-                <Space>
+                <Flexbox horizontal align={'center'} gap={8}>
                   <span>{ds.name}</span>
                   {ds.testCaseCount !== undefined && (
                     <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
                       {t('run.create.caseCount', { count: ds.testCaseCount })}
                     </span>
                   )}
-                </Space>
+                </Flexbox>
               ),
               value: ds.id,
             }))}

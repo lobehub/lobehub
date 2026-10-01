@@ -2,7 +2,6 @@ import { isDesktop } from '@lobechat/const';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { confirmModal, toast, Upload } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
 import { css, cx } from 'antd-style';
 import { Archive, HardDriveDownload, Hash, Import, LucideCheck, Trash } from 'lucide-react';
 import { useCallback } from 'react';
@@ -39,7 +38,6 @@ export const useTopicActionsDropdownMenu = (
   options: UseTopicActionsDropdownMenuOptions = {},
 ): (() => MenuProps['items']) => {
   const { t } = useTranslation(['topic', 'common']);
-  const { modal } = App.useApp();
   const { onUploadClose } = options;
   const activeWorkspaceId = useActiveWorkspaceId();
   const isWorkspaceOwner = useIsWorkspaceOwner();
@@ -109,13 +107,13 @@ export const useTopicActionsDropdownMenu = (
         JSON.parse(text);
         await importTopic(text);
       } catch {
-        modal.error({
-          content: t('importInvalidFormat'),
+        toast.error({
+          description: t('importInvalidFormat'),
           title: t('importError'),
         });
       }
     },
-    [importTopic, modal, onUploadClose, t],
+    [importTopic, onUploadClose, t],
   );
 
   const [topicPageSize, updateSystemStatus] = useGlobalStore((s) => [

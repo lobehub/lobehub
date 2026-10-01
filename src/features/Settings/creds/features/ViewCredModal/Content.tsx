@@ -2,9 +2,8 @@
 
 import { type UserCredSummary } from '@lobechat/types';
 import { CopyButton, Flexbox } from '@lobehub/ui';
-import { Alert, Descriptions } from '@lobehub/ui/base-ui';
+import { Alert, Descriptions, Text } from '@lobehub/ui/base-ui';
 import { useQuery } from '@tanstack/react-query';
-import { Typography } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { Eye, EyeOff } from 'lucide-react';
 import { type FC, useState } from 'react';
@@ -13,8 +12,6 @@ import { useTranslation } from 'react-i18next';
 import { ArticleSkeleton } from '@/components/Skeleton';
 
 import { type CredsApi } from '../useCredsApi';
-
-const { Text } = Typography;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   kvKey: css`
@@ -105,6 +102,7 @@ const KVRow: FC<KVRowProps> = ({ keyName, value }) => {
       <div className={styles.kvKey}>{keyName}</div>
       <div className={styles.kvValue}>
         <Text
+          as={'span'}
           className={cx(!visible && styles.maskedValue)}
           style={{
             flex: 1,

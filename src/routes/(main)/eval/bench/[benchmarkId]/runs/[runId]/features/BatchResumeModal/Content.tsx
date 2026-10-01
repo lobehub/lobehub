@@ -1,7 +1,6 @@
 'use client';
 
-import { Badge, Checkbox, Table, type TableColumn, Tag, Tooltip } from '@lobehub/ui/base-ui';
-import { Typography } from 'antd';
+import { Badge, Checkbox, Table, type TableColumn, Tag, Text, Tooltip } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type FC, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -129,12 +128,9 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
       {
         key: 'input',
         render: (_: any, record: ResumableCase) => (
-          <Typography.Paragraph
-            ellipsis={{ expandable: true, rows: 2, symbol: '...' }}
-            style={{ margin: 0 }}
-          >
+          <Text as={'p'} ellipsis={{ rows: 2, tooltipWhenOverflow: true }}>
             {record.input}
-          </Typography.Paragraph>
+          </Text>
         ),
         title: t('table.columns.input'),
       },
