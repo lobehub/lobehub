@@ -29,9 +29,23 @@ export interface AlintDiagnostic {
 
 export interface AlintOutput {
   diagnostics: AlintDiagnostic[];
-  execution?: { cached?: number; completed?: number; planned?: number };
-  usage?: { totalTokens?: number };
+  execution?: { cached?: number; completed?: number; failed?: number; planned?: number };
+  usage?: { inputTokens?: number; outputTokens?: number };
 }
+
+/**
+ * The cost of one run, carried in every summary so spend can be read back
+ * from the check runs: model calls made, calls served from the cache, and
+ * tokens sent and received.
+ */
+export const toUsageLine = ({ execution, usage }: AlintOutput): string | undefined => {
+  if (!execution && !usage) return undefined;
+  const calls = execution?.completed ?? 0;
+  const cached = execution?.cached ?? 0;
+  const input = usage?.inputTokens ?? 0;
+  const output = usage?.outputTokens ?? 0;
+  return `${calls} model calls, ${cached} cached · ${input.toLocaleString('en-US')} input / ${output.toLocaleString('en-US')} output tokens`;
+};
 
 export interface Finding {
   file: string;
@@ -98,7 +112,7 @@ const cell = (value: string) => value.replaceAll('|', '\\|').replaceAll('\n', ' 
 /** Markdown body shared by the PR comment and the step summary. */
 export const toMarkdown = (
   findings: Finding[],
-  { repo, sha, runUrl }: { repo: string; runUrl?: string; sha: string },
+  { repo, sha, runUrl, usage }: { repo: string; runUrl?: string; sha: string; usage?: string },
 ): string => {
   const icon = findings.some((f) => f.severity === 'error') ? '❌' : findings.length ? '⚠️' : '✅';
   const lines = [`${COMMENT_MARKER}`, `### ${icon} ALint · ${toTitle(findings)}`, ''];
@@ -120,7 +134,10 @@ export const toMarkdown = (
       'Errors fail the ALint check. Fix them, or explain in the PR why the rule does not apply. Rules live in `packages/alint/rules`.',
     );
   }
-  lines.push('', `<sub>Commit \`${sha.slice(0, 7)}\`${runUrl ? ` · [run](${runUrl})` : ''}</sub>`);
+  lines.push(
+    '',
+    `<sub>Commit \`${sha.slice(0, 7)}\`${runUrl ? ` · [run](${runUrl})` : ''}${usage ? ` · ${usage}` : ''}</sub>`,
+  );
   return lines.join('\n');
 };
 
@@ -186,13 +203,12 @@ const main = async () => {
     console.error('usage: bun packages/alint/report.ts <alint-output.json>');
     process.exit(2);
   }
-  const findings = toFindings(
-    JSON.parse(await readFile(inputPath, 'utf8')) as AlintOutput,
-    process.cwd(),
-  );
+  const output = JSON.parse(await readFile(inputPath, 'utf8')) as AlintOutput;
+  const findings = toFindings(output, process.cwd());
+  const usage = toUsageLine(output);
   const repo = process.env.GITHUB_REPOSITORY ?? '';
   const sha = process.env.HEAD_SHA ?? '';
-  const markdown = toMarkdown(findings, { repo, runUrl: process.env.RUN_URL, sha });
+  const markdown = toMarkdown(findings, { repo, runUrl: process.env.RUN_URL, sha, usage });
 
   if (process.env.GITHUB_STEP_SUMMARY)
     await appendFile(process.env.GITHUB_STEP_SUMMARY, `${markdown}\n`);

@@ -12,6 +12,7 @@ Report ONLY these three patterns. They can be decided from this file alone; anyt
 Anchor on the line of the button's opening tag. In the message, name the action (from its label or handler) and which pattern it matches.
 
 Do not report:
+- a primary given conditionally to the ONE recommended, selected or current item of a mapped list (`type={option.id === recommendedId ? 'primary' : 'default'}`): only one row is ever primary, which is pattern 2's opposite;
 - any single primary button that is not in a list row, whatever its label — deciding which action deserves the primary needs the product context;
 - a secondary button that is `default`, `fill`, `text` or `link` — never suggest changing one non-primary type into another;
 - `danger` buttons inside a destructive confirmation dialog;
