@@ -35,7 +35,7 @@ lobehub = "./packages/alint/rules"
 
 [config.group.rules]
 "lobehub/pmap-over-promise-all" = "error"
-"lobehub/no-dynamic-import-in-server" = "warn"
+"lobehub/no-dynamic-import-in-server" = "error"
 
 # Database models layer: cross-table write transactions belong in repositories.
 [[config.group]]
@@ -168,7 +168,7 @@ ignores = [ "**/*.test.tsx", "**/__tests__/**", "src/app/**", "**/DevPanel/**", 
 lobehub = "./packages/alint/rules"
 
 [config.group.rules]
-"lobehub/ui-button-hierarchy" = "warn"
+"lobehub/ui-button-hierarchy" = "error"
 "lobehub/ui-view-switch-tabs" = "warn"
 "lobehub/ui-edit-in-modal" = "warn"
 "lobehub/ui-lightweight-errors" = "warn"
