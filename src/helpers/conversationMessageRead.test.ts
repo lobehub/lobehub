@@ -5,7 +5,10 @@ import * as agentStore from '@/store/agent';
 import * as serverConfigStore from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 
-import { readConversationMessages } from './conversationMessageRead';
+import {
+  readConversationMessageListPage,
+  readConversationMessages,
+} from './conversationMessageRead';
 
 const mockGatewayMode = ({
   gatewayMode,
@@ -64,6 +67,21 @@ describe('readConversationMessages', () => {
     expect(getMessages).toHaveBeenCalledWith({
       agentId: 'agent-1',
       projectToolPayloads: false,
+      topicId: 'topic-1',
+    });
+  });
+});
+
+describe('readConversationMessageListPage', () => {
+  it('applies the same projection gate to the paged list read', async () => {
+    mockGatewayMode({ gatewayMode: true });
+    const getPage = vi.spyOn(messageService, 'getMessageListPage').mockResolvedValue([]);
+
+    await readConversationMessageListPage({ agentId: 'agent-1', topicId: 'topic-1' });
+
+    expect(getPage).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      projectToolPayloads: true,
       topicId: 'topic-1',
     });
   });

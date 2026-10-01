@@ -24,7 +24,9 @@ import { canUseGatewayProtocolV2 } from './gatewayProtocol';
  * since switched to the browser, which is why `ClientMessageTransport` refills
  * omitted payloads before building a context rather than trusting this gate.
  */
-const withConversationReadOptions = (context: MessageReadQueryContext): MessageReadQueryContext => ({
+const withConversationReadOptions = (
+  context: MessageReadQueryContext,
+): MessageReadQueryContext => ({
   ...context,
   projectToolPayloads:
     canUseGatewayProtocolV2() &&
