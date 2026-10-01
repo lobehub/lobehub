@@ -103,6 +103,7 @@ export class PackDownloader {
     local: Map<string, string>,
     baseUrl: string,
     put: (sha256: string, content: Buffer) => Promise<void>,
+    onChunk?: (bytes: number) => void,
   ) {
     const plan = planPackDownload(manifest, missing, local, this.timing);
     const downloaded = { bytes: 0, objects: 0, patches: 0 };
@@ -137,6 +138,7 @@ export class PackDownloader {
           received += value.byteLength;
           downloaded.bytes += value.byteLength;
           if (received > expected) throw new Error('Oversized pack response');
+          onChunk?.(value.byteLength);
           digest.update(value);
           let offset = 0;
           while (offset < value.length) {

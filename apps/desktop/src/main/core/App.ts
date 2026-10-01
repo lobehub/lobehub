@@ -60,6 +60,7 @@ type Class<T> = new (...args: any[]) => T;
 const importAll = (r: any) => Object.values(r).map((v: any) => v.default);
 
 export class App {
+  startupUpdatePending = shellInfo?.startupUpdate?.pending ?? false;
   browserManager: BrowserManager;
   menuManager: MenuManager;
   i18n: I18nManager;
@@ -271,6 +272,13 @@ export class App {
     // Reach Electron ready state, then create the main BrowserWindow before
     // native menus, local-file services, tray and updater initialization.
     await this.makeAppReady();
+    if (shellInfo?.startupUpdate) {
+      const ready = await shellInfo.startupUpdate.run(
+        this.coreUpdateManager.checkBeforeFirstLaunch,
+      );
+      if (!ready) return;
+    }
+    this.startupUpdatePending = false;
     await this.browserManager.initializeBrowsers();
     this.prewarmLocalDatabaseAfterNavigation();
     await this.runControllerHooks('afterAppReady');

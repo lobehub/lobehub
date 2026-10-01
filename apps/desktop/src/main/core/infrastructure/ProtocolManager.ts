@@ -151,7 +151,7 @@ export class ProtocolManager {
       logger.debug(`🔗 [Protocol] App ready state: ${app.isReady()}`);
       logger.debug(`🔗 [Protocol] Current pending URLs count: ${this.pendingUrls.length}`);
 
-      if (!app.isReady()) {
+      if (!app.isReady() || this.app.startupUpdatePending) {
         // App not ready yet, store for later processing
         logger.debug('🔗 [Protocol] App not ready, storing protocol URL for later processing');
         this.pendingUrls.push(url);

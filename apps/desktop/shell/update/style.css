@@ -1,0 +1,32 @@
+:root { color-scheme: light dark; --background: #fafafa; --foreground: #1f1f1f; --muted: #6e6e6e; --track: #e6e6e6; --border: rgba(0, 0, 0, .12); }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--background); color: var(--foreground); font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
+.drag-bar { position: fixed; inset: 0 0 auto; height: 36px; -webkit-app-region: drag; }
+main { height: 100vh; display: grid; place-content: center; justify-items: center; padding: 24px 32px 12px; text-align: center; }
+.brand { display: block; width: 120px; height: 41px; overflow: visible; }
+.brand path { stroke: currentColor; stroke-width: .25em; stroke-dasharray: 1000; stroke-opacity: 0; }
+.enter .brand path { animation: draw 1.4s cubic-bezier(.4, 0, .2, 1) both; }
+[data-phase="error"] .brand { opacity: .28; }
+.required { margin-top: 18px; display: grid; gap: 2px; }
+h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.2px; }
+p { margin: 0; color: var(--muted); font-size: 12px; }
+.status { height: 20px; margin-top: 22px; display: flex; gap: 6px; justify-content: center; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.required:not([hidden]) + .status { margin-top: 10px; }
+#amount { color: var(--foreground); font-weight: 500; }
+[data-phase="error"] .status { color: var(--foreground); font-weight: 500; }
+.slot { height: 30px; margin-top: 10px; display: grid; place-items: center; }
+progress { display: block; width: 200px; height: 3px; border: 0; border-radius: 3px; overflow: hidden; appearance: none; background: var(--track); }
+progress::-webkit-progress-bar { background: var(--track); }
+progress::-webkit-progress-value { background: var(--foreground); border-radius: 3px; transition: width .25s linear; }
+progress:not([value]) { background: linear-gradient(90deg, var(--track) 0 35%, var(--foreground) 50%, var(--track) 65% 100%); background-size: 250% 100%; animation: loading 1.3s ease-in-out infinite; }
+progress:not([value])::-webkit-progress-bar { background: transparent; }
+#actions { display: flex; gap: 8px; }
+[hidden] { display: none !important; }
+button { height: 28px; padding: 0 16px; border: .5px solid var(--border); border-radius: 7px; font: inherit; font-size: 12px; font-weight: 500; color: var(--background); background: var(--foreground); cursor: pointer; }
+button.secondary { color: var(--foreground); background: transparent; }
+button:hover { opacity: .85; }
+button:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+@keyframes draw { 0% { stroke-dashoffset: 1000; stroke-opacity: 1; fill-opacity: 0; } 30% { fill-opacity: .05; } 100% { stroke-dashoffset: 0; stroke-opacity: 0; fill-opacity: 1; } }
+@keyframes loading { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-color-scheme: dark) { :root { --background: #141414; --foreground: #f2f2f2; --muted: #9b9b9b; --track: #333; --border: rgba(255, 255, 255, .14); } }
+@media (prefers-reduced-motion: reduce) { .enter .brand path, progress:not([value]) { animation: none; } }

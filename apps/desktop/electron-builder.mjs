@@ -168,6 +168,23 @@ const config = {
     console.info('📦 Building CLI for embedding...');
     execSync('npm run build:cli', { stdio: 'inherit', cwd: __dirname });
 
+    // The shell window has no React/i18next runtime. Bundle only its translated strings.
+    const updateStrings = {};
+    for (const locale of ['en-US', 'zh-CN']) {
+      const messages = JSON.parse(
+        await fs.readFile(path.join(__dirname, '../../locales', locale, 'electron.json'), 'utf8'),
+      );
+      updateStrings[locale] = Object.fromEntries(
+        Object.entries(messages)
+          .filter(([key]) => key.startsWith('startupUpdate.'))
+          .map(([key, value]) => [key.slice('startupUpdate.'.length), value]),
+      );
+    }
+    await fs.writeFile(
+      path.join(__dirname, 'shell/update/strings.json'),
+      JSON.stringify(updateStrings, null, 2) + '\n',
+    );
+
     execSync('node scripts/shellAbi.mjs --write', { stdio: 'inherit', cwd: __dirname });
     const { shellAbi } = JSON.parse(
       await fs.readFile(path.join(__dirname, 'shell/abi.json'), 'utf8'),

@@ -2,9 +2,14 @@ import * as managedProcess from '@lobechat/utils/managedProcess';
 import { app as electronApp, ipcMain } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ShellGlobal } from '@/const/shell';
+
 // Import after mocks are set up
 import LocalDatabaseService from '../../services/LocalDatabaseSrv';
 import { App } from '../App';
+
+const shellState = vi.hoisted(() => ({ shellInfo: undefined as ShellGlobal | undefined }));
+vi.mock('@/const/shell', () => shellState);
 
 const mockPathExistsSync = vi.fn();
 
@@ -194,6 +199,7 @@ describe('App', () => {
   });
 
   afterEach(() => {
+    shellState.shellInfo = undefined;
     vi.clearAllMocks();
   });
 
@@ -208,6 +214,37 @@ describe('App', () => {
   });
 
   describe('service lifecycle', () => {
+    it('does not create business windows until the first-launch gate allows entry', async () => {
+      let release!: (ready: boolean) => void;
+      const run = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            release = resolve;
+          }),
+      );
+      shellState.shellInfo = {
+        abi: 'test',
+        builtinDir: '/mock/core',
+        coreDir: '/mock/core',
+        log: [],
+        manifest: null,
+        markHealthy: vi.fn(),
+        publicKey: '',
+        shellVersion: '1.0.0',
+        source: 'builtin',
+        startupUpdate: { pending: true, run },
+      };
+      appInstance = new App();
+      const boot = appInstance.bootstrap();
+      await vi.waitFor(() => expect(run).toHaveBeenCalledOnce());
+      expect(appInstance.startupUpdatePending).toBe(true);
+      expect(appInstance.browserManager.initializeBrowsers).not.toHaveBeenCalled();
+      release(true);
+      await boot;
+      expect(appInstance.startupUpdatePending).toBe(false);
+      expect(appInstance.browserManager.initializeBrowsers).toHaveBeenCalledOnce();
+    });
+
     it('enables precise renderer heap metrics before Chromium is ready', async () => {
       appInstance = new App();
 

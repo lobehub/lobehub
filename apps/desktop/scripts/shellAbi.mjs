@@ -9,6 +9,8 @@ const ABI_FILE = 'apps/desktop/shell/abi.json';
 
 const TRACKED_INPUTS = [
   'apps/desktop/shell',
+  'locales/en-US/electron.json',
+  'locales/zh-CN/electron.json',
   'apps/desktop/build',
   'apps/desktop/electron-builder.mjs',
   'apps/desktop/scripts/packBuiltinCore.mjs',
@@ -19,7 +21,7 @@ const TRACKED_INPUTS = [
 ];
 // set-desktop-version copies icon-<channel>.* over these before packaging; the variants stay hashed.
 const EXCLUDED =
-  /^apps\/desktop\/(?:shell\/(?:abi\.json$|__tests__\/)|build\/(?:icon\.png|icon\.ico|Icon\.icns)$)/;
+  /^apps\/desktop\/(?:shell\/(?:abi\.json$|update\/strings\.json$|__tests__\/)|build\/(?:icon\.png|icon\.ico|Icon\.icns)$)/;
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 
@@ -65,7 +67,19 @@ export const shellAbiInputs = ({ root = REPO_ROOT, publicKey = '' } = {}) => {
       electron: pkg.devDependencies?.electron,
       sandbox: pkg.devDependencies?.['@anthropic-ai/sandbox-runtime'],
     }),
-    ...files.map((file) => `${sha256(read(file))}  ${file}`),
+    ...files.map((file) => {
+      // Hash the source of the generated shell copy, not unrelated Core translations.
+      const content = file.startsWith('locales/')
+        ? stableJson(
+            Object.fromEntries(
+              Object.entries(JSON.parse(read(file))).filter(([key]) =>
+                key.startsWith('startupUpdate.'),
+              ),
+            ),
+          )
+        : read(file);
+      return `${sha256(content)}  ${file}`;
+    }),
     ...lockEntries(
       read('apps/desktop/pnpm-lock.yaml').toString(),
       new Set(Object.keys(pkg.dependencies ?? {})),

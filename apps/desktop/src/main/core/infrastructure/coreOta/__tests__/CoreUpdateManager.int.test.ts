@@ -53,7 +53,7 @@ const { electronMock, loggerMock } = vi.hoisted(() => ({
       releaseSingleInstanceLock: vi.fn(),
     },
     BrowserWindow: { getAllWindows: vi.fn(() => []) },
-    net: { fetch: vi.fn() },
+    net: { fetch: vi.fn(), isOnline: vi.fn(() => true) },
   },
   loggerMock: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
@@ -236,6 +236,30 @@ describe('CoreUpdateManager initialize', () => {
     }
   });
 
+  it('checks again as soon as the network comes back', async () => {
+    vi.useFakeTimers();
+    electronMock.net.isOnline.mockReturnValue(false);
+    try {
+      const { manager } = await loadManager();
+      manager.startScheduledChecks();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+      electronMock.net.isOnline.mockReturnValue(true);
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    } finally {
+      electronMock.net.isOnline.mockReturnValue(true);
+      vi.useRealTimers();
+    }
+  });
+
   it('reports disabled reasons when shell is missing', async () => {
     const { manager } = await loadManager(makeApp(), null);
     expect(manager.enabled).toBe(false);
@@ -378,15 +402,35 @@ describe('CoreUpdateManager initialize', () => {
       );
     };
 
+    it('keeps the validated pointer intact until cold boot succeeds, then immediately checks', async () => {
+      vi.useFakeTimers();
+      try {
+        serveLatest(mainChanged('1.0.2', 2));
+        const { manager } = await bootExternal({ failures: 1, version: '1.0.1' });
+        manager.startScheduledChecks();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(readPointer(otaRoot(), ABI)).toMatchObject({ current: '1.0.1', previous: null });
+        expect(fetchImpl).not.toHaveBeenCalled();
+        const resumedCheck = vi.spyOn(manager, 'checkForUpdates');
+        manager.handleBootPing('mounted');
+        expect(resumedCheck).toHaveBeenCalledOnce();
+        await resumedCheck.mock.results[0].value;
+        expect(readPointer(otaRoot(), ABI)).toMatchObject({ current: '1.0.2', previous: '1.0.1' });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('rolls back and relaunches when the first boot of a version never mounts', async () => {
       vi.useFakeTimers();
       try {
+        serveLatest(mainChanged('1.0.2', 2));
         const { app, manager } = await bootExternal({ failures: 1, version: '1.0.1' });
         manager.startScheduledChecks();
 
-        vi.advanceTimersByTime(30_000);
+        await vi.advanceTimersByTimeAsync(30_000);
         expect(electronMock.app.relaunch).not.toHaveBeenCalled();
-        vi.advanceTimersByTime(31_000);
+        await vi.advanceTimersByTimeAsync(31_000);
 
         expect(readPointer(otaRoot(), ABI)).toMatchObject({ blacklist: ['1.0.1'], current: null });
         expect(electronMock.app.relaunch).toHaveBeenCalled();
@@ -579,7 +623,11 @@ describe('CoreUpdateManager checkForUpdates', () => {
 
     await manager.checkForUpdates();
 
-    expect(manager.getStatus()).toMatchObject({ applyMode: 'reload', staged: '1.0.1' });
+    expect(manager.getStatus()).toMatchObject({
+      applyMode: 'reload',
+      running: '1.0.0',
+      staged: '1.0.1',
+    });
     expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
       kind: 'core-reload',
       version: '1.0.1',
@@ -597,7 +645,7 @@ describe('CoreUpdateManager checkForUpdates', () => {
       previous: null,
       staged: null,
     });
-    expect(manager.getStatus().staged).toBeNull();
+    expect(manager.getStatus()).toMatchObject({ running: '1.0.1', staged: null });
     const reload =
       app.browserManager.browsers.get('main')!.browserWindow.webContents.reloadIgnoringCache;
     expect(reload).toHaveBeenCalledTimes(1);
@@ -680,8 +728,10 @@ describe('CoreUpdateManager checkForUpdates', () => {
     await manager.checkForUpdates();
     manager.applyStagedNow();
 
+    expect(manager.getStatus().running).toBe('1.0.1');
     manager.handleRendererCrash();
     manager.handleRendererCrash();
+    expect(manager.getStatus().running).toBe('1.0.0');
 
     expect(app.rendererUrlManager.activeDir).toBe(builtinRenderer);
     expect(readPointer(otaRoot(), ABI)).toMatchObject({
@@ -819,10 +869,9 @@ describe('CoreUpdateManager checkForUpdates', () => {
     expect(readPointer(otaRoot(), ABI).current).toBe('1.0.1');
 
     manager.switchChannel('canary');
-    await flushGc();
 
     expect(readPointer(otaRoot(), ABI)).toMatchObject({ current: null, previous: null });
-    expect(existsSync(coreDir('1.0.1'))).toBe(false);
+    await vi.waitFor(() => expect(existsSync(coreDir('1.0.1'))).toBe(false));
   });
 
   it('auto-applies a reload-mode stage after five idle minutes, even when staged while idle', async () => {
@@ -922,5 +971,42 @@ describe('CoreUpdateManager checkForUpdates', () => {
     expect(manager.getStatus().staged).toBeNull();
     expect(readPointer(otaRoot(), ABI).staged).toBeNull();
     expect(existsSync(coreDir('1.0.1'))).toBe(false);
+  });
+});
+
+describe('first launch update gate', () => {
+  it('opens only after a verified up-to-date response', async () => {
+    serveLatest(builtinManifest);
+    const { manager } = await loadManager();
+    await expect(manager.checkBeforeFirstLaunch(vi.fn())).resolves.toBe('ready');
+  });
+
+  it('downloads and applies before opening, without broadcasting to business windows', async () => {
+    serveLatest(rendererOnly('1.0.1', 1));
+    const { manager, app } = await loadManager();
+    const progress = vi.fn();
+    await expect(manager.checkBeforeFirstLaunch(progress)).resolves.toBe('relaunch');
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'downloading', received: expect.any(Number) }),
+    );
+    expect(progress).toHaveBeenLastCalledWith({ phase: 'applying' });
+    expect(readPointer(otaRoot(), ABI).staged).toBe('1.0.1');
+    expect(app.browserManager.broadcastToAllWindows).not.toHaveBeenCalled();
+    await flushGc();
+  });
+
+  it('fails closed on missing feed and invalid signature, and can retry', async () => {
+    const { manager } = await loadManager();
+    await expect(manager.checkBeforeFirstLaunch(vi.fn())).rejects.toThrow('feed-not-found');
+    serveLatest({ ...builtinManifest, signature: 'invalid' });
+    await expect(manager.checkBeforeFirstLaunch(vi.fn())).rejects.toThrow('signature');
+    serveLatest(builtinManifest);
+    await expect(manager.checkBeforeFirstLaunch(vi.fn())).resolves.toBe('ready');
+  });
+
+  it('requests a full installer when the signed update needs a different shell', async () => {
+    serveLatest(buildManifest('1.0.1', 1, BASE_FILES, { shellAbi: 'b'.repeat(64) }));
+    const { manager } = await loadManager();
+    await expect(manager.checkBeforeFirstLaunch(vi.fn())).resolves.toBe('full-update');
   });
 });

@@ -61,11 +61,15 @@ try {
   };
 
   const abi = loadAbi();
+  const startupUpdate = app.isPackaged
+    ? require('./update').createStartupUpdate({ userData: app.getPath('userData') })
+    : undefined;
 
   core = app.isPackaged
     ? resolveCore({
         abi: abi.shellAbi,
         builtinDir,
+        deferBoot: startupUpdate?.pending,
         publicKey: abi.publicKey,
         userData: app.getPath('userData'),
       })
@@ -87,10 +91,26 @@ try {
     coreProtocol: 4,
     log: core.log,
     manifest: core.manifest,
-    markHealthy: core.markHealthy ?? (() => {}),
+    markHealthy: () => {
+      core.markHealthy?.();
+      startupUpdate?.markHealthy();
+    },
     publicKey: abi.publicKey,
     shellVersion: abi.shellVersion,
     source: core.source,
+    startupUpdate: startupUpdate && {
+      pending: startupUpdate.pending,
+      run: async (check) => {
+        try {
+          const ready = await startupUpdate.run(check);
+          if (ready && startupUpdate.pending) core.startBoot();
+          return ready;
+        } catch (error) {
+          rescue(error, core.log);
+          return false;
+        }
+      },
+    },
   };
 } catch (error) {
   rescue(error, core?.log);
