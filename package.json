@@ -492,7 +492,7 @@
     "zustand-utils": "^2.1.1"
   },
   "devDependencies": {
-    "@alint-js/cli": "0.7.1",
+    "@alint-js/cli": "0.7.3",
     "@commitlint/cli": "^19.8.1",
     "@edge-runtime/vm": "^5.0.0",
     "@huggingface/tasks": "^0.19.90",

@@ -51,7 +51,7 @@ Rules come in two layers, and each layer is registered as its own plugin in `ali
 
 A per-file rule cannot see an import graph. When a package's boundary matters, pair its package-level rule with a deterministic test of the graph: `heterogeneous-agents` lists its browser entries in `browser-entries.json`; `src/runtimeBoundary.test.ts` walks everything those entries reach and fails on Node built-ins, Node globals such as `Buffer`, or files owned by a Node-only entry, and the root ESLint config reads the same list to reject value imports of any other entry from `src/`.
 
-To add a package-level rule: register the directory as a plugin in the rule's `[[config.group]]`, add a fixture group for it, and add its fixtures directory with the plugin prefix to `FIXTURE_ROOTS` in `fixtures.test.ts`. CI already keys the cache on `packages/*/alint/rules/**` and runs calibration when `packages/*/alint/**` changes.
+To add a package-level rule: register the directory as a plugin in the rule's `[[config.group]]`, add a fixture group for it, and add its fixtures directory with the plugin prefix to `FIXTURE_ROOTS` in `fixtures.test.ts`. CI runs calibration when `packages/*/alint/**` changes.
 
 ## Security rules
 
@@ -139,7 +139,7 @@ The `alint ·` steps at the end of the "ALint & Test Desktop App" job in `.githu
 - Findings on the calibration fixtures are dropped from the check and the comment; the fixture suite covers them.
 - The provider key comes from the `DEEPSEEK_API_KEY` repository secret. Fork PRs cannot read it, so the steps are skipped.
 - When `alint.config.toml` or anything under `packages/alint` changed, the fixture suite runs too, so a rule edit is calibrated before it lands.
-- `.alintcache` is restored from the last run with the same rule set, keyed by the rule and config files.
+- `.alintcache` is restored from the latest run whatever the rule set. Since alint 0.7.2 each cached result is keyed by its rule's own text, include/exclude lists and severity, so editing, adding or re-levelling one rule re-runs only that rule; everything else stays cached.
 
 ## Cost and behaviour, measured 2026-09-20
 
@@ -190,5 +190,5 @@ Known remaining false positives: `no-transactions-in-models` still reports a sub
 1. Create `rules/<name>/rule.alint.toml` with `name`, `builtInAgent = "basic-structured"`, and an `instruction`. Write the rule as the reviewer would: what to report, which line to anchor on, what the message and suggestion must contain, and an explicit "do not report" list. The carve-outs are where the false positives live.
 2. Add a `[[config.group]]` for its scope in `alint.config.toml`, and a fixture group `packages/alint/fixtures/<name>/**`.
 3. Add fixtures under `fixtures/<name>/`: at least one `bad-*` file with a standalone `// alint-expect` comment (`{/* alint-expect */}` inside JSX) on the line above the one the finding must anchor to, and one `good-*` file per carve-out. Keep them short and realistic.
-4. Run `bun run alint plugin install`, then `cd packages/alint && bunx vitest run fixtures.test.ts` with a provider set up. The suite skips itself when there is no setup. Delete `.alintcache` after every rule edit while calibrating: the local cache is keyed by file content, so an edited rule otherwise replays the previous rule's findings.
+4. Run `bun run alint plugin install`, then `cd packages/alint && bunx vitest run fixtures.test.ts` with a provider set up. The suite skips itself when there is no setup. The cache is keyed by the rule's text, so an edited rule re-runs on its own; no need to delete `.alintcache`.
 5. Before enabling the rule on a scope, run it over a few dozen real files and read every finding.
