@@ -357,10 +357,6 @@ Then('I should see filtered assistant cards', async function (this: CustomWorld)
 
   // Wait for at least one item to be visible
   await expect(assistantItems.first()).toBeVisible({ timeout: 30_000 });
-
-  // Verify that at least one item exists
-  const count = await assistantItems.count();
-  expect(count).toBeGreaterThan(0);
 });
 
 Then(
@@ -372,10 +368,6 @@ Then(
 
     // Wait for at least one item to be visible
     await expect(assistantItems.first()).toBeVisible({ timeout: 30_000 });
-
-    // Verify that at least one item exists
-    const count = await assistantItems.count();
-    expect(count).toBeGreaterThan(0);
   },
 );
 
@@ -467,10 +459,6 @@ Then('I should see model cards in the sorted order', async function (this: Custo
 
   // Wait for at least one item to be visible
   await expect(modelItems.first()).toBeVisible({ timeout: 30_000 });
-
-  // Verify that at least one item exists
-  const count = await modelItems.count();
-  expect(count).toBeGreaterThan(0);
 });
 
 Then('I should be navigated to the model detail page', async function (this: CustomWorld) {
@@ -546,10 +534,6 @@ Then(
 
     // Wait for at least one item to be visible
     await expect(mcpItems.first()).toBeVisible({ timeout: 30_000 });
-
-    // Verify that at least one item exists
-    const count = await mcpItems.count();
-    expect(count).toBeGreaterThan(0);
   },
 );
 
