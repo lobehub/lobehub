@@ -61,6 +61,7 @@ import {
   LEASE_EXPIRED_ERROR,
   MEASURED_ACCEPTANCE_PAUSE_REASON,
   needsMetricCriteria,
+  NO_FRONTIER_PAUSE_REASON,
   selectFrontier,
   TERMINAL_NODE_STATUSES,
 } from './decideNextMove';
@@ -1374,9 +1375,21 @@ export class GoalService {
       });
     }
 
-    // Stop what the nodes are still running before they leave the graph, so a
-    // retired node cannot keep spending or deliver into the Goal afterwards.
-    const taskIds = targets.flatMap((node) => (node.taskId ? [node.taskId] : []));
+    // Fence the nodes BEFORE looking for their Tasks. The snapshot above can
+    // miss a Task a concurrent tick is creating for a proposed node; once the
+    // node reads `retired`, `bindTask` (which only binds an `active` node) can
+    // no longer attach that Task, and the creator discards it.
+    for (const node of targets) {
+      await this.graphModel.updateNodeStatus(goalId, node.id, 'retired', reason);
+    }
+
+    // Stop what the nodes are still running, so a retired node cannot keep
+    // spending or deliver into the Goal afterwards. Bound Tasks are read after
+    // the fence so a Task bound just before it is included.
+    const fenced = await this.requireGraph(goalId);
+    const taskIds = fenced.nodes.flatMap((node) =>
+      targetIds.has(node.id) && node.taskId ? [node.taskId] : [],
+    );
     if (taskIds.length > 0) {
       for (const topic of await this.taskTopicModel.findRunningByTaskIds(taskIds)) {
         if (topic.topicId) await this.taskService.cancelTopic(topic.topicId);
@@ -1389,9 +1402,9 @@ export class GoalService {
 
     // A pending recovery gate on a retired node asks a question nobody needs
     // answered any more; left pending it keeps the Goal parked in review.
-    for (const decision of graph.decisions) {
+    for (const decision of fenced.decisions) {
       if (decision.status !== 'pending') continue;
-      const gatedByTarget = graph.edges.some(
+      const gatedByTarget = fenced.edges.some(
         (edge) =>
           edge.kind === 'leads_to' &&
           edge.targetNodeId === decision.nodeId &&
@@ -1402,14 +1415,23 @@ export class GoalService {
       }
     }
 
-    for (const node of targets) {
-      await this.graphModel.updateNodeStatus(goalId, node.id, 'retired', reason);
-    }
-
-    if (graph.goal.status === 'review') {
-      const after = await this.requireGraph(goalId);
-      if (!after.decisions.some((decision) => decision.status === 'pending')) {
+    // Reopen a goal the coordinator parked because of what was just retired:
+    // `review` held by the retired node's gate, or `paused` by `no_frontier`
+    // (the stray branch left nothing runnable). A pause somebody chose — or
+    // one the coordinator took for another reason, like a budget — is left.
+    const after = await this.requireGraph(goalId);
+    const lastTransition = after.events.find((event) => event.entityType === 'goal');
+    const parkedOnNoFrontier =
+      after.goal.status === 'paused' &&
+      !after.goal.config?.pausedBy &&
+      lastTransition?.actorType !== 'user' &&
+      lastTransition?.reason === NO_FRONTIER_PAUSE_REASON;
+    if (after.goal.status === 'review' || parkedOnNoFrontier) {
+      const hasPendingDecision = after.decisions.some((decision) => decision.status === 'pending');
+      if (!hasPendingDecision) {
         await this.transitionStatus(after.goal, 'running', 'nodes retired by user', 'user');
+      } else if (parkedOnNoFrontier) {
+        await this.transitionStatus(after.goal, 'review', 'nodes retired by user', 'user');
       }
     }
 
@@ -1905,7 +1927,7 @@ export class GoalService {
         // sweep's window. A `running` goal that always reports `no_progress` is
         // picked by every scan forever, and enough of them starve every other
         // stalled goal out of the newest-first limit.
-        await this.transitionStatus(graph.goal, 'paused', 'no eligible task to advance');
+        await this.transitionStatus(graph.goal, 'paused', NO_FRONTIER_PAUSE_REASON);
         effects.push({ type: 'goal_status', detail: 'paused' });
         return observe({ goalId, message: move.message, outcome: move.outcome });
       }

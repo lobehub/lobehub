@@ -1134,6 +1134,56 @@ describe('GoalService', () => {
     expect(after.goal.status).toBe('running');
   });
 
+  it('retiring a node fences it against a coordinator still creating its task', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    const graph = await service.create({ tasks: ['Stray', 'Keep'], title: 'Retire race' });
+    const stray = graph.nodes.find((node) => node.kind === 'task' && node.title === 'Stray')!;
+    // A tick has claimed the node and is creating its Task when retirement lands.
+    expect(await graphModel.claimTaskNode(graph.goal.id, stray.id, new Date(0))).toBeDefined();
+
+    await service.retireNodes(graph.goal.id, [stray.id]);
+
+    const lateTask = await new TaskModel(serverDB, userId).create({ instruction: 'Late' });
+    expect(await graphModel.bindTask(graph.goal.id, stray.id, lateTask.id)).toBeUndefined();
+    const after = await service.graph(graph.goal.id);
+    expect(after.nodes.find((node) => node.id === stray.id)?.status).toBe('retired');
+  });
+
+  it('reopens a goal parked by no_frontier once the blocking nodes are retired', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ tasks: ['A', 'B', 'Keep'], title: 'Deadlocked branch' });
+    const [a, b] = ['A', 'B'].map((title) =>
+      graph.nodes.find((node) => node.kind === 'task' && node.title === title)!,
+    );
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    await graphModel.createEdge(graph.goal.id, a.id, b.id, 'depends_on');
+    await graphModel.createEdge(graph.goal.id, b.id, a.id, 'depends_on');
+    const keep = graph.nodes.find((node) => node.kind === 'task' && node.title === 'Keep')!;
+    await graphModel.updateNodeStatus(graph.goal.id, keep.id, 'resolved');
+    await service.tick(graph.goal.id); // deadlock → no_frontier → paused
+    expect((await service.graph(graph.goal.id)).goal.status).toBe('paused');
+
+    await service.retireNodes(graph.goal.id, [a.id, b.id]);
+
+    expect((await service.graph(graph.goal.id)).goal.status).toBe('running');
+  });
+
+  it('leaves a user-paused goal paused when nodes are retired', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ tasks: ['A', 'B'], title: 'Paused by a person' });
+    const [a, b] = graph.nodes.filter((node) => node.kind === 'task');
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    await graphModel.createEdge(graph.goal.id, a.id, b.id, 'depends_on');
+    await graphModel.createEdge(graph.goal.id, b.id, a.id, 'depends_on');
+    await service.tick(graph.goal.id); // no_frontier park
+    await service.pause(graph.goal.id); // the person takes the pause over
+
+    await service.retireNodes(graph.goal.id, [a.id, b.id]);
+
+    expect((await service.graph(graph.goal.id)).goal.status).toBe('paused');
+  });
+
   it('leaves a deliberately paused goal paused when its budget changes', async () => {
     // Nothing distinguishes a user pause from a budget pause on the row, so the
     // reopen is limited to goals whose budget was actually binding.

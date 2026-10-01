@@ -14,7 +14,7 @@ import type {
   GoalStatus,
 } from '@lobechat/types';
 import { experimentMembers, experimentOwner, experimentStatus } from '@lobechat/utils/goalGraph';
-import { and, asc, count, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
 import {
@@ -496,6 +496,10 @@ export class GoalGraphModel {
             eq(goalNodes.goalId, goalId),
             eq(goalNodes.id, nodeId),
             eq(goalNodes.kind, 'task'),
+            // A node retired (or otherwise settled) while its Task was being
+            // created must not be flipped back to `active` by the bind — that
+            // is the fence `GoalService.retireNodes` relies on.
+            notInArray(goalNodes.status, ['resolved', 'rejected', 'retired']),
             isNull(goalNodes.taskId),
           ),
         )

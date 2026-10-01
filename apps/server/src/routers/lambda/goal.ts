@@ -499,6 +499,12 @@ export const goalRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        // Same ownership rule as restart/delete: retiring cancels the nodes'
+        // Tasks and recovery gates, so visibility is not manageability.
+        const goal = await ctx.goalModel.findById(input.id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
         const data = await ctx.goalService.retireNodes(input.id, input.nodeIds, input.reason);
         // Retiring can unpark the goal or clear the last unfinished task.
         await scheduleGoalAdvance({

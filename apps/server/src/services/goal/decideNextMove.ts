@@ -150,6 +150,13 @@ export const frontierNeedsBudget = (
  */
 export const MEASURED_ACCEPTANCE_PAUSE_REASON = 'Measured acceptance not met';
 
+/**
+ * Reason recorded when the coordinator parks a goal because nothing on the
+ * frontier can run. Shared so a graph edit that removes the blocker (node
+ * retirement) can recognise this park and lift it.
+ */
+export const NO_FRONTIER_PAUSE_REASON = 'no eligible task to advance';
+
 /** Evaluate one numeric clause. Kept beside the gate that consumes it. */
 export const compareMetric = (
   rawValue: number,
