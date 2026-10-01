@@ -111,6 +111,7 @@ describe('notebook document work provenance', () => {
 
     expect(mocks.findVerbatimTwin).toHaveBeenCalledWith({
       content: input.content,
+      fileType: 'markdown',
       title: input.title,
       topicId: input.topicId,
     });
@@ -118,6 +119,19 @@ describe('notebook document work provenance', () => {
     expect(mocks.create).not.toHaveBeenCalled();
     expect(mocks.associate).not.toHaveBeenCalled();
     expect(mocks.registerDocument).not.toHaveBeenCalled();
+  });
+
+  it('carries the requested kind into the twin search', async () => {
+    // A plan is found by its type, so the search has to know it is looking for
+    // one and not reuse a markdown note that holds the same text.
+    await (await caller()).createDocument({ ...input, type: 'agent/plan' });
+
+    expect(mocks.findVerbatimTwin).toHaveBeenCalledWith({
+      content: input.content,
+      fileType: 'agent/plan',
+      title: input.title,
+      topicId: input.topicId,
+    });
   });
 
   it('rejects inaccessible ancestry before writing', async () => {

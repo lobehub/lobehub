@@ -330,6 +330,65 @@ describe('TopicDocumentModel', () => {
     });
   });
 
+  describe('findVerbatimTwin', () => {
+    const createWith = async (title: string, content: string, fileType: string) => {
+      const doc = await documentModel.create({
+        content,
+        fileType,
+        source: `notebook:${topicId}`,
+        sourceType: 'api',
+        title,
+        totalCharCount: content.length,
+        totalLineCount: 1,
+      });
+      await topicDocumentModel.associate({ documentId: doc.id, topicId });
+      return doc;
+    };
+
+    it('reuses a byte-identical document another surface wrote, whatever it calls the kind', async () => {
+      // The notebook calls a report `markdown`; the page surface calls the same
+      // report `custom/document`. It is one document either way.
+      const page = await createWith('Report', 'Same body', 'custom/document');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'markdown',
+        title: 'Report',
+        topicId,
+      });
+
+      expect(twin?.id).toBe(page.id);
+    });
+
+    it('does not answer a plan write with a page holding the same text', async () => {
+      // `findPlanByTopic` filters on `agent/plan`. Reusing the page here would
+      // report a successful create and leave no discoverable plan behind.
+      await createWith('Plan', 'Same body', 'custom/document');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'agent/plan',
+        title: 'Plan',
+        topicId,
+      });
+
+      expect(twin).toBeUndefined();
+    });
+
+    it('does not answer a plain write with a plan holding the same text', async () => {
+      await createWith('Plan', 'Same body', 'agent/plan');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'markdown',
+        title: 'Plan',
+        topicId,
+      });
+
+      expect(twin).toBeUndefined();
+    });
+  });
+
   describe('findByDocumentId', () => {
     it('should return all topic IDs associated with a document', async () => {
       const doc = await createTestDocument(documentModel, 'Shared Document');

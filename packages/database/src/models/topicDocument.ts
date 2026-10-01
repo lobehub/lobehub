@@ -1,6 +1,11 @@
+import {
+  AGENT_DOCUMENT_FILE_TYPE,
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  MARKDOWN_DOCUMENT_FILE_TYPES,
+} from '@lobechat/const';
 import type { DocumentAccessScope } from '@lobechat/types';
 import { ordinaryDocumentAccessScope } from '@lobechat/types';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import type { DocumentItem, NewTopicDocument } from '../schemas';
 import { documents, topicDocuments } from '../schemas';
@@ -11,6 +16,31 @@ import { buildWorkspaceWhere } from '../utils/workspace';
 export interface TopicDocumentWithDetails extends DocumentItem {
   associatedAt: Date;
 }
+
+/**
+ * Kinds that are all one thing: a text document whose content is its bytes.
+ * Which name a surface gives that document is a tool's own vocabulary — the
+ * notebook writes `markdown`, the agent-documents surface writes
+ * `agent/document`, and a Page is `custom/document` — so the same report written
+ * through two of them is one document, not two.
+ *
+ * A structured artifact is deliberately absent. `agent/plan` is *found* by its
+ * type (`findPlanByTopic` filters on it), so answering a plan write with a page
+ * that happens to hold the same text would report a successful create and leave
+ * no discoverable plan behind.
+ */
+export const TEXT_DOCUMENT_FILE_TYPES = [
+  ...MARKDOWN_DOCUMENT_FILE_TYPES,
+  AGENT_DOCUMENT_FILE_TYPE,
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  'article',
+  'note',
+  'report',
+];
+
+/** The kinds a byte-identical twin of `fileType` may carry. */
+export const twinFileTypesFor = (fileType: string): string[] =>
+  TEXT_DOCUMENT_FILE_TYPES.includes(fileType) ? TEXT_DOCUMENT_FILE_TYPES : [fileType];
 
 export class TopicDocumentModel {
   private userId: string;
@@ -108,7 +138,8 @@ export class TopicDocumentModel {
   };
 
   /**
-   * A document this topic already holds under the same title and the same body.
+   * A document this topic already holds under the same title, the same body and
+   * the same kind.
    *
    * The notebook surface and the agent-documents surface answer one intent with
    * two tools, and an agent that writes the same report through both used to
@@ -117,9 +148,15 @@ export class TopicDocumentModel {
    * is weak (two documents may share one), so the body has to match too —
    * byte-identical identity plus byte-identical content is the same document
    * written twice, and the second write reuses the row.
+   *
+   * The kind is part of that identity, because a document can be *found* by its
+   * type: `findPlanByTopic` filters on `agent/plan`. Two plain documents that
+   * agree are still one (see {@link TEXT_DOCUMENT_FILE_TYPES}); a plan write
+   * must never be answered with the page that happens to hold the same text.
    */
   findVerbatimTwin = async (params: {
     content: string;
+    fileType: string;
     title: string;
     topicId: string;
   }): Promise<DocumentItem | undefined> => {
@@ -132,6 +169,7 @@ export class TopicDocumentModel {
           eq(topicDocuments.topicId, params.topicId),
           eq(documents.title, params.title),
           eq(documents.content, params.content),
+          inArray(documents.fileType, twinFileTypesFor(params.fileType)),
           this.ownership(),
           buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
           documentMatchesAccessScope(documents.metadata, this.documentAccessScope),
