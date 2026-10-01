@@ -1182,6 +1182,33 @@ describe('GoalService', () => {
     expect(task.status).toBe('canceled');
   });
 
+  it('cancels a running task before looking for its runs, fencing a run still being dispatched', async () => {
+    // A runner that already flipped the Task to `running` but has not recorded
+    // its topic yet is invisible to the run lookup. It checks the Task's status
+    // under the row lock before recording, so the cancellation must already be
+    // committed by the time retirement looks for runs to stop.
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({ tasks: ['Dispatching', 'Keep'], title: 'Fence runs' });
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'running');
+    const statusAtLookup: (string | undefined)[] = [];
+    const original = TaskTopicModel.prototype.findRunningByTaskIds;
+    vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockImplementation(async function (
+      this: TaskTopicModel,
+      ids: string[],
+    ) {
+      statusAtLookup.push((await taskModel.findById(created.taskId!))?.status);
+      return original.call(this, ids);
+    });
+
+    await service.retireNodes(graph.goal.id, [created.nodeId!]);
+
+    expect(statusAtLookup).toEqual(['canceled']);
+    expect((await taskModel.findById(created.taskId!))?.status).toBe('canceled');
+  });
+
   it('lets an interrupted retirement be finished by retrying it', async () => {
     // The fence lands before the run is stopped; when stopping it cannot be
     // confirmed the call fails with the node already retired. A retry must

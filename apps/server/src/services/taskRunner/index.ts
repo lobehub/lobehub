@@ -303,12 +303,17 @@ export class TaskRunnerService {
       if (result.topicId) {
         const topicId = result.topicId;
         // Record the run under the task's row lock (see TaskService.deleteTask).
-        // If the task was deleted while this run was being dispatched, nobody
-        // is left to stop it — stop it here instead of orphaning it.
+        // If the task was deleted — or canceled, e.g. by a Goal retiring its
+        // node — while this run was being dispatched, whoever did it found no
+        // topic to stop yet. Nobody else will stop it, so stop it here instead
+        // of recording an operation that keeps running behind the cancellation.
         const recorded = await this.db.transaction(async (tx) => {
           const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
           const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
-          if (!(await taskModel.lockForUpdate(task.id))) return false;
+          if (!(await taskModel.lockForUpdate(task.id))) return 'deleted' as const;
+          if ((await taskModel.findById(task.id))?.status === 'canceled') {
+            return 'canceled' as const;
+          }
           if (continueTopicId) {
             await taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
             await taskTopicModel.updateOperationId(task.id, continueTopicId, result.operationId);
@@ -322,9 +327,9 @@ export class TaskRunnerService {
               trigger,
             });
           }
-          return true;
+          return 'recorded' as const;
         });
-        if (!recorded) {
+        if (recorded !== 'recorded') {
           const stop = await aiAgentService
             .interruptTask({ operationId: result.operationId })
             .catch((error) => {
@@ -334,10 +339,14 @@ export class TaskRunnerService {
           // Same confirmation gate as TaskService.interruptTaskOperation.
           const stopped = !!stop?.success && stop.deviceCancellationConfirmed !== false;
           throw new TRPCError({
-            code: stopped ? 'NOT_FOUND' : 'INTERNAL_SERVER_ERROR',
+            code: stopped
+              ? recorded === 'deleted'
+                ? 'NOT_FOUND'
+                : 'CONFLICT'
+              : 'INTERNAL_SERVER_ERROR',
             message: stopped
-              ? 'The task was deleted while its run was starting; the run was stopped.'
-              : `The task was deleted while its run was starting, and stopping that run (operation ${result.operationId}) could not be confirmed.`,
+              ? `The task was ${recorded} while its run was starting; the run was stopped.`
+              : `The task was ${recorded} while its run was starting, and stopping that run (operation ${result.operationId}) could not be confirmed.`,
           });
         }
       }

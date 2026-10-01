@@ -1421,13 +1421,27 @@ export class GoalService {
       // goal owner's principal instead, limited to the Tasks bound to the nodes
       // being retired.
       const { taskModel, taskService, taskTopicModel } = this.goalOwnerTaskScope(fenced.goal);
+      const cancelTasks = async () => {
+        for (const id of taskIds) {
+          // CAS against the status just read; a runner flipping the Task to
+          // `running` in between makes it miss, so re-read and try again.
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const [task] = await taskModel.findByIds([id]);
+            if (!task || ['canceled', 'completed', 'failed'].includes(task.status)) break;
+            if (await taskModel.updateStatusIfCurrent(id, task.status, 'canceled')) break;
+          }
+        }
+      };
+      // Cancel the Tasks FIRST: that is the fence a run still being dispatched
+      // checks under the Task's row lock before recording its operation, so a
+      // run started from here on stops itself (TaskRunnerService.runTask).
+      // Runs recorded before the fence are then found and stopped below.
+      await cancelTasks();
       for (const topic of await taskTopicModel.findRunningByTaskIds(taskIds)) {
         if (topic.topicId) await taskService.cancelTopic(topic.topicId);
       }
-      for (const task of await taskModel.findByIds(taskIds)) {
-        if (['canceled', 'completed', 'failed'].includes(task.status)) continue;
-        await taskModel.updateStatusIfCurrent(task.id, task.status, 'canceled');
-      }
+      // `cancelTopic` parks its Task as `paused`; settle them back to canceled.
+      await cancelTasks();
     }
 
     // A pending recovery gate on a retired node asks a question nobody needs
