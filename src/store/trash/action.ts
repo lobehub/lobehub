@@ -20,12 +20,16 @@ type Setter = StoreSetter<TrashStore>;
 /** SWR key roots whose lists can regain rows after a restore. */
 const RESTORE_AFFECTED_KEY_PREFIXES = [
   'agent:',
+  // Agent sidebar sync keys (#18913) live outside `agent:` so they skip SWR persistence.
+  'agentSync:',
   'document:',
   'file:',
   'group:',
   'home:',
   'image:',
   'knowledgeBase:',
+  // Local-first resources (topic list, …) sync through `localFirst:sync` keys.
+  'localFirst:',
   'page',
   'project',
   'recent:',

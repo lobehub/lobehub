@@ -75,6 +75,9 @@ describe('TrashAction', () => {
       const filter = filterCall![0] as (key: unknown) => boolean;
       expect(filter(['topic:list', 'x', {}])).toBe(true);
       expect(filter(['agent:list', true])).toBe(true);
+      // Local-first sync keys (topic list) and the agent sidebar sync key
+      expect(filter(['localFirst:sync', 'topicList', 1, 'scope', 'agent_x', {}])).toBe(true);
+      expect(filter(['agentSync:list', true, 'scope'])).toBe(true);
       expect(filter(['trash:list', 'all'])).toBe(false);
       expect(filter('not-an-array')).toBe(false);
     });

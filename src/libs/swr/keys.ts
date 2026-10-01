@@ -590,6 +590,48 @@ export const isProjectDetailKey = (key: unknown, scope: string, id: string): boo
 export const isProjectListKey = (key: unknown, scope: string): boolean =>
   Array.isArray(key) && key[0] === projectKeys.list.root && key[1] === scope;
 
+// ---- local-first resources ---------------------------------------------
+/**
+ * Keys owned by `@/libs/localFirst`. Deliberately outside every persisted
+ * cache tier: the resource's own query projection is the persisted copy, the
+ * SWR entries only orchestrate hydration and network sync.
+ */
+export const localFirstKeys = {
+  hydrate: def(
+    'localFirst:hydrate',
+    (name: string, version: number, scope: string, key: string) => [
+      'localFirst:hydrate',
+      name,
+      version,
+      scope,
+      key,
+    ],
+  ),
+  sync: def(
+    'localFirst:sync',
+    (name: string, version: number, scope: string, key: string, params: unknown) => [
+      'localFirst:sync',
+      name,
+      version,
+      scope,
+      key,
+      params,
+    ],
+  ),
+};
+
+/** Match a resource's sync keys, optionally narrowed to one scope and/or entry key. */
+export const isLocalFirstSyncKey = (
+  swrKey: unknown,
+  name: string,
+  filter: { key?: string; scope?: string } = {},
+): boolean =>
+  Array.isArray(swrKey) &&
+  swrKey[0] === localFirstKeys.sync.root &&
+  swrKey[1] === name &&
+  (filter.scope === undefined || swrKey[3] === filter.scope) &&
+  (filter.key === undefined || swrKey[4] === filter.key);
+
 // ---- aiModel ------------------------------------------------------------
 export const aiModelKeys = {
   disabledModelsPage: def('aiModel:disabledModelsPage', (providerId: string, offset: number) => [
@@ -1608,6 +1650,7 @@ export const swrKeys = {
   imessage: imessageKeys,
   inbox: inboxKeys,
   knowledgeBase: knowledgeBaseKeys,
+  localFirst: localFirstKeys,
   localFile: localFileKeys,
   message: messageKeys,
   messenger: messengerKeys,
