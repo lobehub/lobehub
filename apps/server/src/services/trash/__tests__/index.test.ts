@@ -23,6 +23,29 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { TrashService } from '../index';
 
+// Lets a test land a concurrent purge between a restore handler's reads and its
+// write: the handlers check the owning agent right before restoring, inside the
+// restore transaction (the hook receives that transaction).
+const restoreRace = vi.hoisted(() => ({
+  afterOwnerCheck: undefined as undefined | ((db: any) => Promise<void>),
+}));
+
+vi.mock('@/database/models/agent', async (importOriginal) => {
+  const mod = await importOriginal<{ AgentModel: typeof AgentModel }>();
+  class AgentModel extends mod.AgentModel {
+    constructor(...args: ConstructorParameters<typeof AgentModel>) {
+      super(...args);
+      const hasTrashedOwner = this.hasTrashedOwner;
+      this.hasTrashedOwner = async (owner) => {
+        const result = await hasTrashedOwner(owner);
+        await restoreRace.afterOwnerCheck?.(args[0]);
+        return result;
+      };
+    }
+  }
+  return { ...mod, AgentModel };
+});
+
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(() => ({ deleteFile: vi.fn(), deleteFiles: vi.fn() })),
 }));
@@ -51,6 +74,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  restoreRace.afterOwnerCheck = undefined;
   await serverDB.delete(users);
 });
 
@@ -87,6 +111,21 @@ describe('TrashService', () => {
       expect(outcome.failed).toEqual([]);
       expect(await topicModel.findById(topic.id)).toMatchObject({ deletedAt: null, id: topic.id });
       expect(await serverDB.select().from(trashItems)).toHaveLength(0);
+    });
+
+    it('does not report a topic restored when a purge removed it mid-restore', async () => {
+      const agent = await agentModel.create({ title: 'Bot' });
+      const topic = await topicModel.create({ agentId: agent.id, title: 'Gone' });
+      const [root] = await service.trashTopics([topic.id]);
+      // The expiry sweep deletes the row after the handler read it as trashed.
+      restoreRace.afterOwnerCheck = async (db) => {
+        await db.delete(topics).where(eq(topics.id, topic.id));
+      };
+
+      const outcome = await service.restore([root.id]);
+
+      expect(outcome.restored).toEqual([]);
+      expect(outcome.failed).toEqual([{ code: 'notFound', id: root.id }]);
     });
 
     it('bulk sweeps become one restorable root per topic', async () => {
@@ -304,6 +343,19 @@ describe('TrashService', () => {
       await service.purge([msgRoot.id]);
       expect(await serverDB.select().from(messages).where(eq(messages.id, a1.id))).toHaveLength(0);
       expect((await service.list()).items.map((i) => i.id)).toEqual([topicRoot.id]);
+    });
+
+    it('does not report a message restored when a purge removed it mid-restore', async () => {
+      const { a1 } = await seedChain();
+      const [msgRoot] = await service.trashMessages([a1.id]);
+      restoreRace.afterOwnerCheck = async (db) => {
+        await db.delete(messages).where(eq(messages.id, a1.id));
+      };
+
+      const outcome = await service.restore([msgRoot.id]);
+
+      expect(outcome.restored).toEqual([]);
+      expect(outcome.failed).toEqual([{ code: 'notFound', id: msgRoot.id }]);
     });
 
     it('a purge that lands after a concurrent restore leaves the restored message alone', async () => {
