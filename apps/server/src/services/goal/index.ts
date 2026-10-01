@@ -1313,6 +1313,25 @@ export class GoalService {
   };
 
   /**
+   * Task access under the goal owner's principal — the identity the goal's
+   * coordinator creates and runs its Tasks as. Only for acting on Tasks already
+   * bound to this goal's nodes, after the caller's right to manage the goal has
+   * been checked.
+   */
+  private goalOwnerTaskScope = (goal: { userId: string }) =>
+    goal.userId === this.userId
+      ? {
+          taskModel: this.taskModel,
+          taskService: this.taskService,
+          taskTopicModel: this.taskTopicModel,
+        }
+      : {
+          taskModel: new TaskModel(this.db, goal.userId, this.workspaceId),
+          taskService: new TaskService(this.db, goal.userId, this.workspaceId),
+          taskTopicModel: new TaskTopicModel(this.db, goal.userId, this.workspaceId),
+        };
+
+  /**
    * Retire Task nodes a person no longer wants run — a duplicated plan branch,
    * work that landed elsewhere. Without this a stray node that never got a Task
    * stays unfinished forever and the coordinator can never reach acceptance.
@@ -1394,12 +1413,20 @@ export class GoalService {
       targetIds.has(node.id) && node.taskId ? [node.taskId] : [],
     );
     if (taskIds.length > 0) {
-      for (const topic of await this.taskTopicModel.findRunningByTaskIds(taskIds)) {
-        if (topic.topicId) await this.taskService.cancelTopic(topic.topicId);
+      // The caller may be a workspace owner retiring a colleague's goal (the
+      // router authorizes that). The nodes' Tasks were created by the goal's
+      // coordinator, which runs as the goal's owner — and may be `private`,
+      // inherited from that owner's private agent — so reads under the caller's
+      // visibility would miss them and leave them running. Stop them under the
+      // goal owner's principal instead, limited to the Tasks bound to the nodes
+      // being retired.
+      const { taskModel, taskService, taskTopicModel } = this.goalOwnerTaskScope(fenced.goal);
+      for (const topic of await taskTopicModel.findRunningByTaskIds(taskIds)) {
+        if (topic.topicId) await taskService.cancelTopic(topic.topicId);
       }
-      for (const task of await this.taskModel.findByIds(taskIds)) {
+      for (const task of await taskModel.findByIds(taskIds)) {
         if (['canceled', 'completed', 'failed'].includes(task.status)) continue;
-        await this.taskModel.updateStatusIfCurrent(task.id, task.status, 'canceled');
+        await taskModel.updateStatusIfCurrent(task.id, task.status, 'canceled');
       }
     }
 

@@ -29,6 +29,7 @@ import {
   taskTopics,
   topics,
   users,
+  workspaces,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
@@ -1148,6 +1149,37 @@ describe('GoalService', () => {
     expect(await graphModel.bindTask(graph.goal.id, stray.id, lateTask.id)).toBeUndefined();
     const after = await service.graph(graph.goal.id);
     expect(after.nodes.find((node) => node.id === stray.id)?.status).toBe('retired');
+  });
+
+  it("stops a colleague's private task when a workspace owner retires its node", async () => {
+    // The coordinator runs as the goal's owner, so its Tasks can be private to
+    // that colleague. An owner retiring the node must still stop them — reads
+    // under the owner's own visibility would silently miss them.
+    const workspaceId = 'goal-retire-private-ws';
+    const ownerId = 'goal-retire-private-owner';
+    await serverDB.insert(users).values({ id: ownerId }).onConflictDoNothing();
+    await serverDB
+      .insert(workspaces)
+      .values({ id: workspaceId, name: workspaceId, primaryOwnerId: ownerId, slug: workspaceId })
+      .onConflictDoNothing();
+    const colleague = new GoalService(serverDB, userId, workspaceId);
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const graph = await colleague.create({ tasks: ['Private', 'Keep'], title: 'Private retire' });
+    const created = await colleague.tick(graph.goal.id);
+    await serverDB
+      .update(tasks)
+      .set({ status: 'running', visibility: 'private' })
+      .where(eq(tasks.id, created.taskId!));
+    expect(
+      await new TaskModel(serverDB, ownerId, workspaceId).findById(created.taskId!),
+    ).toBeFalsy();
+
+    await new GoalService(serverDB, ownerId, workspaceId).retireNodes(graph.goal.id, [
+      created.nodeId!,
+    ]);
+
+    const [task] = await serverDB.select().from(tasks).where(eq(tasks.id, created.taskId!));
+    expect(task.status).toBe('canceled');
   });
 
   it('lets an interrupted retirement be finished by retrying it', async () => {
