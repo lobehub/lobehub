@@ -1,0 +1,19 @@
+name = "no-untrusted-path-io"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from the LobeHub server or Electron main process.
+
+Prevent the temporary-file path traversal fixed in #13684 / GHSA-2g9j-v25c-4j97 and attachment-cache filename traversal fixed in #13937.
+
+Report filesystem read/write/delete/extraction when a filename or relative path visibly supplied by an upload, request, remote attachment, or archive entry reaches filesystem IO under an intended fixed root without confinement. Follow local variables through path.join/resolve/normalize: these normalize traversal but do not establish confinement. A bare candidate.startsWith(root) check accepts sibling prefixes and is not sufficient. Replacing one '../' occurrence is not sufficient either.
+
+Only report actual read/write/delete/extraction sinks visible in this file. Returning a constructed path or checking fs.access/exists alone is outside this rule, even if an unseen caller might later use that path. Anchor on the filesystem IO call, never the path construction. Name the untrusted component and the root it can escape. Suggest a generated filename or basename for a flat file store, or a path.relative-based containment check (reject parent escapes and absolute results) for nested paths. Where attackers can create symlinks, note that lexical checks alone cannot guarantee confinement; do not invent symlink control where none is visible.
+
+Do not report:
+- a basename-normalized filename in a private flat temp directory, a generated filename with a fixed extension, or a strict allowlist that excludes separators and dot segments;
+- a resolved path guarded by separator-aware containment, or a recognized confined-path helper;
+- fixed local paths or server-generated cleanup paths;
+- explicitly authorized full-path filesystem tools with a visible approved-root/access guard;
+- path manipulation without IO, or arbitrary string arguments with no evidence of an untrusted source and intended root.
+Do not demand another guard at a call site already using a confined IO abstraction. Require a concrete source-to-sink path in this file.
+"""

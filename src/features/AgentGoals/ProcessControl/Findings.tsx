@@ -7,6 +7,7 @@ import { ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useEntityMarkdown } from '@/features/EntityLink';
 import { useActivityTime } from '@/hooks/useActivityTime';
 
 import type { GoalGraphView, GoalNodeView } from './goalGraphViewModel';
@@ -58,6 +59,7 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
   ({ onSelect, view }) => {
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
+    const markdownProps = useEntityMarkdown();
     const { text, title } = useActivityTime(view.node.resolvedAt ?? view.node.createdAt);
     const answered = view.answers[0];
 
@@ -114,7 +116,7 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
             {/* The description is the producing run's handoff — actual Markdown
                 (tables, code blocks), not plain text. Render it as such. */}
             {view.node.description && (
-              <Markdown fontSize={13} variant={'chat'}>
+              <Markdown fontSize={13} variant={'chat'} {...markdownProps}>
                 {view.node.description}
               </Markdown>
             )}

@@ -17,6 +17,7 @@ const { mockClient } = vi.hoisted(() => ({
       submitReport: { mutate: vi.fn() },
       graph: { query: vi.fn() },
       resume: { mutate: vi.fn() },
+      retireNodes: { mutate: vi.fn() },
       setBudget: { mutate: vi.fn() },
       supervision: { query: vi.fn() },
       tick: { mutate: vi.fn() },
@@ -637,5 +638,42 @@ describe('goal delete', () => {
 
     expect(confirm).toHaveBeenCalledOnce();
     expect(mockClient.goal.delete.mutate).not.toHaveBeenCalled();
+  });
+});
+
+describe('goal retire', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(log, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('retires every listed node in one call', async () => {
+    mockClient.goal.retireNodes.mutate.mockResolvedValue({
+      message: 'Retired 2 node(s)',
+      success: true,
+    });
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'goal',
+      'retire',
+      'goal-1',
+      'node-a',
+      'node-b',
+      '--reason',
+      'duplicate branch',
+    ]);
+
+    expect(mockClient.goal.retireNodes.mutate).toHaveBeenCalledWith({
+      id: 'goal-1',
+      nodeIds: ['node-a', 'node-b'],
+      reason: 'duplicate branch',
+    });
+    expect(log.info).toHaveBeenCalledWith('Retired 2 node(s)');
   });
 });

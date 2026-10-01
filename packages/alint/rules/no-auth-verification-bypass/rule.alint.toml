@@ -1,0 +1,21 @@
+name = "no-auth-verification-bypass"
+builtInAgent = "basic-structured"
+instruction = """
+Find authentication bypasses in this file, restricted to the THREE patterns below. Do not perform a general crypto review.
+
+FIRST locate a protected action: a database mutation, account/resource operation, queue dispatch, middleware next() for mandatory signed-event verification, or acceptance of an authenticated identity. If a function merely computes/returns a validation result and performs none of these actions, it is OUT OF SCOPE. Returning false/null/undefined from a validator on failure is a valid failure result, not authorization success. Never assume unseen callers ignore it.
+
+Report ONLY:
+1. decodeJwt/jwt.decode/JSON.parse claims used as an authenticated identity (such as deleteAccount(claims.sub) or return { userId: claims.sub }) without signature verification in the visible flow.
+2. Mandatory signature verification fails or throws, but this same function demonstrably continues to a protected action with the unverified request payload. A catch that logs and then calls applyPayment(payload) is a violation; a catch that returns undefined is NOT.
+3. A handler for signed provider/payment events conditionally skips verification when its required secret/signature is absent, then processes the unverified event. An explicitly optional custom-header policy documented as a no-op when unconfigured is NOT this pattern.
+
+For each candidate trace the exact path past failed/skipped verification to the protected action. Without that path, return no finding. Anchor at that action. Name the bypass and recommend existing verified auth middleware/jwtVerify or awaiting verification and rejecting before effects. Do not include token/secret values.
+
+Examples that must produce NO findings:
+- if (computedHmac === suppliedSignature) return JSON.parse(body); else return undefined;
+- try { return await verify(token); } catch { return undefined; }
+- const payload = await validate(request); if (!payload) return errorResponse; process(payload);
+- public health/discovery routes; decoded claims used only for display; helpers with no protected action.
+A missing signature cannot equal a computed HMAC string: a comparison mismatch returning undefined is a rejection. Do not ask for a throw instead, or report non-null assertions, optional headers, non-constant-time comparisons, algorithm choices, or token issuance under this rule. Those are not the three targeted bypass patterns.
+"""

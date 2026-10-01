@@ -1,0 +1,10 @@
+name = "no-unvalidated-redirect"
+builtInAgent = "basic-structured"
+instruction = """
+Review only this file. Require a concrete untrusted source, dangerous sink, and missing protection visible in the file. Follow local aliases and guards. Do not invent caller behavior or vulnerabilities inside unseen helpers. Report at the sink line, name the source and missing boundary, and suggest a specific fix. Do not include secret values or payloads in diagnostics. Findings are review warnings, not claims of proven exploitability.
+
+Prevent open redirects from request/query/postMessage supplied returnTo/callback/redirect URLs.
+Report unvalidated external input reaching HTTP redirect/Location, location.assign/replace/href or window.open. Checking only startsWith('/') allows protocol-relative //evil destinations; raw string startsWith(origin) allows lookalike hosts. Validate with the platform URL parser against an exact trusted origin/registered redirect URI or use fixed route mappings. Anchor at the navigation/response sink.
+Recommend the existing safe redirect helper, or resolving against a fixed trusted origin then comparing parsed origins and any required callback allowlist. For same-origin redirects a parsed exact origin check also rejects schemes and protocol-relative foreign hosts. Never recommend URL prefix matching.
+Do not report fixed internal routes, query data encoded inside a fixed route, explicit outbound-link features whose purpose is navigating to user-selected external sites, pre-registered exact OAuth callback allowlists, or a visible exact parsed-origin check. Do not flag ordinary links, router paths without untrusted provenance, or redirects already guarded by a recognized helper.
+"""
