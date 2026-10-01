@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from '../staleness';
-import { sweepStuckVerifyRuns } from '../sweep';
+import { SWEEP_MAX_JUDGING_RUNS, sweepStuckVerifyRuns } from '../sweep';
 
 const {
   settleFailedRepair,
@@ -432,6 +432,23 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
       expect.objectContaining({ deliverable: 'final patch text', goal: '', operationId: 'op-1' }),
     );
     expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+  });
+
+  // Each recovery is a full judge pass run inside the cron request; an
+  // unbounded tick would hold it open for hundreds of LLM calls.
+  it('caps the judge passes one tick runs inline and leaves the rest unclaimed', async () => {
+    const runs = Array.from({ length: SWEEP_MAX_JUDGING_RUNS + 2 }, (_, index) =>
+      evidenceRun({ id: `ev-run-${index}` }),
+    );
+    singleEvidencePage(runs);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(SWEEP_MAX_JUDGING_RUNS).toBeLessThanOrEqual(5);
+    expect(executorExecute).toHaveBeenCalledTimes(SWEEP_MAX_JUDGING_RUNS);
+    expect(claimVerifying).toHaveBeenCalledTimes(SWEEP_MAX_JUDGING_RUNS);
+    expect(outcome.evidenceRecovered).toHaveLength(SWEEP_MAX_JUDGING_RUNS);
+    expect(outcome.skipped).toBe(2);
   });
 
   it('identifies the continuation by the evidence hook, not child order', async () => {

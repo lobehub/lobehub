@@ -1,5 +1,6 @@
 import type { VerifyCheckItem } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
@@ -36,6 +37,15 @@ const PENDING_RESULT_STATUSES = new Set(['pending', 'running']);
 const SWEEP_PAGE_SIZE = 100;
 /** Bound one tick's work; whatever is left is still there on the next one. */
 const SWEEP_MAX_RUNS = 1000;
+/**
+ * Bound the judge passes one tick runs inline. A recovered evidence run is a
+ * full verifier execution (LLM calls, possibly a verifier sub-agent), and the
+ * sweep runs them inside the cron request one after another — at the run cap
+ * that would hold the request open far past any platform timeout and leave
+ * leased runs half-judged when it is killed. Runs over the budget are left
+ * unclaimed, so the next tick picks them up.
+ */
+export const SWEEP_MAX_JUDGING_RUNS = 3;
 
 export interface VerifySweepOutcome {
   /** Runs whose outstanding checks were closed as `errored` before the rollup. */
@@ -95,6 +105,7 @@ export const sweepStuckVerifyRuns = async (
   options?: { now?: Date; pageSize?: number },
 ): Promise<VerifySweepOutcome> => {
   const now = options?.now ?? new Date();
+  const judging: JudgingBudget = { remaining: SWEEP_MAX_JUDGING_RUNS };
   const pageSize = options?.pageSize ?? SWEEP_PAGE_SIZE;
   const staleBefore = new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS);
   const abandonedBound = new Date(now.getTime() - VERIFY_ABANDONED_MS);
@@ -148,7 +159,7 @@ export const sweepStuckVerifyRuns = async (
 
   await scan(VerifyRunModel.findStuckVerifying, staleBefore, (run) => recoverRun(db, run, now));
   await scan(VerifyRunModel.findStuckCollectingEvidence, abandonedBound, (run) =>
-    recoverEvidenceRun(db, run, now),
+    recoverEvidenceRun(db, run, now, judging),
   );
 
   return outcome;
@@ -182,10 +193,22 @@ export const sweepStuckVerifyRuns = async (
  * errored-rows ending the plain sweep gives `verifying` runs — still
  * unblocking the acceptance.
  */
+interface JudgingBudget {
+  remaining: number;
+}
+
+/** Take one judge pass from this tick's budget; `false` leaves the run for the next tick. */
+const takeJudgingSlot = (budget: JudgingBudget): boolean => {
+  if (budget.remaining <= 0) return false;
+  budget.remaining -= 1;
+  return true;
+};
+
 const recoverEvidenceRun = async (
   db: LobeChatDatabase,
   run: VerifyRunItem,
   now: Date,
+  judging: JudgingBudget,
 ): Promise<'abandoned' | 'settled' | 'evidenceRecovered' | 'skipped'> => {
   const operationId = run.operationId;
   if (!operationId) return 'skipped';
@@ -233,6 +256,7 @@ const recoverEvidenceRun = async (
     if (collectorUnknown || (evidenceOp && LIVE_OPERATION_STATUSES.has(evidenceOp.status)))
       return 'skipped';
     if (!deliverable) return closeOutstandingAsErrored(db, run, operationId, now, 'abandoned');
+    if (!takeJudgingSlot(judging)) return 'skipped';
     return enterJudging(db, run, operationId, run.userId, workspaceId, now, deliverable, 'settled');
   }
 
@@ -250,6 +274,7 @@ const recoverEvidenceRun = async (
     return closeOutstandingAsErrored(db, run, operationId, now, 'abandoned');
   }
 
+  if (!takeJudgingSlot(judging)) return 'skipped';
   return enterJudging(
     db,
     run,
@@ -332,26 +357,27 @@ const closeOutstandingAsErrored = async (
   const plan = (run.plan ?? []) as VerifyCheckItem[];
   const resultModel = new VerifyCheckResultModel(db, run.userId, workspaceId);
 
-  await Promise.all(
-    plan
-      .filter((item) => item.required)
-      .map((item) =>
-        // Upsert, not update: an item with no row at all must still land as
-        // `errored`, and a pending row (evidence uploaded mid-run) is closed too.
-        resultModel.upsertByCheckItem({
-          ...planItemToPendingResult(run.id, operationId, item),
-          // Re-asserted after the spread: the upsert key is required, and the
-          // snapshot's own fields are optional-nullable.
-          checkItemId: item.id,
-          verifyRunId: run.id,
-          completedAt: now,
-          status: 'errored',
-          suggestion: 'Rerun verification for this delivery.',
-          toulmin: {
-            limitation: 'Evidence collection was interrupted before this check was judged.',
-          },
-        }),
-      ),
+  // Bounded: the plan is one entry per acceptance criterion, so its length is
+  // persisted runtime data, not a constant.
+  await pMap(
+    plan.filter((item) => item.required),
+    (item) =>
+      // Upsert, not update: an item with no row at all must still land as
+      // `errored`, and a pending row (evidence uploaded mid-run) is closed too.
+      resultModel.upsertByCheckItem({
+        ...planItemToPendingResult(run.id, operationId, item),
+        // Re-asserted after the spread: the upsert key is required, and the
+        // snapshot's own fields are optional-nullable.
+        checkItemId: item.id,
+        verifyRunId: run.id,
+        completedAt: now,
+        status: 'errored',
+        suggestion: 'Rerun verification for this delivery.',
+        toulmin: {
+          limitation: 'Evidence collection was interrupted before this check was judged.',
+        },
+      }),
+    { concurrency: 5 },
   );
 
   await statusService.recompute(operationId);
