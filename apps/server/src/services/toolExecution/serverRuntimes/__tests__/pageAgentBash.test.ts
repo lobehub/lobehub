@@ -203,11 +203,13 @@ describe('runPageBash', () => {
   it('rejects a rewrite that grows the page far beyond its size', async () => {
     const page = setup('para one\n');
 
+    // Double through the hold space to keep this size-limit fixture fast under coverage.
     const { content, state } = await page.run(
-      "echo 0123456789 > /tmp/a; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18; do sed -i 's/.*/&&/' /tmp/a; done; cp /tmp/a /doc.xml",
+      "echo 0123456789 > /tmp/a; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18; do sed -i 'h; G; s/\\n//' /tmp/a; done; cp /tmp/a /doc.xml",
     );
 
-    expect(state.changed).toBe(false);
+    expect(state).toEqual({ changed: false, exitCode: 0, success: false });
+    expect(page.markdown()).toBe('para one');
     expect(content).toMatch(/too large/i);
   });
 
