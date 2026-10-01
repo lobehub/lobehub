@@ -190,5 +190,21 @@ describe('goalRouter numeric acceptance', () => {
         expect.objectContaining({ goalId: 'goal_1' }),
       );
     });
+
+    it("advances as the goal's owner when a workspace owner retires a colleague's nodes", async () => {
+      mockFindById.mockResolvedValue({ id: 'goal_1', userId: 'colleague' });
+      mockRetireNodes.mockResolvedValue({ retiredNodeIds: [nodeId] });
+      const ownerCaller = goalRouter.createCaller({
+        ...ctx,
+        workspaceId: 'ws-1',
+        workspaceRole: 'owner',
+      });
+
+      await ownerCaller.retireNodes({ id: 'goal_1', nodeIds: [nodeId] });
+
+      expect(mockScheduleGoalAdvance).toHaveBeenCalledWith(
+        expect.objectContaining({ goalId: 'goal_1', userId: 'colleague', workspaceId: 'ws-1' }),
+      );
+    });
   });
 });

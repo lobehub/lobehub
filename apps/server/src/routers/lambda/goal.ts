@@ -506,11 +506,14 @@ export const goalRouter = router({
         assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
 
         const data = await ctx.goalService.retireNodes(input.id, input.nodeIds, input.reason);
-        // Retiring can unpark the goal or clear the last unfinished task.
+        // Retiring can unpark the goal or clear the last unfinished task. Advance
+        // as the goal's owner: a workspace owner retiring a colleague's nodes
+        // cannot see that colleague's private Tasks, so an advance under the
+        // caller would read their bound nodes as `missing_task`.
         await scheduleGoalAdvance({
           goalId: input.id,
           trigger: 'manual',
-          userId: ctx.userId,
+          userId: goal.userId,
           workspaceId: ctx.workspaceId ?? undefined,
         });
         return { data, message: `Retired ${data.retiredNodeIds.length} node(s)`, success: true };
