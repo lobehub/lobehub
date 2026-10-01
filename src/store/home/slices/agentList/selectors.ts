@@ -3,7 +3,9 @@ import { type HomeStore } from '@/store/home/store';
 
 const applyOptimisticPatch = (item: SidebarAgentItem, state: HomeStore): SidebarAgentItem => {
   const optimistic = state.agentOptimisticPatches[item.id];
-  return optimistic?.scope === state.agentListScope ? { ...item, ...optimistic.patch } : item;
+  return optimistic && optimistic.scope === state.agentListScope
+    ? { ...item, ...optimistic.patch }
+    : item;
 };
 
 const applyOptimisticPatches = (items: SidebarAgentItem[], state: HomeStore) =>
