@@ -5518,15 +5518,28 @@ export class MessageModel {
         .from(messages)
         .where(and(this.trashScope(), inArray(messages.id, ids), isTrashed(messages.isDeleted)));
       if (rows.length === 0) return [];
-      const restoredIds = new Set(rows.map((row) => row.id));
 
       const parentIds = rows.map((row) => row.parentId).filter((id): id is string => !!id);
       const activeBranchSnapshots = await this.captureActiveBranchSnapshots(tx, parentIds);
 
-      await tx
+      // Report what the write restored, not what the read saw: a purge that
+      // commits in between leaves nothing to update, and the caller must not
+      // count that row as restored.
+      const updated = await tx
         .update(messages)
         .set(restoreStamp())
-        .where(and(this.trashScope(), inArray(messages.id, [...restoredIds])));
+        .where(
+          and(
+            this.trashScope(),
+            inArray(
+              messages.id,
+              rows.map((row) => row.id),
+            ),
+            isTrashed(messages.isDeleted),
+          ),
+        )
+        .returning({ id: messages.id });
+      const restoredIds = new Set(updated.map((row) => row.id));
 
       for (const entry of entries) {
         if (!restoredIds.has(entry.id) || !entry.childIds?.length) continue;

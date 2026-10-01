@@ -63,7 +63,11 @@ export const topicHandler: TrashHandler = {
     const agentModel = new AgentModel(ctx.db, ctx.userId, ctx.workspaceId);
     if (await agentModel.hasTrashedOwner(topic)) throw new TrashRestoreError('parentTrashed');
 
-    await topicModel.restore([root.resourceId]);
+    // The row can be purged between the read above and this write (an expiry
+    // sweep or another request). Only a row this update actually brought back
+    // counts; otherwise the registry entry must not be dropped as "restored".
+    const restored = await topicModel.restore([root.resourceId]);
+    if (restored.length === 0) throw new TrashRestoreError('notFound');
   },
   type: 'topic',
 };

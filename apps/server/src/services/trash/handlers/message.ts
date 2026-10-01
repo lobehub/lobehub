@@ -86,7 +86,10 @@ export const messageHandler: TrashHandler = {
       id: row.resourceId,
       parentId: row.meta?.messageTree?.parentId,
     }));
-    await messageModel.restoreMessages(entries);
+    // Same purge race as the topic handler: only a root this write actually
+    // brought back is a successful restore.
+    const restored = await messageModel.restoreMessages(entries);
+    if (!restored.includes(root.resourceId)) throw new TrashRestoreError('notFound');
   },
   type: 'message',
 };
