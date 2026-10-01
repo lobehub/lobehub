@@ -589,33 +589,50 @@ export class AgentModel {
   };
 
   /**
-   * Build the where condition shared by queryAgents / countAgents:
-   * non-virtual agents of the current user, with optional keyword filter.
+   * Build the where condition shared by queryAgents / countAgents: the current
+   * user's agents, with optional keyword filter.
+   *
+   * Virtual rows are infrastructure (group-built members, supervisors) and stay
+   * excluded — except the inbox, which is the product-owned assistant (Lobe AI)
+   * and a real agent the user talks to. Excluding it made the one agent whose
+   * name the UI *does* show the only one no lookup could reach: it never
+   * appeared in an agent list or a name search, while its documents/name were
+   * still addressable everywhere else.
    */
   private buildQueryAgentsWhere = (keyword?: string) => {
-    // Include agents where virtual is false OR null (legacy data without virtual field)
+    // Include agents where virtual is false OR null (legacy data without virtual field),
+    // plus the inbox regardless of `virtual`.
     const baseConditions = and(
       this.ownership(),
-      or(eq(agents.virtual, false), isNull(agents.virtual)),
+      or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID)),
     );
 
-    // Add keyword search condition if provided
+    // `name` is the user-facing display name (see `agents.name`); resolving the
+    // label the UI shows is the primary way users and tools find an agent, so
+    // the keyword must match it alongside `title`/`description`.
     return keyword
       ? and(
           baseConditions,
-          or(ilike(agents.title, `%${keyword}%`), ilike(agents.description, `%${keyword}%`)),
+          or(
+            ilike(agents.title, `%${keyword}%`),
+            ilike(agents.name, `%${keyword}%`),
+            ilike(agents.description, `%${keyword}%`),
+          ),
         )
       : baseConditions;
   };
 
   /**
-   * Query non-virtual agents with optional keyword filter.
-   * Returns minimal agent info (id, title, description, avatar, backgroundColor),
-   * plus `userId`/`visibility` so callers can gate per-agent actions (e.g.
-   * transfer is creator/primary-owner only), and a compact `heteroType` derived
-   * from `agencyConfig` so callers can tell which results are heterogeneous
-   * (external CLI/device) agents.
-   * Excludes virtual agents (like inbox, supervisors, etc).
+   * Query the user's agents with an optional keyword filter.
+   * Returns minimal agent info (id, title, name, description, avatar,
+   * backgroundColor), plus `userId`/`visibility` so callers can gate per-agent
+   * actions (e.g. transfer is creator/primary-owner only), a compact
+   * `heteroType` derived from `agencyConfig` so callers can tell which results
+   * are heterogeneous (external CLI/device) agents, and `isInbox` so callers can
+   * recognize the product-owned inbox (Lobe AI) without re-deriving it from a
+   * slug the row shape no longer carries.
+   * Excludes virtual agents (supervisors, group-built members) — but always
+   * includes the inbox. See `buildQueryAgentsWhere`.
    */
   queryAgents = async (params?: { keyword?: string; limit?: number; offset?: number }) => {
     const { keyword, limit = 9999, offset = 0 } = params ?? {};
@@ -641,16 +658,22 @@ export class AgentModel {
       .offset(offset);
 
     // Surface only the hetero runtime type, not the full agencyConfig payload.
-    return rows.map(({ slug, agencyConfig, ...row }) =>
-      normalizeInboxAgentMeta(
+    return rows.map(({ slug, agencyConfig, ...row }) => ({
+      ...normalizeInboxAgentMeta(
         { ...row, heteroType: agencyConfig?.heterogeneousProvider?.type },
         { slug },
       ),
-    );
+      // The inbox is the only virtual row this query keeps, and `slug` is consumed
+      // above rather than returned — so the flag is what lets callers pin or
+      // annotate Lobe AI without re-deriving its identity.
+      isInbox: slug === INBOX_SESSION_ID,
+    }));
   };
 
   /**
-   * Count non-virtual agents matching the same conditions as queryAgents.
+   * Count the agents matching the same conditions as queryAgents — inbox
+   * included, other virtual rows excluded — so the count stays a faithful total
+   * for paginated callers and for the assistants stats.
    * Used to report real totals (and pagination) when queryAgents is limited.
    * Accepts the same date filters as SessionModel.count so callers can compare
    * current vs. prior-period totals without falling back to the legacy

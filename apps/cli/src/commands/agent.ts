@@ -83,14 +83,19 @@ export function registerAgentCommand(program: Command) {
         return;
       }
 
+      // `name` (user-facing display name) and `title` (role/identity) are separate
+      // fields and both are returned — collapsing them into one column hides the
+      // only handle the user knows an agent by, e.g. the inbox shows up as
+      // `Sienna` / `Lobe`. `model` is not part of the queryAgents payload, so the
+      // column that used to sit here was always empty.
       const rows = items.map((a: any) => [
         a.id || a.agentId || '',
-        truncate(a.title || a.name || a.meta?.title || 'Untitled', 40),
+        truncate(a.name || a.meta?.name || '', 24),
+        truncate(a.title || a.meta?.title || '', 36),
         truncate(a.description || a.meta?.description || '', 50),
-        a.model || '',
       ]);
 
-      printTable(rows, ['ID', 'TITLE', 'DESCRIPTION', 'MODEL']);
+      printTable(rows, ['ID', 'NAME', 'TITLE', 'DESCRIPTION']);
     });
 
   // ── view ──────────────────────────────────────────────
@@ -122,8 +127,13 @@ export function registerAgentCommand(program: Command) {
         }
 
         const r = result as any;
-        console.log(pc.bold(r.title || r.meta?.title || 'Untitled'));
+        const title = r.title || r.meta?.title || 'Untitled';
+        // Same rule as the web UI (`agentDisplayName`): the personal `name` is the
+        // primary label and the role/title becomes the supporting line — so the
+        // inbox reads `Sienna · Lobe` instead of only one of the two.
+        console.log(pc.bold(r.name || title));
         const meta: string[] = [];
+        if (r.name) meta.push(title);
         if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
         if (r.model) meta.push(`Model: ${r.model}`);
         if (r.provider) meta.push(`Provider: ${r.provider}`);

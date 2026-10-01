@@ -393,6 +393,55 @@ describe('AgentModel', () => {
     });
   });
 
+  describe('queryAgents', () => {
+    it('includes the inbox (Lobe AI) agent and flags it with isInbox', async () => {
+      await serverDB.insert(agents).values([
+        {
+          id: 'inbox-agent',
+          name: 'Sienna',
+          slug: INBOX_SESSION_ID,
+          title: 'Lobe',
+          userId,
+          virtual: true,
+        },
+        { id: 'normal-agent', name: '三条', title: 'Architect', userId, virtual: false },
+        { id: 'group-built-agent', title: 'Group member', userId, virtual: true },
+      ]);
+
+      const result = await agentModel.queryAgents();
+      const byId = new Map(result.map((agent) => [agent.id, agent] as const));
+
+      // The inbox is a real assistant the user talks to, so no lookup may hide it.
+      expect(byId.get('inbox-agent')?.isInbox).toBe(true);
+      expect(byId.get('inbox-agent')?.name).toBe('Sienna');
+      expect(byId.get('inbox-agent')?.title).toBe('Lobe');
+      expect(byId.get('normal-agent')?.isInbox).toBe(false);
+      // Other virtual rows are infrastructure, not user content.
+      expect(byId.has('group-built-agent')).toBe(false);
+    });
+
+    it('matches the user-facing display name in a keyword search', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'sienna-agent', name: 'Sienna', title: 'Lobe', userId },
+        { id: 'coco-agent', name: 'Coco', title: 'Codex', userId },
+      ]);
+
+      const result = await agentModel.queryAgents({ keyword: 'Sienna' });
+
+      expect(result.map((agent) => agent.id)).toEqual(['sienna-agent']);
+    });
+
+    it('counts the inbox in the shared total so pagination stays honest', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'inbox-agent', slug: INBOX_SESSION_ID, userId, virtual: true },
+        { id: 'normal-agent', userId },
+        { id: 'group-built-agent', userId, virtual: true },
+      ]);
+
+      await expect(agentModel.countAgents()).resolves.toBe(2);
+    });
+  });
+
   describe('getAgentConfig', () => {
     it('should find agent by ID', async () => {
       const agentId = 'test-agent-by-id';
