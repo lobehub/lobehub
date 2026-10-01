@@ -83,12 +83,12 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
           <GoalResultHeader data={data} graph={graph} />
         </div>
         {deliverable && (
-          <>
-            <Divider style={{ marginBlock: 24 }} />
-            <div {...anchorProps('document', t('goalProcess.result.nav.document'))}>
-              <FinalDocument documentId={deliverable.documentId} />
-            </div>
-          </>
+          <div
+            {...anchorProps('document', t('goalProcess.result.nav.document'))}
+            style={{ paddingBlockStart: 16 }}
+          >
+            <FinalDocument documentId={deliverable.documentId} />
+          </div>
         )}
         <Divider style={{ marginBlock: 24 }} />
         <Flexbox gap={32}>

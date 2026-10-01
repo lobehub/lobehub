@@ -40,6 +40,14 @@ const RAIL_TOP = 96;
 const RAIL_MARGIN = 16;
 const RAIL_EDGE_MIN = 8;
 
+/**
+ * One row per section, and the line-height the labels take inside it. Both use
+ * this number: the row must stay exactly as tall with the labels open as with
+ * them closed, or every tick below the pointer slides out from under it between
+ * hover and click. Wide enough that the names do not read as a solid block.
+ */
+const RAIL_ROW = 22;
+
 const styles = createStaticStyles(({ css }) => ({
   host: css`
     position: sticky;
@@ -59,7 +67,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     /* Fixed, not a minimum: a row that grows taller when the labels open slides
        every tick below it out from under the pointer between hover and click. */
-    height: 16px;
+    height: ${RAIL_ROW}px;
     padding: 0;
     border: none;
 
@@ -86,7 +94,7 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
 
     /* Matches the row height, so opening the labels changes nothing vertically. */
-    line-height: 16px;
+    line-height: ${RAIL_ROW}px;
     text-align: start;
     text-overflow: ellipsis;
     white-space: nowrap;

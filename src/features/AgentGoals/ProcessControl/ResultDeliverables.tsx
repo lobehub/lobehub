@@ -42,7 +42,6 @@ import { anchorProps } from './resultAnchors';
 const styles = createStaticStyles(({ css }) => ({
   card: css`
     overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
