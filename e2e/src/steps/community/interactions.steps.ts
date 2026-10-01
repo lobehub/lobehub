@@ -10,7 +10,7 @@ import type { CustomWorld } from '../../support/world';
 When('I type {string} in the search bar', async function (this: CustomWorld, searchText: string) {
   await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
-  const searchBar = this.page.locator('input[type="text"]').first();
+  const searchBar = this.page.locator('input[data-testid="search-bar"]');
   await searchBar.waitFor({ state: 'visible', timeout: 30_000 });
   await searchBar.fill(searchText);
 
@@ -30,9 +30,7 @@ When('I click on a category in the category menu', async function (this: CustomW
 
   // Find the category menu items - they are clickable elements in the sidebar
   // The UI shows categories like "All", "Academic", "Career", etc.
-  const categoryItems = this.page.locator(
-    '[class*="CategoryMenu"] [class*="Item"], [class*="category"] a, [class*="category"] button, [role="menuitem"]',
-  );
+  const categoryItems = this.page.locator('[data-testid="category-menu"] li > :is(a, button)');
 
   const count = await categoryItems.count();
   console.log(`   📍 Found ${count} category items`);
@@ -70,9 +68,7 @@ When('I click on a category in the category filter', async function (this: Custo
 
   // Find the category filter items - MCP page has categories like "Developer Tools", "Productivity Tools"
   // Use the same selector pattern as the category menu
-  const categoryItems = this.page.locator(
-    '[class*="CategoryMenu"] [class*="Item"], [class*="category"] a, [class*="category"] button, [role="menuitem"]',
-  );
+  const categoryItems = this.page.locator('[data-testid="category-menu"] li > :is(a, button)');
 
   const count = await categoryItems.count();
   console.log(`   📍 Found ${count} category filter items`);
