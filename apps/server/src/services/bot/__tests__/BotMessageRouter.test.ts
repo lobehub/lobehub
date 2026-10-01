@@ -1116,7 +1116,7 @@ describe('BotMessageRouter', () => {
       it('does not announce mention-only mode in a Feishu group main chat', async () => {
         // Feishu group mains are already mention-only. Membership reports
         // shared (isSoloBotConversation=false) but posting the English notice
-        // is spam — LOBE-14475.
+        // is spam.
         mockGetList.mockResolvedValue([]);
         const isSoloBotConversation = vi.fn().mockResolvedValue(false);
         withMembershipLookup(isSoloBotConversation);

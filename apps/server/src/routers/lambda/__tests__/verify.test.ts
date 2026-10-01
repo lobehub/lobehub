@@ -155,22 +155,40 @@ describe('verifyRouter', () => {
       },
     );
 
-    it('keeps the old authentication requirement and unknown-identifier response', async () => {
+    it.each(['acceptance', 'verify'])('serves %s without authentication', async (identifier) => {
+      mockSnapshot();
+      expect(await createPublicCaller().getSkillBundle({ identifier })).toEqual(snapshot);
+    });
+
+    it('rejects unknown identifiers without fetching upstream', async () => {
       const fetchSpy = vi.spyOn(globalThis, 'fetch');
       await expect(
-        createPublicCaller().getSkillBundle({ identifier: 'acceptance' }),
-      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
-      await expect(createCaller().getSkillBundle({ identifier: 'unknown' })).rejects.toMatchObject({
+        createPublicCaller().getSkillBundle({ identifier: 'unknown' }),
+      ).rejects.toMatchObject({
         code: 'NOT_FOUND',
       });
       expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('keeps private verification reads and writes authenticated', async () => {
+      await expect(
+        createPublicCaller().getVerifyState({ operationId: 'operation-1' }),
+      ).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
+      await expect(
+        createPublicCaller().skipPlan({ operationId: 'operation-1' }),
+      ).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
+      expect(modelMocks.getServerDB).not.toHaveBeenCalled();
     });
 
     it('resolves an explicitly requested tag for newer clients', async () => {
       const fetchSpy = mockSnapshot();
 
       expect(
-        await createCaller().getSkillBundle({ identifier: 'acceptance', version: 'v0.5.0' }),
+        await createPublicCaller().getSkillBundle({ identifier: 'acceptance', version: 'v0.5.0' }),
       ).toEqual({ ...snapshot, source: { ...snapshot.source, ref: 'v0.5.0' } });
       expect(fetchSpy).toHaveBeenCalledWith(
         'https://api.github.com/repos/lobehub/acceptance/commits/v0.5.0',
@@ -178,11 +196,13 @@ describe('verifyRouter', () => {
       );
     });
 
-    it('does not initialize reporting services to download an authenticated public skill', async () => {
+    it('does not initialize reporting services to download a public skill', async () => {
       mockSnapshot();
       modelMocks.getServerDB.mockRejectedValueOnce(new Error('Reporting database unavailable'));
 
-      expect(await createCaller().getSkillBundle({ identifier: 'acceptance' })).toEqual(snapshot);
+      expect(await createPublicCaller().getSkillBundle({ identifier: 'acceptance' })).toEqual(
+        snapshot,
+      );
       expect(modelMocks.getServerDB).not.toHaveBeenCalled();
       modelMocks.getServerDB.mockReset().mockResolvedValue({});
     });

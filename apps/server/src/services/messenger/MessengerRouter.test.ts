@@ -1695,7 +1695,7 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
 
   it('does not announce mention-only mode in a Feishu group main chat', async () => {
     // Same skip path as Slack multi-human, but Feishu group mains already
-    // require @mention — do not post the English notice (LOBE-14475).
+    // require @mention — do not post the English notice.
     await loadSlackBot();
     mockGetList.mockResolvedValue(['U_ALICE']);
     const thread = {

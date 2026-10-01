@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import Graph from '@/features/AgentGoals/ProcessControl/Graph';
 import { chapterMap } from '@/features/AgentGoals/ProcessControl/Graph/chapterMap';
+import { useEntityMarkdown } from '@/features/EntityLink';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -58,6 +59,7 @@ const Unavailable = ({ children }: { children: string }) => (
 export const ReportBody = memo(() => {
   const { t } = useTranslation('chat');
   const view = useChatStore(chatPortalSelectors.goalReportView);
+  const markdownProps = useEntityMarkdown();
   const { error, isLoading, mutate, story } = useReportGraph(view?.goalId);
 
   if (!view) return null;
@@ -73,7 +75,9 @@ export const ReportBody = memo(() => {
         {story.metadata.headline}
       </Text>
       {content ? (
-        <Markdown variant={'chat'}>{content}</Markdown>
+        <Markdown variant={'chat'} {...markdownProps}>
+          {content}
+        </Markdown>
       ) : (
         <Text type={'secondary'}>{t('goalProcess.result.story.reportEmpty')}</Text>
       )}

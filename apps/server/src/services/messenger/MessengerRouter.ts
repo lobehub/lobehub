@@ -788,7 +788,7 @@ export class MessengerRouter {
         // First skip in this thread → tell the room why the bot just went
         // quiet so participants know to @mention if they need it. Dedupe
         // by thread id so we never spam more than once. Feishu/Lark group
-        // mains are already mention-only — skip the notice there (LOBE-14475).
+        // mains are already mention-only — skip the notice there.
         if (!isWholeGroupChatThreadId(thread.id)) {
           try {
             const fresh = await bot

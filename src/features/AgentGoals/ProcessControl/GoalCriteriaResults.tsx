@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { useEntityMarkdown } from '@/features/EntityLink';
 import { useChatStore } from '@/store/chat';
 
 import { SectionTitle } from './GoalResultFollowUps';
@@ -105,6 +106,7 @@ const IMAGE_TYPES = new Set(['screenshot', 'gif']);
 const EvidenceItem = ({ item }: { item: EvidenceLike }) => {
   const { t } = useTranslation('chat');
   const openDocument = useChatStore((s) => s.openDocument);
+  const markdownProps = useEntityMarkdown();
   const caption = item.description || item.fileName;
 
   if (IMAGE_TYPES.has(item.type) && item.fileUrl)
@@ -137,7 +139,7 @@ const EvidenceItem = ({ item }: { item: EvidenceLike }) => {
             {caption}
           </Text>
         )}
-        <Markdown fontSize={13} variant={'chat'}>
+        <Markdown fontSize={13} variant={'chat'} {...markdownProps}>
           {item.content}
         </Markdown>
       </Flexbox>

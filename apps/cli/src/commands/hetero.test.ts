@@ -4,7 +4,7 @@ import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
+import { createAdapter, HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
 import type * as HeteroSpawn from '@lobechat/heterogeneous-agents/spawn';
 import { Command } from 'commander';
@@ -2065,6 +2065,83 @@ describe('hetero exec command', () => {
 
     expect(callOrder).toEqual(['ingest', 'finish', 'renewal:stop']);
   });
+
+  it.each([false, true])(
+    'finishes a Codex reconnect followed by tools and an answer with its actual outcome (failed=%s)',
+    async (failed) => {
+      const adapter = createAdapter('codex');
+      const events = [
+        { type: 'turn.started' },
+        { message: 'Reconnecting... 2/5 (request timed out)', type: 'error' },
+        {
+          item: {
+            command: 'printf inspected',
+            id: 'inspect',
+            status: 'in_progress',
+            type: 'command_execution',
+          },
+          type: 'item.started',
+        },
+        {
+          item: {
+            aggregated_output: 'inspected',
+            command: 'printf inspected',
+            exit_code: 0,
+            id: 'inspect',
+            status: 'completed',
+            type: 'command_execution',
+          },
+          type: 'item.completed',
+        },
+        {
+          item: {
+            id: 'answer',
+            text: 'Version checks do not publish releases.',
+            type: 'agent_message',
+          },
+          type: 'item.completed',
+        },
+        failed
+          ? { error: { message: 'stream closed before response.completed' }, type: 'turn.failed' }
+          : { type: 'turn.completed' },
+      ].flatMap((raw) => adapter.adapt(raw));
+      mockSpawnAgent.mockReturnValue(createFakeHandle({ events, exitCode: 0 }));
+
+      await runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'codex',
+        '--prompt',
+        'hi',
+        '--topic',
+        'topic-1',
+        '--operation-id',
+        'op-reconnect',
+        '--render',
+        'none',
+      ]);
+
+      const ingested = mockHeteroIngestMutate.mock.calls.flatMap(([input]) => input.events);
+      expect(ingested.filter((event) => event.type === 'stream_retry')).toHaveLength(1);
+      expect(ingested.filter((event) => event.type === 'error')).toHaveLength(failed ? 1 : 0);
+      expect(ingested).toContainEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ newStep: true }),
+          type: 'stream_start',
+        }),
+      );
+      expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
+      const finish = mockHeteroFinishMutate.mock.calls[0][0];
+      expect(finish.result).toBe(failed ? 'error' : 'success');
+      if (failed) {
+        expect(finish.error.message).toBe('stream closed before response.completed');
+      } else {
+        expect(finish.error).toBeUndefined();
+      }
+      expect(exitSpy).toHaveBeenCalledWith(failed ? 1 : 0);
+    },
+  );
 
   it('finishes with result "error" when a terminal error event is pushed despite a clean exit', async () => {
     // CC relays an API/rate-limit error as an in-stream `error` event but still

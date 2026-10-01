@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { createAdapter } from '@lobechat/heterogeneous-agents';
 import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -1547,6 +1548,92 @@ describe('HeterogeneousPersistenceHandler', () => {
         metadata: { heteroTextSnapshotSeq: 5 },
       });
     });
+
+    it.each([false, true])(
+      'does not persist a Codex reconnect on either side of a tool-created step (failed=%s)',
+      async (failed) => {
+        const h = createHarness({
+          assistantMessageId: 'asst-1',
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        });
+        const adapter = createAdapter('codex');
+        const rawEvents = [
+          { type: 'turn.started' },
+          { message: 'Reconnecting... 2/5 (request timed out)', type: 'error' },
+          {
+            item: { id: 'progress', text: 'Inspecting the workflow.', type: 'agent_message' },
+            type: 'item.completed',
+          },
+          {
+            item: { command: 'printf inspected', id: 'inspect', type: 'command_execution' },
+            type: 'item.started',
+          },
+          {
+            item: {
+              aggregated_output: 'inspected',
+              command: 'printf inspected',
+              exit_code: 0,
+              id: 'inspect',
+              status: 'completed',
+              type: 'command_execution',
+            },
+            type: 'item.completed',
+          },
+          {
+            item: {
+              id: 'answer',
+              text: 'Version checks do not publish releases.',
+              type: 'agent_message',
+            },
+            type: 'item.completed',
+          },
+          failed
+            ? { error: { message: 'stream closed before response.completed' }, type: 'turn.failed' }
+            : { type: 'turn.completed' },
+        ];
+        // Keep ingest batches separated across the error/tool/newStep boundaries.
+        // Mock only the database, not the adapter or persistence coordinator.
+        let timestamp = 1_700_000_000_000;
+        for (const raw of rawEvents) {
+          const events = adapter.adapt(raw);
+          if (events.length === 0) continue;
+          await h.handler.ingest({
+            events: events.map((event) =>
+              buildEvent(event.type, event.stepIndex, event.data, timestamp++),
+            ),
+            operationId: 'op-1',
+            topicId: 'topic-1',
+          });
+        }
+        await h.handler.finish({
+          error: failed
+            ? { message: 'stream closed before response.completed', type: 'AgentRuntimeError' }
+            : undefined,
+          operationId: 'op-1',
+          result: failed ? 'error' : 'success',
+          topicId: 'topic-1',
+        });
+
+        const assistants = [...h.messages.values()].filter(
+          (message) => message.role === 'assistant',
+        );
+        expect(assistants).toHaveLength(2);
+        expect(assistants.map((message) => message.content)).toEqual([
+          'Inspecting the workflow.',
+          'Version checks do not publish releases.',
+        ]);
+        expect(assistants[0].error).toBeUndefined();
+        expect(assistants.filter((message) => message.error)).toHaveLength(failed ? 1 : 0);
+        if (failed) {
+          expect(assistants[1].error.message).toBe('stream closed before response.completed');
+        }
+        expect([...h.messages.values()].find((message) => message.role === 'tool')).toMatchObject({
+          content: 'inspected',
+          parentId: 'asst-1',
+        });
+      },
+    );
 
     it('writes error onto the assistant when terminal event is error', async () => {
       const h = createHarness({

@@ -1,7 +1,7 @@
 /**
  * Is this conversation the platform's **whole group chat**?
  *
- * LOBE-14475: a Feishu/Lark group main is mention-only from its very first
+ * A Feishu/Lark group main is mention-only from its very first
  * message, so the "Multiple people are talking in this thread now…" notice
  * explains nothing there — it just spams the room (see the 中信 Agent Sentry
  * report). Suppress it for those conversations.

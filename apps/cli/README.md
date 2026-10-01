@@ -5,13 +5,20 @@ LobeHub command-line interface.
 ## Acceptance skill
 
 The acceptance skill is maintained in [lobehub/acceptance](https://github.com/lobehub/acceptance).
-After signing in, install or update from the repository's default branch:
+Install from the repository's default branch:
 
 ```bash
-lh login
 lh acceptance install
+```
+
+Update the installed skill:
+
+```bash
 lh acceptance update
 ```
+
+Creating acceptances and publishing reports require authentication. Run `lh login`
+before using those commands.
 
 This selects the same source as `npx skills add lobehub/acceptance --skill acceptance`.
 Changes merged into the default branch are available on the next install or
@@ -25,9 +32,8 @@ skill from that snapshot before files are changed. `--json` reports the exact
 source commit and the version declared in `SKILL.md`; that version is a label,
 not the selector for default updates.
 
-All CLI versions use the authenticated `verify.getSkillBundle` endpoint. After
-the server adapter is deployed, already-published CLIs follow the default branch
-without upgrading. Creating acceptances and publishing reports use the same login.
+Use an up-to-date CLI and LobeHub server. Older servers may return `401` during
+installation and need to be upgraded.
 
 To select an existing version tag explicitly, use `lh acceptance update --skill-version 0.5.0` (requires the updated CLI and server), or the equivalent
 [tagged skill source](https://github.com/lobehub/acceptance/tree/v0.5.0/skills/acceptance)
