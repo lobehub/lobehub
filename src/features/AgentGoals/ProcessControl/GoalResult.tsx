@@ -17,22 +17,21 @@ import { GoalDecisionsMade, GoalUnfinished, useContinueFromResult } from './Goal
 import GoalResultHeader from './GoalResultHeader';
 import { findFinalAcceptanceView } from './goalResultState';
 import ResultAnchorRail from './ResultAnchorRail';
+import { anchorProps } from './resultAnchors';
 import ResultDeliverables from './ResultDeliverables';
 import ResultTrail from './ResultTrail';
-import { anchorProps } from './resultAnchors';
 import { useGoalResultData } from './useGoalResultData';
 
 /**
  * 结果交付 — what a finished Goal hands over, on its own tab.
  *
- * Layered for a reviewer who reads top-down: the first screen says where the
- * result stands and how big the run was, and carries the sign-off. Every
- * deliverable follows in one place, then each acceptance criterion against what
- * the latest acceptance round found. The document the work wrote comes next,
- * read like a page rather than a card, and under it the trail of how that
- * result was reached. What the owner shaped along the way and what is still
- * open closes the page — history reads after the delivery, not before it. How
- * the Goal ran (tasks, map, activity) lives on the 执行过程 tab.
+ * Layered for a reviewer who reads top-down: the first screen is the Goal's own
+ * headline, the document the work wrote leads the page as the delivery itself,
+ * and the deliverables plus each acceptance criterion (against what the latest
+ * acceptance round found) follow as the evidence behind it. Under them the trail
+ * of how that result was reached. What the owner shaped along the way and what is
+ * still open closes the page — history reads after the delivery, not before it.
+ * How the Goal ran (tasks, map, activity) lives on the 执行过程 tab.
  *
  * A rail of ticks beside the scrollbar names those sections on hover and jumps
  * to them on click — see `ResultAnchorRail`.
@@ -80,10 +79,19 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
     <div ref={rootRef}>
       <ResultAnchorRail rootRef={rootRef} />
       <Flexbox gap={8}>
+        <div {...anchorProps('overview', t('goalProcess.result.nav.overview'))}>
+          <GoalResultHeader data={data} graph={graph} />
+        </div>
+        {deliverable && (
+          <>
+            <Divider style={{ marginBlock: 24 }} />
+            <div {...anchorProps('document', t('goalProcess.result.nav.document'))}>
+              <FinalDocument documentId={deliverable.documentId} />
+            </div>
+          </>
+        )}
+        <Divider style={{ marginBlock: 24 }} />
         <Flexbox gap={32}>
-          <div {...anchorProps('overview', t('goalProcess.result.nav.overview'))}>
-            <GoalResultHeader data={data} graph={graph} onContinue={continueFromResult} />
-          </div>
           <div {...anchorProps('deliverables', t('goalProcess.deliverables.title'))}>
             <ResultDeliverables
               graph={graph}
@@ -102,14 +110,6 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
           </div>
         </Flexbox>
         <Divider style={{ marginBlock: 24 }} />
-        {deliverable && (
-          <>
-            <div {...anchorProps('document', t('goalProcess.result.nav.document'))}>
-              <FinalDocument documentId={deliverable.documentId} />
-            </div>
-            <Divider style={{ marginBlock: 24 }} />
-          </>
-        )}
         <div {...anchorProps('trail', t('goalProcess.result.trail.title'))}>
           <ResultTrail documentId={deliverable?.documentId} graph={graph} onSelect={onSelect} />
         </div>
@@ -119,7 +119,11 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
             <GoalDecisionsMade graph={graph} />
           </div>
           <div {...anchorProps('unfinished', t('goalProcess.result.unfinished.title'))}>
-            <GoalUnfinished graph={graph} outcomes={data.outcomes} onContinue={continueFromResult} />
+            <GoalUnfinished
+              graph={graph}
+              outcomes={data.outcomes}
+              onContinue={continueFromResult}
+            />
           </div>
         </Flexbox>
       </Flexbox>

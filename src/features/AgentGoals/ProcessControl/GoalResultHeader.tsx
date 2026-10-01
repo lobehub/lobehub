@@ -2,41 +2,28 @@
 
 import type { GoalGraphDecision } from '@lobechat/types';
 import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal, Text, TextArea, toast } from '@lobehub/ui/base-ui';
+import { Button, Text, TextArea, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowRight, CircleCheck, Undo2 } from 'lucide-react';
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
-import AsyncError from '@/components/AsyncError';
 import { usePermission } from '@/hooks/usePermission';
-import { verifyService } from '@/services/verify';
 import { useGoalStore } from '@/store/goal';
 
-import { formatSpan, formatUsd } from '../goalPresentation';
 import { coordinatorGateReason, coordinatorReasonCopy } from './coordinatorCopy';
 import { useGateOptionLabel } from './Frontier';
 import type { GoalGraphView } from './goalGraphViewModel';
 import {
-  countGoalTasks,
   deriveGoalResultStatus,
-  deriveSignOffState,
   findGoalAcceptanceGate,
   findOpenChangeRequest,
-  type GoalAcceptanceGate,
-  type GoalSignOffState,
 } from './goalResultState';
-import { openRequestChangesModal } from './RequestChangesModal';
 import type { GoalResultData } from './useGoalResultData';
 
 /**
- * The first screen of a finished Goal: the one-line result (only when the
- * wrap-up report wrote one), how big the run was, and the one action it waits
- * on — signing off the delivery. Sign-off is the Goal-level acceptance's own
- * accept / reject, so the acceptance page and this strip can never disagree.
- *
- * Where the result stands reads from the acceptance itself, below: 验收标准
- * says what was met, and this strip says what to do about it.
+ * The first screen of a finished Goal: the one-line result the wrap-up report
+ * wrote, and — only when the Goal-level acceptance left the coordinator a gate
+ * to resolve — the decision it is waiting on. Signing a delivery off belongs to
+ * the acceptance itself, so this page does not carry a second copy of it.
  */
 
 const styles = createStaticStyles(({ css }) => ({
@@ -47,122 +34,6 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
 }));
-
-const SIGN_OFF_TEXT: Record<GoalSignOffState, string> = {
-  accepted: 'goalProcess.result.signOff.accepted',
-  changesRequested: 'goalProcess.result.signOff.changesRequested',
-  open: 'goalProcess.result.signOff.prompt',
-  stopped: 'goalProcess.result.signOff.stopped',
-  unavailable: 'goalProcess.result.signOff.unavailable',
-};
-
-interface SignOffStripProps {
-  data: GoalResultData;
-  gate?: GoalAcceptanceGate['kind'];
-  goalId: string;
-  goalStatus: string;
-  onContinue: () => void;
-  partial: boolean;
-}
-
-const SignOffStrip = ({
-  data,
-  gate,
-  goalId,
-  goalStatus,
-  onContinue,
-  partial,
-}: SignOffStripProps) => {
-  const { t } = useTranslation('chat');
-  const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
-  const { acceptanceId, acceptanceStatus, canReview, mutateAcceptance, outcomes } = data;
-  const state = deriveSignOffState(acceptanceStatus, goalStatus, gate);
-  const unmet = outcomes.filter((outcome) => outcome.state !== 'passed').length;
-
-  const settle = async (action: () => Promise<unknown>) => {
-    try {
-      await action();
-      await Promise.all([mutateAcceptance(), refreshGoalGraph(goalId)]);
-      return true;
-    } catch (error) {
-      console.error('[goal:sign-off]', error);
-      toast.error(t('goalProcess.result.signOff.error'));
-      return false;
-    }
-  };
-
-  const accept = () =>
-    confirmModal({
-      cancelText: t('goalProcess.result.signOff.cancel'),
-      content:
-        unmet > 0
-          ? `${t('goalProcess.result.signOff.acceptConfirm.content')} ${t(
-              'goalProcess.result.signOff.acceptConfirm.unmet',
-              { count: unmet },
-            )}`
-          : t('goalProcess.result.signOff.acceptConfirm.content'),
-      okText: t('goalProcess.result.signOff.accept'),
-      onOk: async () => {
-        await settle(() => verifyService.acceptDelivery(acceptanceId!));
-      },
-      title: t('goalProcess.result.signOff.acceptConfirm.title'),
-    });
-
-  const requestChanges = () =>
-    openRequestChangesModal({
-      onConfirm: async (comment) => {
-        const sent = await settle(() => verifyService.rejectDelivery(acceptanceId!, comment));
-        if (sent) toast.success(t('goalProcess.result.signOff.changes.sent'));
-        return sent;
-      },
-    });
-
-  const actionable = state === 'open' && !!acceptanceId && canReview;
-
-  // Without the bundle the page cannot tell whether a sign-off is possible;
-  // say so and offer a retry rather than silently dropping the actions.
-  if (data.error && state === 'open')
-    return (
-      <Flexbox className={styles.strip} data-sign-off-state={'error'}>
-        <AsyncError error={data.error} variant={'inline'} onRetry={data.retry} />
-      </Flexbox>
-    );
-
-  return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={styles.strip}
-      data-sign-off-state={state}
-      gap={12}
-      justify={'space-between'}
-      wrap={'wrap'}
-    >
-      <Text style={{ flex: 1, minWidth: 200 }} type={state === 'open' ? undefined : 'secondary'}>
-        {t(SIGN_OFF_TEXT[state] as any)}
-      </Text>
-      <Flexbox horizontal gap={8}>
-        {actionable && (
-          <>
-            <Button icon={Undo2} onClick={requestChanges}>
-              {t('goalProcess.result.signOff.requestChanges')}
-            </Button>
-            <Button icon={CircleCheck} type={'primary'} onClick={accept}>
-              {t('goalProcess.result.signOff.accept')}
-            </Button>
-          </>
-        )}
-        {/* A stopped Goal has nothing further to sign; its way forward is to
-            pick the work up again. */}
-        {!actionable && partial && (
-          <Button icon={ArrowRight} onClick={onContinue}>
-            {t('goalProcess.result.unfinished.continue')}
-          </Button>
-        )}
-      </Flexbox>
-    </Flexbox>
-  );
-};
 
 interface DecisionStripProps {
   decision: GoalGraphDecision;
@@ -242,14 +113,11 @@ const DecisionStrip = ({ decision, goalId, onDecided }: DecisionStripProps) => {
 interface GoalResultHeaderProps {
   data: GoalResultData;
   graph: GoalGraphView;
-  onContinue: () => void;
 }
 
-const GoalResultHeader = ({ data, graph, onContinue }: GoalResultHeaderProps) => {
-  const { t } = useTranslation('chat');
+const GoalResultHeader = ({ data, graph }: GoalResultHeaderProps) => {
   const { goal } = graph;
   const { outcomes } = data;
-  const met = outcomes.filter((outcome) => outcome.state === 'passed').length;
   const gate = findGoalAcceptanceGate(graph);
   const changeRequest = findOpenChangeRequest(graph);
   const status = deriveGoalResultStatus({
@@ -261,18 +129,6 @@ const GoalResultHeader = ({ data, graph, onContinue }: GoalResultHeaderProps) =>
   });
   const headline = graph.report?.latest?.metadata.headline;
 
-  const scale = [
-    outcomes.length > 0 && t('goalProcess.result.scale.criteria', { met, total: outcomes.length }),
-    t('goalProcess.result.scale.tasks', { count: countGoalTasks(graph) }),
-    goal.startedAt &&
-      t('goalProcess.result.scale.duration', {
-        duration: formatSpan(
-          (goal.completedAt ?? goal.updatedAt).getTime() - goal.startedAt.getTime(),
-        ),
-      }),
-    graph.spend && t('goalProcess.result.scale.cost', { cost: formatUsd(graph.spend.totalCost) }),
-  ].filter(Boolean);
-
   return (
     <Flexbox data-goal-result-status={status} gap={14}>
       {headline && (
@@ -280,43 +136,11 @@ const GoalResultHeader = ({ data, graph, onContinue }: GoalResultHeaderProps) =>
           {headline}
         </Text>
       )}
-      <Text fontSize={13} type={'secondary'}>
-        {scale.join(' · ')}
-      </Text>
-      {status === 'awaitingDecision' && gate?.kind === 'pending' ? (
+      {status === 'awaitingDecision' && gate?.kind === 'pending' && (
         <DecisionStrip
           decision={gate.decision}
           goalId={goal.id}
           onDecided={data.mutateAcceptance}
-        />
-      ) : status === 'revising' ? (
-        // Nothing to sign while the rework runs: the strip says what the Agent
-        // is answering to instead of offering accept / request changes again.
-        <Flexbox className={styles.strip} data-sign-off-state={'revising'} gap={6}>
-          <Text type={'secondary'}>
-            {t(
-              changeRequest
-                ? 'goalProcess.result.changes.revising'
-                : 'goalProcess.result.gate.revising',
-            )}
-          </Text>
-          {changeRequest?.comment && (
-            <Flexbox data-goal-change-request gap={2}>
-              <Text fontSize={12} type={'secondary'} weight={500}>
-                {t('goalProcess.result.changes.comment')}
-              </Text>
-              <Text style={{ whiteSpace: 'pre-wrap' }}>{changeRequest.comment}</Text>
-            </Flexbox>
-          )}
-        </Flexbox>
-      ) : (
-        <SignOffStrip
-          data={data}
-          gate={gate?.kind}
-          goalId={goal.id}
-          goalStatus={goal.status}
-          partial={status === 'partial'}
-          onContinue={onContinue}
         />
       )}
     </Flexbox>

@@ -206,7 +206,7 @@ const ResultDeliverables = ({
     <SectionTitle
       extra={
         items.length > 0 && (
-          <Button icon={ArrowRight} size={'small'} onClick={() => setReaderIndex(0)}>
+          <Button icon={ArrowRight} size={'small'} type={'text'} onClick={() => setReaderIndex(0)}>
             {t('goalProcess.result.deliverables.viewAll', { count: items.length })}
           </Button>
         )

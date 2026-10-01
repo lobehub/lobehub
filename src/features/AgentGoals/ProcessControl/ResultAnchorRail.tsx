@@ -1,7 +1,7 @@
 'use client';
 
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type RefObject, useEffect, useState } from 'react';
+import { type RefObject, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -29,6 +29,16 @@ import {
 
 /** How far below the scroller's top edge the rail pins itself. */
 const RAIL_TOP = 96;
+
+/**
+ * The rail belongs to the page's right edge, not to the column the sections are
+ * laid out in. At rest the ticks sit this far inside the scroller's right edge,
+ * and never closer than RAIL_EDGE_MIN to the column's own edge — so a narrowed
+ * column (the document panel open) keeps them outside the text, and a wide one
+ * puts them against the page instead of inside the container.
+ */
+const RAIL_MARGIN = 16;
+const RAIL_EDGE_MIN = 8;
 
 const styles = createStaticStyles(({ css }) => ({
   host: css`
@@ -166,8 +176,10 @@ interface ResultAnchorRailProps {
 
 const ResultAnchorRail = ({ rootRef }: ResultAnchorRailProps) => {
   const { t } = useTranslation('chat');
+  const hostRef = useRef<HTMLDivElement>(null);
   const [anchors, setAnchors] = useState<ResultAnchor[]>([]);
   const [active, setActive] = useState(0);
+  const [edge, setEdge] = useState(-RAIL_MARGIN);
 
   // Sections load and filters change after mount; re-read on DOM changes.
   useEffect(() => {
@@ -205,14 +217,25 @@ const ResultAnchorRail = ({ rootRef }: ResultAnchorRailProps) => {
         );
         const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
         setActive(Math.max(0, pickActiveAnchor(tops, readingLine, atBottom)));
+
+        // Measure where the page's right edge actually is rather than assuming
+        // it: the document panel and the window both narrow the column under us.
+        const host = hostRef.current;
+        if (host) {
+          const gap = scroller.getBoundingClientRect().right - host.getBoundingClientRect().right;
+          setEdge(Math.min(-RAIL_EDGE_MIN, RAIL_MARGIN - gap));
+        }
       });
     };
     update();
     scroller.addEventListener('scroll', update, { passive: true });
     window.addEventListener('resize', update);
+    const resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(scroller);
     return () => {
       scroller.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
+      resizeObserver.disconnect();
       cancelAnimationFrame(frame);
     };
   }, [anchors, rootRef]);
@@ -238,11 +261,12 @@ const ResultAnchorRail = ({ rootRef }: ResultAnchorRailProps) => {
   };
 
   return (
-    <div className={styles.host}>
+    <div className={styles.host} ref={hostRef}>
       <nav
         aria-label={t('goalProcess.result.nav.label')}
         className={styles.rail}
         data-testid={'goal-result-anchor-rail'}
+        style={{ insetInlineEnd: edge }}
       >
         {anchors.map((anchor, index) => {
           const isActive = index === active;
