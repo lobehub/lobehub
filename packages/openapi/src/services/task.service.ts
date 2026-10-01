@@ -3,6 +3,7 @@ import { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
 import { EditLockService } from '@/server/services/editLock';
 import { TaskService } from '@/server/services/task';
+import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
 import { resolveTaskPatchInvariants } from '@/server/services/task/patchValidation';
 import { assertResultingScheduleValid } from '@/server/services/task/scheduleValidation';
 
@@ -55,7 +56,12 @@ export class TaskRestService extends BaseService {
     // create boundary, so a schedule the dispatcher cannot evaluate is refused
     // here instead of being stored and silently never firing.
     assertResultingScheduleValid(null, input);
-    return this.taskService.createTask(input);
+    const task = await this.taskService.createTask(input);
+    // Creating a task already assigned to another member notifies them, the way
+    // the tRPC create boundary does; self-assignment is filtered inside the
+    // helper, so this stays silent for the caller's own task.
+    notifyAssignedBestEffort({ userId: this.userId, workspaceId: this.workspaceId }, task);
+    return task;
   }
 
   async updateTask(id: string, input: UpdateTaskRequest): ServiceResult<unknown> {
@@ -84,6 +90,13 @@ export class TaskRestService extends BaseService {
       { userId: this.userId },
     );
     if (!updated) throw this.createNotFoundError('Task not found');
+    // Only an actual assignee change notifies — re-saving the same assignee
+    // stays silent, exactly like the tRPC patch boundary. `resolved` is the row
+    // as it was before this patch, so the comparison cannot be fooled by a
+    // partial update that leaves the assignee untouched.
+    if (updated.assigneeUserId !== resolved.assigneeUserId) {
+      notifyAssignedBestEffort({ userId: this.userId, workspaceId: this.workspaceId }, updated);
+    }
     return updated;
   }
 

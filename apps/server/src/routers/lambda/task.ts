@@ -4,7 +4,6 @@ import type { TaskListItem, TaskParticipant, TaskVerifyConfig } from '@lobechat/
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { notifyTaskAssigned } from '@/business/server/task/notifyTaskAssigned';
 import type { TaskCommentActivityRecipient } from '@/business/server/task/notifyTaskCommentActivity';
 import { notifyTaskCommentActivity } from '@/business/server/task/notifyTaskCommentActivity';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -23,6 +22,7 @@ import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
+import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
 import { TaskIntentService } from '@/server/services/task/intent';
 import {
   assertAssigneeAgentBelongsToUser,
@@ -289,42 +289,6 @@ function notifyCommentActivityBestEffort(
       await notifyTaskCommentActivity({ ...params, recipients });
     } catch (error) {
       console.error('[task-comment] Failed to send activity notification', error);
-    }
-  });
-}
-
-/**
- * Assignment ping (Linear-style), delivered after the response as best-effort
- * work. Silent for self-assignment; the assignee lock already guarantees the
- * member is active and can open the task (`assertAssigneeUserVisibilityCompat`
- * rejects private tasks assigned to anyone but their creator). Callers decide
- * whether the assignee actually changed.
- */
-function notifyAssignedBestEffort(
-  ctx: { userId: string; workspaceId?: string | null },
-  task: {
-    assigneeUserId: string | null;
-    id: string;
-    identifier: string;
-    name: string | null;
-  },
-) {
-  const { assigneeUserId } = task;
-  if (!assigneeUserId || assigneeUserId === ctx.userId) return;
-
-  const params = {
-    actorUserId: ctx.userId,
-    assigneeUserId,
-    taskId: task.id,
-    taskIdentifier: task.identifier,
-    taskName: task.name,
-    workspaceId: ctx.workspaceId ?? undefined,
-  };
-  after(async () => {
-    try {
-      await notifyTaskAssigned(params);
-    } catch (error) {
-      console.error('[task] Failed to send assignment notification', error);
     }
   });
 }

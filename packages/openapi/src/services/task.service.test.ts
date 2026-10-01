@@ -10,6 +10,7 @@ const {
   createTaskMock,
   deleteTaskMock,
   hasAnyPermissionMock,
+  notifyAssignedMock,
   resolveMock,
   resolveTaskPatchInvariantsMock,
   updateTaskMock,
@@ -17,6 +18,7 @@ const {
   createTaskMock: vi.fn(),
   deleteTaskMock: vi.fn(),
   hasAnyPermissionMock: vi.fn(),
+  notifyAssignedMock: vi.fn(),
   resolveMock: vi.fn(),
   resolveTaskPatchInvariantsMock: vi.fn(),
   updateTaskMock: vi.fn(),
@@ -70,6 +72,11 @@ vi.mock('@/server/services/task', () => ({
 // the REST patch runs through it instead of writing the row directly.
 vi.mock('@/server/services/task/patchValidation', () => ({
   resolveTaskPatchInvariants: resolveTaskPatchInvariantsMock,
+}));
+// The ping itself is the tRPC boundary's shared helper; here we only pin that
+// the REST create/patch actually reaches it.
+vi.mock('@/server/services/task/assignmentNotification', () => ({
+  notifyAssignedBestEffort: notifyAssignedMock,
 }));
 
 const CALLER = 'me';
@@ -192,5 +199,79 @@ describe('TaskRestService write-time schedule validation', () => {
       }),
     ).resolves.toEqual({ id: 'task-1' });
     expect(createTaskMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Assigning through REST must reach the assignee's inbox the way assigning
+ * in-app does: the tRPC boundaries ping via `notifyAssignedBestEffort`, so the
+ * REST create and the REST patch have to as well, and the patch has to stay
+ * silent unless the assignee actually changed.
+ */
+describe('TaskRestService assignment notification', () => {
+  const service = () => new TaskRestService({} as LobeChatDatabase, CALLER, WORKSPACE);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    hasAnyPermissionMock.mockResolvedValue(false);
+  });
+
+  it('notifies the member a create assigned the task to', async () => {
+    const created = {
+      assigneeUserId: 'other-member',
+      id: 'task-1',
+      identifier: 'TASK-1',
+      name: 'ship it',
+    };
+    createTaskMock.mockResolvedValue(created);
+
+    await expect(
+      service().createTask({ assigneeUserId: 'other-member', instruction: 'ship it' }),
+    ).resolves.toEqual(created);
+
+    expect(notifyAssignedMock).toHaveBeenCalledWith(
+      { userId: CALLER, workspaceId: WORKSPACE },
+      created,
+    );
+  });
+
+  it('notifies when a patch actually changes the assignee', async () => {
+    resolveTaskPatchInvariantsMock.mockResolvedValue({
+      data: { assigneeUserId: 'other-member' },
+      resolved: { assigneeUserId: null, id: 'task-1' },
+    });
+    const updated = {
+      assigneeUserId: 'other-member',
+      id: 'task-1',
+      identifier: 'TASK-1',
+      name: 'ship it',
+    };
+    updateTaskMock.mockResolvedValue(updated);
+
+    await expect(
+      service().updateTask('task-1', { assigneeUserId: 'other-member' }),
+    ).resolves.toEqual(updated);
+
+    expect(notifyAssignedMock).toHaveBeenCalledWith(
+      { userId: CALLER, workspaceId: WORKSPACE },
+      updated,
+    );
+  });
+
+  it('stays silent when the patch leaves the assignee untouched', async () => {
+    resolveTaskPatchInvariantsMock.mockResolvedValue({
+      data: { name: 'renamed' },
+      resolved: { assigneeUserId: 'other-member', id: 'task-1' },
+    });
+    updateTaskMock.mockResolvedValue({
+      assigneeUserId: 'other-member',
+      id: 'task-1',
+      identifier: 'TASK-1',
+      name: 'renamed',
+    });
+
+    await service().updateTask('task-1', { name: 'renamed' });
+
+    expect(notifyAssignedMock).not.toHaveBeenCalled();
   });
 });
