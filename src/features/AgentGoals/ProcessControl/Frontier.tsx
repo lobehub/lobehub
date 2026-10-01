@@ -1,9 +1,8 @@
 'use client';
 
 import type { AcceptanceStatus, GoalDecisionOption } from '@lobechat/types';
-import { Block, Flexbox, Icon, TextArea, Tooltip } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Block, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Button, Divider, Tag, Text, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { Fragment, memo, useState } from 'react';

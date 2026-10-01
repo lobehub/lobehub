@@ -1,7 +1,7 @@
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { formatUsageValue } from '@lobechat/utils';
 import { Center, Flexbox, Icon, Popover } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { BadgeCent, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';

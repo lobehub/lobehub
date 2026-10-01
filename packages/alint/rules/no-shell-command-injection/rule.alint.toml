@@ -1,0 +1,12 @@
+name = "no-shell-command-injection"
+builtInAgent = "basic-structured"
+instruction = """
+Mandatory exclusion gate: DO NOT produce a finding unless externally controlled bytes can change shell syntax at this specific sink. Suppress any candidate that your own explanation says is currently safe, only fragile, or might become unsafe after future edits. Standard POSIX single-quote escaping (replace apostrophes with the close/escaped-quote/reopen sequence) is valid even in a local helper; do not demand a third-party library. Base64-only interpolation into quoted shell text is not command injection. Server-generated paths and fixed extension maps are not untrusted. Sending an intentional command to an isolated remote sandbox terminal is expected behavior, not shell injection by itself; require additional data escaping its intended argument role. Do not demand argv conversion of a terminal's intentionally arbitrary command.
+
+Review only this file. Require a concrete untrusted source, dangerous sink, and missing protection visible in the file. Follow local aliases and guards. Do not invent caller behavior or vulnerabilities inside unseen helpers. Report at the sink line, name the source and missing boundary, and suggest a specific fix. Do not include secret values or payloads in diagnostics. Findings are review warnings, not claims of proven exploitability.
+
+Prevent shell-command injection leading to RCE in server, desktop, CLI, and runtime helpers.
+Report user/request/remote metadata interpolated or concatenated into child_process.exec/execSync, spawn/execFile with shell:true, execa shell mode, or an explicit sh/bash/cmd/PowerShell -c/-Command command string. An argument array does not protect input that is subsequently interpreted by a shell. Double quotes around interpolation and JSON.stringify are not shell escaping. Shell blacklist regexes are not general escaping.
+Recommend a fixed executable with shell disabled and separate arguments; use '--' where the target accepts options. If a shell is required, use an existing platform-appropriate escaping helper and the execution policy/approval boundary.
+Do not report fixed literal commands; fixed executable argument arrays with shell disabled and no interpreter; strict enum-to-fixed-command mapping; a demonstrated shell escaping helper used correctly for the target shell; or an intentional agent terminal executor whose visible contract/guard requires approved policy execution. Mere authentication is not shell escaping. Do not label every child_process call unsafe.
+"""

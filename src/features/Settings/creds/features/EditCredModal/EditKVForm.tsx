@@ -2,9 +2,9 @@
 
 import { type UserCredSummary } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Button, Spin } from '@lobehub/ui/base-ui';
+import { Button, Input, InputPassword, Spin, TextArea } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Form, Input } from 'antd';
+import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Minus, Plus } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';
@@ -160,7 +160,7 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, credsApi, onCancel, onSuccess }
                     name={[name, 'value']}
                     style={{ flex: 2, marginBottom: 0 }}
                   >
-                    <Input.Password
+                    <InputPassword
                       autoComplete="new-password"
                       disabled={!canManageCredentials}
                       placeholder={t('creds.form.valuePlaceholder')}
@@ -192,7 +192,7 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, credsApi, onCancel, onSuccess }
       </Form.Item>
 
       <Form.Item label={t('creds.form.description')} name="description">
-        <Input.TextArea
+        <TextArea
           disabled={!canManageCredentials}
           placeholder={t('creds.form.descriptionPlaceholder')}
           rows={2}

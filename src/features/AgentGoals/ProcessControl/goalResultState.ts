@@ -1,4 +1,3 @@
-import { GOAL_REPORT_TASK_TITLE } from '@lobechat/const/goal';
 import type {
   AcceptanceStatus,
   GoalChangeRequest,
@@ -384,17 +383,23 @@ export const buildAbandonedNodes = (graph: Pick<GoalGraphView, 'nodes'>): Abando
  * Work Tasks the Goal ran, for the scale line. The coordinator's own acceptance
  * and wrap-up Tasks check and describe the work; they are not part of it.
  */
-export const countGoalTasks = (graph: Pick<GoalGraphView, 'nodes'>): number =>
+export const countGoalTasks = (graph: Pick<GoalGraphView, 'goal' | 'nodes'>): number =>
   graph.nodes.filter(
     (view) =>
       view.node.kind === 'task' &&
       !isGoalAcceptanceTask(view) &&
-      view.node.title !== GOAL_REPORT_TASK_TITLE,
+      !isGoalReportTaskView(graph, view),
   ).length;
 
-/** The coordinator's wrap-up Task, which writes the report about the Goal. */
-export const isGoalReportTaskView = (view: Pick<GoalNodeView, 'node'>): boolean =>
-  view.node.kind === 'task' && view.node.title === GOAL_REPORT_TASK_TITLE;
+/**
+ * The coordinator's wrap-up Task, which writes the report about the Goal. It is
+ * the node the dispatch recorded on the Goal, never matched by title — a task
+ * that merely shares the title is ordinary work.
+ */
+export const isGoalReportTaskView = (
+  graph: Pick<GoalGraphView, 'goal'>,
+  view: Pick<GoalNodeView, 'node'>,
+): boolean => view.node.id === graph.goal.config?.report?.nodeId;
 
 /**
  * One step of the result's audit trail: the work that ran, what it concluded,
@@ -421,7 +426,7 @@ const settledAt = (view: GoalNodeView) => (view.node.resolvedAt ?? view.node.cre
  * the trail is about output, the process tab already lists every task.
  */
 export const buildResultTrail = (
-  graph: Pick<GoalGraphView, 'artifacts' | 'byId' | 'findings'>,
+  graph: Pick<GoalGraphView, 'artifacts' | 'byId' | 'findings' | 'goal'>,
 ): ResultTrailStep[] => {
   const steps = new Map<string, ResultTrailStep>();
   const orphans: GoalNodeView[] = [];
@@ -437,7 +442,7 @@ export const buildResultTrail = (
 
   for (const finding of graph.findings) {
     const producer = finding.producedBy && graph.byId[finding.producedBy.id];
-    if (producer && isGoalReportTaskView(producer)) continue;
+    if (producer && isGoalReportTaskView(graph, producer)) continue;
     if (producer) stepOf(producer.node.id).findings.push(finding);
     else orphans.push(finding);
   }
@@ -447,7 +452,7 @@ export const buildResultTrail = (
 
   const ordered = [...steps.values()]
     // The wrap-up Task describes the result; it is not a step toward it.
-    .filter((step) => step.view && !isGoalReportTaskView(step.view))
+    .filter((step) => step.view && !isGoalReportTaskView(graph, step.view))
     .sort((a, b) => settledAt(a.view!) - settledAt(b.view!));
   for (const step of ordered) {
     step.findings.sort((a, b) => settledAt(a) - settledAt(b));

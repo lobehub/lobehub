@@ -1,15 +1,16 @@
 'use client';
 
-import { Flexbox, Icon, Input } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Alert,
   Button,
   createModal,
+  Input,
   type ModalInstance,
+  Text,
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Typography } from 'antd';
 import { ArrowLeftRight, Link, Sparkles } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -63,17 +64,17 @@ const ImportFromUrlContent = memo(() => {
         </Flexbox>
 
         <Flexbox align="center" gap={4}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
+          <Text as={'h4'} style={{ margin: 0 }}>
             {t('agentSkillModal.url.title')}
-          </Typography.Title>
-          <Typography.Text type="secondary">{t('agentSkillModal.url.desc')}</Typography.Text>
+          </Text>
+          <Text type={'secondary'}>{t('agentSkillModal.url.desc')}</Text>
         </Flexbox>
       </Flexbox>
 
       {error && <Alert showIcon title={t('agentSkillModal.importError', { error })} type="error" />}
 
       <Flexbox gap={8}>
-        <Typography.Text strong>URL</Typography.Text>
+        <Text strong>URL</Text>
         <Input
           disabled={!canCreate}
           placeholder={t('agentSkillModal.url.urlPlaceholder')}

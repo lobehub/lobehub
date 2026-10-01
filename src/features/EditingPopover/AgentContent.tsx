@@ -1,7 +1,6 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
-import { Block, Flexbox, Icon, Input, stopPropagation, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Avatar, toast } from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
+import { Block, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Avatar, Input, toast } from '@lobehub/ui/base-ui';
 import { Check, PaletteIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -44,22 +43,28 @@ const AgentContent = memo<AgentContentProps>(({ id, title, avatar, onClose }) =>
     const backgroundColorChanged = newBackgroundColor !== meta.backgroundColor;
 
     if (titleChanged || avatarChanged || backgroundColorChanged) {
-      try {
-        useHomeStore.getState().setAgentUpdatingId(id);
+      const updates: { avatar?: string; backgroundColor?: string; title?: string } = {};
+      if (titleChanged) updates.title = newTitle;
+      if (avatarChanged) updates.avatar = newAvatar || undefined;
+      if (backgroundColorChanged) updates.backgroundColor = newBackgroundColor;
 
-        const updates: { avatar?: string; backgroundColor?: string; title?: string } = {};
-        if (titleChanged) updates.title = newTitle;
-        if (avatarChanged) updates.avatar = newAvatar || undefined;
-        if (backgroundColorChanged) updates.backgroundColor = newBackgroundColor;
-
-        await useAgentStore.getState().optimisticUpdateAgentMeta(id, updates);
-        await useHomeStore.getState().refreshAgentList();
-      } finally {
-        useHomeStore.getState().setAgentUpdatingId(null);
-      }
+      void useHomeStore
+        .getState()
+        .updateAgentMeta(id, updates)
+        .catch(() => toast.error(t('operationFailed', { ns: 'common' })));
     }
     onClose();
-  }, [newTitle, newAvatar, newBackgroundColor, title, avatar, meta.backgroundColor, id, onClose]);
+  }, [
+    newTitle,
+    newAvatar,
+    newBackgroundColor,
+    title,
+    avatar,
+    meta.backgroundColor,
+    id,
+    onClose,
+    t,
+  ]);
 
   const handleAvatarUpload = useCallback(
     async (file: File) => {
@@ -85,7 +90,7 @@ const AgentContent = memo<AgentContentProps>(({ id, title, avatar, onClose }) =>
     setNewAvatar(null);
   }, []);
 
-  const inputRef = useRef<InputRef>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {

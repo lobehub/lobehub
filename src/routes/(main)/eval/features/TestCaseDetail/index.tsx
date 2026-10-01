@@ -1,10 +1,9 @@
 'use client';
 
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { Breadcrumb } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Breadcrumb, Button, Tag, Text, TextArea, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, FileText, Pencil } from 'lucide-react';
+import { FileText, Pencil } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -46,7 +45,10 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   editor: css`
     font-size: ${cssVar.fontSize};
-    line-height: 1.75;
+
+    textarea {
+      line-height: 1.75;
+    }
   `,
   prose: css`
     padding-block: 10px;
@@ -137,7 +139,6 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
     >
       <Breadcrumb
         className={styles.breadcrumb}
-        separator={<Icon icon={ChevronRight} size={14} />}
         items={[
           {
             title: <WorkspaceLink to="/eval">{t('testCaseDetail.breadcrumb.eval')}</WorkspaceLink>,

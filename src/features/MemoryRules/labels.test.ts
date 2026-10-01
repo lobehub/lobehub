@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendException, findMove, revisionAuthorKey } from './labels';
+import { appendException, findMove, revisionAuthorKey, ruleOrigin, sectionBody } from './labels';
 
 describe('appendException', () => {
   it('keeps the exceptions already written and adds the new one below', () => {
@@ -53,5 +53,36 @@ describe('revisionAuthorKey', () => {
     expect(revisionAuthorKey({ byViewer: false, changedBy: 'system' })).toBe(
       'rules.revisions.bySystem',
     );
+  });
+});
+
+describe('ruleOrigin', () => {
+  const rule = (rejectionHitCount: number, conversationHitCount: number, authored = false) => ({
+    authored,
+    conversationHitCount,
+    rejectionHitCount,
+  });
+
+  it('does not say the reviewer rejected anything for a rule learned in conversation', () => {
+    expect(ruleOrigin(rule(0, 35))).toEqual({ key: 'observed', params: { hits: 35 } });
+  });
+
+  it('counts only rejections as "you sent it back"', () => {
+    expect(ruleOrigin(rule(4, 0))).toEqual({ key: 'distilled', params: { hits: 4 } });
+    expect(ruleOrigin(rule(4, 9))).toEqual({
+      key: 'distilledAndObserved',
+      params: { conversations: 9, rejections: 4 },
+    });
+  });
+
+  it('keeps a hand-written rule as the reviewer’s own however it was hit since', () => {
+    expect(ruleOrigin(rule(2, 1, true))).toEqual({ key: 'authored' });
+  });
+});
+
+describe('sectionBody', () => {
+  it('reads the "no boundary given" sentence as no boundary', () => {
+    const sections = [{ body: '边界未由评审者说明', key: 'limits' as const }];
+    expect(sectionBody({ sections }, 'limits')).toBeUndefined();
   });
 });

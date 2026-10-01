@@ -10,6 +10,7 @@ import {
   deriveReportVerdict,
   evidenceTypeForFile,
   formatAnnotationRegion,
+  formatDisputedChapter,
   genericContextFromResult,
   inlineTextEvidenceForFile,
   originFromEnv,
@@ -284,6 +285,55 @@ describe('reportEvidence — comparison normalization', () => {
     expect(
       reportEvidence([{ desc: 'a shot', file: 'a.png' }, { comparison: { id: 'x' } }]),
     ).toEqual([{ comparison: undefined, description: 'a shot', path: 'a.png' }]);
+  });
+});
+
+describe('reportEvidence — video chapters', () => {
+  beforeEach(() => {
+    vi.mocked(log.warn).mockClear();
+  });
+
+  it('carries well-formed chapters on a video, sorted by time', () => {
+    const [item] = reportEvidence([
+      {
+        chapters: [
+          { kind: 'check', note: 'no skeleton', t: 7.9 },
+          { kind: 'step', label: 'Scroll #1', t: 2 },
+        ],
+        path: 'proof/scroll.mp4',
+      },
+    ]);
+
+    expect(item.chapters).toEqual([
+      { kind: 'step', label: 'Scroll #1', t: 2 },
+      { kind: 'check', note: 'no skeleton', t: 7.9 },
+    ]);
+    expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  // A dropped marker is a claim the agent believes the reviewer will see.
+  it('names how many markers it dropped and why', () => {
+    const [item] = reportEvidence([
+      {
+        chapters: [
+          { kind: 'step', label: 'Open', t: 0 },
+          { kind: 'check', t: 3 },
+        ],
+        path: 'clip.webm',
+      },
+    ]);
+
+    expect(item.chapters).toEqual([{ kind: 'step', label: 'Open', t: 0 }]);
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('dropped 1 of 2 chapters'));
+  });
+
+  it('ignores chapters on a still image, and a chapters field that is not a list', () => {
+    expect(
+      reportEvidence([{ chapters: [{ kind: 'step', label: 'x', t: 0 }], path: 'a.png' }])[0]
+        .chapters,
+    ).toBeUndefined();
+    expect(reportEvidence([{ chapters: 'intro', path: 'a.mp4' }])[0].chapters).toBeUndefined();
+    expect(log.warn).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -1475,6 +1525,37 @@ describe('formatAnnotationRegion', () => {
   it('returns undefined when there is no location at all', () => {
     expect(formatAnnotationRegion({ comment: 'just a note' })).toBeUndefined();
     expect(formatAnnotationRegion({ rect: { x: 0.1 } })).toBeUndefined();
+  });
+  it('leads with the frame on a video, then the region circled on it', () => {
+    expect(
+      formatAnnotationRegion(
+        { evidenceId: 'ev-1', rect, time: { start: 7.2 } },
+        new Map([['ev-1', 'scroll.mp4']]),
+      ),
+    ).toBe('scroll.mp4 @ frame at 0:07.20 · 31%,24% · 12%×3%');
+  });
+
+  it('prints a span, and no region at all when the note covers the whole frame', () => {
+    expect(
+      formatAnnotationRegion({
+        evidenceId: 'ev-1',
+        rect: { height: 1, width: 1, x: 0, y: 0 },
+        time: { end: 67.65, start: 66.75 },
+      }),
+    ).toBe('ev-1 @ 1:06.75–1:07.65');
+  });
+});
+
+describe('formatDisputedChapter', () => {
+  it('quotes the agent claim the reviewer objected to', () => {
+    expect(
+      formatDisputedChapter({ kind: 'check', note: 'no skeleton after scroll #3', t: 7.9 }),
+    ).toBe('your check at 0:07.90: "no skeleton after scroll #3"');
+  });
+
+  it('says nothing when there is no claim to quote', () => {
+    expect(formatDisputedChapter(undefined)).toBeUndefined();
+    expect(formatDisputedChapter({ kind: 'check', t: 1 })).toBeUndefined();
   });
 });
 

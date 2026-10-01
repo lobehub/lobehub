@@ -1,12 +1,12 @@
 'use client';
 
-import { CheckCircleFilled } from '@ant-design/icons';
 import { type ChatMessageError } from '@lobechat/types';
 import { RequestTrigger, TraceNameMap } from '@lobechat/types';
 import { isRecord, pickTrimmedString } from '@lobechat/utils/object';
 import { Flexbox, Highlighter } from '@lobehub/ui';
 import { Alert, Button, Select, Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { CircleCheckIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -215,16 +215,8 @@ const Checker = memo<ConnectionCheckerProps>(
           />
           <Button
             disabled={!canManageProvider || isProviderConfigUpdating}
+            icon={pass ? CircleCheckIcon : undefined}
             loading={loading}
-            icon={
-              pass ? (
-                <CheckCircleFilled
-                  style={{
-                    color: cssVar.colorSuccess,
-                  }}
-                />
-              ) : undefined
-            }
             style={
               pass
                 ? {

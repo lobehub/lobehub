@@ -7,7 +7,8 @@ import type { VerifyAgentPlanConfig, VerifyCheckItem } from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
-import { getTrpcClient } from '../api/client';
+import type { TrpcClient } from '../api/client';
+import { createPublicLambdaClient, getTrpcClient } from '../api/client';
 import { resolveWorkspaceId } from '../api/workspace';
 import { resolveServerUrl } from '../settings';
 import { ensureAcceptanceDirIgnored, ensureAcceptanceDirIgnoredFor } from '../utils/acceptanceDir';
@@ -74,8 +75,7 @@ const listMaterializedFiles = (directory: string): string[] => {
   });
 };
 
-async function installAction(options: InstallOptions): Promise<void> {
-  const client = await getTrpcClient();
+async function installAction(options: InstallOptions, client: TrpcClient): Promise<void> {
   const version = options.skillVersion?.replace(/^v/, '');
   const bundle = await client.verify.getSkillBundle.query({
     identifier: options.skill,
@@ -1197,13 +1197,15 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
     acceptance
       .command('install')
       .description('Install the latest acceptance skill source into .agents/skills/acceptance'),
-  ).action(installAction);
+  ).action((options: InstallOptions) => installAction(options, createPublicLambdaClient()));
 
   withInstallOptions(
     acceptance
       .command('update')
       .description('Download the latest skill source, replacing its files and re-wiring harnesses'),
-  ).action((options: InstallOptions) => installAction({ ...options, force: true }));
+  ).action((options: InstallOptions) =>
+    installAction({ ...options, force: true }, createPublicLambdaClient()),
+  );
 
   const run = acceptance
     .command('run')
@@ -1313,14 +1315,14 @@ export function attachDeprecatedVerifyRunAliases(verify: Command): void {
       verify.command('init').description('Deprecated — use `lh acceptance install`'),
     ),
     'lh acceptance install',
-  ).action(installAction);
+  ).action(async (options: InstallOptions) => installAction(options, await getTrpcClient()));
 
   deprecate(
     withInstallOptions(
       verify.command('install').description('Deprecated — use `lh acceptance install`'),
     ),
     'lh acceptance install',
-  ).action(installAction);
+  ).action(async (options: InstallOptions) => installAction(options, await getTrpcClient()));
 
   deprecate(
     withIngestReportOptions(

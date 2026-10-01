@@ -1,7 +1,6 @@
 'use client';
 
-import { Input, TextArea } from '@lobehub/ui';
-import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Input, Select, TextArea, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { cssVar } from 'antd-style';
 import { type FC, useEffect, useState } from 'react';

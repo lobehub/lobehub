@@ -10,8 +10,10 @@ import {
   AccordionRoot,
   AccordionTrigger,
   Avatar,
+  Input,
+  InputNumber,
+  TextArea,
 } from '@lobehub/ui/base-ui';
-import { Input, InputNumber } from 'antd';
 import { createStaticStyles, useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Clock, Trash2 } from 'lucide-react';
@@ -163,7 +165,7 @@ const TaskEditor = memo<TaskEditorProps>(({ task, index, onChange, onDelete }) =
                 />
               </Flexbox>
             </Flexbox>
-            <Input.TextArea
+            <TextArea
               autoSize={{ maxRows: 20, minRows: 8 }}
               value={task.instruction}
               variant={'filled'}

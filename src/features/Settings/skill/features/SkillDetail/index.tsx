@@ -343,7 +343,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           notifyUninstallError(error);
         }
       },
-      title: t('store.actions.confirmUninstall'),
+      content: t('store.actions.confirmUninstall'),
+      okText: t('store.actions.uninstall'),
+      title: t('store.actions.uninstall'),
     });
   };
 
@@ -358,7 +360,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           notifyUninstallError(error);
         }
       },
-      title: t('store.actions.confirmUninstall'),
+      content: t('store.actions.confirmUninstall'),
+      okText: t('store.actions.uninstall'),
+      title: t('store.actions.uninstall'),
     });
   };
 

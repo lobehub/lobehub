@@ -1,11 +1,7 @@
-import { type TableProps } from 'antd';
-import { ConfigProvider, Table } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { memo } from 'react';
+import { Table, type TableProps } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cx } from 'antd-style';
 
-const prefixCls = 'ant';
-
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   hoverToActive: css`
     opacity: 0.6;
 
@@ -14,58 +10,51 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   table: css`
-    .${prefixCls}-table {
+    table {
+      font-size: 13px;
+    }
+
+    th {
       background: transparent;
+      box-shadow: inset 0 999px 0 ${cssVar.colorFillQuaternary};
+    }
 
-      th,
-      td {
-        border: none !important;
-        font-size: 13px;
-      }
+    td {
+      border: none;
+      background: transparent;
+    }
 
-      .${prefixCls}-table-cell:before {
-        display: none;
-      }
+    tr:hover > td {
+      background: ${cssVar.colorFillQuaternary};
     }
 
     tr {
       td:first-child,
       th:first-child {
-        padding-inline-start: 24px !important;
+        padding-inline-start: 24px;
       }
 
       td:last-child,
       th:last-child {
-        padding-inline-end: 24px !important;
+        padding-inline-end: 24px;
       }
     }
   `,
 }));
 
-const InlineTable = memo<TableProps & { hoverToActive?: boolean }>(
-  ({ hoverToActive, className, ...rest }) => {
-    return (
-      <ConfigProvider
-        theme={{
-          components: {
-            Table: {
-              headerBg: cssVar.colorFillQuaternary,
-              headerBorderRadius: 0,
-            },
-          },
-        }}
-      >
-        <Table
-          bordered={false}
-          className={cx(styles.table, hoverToActive && styles.hoverToActive, className)}
-          pagination={false}
-          scroll={{ x: 'max-content' }}
-          size={'small'}
-          {...rest}
-        />
-      </ConfigProvider>
-    );
-  },
+export type InlineTableProps<T> = TableProps<T> & { hoverToActive?: boolean };
+
+const InlineTable = <T extends object>({
+  hoverToActive,
+  className,
+  ...rest
+}: InlineTableProps<T>) => (
+  <Table<T>
+    className={cx(styles.table, hoverToActive && styles.hoverToActive, className)}
+    pagination={false}
+    size={'small'}
+    {...rest}
+  />
 );
 
 export default InlineTable;

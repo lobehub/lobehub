@@ -2,8 +2,8 @@ import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type LobeToolCustomPlugin } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Button, Drawer, toast } from '@lobehub/ui/base-ui';
-import { Form, Popconfirm } from 'antd';
+import { Button, confirmModal, Drawer, toast } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { useResponsive } from 'antd-style';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -124,25 +124,25 @@ const DevModal = memo<DevModalProps>(
     const footer = (
       <Flexbox horizontal flex={1} gap={12} justify={'space-between'}>
         {isEditMode ? (
-          <Popconfirm
-            arrow={false}
-            cancelText={t('cancel', { ns: 'common' })}
-            okText={t('ok', { ns: 'common' })}
-            placement={'topLeft'}
-            title={t('dev.confirmDeleteDevPlugin')}
-            okButtonProps={{
-              danger: true,
-              type: 'primary',
-            }}
-            onConfirm={() => {
-              onDelete?.();
-              toast.success(t('dev.deleteSuccess'));
-            }}
+          <Button
+            danger
+            style={buttonStyle}
+            onClick={() =>
+              confirmModal({
+                cancelText: t('cancel', { ns: 'common' }),
+                okButtonProps: { danger: true },
+                okText: t('ok', { ns: 'common' }),
+                onOk: () => {
+                  onDelete?.();
+                  toast.success(t('dev.deleteSuccess'));
+                },
+                content: t('dev.confirmDeleteDevPlugin'),
+                title: t('delete', { ns: 'common' }),
+              })
+            }
           >
-            <Button danger style={buttonStyle}>
-              {t('delete', { ns: 'common' })}
-            </Button>
-          </Popconfirm>
+            {t('delete', { ns: 'common' })}
+          </Button>
         ) : (
           <div />
         )}

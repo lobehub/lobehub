@@ -1,7 +1,7 @@
 'use client';
 
 import type { ExpertiseEnforcement } from '@lobechat/types';
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   Spin,
   Text,
+  TextArea,
   toast,
   Tooltip,
   useModalContext,

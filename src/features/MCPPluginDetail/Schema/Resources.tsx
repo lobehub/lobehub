@@ -22,6 +22,7 @@ const Resources = memo<{ mode?: ModeType }>(({ mode }) => {
       <InlineTable
         dataSource={resources}
         pagination={false}
+        rowKey={'uri'}
         size={'middle'}
         columns={[
           {
@@ -46,8 +47,8 @@ const Resources = memo<{ mode?: ModeType }>(({ mode }) => {
             title: t('mcp.details.schema.resources.table.uri'),
           },
           {
-            dataIndex: 'description',
             key: 'description',
+            render: (_, record) => (record as { description?: string }).description,
             title: t('mcp.details.schema.resources.table.description'),
           },
         ]}

@@ -10,9 +10,8 @@ import {
   ReactTablePlugin,
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { Flexbox, Icon, Input } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
-import { InputNumber } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Input, InputNumber, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -317,7 +316,7 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
                 size={'small'}
                 style={{ width: 120 }}
                 suffix={t('builtins.lobe-task.goal.roundsUnit')}
-                value={args.maxIterations ?? undefined}
+                value={args.maxIterations ?? null}
                 variant={'filled'}
                 onChange={(value) => patch({ maxIterations: value })}
               />
@@ -330,7 +329,7 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
                 prefix={'$'}
                 size={'small'}
                 style={{ width: 120 }}
-                value={args.maxTotalCost ?? undefined}
+                value={args.maxTotalCost ?? null}
                 variant={'filled'}
                 onChange={(value) => patch({ maxTotalCost: value })}
               />

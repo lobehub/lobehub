@@ -9,6 +9,7 @@ import * as activeWorkspaceModule from '@/business/client/hooks/useActiveWorkspa
 import { setScopedMutate } from '@/libs/swr';
 import { agentConfigKeys, builtinAgentKeys } from '@/libs/swr/keys';
 import * as cacheScopeModule from '@/libs/swr/useCacheScope';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useGlobalStore } from '@/store/global';
@@ -150,9 +151,13 @@ describe('AgentSlice Actions', () => {
         .optimisticUpdateAgentMeta('inbox-1', { name: 'Renamed chief' });
 
       expect(agentService.getBuiltinAgent).not.toHaveBeenCalled();
-      expect(scopedMutate).toHaveBeenCalledWith(agentConfigKeys.config('inbox-1'), updatedAgent, {
-        revalidate: false,
-      });
+      expect(scopedMutate).toHaveBeenCalledWith(
+        agentConfigKeys.config('inbox-1', getCacheScope()),
+        updatedAgent,
+        {
+          revalidate: false,
+        },
+      );
       expect(scopedMutate).toHaveBeenCalledWith(
         builtinAgentKeys.init('inbox', cacheScopeModule.getCacheScope()),
         updatedAgent,
@@ -197,7 +202,8 @@ describe('AgentSlice Actions', () => {
       expect(
         scopedMutate.mock.calls.some(
           ([key]) =>
-            JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('inbox-1')) ||
+            JSON.stringify(key) ===
+              JSON.stringify(agentConfigKeys.config('inbox-1', getCacheScope())) ||
             JSON.stringify(key) ===
               JSON.stringify(builtinAgentKeys.init('inbox', 'user-b:personal')),
         ),
@@ -888,7 +894,7 @@ describe('AgentSlice Actions', () => {
 
       expect(toast.error).toHaveBeenCalled();
       // Optimistic value must not survive a rejected write — refetch server truth.
-      expect(refreshSpy).toHaveBeenCalledWith('agent-1');
+      expect(refreshSpy).toHaveBeenCalledWith('agent-1', undefined, getCacheScope());
       expect(result.current.saveStatus).toBe('idle');
     });
 
@@ -1139,7 +1145,7 @@ describe('AgentSlice Actions', () => {
     // Note: refreshSessions is no longer called after optimistic update
     // as the implementation now uses API returned data directly
 
-    it('should refresh agent config SWR cache after a confirmed config update', async () => {
+    it('seeds the scoped config cache with the confirmed response without another request', async () => {
       const { result } = renderHook(() => useAgentStore());
       const scopedMutate = vi.fn().mockResolvedValue(undefined);
       setScopedMutate(scopedMutate as any);
@@ -1162,10 +1168,11 @@ describe('AgentSlice Actions', () => {
         });
       });
 
-      const configCacheCalls = scopedMutate.mock.calls.filter(
-        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
+      expect(scopedMutate).toHaveBeenCalledWith(
+        agentConfigKeys.config('agent-1', getCacheScope()),
+        { id: 'agent-1', model: 'model-b', provider: 'lobehub' },
+        { revalidate: false },
       );
-      expect(configCacheCalls).toEqual([[agentConfigKeys.config('agent-1')]]);
     });
 
     it('should not refresh agent config SWR cache when save fails', async () => {
@@ -1189,10 +1196,14 @@ describe('AgentSlice Actions', () => {
         });
       });
 
-      const configCacheCalls = scopedMutate.mock.calls.filter(
-        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
-      );
-      expect(configCacheCalls).toHaveLength(0);
+      const configCacheMatchers = scopedMutate.mock.calls
+        .map(([key]) => key)
+        .filter((key): key is (candidate: unknown) => boolean => typeof key === 'function');
+      expect(
+        configCacheMatchers.some((matcher) =>
+          matcher(agentConfigKeys.config('agent-1', getCacheScope())),
+        ),
+      ).toBe(false);
       expect(result.current.agentMap['agent-1']).toMatchObject({ model: 'model-b' });
     });
   });
@@ -1232,6 +1243,22 @@ describe('AgentSlice Actions', () => {
         title: 'New Title',
       });
       expect(result.current.availableAgents).toBeUndefined();
+    });
+
+    it('rolls back and rethrows when an optimistic projection owns the failure UI', async () => {
+      const { result } = renderHook(() => useAgentStore());
+      vi.mocked(agentService.updateAgentMeta).mockRejectedValue(new Error('save failed'));
+      act(() => {
+        useAgentStore.setState({ agentMap: { 'agent-1': { title: 'Original' } as any } });
+      });
+
+      await expect(
+        result.current.optimisticUpdateAgentMeta('agent-1', { title: 'Renamed' }, undefined, {
+          rethrow: true,
+        }),
+      ).rejects.toThrow('save failed');
+
+      expect(result.current.agentMap['agent-1']?.title).toBe('Original');
     });
 
     // Note: refreshSessions is no longer called after optimistic update

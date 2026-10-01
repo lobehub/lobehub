@@ -40,6 +40,10 @@ export class BranchResolver {
       // Invalid index (> children.length), ignore and continue to other strategies
     }
 
+    // A lone child is the answer every strategy below lands on; skip their
+    // subtree walks, which made long single-path chains quadratic.
+    if (idNode.children.length === 1) return idNode.children[0].id;
+
     // Priority 2: A persisted user descendant proves which historical branch the
     // user actually continued. Prefer the newest such descendant before the
     // generic "has children" fallback, which otherwise selects an older retried
@@ -93,6 +97,10 @@ export class BranchResolver {
       }
       // Invalid index (> metadataBranchIds.length), ignore and continue to other strategies
     }
+
+    // A lone child is the answer every strategy below lands on; skip their
+    // subtree walks, which made long single-path chains quadratic.
+    if (childIds.length === 1) return childIds[0];
 
     // Priority 2: Prefer the branch that the user most recently continued.
     const latestUserBranchId = this.findBranchContainingLatestUser(

@@ -15,6 +15,7 @@ import {
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useEntityMarkdown } from '@/features/EntityLink';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
 import { shinyTextStyles } from '@/styles';
@@ -253,6 +254,7 @@ const TrailItem = ({
 const TrailFinding = ({ view }: { view: GoalNodeView }) => {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
+  const markdownProps = useEntityMarkdown();
   const description = view.node.description;
   const summary = summaryOf(description);
 
@@ -283,7 +285,7 @@ const TrailFinding = ({ view }: { view: GoalNodeView }) => {
       />
       {open && description && (
         <div className={styles.evidence}>
-          <Markdown fontSize={13} variant={'chat'}>
+          <Markdown fontSize={13} variant={'chat'} {...markdownProps}>
             {description}
           </Markdown>
         </div>
@@ -491,6 +493,7 @@ const StoryChapter = ({
 }) => {
   const openChapter = useChatStore((s) => s.openGoalReportChapter);
   const { chapter } = view;
+  const markdownProps = useEntityMarkdown();
   const hasItems = view.findings.length > 0 || view.artifacts.length > 0;
 
   return (
@@ -508,7 +511,7 @@ const StoryChapter = ({
         </>
       }
     >
-      <Markdown className={styles.narrative} fontSize={14} variant={'chat'}>
+      <Markdown className={styles.narrative} fontSize={14} variant={'chat'} {...markdownProps}>
         {chapter.narrative}
       </Markdown>
       {hasItems && (

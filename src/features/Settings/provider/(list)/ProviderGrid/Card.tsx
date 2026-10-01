@@ -1,7 +1,6 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
-import { Avatar, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Avatar, Divider, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

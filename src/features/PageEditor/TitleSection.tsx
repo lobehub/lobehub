@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { Button, Skeleton } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, Skeleton, TextArea } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { SmilePlus } from 'lucide-react';
 import { memo, useState } from 'react';

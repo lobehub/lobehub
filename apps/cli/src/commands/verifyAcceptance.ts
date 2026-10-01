@@ -15,7 +15,7 @@ import { collectCommentFeedback } from './acceptanceCommentFeedback';
 import { attachAcceptanceFlowCommands } from './acceptanceFlow';
 import { attachAcceptanceRunCommands } from './acceptanceRun';
 import type { ReviewAnnotationRegion } from './verifyHelpers';
-import { formatAnnotationRegion, parseSubjectRef } from './verifyHelpers';
+import { formatAnnotationRegion, formatDisputedChapter, parseSubjectRef } from './verifyHelpers';
 
 /**
  * Resolve an acceptance from either its uuid or a `type:id` subject reference —
@@ -456,6 +456,8 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
             if (annotation.comment && annotation.comment !== entry.comment)
               console.log(`    ${pc.dim('region:')} ${annotation.comment}`);
             if (annotation.region) console.log(`      ${pc.dim(`└ ${annotation.region}`)}`);
+            const disputed = formatDisputedChapter(annotation.disputes);
+            if (disputed) console.log(`      ${pc.dim(`└ disputes ${disputed}`)}`);
           }
           if (entry.fileIds?.length)
             console.log(`    ${pc.dim(`attachments: ${entry.fileIds.join(', ')}`)}`);

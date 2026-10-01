@@ -1,9 +1,9 @@
 'use client';
 
 import { Flexbox, Markdown } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Divider, Skeleton } from '@lobehub/ui/base-ui';
 
+import { useEntityMarkdown } from '@/features/EntityLink';
 import { useClientDataSWR } from '@/libs/swr';
 import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
@@ -33,6 +33,7 @@ import { useGoalResultData } from './useGoalResultData';
 
 const FinalDocument = ({ documentId }: { documentId: string }) => {
   // The graph carries only the document id; its content is read for the page.
+  const markdownProps = useEntityMarkdown();
   const { data: document, isLoading } = useClientDataSWR(
     portalKeys.documentHeader(documentId),
     () => documentService.getDocumentById(documentId),
@@ -48,7 +49,11 @@ const FinalDocument = ({ documentId }: { documentId: string }) => {
       </Flexbox>
     );
 
-  return <Markdown variant={'chat'}>{document?.content ?? ''}</Markdown>;
+  return (
+    <Markdown variant={'chat'} {...markdownProps}>
+      {document?.content ?? ''}
+    </Markdown>
+  );
 };
 
 interface GoalResultProps {

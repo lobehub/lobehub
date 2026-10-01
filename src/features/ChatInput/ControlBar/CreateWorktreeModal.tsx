@@ -1,14 +1,14 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  Input,
   type ModalInstance,
   Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
 import { cssVar } from 'antd-style';
 import { t } from 'i18next';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -31,7 +31,7 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(({ onSubmit, reso
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
-  const inputRef = useRef<InputRef>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     queueMicrotask(() => inputRef.current?.focus());

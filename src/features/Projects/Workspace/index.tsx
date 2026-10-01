@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Flexbox, TextArea } from '@lobehub/ui';
-import { Button, Spin, Tag, Text } from '@lobehub/ui/base-ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Button, Spin, Tag, Text, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SendHorizontalIcon, SparklesIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -92,11 +92,11 @@ const ProjectWorkspace = memo(() => {
   const enabled = useUserStore(labPreferSelectors.enableProjects);
   const detail = useCurrentProjectDetail(projectId);
   const [message, setMessage] = useState('');
-  const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
+  const { error, mutate } = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
 
   if (!enabled) return <ProjectDisabled />;
   if (error) return <AsyncError error={error} variant={'page'} onRetry={() => mutate()} />;
-  if (isLoading || !detail)
+  if (!detail)
     return (
       <Center height={'100%'}>
         <Spin size="small" />

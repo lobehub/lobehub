@@ -1,14 +1,16 @@
 'use client';
 
-import { Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   confirmModal,
   createModal,
+  Input,
   ModalFooter,
   type ModalInstance,
   Select,
   Text,
+  TextArea,
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';

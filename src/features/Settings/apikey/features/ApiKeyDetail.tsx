@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Button, Drawer, Switch, Text } from '@lobehub/ui/base-ui';
-import { Popconfirm } from 'antd';
+import { Button, confirmModal, Drawer, Switch, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Pencil, Trash } from 'lucide-react';
 import { type FC, useState } from 'react';
@@ -270,27 +269,28 @@ const ApiKeyDetail: FC<ApiKeyDetailProps> = ({
           </Flexbox>
 
           <Flexbox horizontal justify={'flex-end'}>
-            <Popconfirm
-              cancelText={t('apikey.list.actions.deleteConfirm.actions.cancel')}
-              description={t('apikey.list.actions.deleteConfirm.content')}
-              okButtonProps={{ disabled: !canDelete }}
-              okText={t('apikey.list.actions.deleteConfirm.actions.ok')}
-              title={t('apikey.list.actions.deleteConfirm.title')}
-              onConfirm={async () => {
-                if (!canDelete) return;
-                await onDelete(apiKey.id);
-              }}
+            <Button
+              danger
+              disabled={!canDelete}
+              icon={Trash}
+              title={canDelete ? t('apikey.list.actions.delete') : manageTooltip}
+              type="text"
+              onClick={() =>
+                confirmModal({
+                  cancelText: t('apikey.list.actions.deleteConfirm.actions.cancel'),
+                  content: t('apikey.list.actions.deleteConfirm.content'),
+                  okButtonProps: { danger: true },
+                  okText: t('apikey.list.actions.deleteConfirm.actions.ok'),
+                  title: t('apikey.list.actions.deleteConfirm.title'),
+                  onOk: async () => {
+                    if (!canDelete) return;
+                    await onDelete(apiKey.id);
+                  },
+                })
+              }
             >
-              <Button
-                danger
-                disabled={!canDelete}
-                icon={Trash}
-                title={canDelete ? t('apikey.list.actions.delete') : manageTooltip}
-                type="text"
-              >
-                {t('apikey.list.actions.delete')}
-              </Button>
-            </Popconfirm>
+              {t('apikey.list.actions.delete')}
+            </Button>
           </Flexbox>
         </Flexbox>
       )}

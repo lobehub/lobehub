@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Text, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import type { ChangeEvent } from 'react';

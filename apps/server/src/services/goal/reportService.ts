@@ -67,28 +67,34 @@ export class GoalReportService {
         id: GOAL_COORDINATOR_ACTOR_ID,
         type: 'system',
       });
-      const created = await writer.createNodeOnce(goalId, {
-        description:
-          'Wrap-up: turn the finished Goal graph into a chaptered storyline and a written report. Does not affect the Goal status.',
-        kind: 'task',
-        priority: -2,
-        status: 'proposed',
-        title: GOAL_REPORT_TASK_TITLE,
-      });
-      if (!created) return undefined;
-      if (created.created) {
+      // A later result reuses the wrap-up node this Goal already recorded; it is
+      // never looked up by title, which any task could share.
+      const recorded = goal.config?.report?.nodeId;
+      const existing = recorded ? graph.nodes.find((node) => node.id === recorded) : undefined;
+      const node =
+        existing ??
+        (await writer.createNode(goalId, {
+          description:
+            'Wrap-up: turn the finished Goal graph into a chaptered storyline and a written report. Does not affect the Goal status.',
+          kind: 'task',
+          priority: -2,
+          status: 'proposed',
+          title: GOAL_REPORT_TASK_TITLE,
+        }));
+      if (!node) return undefined;
+      if (!existing) {
         const acceptance = graph.nodes.find(
-          (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE,
+          (candidate) =>
+            candidate.kind === 'task' && candidate.title === GOAL_ACCEPTANCE_TASK_TITLE,
         );
-        if (acceptance)
-          await writer.createEdge(goalId, created.node.id, acceptance.id, 'depends_on');
+        if (acceptance) await writer.createEdge(goalId, node.id, acceptance.id, 'depends_on');
       }
 
       const dispatch: GoalReportDispatch = {
         acceptanceKey: decision.key,
         dispatchedAt: new Date().toISOString(),
-        nodeId: created.node.id,
-        taskId: created.node.taskId ?? undefined,
+        nodeId: node.id,
+        taskId: node.taskId ?? undefined,
         trigger: decision.trigger,
       };
       await model.update(goalId, { config: { ...goal.config, report: dispatch } });

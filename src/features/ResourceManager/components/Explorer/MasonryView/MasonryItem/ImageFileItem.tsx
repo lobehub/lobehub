@@ -1,10 +1,9 @@
-import { Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Icon, Image, stopPropagation, Tooltip } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { Image } from 'antd';
 import { createStaticStyles, cx, keyframes } from 'antd-style';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
-import { memo, useRef, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { fileManagerSelectors, useFileStore } from '@/store/file';
@@ -188,7 +187,6 @@ const ImageFileItem = memo<ImageFileItemProps>(
     url,
   }) => {
     const { t } = useTranslation('components');
-    const wrapperRef = useRef<HTMLDivElement>(null);
     const knownAspectRatio = readAspectRatio(metadata);
     const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
     // Falls back to a reserved box until the bitmap reports its own ratio.
@@ -201,24 +199,9 @@ const ImageFileItem = memo<ImageFileItemProps>(
     const isSupportedForChunking = !isChunkingUnsupported(fileType || '');
     const imageLoaded = status === 'loaded';
 
-    /**
-     * Read the bitmap through the wrapper rather than the load event: antd's
-     * `Image` renders the `<img>` inside its own wrapper, so the event's
-     * `currentTarget` is not the image and `naturalWidth` reads back undefined.
-     * Silently skipping the correction left every upload with no stored
-     * dimensions parked on the fallback ratio — and `object-fit: cover` then
-     * cropped the thumbnail to a box the image never had.
-     */
-    const applyNaturalRatio = () => {
-      const img = wrapperRef.current?.querySelector('img');
-      if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
-        setAspectRatio(img.naturalWidth / img.naturalHeight);
-      }
-    };
-
     return (
       <>
-        <div className={styles.imageWrapper} ref={wrapperRef} style={{ aspectRatio }}>
+        <div className={styles.imageWrapper} style={{ aspectRatio }}>
           {!imageLoaded && (
             <div
               className={cx(styles.placeholder, status === 'loading' && styles.placeholderLoading)}
@@ -241,30 +224,32 @@ const ImageFileItem = memo<ImageFileItemProps>(
           {isInView && url && (
             <Image
               alt={name}
-              loading="lazy"
+              height={'100%'}
+              objectFit={'cover'}
+              preview={{ src: url }}
               src={url}
-              preview={{
-                src: url,
-              }}
+              variant={'borderless'}
+              width={'100%'}
               style={{
-                display: 'block',
-                height: '100%',
-                objectFit: 'cover',
-                opacity: imageLoaded ? 1 : 0,
-                transition: 'opacity 0.3s',
-                width: '100%',
-              }}
-              wrapperStyle={{
-                display: 'block',
+                borderRadius: 0,
                 height: '100%',
                 pointerEvents: imageLoaded ? 'auto' : 'none',
                 width: '100%',
               }}
+              styles={{
+                image: { opacity: imageLoaded ? 1 : 0, transition: 'opacity 0.3s' },
+                wrapper: { height: '100%', width: '100%' },
+              }}
               onError={() => setStatus('error')}
-              onLoad={() => {
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                // After an error Image loads a fallback bitmap; that load must not count.
+                if (img.getAttribute('src') !== url) return;
                 // Trust the bitmap over the stored metadata: a wrong stored
                 // ratio would crop the thumbnail for good.
-                applyNaturalRatio();
+                if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                  setAspectRatio(img.naturalWidth / img.naturalHeight);
+                }
                 setStatus('loaded');
               }}
             />

@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
-import { ActionIcon, Button, Spin, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Input, Spin, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { ArrowUpIcon, HouseIcon } from 'lucide-react';
 import { useState } from 'react';

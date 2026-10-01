@@ -1,12 +1,9 @@
 import { type BlockProps } from '@lobehub/ui';
 import { Block, Flexbox } from '@lobehub/ui';
-import { Spin, Text } from '@lobehub/ui/base-ui';
-import { Statistic } from 'antd';
+import { Spin, Statistic, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, responsive } from 'antd-style';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo } from 'react';
-
-const prefixCls = 'ant';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   header: css`
@@ -21,11 +18,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   statistic: css`
-    .${prefixCls}-statistic-content-value-int, .${prefixCls}-statistic-content-value-decimal {
-      font-size: 24px;
-      font-weight: bold;
-      line-height: 1.2;
-    }
+    font-weight: bold;
+    line-height: 1.2;
   `,
   title: css`
     overflow: hidden;
@@ -113,10 +107,10 @@ const StatisticCard = memo<StatisticCardProps>(
         {statistic && (
           <Flexbox gap={16} style={statistic.style}>
             <Statistic
-              className={styles.statistic}
+              classNames={{ value: styles.statistic }}
               precision={statistic.precision}
               prefix={statistic.prefix}
-              styles={statistic.valueStyle ? { content: statistic.valueStyle } : undefined}
+              styles={statistic.valueStyle ? { value: statistic.valueStyle } : undefined}
               suffix={statistic.suffix}
               value={statistic.value}
             />

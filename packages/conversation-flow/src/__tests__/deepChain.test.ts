@@ -67,9 +67,9 @@ const buildChain = (rounds: number, stepsPerRound: number, withTools = false): M
   return messages;
 };
 
-// These assert stack depth, not speed: parse still rescans the transcript per
-// chain step, so a loaded parallel run can take several seconds here.
-describe('parse on deep message chains', { timeout: 30_000 }, () => {
+// These assert stack depth. Chain collection looks steps up through per-parse
+// indexes rather than rescanning the transcript, so they also stay fast.
+describe('parse on deep message chains', () => {
   // The recursive walk overflowed Node's stack from ~2,000 plain / ~3,000
   // tool-call messages; browsers hit it near 1,200 inside a React render.
   it('parses a 4,000-message plain chain without overflowing the stack', () => {
@@ -93,5 +93,16 @@ describe('parse on deep message chains', { timeout: 30_000 }, () => {
       Array.from({ length: 200 }, () => ['user', 'assistantGroup']).flat(),
     );
     expect(result.flatList.at(-1)?.children).toHaveLength(10);
+  });
+
+  it('parses one agent run of 3,000 tool steps without overflowing the stack', () => {
+    // A single run keeps every step inside one assistant group, so the group's
+    // own chain walks see the whole depth, not just one round of it.
+    const messages = buildChain(1, 3000, true);
+
+    const result = parse(messages);
+
+    expect(result.flatList.map((m) => m.role)).toEqual(['user', 'assistantGroup']);
+    expect(result.flatList.at(-1)?.children).toHaveLength(3000);
   });
 });

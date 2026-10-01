@@ -1,8 +1,8 @@
 'use client';
 
 import type { GoalGraphDecision } from '@lobechat/types';
-import { Flexbox, Icon, Markdown, TextArea, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Markdown, Tooltip } from '@lobehub/ui';
+import { Button, confirmModal, Text, TextArea, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowRight,

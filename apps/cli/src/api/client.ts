@@ -90,6 +90,18 @@ export async function getTrpcClient(workspaceId?: string): Promise<TrpcClient> {
   return client;
 }
 
+/** Create an anonymous client for public Lambda procedures, without credential discovery. */
+export function createPublicLambdaClient(): TrpcClient {
+  return createTRPCClient<LambdaRouter>({
+    links: [
+      httpLink({
+        transformer: superjson,
+        url: `${resolveServerUrl()}/trpc/lambda`,
+      }),
+    ],
+  });
+}
+
 /**
  * Build a Lambda tRPC client from an already-resolved auth context, without
  * re-running credential discovery. Use this when the caller already holds a

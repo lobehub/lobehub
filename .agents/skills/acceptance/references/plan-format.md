@@ -111,7 +111,8 @@ result ID, subject ID, or the most recent round from another acceptance.
 
 Keep the same CLI server, account, and workspace as the verification. This example
 reads the resolved server from `lh doctor --offline --json` (`endpoints.resolution`
-check, `evidence.serverUrl`), preserving self-hosted hosts and ports. Doctor may exit
+check, `evidence.serverUrl`). Cloud browser links use `https://lobehub.com`;
+self-hosted and development origins retain their hosts and ports. Doctor may exit
 nonzero for unrelated diagnostics while still returning this field; only a valid
 endpoint result is used. No repair, network doctor probe, or remote write is requested.
 The example requires Node.js and the existing CLI commands, not a new CLI release:
@@ -127,7 +128,9 @@ const endpoint = JSON.parse(doctor.stdout).checks?.find((check) => check.id === 
 if (!['ok', 'warn'].includes(endpoint?.status) || !endpoint.evidence?.serverUrl) {
   throw new Error('Handoff blocked: the CLI did not resolve its server URL.');
 }
-const origin = new URL(endpoint.evidence.serverUrl).origin;
+const server = new URL(endpoint.evidence.serverUrl);
+const isCloud = server.hostname === 'lobehub.com' || server.hostname.endsWith('.lobehub.com');
+const origin = isCloud ? 'https://lobehub.com' : server.origin;
 const query = (...args) => JSON.parse(execFileSync('lh', [...args, '--json'], { encoding: 'utf8' }));
 const state = query('verify', 'plan', 'state', operationId);
 const runId = state?.verifyRunId;

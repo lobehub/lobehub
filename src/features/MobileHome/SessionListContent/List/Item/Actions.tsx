@@ -184,10 +184,12 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                     toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
                   }
                 },
-                title:
+                content:
                   sessionType === 'group'
                     ? t('confirmRemoveChatGroupItemAlert')
                     : t('confirmRemoveSessionItemAlert'),
+                okText: t('delete', { ns: 'common' }),
+                title: t('delete', { ns: 'common' }),
               });
             },
           },

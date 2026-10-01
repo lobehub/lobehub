@@ -1,11 +1,12 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
   type ModalInstance,
   Text,
+  TextArea,
   useModalContext,
 } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
@@ -50,9 +51,10 @@ const RequestChangesContent = ({ onConfirm }: RequestChangesContentProps) => {
       </Text>
       <TextArea
         autoFocus
+        aria-invalid={touched && empty}
         autoSize={{ maxRows: 8, minRows: 4 }}
         placeholder={t('goalProcess.result.signOff.changes.placeholder')}
-        status={touched && empty ? 'error' : undefined}
+        style={touched && empty ? { borderColor: cssVar.colorError } : undefined}
         value={comment}
         onChange={(event) => setComment(event.target.value)}
       />

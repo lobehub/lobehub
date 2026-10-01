@@ -1,6 +1,5 @@
 import { Markdown, Snippet } from '@lobehub/ui';
-import { Select, Tag } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Divider, Select, Tag } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -65,7 +64,9 @@ const GithubBadge = memo(() => {
         height={selectedStyle === 'for-the-badge' ? 28 : 20}
         src={styledBadgeUrl}
       />
-      <Divider style={{ color: cssVar.colorTextDescription, fontSize: 12 }}>OR</Divider>
+      <Divider style={{ color: cssVar.colorTextDescription, fontSize: 12, marginBlock: 16 }}>
+        OR
+      </Divider>
       <Select
         options={themeOptions}
         prefix={<Tag style={{ marginRight: 4 }}>theme</Tag>}

@@ -5,6 +5,8 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useWorkspaceSidePanel } from '@/features/RightPanel/WorkspaceSidePanel';
+
 import TaskWorkspaceLayout from './TaskWorkspaceLayout';
 
 const mocks = vi.hoisted(() => ({
@@ -18,10 +20,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock('react-router', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const actual = (await vi.importActual('react-router')) as typeof import('react-router');
+  const { useWorkspaceSidePanel } = await import('@/features/RightPanel/WorkspaceSidePanel');
+
+  const Outlet = () => (
+    <div data-testid="task-workspace-outlet">
+      <span data-testid="side-panel-host">{String(useWorkspaceSidePanel())}</span>
+    </div>
+  );
 
   return {
     ...actual,
-    Outlet: () => <div data-testid="task-workspace-outlet">outlet</div>,
+    Outlet,
   };
 });
 
@@ -78,6 +87,10 @@ vi.mock('@/hooks/useIsMobile', () => ({
   useIsMobile: () => mocks.isMobile,
 }));
 
+const SidePanelProbe = () => (
+  <span data-testid="side-panel-host">{String(useWorkspaceSidePanel())}</span>
+);
+
 describe('TaskWorkspaceLayout', () => {
   beforeEach(() => {
     mocks.isMobile = false;
@@ -127,5 +140,20 @@ describe('TaskWorkspaceLayout', () => {
 
     expect(screen.getByTestId('mobile-task-portal')).toBeInTheDocument();
     expect(screen.queryByTestId('task-agent-manager')).not.toBeInTheDocument();
+  });
+
+  // The routed page must be able to tell that the side panel is already taken:
+  // a second portal host would render the same detail twice and squeeze the
+  // page's own content to nothing beside its copy (review feedback, r1).
+  it('tells the routed page that the layout already owns the side panel', () => {
+    render(<TaskWorkspaceLayout />);
+
+    expect(screen.getByTestId('side-panel-host')).toHaveTextContent('true');
+  });
+
+  it('reports no layout-owned side panel outside the workspace layout', () => {
+    render(<SidePanelProbe />);
+
+    expect(screen.getByTestId('side-panel-host')).toHaveTextContent('false');
   });
 });

@@ -28,7 +28,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
   return {
     ...(await importOriginal<object>()),
     ContextMenuHost: () => React.createElement('div', { 'data-testid': 'context-menu-host' }),
-    ModalHost: () => React.createElement('div', { 'data-testid': 'legacy-modal-host' }),
     setContextMenuInterceptor: vi.fn(),
   };
 });
@@ -336,7 +335,6 @@ describe('SPAGlobalProvider', () => {
       </SPAGlobalProvider>,
     );
 
-    expect(screen.getByTestId('legacy-modal-host')).toBeInTheDocument();
     expect(screen.getByTestId('base-modal-host')).toBeInTheDocument();
     expect(screen.getByTestId('toast-host')).toBeInTheDocument();
     expect(screen.getByTestId('context-menu-host')).toBeInTheDocument();

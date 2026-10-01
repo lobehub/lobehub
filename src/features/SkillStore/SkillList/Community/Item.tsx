@@ -108,7 +108,9 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
                     }
                     await unInstallPlugin(identifier);
                   },
-                  title: t('store.actions.confirmUninstall'),
+                  content: t('store.actions.confirmUninstall'),
+                  okText: t('store.actions.uninstall'),
+                  title: t('store.actions.uninstall'),
                 });
               },
             },

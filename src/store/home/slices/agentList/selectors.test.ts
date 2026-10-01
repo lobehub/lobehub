@@ -7,6 +7,8 @@ import { homeAgentListSelectors } from './selectors';
 const createState = (overrides: Partial<HomeStore>): HomeStore =>
   ({
     agentGroups: [],
+    agentListScope: 'personal',
+    agentOptimisticPatches: {},
     pinnedAgents: [],
     privateAgentGroups: [],
     privatePinnedAgents: [],
@@ -28,6 +30,19 @@ const agent = (id: string) => ({
 });
 
 describe('homeAgentListSelectors - private pinned', () => {
+  it('projects an optimistic agent rename without mutating confirmed list data', () => {
+    const original = agent('a1');
+    const state = createState({
+      agentOptimisticPatches: {
+        a1: { mutationId: 1, patch: { title: 'Renamed' }, scope: 'personal' },
+      },
+      ungroupedAgents: [original],
+    });
+
+    expect(homeAgentListSelectors.ungroupedAgents(state)[0].title).toBe('Renamed');
+    expect(state.ungroupedAgents[0].title).toBe('a1');
+  });
+
   it('privatePinnedAgents returns the private pinned bucket', () => {
     const state = createState({ privatePinnedAgents: [agent('a1')] });
     expect(homeAgentListSelectors.privatePinnedAgents(state)).toEqual([agent('a1')]);

@@ -1,8 +1,9 @@
 import { type AgentLabelListItem } from '@lobechat/types';
-import { Flexbox, Input } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  Input,
   ModalFooter,
   Text,
   toast,

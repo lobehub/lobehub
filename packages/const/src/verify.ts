@@ -371,6 +371,100 @@ export const verifyEvidenceCapturedBy = [
 ] as const;
 export type VerifyEvidenceCapturedBy = (typeof verifyEvidenceCapturedBy)[number];
 
+/**
+ * How an agent marker on a video reads.
+ *
+ * - step:  an action the agent performed, logged while driving the recording
+ * - check: something the agent verified on this frame — a claim for the reviewer
+ *   to audit, never a pass
+ * - flag:  an anomaly the agent noticed and judged harmless, disclosed so the
+ *   reviewer can disagree
+ */
+export const verifyEvidenceChapterKinds = ['check', 'flag', 'step'] as const;
+export type VerifyEvidenceChapterKind = (typeof verifyEvidenceChapterKinds)[number];
+
+/** An agent-authored marker on a video evidence (`verify_evidence.metadata.chapters`). */
+export interface VerifyEvidenceChapter {
+  kind: VerifyEvidenceChapterKind;
+  /** Short name shown on the timeline; required for `step`. */
+  label?: string;
+  /** What the agent claims or noticed; required for `check` and `flag`. */
+  note?: string;
+  /** Seconds from the start of the video. */
+  t: number;
+}
+
+/** Upper bound on chapters per video — a timeline, not a transcript. */
+export const MAX_VERIFY_EVIDENCE_CHAPTERS = 100;
+
+const trimmedText = (value: unknown, max: number) =>
+  typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
+
+/**
+ * Read `chapters` from an evidence metadata bag (or a raw array), dropping
+ * malformed entries instead of failing: chapters guide the reviewer, so one bad
+ * marker must never cost the upload. Returns them sorted by time, or
+ * `undefined` when none survive.
+ */
+export const readEvidenceChapters = (value: unknown): VerifyEvidenceChapter[] | undefined => {
+  let raw: unknown;
+  if (Array.isArray(value)) raw = value;
+  else if (value && typeof value === 'object') raw = (value as { chapters?: unknown }).chapters;
+  if (!Array.isArray(raw)) return undefined;
+
+  const chapters: VerifyEvidenceChapter[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const { kind, label, note, t } = entry as Record<string, unknown>;
+    if (typeof t !== 'number' || !Number.isFinite(t) || t < 0) continue;
+    if (!verifyEvidenceChapterKinds.includes(kind as VerifyEvidenceChapterKind)) continue;
+    const chapter: VerifyEvidenceChapter = { kind: kind as VerifyEvidenceChapterKind, t };
+    const text = { label: trimmedText(label, 80), note: trimmedText(note, 500) };
+    if (chapter.kind === 'step' ? !text.label : !text.note) continue;
+    if (text.label) chapter.label = text.label;
+    if (text.note) chapter.note = text.note;
+    chapters.push(chapter);
+  }
+  if (chapters.length === 0) return undefined;
+  return chapters.sort((a, b) => a.t - b.t).slice(0, MAX_VERIFY_EVIDENCE_CHAPTERS);
+};
+
+/**
+ * Canonicalize the `chapters` key of an evidence metadata bag before it is
+ * stored: malformed markers are dropped, and chapters on anything but a video
+ * are removed (they have no timeline to sit on). Other keys pass through.
+ */
+export const normalizeEvidenceMetadata = (metadata: unknown, type: string): unknown => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+  if (!('chapters' in metadata)) return metadata;
+  const { chapters: _chapters, ...rest } = metadata as Record<string, unknown>;
+  const chapters = type === 'video' ? readEvidenceChapters(metadata) : undefined;
+  if (chapters) return { ...rest, chapters };
+  return Object.keys(rest).length > 0 ? rest : null;
+};
+
+/**
+ * A video timestamp as `m:ss.cc` — a skeleton flash can last a handful of
+ * frames. Rounds to whole centiseconds first so 59.999s carries into the next
+ * minute (`1:00.00`) instead of reading `0:60.00`.
+ */
+export const formatVideoTimestamp = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00.00';
+  const centiseconds = Math.round(seconds * 100);
+  const minutes = Math.floor(centiseconds / 6000);
+  const rest = (centiseconds - minutes * 6000) / 100;
+  return `${minutes}:${rest.toFixed(2).padStart(5, '0')}`;
+};
+
+/**
+ * The whole frame. A reviewer note on a video that marks a moment or a span
+ * without circling an area carries this region.
+ */
+export const FULL_FRAME_RECT = { height: 1, width: 1, x: 0, y: 0 } as const;
+
+export const isFullFrameRect = (rect: { height: number; width: number; x: number; y: number }) =>
+  rect.x === 0 && rect.y === 0 && rect.width === 1 && rect.height === 1;
+
 /** Default cap on automatic repair rounds when a rubric doesn't override it. */
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
 

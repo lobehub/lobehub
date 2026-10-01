@@ -14,6 +14,9 @@ const privateKeyPem = privateKey.export({ format: 'pem', type: 'pkcs8' });
 
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 
+const unsignedOf = (manifest) =>
+  Object.fromEntries(Object.entries(manifest).filter(([key]) => key !== 'signature'));
+
 const signManifest = (manifest) => ({
   ...manifest,
   signature: sign(null, Buffer.from(canonicalJson(manifest)), privateKeyPem).toString('base64'),
@@ -142,22 +145,73 @@ describe('resolveCore', () => {
 
   it('rejects a core with a missing tree file', () => {
     writeExternal('1.1.0', {
-      mutate: (dir) => fs.rmSync(path.join(dir, 'dist/renderer/index.html')),
+      mutate: (dir) => fs.rmSync(path.join(dir, 'cli/lobe-cli.js')),
     });
     writePointer({ current: '1.1.0' });
     const core = resolve();
     expect(core.source).toBe('builtin');
-    expect(core.log.join('\n')).toContain('missing dist/renderer/index.html');
+    expect(core.log.join('\n')).toContain('missing cli/lobe-cli.js');
   });
 
   it('accepts same-size local edits because content is hashed only while staging', () => {
     writeExternal('1.1.0', {
-      mutate: (dir) => fs.writeFileSync(path.join(dir, 'dist/renderer/index.html'), 'changed'),
+      mutate: (dir) => fs.writeFileSync(path.join(dir, 'package.json'), '{"type":"commonjz"}'),
     });
     writePointer({ current: '1.1.0' });
     const core = resolve();
     expect(core.source).toBe('external');
     expect(core.manifest.version).toBe('1.1.0');
+  });
+
+  describe('renderer overlay', () => {
+    const storeObject = (content) => {
+      const file = path.join(otaRoot(), 'store', sha256(content));
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, content);
+      return file;
+    };
+    const overlayExternal = (renderer) =>
+      writeExternal('1.1.0', {
+        mutate: (dir, manifest) => {
+          fs.rmSync(path.join(dir, 'dist/renderer'), { force: true, recursive: true });
+          if (renderer === undefined) return;
+          const entry = manifest.tree.find((file) => file.path === 'dist/renderer/index.html');
+          Object.assign(entry, { sha256: sha256(renderer), size: renderer.length });
+          Object.assign(manifest, signManifest(unsignedOf(manifest)));
+        },
+      });
+
+    it('accepts renderer content served from the builtin core', () => {
+      overlayExternal();
+      writePointer({ current: '1.1.0' });
+      const core = resolve();
+      expect(core.source).toBe('external');
+      expect(core.manifest.version).toBe('1.1.0');
+    });
+
+    it('accepts changed renderer content served from the object store', () => {
+      overlayExternal('<html>new</html>');
+      storeObject('<html>new</html>');
+      writePointer({ current: '1.1.0' });
+      expect(resolve().source).toBe('external');
+    });
+
+    it('rejects changed renderer content missing from the object store', () => {
+      overlayExternal('<html>new</html>');
+      writePointer({ current: '1.1.0' });
+      const core = resolve();
+      expect(core.source).toBe('builtin');
+      expect(core.log.join('\n')).toContain('missing dist/renderer/index.html');
+    });
+
+    it('rejects a truncated object in the store', () => {
+      overlayExternal('<html>new</html>');
+      fs.truncateSync(storeObject('<html>new</html>'), 3);
+      writePointer({ current: '1.1.0' });
+      const core = resolve();
+      expect(core.source).toBe('builtin');
+      expect(core.log.join('\n')).toContain('size mismatch dist/renderer/index.html');
+    });
   });
 
   it.each(['../x', 'dist/main/../x', './x', '/x', 'dist\\main\\x'])(

@@ -102,7 +102,9 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
                         }
                         await unInstallPlugin(identifier);
                       },
-                      title: t('store.actions.confirmUninstall'),
+                      content: t('store.actions.confirmUninstall'),
+                      okText: t('store.actions.uninstall'),
+                      title: t('store.actions.uninstall'),
                     });
                   },
                 },

@@ -197,7 +197,10 @@ A named `--session` reuses the same running browser and its cookies + localStora
 across commands. Each session is a separate daemon plus browser that outlives
 the calling process: close it with `agent-browser --session <name> close` when
 the run ends, and export `AGENT_BROWSER_IDLE_TIMEOUT_MS` (disabled by default)
-so an abandoned session shuts itself down. See
+so an abandoned session shuts itself down. Long runs should also recycle: close
+and reopen the session with `--restore` after a stretch of heavy captures, rather
+than letting one browser accumulate memory for the whole round. See
+[resource-guard.md](resource-guard.md) for the host-level backstop. See
 [../surfaces/web.md](../surfaces/web.md#web-teardown). To save and restore that
 state across browser restarts, also enable `--restore` with a stable session ID:
 
@@ -232,8 +235,10 @@ Providers: `agentcore`, `browserbase`, `browserless`, `browseruse`, `kernel`.
   `agent-browser --session <name> close` and reopen it. `close --all` / `pkill -f agent-browser` also kill other
   runs' sessions; use them only when no other agent is driving a browser.
 - **Sessions leak when not closed** — daemons never exit on their own unless
-  `AGENT_BROWSER_IDLE_TIMEOUT_MS` is set. `agent-browser session list` shows what
-  is still running.
+  `AGENT_BROWSER_IDLE_TIMEOUT_MS` is set, and `session list` can miss a daemon
+  whose run already died. Reap by pid, not only by session name, and keep the
+  [resource guard](resource-guard.md) running so a host that starts swapping is
+  stopped at the threshold instead of freezing.
 - **HMR invalidates everything** — after code changes during dev, refs break;
   re-snapshot or restart.
 - **`snapshot -i` doesn't find contenteditable** — use `snapshot -i -C` for rich

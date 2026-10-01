@@ -1,7 +1,7 @@
 'use client';
 
-import { Empty, Flexbox, List, SearchBar, stopPropagation, Tooltip } from '@lobehub/ui';
-import { Accordion, Avatar, Button, Checkbox, Switch, Text } from '@lobehub/ui/base-ui';
+import { Empty, Flexbox, SearchBar, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Accordion, Avatar, Button, Checkbox, List, Switch, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { omit } from 'es-toolkit/compat';
 import { Users } from 'lucide-react';
@@ -454,8 +454,8 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
               </Tooltip>
             ) : null,
             key: agentId,
+            label: title,
             showAction: true,
-            title,
           };
         })
 
@@ -673,6 +673,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                 {selectedTemplate ? (
                   templateMemberItems.length > 0 ? (
                     <List
+                      styles={{ item: { paddingInlineEnd: 56 } }}
                       items={templateMemberItems.map((member) => ({
                         actions: (
                           <Switch
@@ -702,12 +703,12 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                           </Tooltip>
                         ) : null,
                         key: member.key,
-                        showAction: true,
-                        title: (
+                        label: (
                           <Text type={member.isRemoved ? 'secondary' : undefined}>
                             {member.title}
                           </Text>
                         ),
+                        showAction: true,
                       }))}
                     />
                   ) : (
@@ -719,7 +720,10 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                     />
                   )
                 ) : selectedAgentListItems.length > 0 ? (
-                  <List items={selectedAgentListItems} />
+                  <List
+                    items={selectedAgentListItems}
+                    styles={{ item: { paddingInlineEnd: 56 } }}
+                  />
                 ) : (
                   <Empty
                     description={t('memberSelection.noSelectedAgents')}

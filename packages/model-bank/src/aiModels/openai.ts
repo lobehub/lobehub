@@ -20,6 +20,71 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
+      'GPT-6.1 Sol delivers near-Astra performance for complex coding, computer use, and professional work at a lower cost.',
+    displayName: 'GPT-6.1 Sol',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-6.1',
+    id: 'gpt-6.1-sol',
+    knowledgeCutoff: '2026-04',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        {
+          name: 'textInput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 272_000 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheRead',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.1, upTo: 272_000 },
+            { rate: 0.2, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheWrite',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2.5, upTo: 272_000 },
+            { rate: 5, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textOutput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 10, upTo: 272_000 },
+            { rate: 15, upTo: 'infinity' },
+          ],
+        },
+      ],
+    },
+    releasedAt: '2026-09-29',
+    settings: {
+      extendParams: ['gpt6ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_050_000,
+    description:
       'OpenAI’s most capable model for complex reasoning, coding, computer use, research, and document creation.',
     displayName: 'GPT-6 Astra',
     enabled: true,

@@ -60,6 +60,7 @@ describe('acceptance publication with missing evidence', () => {
     client.verify.uploadEvidence.mutate.mockResolvedValue({ id: 'evidence-1' });
     dir = await mkdtemp(path.join(tmpdir(), 'lh-evidence-'));
     await writeFile(path.join(dir, "screen's shot.png"), 'image fixture');
+    await writeFile(path.join(dir, 'scroll.mp4'), 'video fixture');
     await writeFile(path.join(dir, 'output.txt'), 'Observed the expected response.');
   });
 
@@ -625,6 +626,34 @@ describe('acceptance publication with missing evidence', () => {
     });
     expect(finalCheck().verdict).toBe('passed');
     expect(process.exitCode).toBeUndefined();
+  });
+
+  it('uploads a video with its chapters so the reviewer can seek to each claim', async () => {
+    const chapters = [
+      { kind: 'step', label: 'Scroll #3', t: 6 },
+      { kind: 'check', note: 'no skeleton after scroll #3', t: 7.9 },
+    ];
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [
+          {
+            evidence: [{ chapters, description: 'five scrolls at the top', path: 'scroll.mp4' }],
+            id: 'scroll',
+            name: '滑到顶部后继续上滑不出现骨架',
+            status: 'passed',
+          },
+        ],
+        plan: [
+          { id: 'scroll', requiredEvidence: ['video'], title: '滑到顶部后继续上滑不出现骨架' },
+        ],
+      }),
+    );
+    await run('ingest', dir, '--json');
+
+    expect(client.verify.uploadEvidence.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { chapters }, type: 'video' }),
+    );
   });
 
   it('retries only the failed attachment, reusing its file and preserving its caption and comparison', async () => {

@@ -1,6 +1,10 @@
 import { createHash, verify as cryptoVerify } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 import * as z from 'zod/v4';
+
+import type { ShellGlobal } from '@/const/shell';
 
 const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
 const packPathSchema = z.string().regex(/^packs\/[0-9a-f]{64}\.zip$/);
@@ -200,4 +204,14 @@ export const findMissingEntryAssets = (
   const missing = refs.filter((ref) => !exists(ref));
   if (!refs.some((ref) => /\.m?js$/.test(ref))) missing.push('<no script referenced>');
   return missing;
+};
+
+export const readBuiltinManifest = (shell: ShellGlobal): CoreManifest | null => {
+  if (shell.source === 'builtin') return shell.manifest;
+  try {
+    const raw = JSON.parse(readFileSync(path.join(shell.builtinDir, 'manifest.json'), 'utf8'));
+    return builtinManifestSchema.parse(raw);
+  } catch {
+    return null;
+  }
 };

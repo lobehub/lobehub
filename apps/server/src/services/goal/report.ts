@@ -1,4 +1,4 @@
-import { GOAL_ACCEPTANCE_TASK_TITLE, GOAL_REPORT_TASK_TITLE } from '@lobechat/const/goal';
+import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 import type {
   GoalEdgeKind,
   GoalGraphNode,
@@ -14,8 +14,19 @@ import type {
  * the agent and the checks on what it submits can be tested without IO.
  */
 
-export const isGoalReportNode = (node: Pick<GoalGraphNode, 'kind' | 'title'>) =>
-  node.kind === 'task' && node.title === GOAL_REPORT_TASK_TITLE;
+/**
+ * The wrap-up node is the one the dispatch recorded on the Goal. It is never
+ * matched by title: any task a planner or a person happens to call "Write the
+ * Goal report" would otherwise be hidden from the coordinator and reused as
+ * the wrap-up.
+ */
+export const goalReportNodeId = (graph: Pick<GoalGraphSnapshot, 'goal'>) =>
+  graph.goal.config?.report?.nodeId;
+
+export const isGoalReportNode = (
+  graph: Pick<GoalGraphSnapshot, 'goal'>,
+  node: Pick<GoalGraphNode, 'id'>,
+) => node.id === goalReportNodeId(graph);
 
 /**
  * The graph as the coordinator should see it: without the wrap-up node, its
@@ -24,8 +35,9 @@ export const isGoalReportNode = (node: Pick<GoalGraphNode, 'kind' | 'title'>) =>
  * from finishing — so every decision path reads this view.
  */
 export const withoutGoalReport = <T extends GoalGraphSnapshot>(graph: T): T => {
-  const hidden = new Set(graph.nodes.filter(isGoalReportNode).map((node) => node.id));
-  if (hidden.size === 0) return graph;
+  const reportNodeId = goalReportNodeId(graph);
+  if (!reportNodeId) return graph;
+  const hidden = new Set([reportNodeId]);
   return {
     ...graph,
     edges: graph.edges.filter(

@@ -1,9 +1,19 @@
 'use client';
 
 import { OFFICIAL_URL } from '@lobechat/const';
-import { Center, Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
-import { Accordion, Button, Spin, Text, toast, Upload, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, Input as AntInput } from 'antd';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import {
+  Accordion,
+  Button,
+  Input,
+  Spin,
+  Text,
+  TextArea,
+  toast,
+  Upload,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -74,6 +84,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
   // a well-formed handle, and treat it purely as a UX hint — the setup mutation
   // still rejects a taken handle on submit.
   const namespaceValue = Form.useWatch('namespace', form);
+  const displayNameValue = Form.useWatch('displayName', form);
   const trimmedNamespace = (namespaceValue ?? '').trim();
   const [namespaceAvailability, setNamespaceAvailability] = useState<NamespaceAvailability>('idle');
 
@@ -230,9 +241,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         >
           <Input
             placeholder={t('user.workspaceProfile.fields.websiteUrl.placeholder')}
-            prefix={
-              <Icon color={cssVar.colorTextSecondary} icon={Globe} style={{ marginRight: 8 }} />
-            }
+            prefix={<Icon color={cssVar.colorTextSecondary} icon={Globe} />}
           />
         </Form.Item>
 
@@ -351,9 +360,9 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
               ]}
             >
               <Input
-                showCount
                 maxLength={50}
                 placeholder={t('user.workspaceProfile.fields.displayName.placeholder')}
+                suffix={`${displayNameValue?.length ?? 0} / 50`}
               />
             </Form.Item>
           </Flexbox>
@@ -386,11 +395,11 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
               },
             ]}
           >
-            <AntInput
-              showCount
-              addonBefore={ORGANIZATION_URL_PREFIX}
+            <Input
               maxLength={32}
               placeholder={t('user.workspaceProfile.fields.namespace.placeholder')}
+              prefix={ORGANIZATION_URL_PREFIX}
+              suffix={`${namespaceValue?.length ?? 0} / 32`}
             />
           </Form.Item>
         )}

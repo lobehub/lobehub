@@ -192,7 +192,6 @@
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "^1.2.4",
-    "@ant-design/icons": "6.3.2",
     "@anthropic-ai/sdk": "^0.73.0",
     "@atlaskit/pragmatic-drag-and-drop": "^1.8.1",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.2.0",
@@ -345,7 +344,7 @@
     "@trpc/next": "^11.18.0",
     "@trpc/react-query": "^11.18.0",
     "@trpc/server": "^11.18.0",
-    "@upstash/qstash": "^2.11.3",
+    "@upstash/qstash": "2.12.0",
     "@upstash/workflow": "^0.2.23",
     "@vercel/analytics": "^1.6.1",
     "@vercel/edge-config": "^1.5.1",

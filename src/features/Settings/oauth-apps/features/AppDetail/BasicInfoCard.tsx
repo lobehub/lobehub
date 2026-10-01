@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Input, TextArea } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Input, Text, TextArea } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { PencilIcon } from 'lucide-react';
 import { type FC, useState } from 'react';
