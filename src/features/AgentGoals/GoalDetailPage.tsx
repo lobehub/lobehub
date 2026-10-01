@@ -260,43 +260,44 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
           open, the panel hosts the conversation with the goal's responsible
           agent so a user can just ask about progress.
 
-          Only when this page is the surface's one portal host: on the
-          agent-less route the task workspace already mounts its own panel, and
-          a second host would render the same detail twice while squeezing the
-          goal column to nothing beside it. */}
-      {hasWorkspaceSidePanel ? null : (
-        <RightPanel
-          expand={(showPortal || chatVisible) && !graphFullscreen}
-          maxWidth={maxWidth}
-          minWidth={minWidth}
-          width={width}
-          onSizeChange={(size) => updateWidth(size?.width)}
-          onExpandChange={(next) => {
-            if (!next) clearPortalStack();
-            chat.setOpen(next);
-          }}
-        >
-          {graphFullscreen ? null : showPortal ? (
+          On the agent-less route the task workspace already mounts the portal
+          host, so a drill-down renders there and this panel stays out of the
+          way: a second host would render the same detail twice while squeezing
+          the goal column to nothing beside it. The goal conversation and the
+          supervision trace have no other home, so those still mount here. */}
+      <RightPanel
+        expand={(showPortal ? !hasWorkspaceSidePanel : chatVisible) && !graphFullscreen}
+        maxWidth={maxWidth}
+        minWidth={minWidth}
+        width={width}
+        onSizeChange={(size) => updateWidth(size?.width)}
+        onExpandChange={(next) => {
+          if (!next) clearPortalStack();
+          chat.setOpen(next);
+        }}
+      >
+        {graphFullscreen ? null : showPortal ? (
+          hasWorkspaceSidePanel ? null : (
             <PortalContent />
-          ) : chat.agentId && chat.topicId ? (
-            <GoalSupervision
-              agentId={chat.agentId}
-              goalId={goalId}
-              key={`${goalId}:${chat.agentId}:${chat.request}`}
-              topicId={chat.topicId}
-              onCollapse={() => chat.setOpen(false)}
-            />
-          ) : chat.agentId ? (
-            <GoalChat
-              agentId={chat.agentId}
-              goalId={goalId}
-              initialTopicId={chat.topicId}
-              key={`${goalId}:${chat.agentId}:${chat.request}`}
-              onCollapse={() => chat.setOpen(false)}
-            />
-          ) : null}
-        </RightPanel>
-      )}
+          )
+        ) : chat.agentId && chat.topicId ? (
+          <GoalSupervision
+            agentId={chat.agentId}
+            goalId={goalId}
+            key={`${goalId}:${chat.agentId}:${chat.request}`}
+            topicId={chat.topicId}
+            onCollapse={() => chat.setOpen(false)}
+          />
+        ) : chat.agentId ? (
+          <GoalChat
+            agentId={chat.agentId}
+            goalId={goalId}
+            initialTopicId={chat.topicId}
+            key={`${goalId}:${chat.agentId}:${chat.request}`}
+            onCollapse={() => chat.setOpen(false)}
+          />
+        ) : null}
+      </RightPanel>
     </Flexbox>
   );
 });
