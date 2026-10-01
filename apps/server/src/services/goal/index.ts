@@ -2565,6 +2565,18 @@ export class GoalService {
       };
     }
 
+    // The goal was paused or ended (a close fenced it) while this advance was
+    // deciding: start nothing and do not reopen it.
+    if (recovery.outcome === 'goal-stopped') {
+      return {
+        goalId: graph.goal.id,
+        message: 'Goal stopped while recovery was being decided',
+        nodeId,
+        outcome: 'no_progress',
+        taskId: task.id,
+      };
+    }
+
     // Nothing failed: somebody settled the Task while this advance was deciding.
     // Opening a gate would ask them to judge their own decision.
     if (recovery.outcome === 'settled') {
@@ -2898,6 +2910,18 @@ export class GoalService {
         message: `Task ${task.identifier} is waiting for its device to reconnect`,
         nodeId,
         outcome: 'waiting_external',
+        taskId: task.id,
+      };
+    }
+
+    // The goal was paused or ended (a close fenced it) while this advance was
+    // deciding: start nothing and do not reopen it.
+    if (recovery.outcome === 'goal-stopped') {
+      return {
+        goalId: graph.goal.id,
+        message: 'Goal stopped while recovery was being decided',
+        nodeId,
+        outcome: 'no_progress',
         taskId: task.id,
       };
     }

@@ -461,6 +461,36 @@ describe('GoalService', () => {
     expect((await taskModel.findById(created.taskId!))?.status).toBe(settledAs);
   });
 
+  it.each([LEASE_EXPIRED_ERROR, VERIFICATION_ERRORED_ERROR])(
+    'does not start a recovery run once the goal is fenced for closing (%s)',
+    async (error) => {
+      const runSpy = vi
+        .spyOn(TaskRunnerService.prototype, 'runTask')
+        .mockResolvedValue({} as never);
+      const service = new GoalService(serverDB, userId);
+      const taskModel = new TaskModel(serverDB, userId);
+      const graph = await service.create({ title: `Fenced recovery ${error}`, tasks: ['Stop'] });
+      const created = await service.tick(graph.goal.id);
+      await taskModel.updateStatus(created.taskId!, 'paused', { error });
+      // The tick decided on a running goal; `close` then paused it under the
+      // goal row lock before scanning live runs.
+      const decidedOn = (await service.graph(graph.goal.id)).goal;
+      const task = (await taskModel.findById(created.taskId!))!;
+      await service.pause(graph.goal.id);
+      runSpy.mockClear();
+
+      const recovery = await new TaskRecoveryCoordinator(serverDB, userId).recover({
+        goal: decidedOn,
+        task,
+      });
+
+      expect(recovery.outcome).toBe('goal-stopped');
+      expect(runSpy).not.toHaveBeenCalled();
+      expect((await taskModel.findById(created.taskId!))?.status).toBe('paused');
+      expect((await service.graph(graph.goal.id)).goal.status).toBe('paused');
+    },
+  );
+
   it('does not restart a Task a person paused themselves', async () => {
     const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
     const service = new GoalService(serverDB, userId);
