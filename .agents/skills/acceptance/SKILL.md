@@ -2,7 +2,7 @@
 name: acceptance
 license: Apache-2.0
 metadata:
-  version: "0.5.3"
+  version: "0.6.1"
 description: >
   End-to-end verification and self-evidence for a delivery in any repository,
   with or without a preconfigured verify plan. Discover an existing plan when
@@ -379,7 +379,11 @@ Keep the Skill installation resource at
 Close every browser session this run opened
 (`agent-browser --session <name> close`, [web teardown](surfaces/web.md#web-teardown))
 before handing off; a session left open keeps a full browser running
-indefinitely.
+indefinitely. Stop this run's [resource guard](references/resource-guard.md)
+(`resource-guard.sh stop --state-dir <run state dir>`) as well, and state in the
+round report whether it
+reached yellow or red and what that stopped; a run that hit red must say which
+checks it left `blocked` instead of passing.
 
 Before declaring the task done, prove coverage: for each check with
 `requiredEvidence`, every declared `type` is present at least once. Report it
@@ -477,6 +481,7 @@ For both acceptance-checker handoffs and review output, read
 
 | Need                                           | Reference                                                                                                                                                                               |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bounding a run's memory use                    | [resource-guard.md](references/resource-guard.md) |
 | The project layer, bootstrapping an adapter    | [project-adapter.md](references/project-adapter.md)                                                                                                                                     |
 | Mistakes checklist (read every round)          | [common-mistakes.md](references/common-mistakes.md)                                                                                                                                     |
 | Forcing state, error injection, runtime probes | [probe-mock-patterns.md](references/probe-mock-patterns.md)                                                                                                                             |

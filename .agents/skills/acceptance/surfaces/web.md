@@ -21,7 +21,8 @@ on the desktop shell or is fully provable through backend/CLI output.
 
 ```bash
 SESSION=app-<run-id>                         # unique per run; parallel runs must not share one
-export AGENT_BROWSER_IDLE_TIMEOUT_MS=1800000 # backstop: daemon exits after 30 idle minutes
+export AGENT_BROWSER_IDLE_TIMEOUT_MS=1800000 # set this before the first call; the only thing
+                                             # that closes the session when the run dies
 agent-browser --session $SESSION open "http://localhost:3000/"
 agent-browser --session $SESSION snapshot -i
 # interact via refs, then capture
@@ -87,6 +88,16 @@ Close only the sessions this run opened. Never `close --all` or
 `pkill -f agent-browser` as routine cleanup — that kills sibling runs'
 browsers mid-capture. Keep `AGENT_BROWSER_IDLE_TIMEOUT_MS` set so a run that
 crashes before teardown still releases its browser.
+
+A session also grows *while* it stays open: renderer heap, page cache, and every
+screenshot, HAR buffer and CDP frame it has taken. On a run with many captures,
+close and reopen the session periodically (reopen with `--restore` to keep auth)
+instead of holding one browser for the whole round.
+
+When a run boots services, drives a browser and records media together, start the
+[resource guard](../references/resource-guard.md) next to the session: it samples
+swap and per-group RSS and, at red, stops only the processes this run started.
+Report its peak tier with the round.
 
 ## Boundaries
 
