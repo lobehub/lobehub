@@ -6,23 +6,34 @@ import { getAllScopePermissions } from '@/utils/rbac';
 import { zValidator } from '../common/validator';
 import { MemoryController } from '../controllers/memory.controller';
 import { requireAuth } from '../middleware/auth';
-import { requireAnyPermission } from '../middleware/permission-check';
+import {
+  requireAnyPermissionWithApiKeyScope,
+  requireApiKeyScope,
+} from '../middleware/permission-check';
 import { MemoryCategoryParamSchema, MemoryEntryPathParamSchema } from '../types/memory.type';
 
 /**
  * User memory routes.
  *
  * This is the "durable memory" half of a personal agent: the persona the agent
- * plans from, and the per-category entries it has learned. Writes carry the
- * same `message:create` gate as the in-app memory surface; reads are auth-only
- * because the models are already owner-scoped.
+ * plans from, and the per-category entries it has learned.
+ *
+ * Both gates mirror the delegated-key contract for `userMemory` in
+ * `packages/const/src/apiKeyScope.ts`. RBAC answers "may this user touch
+ * memory", the API-key scope answers "was this key delegated that capability";
+ * `message:create` alone is not enough, because it projects to `chat:write` and
+ * would let any restricted chat key read the persona and purge every memory.
  */
 const MemoryRoutes = new Hono();
 
-const memoryWrite = requireAnyPermission(
+const memoryWrite = requireAnyPermissionWithApiKeyScope(
   getAllScopePermissions('MESSAGE_CREATE'),
+  'user:write',
   'You do not have permission to manage memory',
 );
+
+/** Reading the persona and learned entries is the `user:read` capability. */
+const memoryRead = requireApiKeyScope('user:read');
 
 /** GET /api/v1/memories/persona */
 MemoryRoutes.get(
@@ -33,6 +44,7 @@ MemoryRoutes.get(
     tags: ['memories'],
   }),
   requireAuth,
+  memoryRead,
   async (c) => new MemoryController().getPersona(c),
 );
 
@@ -45,6 +57,7 @@ MemoryRoutes.get(
     tags: ['memories'],
   }),
   requireAuth,
+  memoryRead,
   async (c) => new MemoryController().listPersonaVersions(c),
 );
 
@@ -76,6 +89,7 @@ MemoryRoutes.get(
   '/:category',
   describeRoute({ operationId: 'listMemoryCategory', tags: ['memories'] }),
   requireAuth,
+  memoryRead,
   zValidator('param', MemoryCategoryParamSchema),
   async (c) => new MemoryController().listCategory(c),
 );

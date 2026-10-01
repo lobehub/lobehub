@@ -1,18 +1,26 @@
 // @vitest-environment node
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskRestService } from './task.service';
 
-const { createTaskMock, deleteTaskMock, hasAnyPermissionMock, resolveMock, updateTaskMock } =
-  vi.hoisted(() => ({
-    createTaskMock: vi.fn(),
-    deleteTaskMock: vi.fn(),
-    hasAnyPermissionMock: vi.fn(),
-    resolveMock: vi.fn(),
-    updateTaskMock: vi.fn(),
-  }));
+const {
+  createTaskMock,
+  deleteTaskMock,
+  hasAnyPermissionMock,
+  resolveMock,
+  resolveTaskPatchInvariantsMock,
+  updateTaskMock,
+} = vi.hoisted(() => ({
+  createTaskMock: vi.fn(),
+  deleteTaskMock: vi.fn(),
+  hasAnyPermissionMock: vi.fn(),
+  resolveMock: vi.fn(),
+  resolveTaskPatchInvariantsMock: vi.fn(),
+  updateTaskMock: vi.fn(),
+}));
 
 vi.mock('@/const/rbac', () => ({ ALL_SCOPE: 'all' }));
 vi.mock('@lobechat/database', () => ({
@@ -35,9 +43,19 @@ vi.mock('@/database/schemas', () => ({
   topics: {},
 }));
 vi.mock('@/utils/rbac', () => ({ getScopePermissions: () => [] }));
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: class {
+    getAgentVisibility = vi.fn().mockResolvedValue('public');
+  },
+}));
 vi.mock('@/database/models/task', () => ({
   TaskModel: class {
     resolve = resolveMock;
+  },
+}));
+vi.mock('@/server/services/editLock', () => ({
+  EditLockService: class {
+    getBlockingHolder = vi.fn().mockResolvedValue(null);
   },
 }));
 vi.mock('@/server/services/task', () => ({
@@ -46,6 +64,12 @@ vi.mock('@/server/services/task', () => ({
     deleteTask = deleteTaskMock;
     updateTaskWithAssigneeLock = updateTaskMock;
   },
+}));
+// The invariant chain itself is covered by
+// `apps/server/src/services/task/patchValidation.test.ts`; here we only pin that
+// the REST patch runs through it instead of writing the row directly.
+vi.mock('@/server/services/task/patchValidation', () => ({
+  resolveTaskPatchInvariants: resolveTaskPatchInvariantsMock,
 }));
 
 const CALLER = 'me';
@@ -77,10 +101,62 @@ describe('TaskRestService creator gate on delete', () => {
   });
 });
 
+describe('TaskRestService patch runs the shared invariants', () => {
+  const service = () => new TaskRestService({} as LobeChatDatabase, CALLER, WORKSPACE);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    hasAnyPermissionMock.mockResolvedValue(false);
+    resolveTaskPatchInvariantsMock.mockImplementation(async () => ({
+      data: { parentTaskId: 'parent-1' },
+      resolved: { createdByUserId: CALLER, id: 'task-1' },
+    }));
+    updateTaskMock.mockResolvedValue({ id: 'task-1' });
+  });
+
+  it('writes the row the invariants resolved, not the raw path id', async () => {
+    await expect(service().updateTask('TASK-1', { parentTaskId: 'parent-1' })).resolves.toEqual({
+      id: 'task-1',
+    });
+
+    expect(resolveTaskPatchInvariantsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: CALLER, workspaceId: WORKSPACE }),
+      expect.objectContaining({ id: 'TASK-1', parentTaskId: 'parent-1' }),
+    );
+    expect(updateTaskMock).toHaveBeenCalledWith(
+      'task-1',
+      { parentTaskId: 'parent-1' },
+      {
+        userId: CALLER,
+      },
+    );
+  });
+
+  it('refuses the patch when an invariant rejects it', async () => {
+    resolveTaskPatchInvariantsMock.mockRejectedValue(
+      new TRPCError({ code: 'BAD_REQUEST', message: 'Task cannot be parented to itself' }),
+    );
+
+    await expect(service().updateTask('task-1', { parentTaskId: 'task-1' })).rejects.toThrow(
+      'Task cannot be parented to itself',
+    );
+    expect(updateTaskMock).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing task instead of writing', async () => {
+    resolveTaskPatchInvariantsMock.mockRejectedValue(
+      new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' }),
+    );
+
+    await expect(service().updateTask('missing', { name: 'x' })).rejects.toThrow('Task not found');
+    expect(updateTaskMock).not.toHaveBeenCalled();
+  });
+});
+
 /**
- * The REST schemas check `schedulePattern` and `scheduleTimezone` one field at a
- * time; these cases pin the resulting-pair check, which is what stops a patch
- * from keeping a legacy timezone the dispatcher cannot evaluate.
+ * The task create boundary still validates its own schedule: `createTask` has no
+ * stored row to validate against, so the field schemas plus this pair check are
+ * the whole gate.
  */
 describe('TaskRestService write-time schedule validation', () => {
   const service = () => new TaskRestService({} as LobeChatDatabase, CALLER, WORKSPACE);
@@ -116,34 +192,5 @@ describe('TaskRestService write-time schedule validation', () => {
       }),
     ).resolves.toEqual({ id: 'task-1' });
     expect(createTaskMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('refuses a patch that would leave an unusable stored timezone in place', async () => {
-    resolveMock.mockResolvedValue({
-      createdByUserId: CALLER,
-      id: 'task-1',
-      schedulePattern: null,
-      scheduleTimezone: 'Legacy/Zone',
-    });
-
-    await expect(service().updateTask('task-1', { automationMode: 'schedule' })).rejects.toThrow(
-      /Invalid schedule/,
-    );
-    expect(updateTaskMock).not.toHaveBeenCalled();
-  });
-
-  it('patches a pattern against the stored timezone', async () => {
-    resolveMock.mockResolvedValue({
-      createdByUserId: CALLER,
-      id: 'task-1',
-      schedulePattern: null,
-      scheduleTimezone: 'Asia/Shanghai',
-    });
-    updateTaskMock.mockResolvedValue({ id: 'task-1' });
-
-    await expect(
-      service().updateTask('task-1', { schedulePattern: '0 9 * * 1-5' }),
-    ).resolves.toEqual({ id: 'task-1' });
-    expect(updateTaskMock).toHaveBeenCalledTimes(1);
   });
 });

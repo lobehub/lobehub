@@ -1,6 +1,9 @@
+import { AgentModel } from '@/database/models/agent';
 import { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
+import { EditLockService } from '@/server/services/editLock';
 import { TaskService } from '@/server/services/task';
+import { resolveTaskPatchInvariants } from '@/server/services/task/patchValidation';
 import { assertResultingScheduleValid } from '@/server/services/task/scheduleValidation';
 
 import { BaseService } from '../common/base.service';
@@ -56,20 +59,30 @@ export class TaskRestService extends BaseService {
   }
 
   async updateTask(id: string, input: UpdateTaskRequest): ServiceResult<unknown> {
-    const task = await this.taskModel.resolve(id);
-    if (!task) throw this.createNotFoundError('Task not found');
+    // Hierarchy, visibility, assignment and schedule invariants all live in one
+    // shared place, so this patch cannot persist what the in-app editor refuses
+    // — a task parented to itself, a public child under a private parent, an
+    // unusable or private assignee — and the two boundaries cannot drift.
+    const { data, resolved } = await resolveTaskPatchInvariants(
+      {
+        agentModel: new AgentModel(this.db, this.userId, this.workspaceId),
+        editLockService: new EditLockService(this.userId),
+        serverDB: this.db,
+        taskModel: this.taskModel,
+        taskService: this.taskService,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      },
+      { data: input, id, parentTaskId: input.parentTaskId },
+    );
 
-    // A pattern-only patch keeps the stored timezone, and turning on `schedule`
-    // mode re-checks the stored pair, so validate against the row being updated
-    // rather than the patch alone.
-    assertResultingScheduleValid(task, input);
-
-    // The update body is a partial row patch; the model owns which columns are
+    // The patch is a partial row update; the model owns which columns are
     // accepted and normalises the null-vs-undefined distinction itself.
-    const data = input as Parameters<TaskModel['update']>[1];
-    const updated = await this.taskService.updateTaskWithAssigneeLock(task.id, data, {
-      userId: this.userId,
-    });
+    const updated = await this.taskService.updateTaskWithAssigneeLock(
+      resolved.id,
+      data as Parameters<TaskModel['update']>[1],
+      { userId: this.userId },
+    );
     if (!updated) throw this.createNotFoundError('Task not found');
     return updated;
   }

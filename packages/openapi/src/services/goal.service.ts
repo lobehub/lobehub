@@ -147,13 +147,26 @@ export class GoalRestService extends BaseService {
   async updateGoal(id: string, input: UpdateGoalRequest): ServiceResult<unknown> {
     await this.requireGoal(id);
 
-    if (input.requirement) {
-      await this.goalService.updateRequirement(id, input.requirement);
-    }
+    // Both writes land in one transaction. A budget the goal cannot take (e.g.
+    // `maxManagerTurns` on a goal with no main Agent) must not leave the new
+    // requirement persisted behind a failed response — the caller would see a
+    // 400 while half the patch had already been applied.
+    await this.db.transaction(async (tx) => {
+      const service = new GoalService(tx, this.userId, this.workspaceId);
+
+      if (input.requirement) {
+        await service.updateRequirement(id, input.requirement);
+      }
+
+      if (input.budget) {
+        await service.setBudget(id, input.budget);
+      }
+    });
 
     if (input.budget) {
-      await this.goalService.setBudget(id, input.budget);
-      // Raising a budget is how a user un-sticks a goal that stopped on one.
+      // Raising a budget is how a user un-sticks a goal that stopped on one,
+      // and only after the transaction committed — an enqueue must never
+      // survive a rolled-back budget.
       await scheduleGoalAdvance({
         goalId: id,
         trigger: 'budget',
