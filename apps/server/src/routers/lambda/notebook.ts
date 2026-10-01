@@ -104,8 +104,10 @@ export const notebookRouter = router({
       // all for one piece of work. A byte-identical document of the same kind
       // already in this topic is that second write, so it reuses the row
       // instead of forking the document. Nothing changed, so nothing is
-      // registered either. The kind travels with the search: `agent/plan` is
-      // found by its type, so a plan must not be answered with a markdown note.
+      // registered either. The kind travels with the search, because a document
+      // is found by its type: `agent/plan` and the labelled kinds (`article` /
+      // `note` / `report`) stay distinct, so a plan is never answered with a
+      // markdown note and a note is never answered with a markdown row.
       const twin = await ctx.topicDocumentModel.findVerbatimTwin({
         content: input.content,
         fileType: input.type,

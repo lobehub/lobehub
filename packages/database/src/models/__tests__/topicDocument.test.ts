@@ -387,6 +387,33 @@ describe('TopicDocumentModel', () => {
 
       expect(twin).toBeUndefined();
     });
+
+    it('keeps a labelled kind distinct — a note is not answered by a markdown row', async () => {
+      await createWith('Notes', 'Same body', 'markdown');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'note',
+        title: 'Notes',
+        topicId,
+      });
+
+      expect(twin).toBeUndefined();
+      // The read has to agree with the write: a `note` create that reported
+      // success must be findable as a note.
+      expect(await topicDocumentModel.findByTopicId(topicId, { type: 'note' })).toHaveLength(0);
+    });
+
+    it('finds a plain document under every equivalent kind', async () => {
+      // `documentFileTypesOfKind` widens the write; the same equivalence widens
+      // the read, so whichever equivalent name a plain document was written as,
+      // a read by the name the caller asked for finds it.
+      const page = await createWith('Report', 'Same body', 'custom/document');
+
+      const byMarkdown = await topicDocumentModel.findByTopicId(topicId, { type: 'markdown' });
+
+      expect(byMarkdown.map((doc) => doc.id)).toEqual([page.id]);
+    });
   });
 
   describe('findByDocumentId', () => {

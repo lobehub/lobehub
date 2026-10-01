@@ -18,29 +18,37 @@ export interface TopicDocumentWithDetails extends DocumentItem {
 }
 
 /**
- * Kinds that are all one thing: a text document whose content is its bytes.
- * Which name a surface gives that document is a tool's own vocabulary — the
- * notebook writes `markdown`, the agent-documents surface writes
- * `agent/document`, and a Page is `custom/document` — so the same report written
- * through two of them is one document, not two.
+ * Kinds that are all the same document: the surfaces' own names for a plain text
+ * document whose content is its bytes. The notebook writes the unlabelled
+ * default as `markdown`, the agent-documents surface writes `agent/document`,
+ * and a Page is `custom/document` — so a report written through two of them is
+ * one document, not two.
  *
- * A structured artifact is deliberately absent. `agent/plan` is *found* by its
- * type (`findPlanByTopic` filters on it), so answering a plan write with a page
- * that happens to hold the same text would report a successful create and leave
- * no discoverable plan behind.
+ * The notebook's *labelled* kinds — `article`, `note`, `report` — are absent on
+ * purpose. A caller that asks for one of them asked for that kind, so it is
+ * matched and read exactly: letting a `note` write be answered by a markdown row
+ * would report success and then leave `listDocuments({ type: 'note' })` with
+ * nothing to return.
+ *
+ * A structured artifact is absent for the same reason, one step further:
+ * `agent/plan` is *found* by its type (`findPlanByTopic` filters on it).
  */
-export const TEXT_DOCUMENT_FILE_TYPES = [
+export const SAME_DOCUMENT_KIND_FILE_TYPES = [
   ...MARKDOWN_DOCUMENT_FILE_TYPES,
   AGENT_DOCUMENT_FILE_TYPE,
   CUSTOM_DOCUMENT_FILE_TYPE,
-  'article',
-  'note',
-  'report',
 ];
 
-/** The kinds a byte-identical twin of `fileType` may carry. */
-export const twinFileTypesFor = (fileType: string): string[] =>
-  TEXT_DOCUMENT_FILE_TYPES.includes(fileType) ? TEXT_DOCUMENT_FILE_TYPES : [fileType];
+/**
+ * Every kind a document of `fileType` may be stored as: the whole equivalent set
+ * for a plain document, the kind itself for anything with a name of its own.
+ *
+ * Both the twin search and {@link TopicDocumentModel.findByTopicId}'s kind
+ * filter read this, so the two cannot disagree — a document is always findable
+ * under the kind its writer asked for.
+ */
+export const documentFileTypesOfKind = (fileType: string): string[] =>
+  SAME_DOCUMENT_KIND_FILE_TYPES.includes(fileType) ? SAME_DOCUMENT_KIND_FILE_TYPES : [fileType];
 
 export class TopicDocumentModel {
   private userId: string;
@@ -126,7 +134,9 @@ export class TopicDocumentModel {
           this.ownership(),
           buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
           documentMatchesAccessScope(documents.metadata, this.documentAccessScope),
-          filter?.type ? eq(documents.fileType, filter.type) : undefined,
+          filter?.type
+            ? inArray(documents.fileType, documentFileTypesOfKind(filter.type))
+            : undefined,
         ),
       )
       .orderBy(desc(topicDocuments.createdAt));
@@ -150,9 +160,11 @@ export class TopicDocumentModel {
    * written twice, and the second write reuses the row.
    *
    * The kind is part of that identity, because a document can be *found* by its
-   * type: `findPlanByTopic` filters on `agent/plan`. Two plain documents that
-   * agree are still one (see {@link TEXT_DOCUMENT_FILE_TYPES}); a plan write
-   * must never be answered with the page that happens to hold the same text.
+   * type: `findPlanByTopic` filters on `agent/plan`, and the notebook's labelled
+   * kinds are filtered by callers too. Two plain documents that agree are still
+   * one (see {@link SAME_DOCUMENT_KIND_FILE_TYPES}); a plan write must never be
+   * answered with the page that happens to hold the same text, and neither must
+   * a `note` write be answered by a markdown row.
    */
   findVerbatimTwin = async (params: {
     content: string;
@@ -169,7 +181,7 @@ export class TopicDocumentModel {
           eq(topicDocuments.topicId, params.topicId),
           eq(documents.title, params.title),
           eq(documents.content, params.content),
-          inArray(documents.fileType, twinFileTypesFor(params.fileType)),
+          inArray(documents.fileType, documentFileTypesOfKind(params.fileType)),
           this.ownership(),
           buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
           documentMatchesAccessScope(documents.metadata, this.documentAccessScope),
