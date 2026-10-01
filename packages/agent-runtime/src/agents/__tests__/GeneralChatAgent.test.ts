@@ -305,6 +305,82 @@ describe('GeneralChatAgent', () => {
     // agent used to finish with "completed without tool calls", writing an
     // empty assistant message while the requested work never ran. Reject the
     // calls instead so the model can retry with a real name.
+    it('explains a device-picker call on a device-locked run instead of asking for the exact name', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        plan: { execution: { deviceId: 'device-a', kind: 'device', target: 'local' } },
+      } as Partial<AgentState>);
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [],
+        parentMessageId: 'msg-1',
+        result: {
+          content: '',
+          tool_calls: [
+            {
+              id: 't1',
+              type: 'function',
+              function: {
+                name: 'lobe-remote-device____activateDevice',
+                arguments: '{"deviceId":"device-b"}',
+              },
+            },
+          ],
+        },
+      });
+
+      const result = (await agent.runner(context, state)) as any;
+
+      expect(result.type).toBe('resolve_blocked_tools');
+      expect(result.payload.blockedContent).toContain(
+        'lobe-remote-device____activateDevice is not available in this run',
+      );
+      expect(result.payload.blockedContent).toContain('locked to device "device-a"');
+      expect(result.payload.blockedContent).toContain('device selector');
+      expect(result.payload.blockedContent).not.toContain('Copy a name exactly');
+    });
+
+    it('keeps the typo feedback for other names batched with a locked picker call', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        plan: { execution: { deviceId: 'device-a', kind: 'device', target: 'local' } },
+      } as Partial<AgentState>);
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [],
+        parentMessageId: 'msg-1',
+        result: {
+          content: '',
+          tool_calls: [
+            {
+              id: 't1',
+              type: 'function',
+              function: { name: 'lobe-remote-device____activateDevice', arguments: '{}' },
+            },
+            { id: 't2', type: 'function', function: { name: 'activateTools', arguments: '{}' } },
+          ],
+        },
+      });
+
+      const result = (await agent.runner(context, state)) as any;
+
+      expect(result.payload.blockedContent).toBe(
+        'Tool call rejected: lobe-remote-device____activateDevice is not available in this run. Device switching is off for this run: it is locked to device "device-a", where the Local System tools already run. You cannot activate another device from here. If the user wants a different device, tell them to pick it in the device selector of the chat input and send the message again.' +
+          '\n\n' +
+          'Tool call rejected: no available tool is named activateTools. Copy a name exactly as declared in the tools schema and call it again.',
+      );
+    });
+
     it('should reject unresolvable tool_calls so the model can retry', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
@@ -3428,54 +3504,72 @@ describe('GeneralChatAgent', () => {
       ]);
     });
 
-    it('should resolve blocked tool in headless mode when global resolver with policy always triggers', async () => {
-      const customResolver: GlobalInterventionAuditConfig = {
-        type: 'customBlocker',
-        policy: 'always',
-        resolver: async (toolArgs) => toolArgs.blocked === true,
-      };
+    // The approval mode lives on `principal.policy.userIntervention`; operations
+    // created before the move carry it at the top level. Both must still reach
+    // the decision, or a background run parks for an approval nobody can give.
+    it.each([
+      {
+        shape: 'policy slot',
+        state: { principal: { policy: { userIntervention: { approvalMode: 'headless' } } } },
+      },
+      {
+        shape: 'legacy top level',
+        state: { userInterventionConfig: { approvalMode: 'headless' } },
+      },
+    ])(
+      'should resolve blocked tool in headless mode when global resolver with policy always triggers (%s)',
+      async ({ state: interventionState }) => {
+        const customResolver: GlobalInterventionAuditConfig = {
+          type: 'customBlocker',
+          policy: 'always',
+          resolver: async (toolArgs) => toolArgs.blocked === true,
+        };
 
-      const agent = new GeneralChatAgent({
-        agentConfig: { maxSteps: 100 },
-        globalInterventionAudits: [customResolver],
-        operationId: 'test-session',
-        modelRuntimeConfig: mockModelRuntimeConfig,
-      });
+        const agent = new GeneralChatAgent({
+          agentConfig: { maxSteps: 100 },
+          globalInterventionAudits: [customResolver],
+          operationId: 'test-session',
+          modelRuntimeConfig: mockModelRuntimeConfig,
+        });
 
-      const blockedTool: ChatToolPayload = {
-        id: 'call-1',
-        identifier: 'my-tool',
-        apiName: 'doSomething',
-        arguments: '{"blocked":true}',
-        type: 'default',
-      };
+        const blockedTool: ChatToolPayload = {
+          id: 'call-1',
+          identifier: 'my-tool',
+          apiName: 'doSomething',
+          arguments: '{"blocked":true}',
+          type: 'default',
+        };
 
-      const state = createMockState({
-        toolManifestMap: {
-          'my-tool': { identifier: 'my-tool' },
-        },
-        userInterventionConfig: { approvalMode: 'headless' },
-      });
-
-      const context = createMockContext('llm_result', {
-        hasToolsCalling: true,
-        toolsCalling: [blockedTool],
-        parentMessageId: 'msg-1',
-      });
-
-      const result = await agent.runner(context, state);
-
-      // Headless/CLI has no human intervention UI, so return a blocked tool result for replan.
-      expect(result).toEqual([
-        {
-          payload: {
-            parentMessageId: 'msg-1',
-            toolsCalling: [blockedTool],
+        const state = createMockState({
+          toolManifestMap: {
+            'my-tool': { identifier: 'my-tool' },
           },
-          type: 'resolve_blocked_tools',
-        },
-      ]);
-    });
+          ...(interventionState as Record<string, unknown>),
+        });
+
+        const context = createMockContext('llm_result', {
+          hasToolsCalling: true,
+          toolsCalling: [blockedTool],
+          parentMessageId: 'msg-1',
+        });
+
+        const result = await agent.runner(context, state);
+
+        // Headless/CLI has no human intervention UI, so return a blocked tool result for replan.
+        expect(result).toEqual([
+          {
+            payload: {
+              blockedContent:
+                'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+              blockedReason: 'human_intervention_unavailable',
+              parentMessageId: 'msg-1',
+              toolsCalling: [blockedTool],
+            },
+            type: 'resolve_blocked_tools',
+          },
+        ]);
+      },
+    );
 
     it('should execute tool in headless mode when global resolver with policy required triggers', async () => {
       const customResolver: GlobalInterventionAuditConfig = {
@@ -3762,6 +3856,51 @@ describe('GeneralChatAgent', () => {
   });
 
   describe('headless mode (for async tasks)', () => {
+    it.each(['manual', 'auto-run', 'allow-list'] as const)(
+      'parks creator questions in %s mode instead of blocking them',
+      async (approvalMode) => {
+        const agent = new GeneralChatAgent({
+          agentConfig: { maxSteps: 100 },
+          operationId: 'creator-wakeup',
+          modelRuntimeConfig: mockModelRuntimeConfig,
+        });
+        const question: ChatToolPayload = {
+          id: 'question-1',
+          identifier: 'lobe-user-interaction',
+          apiName: 'askUserQuestion',
+          arguments: '{}',
+          type: 'builtin',
+        };
+        const result = await agent.runner(
+          createMockContext('llm_result', {
+            hasToolsCalling: true,
+            toolsCalling: [question],
+            parentMessageId: 'creator-message',
+          }),
+          createMockState({
+            toolManifestMap: {
+              'lobe-user-interaction': {
+                identifier: 'lobe-user-interaction',
+                api: [{ name: 'askUserQuestion', humanIntervention: 'always' }],
+              },
+            },
+            userInterventionConfig: {
+              approvalMode,
+              allowList: ['lobe-user-interaction/askUserQuestion'],
+            },
+          }),
+        );
+        expect(result).toEqual([
+          {
+            parentMessageId: 'creator-message',
+            pendingToolsCalling: [question],
+            reason: 'human_intervention_required',
+            type: 'request_human_approve',
+          },
+        ]);
+      },
+    );
+
     it('should execute tool-level required tools in headless mode', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
@@ -3897,6 +4036,9 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           payload: {
+            blockedContent:
+              'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+            blockedReason: 'human_intervention_unavailable',
             parentMessageId: 'msg-1',
             toolsCalling: [alwaysTool],
           },
@@ -3945,6 +4087,9 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           payload: {
+            blockedContent:
+              'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+            blockedReason: 'human_intervention_unavailable',
             parentMessageId: 'msg-1',
             toolsCalling: [blacklistedTool],
           },
@@ -4024,6 +4169,9 @@ describe('GeneralChatAgent', () => {
         },
         {
           payload: {
+            blockedContent:
+              'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+            blockedReason: 'human_intervention_unavailable',
             parentMessageId: 'msg-1',
             toolsCalling: [blacklistedTool, alwaysTool],
           },
@@ -4081,6 +4229,9 @@ describe('GeneralChatAgent', () => {
         },
         {
           payload: {
+            blockedContent:
+              'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+            blockedReason: 'human_intervention_unavailable',
             parentMessageId: 'msg-1',
             toolsCalling: [tool2],
           },

@@ -233,6 +233,36 @@ PostgreSQL, not on the bundled node. To run them against Elastic Cloud instead, 
 `elasticsearch` profile out of `COMPOSE_PROFILES`, set `ES_URL` and `ES_API_KEY` in `.env`, and do
 not set `ES_ALLOW_INSECURE_HTTP`; steps 2 to 4 are otherwise identical.
 
+### Rebuild the current Elasticsearch schema generation
+
+When a projection or capture behavior change requires every historical document to be regenerated,
+first upgrade every application and continuous-sync worker. Then build a new physical generation
+from PostgreSQL without changing the mapping version:
+
+```bash
+docker compose run --rm fts-search-reindex \
+  --apply --rebuild-current --entity=messages --yes
+```
+
+The command prints a run ID and an index such as `<namespace>-messages-v1-r<run-id>`. If interrupted,
+run the same command with `--run-id=<run-id>`. Continuous sync writes both the existing and rebuilding
+generations; do not pause application writes or the sync worker. Creating the checkpoint briefly
+fences only the PostgreSQL tables that can emit the selected entities; resuming the same checkpoint
+does not repeat that fence. After the backfill reports
+`ready_for_incremental_sync` and the `messages` Outbox is idle, promote the exact physical index:
+
+```bash
+docker compose run --rm fts-search-reindex \
+  --promote --entity=messages --generation=<exact-index> --yes
+```
+
+The alias and logical schema version remain unchanged. Keep the previous generation during an
+observation window so the alias can be promoted back to its exact name. Once rollback is no longer
+needed, run `--purge --entity=messages --yes`. Purge installs an exact-name auto-create guard before
+deleting each detached old index. Self-managed clusters may run `--retire --entity=messages --yes`
+first to close old indexes; Elastic Cloud Serverless does not support index close, so skip retire and
+purge directly.
+
 Security boundary of this mode: `ES_ALLOW_INSECURE_HTTP=true` permits plaintext HTTP to a
 non-loopback host and lets `ES_API_KEY` be omitted. It never permits sending an API key over
 plaintext HTTP, so do not combine it with `ES_API_KEY` and an `http://` URL. The Elasticsearch

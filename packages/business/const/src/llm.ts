@@ -5,6 +5,14 @@ export const DEFAULT_PROVIDER = 'deepseek';
 export const DEFAULT_MINI_MODEL = 'gpt-5.6-luna';
 export const DEFAULT_MINI_PROVIDER = 'openai';
 
+/**
+ * The speech-to-text model that transcribes voice messages for runtimes that only take text
+ * (heterogeneous agents). It only takes effect once its provider is enabled, so a deployment
+ * without that provider keeps voice input for those agents hidden.
+ */
+export const DEFAULT_ASR_MODEL = 'gpt-4o-mini-transcribe';
+export const DEFAULT_ASR_PROVIDER = 'openai';
+
 export const DEFAULT_ONBOARDING_MODEL = 'gemini-3-flash-preview';
 export const DEFAULT_ONBOARDING_PROVIDER = 'google';
 
@@ -13,8 +21,14 @@ export const DEFAULT_ONBOARDING_PROVIDER = 'google';
  * MUST be vision-capable — a text-only model silently "accepts on missing
  * evidence" for every check and no proposal ever surfaces (a model-bank
  * test in apps/server guards this).
+ *
+ * Changing it is not free: a prediction counts as current only while its
+ * provider + model + prompt version all match (`isCurrentReviewPrediction`), so
+ * every stored prediction from the previous model is re-judged, and agreement
+ * stats gathered under it cannot be pooled with the new ones. Treat a swap as
+ * opening a new cohort rather than a routine version bump.
  */
-export const DEFAULT_REVIEW_PREDICT_MODEL = 'gemini-3.6-flash';
+export const DEFAULT_REVIEW_PREDICT_MODEL = 'gemini-3.8-flash';
 export const DEFAULT_REVIEW_PREDICT_PROVIDER = 'google';
 
 /**

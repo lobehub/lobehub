@@ -5,6 +5,7 @@ import { documentLikes } from '../schemas/documentLike';
 import { documents } from '../schemas/file';
 import { users } from '../schemas/user';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
 
 export const DOCUMENT_LIKE_WORKSPACE_REQUIRED =
   'Document likes are workspace-scoped; a workspaceId is required';
@@ -68,7 +69,7 @@ export class DocumentLikeModel {
     const [document] = await tx
       .select({ id: documents.id, userId: documents.userId, workspaceId: documents.workspaceId })
       .from(documents)
-      .where(eq(documents.id, documentId))
+      .where(and(eq(documents.id, documentId), notTrashed(documents.isDeleted)))
       .limit(1)
       .for(mode);
 

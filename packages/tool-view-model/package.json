@@ -9,6 +9,9 @@
   "scripts": {
     "test": "vitest"
   },
+  "dependencies": {
+    "@lobechat/const": "workspace:*"
+  },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   }

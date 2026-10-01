@@ -50,6 +50,47 @@ canonical conversation at every step boundary:
 This extension is intentionally limited to mux (`/v2/ws`) and the native harness. V1,
 heterogeneous CLI ingest, and share visitors keep their existing snapshot behavior.
 
+### 0.2 Projected `tool_end` results
+
+`tool_end` announces that a tool finished; it is not how the result reaches the
+screen. That arrives with the message, through a read path that already projects
+it, so the event carries a second copy of the largest payload on the connection.
+
+The gateway push runs `result.state` through the same per-tool projectors the read
+path uses, keeping mid-run and settled renders identical, and drops `result.content`
+for the tools vouched for by the `eventBodyUnused` allowlist in
+`@lobechat/tool-view-model`. The allowlist exists because several renderer-side
+`onAfterCall` hooks parse the body for invisible side effects — a shell result tells
+the topic which branch it switched to and which PR it opened — so shell and worktree
+tools keep their body, and any tool not on the list is unchanged.
+
+This is applied in `GatewayStreamNotifier`, the WS transport seam. In-process
+consumers — the OpenAI-compatible Responses endpoint, recorded step events — install
+their own stream manager, never reach this path, and keep the real body.
+
+### 0.3 Projected `stream_end`
+
+`stream_end` publishes `finalContent`, `reasoning`, `toolsCalling`, `usage`,
+`grounding` and `imageList`. On this wire the store reads `finalContent` alone —
+a reasoning-only answer arrives as chunks and is promoted into it — and the CLI
+renders nothing from the payload. The rest already arrived token by token as
+`stream_chunk`, and lands again, canonically, with the message.
+
+So the gateway push keeps `finalContent` and `stepLabel` and drops the rest;
+on a sampled run that was 12 kB of a 14 kB event. Same seam as `tool_end`:
+in-process consumers install their own stream manager and keep the full payload.
+
+### 0.4 The operation id is sent once per frame
+
+The envelope names the channel an event came down, so the hub omits
+`event.operationId` whenever it would repeat it. At 59 characters carried twice
+it was the most repeated string on the wire — 5% of a sampled session.
+
+A mirrored member event still carries its own id, which differs from the
+envelope's and is therefore never omitted, and `GatewayMuxClient` fills the
+field back in from the envelope before emitting. Readers downstream are
+unchanged. The client tolerating the gap must ship before the hub opens it.
+
 ## 1. Topology
 
 ```
@@ -115,7 +156,10 @@ Existing routes unchanged. New:
    status in the lifecycle notification only.
 
 Leave `interrupt` as-is (documented no-op; the web client interrupts via tRPC). Do not
-attempt to implement it.
+attempt to implement it. The hub still accepts and forwards the frame for wire
+compatibility, but no client in this repo sends one: `sendInterrupt` was removed from both
+`AgentStreamClient` and `OperationSubscription` so nothing can be wired to a stop that the
+op DO silently drops.
 
 ### 3.2 Init metadata
 
@@ -201,7 +245,7 @@ Hub → client messages:
 
 ```ts
 | { type:'ready'; userId; connectionId; protocol: 2 }
-| { type:'agent_event'; operationId; id; event }          // event.operationId may differ (mirrored member)
+| { type:'agent_event'; operationId; id; event }          // event.operationId is omitted when equal, and may differ (mirrored member)
 | { type:'session_complete'; operationId; id; summary? }
 | { type:'status_change'; operationId; id; status }
 | { type:'tool_confirmation_request'; operationId; id; toolCallId; tool }
@@ -284,7 +328,6 @@ interface OperationSubscription {
   on<K extends keyof AgentStreamClientEvents>(event: K, cb: AgentStreamClientEvents[K]): () => void;
   // plus 'resume_complete': (info: { status?: SessionStatus; gap: boolean; pending?: boolean }) => void
   sendToolResult(result: ToolResultPayload): boolean; // queued while disconnected, TTL 120s
-  sendInterrupt(): boolean;
   unsubscribe(): void;
 }
 ```
@@ -307,7 +350,7 @@ Behavior:
 - `createOperationClient(mux, operationId, { resumeOnConnect?, lastEventId?, executor? })`
   returns an object structurally compatible with the store's
   `GatewayConnection['client']` Pick (`connect`, `disconnect`, `on`, `reconnect`,
-  `sendInterrupt`, `sendToolResult`, `updateToken`): `connect` = subscribe, `disconnect` =
+  `sendToolResult`, `updateToken`): `connect` = subscribe, `disconnect` =
   unsubscribe, `reconnect` = unsubscribe+subscribe with lastEventId, `updateToken` = no-op
   (token comes from `getToken`). Emits the same `AgentStreamClientEvents`
   (`connected` when `resume_complete`/first event arrives or immediately if the socket is

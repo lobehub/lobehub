@@ -36,6 +36,21 @@ describe('agentDocumentsRuntime', () => {
       'userId and serverDB are required for Agent Documents execution',
     );
   });
+
+  it('fails closed when a Share document call has no topic context', () => {
+    expect(() =>
+      agentDocumentsRuntime.factory({
+        agentShareVisitor: {
+          agentId: 'agent-1',
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+        serverDB: {} as any,
+        toolManifestMap: {},
+        userId: 'user-1',
+      }),
+    ).toThrow('topicId is required for Agent Share document execution');
+  });
 });
 
 describe('agentDocumentsRuntime auto-pin to task', () => {
@@ -51,6 +66,8 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     createDocument: ReturnType<typeof vi.fn>;
     createForTopic: ReturnType<typeof vi.fn>;
     getDocumentSnapshotById: ReturnType<typeof vi.fn>;
+    listDocuments: ReturnType<typeof vi.fn>;
+    listDocumentsForTopic: ReturnType<typeof vi.fn>;
     renameDocumentById: ReturnType<typeof vi.fn>;
   };
   let pinDocument: ReturnType<typeof vi.fn>;
@@ -63,6 +80,8 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       createDocument: vi.fn().mockResolvedValue(newDoc),
       createForTopic: vi.fn().mockResolvedValue(newDoc),
       getDocumentSnapshotById: vi.fn().mockResolvedValue(newDoc),
+      listDocuments: vi.fn().mockResolvedValue([newDoc]),
+      listDocumentsForTopic: vi.fn().mockResolvedValue([newDoc]),
       renameDocumentById: vi.fn().mockResolvedValue(newDoc),
     };
     pinDocument = vi.fn().mockResolvedValue(undefined);
@@ -79,10 +98,15 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     });
   });
 
-  const buildContext = (taskId?: string, workspaceId?: string) => {
+  const buildContext = (
+    taskId?: string,
+    workspaceId?: string,
+    taskRows: Array<{ workspaceId: string | null }> = [{ workspaceId: null }],
+    overrides?: Partial<ToolExecutionContext>,
+  ) => {
     // Mock the workspace lookup chain that `pinToTask` runs against the task
     // row. Returning `workspaceId: null` reproduces personal-mode behavior.
-    const limit = vi.fn().mockResolvedValue([{ workspaceId: null }]);
+    const limit = vi.fn().mockResolvedValue(taskRows);
     const where = vi.fn().mockReturnValue({ limit });
     const from = vi.fn().mockReturnValue({ where });
     const select = vi.fn().mockReturnValue({ from });
@@ -92,6 +116,7 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       toolManifestMap: {},
       userId: 'user-1',
       workspaceId,
+      ...overrides,
     };
   };
 
@@ -101,6 +126,63 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     await runtime.createDocument({ content: 'body', title: 'Daily Brief' }, { agentId: 'agent-1' });
 
     expect(pinDocument).toHaveBeenCalledWith('task-1', 'documents-row-id', 'agent');
+  });
+
+  it('fails before document mutation when a legacy task anchor was trashed', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('trashed-task', undefined, []));
+
+    await expect(
+      runtime.createDocument(
+        { content: 'body', title: 'Must not write to personal scope' },
+        { agentId: 'agent-1' },
+      ),
+    ).rejects.toThrow('missing or trashed task trashed-task');
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
+    expect(pinDocument).not.toHaveBeenCalled();
+  });
+
+  it('validates a trashed task before mutation when workspace context is present', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('trashed-task', 'workspace-1', []));
+
+    await expect(
+      runtime.createDocument(
+        { content: 'body', title: 'Must not write before task validation' },
+        { agentId: 'agent-1' },
+      ),
+    ).rejects.toThrow('missing or trashed task trashed-task');
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
+    expect(pinDocument).not.toHaveBeenCalled();
+  });
+
+  it('fails before document mutation when task and context workspaces differ', async () => {
+    const runtime = agentDocumentsRuntime.factory(
+      buildContext('task-1', 'workspace-1', [{ workspaceId: 'workspace-2' }]),
+    );
+
+    await expect(
+      runtime.createDocument(
+        { content: 'body', title: 'Must not cross workspace scopes' },
+        { agentId: 'agent-1' },
+      ),
+    ).rejects.toThrow('Task task-1 belongs to workspace workspace-2, not workspace-1');
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
+    expect(pinDocument).not.toHaveBeenCalled();
+  });
+
+  it('uses the recovered task workspace for both document mutation and pinning', async () => {
+    const context = buildContext('task-1', undefined, [{ workspaceId: 'workspace-1' }]);
+    const runtime = agentDocumentsRuntime.factory(context);
+
+    await runtime.createDocument({ content: 'body', title: 'Scoped' }, { agentId: 'agent-1' });
+
+    expect(AgentDocumentsService).toHaveBeenLastCalledWith(
+      context.serverDB,
+      'user-1',
+      'workspace-1',
+      undefined,
+      { type: 'ordinary' },
+    );
+    expect(TaskModel).toHaveBeenLastCalledWith(context.serverDB, 'user-1', 'workspace-1');
   });
 
   it('emits create outcomes with the agent document binding id', async () => {
@@ -229,6 +311,60 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
 
     expect(result.content).toBe(
       'Created document "Daily Brief" (internal id: agent-doc-assoc-id).',
+    );
+  });
+
+  it('forces Share creation and listing into the visitor current-topic scope', async () => {
+    const runtime = agentDocumentsRuntime.factory(
+      buildContext(undefined, undefined, undefined, {
+        agentShareVisitor: {
+          agentId: 'agent-1',
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+        topicId: 'topic-1',
+      }),
+    );
+
+    const created = await runtime.createDocument(
+      {
+        content: 'body',
+        hintIsSkill: true,
+        parentId: 'creator-folder',
+        scope: 'agent',
+        title: 'Visitor Note',
+      },
+      { agentId: 'agent-1', topicId: 'topic-1' },
+    );
+    await runtime.listDocuments(
+      { parentId: 'creator-folder', scope: 'agent' },
+      { agentId: 'agent-1', topicId: 'topic-1' },
+    );
+
+    expect(serviceImpl.createForTopic).toHaveBeenCalledWith(
+      'agent-1',
+      'Visitor Note',
+      'body',
+      'topic-1',
+    );
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
+    expect(serviceImpl.listDocumentsForTopic).toHaveBeenCalledWith('agent-1', 'topic-1', 'all', {
+      includeArchivedToolResults: true,
+    });
+    expect(serviceImpl.listDocuments).not.toHaveBeenCalled();
+    expect(created.content).not.toContain('https://app.example.com');
+    expect(created.state).toMatchObject({ readonly: true });
+    expect(AgentDocumentsService).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'user-1',
+      undefined,
+      undefined,
+      {
+        shareId: 'share-1',
+        topicId: 'topic-1',
+        type: 'agentShare',
+        visitorUserId: 'visitor-1',
+      },
     );
   });
 });

@@ -1,5 +1,7 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 
 import type * as AcceptanceServiceModule from '../acceptanceService';
 import { instantiateVerifyPlanOnStart } from '../planInstantiation';
@@ -12,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   acceptanceEnsureForSubject: vi.fn(),
   acceptanceUpdate: vi.fn(),
   agentExec: vi.fn(),
+
   confirmPlan: vi.fn(),
   ensureForOperation: vi.fn(),
   generateDraftPlan: vi.fn(),
@@ -21,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   setMetadata: vi.fn(),
   setPlan: vi.fn(),
   taskFindById: vi.fn(),
+  taskAcceptanceAttachRun: vi.fn(),
   taskAcceptanceResolve: vi.fn(),
 }));
 
@@ -51,6 +55,7 @@ vi.mock('../planGenerator', () => ({
 }));
 
 vi.mock('../taskAcceptance', () => ({
+  attachTaskRunToAcceptance: mocks.taskAcceptanceAttachRun,
   resolveTaskAcceptance: mocks.taskAcceptanceResolve,
 }));
 
@@ -90,10 +95,11 @@ vi.mock('@/server/services/aiAgent', () => ({
   }),
 }));
 
-const db = {} as any;
+const db = { transaction: async (callback: (tx: unknown) => Promise<void>) => callback(db) } as any;
 const plan = [{ id: 'check-1', required: true }];
 
 describe('Verify acceptance lifecycle', () => {
+  afterEach(() => vi.restoreAllMocks());
   it('reuses the Goal acceptance checklist and supplemental check ids on a repair attempt', async () => {
     mocks.goalFind.mockResolvedValue({ id: 'goal-1' });
     mocks.taskAcceptanceResolve.mockResolvedValue({
@@ -144,6 +150,67 @@ describe('Verify acceptance lifecycle', () => {
     );
 
     expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
+  });
+
+  /**
+   * Regression: the builder authored and confirmed its own plan through the CLI,
+   * so this function found a plan and returned before the attach below it. The
+   * round stayed orphaned from the Task's Acceptance, passed verification, and
+   * the Goal review then errored with "no Acceptance" — parking a delivery that
+   * met every criterion on a human decision gate.
+   */
+  it('binds a plan the builder authored itself to the task acceptance', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+      requirement: 'Cut an isolated worktree',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Worktree' });
+    const authored = { acceptanceId: null, id: 'run-1', plan, planConfirmedAt: new Date() };
+    mocks.runFindByOperation.mockResolvedValue(authored);
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    // The plan is the builder's — regenerating it is exactly what the early
+    // return protects — but the round still has to belong to the Acceptance.
+    expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
+    expect(mocks.taskAcceptanceAttachRun).toHaveBeenCalledWith(
+      db,
+      'user-1',
+      { acceptanceId: 'acceptance-1', run: authored },
+      undefined,
+    );
+  });
+
+  /**
+   * Regression: an unconfirmed builder plan was bound too. It stayed the
+   * Acceptance's newest round as a draft, and the next attempt folded into it — so
+   * the round a later attempt ran in carried an operation that was not running.
+   */
+  it('leaves an unconfirmed builder plan unbound', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+      requirement: 'Cut an isolated worktree',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Worktree' });
+    mocks.runFindByOperation.mockResolvedValue({
+      acceptanceId: null,
+      id: 'run-1',
+      plan,
+      planConfirmedAt: null,
+    });
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    expect(mocks.taskAcceptanceAttachRun).not.toHaveBeenCalled();
+    expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
   });
 
   it('skips instantiation for a recurring task, even when an Acceptance policy exists', async () => {
@@ -233,9 +300,65 @@ describe('Verify acceptance lifecycle', () => {
     );
   });
 
+  it.each(['normal', 'heterogeneous'])(
+    'does not report a spawned repair after %s preparation fails',
+    async (runtime) => {
+      mocks.operationFindById.mockResolvedValue({ parentOperationId: null });
+      mocks.runFindByOperation.mockResolvedValue({ id: 'source', plan });
+      mocks.ensureForOperation.mockResolvedValue({ id: 'repair-run' });
+      mocks.confirmPlan.mockRejectedValue(new Error('Plan write failed'));
+      const complete = vi
+        .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+        .mockResolvedValue(undefined);
+      mocks.agentExec.mockImplementation(async ({ onOperationCreated }) => {
+        try {
+          await onOperationCreated('repair-op');
+        } catch (error) {
+          if (runtime === 'heterogeneous') throw error;
+          return { operationId: 'repair-op', success: false };
+        }
+        throw new Error('Unexpected dispatch');
+      });
+      const runner = createRepairRunner({
+        agentId: 'a',
+        db,
+        maxRepairRounds: 2,
+        topicId: 't',
+        userId: 'u',
+      });
+      expect(
+        await runner!({ failedItemIds: ['check-1'], instruction: 'Fix', operationId: 'source' }),
+      ).toBeNull();
+      expect(complete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'repair-op',
+          error: { type: 'ServerAgentRuntimeError', message: 'Plan write failed' },
+        }),
+        'error',
+      );
+      expect(mocks.acceptanceAttachPolicyRun).not.toHaveBeenCalled();
+    },
+  );
+
   it('attaches an auto-repair verify run as the next round of the same acceptance', async () => {
     mocks.operationFindById.mockResolvedValue({ parentOperationId: null });
-    mocks.agentExec.mockResolvedValue({ operationId: 'repair-operation' });
+    let confirmed = false;
+    let attached = false;
+    let stateAtStart: boolean[] = [];
+    const start = async () => {
+      stateAtStart = [confirmed, attached];
+    };
+    mocks.agentExec.mockImplementation(async ({ onOperationCreated }) => {
+      await onOperationCreated?.('repair-operation');
+      await start();
+      return { operationId: 'repair-operation', success: true };
+    });
+    mocks.confirmPlan.mockImplementation(async () => {
+      confirmed = true;
+    });
+    mocks.acceptanceAttachPolicyRun.mockImplementation(async () => {
+      attached = true;
+    });
     mocks.runFindByOperation.mockResolvedValue({
       acceptanceId: 'acceptance-1',
       id: 'source-run',
@@ -260,7 +383,13 @@ describe('Verify acceptance lifecycle', () => {
     });
 
     expect(result).toEqual({ repairOperationId: 'repair-operation' });
-    expect(mocks.agentExec).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'task-1' }));
+    expect(stateAtStart).toEqual([true, true]);
+    expect(mocks.agentExec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        additionalPluginIds: ['lobe-acceptance-evidence'],
+        taskId: 'task-1',
+      }),
+    );
     expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('repair-run', 'acceptance-1');
   });
 });

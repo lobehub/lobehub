@@ -6,6 +6,7 @@ import {
   type ConversationContext,
   type MessageMetadata,
   resolveAgentAgencyConfig,
+  type ToolIntervention,
   type UIChatMessage,
 } from '@lobechat/types';
 import { t } from 'i18next';
@@ -15,7 +16,11 @@ import {
   ensureAgentManagementAccess,
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
-import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import {
+  applyTopicDeviceBinding,
+  getTopicBoundDeviceId,
+  resolveWorkspaceScoped,
+} from '@/helpers/executionTarget';
 import { lambdaClient } from '@/libs/trpc/client';
 import {
   type AgentInterventionSourceAction,
@@ -24,7 +29,7 @@ import {
 } from '@/services/aiAgent';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { displayMessageSelectors } from '@/store/chat/selectors';
+import { displayMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import {
   type AgentRuntimeType,
   selectRuntimeType,
@@ -36,6 +41,7 @@ import type { Operation } from '@/store/chat/slices/operation/types';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { getElectronStoreState } from '@/store/electron';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -103,6 +109,13 @@ const toHeterogeneousSourceAction = (
       : undefined;
   }
 };
+
+/**
+ * How long a published-but-unacknowledged hetero intervention stays in the
+ * `resolving` phase before it is settled. Mirrors `SUBMIT_ACK_TIMEOUT_MS` in
+ * `@lobechat/shared-tool-ui/ask-user`.
+ */
+const HETERO_INTERVENTION_ACK_TIMEOUT_MS = 30 * 1000;
 
 export const conversationControl = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new ConversationControlActionImpl(set, get, _api);
@@ -244,11 +257,23 @@ export class ConversationControlActionImpl {
     const deviceOverride = agent?.workspaceId
       ? useUserStore.getState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
       : undefined;
-    const agencyConfig = resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
-      canManage,
-      visibility: agent?.visibility,
-      workspaceId: agent?.workspaceId,
-    });
+    // Same topic machine binding as sendMessage, so the resume takes the path
+    // the paused run was dispatched on.
+    const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
+      {
+        agencyConfig: resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
+          canManage,
+          visibility: agent?.visibility,
+          workspaceId: agent?.workspaceId,
+        }),
+        workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+      },
+      getTopicBoundDeviceId(
+        context.topicId ? topicSelectors.getTopicById(context.topicId)(this.#get()) : undefined,
+        agentId,
+      ),
+      getElectronStoreState().gatewayDeviceInfo?.deviceId,
+    );
     const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
     const heterogeneousProvider =
       agencyConfig?.heterogeneousProvider ??
@@ -263,7 +288,7 @@ export class ConversationControlActionImpl {
         heterogeneousProvider,
         isGatewayMode,
         isWorkspaceAgent: !!agent?.workspaceId,
-        workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+        workspaceScoped,
       }) === 'gateway'
     );
   };
@@ -289,8 +314,24 @@ export class ConversationControlActionImpl {
     })(this.#get());
     return ops.filter(
       (op) =>
-        op.type === 'execServerAgentRuntime' && op.status === 'running' && !op.metadata?.isAborting,
+        op.type === 'execServerAgentRuntime' &&
+        op.status === 'running' &&
+        !op.metadata?.isAborting &&
+        !(groupId && this.#isLiveGatewayOp(op)),
     );
+  };
+
+  /**
+   * Whether an op's gateway stream is still open. In a group chat that is the
+   * supervisor waiting on its members (e.g. a member parked on the approval
+   * being resolved): it is not paused, it will stream the members' continuation
+   * and its own closing, and retiring it would drop both from the screen.
+   */
+  #isLiveGatewayOp = (op: Operation) => {
+    const serverOperationId = op.metadata?.serverOperationId;
+    if (!serverOperationId) return false;
+    const status = this.#get().gatewayConnections[serverOperationId]?.status;
+    return !!status && status !== 'disconnected';
   };
 
   #resolveHeteroInterventionExecutionOperation = (
@@ -415,6 +456,96 @@ export class ConversationControlActionImpl {
       this.#get().cancelOperation(interimOperationId, 'Intervention already resolved');
     }
     return true;
+  };
+
+  /**
+   * Write an intervention state onto both projections the UI reads: the tool
+   * row's own `pluginIntervention` (what the pending-card list is built from)
+   * and the parent assistant's tool entry (inline row), so every subscribed
+   * surface agrees immediately.
+   *
+   * Local only. For `resolving` that is the whole point — it describes this
+   * client's in-flight publish, not durable truth, and a slow write could land
+   * after the producer's terminal ACK and resurrect a settled card. For a
+   * terminal settle it is the fast half: the durable write follows separately,
+   * and the card must not wait on it to leave the screen.
+   */
+  #dispatchInterventionState = (
+    toolMessageId: string,
+    patch: Partial<ToolIntervention>,
+    context: OptimisticUpdateContext,
+  ): void => {
+    const message = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
+    if (!message) return;
+
+    const intervention = { ...message.pluginIntervention, ...patch };
+    this.#get().internal_dispatchMessage(
+      { id: toolMessageId, type: 'updateMessage', value: { pluginIntervention: intervention } },
+      context,
+    );
+    if (message.parentId && message.tool_call_id) {
+      this.#get().internal_dispatchMessage(
+        {
+          id: message.parentId,
+          tool_call_id: message.tool_call_id,
+          type: 'updateMessageTools',
+          value: { intervention },
+        },
+        context,
+      );
+    }
+  };
+
+  /**
+   * A remote submit parks the card on `pending + resolving` until the blocked
+   * producer echoes its ACK. That ACK can never arrive when the producer is
+   * already gone — its own ask-user deadline elapsed, its process died, or its
+   * long-poll stopped listening the moment the bridge settled — and nothing
+   * else moves the card off that phase, so every surface reading it stays
+   * permanently non-actionable.
+   *
+   * Settle it after a bounded wait rather than handing the buttons back. The
+   * server accepted the user's decision for delivery, so from their side the
+   * question IS resolved; re-offering it would ask them to decide a second time
+   * and risk a duplicate landing on a producer that already has one. The
+   * terminal state is the one the user chose — an answer settles `approved`, a
+   * skip or cancel settles `rejected` — matching what the local desktop path
+   * stamps immediately. A later real producer result simply overwrites this.
+   */
+  #scheduleHeteroInterventionSettle = (
+    toolMessageId: string,
+    actionType: 'submit' | 'skip' | 'cancel',
+    context: OptimisticUpdateContext,
+  ): void => {
+    const settled: Partial<ToolIntervention> =
+      actionType === 'submit'
+        ? { resolving: false, status: 'approved' }
+        : {
+            rejectedReason: actionType === 'skip' ? 'User skipped' : 'User cancelled',
+            resolving: false,
+            skipped: actionType === 'skip',
+            status: 'rejected',
+          };
+
+    setTimeout(() => {
+      const intervention = dbMessageSelectors.getDbMessageById(toolMessageId)(
+        this.#get(),
+      )?.pluginIntervention;
+      // Anything terminal already won the race — never reopen a settled card.
+      if (intervention?.resolving !== true || intervention.status !== 'pending') return;
+
+      // Write the terminal state onto the projections the surfaces read BEFORE
+      // persisting: `optimisticUpdateMessagePlugin` only reaches the tool row's
+      // top-level `pluginIntervention` (what the card list is built from) once
+      // the server echoes, so a failed or slow write would leave the card on
+      // screen — the exact state this settle exists to end.
+      this.#dispatchInterventionState(toolMessageId, settled, context);
+      void this.#get().optimisticUpdateMessagePlugin(
+        toolMessageId,
+        { intervention: settled },
+        context,
+      );
+    }, HETERO_INTERVENTION_ACK_TIMEOUT_MS);
   };
 
   #writeTopicStatus = (context: ConversationContext, status: ChatTopicStatus): void => {
@@ -885,6 +1016,12 @@ export class ConversationControlActionImpl {
           toolMessageIds: addressable,
           topicId,
         });
+      }
+      // Settle the cards locally. A group member's stop ends no stream this
+      // client still listens on, so no refetch would ever land the aborted rows
+      // and the card would stay on screen until a reload.
+      for (const id of addressable) {
+        this.#dispatchInterventionState(id, { status: 'aborted' }, { context: effectiveContext });
       }
       this.#completeOpsById(pausedOpIds);
     } catch (error) {
@@ -1669,33 +1806,15 @@ export class ConversationControlActionImpl {
 
       if (sourceResolution.handled) {
         const sourceOptimisticContext: OptimisticUpdateContext = { context: effectiveContext };
-        const resolvingIntervention = {
-          ...originalIntervention,
-          resolving: true,
-          status: 'pending' as const,
-        };
-        this.#get().internal_dispatchMessage(
-          {
-            id: toolMessageId,
-            type: 'updateMessage',
-            value: { pluginIntervention: resolvingIntervention },
-          },
+        this.#dispatchInterventionState(
+          toolMessageId,
+          { resolving: true, status: 'pending' },
           sourceOptimisticContext,
         );
-        if (toolMessage.parentId) {
-          this.#get().internal_dispatchMessage(
-            {
-              id: toolMessage.parentId,
-              tool_call_id: toolCallId,
-              type: 'updateMessageTools',
-              value: { intervention: resolvingIntervention },
-            },
-            sourceOptimisticContext,
-          );
-        }
         if (actionType === 'submit') {
           await this.setInterventionAnswers(toolMessageId, payload ?? {}, sourceOptimisticContext);
         }
+        this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, sourceOptimisticContext);
         return;
       }
     }
@@ -1743,9 +1862,9 @@ export class ConversationControlActionImpl {
       // Publishing the user intent is not completion. Keep the interaction
       // pending but mark its in-flight phase so a remount/retry cannot present
       // an optimistic terminal state before the producer has consumed it.
-      await this.#get().optimisticUpdateMessagePlugin(
+      this.#dispatchInterventionState(
         toolMessageId,
-        { intervention: { resolving: true, status: 'pending' } },
+        { resolving: true, status: 'pending' },
         optimisticContext,
       );
       if (actionType === 'submit') {
@@ -1836,12 +1955,26 @@ export class ConversationControlActionImpl {
                 toolCallId,
               },
         );
+        this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, optimisticContext);
       }
     } catch (err) {
       console.error('[submitHeteroIntervention] submitIntervention failed:', err);
+      // Drop the in-flight hint first: the rollback below only reaches
+      // `pluginIntervention` once the server echoes, and a failed publish must
+      // never leave the card disabled waiting on an ACK that was never asked for.
+      if (!isLocalDesktopHetero) {
+        this.#dispatchInterventionState(
+          toolMessageId,
+          { resolving: false, status: 'pending' },
+          optimisticContext,
+        );
+      }
       await this.#get().optimisticUpdateMessagePlugin(
         toolMessageId,
-        { intervention: originalIntervention ?? { status: 'pending' } },
+        // `resolving` is never part of what a rollback restores: it describes
+        // an in-flight publish, and this one just failed. Carrying a hint left
+        // by an earlier attempt would re-disable the card the user must retry.
+        { intervention: { ...(originalIntervention ?? { status: 'pending' }), resolving: false } },
         optimisticContext,
       );
       if (isLocalDesktopHetero) {

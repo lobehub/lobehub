@@ -374,6 +374,10 @@ const gatherGroupAgentBuilderContext = async (
  * - nothing owner-scoped for a share visitor: the creator's other agents,
  *   providers and plugins are theirs, and the share gate has already removed
  *   the tool that could act on them.
+ * - no delegation facts (`availableAgents` / `mentionedAgents`) inside a
+ *   sub-agent run: the executor rejects nested `callAgent` there and the
+ *   manifest already hides it, so inviting delegation only sends the model
+ *   to a tool call that can never succeed.
  */
 const gatherAgentManagementContext = async (
   request: ContextFactRequest,
@@ -382,26 +386,35 @@ const gatherAgentManagementContext = async (
   const isVisitor = !!request.shareVisitor;
   const isEnabled = !isVisitor && request.enabledToolIds.includes(AgentManagementIdentifier);
   const isAutoSkillMode = !isVisitor && request.agent.chatConfig?.skillActivateMode !== 'manual';
+  const canDelegate = request.isSubAgent !== true;
   let context: AgentManagementContext | undefined;
 
   if ((isAutoSkillMode || isEnabled) && providers.listRecentAgents) {
-    const { listRecentAgents } = providers;
-    const recent =
-      (await attempt('recentAgents', () => listRecentAgents(AVAILABLE_AGENTS_LIMIT + 2))) ?? [];
-    // The model is the current agent: its identity is already established by
-    // the system role, and it must never see its own id (it cannot call itself).
-    const others = request.agentId ? recent.filter((a) => a.id !== request.agentId) : recent;
-    context = {
-      availableAgents: others.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
-        description: a.description ?? undefined,
-        id: a.id,
-        title: a.title ?? 'Untitled',
-      })),
-      availableAgentsHasMore: others.length > AVAILABLE_AGENTS_LIMIT,
-      ...(request.agentId && {
-        currentAgent: { id: request.agentId, title: request.agent.title ?? undefined },
-      }),
-    };
+    // Self-management (updateAgent / installPlugin on itself) stays available
+    // inside a sub-agent, so its own id is kept; only the delegation list goes.
+    const currentAgent = request.agentId
+      ? { id: request.agentId, title: request.agent.title ?? undefined }
+      : undefined;
+
+    if (canDelegate) {
+      const { listRecentAgents } = providers;
+      const recent =
+        (await attempt('recentAgents', () => listRecentAgents(AVAILABLE_AGENTS_LIMIT + 2))) ?? [];
+      // The model is the current agent: its identity is already established by
+      // the system role, and it must never see its own id (it cannot call itself).
+      const others = request.agentId ? recent.filter((a) => a.id !== request.agentId) : recent;
+      context = {
+        availableAgents: others.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
+          description: a.description ?? undefined,
+          id: a.id,
+          title: a.title ?? 'Untitled',
+        })),
+        availableAgentsHasMore: others.length > AVAILABLE_AGENTS_LIMIT,
+        ...(currentAgent && { currentAgent }),
+      };
+    } else if (currentAgent) {
+      context = { currentAgent };
+    }
   }
 
   if (isEnabled) {
@@ -416,7 +429,7 @@ const gatherAgentManagementContext = async (
     };
   }
 
-  if (request.mentionedAgents?.length) {
+  if (canDelegate && request.mentionedAgents?.length) {
     context = { ...context, mentionedAgents: request.mentionedAgents };
   }
 

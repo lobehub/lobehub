@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getUserIdFromApiKey } from '../auth/apiKey';
 import { saveCredentials } from '../auth/credentials';
+import type * as Settings from '../settings';
 import { loadSettings, saveSettings } from '../settings';
 import { log } from '../utils/logger';
 import { registerLoginCommand, resolveCommandExecutable } from './login';
@@ -15,7 +16,8 @@ vi.mock('../auth/apiKey', () => ({
 vi.mock('../auth/credentials', () => ({
   saveCredentials: vi.fn(),
 }));
-vi.mock('../settings', () => ({
+vi.mock('../settings', async (importOriginal) => ({
+  ...(await importOriginal<typeof Settings>()),
   loadSettings: vi.fn().mockReturnValue(null),
   saveSettings: vi.fn(),
 }));
@@ -38,6 +40,13 @@ describe('login command', () => {
   const originalSystemRoot = process.env.SystemRoot;
 
   beforeEach(() => {
+    vi.mocked(getUserIdFromApiKey).mockClear();
+    vi.mocked(saveCredentials).mockClear();
+    vi.mocked(loadSettings).mockClear();
+    vi.mocked(saveSettings).mockClear();
+    vi.mocked(log.info).mockClear();
+    vi.mocked(log.error).mockClear();
+    vi.mocked(log.warn).mockClear();
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn());
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
@@ -48,12 +57,17 @@ describe('login command', () => {
   afterEach(() => {
     vi.useRealTimers();
     exitSpy.mockRestore();
-    process.env.LOBEHUB_CLI_API_KEY = originalApiKey;
-    process.env.PATH = originalPath;
-    process.env.PATHEXT = originalPathext;
-    process.env.SystemRoot = originalSystemRoot;
-    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    restoreEnv('LOBEHUB_CLI_API_KEY', originalApiKey);
+    restoreEnv('PATH', originalPath);
+    restoreEnv('PATHEXT', originalPathext);
+    restoreEnv('SystemRoot', originalSystemRoot);
   });
+
+  function restoreEnv(name: string, value: string | undefined) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
 
   function createProgram() {
     const program = new Command();
@@ -106,11 +120,19 @@ describe('login command', () => {
 
   async function runLoginAndAdvanceTimers(program: Command, args: string[] = []) {
     const parsePromise = runLogin(program, args);
+    let parseError: unknown;
+    const observedParsePromise = parsePromise.then(
+      () => undefined,
+      (error: unknown) => {
+        parseError = error;
+      },
+    );
     // Advance timers to let sleep resolve in the polling loop
     for (let i = 0; i < 10; i++) {
       await vi.advanceTimersByTimeAsync(2000);
     }
-    return parsePromise;
+    await observedParsePromise;
+    if (parseError) throw parseError;
   }
 
   it('should complete login flow successfully', async () => {
@@ -188,6 +210,41 @@ describe('login command', () => {
     expect(saveSettings).toHaveBeenCalledWith({
       gatewayUrl: 'https://gateway.example.com',
       serverUrl: 'https://test.com',
+    });
+  });
+
+  it('should preserve existing gateway for environment api key on the official server', async () => {
+    process.env.LOBEHUB_CLI_API_KEY = '[REDACTED:api-key]';
+    vi.mocked(getUserIdFromApiKey).mockResolvedValue('user-123');
+    vi.mocked(loadSettings).mockReturnValueOnce({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: undefined,
+    });
+
+    const program = createProgram();
+    await runLogin(program);
+
+    expect(saveSettings).toHaveBeenCalledWith({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://app.lobehub.com',
+    });
+  });
+
+  it('should preserve existing gateway for OIDC login on the official server', async () => {
+    vi.mocked(loadSettings).mockReturnValueOnce({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: undefined,
+    });
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(deviceAuthResponse())
+      .mockResolvedValueOnce(tokenSuccessResponse());
+
+    const program = createProgram();
+    await runLoginAndAdvanceTimers(program);
+
+    expect(saveSettings).toHaveBeenCalledWith({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://app.lobehub.com',
     });
   });
 

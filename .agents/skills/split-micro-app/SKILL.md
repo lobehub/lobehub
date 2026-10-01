@@ -109,6 +109,14 @@ the one manual rule. See `apps/workbench/scripts/should-build.mjs` +
 `.github/workflows/deploy-workbench.yml`; the overlay-hosted variant is lobehub-cloud's
 `scripts/shouldBuildShare.ts` + `.github/workflows/deploy-share.yml` (§1b).
 
+The manifest is only a pre-filter: it lists every module the build loaded, so type-only files,
+barrels and tree-shaken code trigger builds too. The deploy decision is the **output hash**
+(`scripts/workerOutputHash.ts`): the build is deterministic (comment-only edits hash
+identically), so `deploy.ts` hashes `build/`, compares it with the `output-hash.txt` carried in
+the same artifact, and skips upload + `wrangler deploy` when equal — keeping Cloudflare's
+100-version rollback window for real releases. Manual dispatch passes no previous hash and
+always deploys. Workbench has it; share does not yet.
+
 **PR-time verify is a separate workflow per repo that can change the artifact** — deploy
 ownership (§1b) does not decide verify ownership. Each verify builds the worker, uploads a
 non-deployed preview **version** (`wrangler versions upload --preview-alias`, dry-run when

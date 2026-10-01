@@ -1,5 +1,5 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { MessageGroupType } from '@lobechat/types';
+import { agentShareWorkAccessScope, MessageGroupType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,6 +29,7 @@ import {
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel, toVisitorMessage } from '../../message';
+import { WorkModel } from '../../work';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -658,6 +659,204 @@ describe('MessageModel Query Tests', () => {
         expect(result).toHaveLength(4);
         expect(result.every((m) => m.role !== 'user')).toBe(true);
         expect(result.at(-1)!.id).toBe(lastId);
+      });
+    });
+
+    describe('round-cursor before pages', () => {
+      // Like seedRounds, but with a per-round step count so one round can dwarf
+      // the page size — the shape that amplifies the round-start trim.
+      const seedVariableRounds = async (topicId: string, stepsPerRound: number[]) => {
+        await serverDB.insert(topics).values([{ id: topicId, userId }]);
+        const rows: any[] = [];
+        let seq = 0;
+        let prevId: string | null = null;
+        stepsPerRound.forEach((steps, index) => {
+          const r = index + 1;
+          const uid = `${topicId}-u${r}`;
+          rows.push({
+            id: uid,
+            userId,
+            topicId,
+            role: 'user',
+            parentId: prevId,
+            content: `q${r}`,
+            createdAt: new Date(2023, 0, 1, 0, seq),
+          });
+          seq += 1;
+          prevId = uid;
+          for (let step = 1; step <= steps; step += 1) {
+            const sid = `${topicId}-a${r}-${step}`;
+            rows.push({
+              id: sid,
+              userId,
+              topicId,
+              role: 'assistant',
+              parentId: prevId,
+              content: `a${r}.${step}`,
+              createdAt: new Date(2023, 0, 1, 0, seq),
+            });
+            seq += 1;
+            prevId = sid;
+          }
+        });
+        await serverDB.insert(messages).values(rows);
+        return { allIds: rows.map((row) => row.id as string) };
+      };
+
+      const cursorOf = (message: { createdAt: Date | number | string; id: string }) => ({
+        createdAt: new Date(message.createdAt),
+        id: message.id,
+      });
+
+      it('reproduces the amplified trim: a giant mid-topic round shrinks page 0 to the last round', async () => {
+        const topicId = 't-lobe13716-repro';
+        // Rounds of 4 / 12 / 4 messages; page size 10. The newest 10 rows cut
+        // into the giant round 2, and the round-start trim jumps all the way to
+        // round 3 — page 0 keeps only 4 of the 20 messages.
+        await seedVariableRounds(topicId, [3, 11, 3]);
+
+        const page0 = await messageModel.query({ topicId, pageSize: 10 });
+
+        expect(page0).toHaveLength(4);
+        expect(page0[0].id).toBe(`${topicId}-u3`);
+        expect(page0.at(-1)!.id).toBe(`${topicId}-a3-3`);
+      });
+
+      it('walks the full history through before cursors with no gaps or duplicates', async () => {
+        const topicId = 't-lobe13716-walk';
+        const { allIds } = await seedVariableRounds(topicId, [3, 11, 3]);
+
+        const pageSize = 10;
+        const page0 = await messageModel.query({ topicId, pageSize });
+
+        // Page 1: the giant round's tail. A full page with no user message in
+        // view is kept whole (oversized-round guard), mid-round top and all.
+        const page1 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page0[0]),
+        });
+        expect(page1).toHaveLength(10);
+        // Contiguous join: page 1's newest row is the parent of page 0's oldest.
+        expect(page0[0].parentId).toBe(page1.at(-1)!.id);
+
+        // Page 2: everything left (6 rows < pageSize) — no trim on a partial page.
+        const page2 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page1[0]),
+        });
+        expect(page2).toHaveLength(6);
+        expect(page2[0].id).toBe(`${topicId}-u1`);
+        expect(page1[0].parentId).toBe(page2.at(-1)!.id);
+
+        // The three pages reassemble the exact full transcript, in order.
+        const walked = [...page2, ...page1, ...page0].map((m) => m.id);
+        expect(walked).toEqual(allIds);
+
+        // Walking past the beginning returns an empty page (the client's
+        // exhaustion signal alongside `page.length < pageSize`).
+        const page3 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page2[0]),
+        });
+        expect(page3).toHaveLength(0);
+      });
+
+      it('breaks createdAt ties by id so equal-timestamp rows are neither skipped nor duplicated', async () => {
+        const topicId = 't-lobe13716-tie';
+        await serverDB.insert(topics).values([{ id: topicId, userId }]);
+        const createdAt = new Date(2023, 0, 1, 0, 0);
+        await serverDB.insert(messages).values([
+          { id: `${topicId}-m1`, userId, topicId, role: 'user', content: 'q', createdAt },
+          { id: `${topicId}-m2`, userId, topicId, role: 'assistant', content: 'a1', createdAt },
+          { id: `${topicId}-m3`, userId, topicId, role: 'assistant', content: 'a2', createdAt },
+        ]);
+
+        const page0 = await messageModel.query({ topicId, pageSize: 2 });
+        expect(page0.map((m) => m.id)).toEqual([`${topicId}-m2`, `${topicId}-m3`]);
+
+        const page1 = await messageModel.query({
+          topicId,
+          pageSize: 2,
+          before: cursorOf(page0[0]),
+        });
+        expect(page1.map((m) => m.id)).toEqual([`${topicId}-m1`]);
+      });
+
+      it('windows group nodes to the before page instead of refetching the whole topic', async () => {
+        const topicId = 't-lobe13716-group';
+        await seedVariableRounds(topicId, [3, 11, 3]);
+
+        // One group inside the first before page's time window (minute 7.5) and
+        // one inside page 0's window (minute 18.5), each with a hidden member.
+        await serverDB.insert(messageGroups).values([
+          {
+            id: `${topicId}-g-old`,
+            content: 'old summary',
+            type: MessageGroupType.Compression,
+            topicId,
+            userId,
+            createdAt: new Date(2023, 0, 1, 0, 7, 30),
+          },
+          {
+            id: `${topicId}-g-new`,
+            content: 'new summary',
+            type: MessageGroupType.Compression,
+            topicId,
+            userId,
+            createdAt: new Date(2023, 0, 1, 0, 18, 30),
+          },
+        ]);
+        await serverDB.insert(messages).values([
+          {
+            id: `${topicId}-gm-old`,
+            userId,
+            topicId,
+            role: 'assistant',
+            content: 'grouped old',
+            messageGroupId: `${topicId}-g-old`,
+            createdAt: new Date(2023, 0, 1, 0, 7, 15),
+          },
+          {
+            id: `${topicId}-gm-new`,
+            userId,
+            topicId,
+            role: 'assistant',
+            content: 'grouped new',
+            messageGroupId: `${topicId}-g-new`,
+            createdAt: new Date(2023, 0, 1, 0, 18, 15),
+          },
+        ]);
+
+        const pageSize = 10;
+        const page0 = await messageModel.query({ topicId, pageSize });
+        // Page 0 keeps its existing behavior: every group node of the topic.
+        expect(page0.filter((m) => m.id.startsWith(`${topicId}-g-`)).map((m) => m.id)).toEqual([
+          `${topicId}-g-old`,
+          `${topicId}-g-new`,
+        ]);
+
+        const mainline = page0.find((m) => !m.id.startsWith(`${topicId}-g-`));
+        const page1 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(mainline!),
+        });
+        const page1GroupIds = page1
+          .filter((m) => m.id.startsWith(`${topicId}-g-`))
+          .map((m) => m.id);
+        // Only the group inside this page's time window — not the whole topic's.
+        expect(page1GroupIds).toEqual([`${topicId}-g-old`]);
+
+        const page1Mainline = page1.find((m) => !m.id.startsWith(`${topicId}-g-`));
+        const page2 = await messageModel.query({
+          topicId,
+          pageSize,
+          before: cursorOf(page1Mainline!),
+        });
+        expect(page2.some((m) => m.id.startsWith(`${topicId}-g-`))).toBe(false);
       });
     });
 
@@ -1557,6 +1756,94 @@ describe('MessageModel Query Tests', () => {
       expect(result.map((item) => item.id)).toEqual(['visitor-direct-msg']);
     });
 
+    describe('Work summaries', () => {
+      const provenance = { shareId: 'share-works', topicId: visitorTopicId, visitorUserId };
+      const rootOperationId = 'op-visitor-works';
+
+      beforeEach(async () => {
+        await serverDB.insert(messages).values({
+          content: 'visitor reply',
+          id: 'visitor-anchor-msg',
+          metadata: { work: { rootOperationId } },
+          role: 'assistant',
+          topicId: visitorTopicId,
+          userId,
+        });
+        // A file Work the visitor's run registered under the share scope.
+        await new WorkModel(
+          serverDB,
+          userId,
+          undefined,
+          agentShareWorkAccessScope(provenance),
+        ).registerFile({
+          cumulativeCost: 0.42,
+          cumulativeUsage: { capturedAt: '2026-01-01T00:00:00.000Z', usage: { totalTokens: 9 } },
+          filePath: '/mnt/data/report.md',
+          metadata: { fileId: 'file-report', filePath: '/mnt/data/report.md' },
+          rootOperationId,
+          title: 'report.md',
+          toolCallId: `op:${rootOperationId}`,
+          toolIdentifier: 'lobe-cloud-sandbox',
+          toolName: 'writeFile',
+          topicId: visitorTopicId,
+          userId,
+        });
+      });
+
+      const findAnchor = (rows: { id: string }[]) =>
+        rows.find((item) => item.id === 'visitor-anchor-msg') as any;
+
+      it('skips Work assembly entirely without a share scope (fail closed)', async () => {
+        const result = await messageModel.queryForVisitor({
+          includeFileWorks: true,
+          topicId: visitorTopicId,
+        });
+
+        expect(findAnchor(result).works).toBeUndefined();
+      });
+
+      it('serves the share-scoped Works with the creator spend redacted', async () => {
+        const result = await messageModel.queryForVisitor(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          { workAccessScope: agentShareWorkAccessScope(provenance) },
+        );
+
+        const works = findAnchor(result).works;
+        expect(works).toHaveLength(1);
+        expect(works[0]).toMatchObject({ title: 'report.md', totalCost: null, type: 'file' });
+        expect(works[0].event).toMatchObject({ cumulativeCost: null, cumulativeUsage: null });
+        // The run executes as the creator: their account/workspace ids must not leak.
+        expect(works[0]).not.toHaveProperty('userId');
+        expect(works[0]).not.toHaveProperty('workspaceId');
+      });
+
+      it('keeps the spend snapshot when the share exposes model info', async () => {
+        const result = await messageModel.queryForVisitor(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          {
+            redaction: { showModelInfo: true },
+            workAccessScope: agentShareWorkAccessScope(provenance),
+          },
+        );
+
+        const works = findAnchor(result).works;
+        expect(works[0]).toMatchObject({ totalCost: 0.42 });
+        expect(works[0].event.cumulativeUsage).toMatchObject({ usage: { totalTokens: 9 } });
+        // `showModelInfo` exposes spend only, never the creator's identity.
+        expect(works[0]).not.toHaveProperty('userId');
+        expect(works[0]).not.toHaveProperty('workspaceId');
+      });
+
+      it('never resolves the visitor Works through the creator scope', async () => {
+        const result = await messageModel.query(
+          { includeFileWorks: true, topicId: visitorTopicId },
+          { allowShareVisitor: true },
+        );
+
+        expect(findAnchor(result).works).toBeUndefined();
+      });
+    });
+
     it('honours an explicit allowShareVisitor opt-in (agent runtime path)', async () => {
       const result = await messageModel.query(
         { topicId: visitorTopicId },
@@ -2328,6 +2615,202 @@ describe('MessageModel Query Tests', () => {
       expect(result[0].fileList).toHaveLength(1);
       expect(result[0].fileList![0].id).toBe(fileId);
       expect(result[0].fileList![0].content).toBe('This is the document content for testing');
+      expect(result[0].fileList![0].originalCharCount).toBeUndefined();
+    });
+
+    it('should report the original size of document text cut at parse time', async () => {
+      const fileId = uuid();
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/csv',
+          id: fileId,
+          name: 'big.csv',
+          size: 5000,
+          url: 'big.csv',
+          userId,
+        });
+        await trx.insert(documents).values({
+          content: 'stored head',
+          fileId,
+          fileType: 'text/csv',
+          metadata: { originalCharCount: 9_000_000, truncated: true },
+          source: 'big.csv',
+          sourceType: 'file',
+          totalCharCount: 11,
+          totalLineCount: 1,
+          userId,
+        });
+
+        const messageId = uuid();
+        await trx.insert(messages).values({
+          content: 'Message with a capped document',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      expect(result[0].fileList![0]).toMatchObject({
+        content: 'stored head',
+        originalCharCount: 9_000_000,
+      });
+    });
+
+    it('should treat malformed originalCharCount metadata as absent', async () => {
+      const fileId = uuid();
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/plain',
+          id: fileId,
+          name: 'note.txt',
+          size: 10,
+          url: 'note.txt',
+          userId,
+        });
+        await trx.insert(documents).values({
+          content: 'note',
+          fileId,
+          fileType: 'text/plain',
+          metadata: { originalCharCount: 'not-a-number' },
+          source: 'note.txt',
+          sourceType: 'file',
+          totalCharCount: 4,
+          totalLineCount: 1,
+          userId,
+        });
+
+        const messageId = uuid();
+        await trx.insert(messages).values({
+          content: 'Message with odd metadata',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      expect(result[0].fileList![0].content).toBe('note');
+      expect(result[0].fileList![0].originalCharCount).toBeUndefined();
+    });
+
+    it('should pick the oldest document when a file owns several', async () => {
+      const fileId = uuid();
+      const messageId = uuid();
+      const doc = {
+        fileId,
+        fileType: 'text/plain',
+        source: 'notes.txt',
+        sourceType: 'file',
+        totalLineCount: 1,
+        userId,
+      } as const;
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/plain',
+          id: fileId,
+          name: 'notes.txt',
+          size: 100,
+          url: 'notes.txt',
+          userId,
+        });
+        // Inserted newest first: without an explicit order, a first-wins read would take the newer copy.
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'page-editor copy',
+          createdAt: new Date('2026-02-01'),
+          totalCharCount: 16,
+        });
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'parse cache',
+          createdAt: new Date('2026-01-01'),
+          totalCharCount: 11,
+        });
+
+        await trx.insert(messages).values({
+          content: 'Message with a twice-parsed file',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+
+      // Same document `DocumentModel.findByFileId` returns, which `readAttachment` pages through.
+      expect(result[0].fileList![0].content).toBe('parse cache');
+
+      const [byId] = await messageModel.queryByIds([messageId]);
+      expect(byId.fileList![0].content).toBe('parse cache');
+    });
+
+    it('should skip an agent-document upload placeholder in favor of the parse cache', async () => {
+      const fileId = uuid();
+      const messageId = uuid();
+      const doc = {
+        fileId,
+        source: 'notes.md',
+        sourceType: 'file',
+        totalLineCount: 1,
+        userId,
+      } as const;
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: 'session1', userId });
+        await trx.insert(files).values({
+          fileType: 'text/markdown',
+          id: fileId,
+          name: 'notes.md',
+          size: 100,
+          url: 'notes.md',
+          userId,
+        });
+        // Older empty row written by `AgentDocumentsService.importFile`; bytes live in the file.
+        await trx.insert(documents).values({
+          ...doc,
+          content: '',
+          createdAt: new Date('2026-01-01'),
+          fileType: 'text/markdown',
+          totalCharCount: 0,
+        });
+        await trx.insert(documents).values({
+          ...doc,
+          content: 'parse cache',
+          createdAt: new Date('2026-02-01'),
+          fileType: 'custom/document',
+          totalCharCount: 11,
+        });
+
+        await trx.insert(messages).values({
+          content: 'Message with an uploaded agent document',
+          id: messageId,
+          role: 'user',
+          sessionId: 'session1',
+          userId,
+        });
+        await trx.insert(messagesFiles).values({ fileId, messageId, userId });
+      });
+
+      const result = await messageModel.query({ sessionId: 'session1' });
+      expect(result[0].fileList![0].content).toBe('parse cache');
+
+      const [byId] = await messageModel.queryByIds([messageId]);
+      expect(byId.fileList![0].content).toBe('parse cache');
     });
   });
 

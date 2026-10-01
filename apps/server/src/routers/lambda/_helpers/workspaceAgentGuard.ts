@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 
 import { agents, chatGroupsAgents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 interface WorkspaceAgentGuardParams {
@@ -31,6 +32,7 @@ export const getWorkspaceAgentParentGroupIds = async ({
         eq(chatGroupsAgents.agentId, agentId),
         eq(chatGroupsAgents.workspaceId, workspaceId),
         eq(agents.virtual, true),
+        notTrashed(agents.isDeleted),
       ),
     );
 
@@ -60,6 +62,7 @@ export const getWorkspaceGroupVirtualAgentIds = async ({
         eq(chatGroupsAgents.chatGroupId, groupId),
         eq(chatGroupsAgents.workspaceId, workspaceId),
         eq(agents.virtual, true),
+        notTrashed(agents.isDeleted),
       ),
     );
 
@@ -90,7 +93,11 @@ export const assertCanUseWorkspaceAgent = async ({
   if (!resourceId && slug) {
     const agent = await db.query.agents.findFirst({
       columns: { id: true },
-      where: and(eq(agents.slug, slug), eq(agents.workspaceId, workspaceId)),
+      where: and(
+        eq(agents.slug, slug),
+        eq(agents.workspaceId, workspaceId),
+        notTrashed(agents.isDeleted),
+      ),
     });
     resourceId = agent?.id;
   }

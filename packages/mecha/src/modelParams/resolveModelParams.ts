@@ -18,6 +18,7 @@ import {
 import { ModelProvider } from 'model-bank/modelProvider';
 
 import type {
+  FrozenModelFacts,
   MediaCapabilities,
   ModelCardFacts,
   ModelParamsProviders,
@@ -123,6 +124,74 @@ const resolveReasoningConfig = async (
   return attempt('modelReasoningConfig', () =>
     providers.getModelReasoningConfig?.(model, provider),
   );
+};
+
+/**
+ * Read every model fact of one run once, as plain data the host can freeze onto
+ * the operation. Each later LLM attempt then resolves its parameters from that
+ * snapshot via {@link createFrozenModelParamsProviders}, so a run sees one model
+ * from its first step to its last: a card the user edits, a model row they
+ * change or an effort they pick mid-run applies to the next turn, not to this
+ * one, and no step pays for the lookups again.
+ */
+export const readFrozenModelFacts = async (
+  request: ModelParamsRequest,
+  providers: ModelParamsProviders,
+): Promise<FrozenModelFacts> => {
+  const { model, provider } = request;
+  const { canonicalModelCard, modelCard, modelHasReasoningExtendParams, userModelRow } =
+    await resolveModelExtendParamList(request, providers);
+  // Read the reasoning sources only for models that can consume them, exactly
+  // as the per-attempt rules do: a non-reasoning model freezes none.
+  const reasoningConfig = modelHasReasoningExtendParams
+    ? await resolveReasoningConfig(request, providers)
+    : undefined;
+
+  return {
+    // Only the two cards the rules can match — the provider's own and the
+    // canonical one of the same id elsewhere. The whole bank would not fit the
+    // state, and nothing asks about another model (see the frozen providers).
+    cards: [modelCard, canonicalModelCard].filter(
+      (card, index, all): card is ModelCardFacts => !!card && all.indexOf(card) === index,
+    ),
+    // Only the three flags the rules read: a host may hand over a fuller
+    // abilities object, and the state pays for every key it keeps.
+    mediaCapabilities: request.mediaCapabilities && {
+      audio: request.mediaCapabilities.audio,
+      video: request.mediaCapabilities.video,
+      vision: request.mediaCapabilities.vision,
+    },
+    model,
+    provider,
+    reasoningConfig,
+    userModelRow,
+  };
+};
+
+/**
+ * Answer the rules from a frozen snapshot: no model bank, no database, no topic
+ * read. The topic-pin precedence was already applied when the facts were read,
+ * so the pin provider stays absent and the frozen config answers directly.
+ *
+ * Only the frozen model is answered for. A capability question about any other
+ * model (a compression model reusing this context) falls back to the rules' own
+ * "no card" defaults, and a run whose attempt model differs should resolve live
+ * instead of freezing the wrong row onto it.
+ */
+export const createFrozenModelParamsProviders = (facts: FrozenModelFacts): ModelParamsProviders => {
+  const isFrozenModel = (model: string, provider: string) =>
+    model === facts.model && provider === facts.provider;
+
+  return {
+    // Explicitly absent, so overlaying these onto a host's live providers cannot
+    // reintroduce the topic read the snapshot already resolved.
+    findTopicReasoningPin: undefined,
+    getModelReasoningConfig: async (model, provider) =>
+      isFrozenModel(model, provider) ? facts.reasoningConfig : undefined,
+    getUserModelRow: async (model, provider) =>
+      isFrozenModel(model, provider) ? facts.userModelRow : undefined,
+    listModelCards: () => facts.cards,
+  };
 };
 
 const isNonEmptyRecord = (value: unknown): value is Record<string, unknown> =>

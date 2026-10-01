@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AssistantContentBlock } from '@/types/index';
 
 import {
+  formatReasoningDuration,
   getToolDisplayName,
   getWorkflowStreamingHeadlineState,
   getWorkflowSummaryText,
@@ -237,5 +238,24 @@ describe('reasoning headline extraction', () => {
       kind: 'thinking',
       reasoningTitle: 'Search release notes',
     });
+  });
+});
+
+describe('formatReasoningDuration', () => {
+  it('formats sub-minute durations in seconds', () => {
+    expect(formatReasoningDuration(49_000)).toBe('49s');
+  });
+
+  it('formats sub-hour durations in minutes and seconds', () => {
+    expect(formatReasoningDuration(217_000)).toBe('3m 37s');
+    expect(formatReasoningDuration(180_000)).toBe('3m');
+  });
+
+  it('rolls minutes up to hours past the hour mark', () => {
+    // The row used to read "251m 49s" for this turn.
+    expect(formatReasoningDuration(15_109_000)).toBe('4h 11m');
+    expect(formatReasoningDuration(3_600_000)).toBe('1h');
+    expect(formatReasoningDuration(3_660_000)).toBe('1h 1m');
+    expect(formatReasoningDuration(3_599_000)).toBe('59m 59s');
   });
 });

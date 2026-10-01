@@ -17,6 +17,7 @@ import { agentSignalFeedbackIntentRuntime } from './agentSignalFeedbackIntent';
 import { agentSignalReflectionRuntime } from './agentSignalReflection';
 import { agentSignalReviewRuntime } from './agentSignalReview';
 import { agentSignalSkillManagementRuntime } from './agentSignalSkillManagement';
+import { attachmentsRuntime } from './attachments';
 import { auvRuntime } from './auv';
 import { briefRuntime } from './brief';
 import { browserRuntime } from './browser';
@@ -24,6 +25,7 @@ import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
 import { goalRuntime } from './goal';
+import { goalReportRuntime } from './goalReport';
 import { goalSupervisorRuntime } from './goalSupervisor';
 import { groupAgentBuilderRuntime } from './groupAgentBuilder';
 import { groupManagementRuntime } from './groupManagement';
@@ -45,6 +47,7 @@ import { topicReferenceRuntime } from './topicReference';
 import type { ServerRuntimeFactory, ServerRuntimeRegistration } from './types';
 import { userInteractionRuntime } from './userInteraction';
 import { verifyResultRuntime } from './verifyResult';
+import { videoGenerationRuntime } from './videoGeneration';
 import { webBrowsingRuntime } from './webBrowsing';
 import { webOnboardingRuntime } from './webOnboarding';
 
@@ -90,9 +93,12 @@ registerRuntimes([
   groupAgentBuilderRuntime,
   groupManagementRuntime,
   goalRuntime,
+  goalReportRuntime,
   goalSupervisorRuntime,
   imageGenerationRuntime,
+  videoGenerationRuntime,
   knowledgeBaseRuntime,
+  attachmentsRuntime,
   webOnboardingRuntime,
   lobeAgentRuntime,
   selfFeedbackIntentRuntime,

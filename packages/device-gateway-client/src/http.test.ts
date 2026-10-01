@@ -383,7 +383,11 @@ describe('GatewayHttpClient', () => {
     });
 
     it('describes an unreachable gateway host', async () => {
-      vi.mocked(fetch).mockRejectedValue(new TypeError('fetch failed'));
+      vi.mocked(fetch).mockRejectedValue(
+        Object.assign(new TypeError('fetch failed'), {
+          cause: { code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 10.0.0.1:443' },
+        }),
+      );
 
       const result = await client.executeToolCall(
         { userId: 'user-1' },
@@ -393,6 +397,24 @@ describe('GatewayHttpClient', () => {
       expect(result.success).toBe(false);
       expect(result.content).toContain('Could not reach the device gateway');
       expect(result.error).toContain('DEVICE_GATEWAY_UNREACHABLE');
+    });
+
+    it('does not tell the model a call never ran when the connection dropped after sending', async () => {
+      vi.mocked(fetch).mockRejectedValue(
+        Object.assign(new TypeError('fetch failed'), {
+          cause: { code: 'UND_ERR_SOCKET', message: 'other side closed' },
+        }),
+      );
+
+      const result = await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'writeFile', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).not.toContain('never ran');
+      expect(result.content).toContain('unclear whether the device ran it');
+      expect(result.error).toContain('DEVICE_GATEWAY_ERROR');
     });
 
     it('should pass optional deviceId and timeout', async () => {
@@ -817,6 +839,21 @@ describe('GatewayHttpClient', () => {
       });
     });
 
+    it('forwards the preferred channel when one is given', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ data: {}, success: true }), ok: true });
+
+      await client.invokeRpc(
+        { channel: 'desktop', deviceId: 'device-1', userId: 'user-1' },
+        { method: 'getAppUpdateState' },
+      );
+
+      const [, init] = vi.mocked(fetch).mock.calls[0];
+      expect(JSON.parse((init as any).body)).toMatchObject({
+        channel: 'desktop',
+        method: 'getAppUpdateState',
+      });
+    });
+
     it('returns failure on non-ok response', async () => {
       mockFetch({ ok: false, status: 503, text: vi.fn().mockResolvedValue('offline') });
 
@@ -837,6 +874,89 @@ describe('GatewayHttpClient', () => {
       );
 
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe('tunnel registry', () => {
+    it('creates a tunnel and folds the hostname into the registration', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({
+          hostname: '3000--abcdefgh.lobe.sh',
+          registration: {
+            createdAt: 1,
+            createdBy: 'user-1',
+            deviceId: 'device-1',
+            port: 3000,
+            principal: 'user:user-1',
+            slug: 'abcdefgh',
+          },
+        }),
+        ok: true,
+      });
+
+      const result = await client.createTunnel({
+        createdBy: 'user-1',
+        deviceId: 'device-1',
+        port: 3000,
+        principal: 'user:user-1',
+      });
+
+      expect(result).toMatchObject({ hostname: '3000--abcdefgh.lobe.sh', slug: 'abcdefgh' });
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/admin/tunnels',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('surfaces a rejected creation instead of returning a broken link', async () => {
+      mockFetch({ ok: false, status: 400, text: vi.fn().mockResolvedValue('INVALID_PORT') });
+
+      await expect(
+        client.createTunnel({
+          createdBy: 'user-1',
+          deviceId: 'device-1',
+          port: 3000,
+          principal: 'user:user-1',
+        }),
+      ).rejects.toThrow('INVALID_PORT');
+    });
+
+    it('lists tunnels for one principal', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ tunnels: [{ slug: 'abcdefgh' }] }), ok: true });
+
+      const result = await client.listTunnels('workspace:ws-1');
+
+      expect(result).toEqual([{ slug: 'abcdefgh' }]);
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/admin/tunnels?principal=workspace%3Aws-1',
+        expect.objectContaining({
+          headers: { Authorization: 'Bearer test-service-token' },
+          method: 'GET',
+        }),
+      );
+    });
+
+    it('treats an unknown slug as absent, not as an error', async () => {
+      mockFetch({ ok: false, status: 404 });
+      expect(await client.resolveTunnel('zzzzzzzz')).toBeUndefined();
+
+      mockFetch({ ok: false, status: 404 });
+      expect(await client.revokeTunnel('zzzzzzzz')).toBe(false);
+    });
+
+    it('revokes a tunnel', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ success: true }), ok: true });
+
+      expect(await client.revokeTunnel('abcdefgh')).toBe(true);
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/admin/tunnels/abcdefgh',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+
+    it('raises a gateway failure rather than reporting an empty list', async () => {
+      mockFetch({ ok: false, status: 500 });
+      await expect(client.listTunnels('user:user-1')).rejects.toThrow('responded 500');
     });
   });
 });

@@ -1,5 +1,6 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { memo, type ReactNode, useCallback, useMemo } from 'react';
@@ -54,9 +55,9 @@ const SharedMessageList = memo<SharedMessageListProps>((props) => {
         headerSlot={headerSlot}
         itemContent={itemContent}
         footerSlot={
-          <Flexbox align={'center'} paddingBlock={'16px 80px'} paddingInline={24}>
+          <Flexbox align={'center'} paddingBlock={24} paddingInline={24}>
             <Text fontSize={12} style={{ maxWidth: 480, textAlign: 'center' }} type={'secondary'}>
-              {t('sharePageDisclaimer')}
+              {t('sharePageDisclaimer', { appName: BRANDING_NAME })}
             </Text>
           </Flexbox>
         }

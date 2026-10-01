@@ -28,6 +28,8 @@ export default {
     'A database operation failed while saving or loading this conversation. Please try again; if it persists, contact support.',
   'ExceededContextWindow':
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
+  'ExceededImageLimit':
+    'This conversation contains more images than the model provider allows in one request. Start a new topic or remove some images, then try again.',
   'ExceededToolLimit':
     'This run reached its tool-call limit. Break the task into smaller steps, or ask the agent owner to adjust the tool-call limit.',
   'HarnessJsonParseError':
@@ -79,6 +81,8 @@ export default {
     'Connection to the provider timed out or was dropped. Please check your network and try again.',
   'ProviderNoImageGenerated':
     'The provider returned no image for this request. Try rephrasing the request, or choose a model that supports image generation.',
+  'RemoteMediaDownloadTimeout':
+    'The provider timed out while downloading an attached image or file. Please try again.',
   'ProviderServiceUnavailable':
     'The provider is temporarily overloaded or unavailable. Please try again shortly.',
   'QuotaLimitReached':

@@ -69,7 +69,8 @@ export class MessageInternalsActionImpl {
     if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;
 
     // parse to get display messages
-    const { flatList } = parse(reconciled);
+    // The key's thread decides which threaded rows render (see conversation-flow `ThreadScope`).
+    const { flatList } = parse(reconciled, undefined, { threadId: ctx.threadId });
     const nextDisplayMap = { ...this.#get().messagesMap, [messagesKey]: flatList };
 
     this.#set({ dbMessagesMap: nextDbMap, messagesMap: nextDisplayMap }, false, {

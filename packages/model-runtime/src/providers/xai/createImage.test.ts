@@ -230,6 +230,33 @@ describe('createXAIImage', () => {
       });
     });
 
+    it('should pass quality and 1.5k resolution for grok-imagine-image-2.0', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ url: 'https://xai-cdn.com/q.jpg', revised_prompt: '' }] }),
+      });
+
+      await createXAIImage(
+        {
+          model: 'grok-imagine-image-2.0',
+          params: { prompt: 'Test image', quality: 'low', resolution: '1.5k' },
+        },
+        mockOptions,
+      );
+
+      expect(fetch).toHaveBeenCalledWith(
+        'https://api.x.ai/v1/images/generations',
+        expect.objectContaining({
+          body: JSON.stringify({
+            model: 'grok-imagine-image-2.0',
+            prompt: 'Test image',
+            resolution: '1.5k',
+            quality: 'low',
+          }),
+        }),
+      );
+    });
+
     it('should handle image editing mode with imageUrl', async () => {
       const mockImageUrl = 'https://xai-cdn.com/images/generated/edited-image.jpg';
 

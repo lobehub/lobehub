@@ -22,7 +22,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { FTS_SEARCH_DOCUMENT_FIXTURES } from './__tests__/fixtures';
-import { FtsSearchDocumentBuilder } from './builder';
+import { FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS, FtsSearchDocumentBuilder } from './builder';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from './zodSchema';
 
 const userId = 'search-document-user';
@@ -338,7 +338,7 @@ describe('FtsSearchDocumentBuilder', () => {
     expect(result.map(({ id }) => id)).toEqual(['agent-1']);
   });
 
-  it('omits files carrying agent-share provenance from the search projection', async () => {
+  it('omits files and generated documents carrying Agent Share provenance', async () => {
     await db.insert(files).values({
       fileType: 'text/plain',
       id: 'file-agent-share',
@@ -364,6 +364,50 @@ describe('FtsSearchDocumentBuilder', () => {
       userId,
     });
     await expect(builder.buildByIds('documents', ['document-agent-share'])).resolves.toEqual([]);
+
+    await db.insert(documents).values({
+      content: 'Private generated visitor document',
+      fileType: 'custom/document',
+      id: 'generated-document-agent-share',
+      metadata: {
+        agentShare: {
+          shareId: 'share-1',
+          topicId: 'topic-1',
+          visitorUserId: 'visitor-1',
+        },
+      },
+      source: 'agent-document://agent-1/private.md',
+      sourceType: 'agent',
+      title: 'Private generated visitor document',
+      totalCharCount: 34,
+      totalLineCount: 1,
+      userId,
+    });
+    await expect(
+      builder.buildByIds('documents', ['generated-document-agent-share']),
+    ).resolves.toEqual([]);
+  });
+
+  it('caps oversized document content by characters while keeping the full character count', async () => {
+    const content = `${'文'.repeat(FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS)}tail beyond the cap`;
+    await db.insert(documents).values({
+      content,
+      fileType: 'text/plain',
+      id: 'document-oversized',
+      source: 'https://example.com/oversized.txt',
+      sourceType: 'file',
+      title: 'Oversized document',
+      totalCharCount: content.length,
+      totalLineCount: 1,
+      userId,
+    });
+
+    const [document] = await builder.buildByIds('documents', ['document-oversized']);
+
+    expect(document.source).toMatchObject({
+      content: '文'.repeat(FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS),
+      total_char_count: content.length,
+    });
   });
 
   it('rejects invalid batch limits before querying PostgreSQL', async () => {

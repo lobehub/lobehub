@@ -29,6 +29,8 @@ export interface AgentOperationError {
 export interface AgentOperationAppContext {
   defaultTaskAssigneeAgentId?: string;
   documentId?: string | null;
+  /** The agent a builder run edits (scope `agent_builder`); the run itself is owned by the builder. */
+  editingAgentId?: string;
   groupId?: string | null;
   scope?: string | null;
   sessionId?: string;

@@ -14,11 +14,12 @@ const AgentSharePage = memo(() => {
 
   return (
     <Suspense fallback={skeleton}>
-      {/* Sharing exposes real execution on the creator's account — a
-          configuration action, gated exactly like Agent Profile / Channels. */}
+      {/* Sharing exposes real execution in the Agent's owning billing scope —
+          only resource managers may configure the external link. */}
       <ResourceConfigAccessGate
         loading={skeleton}
         redirectPath={`/agent/${aid ?? ''}`}
+        requiredAccess="manage"
         resourceId={aid}
         resourceType="agent"
       >

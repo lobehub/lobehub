@@ -1,14 +1,56 @@
 import type { GenerateVideosConfig, GoogleGenAI, Image } from '@google/genai';
 import { GenerateVideosOperation } from '@google/genai';
+import type { ModelTokensUsage } from '@lobechat/types';
 import { imageUrlToBase64 } from '@lobechat/utils';
 import debug from 'debug';
+import { GEMINI_OMNI_VIDEO_MODEL_ID } from 'model-bank/standardParameters';
 
-import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
+import type {
+  CreateVideoPayload,
+  CreateVideoResult,
+  VideoGenerationUsage,
+} from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
 import { parseDataUri } from '../../utils/uriParser';
 
 const log = debug('lobe-video:google');
+const GOOGLE_FILE_DOWNLOAD_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+
+interface OmniVideoContent {
+  data?: string;
+  mime_type?: string;
+  type?: 'video';
+  uri?: string;
+}
+
+interface OmniInteraction {
+  id: string;
+  output_video?: OmniVideoContent;
+  status: string;
+  steps?: Array<{
+    content?: Array<Record<string, unknown>>;
+    error?: { message?: string };
+    type?: string;
+  }>;
+  usage?: OmniUsage;
+}
+
+interface OmniModalityTokens {
+  modality?: string;
+  tokens?: number;
+}
+
+interface OmniUsage {
+  input_tokens_by_modality?: OmniModalityTokens[];
+  output_tokens_by_modality?: OmniModalityTokens[];
+  total_input_tokens?: number;
+  total_output_tokens?: number;
+  total_thought_tokens?: number;
+  total_tokens?: number;
+}
+
+export const isGeminiOmniVideoModel = (model: string) => model === GEMINI_OMNI_VIDEO_MODEL_ID;
 
 /**
  * Convert image URL to Google Image format
@@ -39,13 +81,159 @@ async function imageToGoogleImageFormat(imageUrl: string): Promise<Image> {
   }
 }
 
+async function imageToOmniContent(imageUrl: string) {
+  const image = await imageToGoogleImageFormat(imageUrl);
+
+  return {
+    data: image.imageBytes,
+    mime_type: image.mimeType || 'image/png',
+    type: 'image' as const,
+  };
+}
+
+function extractOmniVideo(interaction: OmniInteraction): OmniVideoContent | undefined {
+  if (interaction.output_video) return interaction.output_video;
+
+  for (const step of interaction.steps ?? []) {
+    if (step.type !== 'model_output') continue;
+
+    const video = step.content?.find((content) => content.type === 'video');
+    if (video) return video as unknown as OmniVideoContent;
+  }
+
+  return undefined;
+}
+
+function extractOmniError(interaction: OmniInteraction): string {
+  for (const step of interaction.steps ?? []) {
+    if (step.error?.message) return step.error.message;
+  }
+
+  return `Gemini interaction ${interaction.status}`;
+}
+
+const sumModalityTokens = (items: OmniModalityTokens[] | undefined, modality: string) => {
+  const matched = items?.filter((item) => item.modality === modality);
+  if (!matched?.length) return undefined;
+
+  return matched.reduce((sum, item) => sum + (item.tokens ?? 0), 0);
+};
+
+/**
+ * Gemini Omni bills input, text/thinking output and video output at different rates, so keep the
+ * per-modality breakdown for token pricing. `total_output_tokens` holds the generated text and
+ * video tokens; thinking tokens are reported separately in `total_thought_tokens`.
+ * @see https://ai.google.dev/gemini-api/docs/pricing#gemini-omni-flash
+ */
+const convertOmniUsage = (usage: OmniUsage | undefined): VideoGenerationUsage | undefined => {
+  const totalOutputTokens = usage?.total_output_tokens;
+  if (!usage || !totalOutputTokens || totalOutputTokens <= 0) return undefined;
+
+  const outputVideoTokens = sumModalityTokens(usage.output_tokens_by_modality, 'video') ?? 0;
+  const outputReasoningTokens = usage.total_thought_tokens ?? 0;
+  const modelUsage: ModelTokensUsage = {
+    inputImageTokens: sumModalityTokens(usage.input_tokens_by_modality, 'image'),
+    // Default to 0 so pricing never falls back to billing all input tokens at the text rate.
+    inputTextTokens: sumModalityTokens(usage.input_tokens_by_modality, 'text') ?? 0,
+    inputVideoTokens: sumModalityTokens(usage.input_tokens_by_modality, 'video'),
+    outputReasoningTokens,
+    outputTextTokens: Math.max(0, totalOutputTokens - outputVideoTokens),
+    outputVideoTokens,
+    totalInputTokens: usage.total_input_tokens ?? 0,
+    totalOutputTokens: totalOutputTokens + outputReasoningTokens,
+    totalTokens: usage.total_tokens,
+  };
+
+  return {
+    completionTokens: totalOutputTokens,
+    modelUsage,
+    totalTokens: usage.total_tokens ?? totalOutputTokens,
+  };
+};
+
+async function createGoogleOmniVideo(
+  client: GoogleGenAI,
+  payload: CreateVideoPayload,
+): Promise<CreateVideoResult> {
+  const { callbackUrl, model, params, previousInteractionId } = payload;
+  const { aspectRatio, endImageUrl, imageUrl, imageUrls, prompt, resolution } = params;
+  const images = [imageUrl, ...(imageUrls ?? []), endImageUrl].filter((url): url is string =>
+    Boolean(url),
+  );
+
+  /**
+   * Infer the task from the actual request media. Persisted generation parameters and older
+   * clients can retain a stale `text_to_video` value after images are added, which Gemini rejects.
+   * First/last frame interpolation has no task value: Gemini infers it from the ordered frames, and
+   * forcing `reference_to_video` would treat them as subject references instead. The start frame
+   * may arrive as `imageUrl` or, following the Seedance convention used by the video page, as the
+   * single `imageUrls` entry.
+   */
+  const isFrameInterpolation = Boolean(endImageUrl) && images.length <= 2;
+  const resolvedTask = previousInteractionId
+    ? 'edit'
+    : isFrameInterpolation
+      ? undefined
+      : images.length > 1
+        ? 'reference_to_video'
+        : images.length === 1
+          ? 'image_to_video'
+          : 'text_to_video';
+  /**
+   * Stateful continuation already restores the source media from `previous_interaction_id`.
+   * Re-sending persisted frame inputs can make Gemini reject the edit as conflicting media.
+   */
+  const input = previousInteractionId
+    ? prompt
+    : images.length === 0
+      ? prompt
+      : [
+          ...(await Promise.all(images.map((url) => imageToOmniContent(url)))),
+          { text: prompt, type: 'text' as const },
+        ];
+
+  const interaction = (await client.interactions.create({
+    api_version: 'v1beta',
+    background: true,
+    ...(previousInteractionId || !resolvedTask
+      ? {}
+      : { generation_config: { video_config: { task: resolvedTask } } }),
+    input,
+    model,
+    ...(previousInteractionId ? { previous_interaction_id: previousInteractionId } : {}),
+    response_format: {
+      ...(aspectRatio ? { aspect_ratio: aspectRatio as '16:9' | '9:16' } : {}),
+      delivery: 'uri',
+      ...(resolution ? { resolution } : {}),
+      type: 'video',
+    },
+    store: true,
+    ...(callbackUrl
+      ? {
+          webhook_config: {
+            uris: [callbackUrl],
+          },
+        }
+      : {}),
+  })) as OmniInteraction;
+
+  if (!interaction.id) throw new Error('Gemini interaction response is missing an id');
+
+  return { inferenceId: interaction.id };
+}
+
 export async function createGoogleVideo(
   client: GoogleGenAI,
   provider: string,
   payload: CreateVideoPayload,
-): Promise<CreateVideoResponse> {
+): Promise<CreateVideoResult> {
   try {
     const { model, params } = payload;
+
+    if (isGeminiOmniVideoModel(model)) {
+      return await createGoogleOmniVideo(client, payload);
+    }
+
     const {
       prompt,
       imageUrl,
@@ -113,13 +301,89 @@ export async function createGoogleVideo(
   }
 }
 
+async function pollGoogleOmniInteraction(client: GoogleGenAI, inferenceId: string, apiKey: string) {
+  const interaction = (await client.interactions.get(inferenceId, {
+    api_version: 'v1beta',
+  })) as OmniInteraction;
+  const usage = convertOmniUsage(interaction.usage);
+
+  if (interaction.status === 'queued' || interaction.status === 'in_progress') {
+    return { status: 'pending' as const };
+  }
+
+  if (interaction.status !== 'completed') {
+    return {
+      error: extractOmniError(interaction),
+      status: 'failed' as const,
+    };
+  }
+
+  const video = extractOmniVideo(interaction);
+  if (!video) {
+    return {
+      error: 'Gemini interaction completed without video output',
+      status: 'failed' as const,
+    };
+  }
+
+  if (video.data) {
+    return {
+      status: 'success' as const,
+      ...(usage ? { usage } : {}),
+      videoUrl: `data:${video.mime_type || 'video/mp4'};base64,${video.data}`,
+    };
+  }
+
+  if (!video.uri) {
+    return {
+      error: 'Gemini interaction video output is missing data and URI',
+      status: 'failed' as const,
+    };
+  }
+
+  const fileMatch = video.uri.match(/(?:^|\/)(files\/[^/:?#]+)/);
+  if (!fileMatch) {
+    return {
+      headers: { 'x-goog-api-key': apiKey },
+      status: 'success' as const,
+      ...(usage ? { usage } : {}),
+      videoUrl: video.uri,
+    };
+  }
+
+  const file = await client.files.get({ name: fileMatch[1] });
+  const fileState = String(file.state ?? '').toUpperCase();
+
+  if (fileState === 'FAILED') {
+    return {
+      error: file.error?.message || 'Gemini generated video file processing failed',
+      status: 'failed' as const,
+    };
+  }
+
+  if (fileState !== 'ACTIVE') return { status: 'pending' as const };
+
+  return {
+    headers: { 'x-goog-api-key': apiKey },
+    status: 'success' as const,
+    ...(usage ? { usage } : {}),
+    videoUrl:
+      file.downloadUri || `${GOOGLE_FILE_DOWNLOAD_BASE_URL}/${fileMatch[1]}:download?alt=media`,
+  };
+}
+
 export async function pollGoogleVideoOperation(
   client: GoogleGenAI,
   inferenceId: string,
   provider: string,
   apiKey: string,
 ): Promise<
-  | { headers?: Record<string, string>; status: 'success'; videoUrl: string }
+  | {
+      headers?: Record<string, string>;
+      status: 'success';
+      usage?: VideoGenerationUsage;
+      videoUrl: string;
+    }
   | { status: 'failed'; error: string }
   | { status: 'pending' }
 > {
@@ -128,6 +392,10 @@ export async function pollGoogleVideoOperation(
 
     if (!inferenceId) {
       return { error: 'Invalid operation name', status: 'failed' };
+    }
+
+    if (!inferenceId.startsWith('operations/') && !inferenceId.includes('/operations/')) {
+      return await pollGoogleOmniInteraction(client, inferenceId, apiKey);
     }
 
     // Create a proper GenerateVideosOperation instance from the operation name

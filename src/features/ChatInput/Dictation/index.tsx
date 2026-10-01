@@ -1,8 +1,9 @@
 'use client';
 
-import { Icon, Tooltip } from '@lobehub/ui';
+import { Tooltip } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { LoaderCircle, Mic, RotateCcw, X } from 'lucide-react';
+import { Mic, RotateCcw, X } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -83,19 +84,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     white-space: nowrap;
 
     clip: rect(0, 0, 0, 0);
-  `,
-  spin: css`
-    animation: dictation-spin 1s linear infinite;
-
-    @keyframes dictation-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
   `,
   status: css`
     overflow: hidden;
@@ -322,7 +310,7 @@ const Dictation = memo(() => {
             onKeyDown={(event) => handleKeyboardActivation(event, start)}
           />
         ) : status !== 'error' ? (
-          <Icon aria-hidden className={styles.spin} icon={LoaderCircle} size={18} />
+          <Spin aria-hidden size="small" />
         ) : null}
       </div>
       <ChatInputAction

@@ -1,5 +1,5 @@
 export type UpdateChannel = 'stable' | 'canary';
-export type UpdateKind = 'app' | 'renderer';
+export type UpdateKind = 'app' | 'renderer' | 'core-reload' | 'core-relaunch';
 
 export interface ReleaseNoteInfo {
   /**
@@ -24,6 +24,18 @@ export interface UpdateInfo {
   releaseDate?: string;
   releaseNotes?: string | ReleaseNoteInfo[];
   version: string;
+}
+
+export interface CoreUpdateStatus {
+  applyMode: 'reload' | 'relaunch' | null;
+  current: string | null;
+  disabledReasons: string[];
+  enabled: boolean;
+  lastCheckAt: number | null;
+  lastError: string | null;
+  needsFullRelease: boolean;
+  running: string | null;
+  staged: string | null;
 }
 
 export type UpdaterStage = 'idle' | 'checking' | 'downloading' | 'downloaded' | 'latest' | 'error';

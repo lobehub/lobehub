@@ -22,14 +22,18 @@ const extractProvider = (body: unknown): string | undefined => {
   return typeof p === 'string' ? p : undefined;
 };
 
-const extractMessage = (value: unknown, depth = 0): string | undefined => {
+/**
+ * Find the first human-readable message in an error value, walking the nested `error`,
+ * `_responseBody` and `body` layers that runtime payloads use.
+ */
+export const extractErrorMessage = (value: unknown, depth = 0): string | undefined => {
   if (typeof value === 'string') return value.trim() ? value : undefined;
   if (!isRecord(value) || depth > 5) return undefined;
   if (typeof value.message === 'string' && value.message.trim() && value.message !== 'error') {
     return value.message;
   }
   for (const nested of [value.error, value._responseBody, value.body]) {
-    const message = extractMessage(nested, depth + 1);
+    const message = extractErrorMessage(nested, depth + 1);
     if (message) return message;
   }
 };
@@ -70,6 +74,16 @@ const buildPayloadBody = (
   // layers so normalizing `{ errorType, error }` does not drop the fields the
   // chat error renderer needs later.
   const sourceBody = payload.body ?? payload._responseBody ?? payload.error ?? originalError;
+  /**
+   * Error hooks attach display fields such as `traceId` through `_responseBody`. A stream error
+   * already carries the provider `body`, which would otherwise hide them from the error card.
+   */
+  const displayFields =
+    payload.body !== undefined &&
+    isRecord(payload._responseBody) &&
+    payload._responseBody !== payload.body
+      ? payload._responseBody
+      : undefined;
   const context: Record<string, unknown> = {};
 
   if (payload.budget !== undefined) context.budget = payload.budget;
@@ -80,6 +94,7 @@ const buildPayloadBody = (
 
     return {
       ...sourceBody,
+      ...displayFields,
       // `_responseBody` is the display-facing body, but gateway/model-runtime
       // still carries status/provider details in `error` for some failures:
       // `{ _responseBody: { error: { message } }, error: { status: 402 } }`.
@@ -186,9 +201,9 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
     };
     const message =
       (payload.message && payload.message !== 'error' ? payload.message : undefined) ??
-      extractMessage(payload.body) ??
-      extractMessage(payload._responseBody) ??
-      extractMessage(payload.error) ??
+      extractErrorMessage(payload.body) ??
+      extractErrorMessage(payload._responseBody) ??
+      extractErrorMessage(payload.error) ??
       String(payload.errorType);
 
     return enrichWithSpec({
@@ -211,7 +226,7 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
       typeof (error as { type: unknown }).type === 'number')
   ) {
     const formatted = error as ChatMessageError;
-    const message = extractMessage(formatted);
+    const message = extractErrorMessage(formatted);
     return enrichWithSpec({ ...formatted, ...(message ? { message } : {}) });
   }
 
@@ -221,8 +236,15 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
     // out of some `JSON.parse` those two say nothing about WHERE it blew up.
     // Persist a bounded stack so a recurring 500 is locatable from the stored
     // operation instead of needing a live repro.
+    // Error hooks attach display fields such as `traceId` through `_responseBody` — also on
+    // plain Errors, e.g. a provider stream that fails with `TypeError: terminated`.
+    const responseBody = (error as { _responseBody?: unknown })._responseBody;
     return enrichWithSpec({
-      body: { name: error.name, stack: truncateStack(error.stack) },
+      body: {
+        ...(isRecord(responseBody) ? responseBody : {}),
+        name: error.name,
+        stack: truncateStack(error.stack),
+      },
       message: error.message,
       type: ChatErrorType.InternalServerError,
     });
@@ -238,7 +260,7 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
   if (isRecord(error)) {
     return enrichWithSpec({
       body: error,
-      message: extractMessage(error) ?? 'Agent runtime error',
+      message: extractErrorMessage(error) ?? 'Agent runtime error',
       type:
         typeof error.code === 'string'
           ? (getErrorCodeSpec(error.code)?.code ?? AgentRuntimeErrorType.AgentRuntimeError)

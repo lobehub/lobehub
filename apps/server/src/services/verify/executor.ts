@@ -16,6 +16,7 @@ import type {
   VerifyCheckResultStatus,
   VerifyVerdict,
 } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { AiModelModel } from '@/database/models/aiModel';
@@ -28,7 +29,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
-import { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
+import { runEvidenceGaps } from './evidenceCoverage';
 import { planEvidenceVerification } from './evidencePlanner';
 import { resolveModelReadableFrameUrl } from './modelFrames';
 import { planItemToPendingResult } from './resultSnapshot';
@@ -265,13 +266,7 @@ export class VerifyExecutorService {
   ): Promise<Set<string>> {
     const gapIds = new Set<string>();
     for (const item of items) {
-      // Deliverable/task-artifact evidence is resolved by the verifier agent
-      // from the operation's associated documents/files. Only run evidence is
-      // expected to have been explicitly captured into verify_evidence rows.
-      const required = readRequiredEvidence(item.verifierConfig)?.filter(
-        (spec) => !spec.scope || spec.scope === 'run_evidence',
-      );
-      const gaps = coverageGaps(required, evidenceByItem.get(item.id) ?? []);
+      const gaps = runEvidenceGaps(item.verifierConfig, evidenceByItem.get(item.id) ?? []);
       if (gaps.length === 0) continue;
 
       gapIds.add(item.id);
@@ -280,7 +275,9 @@ export class VerifyExecutorService {
         completedAt: new Date(),
         confidence: 0,
         status: 'failed',
-        suggestion: `Capture and upload the missing evidence (${missing}) via \`lh verify upload-evidence\`.`,
+        // `result submit` needs a run selector; spell out this run and item so
+        // the recovery command can be run as-is.
+        suggestion: `Capture and upload the missing evidence (${missing}) via \`lh acceptance run result submit --run ${verifyRunId} --item ${item.id} --type <type> --file <path>\`.`,
         toulmin: { limitation: `Required evidence not provided: ${missing}.` },
         verdict: 'uncertain',
       });
@@ -450,6 +447,7 @@ export class VerifyExecutorService {
         schema: BATCH_VERDICT_JSON_SCHEMA,
       },
       {
+        metadata: { trigger: RequestTrigger.Verify },
         tracing: {
           ...({
             promptVersion: VERIFY_JUDGE_PROMPT_VERSION,
@@ -527,6 +525,7 @@ export class VerifyExecutorService {
         schema: SINGLE_VERDICT_JSON_SCHEMA,
       },
       {
+        metadata: { trigger: RequestTrigger.Verify },
         tracing: {
           ...({
             promptVersion: VERIFY_JUDGE_PROMPT_VERSION,

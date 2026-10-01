@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -10,6 +10,7 @@ import {
   deriveReportVerdict,
   evidenceTypeForFile,
   formatAnnotationRegion,
+  formatDisputedChapter,
   genericContextFromResult,
   inlineTextEvidenceForFile,
   originFromEnv,
@@ -33,7 +34,6 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       createRubric: { mutate: vi.fn() },
       deleteRun: { mutate: vi.fn() },
       getRubric: { query: vi.fn() },
-      getSkillBundle: { query: vi.fn() },
       updateRubric: { mutate: vi.fn() },
     },
   },
@@ -44,7 +44,10 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.lobehub.com' }));
+vi.mock('../settings', () => ({
+  loadActiveWorkspace: () => undefined,
+  resolveServerUrl: () => 'https://app.lobehub.com',
+}));
 describe('verify rubric config commands', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
 
@@ -181,74 +184,6 @@ describe('verify evidence upload command', () => {
   });
 });
 
-describe('verify init command', () => {
-  let consoleSpy: ReturnType<typeof vi.spyOn>;
-  let dir: string;
-
-  beforeEach(() => {
-    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
-    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
-      content: '# Acceptance SKILL',
-      files: { 'references/plan-format.md': 'plan', 'surfaces/cli.md': 'cli' },
-      identifier: 'acceptance',
-      name: 'acceptance',
-    });
-    dir = mkdtempSync(path.join(tmpdir(), 'verify-init-'));
-  });
-
-  afterEach(() => {
-    consoleSpy.mockRestore();
-    rmSync(dir, { force: true, recursive: true });
-  });
-
-  const run = async (args: string[]) => {
-    const program = new Command();
-    program.exitOverride();
-    registerVerifyCommand(program);
-    await program.parseAsync(['node', 'lh', 'verify', ...args]);
-  };
-
-  it('defaults to the acceptance skill and writes it into .agents/skills/acceptance', async () => {
-    await run(['init', '--dir', dir]);
-
-    expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
-      identifier: 'acceptance',
-    });
-    const skillDir = path.join(dir, '.agents', 'skills', 'acceptance');
-    expect(readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('# Acceptance SKILL');
-    expect(readFileSync(path.join(skillDir, 'references/plan-format.md'), 'utf8')).toBe('plan');
-    expect(readFileSync(path.join(skillDir, 'surfaces/cli.md'), 'utf8')).toBe('cli');
-  });
-
-  it('skips existing files without --force and overwrites with it', async () => {
-    const skillFile = path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md');
-    await run(['init', '--dir', dir]);
-
-    // server now serves updated content
-    mockTrpcClient.verify.getSkillBundle.query.mockResolvedValue({
-      content: '# Updated SKILL',
-      files: {},
-      identifier: 'acceptance',
-      name: 'acceptance',
-    });
-
-    await run(['init', '--dir', dir]); // no --force → keep existing
-    expect(readFileSync(skillFile, 'utf8')).toBe('# Acceptance SKILL');
-
-    await run(['init', '--dir', dir, '--force']); // --force → overwrite
-    expect(readFileSync(skillFile, 'utf8')).toBe('# Updated SKILL');
-  });
-
-  it('reports the written/skipped counts as JSON', async () => {
-    await run(['init', '--dir', dir, '--json']);
-    const out = JSON.parse(consoleSpy.mock.calls.map((c) => String(c[0])).join(''));
-    expect(out.skill).toBe('acceptance');
-    expect(out.written).toContain('SKILL.md');
-    expect(existsSync(path.join(out.dir, 'SKILL.md'))).toBe(true);
-  });
-});
-
 describe('reportEvidence — comparison normalization', () => {
   it('accepts plain string paths', () => {
     expect(reportEvidence('assets/a.png')).toEqual([{ path: 'assets/a.png' }]);
@@ -350,6 +285,55 @@ describe('reportEvidence — comparison normalization', () => {
     expect(
       reportEvidence([{ desc: 'a shot', file: 'a.png' }, { comparison: { id: 'x' } }]),
     ).toEqual([{ comparison: undefined, description: 'a shot', path: 'a.png' }]);
+  });
+});
+
+describe('reportEvidence — video chapters', () => {
+  beforeEach(() => {
+    vi.mocked(log.warn).mockClear();
+  });
+
+  it('carries well-formed chapters on a video, sorted by time', () => {
+    const [item] = reportEvidence([
+      {
+        chapters: [
+          { kind: 'check', note: 'no skeleton', t: 7.9 },
+          { kind: 'step', label: 'Scroll #1', t: 2 },
+        ],
+        path: 'proof/scroll.mp4',
+      },
+    ]);
+
+    expect(item.chapters).toEqual([
+      { kind: 'step', label: 'Scroll #1', t: 2 },
+      { kind: 'check', note: 'no skeleton', t: 7.9 },
+    ]);
+    expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  // A dropped marker is a claim the agent believes the reviewer will see.
+  it('names how many markers it dropped and why', () => {
+    const [item] = reportEvidence([
+      {
+        chapters: [
+          { kind: 'step', label: 'Open', t: 0 },
+          { kind: 'check', t: 3 },
+        ],
+        path: 'clip.webm',
+      },
+    ]);
+
+    expect(item.chapters).toEqual([{ kind: 'step', label: 'Open', t: 0 }]);
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('dropped 1 of 2 chapters'));
+  });
+
+  it('ignores chapters on a still image, and a chapters field that is not a list', () => {
+    expect(
+      reportEvidence([{ chapters: [{ kind: 'step', label: 'x', t: 0 }], path: 'a.png' }])[0]
+        .chapters,
+    ).toBeUndefined();
+    expect(reportEvidence([{ chapters: 'intro', path: 'a.mp4' }])[0].chapters).toBeUndefined();
+    expect(log.warn).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -709,6 +693,7 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
 
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     const verify = mockTrpcClient.verify as Record<string, any>;
     verify.createRun = { mutate: vi.fn().mockResolvedValue({ id: 'run-new' }) };
@@ -717,7 +702,10 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     mockTrpcClient.acceptance = {
       attachRun: { mutate: vi.fn() },
       ensure: { mutate: vi.fn().mockResolvedValue({ id: 'acceptance-1' }) },
-      getBundle: { query: vi.fn() },
+      getBundle: { query: vi.fn().mockResolvedValue({}) },
+    };
+    mockTrpcClient.workspace = {
+      getById: { query: vi.fn().mockResolvedValue({ id: 'workspace-1' }) },
     };
 
     dir = mkdtempSync(path.join(tmpdir(), 'lh-ingest-'));
@@ -727,6 +715,7 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
 
   afterEach(() => {
     consoleSpy.mockRestore();
+    vi.unstubAllEnvs();
     delete process.env.LOBEHUB_TOPIC_ID;
     rmSync(dir, { force: true, recursive: true });
   });
@@ -845,27 +834,170 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     );
   });
 
-  it('appends a re-verification round directly to an existing acceptance', async () => {
+  it('reuses criteria when the round reaches its acceptance through the subject', async () => {
+    // Regression: only `--acceptance` read the existing checks, so re-ingesting
+    // a topic's report minted fresh criteria and duplicated every check row.
+    mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+      checks: [{ id: 'criterion-1', planItem: { id: '1', sourceCriterionId: 'criterion-1' } }],
+    });
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [{ id: '1', name: '标题可编辑', status: 'pass' }],
+        plan: [{ id: '1', title: '标题可编辑' }],
+      }),
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(mockTrpcClient.acceptance.getBundle.query).toHaveBeenCalledWith({ id: 'acceptance-1' });
+    expect(mockTrpcClient.verify.createRun.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: [expect.objectContaining({ id: '1', sourceCriterionId: 'criterion-1' })],
+      }),
+    );
+  });
+
+  describe('identical re-ingest', () => {
+    const publishedRound = (content: string) => ({
+      report: { content, summary: '全部通过' },
+      run: { id: 'run-r1', plan: [{ id: '1', title: '标题可编辑' }], roundIndex: 1 },
+    });
+
+    beforeEach(() => {
+      (mockTrpcClient.verify as Record<string, any>).ingestResult = {
+        mutate: vi.fn().mockResolvedValue({ id: 'result-1' }),
+      };
+      writeFileSync(path.join(dir, 'report.md'), '## 备注\n\n首次发布');
+      writeFileSync(
+        path.join(dir, 'result.json'),
+        JSON.stringify({
+          cases: [{ id: '1', name: '标题可编辑', status: 'pass' }],
+          plan: [{ id: '1', title: '标题可编辑' }],
+          summary: { conclusion: '全部通过', failed: 0, passed: 1, total: 1 },
+        }),
+      );
+    });
+
+    it('refuses to stack a round identical to the latest one', async () => {
+      mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+        rounds: [publishedRound('## 备注\n\n首次发布')],
+      });
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+        throw new Error(`process.exit ${code}`);
+      }) as never);
+
+      try {
+        await expect(run(['ingest-report', dir, '--json'])).rejects.toThrow('process.exit 1');
+        expect(mockTrpcClient.verify.createRun.mutate).not.toHaveBeenCalled();
+      } finally {
+        exitSpy.mockRestore();
+      }
+    });
+
+    it('publishes the next round once the report actually changed', async () => {
+      mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+        rounds: [publishedRound('## 备注\n\n上一轮的报告')],
+      });
+
+      await run(['ingest-report', dir, '--json']);
+
+      expect(mockTrpcClient.verify.createRun.mutate).toHaveBeenCalled();
+    });
+  });
+
+  it.each([null, 'workspace-1'])(
+    'appends a re-verification round when both scopes are %s',
+    async (workspaceId) => {
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', workspaceId ?? '');
+      mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+        acceptance: {
+          id: 'acceptance-existing',
+          status: 'delivered',
+          subjectId: 'standalone-subject',
+          subjectType: 'standalone',
+          workspaceId,
+        },
+      });
+
+      await run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']);
+
+      expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenCalledWith({
+        acceptanceId: 'acceptance-existing',
+        verifyRunId: 'run-new',
+      });
+      expect(mockTrpcClient.verify.upsertReport.mutate).toHaveBeenCalled();
+      expect(process.env.LOBEHUB_WORKSPACE_ID).toBe(workspaceId ?? '');
+      if (!workspaceId) expect(mockTrpcClient.workspace.getById.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { effectiveWorkspace: null, name: 'revoked workspace membership' },
+    { effectiveWorkspace: { id: 'workspace-other' }, name: 'a different server workspace' },
+    { effectiveWorkspace: new Error('Workspace lookup unavailable'), name: 'a failed lookup' },
+  ])('rejects $name before creating a run', async ({ effectiveWorkspace }) => {
+    vi.stubEnv('LOBEHUB_WORKSPACE_ID', 'workspace-1');
     mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
       acceptance: {
         id: 'acceptance-existing',
         status: 'delivered',
         subjectId: 'standalone-subject',
         subjectType: 'standalone',
+        workspaceId: 'workspace-1',
       },
     });
+    const query = mockTrpcClient.workspace.getById.query;
+    if (effectiveWorkspace instanceof Error) query.mockRejectedValue(effectiveWorkspace);
+    else query.mockResolvedValue(effectiveWorkspace);
 
-    await run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']);
+    await expect(
+      run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']),
+    ).rejects.toThrow(
+      effectiveWorkspace instanceof Error ? effectiveWorkspace.message : 'No run was created.',
+    );
 
-    expect(mockTrpcClient.acceptance.getBundle.query).toHaveBeenCalledWith({
-      id: 'acceptance-existing',
-    });
     expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
-    expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenCalledWith({
-      acceptanceId: 'acceptance-existing',
-      verifyRunId: 'run-new',
-    });
+    expect(mockTrpcClient.verify.createRun.mutate).not.toHaveBeenCalled();
+    expect(mockTrpcClient.acceptance.attachRun.mutate).not.toHaveBeenCalled();
+    expect(mockTrpcClient.verify.upsertReport.mutate).not.toHaveBeenCalled();
+    expect(process.env.LOBEHUB_WORKSPACE_ID).toBe('workspace-1');
   });
+
+  it.each([
+    { current: '', hint: 'LOBEHUB_WORKSPACE_ID=workspace-target', target: 'workspace-target' },
+    {
+      current: 'workspace-current',
+      hint: 'LOBEHUB_WORKSPACE_ID=workspace-target',
+      target: 'workspace-target',
+    },
+    { current: 'workspace-current', hint: 'lh workspace use --personal', target: null },
+  ])(
+    'rejects scope $current → $target before any remote writes',
+    async ({ current, target, hint }) => {
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', current);
+      mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+        acceptance: {
+          id: 'acceptance-existing',
+          status: 'delivered',
+          subjectId: 'standalone-subject',
+          subjectType: 'standalone',
+          workspaceId: target,
+        },
+      });
+
+      await expect(
+        run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']),
+      ).rejects.toThrow(hint);
+
+      expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcClient.verify.createRun.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcClient.acceptance.attachRun.mutate).not.toHaveBeenCalled();
+      expect(mockTrpcClient.verify.upsertReport.mutate).not.toHaveBeenCalled();
+      expect(process.env.LOBEHUB_WORKSPACE_ID).toBe(current);
+    },
+  );
 
   it('passes a non-coding scenario and its context bag through to the run', async () => {
     const verify = mockTrpcClient.verify as Record<string, any>;
@@ -1350,77 +1482,6 @@ describe('lh acceptance — canonical run tree', () => {
     expect(output.url).toBe('https://app.lobehub.com/verify/run_1');
   });
 
-  it('exposes `acceptance install` defaulting to the acceptance skill', async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-install-'));
-    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
-      content: '# Acceptance SKILL',
-      files: {},
-      identifier: 'acceptance',
-      name: 'acceptance',
-    });
-    await run(['install', '--dir', dir]);
-    expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
-      identifier: 'acceptance',
-    });
-    expect(existsSync(path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md'))).toBe(true);
-    rmSync(dir, { force: true, recursive: true });
-  });
-
-  it('reports the installed version and leaves it in the SKILL.md on disk', async () => {
-    // The version is what a later install compares against, so it has to survive
-    // in two places: the JSON result, and the frontmatter of the materialized
-    // file (the copy a builder actually reads).
-    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-version-'));
-    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
-      content: '---\nname: acceptance\nversion: 1.0.0\n---\n\n# Acceptance SKILL',
-      files: {},
-      identifier: 'acceptance',
-      name: 'acceptance',
-      version: '1.0.0',
-    });
-
-    await run(['install', '--dir', dir, '--json']);
-
-    const printed = JSON.parse(consoleSpy.mock.calls.at(-1)![0] as string);
-    expect(printed.version).toBe('1.0.0');
-    expect(
-      readFileSync(path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md'), 'utf8'),
-    ).toContain('version: 1.0.0');
-    rmSync(dir, { force: true, recursive: true });
-  });
-
-  it('removes stale materialized resources on `acceptance update`', async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-update-'));
-    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValueOnce({
-      content: '# Acceptance SKILL',
-      files: {
-        'references/auth.md': '# Mixed auth',
-        'references/recording.md': '# Mixed recording',
-      },
-      identifier: 'acceptance',
-      name: 'acceptance',
-    });
-    await run(['install', '--dir', dir]);
-
-    mockTrpcClient.verify.getSkillBundle.query.mockResolvedValueOnce({
-      content: '# Acceptance SKILL v2',
-      files: {
-        'references/auth-web.md': '# Web auth',
-        'references/recording-cdp.md': '# CDP recording',
-      },
-      identifier: 'acceptance',
-      name: 'acceptance',
-    });
-    await run(['update', '--dir', dir]);
-
-    const skillDir = path.join(dir, '.agents', 'skills', 'acceptance');
-    expect(existsSync(path.join(skillDir, 'references', 'auth.md'))).toBe(false);
-    expect(existsSync(path.join(skillDir, 'references', 'recording.md'))).toBe(false);
-    expect(existsSync(path.join(skillDir, 'references', 'auth-web.md'))).toBe(true);
-    expect(existsSync(path.join(skillDir, 'references', 'recording-cdp.md'))).toBe(true);
-    rmSync(dir, { force: true, recursive: true });
-  });
-
   it('does NOT attach the run subtree to the deprecated `verify acceptance` alias', async () => {
     const program = new Command();
     program.exitOverride();
@@ -1464,6 +1525,37 @@ describe('formatAnnotationRegion', () => {
   it('returns undefined when there is no location at all', () => {
     expect(formatAnnotationRegion({ comment: 'just a note' })).toBeUndefined();
     expect(formatAnnotationRegion({ rect: { x: 0.1 } })).toBeUndefined();
+  });
+  it('leads with the frame on a video, then the region circled on it', () => {
+    expect(
+      formatAnnotationRegion(
+        { evidenceId: 'ev-1', rect, time: { start: 7.2 } },
+        new Map([['ev-1', 'scroll.mp4']]),
+      ),
+    ).toBe('scroll.mp4 @ frame at 0:07.20 · 31%,24% · 12%×3%');
+  });
+
+  it('prints a span, and no region at all when the note covers the whole frame', () => {
+    expect(
+      formatAnnotationRegion({
+        evidenceId: 'ev-1',
+        rect: { height: 1, width: 1, x: 0, y: 0 },
+        time: { end: 67.65, start: 66.75 },
+      }),
+    ).toBe('ev-1 @ 1:06.75–1:07.65');
+  });
+});
+
+describe('formatDisputedChapter', () => {
+  it('quotes the agent claim the reviewer objected to', () => {
+    expect(
+      formatDisputedChapter({ kind: 'check', note: 'no skeleton after scroll #3', t: 7.9 }),
+    ).toBe('your check at 0:07.90: "no skeleton after scroll #3"');
+  });
+
+  it('says nothing when there is no claim to quote', () => {
+    expect(formatDisputedChapter(undefined)).toBeUndefined();
+    expect(formatDisputedChapter({ kind: 'check', t: 1 })).toBeUndefined();
   });
 });
 

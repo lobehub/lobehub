@@ -1,6 +1,6 @@
 ---
 title: 在 LobeHub 中使用多模型服务商
-description: 了解 LobeHub 在多模型服务商支持方面的最新进展，包括已支持的模型服务商和计划中的扩展，以及本地模型支持的使用方式。
+description: 按商业服务商、推理平台、国内服务商、本地推理和图像服务查找配置教程，并了解模型选择与连接排查方法。
 tags:
   - LobeHub
   - AI 会话服务
@@ -20,38 +20,46 @@ tags:
 
 <Image alt={'多模型服务商支持'} borderless cover src={'/blog/assets17870709/1148639c-2687-4a9c-9950-8ca8672f34b6.webp'} />
 
-在 LobeHub 的不断发展过程中，我们深刻理解到在提供 AI 会话服务时模型服务商的多样性对于满足社区需求的重要性。因此，我们不再局限于单一的模型服务商，而是拓展了对多种模型服务商的支持，以便为用户提供更为丰富和多样化的会话选择。
+你可以为不同助理选择模型服务商，也可以接入本地推理服务。本页提供分组教程入口，完整服务商卡片保留在页面末尾。
 
 ## 为什么支持多模型服务商？
 
-LobeHub 的多提供商架构带来了以下核心优势：
+- **统一入口** — 在同一界面选择不同服务商支持的模型与模态。
+- **成本比较** — 根据任务质量、延迟和预算选择服务商。
+- **减少单一依赖** — 当某家服务不可用时，可选择已配置且兼容的替代服务，并非保证自动故障切换。
+- **按助理配置** — 为不同职责设置不同的默认模型。
+- **本地推理** — 通过 Ollama 或 LM Studio 运行本地模型。本地推理通常不产生云端模型 API 费用，但仍有硬件和运行成本。
 
-- **统一智能** — 通过单一界面访问任意模型和任意模态
-- **成本优化** — 在不同提供商之间切换，兼顾性能与预算
-- **供应商独立** — 避免厂商锁定，在某家提供商出现故障时保持服务连续性
-- **灵活性** — 为不同的 Agent 和使用场景混合搭配最合适的模型
-- **本地选项** — 使用 Ollama 或 LM Studio 实现完全数据隐私，无 API 费用
+本地模型不代表整个工作流完全私密或离线。云端同步、搜索和其他连接器仍可能传输数据。
 
-## 提供商分类
+## 按类别查找教程
 
-LobeHub 集成了 70+ AI 模型提供商：
+分类用于快速查找，不是互斥的能力划分，也不是全部服务商列表。同一服务商可以同时提供文本和图像能力；实际模型、地区、价格和接口以服务商及账号为准。
 
-- **主流商业提供商** — OpenAI（GPT-5、o3）、Anthropic（Claude）、Google（Gemini）、Microsoft Azure OpenAI、AWS Bedrock
-- **推理平台** — OpenRouter、Together AI、Groq、Fireworks AI、SambaNova
-- **国内提供商** — 智谱、Moonshot、DeepSeek、百川、通义千问（阿里）、文心一言（百度）、讯飞星火
-- **本地模型** — Ollama、LM Studio（无 API 费用，完全隐私，支持离线）
-- **图像生成** — GPT Image、Flux、Seedream、Imagen、ComfyUI
+| 类别 | 配置教程 |
+| --- | --- |
+| **主流商业服务商** | [OpenAI](/zh/docs/usage/providers/openai)（GPT-6 Astra） · [Anthropic](/zh/docs/usage/providers/anthropic)（Claude Fable 5.1、Claude Opus 5、Claude Sonnet 5） · [Google](/zh/docs/usage/providers/google)（Gemini 3.8 Flash） · [Azure OpenAI](/zh/docs/usage/providers/azure) · [AWS Bedrock](/zh/docs/usage/providers/bedrock) |
+| **聚合与推理平台** | [OpenRouter](/zh/docs/usage/providers/openrouter) · [Together AI](/zh/docs/usage/providers/togetherai) · [Groq](/zh/docs/usage/providers/groq) · [Fireworks AI](/zh/docs/usage/providers/fireworksai) · [SambaNova](/zh/docs/usage/providers/sambanova) |
+| **国内服务商** | [DeepSeek](/zh/docs/usage/providers/deepseek)（DeepSeek-V4.1-Flash） · [Moonshot](/zh/docs/usage/providers/moonshot) · [智谱](/zh/docs/usage/providers/zhipu) · [通义千问](/zh/docs/usage/providers/qwen)（Qwen3.8-Max） · [百川](/zh/docs/usage/providers/baichuan) · [百度文心](/zh/docs/usage/providers/wenxin) · [讯飞星火](/zh/docs/usage/providers/spark) |
+| **本地与自托管推理** | [Ollama](/zh/docs/usage/providers/ollama) · [LM Studio](/zh/docs/usage/providers/lmstudio) · [vLLM](/zh/docs/usage/providers/vllm) |
+| **图像与多媒体服务** | [OpenAI](/zh/docs/usage/providers/openai) · [Black Forest Labs](/zh/docs/usage/providers/bfl) · [fal](/zh/docs/usage/providers/fal) · [ComfyUI](/zh/docs/usage/providers/comfyui) · [Google](/zh/docs/usage/providers/google) · [火山引擎](/zh/docs/usage/providers/volcengine) |
+
+图像模型名称不是服务商名称。请按提供该模型的服务商或本地运行时选择配置教程。
 
 ## 配置提供商
 
-每个提供商在 **设置 → 语言模型** 中配置：
+打开 **应用设置 → AI 服务商**，然后选择要配置的服务商。不同服务商显示的配置项可能不同：
 
-1. 从列表中选择提供商
-2. 输入你的 API Key（从提供商的开发者控制台获取）
-3. 如需使用代理或自托管端点，可选填自定义 Base URL
-4. 保存后选择模型即可开始对话
+1. 从列表中选择服务商，并打开右侧开关
+2. 按页面填写凭据。大多数云端服务使用 API Key；Amazon Bedrock、Azure OpenAI 等服务商还会显示区域、端点或其他专用字段
+3. 如果页面显示 **代理地址**，可以填写服务商 API 的 Base URL 或兼容接口地址。本地服务可填写 Ollama、vLLM 等运行地址
+4. 点击 **检查** 测试连接
+5. 在下方模型列表中启用已有模型，也可以根据页面选项获取或添加模型
+6. 配置会自动保存。之后可在助理设置中选择该服务商及模型
 
-自托管部署的环境变量配置，请参见[模型提供商环境变量](/docs/self-hosting/environment-variables/model-provider)参考文档。
+自托管部署的环境变量配置，请参见[模型提供商环境变量](/zh/docs/self-hosting/environment-variables/model-provider)参考文档。
+
+模型选择原则见[助理指南](/zh/docs/usage/getting-started/agent)。Cloud 与 Desktop 的区别见[功能状态与可用性](/zh/docs/usage/feature-status)。
 
 ## 故障排查
 

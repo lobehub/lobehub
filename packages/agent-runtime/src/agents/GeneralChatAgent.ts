@@ -1,6 +1,7 @@
 import { ToolNameResolver } from '@lobechat/context-engine';
 import {
   type ChatToolPayload,
+  describeLockedDevicePicker,
   type ExtendedHumanInterventionConfig,
   type HumanInterventionConfig,
   type HumanInterventionPolicy,
@@ -25,6 +26,8 @@ import {
   type SubAgentResultPayload,
   type SubAgentsBatchResultPayload,
 } from '../types';
+import { selectRunTools, selectToolManifestMap } from '../utils/operationToolSet';
+import { selectSecurityBlacklist, selectUserInterventionConfig } from '../utils/stateSlots';
 import { shouldCompress } from '../utils/tokenCounter';
 
 const TOOL_NOT_ALLOWED_CONTENT =
@@ -37,6 +40,8 @@ const TOOL_NOT_ALLOWED_REASON = 'tool_not_allowed';
  */
 const unresolvedToolContent = (names: string) =>
   `Tool call rejected: no available tool is named ${names}. Copy a name exactly as declared in the tools schema and call it again.`;
+/** The remote-device picker; walled off on device-locked runs. */
+const REMOTE_DEVICE_IDENTIFIER = 'lobe-remote-device';
 const UNRESOLVED_TOOL_REASON = 'tool_name_unresolved';
 /**
  * How many times one operation may answer unresolvable tool calls with a
@@ -72,7 +77,7 @@ export class GeneralChatAgent implements Agent {
   }
 
   private getTools(state: AgentState, fallbackTools?: any[]): any[] | undefined {
-    return this.config.tools ?? state.tools ?? state.operationToolSet?.tools ?? fallbackTools;
+    return this.config.tools ?? selectRunTools(state) ?? fallbackTools;
   }
 
   private getAllowedToolNamesPayload() {
@@ -108,7 +113,7 @@ export class GeneralChatAgent implements Agent {
     state: AgentState,
   ): ExtendedHumanInterventionConfig | undefined {
     const { identifier, apiName } = toolCalling;
-    const manifest = state.toolManifestMap[identifier];
+    const manifest = selectToolManifestMap(state)[identifier];
 
     if (!manifest) return undefined;
 
@@ -159,7 +164,7 @@ export class GeneralChatAgent implements Agent {
     const toolsToExecute: ChatToolPayload[] = [];
 
     // Get security blacklist for resolver metadata
-    const securityBlacklist = state.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
+    const securityBlacklist = selectSecurityBlacklist(state) ?? DEFAULT_SECURITY_BLACKLIST;
 
     // Resolvers see one flat record: the run ledger plus the facts they audit
     // against — the security blacklist and the plan's working directory (the
@@ -171,7 +176,7 @@ export class GeneralChatAgent implements Agent {
     };
 
     // Get user config (default to 'manual' mode)
-    const userConfig = state.userInterventionConfig || { approvalMode: 'manual' };
+    const userConfig = selectUserInterventionConfig(state) || { approvalMode: 'manual' };
     const { approvalMode, allowList = [] } = userConfig;
 
     // Global audits: default to security blacklist audit if not provided
@@ -217,7 +222,7 @@ export class GeneralChatAgent implements Agent {
       }
 
       // Phase 2.5: Get manifest for later use
-      const manifest = state.toolManifestMap?.[identifier];
+      const manifest = selectToolManifestMap(state)[identifier];
 
       // Phase 3: Per-tool dynamic resolver
       const config = this.getToolInterventionConfig(toolCalling, state);
@@ -272,7 +277,7 @@ export class GeneralChatAgent implements Agent {
       // Only applies to manual/allow-list modes; auto-run users accept the risk
       if (!manifest) {
         console.warn(
-          `[InterventionGuard] Unknown tool "${identifier}/${apiName}" not found in toolManifestMap (keys: ${Object.keys(state.toolManifestMap ?? {}).join(', ')}), requiring intervention`,
+          `[InterventionGuard] Unknown tool "${identifier}/${apiName}" not found in toolManifestMap (keys: ${Object.keys(selectToolManifestMap(state)).join(', ')}), requiring intervention`,
         );
         toolsNeedingIntervention.push(toolCalling);
         continue;
@@ -752,9 +757,12 @@ export class GeneralChatAgent implements Agent {
           // Request approval for tools that need intervention
           // Non-headless mode waits for human approval; headless mode returns blocked tool results.
           if (toolsNeedingIntervention.length > 0) {
-            if (state.userInterventionConfig?.approvalMode === 'headless') {
+            if (selectUserInterventionConfig(state)?.approvalMode === 'headless') {
               instructions.push({
                 payload: {
+                  blockedContent:
+                    'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+                  blockedReason: 'human_intervention_unavailable',
                   parentMessageId,
                   toolsCalling: toolsNeedingIntervention,
                 },
@@ -815,9 +823,29 @@ export class GeneralChatAgent implements Agent {
             );
           }
 
+          // A picker call on a locked run is not a typo: the tool was withheld on
+          // purpose, and "copy the name exactly" sends the model into a retry
+          // loop that ends the operation. Say why and who can switch instead;
+          // any other unresolved name in the batch keeps the typo feedback.
+          const lockedPickerNote = state.plan?.execution
+            ? describeLockedDevicePicker(state.plan.execution)
+            : undefined;
+          const isPickerCall = (name: string) =>
+            name.split(PLUGIN_SCHEMA_SEPARATOR)[0] === REMOTE_DEVICE_IDENTIFIER;
+          const allNames = namedToolCalls.map((toolCall) => toolCall.function.name);
+          const pickerNames = lockedPickerNote ? allNames.filter(isPickerCall) : [];
+          const otherNames = allNames.filter((name) => !pickerNames.includes(name));
+          const blockedContent = [
+            pickerNames.length > 0 &&
+              `Tool call rejected: ${pickerNames.join(', ')} is not available in this run. ${lockedPickerNote}`,
+            otherNames.length > 0 && unresolvedToolContent(otherNames.join(', ')),
+          ]
+            .filter(Boolean)
+            .join('\n\n');
+
           return {
             payload: {
-              blockedContent: unresolvedToolContent(unresolvedNames),
+              blockedContent,
               blockedReason: UNRESOLVED_TOOL_REASON,
               parentMessageId,
               unresolvedToolNames: true,

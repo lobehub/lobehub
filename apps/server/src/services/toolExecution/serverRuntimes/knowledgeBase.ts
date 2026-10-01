@@ -52,6 +52,12 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
         getFileContents: (fileIds) => searchService.getFileContents(fileIds),
         semanticSearchForChat: async ({ knowledgeIds, query, topK }) => {
           const effectiveKnowledgeIds = await resolveAgentKnowledgeBaseIds(knowledgeIds);
+          // No enabled KB in scope (none attached, or all turned off) → both search paths would return nothing (BM25 is
+          // KB-scoped; vector has no file scope). Skip the embedding call and
+          // report the empty scope so the runtime can tell the model why.
+          if (effectiveKnowledgeIds.length === 0) {
+            return { chunks: [], documents: [], fileResults: [], searchedKnowledgeBaseIds: [] };
+          }
           const result = await searchService.semanticSearchForChat({
             knowledgeIds: effectiveKnowledgeIds,
             query,
@@ -62,6 +68,7 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
             documents: result.documents,
             errors: result.errors,
             fileResults: result.fileResults,
+            searchedKnowledgeBaseIds: effectiveKnowledgeIds,
           };
         },
       },

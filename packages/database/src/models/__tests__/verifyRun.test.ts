@@ -3,7 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { acceptances, users, verifyRuns } from '../../schemas';
+import { acceptances, agentOperations, users, verifyRuns } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 import { VerifyRunModel } from '../verifyRun';
@@ -224,6 +224,38 @@ describe('VerifyRunModel.findStuckVerifying', () => {
     expect(restIds).toContain(interloper);
   });
 
+  it('finds dead planned repairs but excludes live, successful and unconfirmed rounds', async () => {
+    const states = [
+      ['dead', 'error', true],
+      ['interrupted', 'interrupted', true],
+      ['live', null, true],
+      ['done', 'done', true],
+      ['draft', 'error', false],
+    ] as const;
+    const ids: Record<string, string> = {};
+    for (const [name, completionReason, confirmed] of states) {
+      const operationId = `op-planned-${name}`;
+      ids[name] = await buildRun(operationId);
+      if (confirmed) await new VerifyRunModel(serverDB, userId).confirmPlan(ids[name]);
+      await serverDB
+        .update(agentOperations)
+        .set({
+          completionReason,
+          parentOperationId: 'parent-operation',
+        })
+        .where(eq(agentOperations.id, operationId));
+      await backdate(ids[name], 10 * 60 * 1000);
+    }
+    const stuck = await VerifyRunModel.findStuckVerifying(
+      serverDB,
+      new Date(Date.now() - 5 * 60 * 1000),
+      { limit: 500 },
+    );
+    const found = stuck.map((run) => run.id);
+    expect(found).toEqual(expect.arrayContaining([ids.dead, ids.interrupted]));
+    for (const name of ['live', 'done', 'draft']) expect(found).not.toContain(ids[name]);
+  });
+
   it('ignores operation-less rounds — there is no rollup to address', async () => {
     const run = await new VerifyRunModel(serverDB, userId).create({ status: 'verifying' });
     await backdate(run.id, 10 * 60 * 1000);
@@ -286,6 +318,54 @@ describe('VerifyRunModel.foldIntoRound', () => {
     expect(folded.metadata).toMatchObject({ interactionCost: { total: 1 } });
     expect(await model().findById(incoming.id)).toBeUndefined();
     expect(await model().listByAcceptance(acceptance.id)).toHaveLength(1);
+  });
+
+  /**
+   * Regression: the survivor was always written with a null status. Folding a live
+   * builder round into a leftover draft therefore produced a row no claim can move
+   * — `claimEvidenceCollection` wants `planned`, `claimVerifying` wants `planned`
+   * or `collecting_evidence` — so completion returned without collecting evidence
+   * or judging, and the Task was stranded.
+   */
+  it('keeps a live round claimable after folding it into a draft', async () => {
+    const { draft } = await draftRound();
+    const incoming = await model().create({
+      plan: [item('case-1')],
+      status: 'planned',
+      title: 'builder run',
+    });
+    await model().confirmPlan(incoming.id);
+
+    const folded = await model().foldIntoRound(incoming.id, draft.id);
+
+    expect(folded.status).toBe('planned');
+    expect(await model().claimEvidenceCollection(folded.id)).toBe(true);
+  });
+
+  /**
+   * Regression: the survivor kept the draft's operation. A draft left behind by an
+   * earlier attempt therefore swallowed the next attempt's row, and that attempt
+   * was no longer discoverable by its own operation — its verification stopped.
+   */
+  it("hands the survivor to the incoming run's operation", async () => {
+    const { draft } = await draftRound();
+    await new AgentOperationModel(serverDB, userId).recordStart({ operationId: 'fold-stale-op' });
+    await new AgentOperationModel(serverDB, userId).recordStart({ operationId: 'fold-live-op' });
+    await serverDB
+      .update(verifyRuns)
+      .set({ operationId: 'fold-stale-op' })
+      .where(eq(verifyRuns.id, draft.id));
+    const incoming = await model().create({
+      operationId: 'fold-live-op',
+      plan: [item('case-1')],
+      status: 'planned',
+      title: 'next attempt',
+    });
+
+    const folded = await model().foldIntoRound(incoming.id, draft.id);
+
+    expect(folded.operationId).toBe('fold-live-op');
+    expect((await model().findByOperation('fold-live-op'))?.id).toBe(draft.id);
   });
 
   it('refuses to fold into a round that already executed or a run already chained', async () => {

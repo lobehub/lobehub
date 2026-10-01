@@ -1,0 +1,27 @@
+name = "no-mode-flags"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one React component file from the LobeHub web client.
+
+Team rule (compose-atoms): when one feature must render in several hosts (the full page, a portal or drawer, a public share page, a micro-app), split it on mountable capabilities and let each host assemble only the atoms it needs. Do not hide unused work behind a mode flag. A prop such as `readOnly`, `mode`, `variant`, `isShare`, `isPortal`, `isPreview`, `compact` that disables editing, fetching, toolbars, hotkeys, or stores inside one fat component still imports and mounts all of that work in every host: the share page ships the editor, the portal registers hotkeys it never uses, and each new host adds another branch.
+
+Report a component only when ALL of these hold:
+1. the prop (or a context value read the same way, such as `embedded` from a scope hook) names a HOST or a host-level mode: `isShare`, `inShare`, `isPortal`, `inPortal*`, `embedded`, `isPreview`, `readOnly` on a whole viewer or page, `mobile` choosing between two page compositions, `mode` / `viewMode` / `variant` whose values are hosts or surfaces;
+2. it switches off whole capabilities — a data-fetching hook, a store subscription, an editor, a toolbar, a hotkey registration, an upload path — that stay imported and mounted by the same component;
+3. at least one host is visible in this file or its name (a share page, a portal, a modal, a public page), so the split has somewhere to go.
+Use the line of the component declaration. In the message, name the prop and the capabilities it gates. In the suggestion, name the atoms to extract and which host would mount which.
+
+Do not report — these are the false positives this rule has produced on real code:
+- behaviour toggles that tune one capability instead of choosing a host: `disableSend`, `lockAssignee`, `autoFocus`, `syncActiveAgent`, `withSingletonActionsBar`;
+- feature gates, Labs toggles and permission checks (`labelsEnabled`, `canEdit`, `isOwner`, `showCollaborators` driven by plan or role) that decide access, not host composition;
+- per-item configuration objects that describe the item being rendered (a provider's `settings.showApiKey`, `showChecker`) — they differ by data, not by host;
+- callbacks such as `onSelect` / `onClick`, even when their presence changes the rendering;
+- visual variants (size, tone, density, layout direction) that only change styling or copy;
+- a `readOnly` / `disabled` prop forwarded to a form control, an input, or a small leaf component;
+- a flag that gates one small conditional render without an owning import or hook behind it;
+- a parent that merely passes such a prop to a child: report the component that branches on it, once.
+
+If an exclusion applies, return no finding.
+
+If uncertain, use low confidence rather than forcing a finding.
+"""

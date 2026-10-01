@@ -1,7 +1,5 @@
 import { type NavigateFunction } from 'react-router';
 
-import { type MigrationSQL, type MigrationTableItem } from '@/types/clientDB';
-import { DatabaseLoadingState } from '@/types/clientDB';
 import { type LocaleMode } from '@/types/locale';
 import { SessionDefaultGroup } from '@/types/session';
 import { type TopicGroupMode } from '@/types/topic';
@@ -76,6 +74,7 @@ export enum SettingsTabs {
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
+  Integrations = 'integrations',
   Labels = 'labels',
   Labs = 'labs',
   LLM = 'llm',
@@ -96,6 +95,8 @@ export enum SettingsTabs {
   Stats = 'stats',
   Storage = 'storage',
   SystemTools = 'system-tools',
+  Tools = 'tools',
+  Trash = 'trash',
   /** @deprecated Use ServiceModel instead */
   TTS = 'tts',
   Usage = 'usage',
@@ -232,10 +233,6 @@ export interface SystemStatus {
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   imageTopicViewMode?: 'grid' | 'list';
-  /**
-   * Do not enable PGLite on app initialization, only enable when user manually turns it on
-   */
-  isEnablePglite?: boolean;
   isShowCredit?: boolean;
   knowledgeBaseModalViewMode?: 'list' | 'masonry';
   language?: LocaleMode;
@@ -262,9 +259,16 @@ export interface SystemStatus {
    */
   modelDetailPanelCollapsedKeys?: ModelDetailPanelExpandedKey[];
   /**
-   * ModelSwitchPanel grouping mode
+   * ModelSwitchPanel grouping preference. Only ever written by the user's own
+   * switch; the store must not seed a default here, because
+   * `updateSystemStatus` persists the whole merged status and a seeded value
+   * is indistinguishable from a chosen one.
+   *
+   * Replaces the legacy `modelSwitchPanelGroupMode` key, which was seeded with
+   * `'byProvider'` and therefore sits in existing users' storage without them
+   * having picked it. That key is intentionally never read again.
    */
-  modelSwitchPanelGroupMode?: 'byModel' | 'byProvider';
+  modelSwitchPanelGroupBy?: 'byModel' | 'byProvider';
   /**
    * ModelSwitchPanel width
    */
@@ -470,18 +474,6 @@ export const createNavigationRef = (): GlobalNavigationRef => ({ current: null }
 
 export interface GlobalState {
   hasNewVersion?: boolean;
-  initClientDBError?: Error;
-  initClientDBMigrations?: {
-    sqls: MigrationSQL[];
-    tableRecords: MigrationTableItem[];
-  };
-
-  initClientDBProcess?: { costTime?: number; phase: 'wasm' | 'dependencies'; progress: number };
-  /**
-   * Client database initialization state
-   * Idle on startup, Ready when complete, Error on failure
-   */
-  initClientDBStage: DatabaseLoadingState;
   isMobile?: boolean;
   /**
    * Server version is too old, does not support /api/version endpoint
@@ -551,7 +543,6 @@ export const INITIAL_STATUS = {
   leftPanelWidth: 280,
   mobileShowTopic: false,
   modelDetailPanelCollapsedKeys: [],
-  modelSwitchPanelGroupMode: 'byProvider',
   modelSwitchPanelWidth: 460,
   noWideScreen: true,
   pageAgentPanelWidth: 360,
@@ -627,7 +618,6 @@ export const createInitialSystemStatus = (): SystemStatus => {
 };
 
 export const initialState: GlobalState = {
-  initClientDBStage: DatabaseLoadingState.Idle,
   isMobile: false,
   isStatusInit: false,
   navigationRef: createNavigationRef(),

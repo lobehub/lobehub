@@ -13,11 +13,44 @@ export const FREEFORM_PAYLOAD_KEY = '__freeform__';
 export const SUPPLEMENT_PAYLOAD_KEY = '__supplement__';
 
 /**
- * Default on-screen countdown, mirroring the server-side bridge timeout
- * (`DEFAULT_ASK_USER_TIMEOUT_MS`). Hosts that have no bridge timeout (the
+ * Fallback on-screen countdown, mirroring the server-side bridge timeout
+ * (`DEFAULT_ASK_USER_TIMEOUT_MS`). Only used when the producer did not tell us
+ * its own deadline — a mount-relative countdown restarts on every remount, so
+ * `deadlineAt` is always preferred. Hosts that have no bridge timeout (the
  * builtin surfaces) pass `undefined` to disable the countdown entirely.
  */
 export const DEFAULT_COUNTDOWN_MS = 10 * 60 * 1000;
+
+/**
+ * How far ahead of the producer's deadline the timeout fallback submits.
+ *
+ * The producer's bridge stops waiting exactly at the deadline and its
+ * long-poll stops listening with it, so an answer published after that point
+ * can never be acknowledged. The lead only has to cover publishing the answer
+ * and the producer picking it off the stream — every millisecond beyond that
+ * is answering time taken from the user, who is still looking at a question
+ * the countdown says they may answer.
+ */
+export const AUTO_SUBMIT_LEAD_MS = 5 * 1000;
+
+/**
+ * How long a card stays in the waiting-for-ACK state before the host settles
+ * it. A remote submit is only transport acceptance; the card stays disabled
+ * until the blocked producer echoes, and when the producer is already gone that
+ * echo never comes. The answer was accepted for delivery either way, so the
+ * card settles as answered and leaves the surface — re-offering a question the
+ * user has already answered only invites a duplicate answer.
+ */
+export const SUBMIT_ACK_TIMEOUT_MS = 30 * 1000;
+
+/**
+ * Last-resort release of the form's own `submitting` latch, for the case where
+ * the host never settled the card at all (a submit that never reached a
+ * transport). Deliberately longer than the host's settle budget so the normal
+ * path is always "the card settles and disappears", never "the buttons come
+ * back on a question that is already answered".
+ */
+export const SUBMIT_SETTLE_FALLBACK_MS = 45 * 1000;
 
 /** Key under tool message `pluginState` where the in-progress draft lives. */
 export const DRAFT_PLUGIN_STATE_KEY = 'askUserDraft';

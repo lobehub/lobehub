@@ -60,7 +60,7 @@ const Nav = memo(() => {
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
-  const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
   const enableSelfLearning = useUserStore(labPreferSelectors.enableSelfLearning);
 
   const { mutate } = useActionSWR(topicActionKeys.openNewOrSave(), openNewTopicOrSaveTopic);
@@ -121,7 +121,7 @@ const Nav = memo(() => {
           }}
         />
       )}
-      {enableTopicAcceptance && (
+      {enableGoals && (
         <NavItem
           active={isGoalsActive}
           icon={TargetIcon}

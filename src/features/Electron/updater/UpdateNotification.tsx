@@ -9,10 +9,10 @@ import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { autoUpdateService } from '@/services/electron/autoUpdate';
-import { rendererOtaService } from '@/services/electron/rendererOta';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
+import { applyCoreUpdate } from './applyCoreUpdate';
 import { selectUpdateInfo } from './selectUpdateInfo';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -146,7 +146,7 @@ export const UpdateNotification: React.FC = () => {
 
   useWatchBroadcast('updateReady', (info) => {
     setUpdateInfo((current) => selectUpdateInfo(current, info));
-    if (info.kind === 'app') setInstallConfirmMode('unconfirm');
+    if (info.kind === 'app' || info.kind === 'core-relaunch') setInstallConfirmMode('unconfirm');
   });
 
   useWatchBroadcast('updateWillInstallLater', () => {
@@ -155,7 +155,15 @@ export const UpdateNotification: React.FC = () => {
     setTimeout(() => setInstallConfirmMode(null), 5000);
   });
 
-  if (updateInfo?.kind === 'renderer') {
+  const applyCoreUpdateNow = async (keepLoadingOnSuccess: boolean) => {
+    setIsInstalling(true);
+    const applied = await applyCoreUpdate(() =>
+      toast.error(tElectron('updater.rendererUpdateError')),
+    );
+    if (!applied || !keepLoadingOnSuccess) setIsInstalling(false);
+  };
+
+  if (updateInfo?.kind === 'renderer' || updateInfo?.kind === 'core-reload') {
     return (
       <div className={styles.installLaterToast}>
         <span>{tElectron('updater.rendererReady', { version: updateInfo.version })}</span>
@@ -166,19 +174,29 @@ export const UpdateNotification: React.FC = () => {
           loading={isInstalling}
           size={'small'}
           type={'primary'}
-          onClick={async () => {
-            setIsInstalling(true);
-            try {
-              if (!(await rendererOtaService.applyNow())) {
-                toast.error(tElectron('updater.rendererUpdateError'));
-              }
-            } catch (error) {
-              console.error('Failed to apply renderer update:', error);
-              toast.error(tElectron('updater.rendererUpdateError'));
-            } finally {
-              setIsInstalling(false);
-            }
-          }}
+          onClick={() => applyCoreUpdateNow(false)}
+        >
+          {tElectron('updater.upgradeNow')}
+        </BaseButton>
+      </div>
+    );
+  }
+
+  if (updateInfo?.kind === 'core-relaunch') {
+    return (
+      <div className={styles.installLaterToast}>
+        <span>
+          {tElectron('updater.updateReady')}
+          {isDevMode ? ` · ${updateInfo.version}` : ''}
+        </span>
+        <BaseButton size={'small'} type={'text'} onClick={() => setUpdateInfo(null)}>
+          {tElectron('updater.later')}
+        </BaseButton>
+        <BaseButton
+          loading={isInstalling}
+          size={'small'}
+          type={'primary'}
+          onClick={() => applyCoreUpdateNow(true)}
         >
           {tElectron('updater.upgradeNow')}
         </BaseButton>
@@ -207,22 +225,11 @@ export const UpdateNotification: React.FC = () => {
   if (installConfirmMode === 'unconfirm')
     return (
       <div className={styles.installLaterToast}>
-        <span
-          style={{ cursor: 'pointer' }}
-          onClick={() => {
-            if (updateInfo) openUpdateDetailModal(updateInfo);
-          }}
-        >
+        <span style={{ cursor: 'pointer' }} onClick={() => openUpdateDetailModal(updateInfo)}>
           {tElectron('updater.updateReady')}
           {isDevMode && updateInfo?.version ? ` · ${updateInfo.version}` : ''}
         </span>
-        <BaseButton
-          size={'small'}
-          type={'text'}
-          onClick={() => {
-            autoUpdateService.installLater();
-          }}
-        >
+        <BaseButton size={'small'} type={'text'} onClick={() => autoUpdateService.installLater()}>
           {tElectron('updater.later')}
         </BaseButton>
         <BaseButton

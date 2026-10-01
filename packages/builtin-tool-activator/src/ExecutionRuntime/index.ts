@@ -12,6 +12,12 @@ export interface ToolManifestInfo {
 
 export interface ActivatorRuntimeService {
   activateSkill?: (args: ActivateSkillParams) => Promise<BuiltinServerRuntimeOutput>;
+  /**
+   * Why an identifier that exists is withheld from this run, if the host knows.
+   * A bare "Not found" for a tool the model has seen before reads as a typo, so
+   * it retries instead of telling the user what they can change.
+   */
+  explainNotFound?: (identifier: string) => string | undefined;
   getActivatedToolIds: () => string[];
   getToolManifests: (identifiers: string[]) => Promise<ToolManifestInfo[]>;
   markActivated: (identifiers: string[]) => void;
@@ -129,8 +135,15 @@ export class ActivatorExecutionRuntime {
         parts.push(`\nAlready active: ${alreadyActiveList.join(', ')}`);
       }
 
-      if (notFound.length > 0) {
-        parts.push(`\nNot found: ${notFound.join(', ')}`);
+      const unexplained: string[] = [];
+      for (const id of notFound) {
+        const explanation = this.service.explainNotFound?.(id);
+        if (explanation) parts.push(`\nNot available: ${id}. ${explanation}`);
+        else unexplained.push(id);
+      }
+
+      if (unexplained.length > 0) {
+        parts.push(`\nNot found: ${unexplained.join(', ')}`);
       }
 
       return {

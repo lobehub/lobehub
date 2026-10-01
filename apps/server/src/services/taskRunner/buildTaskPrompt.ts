@@ -13,7 +13,11 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
-import { resolveTaskAttemptBudget } from '@/server/services/goal/recoveryPolicy';
+import {
+  countChargedTaskAttempts,
+  countDeviceOfflineRuns,
+  resolveTaskAttemptBudget,
+} from '@/server/services/goal/recoveryPolicy';
 import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 
 /** Cap on unresolved checks carried into the next round's prompt. */
@@ -35,9 +39,14 @@ const resolveGoalLoopContext = async (
   if (!goal || !task.totalTopics) return undefined;
 
   const budget = resolveTaskAttemptBudget(goal);
+  // Runs its device lost are not rounds the budget counts, so the agent is not
+  // told it is on a later round than the coordinator thinks.
+  const offlineRuns = countDeviceOfflineRuns(
+    await deps.taskTopicModel.findByTaskId(task.id).catch(() => []),
+  );
   const context: TaskRunPromptGoalLoop = {
     maxRounds: Number.isFinite(budget) ? budget : null,
-    round: (task.totalTopics || 0) + 1,
+    round: countChargedTaskAttempts(task, offlineRuns) + 1,
   };
 
   try {
@@ -51,8 +60,12 @@ const resolveGoalLoopContext = async (
     const last = runs.at(-1);
     if (!last) return context;
 
-    if (last.userDecision === 'reject') {
-      const comment = (last.decisionDetail as { comment?: string } | null)?.comment;
+    // The owner's latest verdict is the instruction until they give another.
+    // A rework's own rounds carry no decision, so a retry after its first
+    // attempt failed must still read the comment the owner sent it back with.
+    const decided = runs.findLast((run) => !!run.userDecision);
+    if (decided?.userDecision === 'reject') {
+      const comment = (decided.decisionDetail as { comment?: string } | null)?.comment;
       if (comment) context.rejectComment = comment;
     }
 

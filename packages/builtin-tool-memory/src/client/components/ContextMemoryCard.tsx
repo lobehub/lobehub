@@ -1,13 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Progress, Spin, Tag, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import StreamingMarkdown from '@/components/StreamingMarkdown';
 
 import type { AddContextMemoryParams } from '../../types';
@@ -73,7 +71,7 @@ export const ContextMemoryCard = memo<ContextMemoryCardProps>(({ data, loading }
         </Flexbox>
         {contextType && <Tag>{contextType}</Tag>}
         {status && <Tag color={STATUS_COLORS[status] || 'default'}>{status.replace('_', ' ')}</Tag>}
-        {loading && <NeuralNetworkLoading size={20} />}
+        {loading && <Spin size="middle" variant="network" />}
       </Flexbox>
 
       {hasContextContent ? (
@@ -101,11 +99,13 @@ export const ContextMemoryCard = memo<ContextMemoryCardProps>(({ data, loading }
                     {item.title}
                   </Text>
                   <Progress
-                    percent={item.percent}
+                    percent={item.percent ?? 0}
+                    segments={5}
                     showInfo={false}
-                    size={[2, 12]}
-                    steps={5}
+                    size={12}
                     strokeColor={item.strokeColor}
+                    style={{ flex: 'none', width: 18 }}
+                    variant="segments"
                   />
                   <Text fontSize={12} type={'secondary'}>
                     {item.percent}%

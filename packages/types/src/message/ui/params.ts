@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import type { ConversationContext } from '../../conversation';
 import type { UploadFileItem } from '../../files';
 import type { MessageSemanticSearchChunk } from '../../rag';
 import type { ChatMessageError } from '../common/base';
@@ -199,20 +198,6 @@ export interface SendMessageParams {
    * owns any subsequent model execution.
    */
   signal?: AbortSignal;
-}
-
-export interface SendGroupMessageParams {
-  context: ConversationContext;
-  files?: UploadFileItem[];
-  message: string;
-  /**
-   * Additional metadata for the message (e.g., mentioned users)
-   */
-  metadata?: Record<string, any>;
-  /**
-   * for group chat
-   */
-  targetMemberId?: string | null;
 }
 
 // ========== Zod Schemas ========== //

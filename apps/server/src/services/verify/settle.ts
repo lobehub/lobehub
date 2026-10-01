@@ -9,7 +9,9 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
+import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyRunModel } from '@/database/models/verifyRun';
+import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import { TaskService } from '@/server/services/task';
@@ -19,6 +21,7 @@ import { reviewGoalDelivery } from './goalReview';
 import { maybeAutoRepair } from './repairService';
 import { VerifyReporterService } from './reporter';
 import { VerifyStatusService } from './statusService';
+import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
 
 const log = debug('lobe-server:verify-settle');
 
@@ -63,6 +66,56 @@ export const recomputeRepairAncestors = async (
   }
 };
 
+const MAX_REPORTED_FAILURES = 5;
+const MAX_REASON_CHARS = 300;
+
+/**
+ * Turn a failed run's check results into the rejection the dispatching agent
+ * reads. The bare "did not pass" left it unable to tell a real shortfall from
+ * a gate misfire, so it re-verified by hand or overrode the verdict.
+ */
+export const describeVerifyFailure = (
+  results: Pick<
+    VerifyCheckResultItem,
+    'checkItemTitle' | 'required' | 'status' | 'suggestion' | 'toulmin' | 'verdict'
+  >[],
+  reviewFeedback?: string,
+): string => {
+  const failed = results.filter(
+    (r) =>
+      r.status !== 'errored' &&
+      (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain'),
+  );
+  // Only required checks gate the run. Optional failures stay out entirely —
+  // when the Acceptance review is what rejected a passing run, its feedback is
+  // the reason, not unrelated optional rows.
+  const reasons = failed
+    .filter((r) => r.required)
+    .map((r) => {
+      // Verifier agents may submit a verdict with only evidence or a limitation.
+      const why = (
+        r.toulmin?.reasoning ||
+        r.suggestion ||
+        r.toulmin?.limitation ||
+        r.toulmin?.evidence ||
+        ''
+      )
+        .replaceAll(/\s+/g, ' ')
+        .trim();
+      const clipped = why.length > MAX_REASON_CHARS ? `${why.slice(0, MAX_REASON_CHARS)}…` : why;
+      return `- ${r.checkItemTitle || 'Untitled check'}${clipped ? `: ${clipped}` : ''}`;
+    });
+
+  const lines = ['Delivery did not pass verification.'];
+  if (reviewFeedback?.trim()) lines.push(`Acceptance review: ${reviewFeedback.trim()}`);
+  if (reasons.length > 0) {
+    lines.push('Failed checks:', ...reasons.slice(0, MAX_REPORTED_FAILURES));
+    if (reasons.length > MAX_REPORTED_FAILURES)
+      lines.push(`- …and ${reasons.length - MAX_REPORTED_FAILURES} more`);
+  }
+  return lines.join('\n');
+};
+
 interface ReportContext {
   deliverable: string;
   goal: string;
@@ -91,14 +144,35 @@ export const driveTaskFromVerify = async (
     // Only act on a terminally settled run (skip pending / verifying / repairing).
     if (run?.status !== 'passed' && run?.status !== 'failed' && run?.status !== 'errored') return;
     if ((run.metadata as { taskDrivenAt?: string } | null)?.taskDrivenAt) return; // already drove
+    const operationModel = new AgentOperationModel(db, userId, workspaceId);
+    const op = await operationModel.findById(operationId);
+    const taskOperation = await resolveTaskOperation(operationModel, operationId);
+
+    // Last defence before the review: a round the builder planned itself can still
+    // arrive here unattached, because the CLI-driven verify path never passes
+    // through the completion lifecycle. The review reaches a delivery only through
+    // its Acceptance, and a missing link reads as "no Acceptance" — an error with
+    // no recovery branch, which parks a passing delivery on a person.
+    //
+    // Bound BEFORE the drive claim, and a failed resolution is not swallowed: it
+    // leaves through the outer catch with the claim unstamped, so a later finalizer
+    // retries instead of reviewing an unattached round into that same human gate.
+    if (op && taskOperation?.taskId && run.status === 'passed' && !run.acceptanceId) {
+      const resolved = await resolveTaskAcceptance(db, userId, taskOperation.taskId, workspaceId);
+      if (resolved)
+        await attachTaskRunToAcceptance(
+          db,
+          userId,
+          { acceptanceId: resolved.acceptance.id, run },
+          workspaceId,
+        );
+    }
+
     // Cheap read above, authoritative claim here: concurrent verifier
     // callbacks would otherwise both pass the read and both act — spawning two
     // rounds, or one spawning while the other pauses the task it just started.
     if (!(await runModel.claimTaskDrive(run.id))) return;
 
-    const operationModel = new AgentOperationModel(db, userId, workspaceId);
-    const op = await operationModel.findById(operationId);
-    const taskOperation = await resolveTaskOperation(operationModel, operationId);
     if (!op || !taskOperation?.taskId) return; // not a task-bound run — nothing to drive
 
     const taskModel = new TaskModel(db, userId, workspaceId);
@@ -197,7 +271,17 @@ export const driveTaskFromVerify = async (
     try {
       const errorMessage =
         outcome === 'failed'
-          ? 'Delivery did not pass verification.'
+          ? describeVerifyFailure(
+              // The run is already claimed, so a failed lookup must not cost the
+              // creator its callback — fall back to the bare verdict.
+              await new VerifyCheckResultModel(db, userId, workspaceId)
+                .listByRun(run.id)
+                .catch((error) => {
+                  log('verify-settle failure details unavailable for %s: %O', run.id, error);
+                  return [];
+                }),
+              goalReview?.status === 'rejected' ? goalReview.feedback : undefined,
+            )
           : outcome === 'errored' || outcome === 'review_errored'
             ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
             : outcome === 'unjudgeable'
@@ -259,7 +343,10 @@ export const finalizeVerifyRun = async (
 ): Promise<void> => {
   // Repair-aware: no-ops until every required check is terminal, and may spawn a
   // repair (→ `repairing`), in which case finalize defers to the repair op.
-  await maybeAutoRepair(db, userId, operationId, workspaceId);
+  const repair = await maybeAutoRepair(db, userId, operationId, workspaceId);
+  // The child owns settlement even when it failed before the spawn returned
+  // and already recomputed this parent from repairing back to failed.
+  if (repair) return;
 
   const settled = await new VerifyRunModel(db, userId, workspaceId).findByOperation(operationId);
   if (settled?.status !== 'passed' && settled?.status !== 'failed' && settled?.status !== 'errored')

@@ -1,4 +1,4 @@
-import type { ISnapshotStore, StepSnapshot } from '@lobechat/agent-tracing';
+import type { ExecutionSnapshot, ISnapshotStore, StepSnapshot } from '@lobechat/agent-tracing';
 import type { ChatMessageErrorAttribution, ChatMessageErrorSeverity } from '@lobechat/types';
 import debug from 'debug';
 
@@ -25,8 +25,12 @@ export interface AppendStepParams {
    * Context: agent-runtime state blob was hitting Upstash Redis 10MB limit
    * because ~97% of each step payload was tracing-only fields. Routing CE
    * via tracingContextEngine keeps it in trace only, keeping Redis state lean.
+   *
+   * `metadata` carries the pipeline's per-request decisions (trim stats,
+   * cache-warmth gate inputs/outputs, truncation counts) — small scalar
+   * records, safe to store every step.
    */
-  contextEngine?: { input?: unknown; output?: unknown };
+  contextEngine?: { input?: unknown; metadata?: unknown; output?: unknown };
   currentContext?: { payload?: unknown; phase?: string; stepContext?: unknown };
   externalRetryCount: number;
   presentation: StepPresentationData;
@@ -88,6 +92,23 @@ export interface FinalizeParams {
  * methods are no-ops.
  */
 export class OperationTraceRecorder {
+  /**
+   * The partial this invocation is accumulating, kept in memory so a step
+   * boundary no longer pays a full read-modify-write of the whole trace.
+   * Measured in production (Tempo, 75 steps): ~570ms GET + ~960ms PUT per step,
+   * on the critical path between two steps of an inlined run.
+   */
+  private cached: { operationId: string; partial: Partial<ExecutionSnapshot> } | null = null;
+
+  /** In-flight upload, if any. Never rejects — `drainSaves` logs and continues. */
+  private pendingSave: Promise<void> | undefined;
+
+  /** Set when the cached partial has steps the store has not seen yet. */
+  private dirty = false;
+
+  /** Aborts the upload in flight when this invocation stops owning the operation. */
+  private saveAbort: AbortController | undefined;
+
   constructor(private readonly store: ISnapshotStore | null) {}
 
   get enabled(): boolean {
@@ -98,7 +119,7 @@ export class OperationTraceRecorder {
     if (!this.store) return;
 
     try {
-      const partial = (await this.store.loadPartial(operationId)) ?? { steps: [] };
+      const partial = await this.loadCachedPartial(operationId);
 
       this.initPartialHeader(partial, params.agentState);
 
@@ -107,9 +128,87 @@ export class OperationTraceRecorder {
       this.deduplicateCeSnapshot(newStep, partial.steps);
       partial.steps.push(newStep);
 
-      await this.store.savePartial(operationId, partial);
+      // Upload in the background: the next step only needs the in-memory copy,
+      // and the upload overlaps with it instead of delaying it. Anything that
+      // reads the partial from another process waits via `flushPartial`.
+      this.scheduleSave(operationId);
     } catch (e) {
       log('[%s] snapshot step recording failed: %O', operationId, e);
+    }
+  }
+
+  /**
+   * Wait for the accumulated partial to become durable. Required before any
+   * other process reads it: a queue hand-off, a parked operation, or
+   * finalization.
+   */
+  async flushPartial(): Promise<void> {
+    if (!this.store) return;
+
+    if (this.dirty && this.cached) this.scheduleSave(this.cached.operationId);
+    await this.pendingSave;
+  }
+
+  /**
+   * Drop the in-memory partial without uploading it. Used when this invocation
+   * loses the operation lock: the worker that took over owns the partial now,
+   * and writing ours over it would roll back the steps it recorded.
+   */
+  discardPartial(): void {
+    this.dirty = false;
+    this.cached = null;
+    // An upload already in flight was started while this invocation still owned
+    // the operation, and carries a partial the new owner has moved past. Abort
+    // it rather than let it land on top of theirs.
+    this.saveAbort?.abort();
+    this.saveAbort = undefined;
+  }
+
+  private async loadCachedPartial(operationId: string): Promise<Partial<ExecutionSnapshot>> {
+    if (this.cached?.operationId === operationId) return this.cached.partial;
+
+    // A different operation must not inherit this cache, and its queued upload
+    // still points at the object we are about to forget — land it first.
+    if (this.cached) await this.flushPartial();
+
+    const partial = (await this.store!.loadPartial(operationId)) ?? { steps: [] };
+    this.cached = { operationId, partial };
+    return partial;
+  }
+
+  private scheduleSave(operationId: string): void {
+    this.dirty = true;
+    if (this.pendingSave) return;
+
+    this.pendingSave = this.drainSaves(operationId).finally(() => {
+      this.pendingSave = undefined;
+    });
+  }
+
+  /**
+   * Uploads until the cached partial is clean. Steps appended while an upload is
+   * in flight are picked up by the next iteration, so a fast run collapses
+   * several step appends into one upload instead of one upload per step.
+   */
+  private async drainSaves(operationId: string): Promise<void> {
+    while (this.dirty) {
+      this.dirty = false;
+
+      const partial = this.cached?.operationId === operationId ? this.cached.partial : undefined;
+      if (!partial) return;
+
+      const abort = new AbortController();
+      this.saveAbort = abort;
+      try {
+        await this.store!.savePartial(operationId, partial, { signal: abort.signal });
+      } catch (e) {
+        // Matches the previous behaviour: a failed partial upload degrades the
+        // trace, it never fails the step that produced it. An abort lands here
+        // too — the partial it carried is deliberately not written.
+        log('[%s] partial snapshot upload failed: %O', operationId, e);
+      } finally {
+        if (this.saveAbort === abort) this.saveAbort = undefined;
+      }
     }
   }
 
@@ -117,7 +216,15 @@ export class OperationTraceRecorder {
     if (!this.store) return;
 
     try {
-      const partial = await this.store.loadPartial(operationId);
+      // Land whatever is still queued: the upload in flight writes the same
+      // object we are about to finalize, and `removePartial` below must not
+      // race an upload that would resurrect the partial afterwards.
+      await this.flushPartial();
+
+      const partial =
+        this.cached?.operationId === operationId
+          ? this.cached.partial
+          : await this.store.loadPartial(operationId);
       if (!partial) {
         // No partial recorded — nothing to finalize. Skip rather than write
         // an empty snapshot.
@@ -189,6 +296,9 @@ export class OperationTraceRecorder {
       };
 
       await this.store.save(snapshot as any);
+      // Forget the partial before deleting it, so a late `appendStep` on this
+      // recorder cannot re-upload the object we just removed.
+      this.discardPartial();
       await this.store.removePartial(operationId);
     } catch (e) {
       log('[%s] snapshot finalize failed (reason=%s): %O', operationId, params.completionReason, e);
@@ -196,14 +306,16 @@ export class OperationTraceRecorder {
   }
 
   /**
-   * Strip `contextEngine` input/output fields that are identical to the most-recently
-   * stored values in previous steps. The viewer reconstructs the full snapshot by
-   * walking back through the step list (same pattern as messagesBaseline + messagesDelta).
+   * Strip `contextEngine` input/output/metadata fields that are identical to the
+   * most-recently stored values in previous steps. The viewer reconstructs the
+   * full snapshot by walking back through the step list (same pattern as
+   * messagesBaseline + messagesDelta).
    */
   private deduplicateCeSnapshot(step: StepSnapshot, prevSteps: StepSnapshot[]): void {
     if (!step.contextEngine) return;
 
     let lastInputJson: string | undefined;
+    let lastMetadataJson: string | undefined;
     let lastOutputJson: string | undefined;
 
     for (let i = prevSteps.length - 1; i >= 0; i--) {
@@ -212,19 +324,32 @@ export class OperationTraceRecorder {
       if (lastInputJson === undefined && prev.contextEngine.input !== undefined) {
         lastInputJson = JSON.stringify(prev.contextEngine.input);
       }
+      if (lastMetadataJson === undefined && prev.contextEngine.metadata !== undefined) {
+        lastMetadataJson = JSON.stringify(prev.contextEngine.metadata);
+      }
       if (lastOutputJson === undefined && prev.contextEngine.output !== undefined) {
         lastOutputJson = JSON.stringify(prev.contextEngine.output);
       }
-      if (lastInputJson !== undefined && lastOutputJson !== undefined) break;
+      if (
+        lastInputJson !== undefined &&
+        lastMetadataJson !== undefined &&
+        lastOutputJson !== undefined
+      )
+        break;
     }
 
     const storeInput =
       lastInputJson === undefined || JSON.stringify(step.contextEngine.input) !== lastInputJson;
+    const storeMetadata =
+      step.contextEngine.metadata !== undefined &&
+      (lastMetadataJson === undefined ||
+        JSON.stringify(step.contextEngine.metadata) !== lastMetadataJson);
     const storeOutput =
       lastOutputJson === undefined || JSON.stringify(step.contextEngine.output) !== lastOutputJson;
 
     step.contextEngine = {
       ...(storeInput ? { input: step.contextEngine.input } : {}),
+      ...(storeMetadata ? { metadata: step.contextEngine.metadata } : {}),
       ...(storeOutput ? { output: step.contextEngine.output } : {}),
     };
   }
@@ -265,7 +390,7 @@ export class OperationTraceRecorder {
     // RuntimeExecutorContext.tracingContextEngine). Uses the same delta
     // pattern as messagesBaseline/messagesDelta.
     const contextEngine: StepSnapshot['contextEngine'] = ceInput
-      ? { input: ceInput.input, output: ceInput.output }
+      ? { input: ceInput.input, metadata: ceInput.metadata, output: ceInput.output }
       : undefined;
 
     // Strip heavy/redundant data from events before persisting to snapshot.
@@ -279,8 +404,9 @@ export class OperationTraceRecorder {
             // Remove reconstructible fields from finalState:
             // - messages: from messagesBaseline + messagesDelta chain
             // - operationToolSet: from toolsetBaseline (step 0)
-            // - toolManifestMap/tools/toolSourceMap: backward-compat copies of operationToolSet
-            // - expertise: immutable operation-level snapshot retained in working state
+            // - toolManifestMap/tools/toolSourceMap: legacy mirrors of operationToolSet
+            // - world.expertise (and its legacy top-level copy): immutable
+            //   operation-level snapshot retained in working state
             const {
               expertise: _expertise,
               messages: _msgs,
@@ -288,10 +414,15 @@ export class OperationTraceRecorder {
               toolManifestMap: _tmm,
               toolSourceMap: _tsm,
               tools: _tools,
+              world: _world,
               // activatedStepTools is kept since it's the cumulative record
               ...restState
             } = e.finalState;
-            return { ...e, finalState: restState };
+            const { expertise: _worldExpertise, ...worldRest } = _world ?? {};
+            return {
+              ...e,
+              finalState: _world ? { ...restState, world: worldRest } : restState,
+            };
           }
           return e;
         }),

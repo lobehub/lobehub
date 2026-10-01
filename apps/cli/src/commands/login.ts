@@ -71,7 +71,8 @@ export function registerLoginCommand(program: Command) {
           await getUserIdFromApiKey(apiKey, serverUrl);
 
           const existingSettings = loadSettings();
-          const shouldPreserveGateway = existingSettings?.serverUrl === serverUrl;
+          const existingServerUrl = existingSettings?.serverUrl || OFFICIAL_SERVER_URL;
+          const shouldPreserveGateway = !!existingSettings && existingServerUrl === serverUrl;
 
           saveSettings(
             shouldPreserveGateway
@@ -203,7 +204,8 @@ export function registerLoginCommand(program: Command) {
             });
 
             const existingSettings = loadSettings();
-            const shouldPreserveGateway = existingSettings?.serverUrl === serverUrl;
+            const existingServerUrl = existingSettings?.serverUrl || OFFICIAL_SERVER_URL;
+            const shouldPreserveGateway = !!existingSettings && existingServerUrl === serverUrl;
 
             saveSettings(
               shouldPreserveGateway

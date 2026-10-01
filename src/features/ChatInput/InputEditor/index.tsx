@@ -6,6 +6,7 @@ import {
   INPUT_COMPLETION_PROMPT_VERSION,
   INPUT_COMPLETION_SCHEMA_NAME,
 } from '@lobechat/prompts';
+import { RequestTrigger } from '@lobechat/types';
 import { isCommandPressed } from '@lobechat/utils';
 import type { IEditor, ISlashMenuOption, ISlashSectionOption } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin } from '@lobehub/editor';
@@ -41,6 +42,7 @@ import { useChatInputDraft } from '../hooks/useChatInputDraft';
 import { useChatInputHistory } from '../hooks/useChatInputHistory';
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { useEffectiveModel } from '../hooks/useEffectiveModel';
+import { useLargeFileLocalPath } from '../hooks/useLargeFileLocalPath';
 import { useChatInputStore, useStoreApi } from '../store';
 import {
   INSERT_ACTION_TAG_COMMAND,
@@ -50,7 +52,7 @@ import {
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
 import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
-import { mentionFilledClassName } from './mentionStyle';
+import { mentionPlainClassName } from './mentionStyle';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
@@ -63,7 +65,7 @@ const className = cx(
       margin-block-end: 0;
     }
   `,
-  mentionFilledClassName,
+  mentionPlainClassName,
 );
 
 // Single-line dimmed preview of the highlighted history entry, shown through the
@@ -231,9 +233,14 @@ const InputEditor = memo<{
     !heterogeneousName &&
     categories.some((category) => category.id === 'agent');
   const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
+  const routeLargeFilesToLocalPaths = useLargeFileLocalPath(agentId, editor);
+  const handlePasteFiles = useCallback(
+    (files: File[]) => handleUploadFiles(routeLargeFilesToLocalPaths(files)),
+    [handleUploadFiles, routeLargeFilesToLocalPaths],
+  );
 
   // Listen to editor's paste event for file uploads
-  usePasteFile(editor, handleUploadFiles);
+  usePasteFile(editor, handlePasteFiles);
 
   useEffect(() => {
     const fn = (e: BeforeUnloadEvent) => {
@@ -326,6 +333,7 @@ const InputEditor = memo<{
         envelope = (await aiChatService.generateJSON(
           {
             messages,
+            metadata: { trigger: RequestTrigger.InputCompletion },
             model: config.model,
             provider: config.provider,
             schema,

@@ -14,7 +14,20 @@ import type {
   GoalStatus,
 } from '@lobechat/types';
 import { experimentMembers, experimentOwner, experimentStatus } from '@lobechat/utils/goalGraph';
-import { and, asc, count, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
 import {
@@ -27,6 +40,7 @@ import {
 import { tasks } from '../schemas/task';
 import { works, workVersions } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { notTrashed } from '../utils/softDelete';
 import { buildWorkspaceWhere } from '../utils/workspace';
 import { workOwnership } from './work/context';
 
@@ -218,6 +232,9 @@ export class GoalGraphModel {
         workId: row.workId,
         ...(row.metadata?.agentDocumentId ? { agentDocumentId: row.metadata.agentDocumentId } : {}),
         ...(row.metadata?.fileUrl ? { fileUrl: row.metadata.fileUrl } : {}),
+        ...(row.metadata?.fileId ? { fileId: row.metadata.fileId } : {}),
+        ...(typeof row.metadata?.fileSize === 'number' ? { fileSize: row.metadata.fileSize } : {}),
+        ...(row.metadata?.mimeType ? { mimeType: row.metadata.mimeType } : {}),
       });
     }
     return display;
@@ -336,6 +353,7 @@ export class GoalGraphModel {
           eq(goalNodes.goalId, goalId),
           eq(goalNodes.kind, 'task'),
           inArray(tasks.status, ['running', 'scheduled']),
+          notTrashed(tasks.isDeleted),
         ),
       );
     return row?.count ?? 0;
@@ -491,6 +509,10 @@ export class GoalGraphModel {
             eq(goalNodes.goalId, goalId),
             eq(goalNodes.id, nodeId),
             eq(goalNodes.kind, 'task'),
+            // A node retired (or otherwise settled) while its Task was being
+            // created must not be flipped back to `active` by the bind — that
+            // is the fence `GoalService.retireNodes` relies on.
+            notInArray(goalNodes.status, ['resolved', 'rejected', 'retired']),
             isNull(goalNodes.taskId),
           ),
         )
@@ -534,12 +556,22 @@ export class GoalGraphModel {
     });
 
   /** Rewrite a node's description — e.g. the planner replacing the seeded requirement blob with its own problem statement. */
-  updateNodeDescription = async (goalId: string, nodeId: string, description: string) =>
+  /** `confidence` travels with the description when the planner re-reads the problem. */
+  updateNodeDescription = async (
+    goalId: string,
+    nodeId: string,
+    description: string,
+    confidence?: number,
+  ) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
       const [node] = await tx
         .update(goalNodes)
-        .set({ description, updatedAt: new Date() })
+        .set({
+          description,
+          ...(confidence === undefined ? {} : { confidence: confidence.toString() }),
+          updatedAt: new Date(),
+        })
         .where(and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId)))
         .returning();
       if (!node) return undefined;
@@ -552,6 +584,17 @@ export class GoalGraphModel {
       });
       return node;
     });
+
+  /** Current status of one node, read fresh — for writers holding an older snapshot. */
+  getNodeStatus = async (goalId: string, nodeId: string): Promise<GoalNodeStatus | undefined> => {
+    const [row] = await this.db
+      .select({ status: goalNodes.status })
+      .from(goalNodes)
+      .innerJoin(goals, eq(goals.id, goalNodes.goalId))
+      .where(and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId), this.ownership()))
+      .limit(1);
+    return row?.status as GoalNodeStatus | undefined;
+  };
 
   updateNodeStatus = async (
     goalId: string,
@@ -568,7 +611,17 @@ export class GoalGraphModel {
           status,
           updatedAt: new Date(),
         })
-        .where(and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId)))
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.id, nodeId),
+            // Retirement is a person's final word on a node. A coordinator tick
+            // that loaded the node before it was retired must not write it back
+            // to `resolved` / `active` afterwards; the goal row lock taken above
+            // serializes this check with the retirement itself.
+            status === 'retired' ? undefined : ne(goalNodes.status, 'retired'),
+          ),
+        )
         .returning();
       if (!node) return undefined;
       const eventType: GoalEventType =

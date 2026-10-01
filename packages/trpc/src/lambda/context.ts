@@ -16,6 +16,7 @@ import { extractTraceContext } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
+import { getRequestClientIP } from '@/utils/requestClientIP';
 
 import { describeOIDCAuthFailure, setAuthFailureHeader } from '../utils/authFailure';
 import { HETERO_OPERATION_JWT_PURPOSE } from '../utils/internalJwt';
@@ -23,19 +24,6 @@ import { HETERO_OPERATION_JWT_PURPOSE } from '../utils/internalJwt';
 // Create context logger namespace
 const log = debug('lobe-trpc:lambda:context');
 const LOBE_CHAT_API_KEY_HEADER = 'X-API-Key';
-
-const extractClientIp = (request: NextRequest): string | undefined => {
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    const ip = forwardedFor.split(',')[0]?.trim();
-    if (ip) return ip;
-  }
-
-  const realIp = request.headers.get('x-real-ip')?.trim();
-  if (realIp) return realIp;
-
-  return undefined;
-};
 
 interface ValidatedApiKey {
   scopes: string[] | null;
@@ -197,7 +185,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   // for API-response caching see https://trpc.io/docs/v11/caching
 
   const userAgent = request.headers.get('user-agent') || undefined;
-  const clientIp = extractClientIp(request);
+  const clientIp = getRequestClientIP(request.headers);
 
   // get marketAccessToken from cookies
   const cookieHeader = request.headers.get('cookie');

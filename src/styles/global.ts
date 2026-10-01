@@ -19,6 +19,10 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
 
     @media (device-width >= 576px) {
       overflow: hidden;
+
+      /* The root cannot scroll here, and a root 'none' also suppresses the
+         elastic overscroll of inner scrollers in Chromium on macOS. */
+      overscroll-behavior: auto;
     }
   }
 
@@ -53,6 +57,12 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
     ::-webkit-scrollbar-track {
       background-color: transparent;
     }
+  }
+
+  /* antd resets re-apply antialiased on each component root, so body alone is not enough */
+  html[data-font-antialiasing='off'] * {
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
   }
 
   html.desktop[data-theme='dark'] body {

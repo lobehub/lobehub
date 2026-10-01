@@ -83,6 +83,8 @@ export interface FileContextConfig {
 }
 
 export interface MessageContentConfig {
+  /** Whether `readAttachment` is in the request's tool set, so oversized file previews can name it */
+  canReadAttachment?: boolean;
   /** File context configuration */
   fileContext?: FileContextConfig;
   /** Function to check if audio input is supported */
@@ -265,6 +267,7 @@ export class MessageContentProcessor extends BaseProcessor {
         // Call sites can still disable them for environments such as desktop local files.
         addUrl: this.config.fileContext.includeFileUrl ?? true,
         audioList: message.audioList || [],
+        canReadAttachment: this.config.canReadAttachment,
         fileList: message.fileList,
         imageList: message.imageList || [],
         messageId: message.id,

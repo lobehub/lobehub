@@ -259,6 +259,8 @@ export class DocumentService {
           ? result.savedAt.toISOString()
           : result.savedAt
         : undefined,
+      updatedAt:
+        result.updatedAt instanceof Date ? result.updatedAt.toISOString() : result.updatedAt,
     };
   }
 

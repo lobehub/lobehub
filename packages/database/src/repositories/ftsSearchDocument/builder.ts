@@ -18,6 +18,7 @@ import {
   userPersonaDocuments,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { notAgentShareDocument } from '../../utils/documentVisibility';
 import { notAgentShareFile, notAgentShareFileReference } from '../../utils/fileVisibility';
 import { searchableMessage } from '../../utils/searchableMessage';
 import type {
@@ -51,6 +52,21 @@ export interface FtsSearchDocumentRangeBatchOptions {
 export type FtsSearchDocumentRelationChange =
   | { fileIds: readonly string[]; relation: 'knowledgeBaseFiles' }
   | { memoryIds: readonly string[]; relation: 'userMemoryReferences' };
+
+/**
+ * Upper bound, in characters, of `documents.content` copied into a search document.
+ *
+ * Parsed files and generated documents can hold 100+ MiB of text (for example, a failed spreadsheet
+ * parse that emitted mostly blank cells). A document that large exceeds the incremental sync bulk
+ * limit, becomes a permanent dead letter, and blocks every later change; Elasticsearch Serverless
+ * also rejects such requests with 429. Only the prefix is indexed, so matches beyond it are not
+ * found. Results are hydrated from PostgreSQL, so callers never see the shortened text.
+ *
+ * One million characters matches Elasticsearch's default `index.highlight.max_analyzed_offset`.
+ * Even at 6 JSON-escaped bytes per character this stays far below
+ * `FTS_SEARCH_SYNC_BULK_MAX_BYTES`, so one document can no longer outgrow a bulk request.
+ */
+export const FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS = 1_000_000;
 
 const entityOrder = new Map(FTS_SEARCH_DOCUMENT_ENTITIES.map((entity, index) => [entity, index]));
 
@@ -914,7 +930,10 @@ export class FtsSearchDocumentBuilder {
   private async buildDocuments(selection: FtsSearchDocumentSelection) {
     const rows = await this.db
       .select({
-        content: documents.content,
+        /** Truncate in SQL so oversized rows never cross the wire into application memory. */
+        content: sql<
+          string | null
+        >`left(${documents.content}, ${FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS})`,
         createdAt: documents.createdAt,
         description: documents.description,
         fileId: documents.fileId,
@@ -934,6 +953,7 @@ export class FtsSearchDocumentBuilder {
       .from(documents)
       .where(
         and(
+          notAgentShareDocument(documents.metadata),
           notAgentShareFileReference(this.db, documents.fileId),
           selection.ids
             ? inArray(documents.id, selection.ids)

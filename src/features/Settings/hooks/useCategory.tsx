@@ -1,3 +1,4 @@
+import { ENABLE_TOOL_CHANNEL_SETTINGS } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
@@ -5,6 +6,7 @@ import {
   AppWindowIcon,
   BellIcon,
   Blocks,
+  BlocksIcon,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -26,6 +28,8 @@ import {
   Sparkles,
   TagIcon,
   TerminalSquare,
+  Trash2,
+  Wrench,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -80,6 +84,7 @@ export const useCategory = () => {
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
+  const enableIntegrations = useUserStore(labPreferSelectors.enableIntegrations);
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -117,6 +122,14 @@ export const useCategory = () => {
         icon: MessageCircleIcon,
         key: SettingsTabs.Messenger,
         label: t('tab.messenger'),
+      },
+      // Third-party integrations (the GitHub App today) are bound to the user
+      // or workspace that connected them, so they sit with the account. Labs
+      // alpha: hidden until the closed loop is ready for everyone.
+      enableIntegrations && {
+        icon: BlocksIcon,
+        key: SettingsTabs.Integrations,
+        label: t('tab.integrations'),
       },
     ].filter(Boolean) as CategoryItem[];
 
@@ -204,6 +217,11 @@ export const useCategory = () => {
         key: SettingsTabs.Memory,
         label: t('tab.memory'),
       },
+      ENABLE_TOOL_CHANNEL_SETTINGS && {
+        icon: Wrench,
+        key: SettingsTabs.Tools,
+        label: t('tab.tools'),
+      },
       {
         icon: KeyRound,
         key: SettingsTabs.Creds,
@@ -238,6 +256,11 @@ export const useCategory = () => {
         icon: Database,
         key: SettingsTabs.Storage,
         label: t('tab.storage'),
+      },
+      {
+        icon: Trash2,
+        key: SettingsTabs.Trash,
+        label: t('tab.trash'),
       },
       !hideDocs && {
         icon: Info,
@@ -296,6 +319,7 @@ export const useCategory = () => {
     showProvider,
     isDevMode,
     enableOAuthApps,
+    enableIntegrations,
     avatarUrl,
     username,
   ]);

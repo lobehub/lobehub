@@ -19,6 +19,7 @@ const {
   execAgent,
   findMessage,
   getLastLeaf,
+  getUserSettings,
   release,
   settle,
   topicFindById,
@@ -32,6 +33,7 @@ const {
   execAgent: vi.fn(),
   findMessage: vi.fn(),
   getLastLeaf: vi.fn(),
+  getUserSettings: vi.fn(),
   releaseReservation: vi.fn(),
   tryReserve: vi.fn(),
   release: vi.fn(),
@@ -77,6 +79,12 @@ vi.mock('../aiAgent', () => ({
   }),
 }));
 
+vi.mock('@/database/models/user', () => ({
+  UserModel: vi.fn(function () {
+    return { getUserSettings };
+  }),
+}));
+
 const TEST_USER = 'user-1';
 const db = {
   transaction: vi.fn(async (callback) => callback({ execute: vi.fn() })),
@@ -105,6 +113,7 @@ describe('TaskResultBridgeService.deliver', () => {
   let findByTopicId: any;
 
   beforeEach(() => {
+    getUserSettings.mockReset().mockResolvedValue(undefined);
     createMsg.mockReset().mockResolvedValue({ id: 'task-cb-task-1-topic-done' } as any);
     createPending.mockReset().mockResolvedValue({ id: 'receipt-1' });
     claimPending
@@ -142,6 +151,34 @@ describe('TaskResultBridgeService.deliver', () => {
   });
 
   afterEach(() => vi.restoreAllMocks());
+
+  it.each(['manual', 'auto-run', 'allow-list'] as const)(
+    'preserves %s preferences so creator questions can wait for user input',
+    async (approvalMode) => {
+      const intervention = { allowList: ['lobe-task/viewTask'], approvalMode };
+      getUserSettings.mockResolvedValue({ tool: { humanIntervention: intervention } });
+
+      await new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
+
+      expect(execAgent.mock.calls[0][0].userInterventionConfig).toEqual(intervention);
+    },
+  );
+
+  it('defaults a user-facing creator to manual approval', async () => {
+    await new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
+    expect(execAgent.mock.calls[0][0].userInterventionConfig).toEqual({
+      allowList: [],
+      approvalMode: 'manual',
+    });
+  });
+
+  it('normalizes a legacy headless preference like the foreground client', async () => {
+    getUserSettings.mockResolvedValue({
+      tool: { humanIntervention: { approvalMode: 'headless' } },
+    });
+    await new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
+    expect(execAgent.mock.calls[0][0].userInterventionConfig.approvalMode).toBe('auto-run');
+  });
 
   it('appends a taskCallback card to the origin topic and runs the creator agent off history', async () => {
     await new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
@@ -276,6 +313,32 @@ describe('TaskResultBridgeService.deliver', () => {
     }
   });
 
+  it('retains a callback while a question is pending and dispatches it after the topic is free', async () => {
+    vi.useFakeTimers();
+    try {
+      topicFindById.mockResolvedValue({
+        metadata: { runningOperation: { operationId: 'op-question', status: 'waiting_for_human' } },
+      });
+      tryReserve.mockResolvedValue(false);
+      const service = new TaskResultBridgeService(db, TEST_USER);
+      const delivery = service.deliver(baseParams);
+      const rejected = expect(delivery).rejects.toThrow('remained busy');
+      await vi.runAllTimersAsync();
+      await rejected;
+
+      expect(release).toHaveBeenCalledWith(['receipt-1'], expect.stringContaining('remained busy'));
+      expect(settle).not.toHaveBeenCalled();
+      expect(execAgent).not.toHaveBeenCalled();
+
+      tryReserve.mockResolvedValue(true);
+      await service.drain(ORIGIN.agentId, ORIGIN.topicId);
+      expect(execAgent).toHaveBeenCalledTimes(1);
+      expect(attachCreatorOperation).toHaveBeenCalledWith(['receipt-1'], 'op-new');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('restores messenger routing and registers a proactive bot completion hook', async () => {
     topicFindById.mockResolvedValue({
       agentId: 'agent-creator',
@@ -294,6 +357,8 @@ describe('TaskResultBridgeService.deliver', () => {
     await new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
 
     const hooks = execAgent.mock.calls[0][0].hooks;
+    expect(execAgent.mock.calls[0][0].userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    expect(getUserSettings).not.toHaveBeenCalled();
     const botHook = hooks.find((hook: any) => hook.id === 'task-creator-completion');
     expect(botHook.webhook).toMatchObject({
       delivery: 'qstash',

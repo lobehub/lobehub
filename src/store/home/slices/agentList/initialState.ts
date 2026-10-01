@@ -2,13 +2,26 @@ import {
   type SidebarAgentItem,
   type SidebarAgentListResponse,
   type SidebarGroup,
-} from '@/database/repositories/home';
+} from '@lobechat/types';
+
+import type { AgentMetaUpdate } from '@/store/agent/slices/agent/action';
+
+export type SidebarAgentMetaPatch = Pick<
+  AgentMetaUpdate,
+  'avatar' | 'backgroundColor' | 'description' | 'name' | 'title'
+>;
 
 export interface AgentListState {
   /**
    * Agent groups (user-defined folders)
    */
   agentGroups: SidebarGroup[];
+  agentListScope?: string;
+  agentListSource?: 'server' | 'storage';
+  agentOptimisticPatches: Record<
+    string,
+    { mutationId: number; patch: SidebarAgentMetaPatch; scope: string }
+  >;
   /**
    * Whether all agents drawer is open
    */
@@ -45,6 +58,9 @@ export interface AgentListState {
 
 export const initialAgentListState: AgentListState = {
   agentGroups: [],
+  agentOptimisticPatches: {},
+  agentListScope: undefined,
+  agentListSource: undefined,
   allAgentsDrawerOpen: false,
   isAgentListInit: false,
   pinnedAgents: [],

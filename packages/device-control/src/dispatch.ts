@@ -1,4 +1,11 @@
-import { moveLocalFiles, renameLocalFile, writeLocalFile } from '@lobechat/local-file-shell/file';
+import {
+  copyLocalFiles,
+  createLocalDirectory,
+  createLocalFile,
+  moveLocalFiles,
+  renameLocalFile,
+  writeLocalFile,
+} from '@lobechat/local-file-shell/file';
 import {
   addGitWorktree,
   checkoutGitBranch,
@@ -24,10 +31,17 @@ import {
   revertGitFile,
   runPullRequestAction,
 } from '@lobechat/local-file-shell/git';
+import type {
+  CopyFilesParams,
+  CreateDirectoryParams,
+  CreateFileParams,
+} from '@lobechat/local-file-shell/types';
 
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
 import { defaultCopyAssetForPublish, defaultReadExternalAssetForPublish } from './filePreview';
+import { getKimiCodeQuota, type GetKimiCodeQuotaParams } from './kimiCodeQuota';
+import { listListeningPorts, type ListListeningPortsParams } from './listeningPorts';
 import { defaultListProjectDirectory } from './projectFileIndex';
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
@@ -44,9 +58,11 @@ import type {
   ProjectDirectoryListParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
+  TrashLocalFilesParams,
   UnenrollWorkspaceParams,
 } from './types';
 import { browseDirectory, initWorkspace, listProjectSkills, statPath } from './workspace';
+import { assertEntriesWithinWorkspace, WORKSPACE_ESCAPE_MESSAGE } from './workspaceGuard';
 
 /**
  * Every method name the device-control RPC dispatcher understands. Mirrors the
@@ -61,6 +77,7 @@ export const DEVICE_RPC_METHODS = [
   'listHeterogeneousAgentModels',
   'getClaudeCodeQuota',
   'getCodexQuota',
+  'getKimiCodeQuota',
   'listProjectSkills',
   'prepareSkillDirectory',
   'browseDirectory',
@@ -74,6 +91,10 @@ export const DEVICE_RPC_METHODS = [
   'moveLocalFiles',
   'renameLocalFile',
   'writeLocalFile',
+  'createLocalFile',
+  'createLocalDirectory',
+  'copyLocalFiles',
+  'trashLocalFiles',
   'getGitBranch',
   'getLinkedPullRequest',
   'getPullRequestDetail',
@@ -96,9 +117,40 @@ export const DEVICE_RPC_METHODS = [
   'pullGitBranch',
   'pushGitBranch',
   'revertGitFile',
+  'listListeningPorts',
+  'getAppUpdateState',
+  'checkAppUpdate',
+  'installAppUpdate',
 ] as const;
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
+
+/** Why a client without the app-update handlers rejects those RPCs. */
+export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not support remote updates';
+
+/** Why a client without a recoverable trash (the CLI daemon) rejects `trashLocalFiles`. */
+export const TRASH_UNSUPPORTED_MESSAGE = 'This device does not support moving files to the trash';
+
+/** File-mutation params carry the approved workspace root they must stay inside. */
+type WorkspaceScoped<T> = T & { workspaceRoot?: string };
+
+/**
+ * The file-tree mutations (create / mkdir / copy / trash) always arrive with
+ * the workspace root, so a request without one is refused rather than run
+ * unchecked.
+ */
+const guardMutation = async (workspaceRoot: string | undefined, targets: string[]) => {
+  if (!workspaceRoot) throw new Error(`${WORKSPACE_ESCAPE_MESSAGE}: missing workspace root`);
+  await assertEntriesWithinWorkspace(workspaceRoot, targets);
+};
+
+/**
+ * move / rename / write predate the root being sent; a server that still omits
+ * it keeps working, and every server that sends it gets the device-side check.
+ */
+const guardLegacyMutation = async (workspaceRoot: string | undefined, targets: string[]) => {
+  if (workspaceRoot) await assertEntriesWithinWorkspace(workspaceRoot, targets);
+};
 
 /**
  * Dispatch a generic server-internal device RPC by method name. This is the
@@ -151,12 +203,20 @@ export const executeDeviceRpc = async (
       return getCodexQuota(params as GetCodexQuotaParams);
     }
 
+    case 'getKimiCodeQuota': {
+      return getKimiCodeQuota(params as GetKimiCodeQuotaParams);
+    }
+
     case 'listProjectSkills': {
       return listProjectSkills(params as ListProjectSkillsParams, deps);
     }
 
     case 'prepareSkillDirectory': {
       return prepareSkillDirectory(params as PrepareSkillDirectoryParams, deps);
+    }
+
+    case 'listListeningPorts': {
+      return listListeningPorts(params as ListListeningPortsParams);
     }
 
     case 'browseDirectory': {
@@ -196,15 +256,64 @@ export const executeDeviceRpc = async (
     }
 
     case 'moveLocalFiles': {
-      return moveLocalFiles(params as { items: { newPath: string; oldPath: string }[] });
+      const { workspaceRoot, ...rest } = params as WorkspaceScoped<{
+        items: { newPath: string; oldPath: string }[];
+      }>;
+      await guardLegacyMutation(
+        workspaceRoot,
+        rest.items.flatMap((item) => [item.oldPath, item.newPath]),
+      );
+      return moveLocalFiles(rest);
     }
 
     case 'renameLocalFile': {
-      return renameLocalFile(params as { newName: string; path: string });
+      const { workspaceRoot, ...rest } = params as WorkspaceScoped<{
+        newName: string;
+        path: string;
+      }>;
+      await guardLegacyMutation(workspaceRoot, [rest.path]);
+      return renameLocalFile(rest);
     }
 
     case 'writeLocalFile': {
-      return writeLocalFile(params as { content: string; path: string });
+      const { workspaceRoot, ...rest } = params as WorkspaceScoped<{
+        content: string;
+        path: string;
+      }>;
+      await guardLegacyMutation(workspaceRoot, [rest.path]);
+      return writeLocalFile(rest);
+    }
+
+    case 'createLocalFile': {
+      const { workspaceRoot, ...rest } = params as WorkspaceScoped<CreateFileParams>;
+      await guardMutation(workspaceRoot, [rest.path]);
+      return createLocalFile(rest);
+    }
+
+    case 'createLocalDirectory': {
+      const { workspaceRoot, ...rest } = params as WorkspaceScoped<CreateDirectoryParams>;
+      await guardMutation(workspaceRoot, [rest.path]);
+      return createLocalDirectory(rest);
+    }
+
+    case 'copyLocalFiles': {
+      const { workspaceRoot, ...rest } = params as WorkspaceScoped<CopyFilesParams>;
+      await guardMutation(
+        workspaceRoot,
+        rest.items.flatMap((item) =>
+          item.targetPath === undefined ? [item.sourcePath] : [item.sourcePath, item.targetPath],
+        ),
+      );
+      return copyLocalFiles(rest);
+    }
+
+    // Never falls back to a hard delete: a host without a recoverable trash
+    // refuses, so a remote "delete" can always be undone.
+    case 'trashLocalFiles': {
+      const { workspaceRoot, ...rest } = params as WorkspaceScoped<TrashLocalFilesParams>;
+      if (!deps.trashLocalFiles) throw new Error(TRASH_UNSUPPORTED_MESSAGE);
+      await guardMutation(workspaceRoot, rest.paths);
+      return deps.trashLocalFiles(rest);
     }
 
     case 'getGitBranch': {
@@ -304,6 +413,23 @@ export const executeDeviceRpc = async (
 
     case 'revertGitFile': {
       return revertGitFile(params as { filePath: string; path: string });
+    }
+
+    // Remote app update: only a client that can update itself (the desktop
+    // app) injects these, so the CLI answers with a stable reason instead.
+    case 'getAppUpdateState': {
+      if (!deps.getAppUpdateState) throw new Error(APP_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.getAppUpdateState();
+    }
+
+    case 'checkAppUpdate': {
+      if (!deps.checkAppUpdate) throw new Error(APP_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.checkAppUpdate();
+    }
+
+    case 'installAppUpdate': {
+      if (!deps.installAppUpdate) throw new Error(APP_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.installAppUpdate();
     }
 
     default: {

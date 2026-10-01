@@ -113,4 +113,49 @@ describe('activatorRuntime', () => {
       expect(result.success).toBe(true);
     });
   });
+  describe('activateTools — device picker on a locked run', () => {
+    it.each([
+      {
+        expected: 'locked to device "device-a"',
+        plan: { deviceId: 'device-a', kind: 'device', target: 'local' },
+      },
+      {
+        expected: 'bound device, which is offline',
+        plan: { kind: 'device-unrouted', reason: 'bound-device-offline', target: 'local' },
+      },
+    ] as const)(
+      'says why the picker is missing instead of a bare "Not found" ($plan.kind)',
+      async ({ expected, plan }) => {
+        const { activatorRuntime } = await import('../activator');
+        const runtime = await activatorRuntime.factory({
+          executionPlan: plan,
+          serverDB: {} as never,
+          toolManifestMap: {},
+          userId: 'user-1',
+        });
+
+        const result = await runtime.activateTools({ identifiers: ['lobe-remote-device'] });
+
+        expect(result.content).toContain('Not available: lobe-remote-device.');
+        expect(result.content).toContain(expected);
+        expect(result.content).toContain('device selector');
+        expect(result.content).not.toContain('Not found');
+      },
+      20_000,
+    );
+
+    it('keeps "Not found" when the picker was withheld for another reason', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        executionPlan: { kind: 'sandbox', target: 'sandbox' },
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['lobe-remote-device'] });
+
+      expect(result.content).toContain('Not found: lobe-remote-device');
+    });
+  });
 });

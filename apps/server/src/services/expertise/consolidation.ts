@@ -16,6 +16,7 @@ import type {
   ExpertiseRevisionEvidence,
   VerifyCheckDecisionDetail,
 } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { and, desc, eq, gt, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -28,6 +29,7 @@ import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 import { resolveModelReadableFrameUrl } from '@/server/services/verify/modelFrames';
 
+import { renderAnnotationRegion } from './annotationRegion';
 import { resolveExpertiseModelConfig } from './modelConfig';
 
 const log = debug('lobe-server:expertise-consolidation');
@@ -58,8 +60,6 @@ const MAX_SHIPPED = 6;
 
 /** Total frames inlined. Each is a full base64 body, so this is a payload budget. */
 const MAX_FRAMES = 10;
-
-const pct = (value: number) => `${Math.round(value * 100)}%`;
 
 const ConsolidationSchema = z.object({
   currentLimitsArePlaceholder: z.boolean(),
@@ -251,7 +251,7 @@ export class ExpertiseConsolidationService {
         schema: EXPERTISE_CONSOLIDATION_JSON_SCHEMA,
       },
       {
-        metadata: { trigger: 'expertise_consolidation' },
+        metadata: { trigger: RequestTrigger.Expertise },
         tracing: {
           promptVersion: EXPERTISE_CONSOLIDATION_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.ExpertiseConsolidation,
@@ -396,13 +396,9 @@ export class ExpertiseConsolidationService {
     },
     frameLabel: Map<string, string>,
   ) => {
-    const regions = (delivery.detail?.annotations ?? []).map((annotation) => {
-      const frame = frameLabel.get(`${delivery.id}:${annotation.evidenceId}`);
-      const at = annotation.rect
-        ? ` at ${pct(annotation.rect.x)},${pct(annotation.rect.y)} sized ${pct(annotation.rect.width)}×${pct(annotation.rect.height)}`
-        : '';
-      return `  circled${frame ? ` on ${frame}` : ''}${at}: ${annotation.comment?.trim() || '(no note)'}`;
-    });
+    const regions = (delivery.detail?.annotations ?? []).map((annotation) =>
+      renderAnnotationRegion(annotation, frameLabel.get(`${delivery.id}:${annotation.evidenceId}`)),
+    );
     const frames = [...frameLabel]
       .filter(([key]) => key.startsWith(`${delivery.id}:`))
       .map(([, label]) => label);

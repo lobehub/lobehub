@@ -9,6 +9,7 @@ import {
   getFtsSearchIndexAlias,
   getFtsSearchIndexSchemaVersion,
   getFtsSearchPhysicalIndexName,
+  parseFtsSearchPhysicalIndexName,
 } from './mappings';
 import { FTS_SEARCH_CURRENT_MAPPING_MIGRATIONS } from './migration';
 import { FTS_SEARCH_RETAINED_SOURCE_PROPERTIES } from './policy';
@@ -97,6 +98,19 @@ describe('search index mappings', () => {
     expect(getFtsSearchPhysicalIndexName('lobehub-dev', 'knowledgeBases', 4)).toBe(
       'lobehub-dev-knowledge-bases-v4',
     );
+    const runId = '00000000-0000-4000-8000-000000000001';
+    const rebuilt = getFtsSearchPhysicalIndexName('lobehub-dev', 'knowledgeBases', 4, runId);
+    expect(rebuilt).toBe(`lobehub-dev-knowledge-bases-v4-r${runId}`);
+    expect(parseFtsSearchPhysicalIndexName('lobehub-dev-knowledge-bases', rebuilt)).toEqual({
+      builtSchemaVersion: 4,
+      reindexRunId: runId,
+    });
+    expect(
+      parseFtsSearchPhysicalIndexName(
+        'lobehub-dev-knowledge-bases',
+        'lobehub-dev-knowledge-bases-v4-rnot-a-run',
+      ),
+    ).toBeUndefined();
   });
 
   it.each(FTS_SEARCH_DOCUMENT_ENTITIES)('maps the soft-delete marker for %s', (entity) => {

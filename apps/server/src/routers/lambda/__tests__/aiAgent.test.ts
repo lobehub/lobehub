@@ -16,6 +16,7 @@ import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as InternalJwtModule from '@/libs/trpc/utils/internalJwt';
+import { AiAgentService } from '@/server/services/aiAgent';
 import {
   assertCanPerformResourceAction,
   getResourceMeta,
@@ -58,10 +59,13 @@ vi.mock('@/server/modules/Mecha', () => ({
       }),
     };
   }),
-  serverMessagesEngine: vi.fn().mockResolvedValue([
-    { role: 'system', content: 'You are a helpful assistant.' },
-    { role: 'user', content: 'Hello' },
-  ]),
+  serverMessagesEngine: vi.fn().mockResolvedValue({
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'Hello' },
+    ],
+    metadata: {},
+  }),
 }));
 
 // Mock AiChatService to avoid S3 dependency
@@ -183,6 +187,36 @@ describe('AI Agent Router Integration Tests', () => {
         code: 'BAD_REQUEST',
       });
       expect(await serverDB.select().from(topics).where(eq(topics.userId, userId))).toEqual([]);
+    });
+
+    // G-02: only a client that declares `member_runtime_end` gets mirrored member
+    // terminals under that name (Codex on #20102: the batch route dropped it).
+    it('forwards a declared member_runtime_end stream feature on both routes', async () => {
+      const { AgentRuntimeService } = await import('@/server/services/agentRuntime');
+      const caller = aiAgentRouter.createCaller(createTestContext());
+      const createOperationCalls = () =>
+        vi
+          .mocked(AgentRuntimeService)
+          .mock.results.flatMap((r) => (r.value as any).createOperation.mock.calls)
+          .map(([params]) => params.acceptsMemberRuntimeEnd);
+
+      vi.mocked(AgentRuntimeService).mockClear();
+      await caller.execAgent({
+        agentId: testAgentId,
+        prompt: 'single',
+        streamFeatures: ['member_runtime_end'],
+      });
+      await caller.execAgents({
+        tasks: [{ agentId: testAgentId, prompt: 'batch', streamFeatures: ['member_runtime_end'] }],
+      });
+      expect(createOperationCalls()).toEqual([true, true]);
+
+      vi.mocked(AgentRuntimeService).mockClear();
+      // A client that declares nothing (a released desktop, a stale tab) is an
+      // explicit `false`, so a continuation never inherits a newer client's `true`.
+      await caller.execAgent({ agentId: testAgentId, prompt: 'undeclared single' });
+      await caller.execAgents({ tasks: [{ agentId: testAgentId, prompt: 'undeclared' }] });
+      expect(createOperationCalls()).toEqual([false, false]);
     });
 
     it('should create a new topic when topicId is not provided', async () => {
@@ -360,11 +394,13 @@ describe('AI Agent Router Integration Tests', () => {
             agentId: testAgentId,
           }),
           autoStart: false,
-          modelRuntimeConfig: {
+          modelRuntimeConfig: expect.objectContaining({
             mediaCapabilities: expect.objectContaining({ vision: true }),
+            // The run's model facts, read once during discovery.
+            modelFacts: expect.objectContaining({ model: 'gpt-4o-mini', provider: 'openai' }),
             model: 'gpt-4o-mini',
             provider: 'openai',
-          },
+          }),
           userId,
         }),
       );
@@ -488,6 +524,24 @@ describe('AI Agent Router Integration Tests', () => {
       // Should have 1 assistant message with parentId pointing to the user message
       expect(assistantMessages).toHaveLength(1);
       expect(assistantMessages[0].parentId).toBe(userMsg.id);
+    });
+
+    it('forwards the replaced operation to the service', async () => {
+      const execAgent = vi
+        .spyOn(AiAgentService.prototype, 'execAgent')
+        .mockResolvedValue({ operationId: 'op-new', success: true } as any);
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      await caller.execAgent({
+        agentId: testAgentId,
+        prompt: 'send now',
+        replacesOperationId: 'op-old',
+      });
+
+      expect(execAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ interactiveStart: true, replacesOperationId: 'op-old' }),
+      );
+      execAgent.mockRestore();
     });
   });
 

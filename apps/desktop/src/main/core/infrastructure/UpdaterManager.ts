@@ -177,6 +177,7 @@ export class UpdaterManager {
    * Check for updates
    */
   public checkForUpdates = async ({ manual = false }: { manual?: boolean } = {}) => {
+    if (manual) void this.app.coreUpdateManager.checkForUpdates({ manual: true });
     if (this.checking || this.downloading) return;
 
     this.checking = true;
@@ -231,6 +232,22 @@ export class UpdaterManager {
   };
 
   /**
+   * Check for updates because someone explicitly asked to update this app from
+   * another device. An earlier local "install later" would keep the found
+   * update from downloading, so the explicit request overrides it.
+   */
+  public checkForUpdatesOnRequest = () => {
+    if (this.installLaterVersion) {
+      logger.info(
+        `Remote update requested; clearing install-later for v${this.installLaterVersion}`,
+      );
+      this.installLaterVersion = null;
+    }
+
+    void this.checkForUpdates({ manual: true });
+  };
+
+  /**
    * Download update
    */
   public downloadUpdate = async () => {
@@ -253,7 +270,7 @@ export class UpdaterManager {
     }
   };
 
-  private captureRestoreRoute = () => {
+  captureRestoreRoute = () => {
     try {
       const url = this.mainWindow.webContents?.getURL();
       if (!url) return;
@@ -469,6 +486,8 @@ export class UpdaterManager {
         logger.info(
           `Skipping auto-download — install-later acknowledged for v${this.installLaterVersion}, incoming v${info.version}`,
         );
+        // Finish the check with the cached update still installable, without reopening its prompt.
+        this.setStage('downloaded');
         return;
       }
 

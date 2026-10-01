@@ -16,10 +16,13 @@ import {
   type UpdateMessageResult,
 } from '@lobechat/types';
 import { type HeatmapsProps } from '@lobehub/charts';
+import pMap from 'p-map';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { abortableRequest } from '../utils/abortableRequest';
+import type { MessageListPage, MessageRoundCursor } from './cache';
+import { supportsRoundCursor } from './cache';
 
 /**
  * Query context for message operations
@@ -48,6 +51,12 @@ interface MessageReadQueryContext {
   topicId?: string | null;
   topicShareId?: string;
 }
+
+/**
+ * Rows walked per round-cursor page: whole rounds up to this many mainline rows,
+ * matching the newest-first window `getMessages` serves.
+ */
+const MESSAGE_PAGE_ROW_BUDGET = 1000;
 
 export type MessageBatchOperation =
   | {
@@ -99,6 +108,9 @@ const getBatchMutationAbortKey = (operations: MessageBatchOperation[]) => {
   const [operation] = operations;
   if (operation.type === 'updateToolMessage') return `tool-message-${operation.id}`;
 };
+
+/** Matches the `getToolResultPayloads` input cap in the lambda router. */
+const TOOL_PAYLOAD_BATCH_SIZE = 500;
 
 export class MessageService {
   batchMutate = async (operations: MessageBatchOperation[], signal?: AbortSignal) => {
@@ -158,6 +170,7 @@ export class MessageService {
       if (!params.topicId) return [];
 
       const shared = await lambdaClient.shareChat.getMessages.query({
+        includeFileWorks: true,
         shareId: params.agentShareId,
         topicId: params.topicId,
       });
@@ -184,6 +197,95 @@ export class MessageService {
    */
   getToolResultPayload = async (messageId: string) => {
     return lambdaClient.message.getToolResultPayload.query({ messageId });
+  };
+
+  /**
+   * Bulk form, for surfaces that need every omitted row at once (export).
+   *
+   * Chunked to the endpoint's own cap: a tool-dense topic can hold more
+   * projected rows than one request accepts, and the schema would reject the
+   * whole set rather than return what it could.
+   */
+  getToolResultPayloads = async (messageIds: string[]) => {
+    const chunks: string[][] = [];
+    for (let i = 0; i < messageIds.length; i += TOOL_PAYLOAD_BATCH_SIZE) {
+      chunks.push(messageIds.slice(i, i + TOOL_PAYLOAD_BATCH_SIZE));
+    }
+
+    const results = await pMap(
+      chunks,
+      (ids) => lambdaClient.message.getToolResultPayloads.query({ messageIds: ids }),
+      { concurrency: 3 },
+    );
+
+    return Object.assign({}, ...results) as Record<
+      string,
+      { content: string; pluginState?: unknown }
+    >;
+  };
+
+  /**
+   * The newest window of a conversation for the message-list cache. Topic
+   * conversations read it by round cursor so the page also says whether any
+   * older history exists (`olderCursor: null` → the topic start is loaded, and
+   * scrolling up must not fetch). Other contexts return the plain list, whose
+   * older history is unknown.
+   */
+  getMessageListPage = async (
+    params: MessageReadQueryContext,
+  ): Promise<MessageListPage | UIChatMessage[]> => {
+    if (!supportsRoundCursor(params)) return this.getMessages(params);
+
+    return this.getMessagesByRoundCursor(params, null);
+  };
+
+  /**
+   * Load one round-aligned page of history strictly OLDER than `cursor` (the
+   * start of the oldest loaded round). Intentionally outside the
+   * `runMessageListQuery` client-cache policy: older pages are additive and
+   * merged by the earlier-history layer in `services/message/cache`.
+   */
+  getEarlierMessages = async (
+    params: MessageReadQueryContext,
+    cursor: MessageRoundCursor,
+  ): Promise<MessageListPage> => {
+    // Agent-share pages read through `shareChat.getMessages`, which has no
+    // round cursor: report the start as reached so the shared view keeps its
+    // current window instead of hitting the authed endpoint.
+    if (params.agentShareId) return { messages: [], olderCursor: null };
+
+    if (supportsRoundCursor(params)) return this.getMessagesByRoundCursor(params, cursor);
+
+    const data = await lambdaClient.message.getMessages.query({
+      ...params,
+      before: { createdAt: new Date(cursor.createdAt), id: cursor.id },
+      includeFileWorks: true,
+    });
+
+    return { messages: data as unknown as UIChatMessage[] };
+  };
+
+  private getMessagesByRoundCursor = async (
+    params: MessageReadQueryContext,
+    cursor: MessageRoundCursor | null,
+  ): Promise<MessageListPage> => {
+    const page = await lambdaClient.message.getMessagesByCursor.query({
+      agentId: params.agentId,
+      countBudget: MESSAGE_PAGE_ROW_BUDGET,
+      cursor,
+      groupId: params.groupId,
+      includeFileWorks: true,
+      // The row budget is the real bound; ask for as many whole rounds as it holds.
+      roundLimit: MESSAGE_PAGE_ROW_BUDGET,
+      skipWorks: params.skipWorks,
+      topicId: params.topicId,
+      topicShareId: params.topicShareId,
+    });
+
+    return {
+      messages: page.messages as unknown as UIChatMessage[],
+      olderCursor: page.nextCursor,
+    };
   };
 
   diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {

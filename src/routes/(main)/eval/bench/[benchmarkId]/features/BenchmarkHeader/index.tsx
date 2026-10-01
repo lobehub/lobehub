@@ -289,9 +289,7 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <div className={styles.statIcon} style={{ background: cssVar.colorWarningBg }}>
                   <Trophy size={16} style={{ color: cssVar.colorWarning }} />
                 </div>
-                <span className={styles.statLabel} style={{ textTransform: 'uppercase' }}>
-                  {t('benchmark.detail.stats.topAgents')}
-                </span>
+                <span className={styles.statLabel}>{t('benchmark.detail.stats.topAgents')}</span>
               </Flexbox>
 
               {!hasDatasets && !hasCompletedRuns && (

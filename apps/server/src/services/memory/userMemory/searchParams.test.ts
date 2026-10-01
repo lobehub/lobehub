@@ -1,7 +1,11 @@
 import type { SearchMemoryParams } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { normalizeSearchMemoryParams, resolveTimeIntent } from './searchParams';
+import {
+  normalizeSearchMemoryParams,
+  resolveMemorySearchTopK,
+  resolveTimeIntent,
+} from './searchParams';
 
 describe('searchParams', () => {
   const now = new Date('2026-03-30T10:15:00.000Z');
@@ -133,5 +137,32 @@ describe('searchParams', () => {
         },
       });
     });
+  });
+});
+
+describe('resolveMemorySearchTopK', () => {
+  it('leaves context memories out when the caller does not ask for them', () => {
+    expect(resolveMemorySearchTopK('low', {})).toEqual({
+      activities: 2,
+      contexts: 0,
+      experiences: 0,
+      identities: 1,
+      preferences: 2,
+    });
+  });
+
+  it('gives an explicit context request a small effort-scaled cap', () => {
+    expect(resolveMemorySearchTopK('low', { layers: ['context'] as any }).contexts).toBe(1);
+    expect(resolveMemorySearchTopK('medium', { topK: { contexts: 1 } }).contexts).toBe(1);
+    expect(resolveMemorySearchTopK('high', { topK: { contexts: 10 } }).contexts).toBe(4);
+  });
+
+  it('respects an explicit zero and never re-enables experience memories', () => {
+    const topK = resolveMemorySearchTopK('medium', {
+      layers: ['context'] as any,
+      topK: { contexts: 0, experiences: 5 },
+    });
+
+    expect(topK).toMatchObject({ contexts: 0, experiences: 0 });
   });
 });

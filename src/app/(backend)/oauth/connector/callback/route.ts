@@ -53,6 +53,9 @@ const renderResultPage = (result: {
     <script>
       (function () {
         try {
+          // The isolated desktop preload relays status to the native window
+          // owner even when a provider's COOP policy severs window.opener.
+          window.postMessage(${payload}, window.location.origin);
           if (window.opener) {
             window.opener.postMessage(${payload}, ${jsonForScript(targetOrigin())});
           }

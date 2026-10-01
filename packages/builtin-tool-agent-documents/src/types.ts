@@ -1,5 +1,17 @@
 export const AgentDocumentsIdentifier = 'lobe-agent-documents';
 
+/**
+ * Upper bound on the characters a single readDocument result feeds back into the
+ * model context. Agent documents can hold whole email/newsletter archives that
+ * run into the millions of characters; returning one whole once pushed a task
+ * past the model's context window — a lone tool result reached ~591k tokens and
+ * the next completion 400'd with ExceededContextWindow. The client Inspector
+ * still renders the full document from `state`, so only the LLM-facing `content`
+ * is capped. ~200k chars is roughly 50k tokens per field — generous for a real
+ * document read while leaving ample room in the window.
+ */
+export const MAX_READ_DOCUMENT_CONTENT_CHARS = 200_000;
+
 export const AgentDocumentsApiName = {
   createDocument: 'createDocument',
   copyDocument: 'copyDocument',
@@ -11,6 +23,19 @@ export const AgentDocumentsApiName = {
   replaceDocumentContent: 'replaceDocumentContent',
   updateLoadRule: 'updateLoadRule',
 } as const;
+
+/**
+ * Document APIs a shared-agent visitor may use after the owner grants this tool.
+ * The server still scopes every call to the exact share, visitor, and topic.
+ */
+export const AGENT_SHARE_DOCUMENT_API_NAMES = new Set<string>([
+  AgentDocumentsApiName.createDocument,
+  AgentDocumentsApiName.listDocuments,
+  AgentDocumentsApiName.modifyNodes,
+  AgentDocumentsApiName.readDocument,
+  AgentDocumentsApiName.renameDocument,
+  AgentDocumentsApiName.replaceDocumentContent,
+]);
 
 export interface CreateDocumentArgs {
   content: string;
@@ -26,11 +51,17 @@ export interface CreateDocumentState {
   /** Owning agent id — used to attribute the created document's Work. */
   agentId?: string;
   documentId?: string;
+  /** The caller may preview/copy this result but must not open the owner-only editor. */
+  readonly?: boolean;
 }
 
 export interface ReadDocumentArgs {
   format?: 'xml' | 'markdown' | 'both';
   id: string;
+  /** Maximum number of lines to return. */
+  limit?: number;
+  /** 1-based line to start reading from. */
+  offset?: number;
 }
 
 export interface ReadDocumentState {
@@ -197,11 +228,28 @@ export interface ListDocumentsArgs {
    * (the folder's `documentId`). The progressive index collapses folders and
    * surfaces this id so the model can expand a folder on demand.
    */
+  /** Page size; defaults to {@link LIST_DOCUMENTS_DEFAULT_LIMIT}. */
+  limit?: number;
+  /** Number of documents to skip, for paging past the first page. */
+  offset?: number;
   parentId?: string;
   scope?: 'agent' | 'currentTopic';
   sourceType?: 'all' | 'file' | 'web';
 }
 
+/**
+ * An agent can own thousands of documents (mostly web-crawled pages); listing
+ * them all in one result blew past the model's context window.
+ */
+export const LIST_DOCUMENTS_DEFAULT_LIMIT = 50;
+export const LIST_DOCUMENTS_MAX_LIMIT = 200;
+
 export interface ListDocumentsState {
+  /**
+   * How many rows `documents` held, pinned by the read-path projector before it
+   * drops them. The inspector chip is the only surface that reads this state,
+   * and a count is all it shows.
+   */
+  documentCount?: number;
   documents: { documentId?: string; filename: string; id: string; title?: string }[];
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { readDocumentProjector } from './agentDocuments';
 import { runCommandProjector } from './localSystem';
+import { readFileProjector } from './readFile';
 import { crawlProjector } from './webBrowsing';
 
 const input = (partial: Record<string, unknown> = {}) => ({
@@ -193,5 +194,54 @@ describe('readDocumentProjector', () => {
       content: null,
       storedPayloadNeededBy: 'render',
     });
+  });
+});
+
+describe('readFileProjector', () => {
+  const fileState = (over: Record<string, unknown> = {}) => ({
+    content: 'x'.repeat(8000),
+    fileType: 'ts',
+    images: [{ url: 'https://cdn.test/a.png' }],
+    loc: [0, 200],
+    path: '/repo/src/index.ts',
+    ...over,
+  });
+
+  it('drops both copies of the file and keeps what the card reads', () => {
+    const result = readFileProjector(
+      input({ content: 'File: /repo/src/index.ts\n...', pluginState: fileState() }),
+    );
+
+    expect(result?.content).toBeNull();
+    expect(result?.pluginState).toEqual({
+      charCount: 8000,
+      fileType: 'ts',
+      images: [{ url: 'https://cdn.test/a.png' }],
+      loc: [0, 200],
+      path: '/repo/src/index.ts',
+    });
+    expect(result?.storedPayloadNeededBy).toBe('render');
+  });
+
+  it('pins charCount, which the card otherwise derives from the dropped body', () => {
+    const result = readFileProjector(input({ pluginState: fileState({ charCount: 12_345 }) }));
+
+    expect((result?.pluginState as any).charCount).toBe(12_345);
+  });
+
+  it('keeps images, which vision models read as image_url parts', () => {
+    const result = readFileProjector(input({ pluginState: fileState() }));
+
+    expect((result?.pluginState as any).images).toEqual([{ url: 'https://cdn.test/a.png' }]);
+  });
+
+  it('still drops the duplicated body when state carries no file text', () => {
+    const result = readFileProjector(input({ content: 'body', pluginState: { path: '/a' } }));
+
+    expect(result).toEqual({ content: null, storedPayloadNeededBy: 'render' });
+  });
+
+  it('declines when there is nothing to drop', () => {
+    expect(readFileProjector(input({ content: '', pluginState: { path: '/a' } }))).toBeUndefined();
   });
 });

@@ -30,7 +30,7 @@ export {
   parseOperationId,
   RemoteSnapshotStore,
 } from './store/remote-store';
-export type { ISnapshotStore } from './store/types';
+export type { ISnapshotStore, PartialSaveOptions, PartialSaveResult } from './store/types';
 export type { ExecutionSnapshot, SnapshotSummary, StepSnapshot } from './types';
 export {
   expandSnapshot,

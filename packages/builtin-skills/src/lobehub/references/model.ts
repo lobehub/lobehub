@@ -7,7 +7,7 @@ Manage AI models for providers.
 - \`lh model list <providerId> [--enabled] [--type <type>] [-L <limit>]\` - List models
 - \`lh model view <id>\` - View model details
 - \`lh model create --id <id> --provider <p> --display-name <name> [--type <type>]\` - Create model
-- \`lh model edit <id> [--provider <p>] [--display-name <name>]\` - Update model
+- \`lh model edit <id> --provider <p> [--display-name <name>] [--type <type>]\` - Update model
 - \`lh model toggle <id> --provider <p> [--enable|--disable]\` - Enable/disable model
 - \`lh model delete <id> --provider <p> [--yes]\` - Delete model
 - \`lh model batch-toggle <ids...> --provider <p> [--enable|--disable]\` - Batch toggle
@@ -22,7 +22,7 @@ The \`--type\` filter accepts the following values:
 | \`chat\` | Text chat / LLM models |
 | \`embedding\` | Text embedding models |
 | \`tts\` | Text-to-speech models |
-| \`stt\` | Speech-to-text models |
+| \`asr\` | Speech-to-text models |
 | \`image\` | Image generation models |
 | \`video\` | Video generation models |
 | \`text2music\` | Music generation models |

@@ -11,6 +11,8 @@ import {
 import { AiAgentService } from '../index';
 
 const {
+  mockCompleteGroupActionMember,
+  mockLoadGroupMemberBridge,
   mockCreateOperation,
   mockFindById,
   mockFindMessagePlugin,
@@ -31,6 +33,8 @@ const {
   mockReleaseTaskCallbackReservation,
   mockTryReserveTaskCallback,
 } = vi.hoisted(() => ({
+  mockCompleteGroupActionMember: vi.fn(),
+  mockLoadGroupMemberBridge: vi.fn(),
   mockEnsureInterventionContinuationStarted: vi.fn(),
   mockFindOperationById: vi.fn(),
   mockRecordCompletion: vi.fn(),
@@ -148,9 +152,12 @@ vi.mock('@/database/models/userMemory/persona', () => ({
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(function () {
     return {
+      acceptsMemberRuntimeEnd: vi.fn().mockResolvedValue(false),
+      completeGroupActionMember: mockCompleteGroupActionMember,
       createOperation: mockCreateOperation,
       ensureInterventionContinuationStarted: mockEnsureInterventionContinuationStarted,
       interruptOperation: mockInterruptOperation,
+      loadGroupMemberBridge: mockLoadGroupMemberBridge,
       loadInterventionContinuationState: mockLoadInterventionContinuationState,
     };
   }),
@@ -1131,7 +1138,47 @@ describe('AiAgentService.stopPendingApproval', () => {
     });
     mockRecordCompletion.mockResolvedValue(undefined);
     mockInterruptOperation.mockResolvedValue(true);
+    mockLoadGroupMemberBridge.mockResolvedValue(undefined);
+    mockCompleteGroupActionMember.mockResolvedValue(true);
     service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
+  });
+
+  // Codex P1 on #20093: a member stopped on its approval never reached its own
+  // completion, so the supervisor stayed parked on the member barrier forever.
+  it("reports a stopped group member through its bridge so the supervisor isn't stranded", async () => {
+    const bridge = {
+      anchorMessageId: 'msg-speak',
+      expectedMembers: 1,
+      groupToolMessageId: 'msg-speak',
+      mode: 'in_group',
+      onComplete: 'resume',
+      parentOperationId: 'op-supervisor',
+    };
+    mockLoadGroupMemberBridge.mockResolvedValue({ agentId: 'agt-carol', bridge });
+
+    await service.stopPendingApproval({
+      batchId: 'batch-1',
+      operationId: 'op-parked-1',
+      toolMessageIds: ['tool-msg-1', 'tool-msg-2'],
+      topicId: 'topic-1',
+    });
+
+    expect(mockCompleteGroupActionMember).toHaveBeenCalledWith({
+      ...bridge,
+      operationId: 'op-parked-1',
+      reason: 'interrupted',
+    });
+  });
+
+  it('does not touch any bridge when the stopped run is not a group member', async () => {
+    await service.stopPendingApproval({
+      batchId: 'batch-1',
+      operationId: 'op-parked-1',
+      toolMessageIds: ['tool-msg-1', 'tool-msg-2'],
+      topicId: 'topic-1',
+    });
+
+    expect(mockCompleteGroupActionMember).not.toHaveBeenCalled();
   });
 
   it('settles every pending row in place and retires the parked operation', async () => {

@@ -44,6 +44,17 @@ export interface SearchKnowledgeBaseState {
   documents: KnowledgeBaseDocumentResult[];
   errors?: { bm25?: string; vector?: string };
   fileResults: FileSearchResult[];
+  /**
+   * How many hits `fileResults` held, pinned by the read-path projector before
+   * it drops the three lists. The collapsed chip shows only this number; the
+   * card hydrates the real hits when the row is expanded.
+   */
+  resultCount?: number;
+  /**
+   * `'none'` when no knowledge base was in scope, so nothing was searched at
+   * all — distinct from a search that ran and matched nothing.
+   */
+  scope?: 'none';
   totalResults: number;
 }
 

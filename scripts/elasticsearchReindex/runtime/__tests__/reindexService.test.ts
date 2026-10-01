@@ -439,6 +439,24 @@ describe('FtsSearchReindexService', () => {
     });
   });
 
+  it('creates a run-suffixed same-schema generation instead of treating it as in-place', async () => {
+    const { builder, client, repository, state } = createDependencies();
+    const runId = '00000000-0000-4000-8000-000000000001';
+    state.run.id = runId;
+    state.progress.find(({ entity }) => entity === 'agents')!.physicalIndex =
+      `test-agents-v1-r${runId}`;
+    const service = new FtsSearchReindexService(builder, repository, client);
+
+    await service.prepareIndices(state);
+
+    expect(client.ensureIndex).toHaveBeenCalledWith(
+      `test-agents-v1-r${runId}`,
+      expect.any(Object),
+      { createIfMissing: true },
+    );
+    expect(client.putMapping).not.toHaveBeenCalled();
+  });
+
   it('attributes index preparation failures to their entity', async () => {
     const { builder, client, repository, state } = createDependencies();
     vi.mocked(client.ensureIndex).mockImplementation(async (index) => {

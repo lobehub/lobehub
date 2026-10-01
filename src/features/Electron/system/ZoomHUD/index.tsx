@@ -17,8 +17,6 @@ const styles = createStaticStyles(({ css }) => ({
     font-weight: 500;
     line-height: 1;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
   `,
   hud: css`
     pointer-events: none;

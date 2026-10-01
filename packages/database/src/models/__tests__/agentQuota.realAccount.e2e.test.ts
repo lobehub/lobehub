@@ -17,13 +17,15 @@ import path from 'node:path';
 
 import {
   calibrateCapacity,
-  mapClaudeUsageToReadings,
-  parseClaudeAccountIdentity,
   projectWindows,
   type QuotaAccountIdentity,
   type QuotaLimitReading,
   windowsToCalibrationIntervals,
 } from '@lobechat/heterogeneous-agents/quota';
+import {
+  mapClaudeUsageToReadings,
+  parseClaudeAccountIdentity,
+} from '@lobechat/heterogeneous-agents/quota-sampler';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 

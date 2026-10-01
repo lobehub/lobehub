@@ -1,15 +1,15 @@
 import type {
   AgentOperationCompletionReason,
-  AgentOperationStatus,
   GoalGraphSnapshot,
   GoalItem,
   TaskItem,
 } from '@lobechat/types';
+import { isAgentOperationInFlight } from '@lobechat/types';
 
 import type { AgentOperationItem } from '@/database/schemas/agentOperations';
 import { HETERO_DISPATCH_ERROR_HEADLINES } from '@/server/services/aiAgent/helpers/heteroErrors';
 
-import { resolveTaskAttemptBudget } from '../recoveryPolicy';
+import { countChargedTaskAttempts, resolveTaskAttemptBudget } from '../recoveryPolicy';
 
 export const SUPERVISOR_DIAGNOSIS_TIMEOUT_MS = 10 * 60 * 1000;
 export const MAX_SUPERVISION_INCIDENTS = 100;
@@ -58,14 +58,6 @@ export const statusAuthoredByActor = (
   return Boolean(latest.actorUserId || latest.actorAgentId);
 };
 
-/** The run has not settled yet; the lease reclaim owns it, not recovery. */
-const IN_FLIGHT_STATUSES = new Set<AgentOperationStatus>([
-  'idle',
-  'running',
-  'waiting_for_async_tool',
-  'waiting_for_human',
-]);
-
 /**
  * Gateway codes whose own message states the run never started, so a retry cannot
  * duplicate committed work. `DEVICE_GATEWAY_UNAUTHORIZED` and `GATEWAY_NOT_CONFIGURED`
@@ -101,13 +93,16 @@ export const recoveryEligibility = (
   operation?: AgentOperationItem,
   /** Whether the Task's current status was written by a person or an agent tool. */
   actorAuthoredStatus = false,
+  /** Runs the Task's device lost; they are not charged to its attempt budget. */
+  deviceOfflineRuns = 0,
 ): { eligible: boolean; reason: string } => {
   if (!graph.goal.config?.supervision?.enabled && !graph.goal.config?.manager)
     return { eligible: false, reason: 'Supervision is disabled' };
   if (graph.goal.status !== 'running' || graph.decisions.some((d) => d.status === 'pending')) {
     return { eligible: false, reason: 'Goal is stopped or has a pending decision' };
   }
-  if (operation && IN_FLIGHT_STATUSES.has(operation.status)) {
+  // The run has not settled yet; the lease reclaim owns it, not recovery.
+  if (operation && isAgentOperationInFlight(operation.status)) {
     return { eligible: false, reason: 'The operation has not settled yet' };
   }
   if (
@@ -127,7 +122,7 @@ export const recoveryEligibility = (
   if (actorAuthoredStatus) {
     return { eligible: false, reason: 'Someone set this status themselves' };
   }
-  if ((task.totalTopics ?? 0) >= resolveTaskAttemptBudget(graph.goal)) {
+  if (countChargedTaskAttempts(task, deviceOfflineRuns) >= resolveTaskAttemptBudget(graph.goal)) {
     return { eligible: false, reason: 'Task attempt budget exhausted' };
   }
   const error = `${operation?.error?.type ?? ''} ${operation?.error?.message ?? ''} ${task.error ?? ''}`;

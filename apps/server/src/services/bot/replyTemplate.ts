@@ -260,6 +260,7 @@ type SystemStrings = {
   errorInvalidProviderAPIKey: string;
   errorCommandConnectionClosed: string;
   errorContentModeration: string;
+  errorDeviceUnreachable: string;
   errorEmptyCompletion: string;
   errorModelRefusal: string;
   errorHarnessInternal: string;
@@ -370,6 +371,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**Command session disconnected.**\nThe agent lost its command connection before finishing. Please retry. If this keeps happening, check the sandbox or device connection and review the server logs for the operation.',
     errorContentModeration:
       "**Blocked by the content-safety filter.**\nThe model provider's safety filter rejected the request or response. Please rephrase and try again.",
+    errorDeviceUnreachable:
+      "**Couldn't reach the device this agent runs on.**\nThe run never started. Check that the LobeHub desktop app (or the `lh` CLI) is running and connected, then try again — or bind this agent to another online device in its settings.",
     errorEmptyCompletion:
       "**The model provider returned an empty response.**\nEven without visible content, this request may still incur charges. You can retry, or switch models in the agent's settings and try again.",
     errorModelRefusal:
@@ -494,6 +497,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**命令会话已断开**\nAgent 在完成前丢失了命令连接。请重试；如果该问题持续出现，请检查 sandbox 或设备连接，并结合 Operation ID 查看服务端日志。',
     errorContentModeration:
       '**被内容安全策略拦截**\n模型 Provider 的安全策略拒绝了本次请求或回复。请调整内容后重试。',
+    errorDeviceUnreachable:
+      '**无法连接到运行该 Agent 的设备**\n本次执行没有启动。请确认 LobeHub 桌面端（或 `lh` CLI）正在运行且已连接后重试，也可以在 Agent 设置中改绑其他在线设备。',
     errorEmptyCompletion:
       '**模型供应商返回了空内容**\n即使没有可显示的内容，本次请求仍可能产生费用。你可以重试，或在 Agent 设置中切换模型后再试。',
     errorModelRefusal:
@@ -588,6 +593,11 @@ export function renderError(operationId?: string, lng?: BotReplyLocale): string 
 const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   // ── user-fixable config / input (attribution: user) ──
   ContentModeration: 'errorContentModeration',
+  // Every "we could not reach a run device" flavour (gateway unconfigured,
+  // device offline, registration gone) arrives under this one type — see
+  // `HETERO_DISPATCH_ERROR_TYPES`. Without it a hetero dispatch failure fell to
+  // the legacy tier and told an IM user nothing but an Operation ID.
+  DeviceGatewayNotConfigured: 'errorDeviceUnreachable',
   ExceededContextWindow: 'errorExceededContextWindow',
   // Managed credits: all three codes come out of the same cost-admission gate,
   // so the fix is topping up / upgrading — not editing the input (without them

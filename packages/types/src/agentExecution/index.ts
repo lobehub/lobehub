@@ -4,6 +4,9 @@ import type { DeviceUnavailableErrorData, WorkingDirConfig } from '../device';
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
+export * from './credentialFacts';
+export * from './modelFacts';
+
 export type AgentSignalOperationKind =
   'memory' | 'nightly-review' | 'self-feedback-intent' | 'self-reflection' | 'skill';
 
@@ -322,11 +325,25 @@ export interface ExecAgentResult {
   /** Structured availability context when a device dispatch failed before acceptance. */
   errorData?: DeviceUnavailableErrorData;
   /**
+   * The run continues a group member's approved tool under the supervisor's
+   * run (the supervisor keeps the topic and its stream). Explicit, because the
+   * member can be the supervisor agent itself.
+   */
+  groupMemberContinuation?: boolean;
+  /**
    * External heterogeneous producer for this run. `null` explicitly denotes
    * the normal AgentRuntime path; `undefined` is reserved for rolling clients
    * talking to an older server that did not yet return this discriminator.
    */
   heteroType?: string | null;
+  /**
+   * With `groupMemberContinuation`: the member's continuation operation. The
+   * client-facing `operationId` then names the supervisor's run, so a client
+   * released before this field keeps following the supervisor (its stream
+   * carries the member's continuation and the supervisor's closing) instead of
+   * taking the topic over and dropping it.
+   */
+  memberOperationId?: string;
   /** Status message */
   message: string;
   /** Queue message ID if auto-started */
@@ -337,6 +354,25 @@ export interface ExecAgentResult {
   status: string;
   /** Whether the operation was created successfully */
   success: boolean;
+  /**
+   * Server-side only, with `groupMemberContinuation`: the supervisor run the
+   * member continues under. Mapped into the client shape by the router.
+   */
+  supervisorOperationId?: string;
+  /**
+   * The failure was already announced through the run's terminal lifecycle —
+   * `CompletionLifecycle` fired its `onComplete` hooks, so every consumer of
+   * those hooks (IM bot completion callback, task lifecycle) has been told.
+   *
+   * Callers that render failures themselves must not report it a second time:
+   * a hetero dispatch failure finalizes the run AND returns `success: false`,
+   * which used to put two error messages in the same IM thread. Absent /
+   * `false` means no hook consumer was reachable, so the caller owns the
+   * report — as it still does when delivery itself fails, because a hook with
+   * no fallback throws `CriticalHookDeliveryError` out of `execAgent` instead
+   * of resolving to this result.
+   */
+  terminalReported?: boolean;
   /** ISO timestamp */
   timestamp: string;
   /** Short-lived JWT token for Gateway WebSocket authentication */
@@ -470,10 +506,22 @@ export interface ExecVirtualSubAgentParams {
    * Merged over the executing agent's own chatConfig, skipping nulled keys.
    */
   chatConfig?: Partial<LobeAgentChatConfig> | null;
+  /**
+   * Explicit device request for the child: the device the parent run is bound
+   * to. Set for an anonymous `callSubAgent` clone so it runs where its parent
+   * runs instead of re-routing through the agent-level `boundDeviceId`.
+   */
+  deviceId?: string;
   /** The Group ID inherited from the parent operation, when present */
   groupId?: string;
   /** Instruction/prompt for the virtual sub-agent */
   instruction: string;
+  /**
+   * What "this machine" means for the child: the parent run's device. Only
+   * consulted when the child's target is `local`, so a named `callAgent` target
+   * keeps its own execution target.
+   */
+  localDeviceId?: string;
   /**
    * Model the sub-agent should run on, resolved by the spawn site from the
    * parent agent's `agencyConfig.subagent` (explicit override or the parent's
@@ -487,6 +535,12 @@ export interface ExecVirtualSubAgentParams {
   parentOperationId: string;
   /** Provider for {@link model}. */
   provider?: string;
+  /**
+   * Existing isolation thread of an earlier `callSubAgent` run to continue.
+   * When set, the instruction becomes a new turn on that thread (the sub-agent
+   * keeps its history) instead of a new thread being created.
+   */
+  threadId?: string;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
   /** Thread title shown in UI */

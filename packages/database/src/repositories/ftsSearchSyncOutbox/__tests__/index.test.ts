@@ -18,12 +18,13 @@ import {
   topics,
   users,
 } from '../../../schemas';
-import { FtsSearchDocumentBuilder } from '../../ftsSearchDocument';
+import { FTS_SEARCH_DOCUMENT_ENTITIES, FtsSearchDocumentBuilder } from '../../ftsSearchDocument';
 import { FtsSearchSyncOutboxRepository } from '..';
 import captureHistory from '../captureHistory.json';
 import {
   FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
   FTS_SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX,
+  getFtsSearchSyncCaptureSourceTables,
 } from '../captureInfrastructure';
 
 const USER_ID = 'fts-search-sync-integration-user';
@@ -71,7 +72,7 @@ const createRecordedRepository = (revisionRows: unknown[]) => {
   const execute = vi.fn(async (statement: SQL) => {
     const normalized = normalizeSql(statement);
     statements.push(normalized);
-    return normalized.includes('FROM fts_search_sync_revision_seq') ? { rows: revisionRows } : [];
+    return normalized.includes('fts_search_sync_revision_seq') ? { rows: revisionRows } : [];
   });
   const database = {
     execute,
@@ -181,6 +182,13 @@ afterAll(async () => {
 }, CAPTURE_INSTALL_TEST_TIMEOUT);
 
 describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
+  it.each(FTS_SEARCH_DOCUMENT_ENTITIES)(
+    'maps %s to at least one capture source table',
+    (entity) => {
+      expect(getFtsSearchSyncCaptureSourceTables([entity])).not.toHaveLength(0);
+    },
+  );
+
   it('pins immutable historical capture snapshots independently of current definitions', () => {
     const digests = captureHistory.map((snapshot) => ({
       digest: createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),
@@ -512,16 +520,37 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
   );
 
   it('reserves and fences revisions for a local full-reindex checkpoint', async () => {
-    const revision = await repository.reserveRevisionWithWriteFence();
+    const revision = await repository.reserveRevisionWithWriteFence(FTS_SEARCH_DOCUMENT_ENTITIES);
 
     expect(revision).toBeGreaterThan(0);
     await expect(repository.readHighWaterRevision()).resolves.toBeGreaterThanOrEqual(revision);
   });
 
+  it.each([
+    { entities: ['messages'] as const, tables: ['messages'] },
+    { entities: ['documents'] as const, tables: ['documents', 'knowledge_base_files'] },
+  ])('fences only capture sources for $entities', async ({ entities, tables }) => {
+    const { repository: recordedRepository, statements } = createRecordedRepository([
+      { revision: '42' },
+    ]);
+
+    await expect(recordedRepository.reserveRevisionWithWriteFence(entities)).resolves.toBe(42);
+    expect(statements).toHaveLength(3);
+    expect(statements[0]).toBe(
+      "SELECT nextval('fts_search_sync_revision_seq')::bigint AS revision",
+    );
+    expect(statements[1]).toBe("SET LOCAL lock_timeout = '3s'");
+    expect(statements[2]).toBe(
+      `LOCK TABLE ${tables.map((table) => `"public"."${table}"`).join(', ')} IN SHARE MODE`,
+    );
+  });
+
   it('reads a committed revision boundary without allocating a new revision', async () => {
     const before = await repository.readHighWaterRevision();
 
-    await expect(repository.readCommittedRevisionBoundary()).resolves.toBe(before);
+    await expect(
+      repository.readCommittedRevisionBoundary(FTS_SEARCH_DOCUMENT_ENTITIES),
+    ).resolves.toBe(before);
     await expect(repository.readHighWaterRevision()).resolves.toBe(before);
   });
 
@@ -530,10 +559,10 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
       { revision: '42' },
     ]);
 
-    await expect(recordedRepository.readCommittedRevisionBoundary()).resolves.toBe(42);
+    await expect(recordedRepository.readCommittedRevisionBoundary(['messages'])).resolves.toBe(42);
     expect(statements).toHaveLength(3);
     expect(statements[0]).toBe("SET LOCAL lock_timeout = '3s'");
-    expect(statements[1]).toMatch(/^LOCK TABLE .* IN SHARE MODE$/);
+    expect(statements[1]).toBe('LOCK TABLE "public"."messages" IN SHARE MODE');
     expect(statements[2]).toBe(
       'SELECT CASE WHEN is_called THEN last_value ELSE 0 END AS revision FROM fts_search_sync_revision_seq',
     );
@@ -542,7 +571,7 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
   it('rejects an invalid committed revision boundary', async () => {
     const { repository: recordedRepository } = createRecordedRepository([]);
 
-    await expect(recordedRepository.readCommittedRevisionBoundary()).rejects.toThrow(
+    await expect(recordedRepository.readCommittedRevisionBoundary(['messages'])).rejects.toThrow(
       'Failed to read a valid FTS search sync revision while reading the committed revision boundary',
     );
   });

@@ -50,6 +50,7 @@ export * from './rbac';
 export * from './relations';
 export * from './resourcePermission';
 export * from './resourceTransferRequest';
+export * from './scm';
 export * from './session';
 export * from './systemBotProvider';
 export * from './task';

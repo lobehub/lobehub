@@ -36,6 +36,9 @@ const lockWriteResponseSchema = z.object({
 
 const createIndexResponseSchema = z.object({ acknowledged: z.literal(true) });
 const deleteLockResponseSchema = z.object({ result: z.literal('deleted') });
+const elasticsearchErrorResponseSchema = z.object({
+  error: z.object({ type: z.string() }).passthrough(),
+});
 
 const lockReadResponseSchema = lockWriteResponseSchema.extend({
   _source: lockSourceSchema,
@@ -220,7 +223,6 @@ export class FtsSearchMigrationLockClient {
     const response = await this.request(`/${encodeURIComponent(this.controlIndex)}`, {
       body: JSON.stringify({
         mappings: controlMapping,
-        settings: { number_of_shards: 1 },
       }),
       headers: { 'Content-Type': 'application/json' },
       method: 'PUT',
@@ -245,9 +247,25 @@ export class FtsSearchMigrationLockClient {
       return;
     }
 
-    // Concurrent creators and an already-present index both reach this path. Verification is
-    // authoritative: authentication and transport failures must never be interpreted as existence.
+    let errorType: string | undefined;
     if (response.status === 400 || response.status === 409) {
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch (cause) {
+        throw new FtsSearchMigrationLockError(
+          `Elasticsearch migration control index creation failed (${response.status})`,
+          { cause, status: response.status },
+        );
+      }
+      const parsed = elasticsearchErrorResponseSchema.safeParse(body);
+      errorType = parsed.success ? parsed.data.error.type : undefined;
+    }
+
+    // Concurrent creators and an already-present index reach this path. Verification is
+    // authoritative, but an arbitrary client error must retain its real create failure instead of
+    // being misreported as a missing pre-existing index.
+    if (errorType === 'resource_already_exists_exception') {
       await this.assertControlIndexMapping();
       return;
     }

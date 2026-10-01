@@ -22,6 +22,7 @@ import {
   EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { VerifyCheckDecisionDetail } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -33,20 +34,33 @@ import { FileModel } from '@/database/models/file';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import type { LobeChatDatabase } from '@/database/type';
 import { notShareVisitorMessage, notShareVisitorTopic } from '@/database/utils/shareVisitor';
+import { notTrashed } from '@/database/utils/softDelete';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import type { CompletionCallbackParams } from '@/server/services/agentSignal/policies/completionPolicy';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 import { resolveModelReadableFrameUrl } from '@/server/services/verify/modelFrames';
 
+import { renderAnnotationRegion } from './annotationRegion';
 import type { ConsolidationResult } from './consolidation';
 import { ExpertiseConsolidationService } from './consolidation';
 import { resolveExpertiseModelConfig } from './modelConfig';
 import { isProviderAccountError } from './providerAccountError';
+import {
+  deliveryStandardsDomainCopy,
+  findQuotedMessage,
+  refineRejectionFields,
+} from './rejectionObservation';
 
 const log = debug('lobe-server:expertise-ingestion');
 
 const MAX_CONTEXT_MESSAGES = 24;
 const MAX_CONTEXT_CHARS = 24_000;
+/**
+ * How far back an observation's excerpt is looked for. Wider than the context window because the
+ * self-review path serializes its own context, which can reach older turns than the last 24.
+ */
+const MAX_QUOTE_LOOKUP_MESSAGES = 200;
 /**
  * Frames attached to one round's distillation. A round is a batch, unlike the single-check review
  * that caps at 3 — but every frame is a full base64 body, so the cap is what keeps a 20-rejection
@@ -54,9 +68,6 @@ const MAX_CONTEXT_CHARS = 24_000;
  */
 const MAX_REJECTION_FRAMES = 8;
 const VISUAL_REJECTION_EVIDENCE_TYPES = new Set(['screenshot', 'gif']);
-
-/** Normalized 0-1 region coordinates read better to a model as percentages. */
-const pct = (value: number) => `${Math.round(value * 100)}%`;
 
 const LESSON_CODE_PATTERN = /^P-\d+$/;
 const AnalysisSchema = z.object({
@@ -71,6 +82,8 @@ const AnalysisSchema = z.object({
             existingLessonCode: z.string().nullable(),
             layer: z.string().nullable(),
             outcome: z.enum(['pass', 'violation']),
+            // Absent from answers to older prompt versions; reads as "no single message".
+            quote: z.string().default(''),
             reasoning: z.string(),
             title: z.string(),
           }),
@@ -101,7 +114,10 @@ const RejectionAnalysisSchema = z.object({
             reasonKind: z.enum(['mechanism', 'taste']),
             reasoning: z.string(),
             reasonSource: z.enum(['reviewer', 'inferred']),
+            // Older models answer without these; absent reads as "no quote" and "a standard".
+            reviewerWords: z.string().default(''),
             sourceRefs: z.array(z.string()),
+            specificity: z.enum(['general', 'one-off']).default('general'),
             subject: z.string(),
             title: z.string(),
           }),
@@ -194,6 +210,14 @@ interface PersistableObservation {
    * N rejections" a real count rather than a count of analysis passes.
    */
   sourceCheckResultIds?: string[];
+  /** The conversation message the observation was read from, when its excerpt was found. */
+  sourceMessageId?: string;
+  /**
+   * `one-off` when the model could not lift the rejection above an instruction about that one
+   * delivery. Only written on a new lesson; a later round attaching to it clears the mark,
+   * because recurring is exactly what a one-off does not do.
+   */
+  specificity?: 'general' | 'one-off';
   /** What the standard is really about, once the concrete names are replaced by what they exemplify. */
   subject?: null | string;
   title: string;
@@ -278,11 +302,13 @@ export class ExpertiseIngestionService {
     const byMessageAgent = this.db
       .select({ topicId: messages.topicId })
       .from(messages)
+      .innerJoin(topics, and(eq(topics.id, messages.topicId), notTrashed(topics.isDeleted)))
       .where(
         and(
           scope,
           eq(messages.agentId, agentId),
           isNotNull(messages.topicId),
+          notTrashed(messages.isDeleted),
           notShareVisitorMessage(),
         ),
       );
@@ -291,7 +317,14 @@ export class ExpertiseIngestionService {
       .from(messages)
       .innerJoin(topics, eq(topics.id, messages.topicId))
       .where(
-        and(scope, isNull(messages.agentId), eq(topics.agentId, agentId), notShareVisitorTopic()),
+        and(
+          scope,
+          isNull(messages.agentId),
+          eq(topics.agentId, agentId),
+          notTrashed(messages.isDeleted),
+          notTrashed(topics.isDeleted),
+          notShareVisitorTopic(),
+        ),
       );
 
     return byMessageAgent.union(byTopicAgent).as('historical_topic_candidates');
@@ -315,7 +348,7 @@ export class ExpertiseIngestionService {
       })
       .from(messages)
       .innerJoin(candidates, eq(candidates.topicId, messages.topicId))
-      .where(scope)
+      .where(and(scope, notTrashed(messages.isDeleted)))
       .groupBy(messages.topicId)
       .having(
         options.cursor
@@ -425,7 +458,7 @@ export class ExpertiseIngestionService {
         schema: EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
       },
       {
-        metadata: { trigger: 'expertise_topic_ingestion' },
+        metadata: { trigger: RequestTrigger.Expertise },
         tracing: {
           agentId: input.agentId,
           promptVersion: EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
@@ -436,6 +469,13 @@ export class ExpertiseIngestionService {
       },
     );
     const analysis = AnalysisSchema.parse(raw);
+    // Read once for every observation; the self-review path hands over its own serialized
+    // context, so the topic's messages are looked up here rather than taken from it.
+    const quoted = analysis.domains.some((result) =>
+      result.observations.some((observation) => observation.quote.trim()),
+    )
+      ? await this.readTopicMessages(input.topicId, MAX_QUOTE_LOOKUP_MESSAGES)
+      : [];
     let ingested = 0;
 
     for (const result of analysis.domains) {
@@ -443,7 +483,10 @@ export class ExpertiseIngestionService {
       if (!domain || !result.matches) continue;
       await this.persistDomainRun({
         domain,
-        observations: result.observations,
+        observations: result.observations.map((observation) => ({
+          ...observation,
+          sourceMessageId: findQuotedMessage(quoted, observation.quote),
+        })),
         run: {
           actorId: input.agentId,
           actorType: 'agent',
@@ -503,20 +546,24 @@ export class ExpertiseIngestionService {
       ref: `R${index + 1}`,
     }));
     const byRef = new Map(labelled.map((rejection) => [rejection.ref, rejection.id]));
+    const saidByRef = new Map(
+      labelled.map((rejection) => [
+        rejection.ref,
+        [
+          rejection.detail?.comment ?? '',
+          ...(rejection.detail?.annotations ?? []).map((annotation) => annotation.comment ?? ''),
+        ].filter((text) => text.trim()),
+      ]),
+    );
     const { visuals, withheld } = await this.resolveRejectionFrames(labelled);
     const frameLabelByEvidence = new Map(
       visuals.map((visual, index) => [visual.evidenceId, `frame ${index + 1}`]),
     );
     const rendered = labelled
       .map((rejection) => {
-        const regions = (rejection.detail?.annotations ?? []).map((annotation) => {
-          const frame = frameLabelByEvidence.get(annotation.evidenceId);
-          // Regions are normalized 0-1; percentages read better to a model than raw floats.
-          const at = annotation.rect
-            ? ` at ${pct(annotation.rect.x)},${pct(annotation.rect.y)} sized ${pct(annotation.rect.width)}×${pct(annotation.rect.height)}`
-            : '';
-          return `  circled${frame ? ` on ${frame}` : ''}${at}: ${annotation.comment?.trim() || '(no note)'}`;
-        });
+        const regions = (rejection.detail?.annotations ?? []).map((annotation) =>
+          renderAnnotationRegion(annotation, frameLabelByEvidence.get(annotation.evidenceId)),
+        );
         return [
           `[${rejection.ref}] promised: ${rejection.title ?? '(untitled check)'}`,
           rejection.detail?.comment?.trim() && `  said: ${rejection.detail.comment.trim()}`,
@@ -536,7 +583,7 @@ export class ExpertiseIngestionService {
 
     let bound = await listDomains();
     if (bound.length === 0) {
-      await this.createDeliveryStandardsDomain(acceptance.projectId);
+      await this.createDeliveryStandardsDomain(acceptance.projectId, rendered);
       bound = await listDomains();
       if (bound.length === 0) return { ingested: 0, reason: 'no-domains' } as const;
     }
@@ -571,7 +618,7 @@ export class ExpertiseIngestionService {
         schema: EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA,
       },
       {
-        metadata: { trigger: 'expertise_rejection_ingestion' },
+        metadata: { trigger: RequestTrigger.Expertise },
         tracing: {
           promptVersion: EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.ExpertiseRejectionIngestion,
@@ -590,6 +637,10 @@ export class ExpertiseIngestionService {
         domain,
         observations: result.observations.map((observation) => ({
           ...observation,
+          ...refineRejectionFields(
+            observation,
+            observation.sourceRefs.map((ref) => ({ said: saidByRef.get(ref) ?? [] })),
+          ),
           existingLessonCode: observation.existingLessonCode.trim() || null,
           layer: observation.layer.trim() || null,
           // A rejection is a violation by construction — never let the model relabel it a pass.
@@ -724,7 +775,10 @@ export class ExpertiseIngestionService {
    * Owned by the user (never by the project — a project mounts standards, it does not own them),
    * so the same domain can later be mounted by a sibling project without being copied.
    */
-  private createDeliveryStandardsDomain = async (projectId: null | string) => {
+  private createDeliveryStandardsDomain = async (
+    projectId: null | string,
+    rejectionText: string,
+  ) => {
     const [project] = projectId
       ? await this.db
           .select({ name: projects.name })
@@ -732,33 +786,15 @@ export class ExpertiseIngestionService {
           .where(eq(projects.id, projectId))
           .limit(1)
       : [];
-    const scope = project?.name ?? 'my work';
 
     return new ExpertiseModel(this.db, this.userId, this.workspaceId).createDomain({
-      brief: `Delivery standards distilled from rejected acceptance checks on ${scope}.`,
+      ...deliveryStandardsDomainCopy(project?.name ?? null, rejectionText),
       carrier: projectId ? { id: projectId, type: 'project' } : { type: 'user' },
-      domainFilter: `Strip the screen names, component names and this task's name out of the requirement — does it still hold for any delivery on ${scope}? Only then is it mine.`,
-      outOfScope:
-        'One-off facts about a single screen, and anything that stops being true once the task changes.',
-      title: `${scope} delivery standards`,
     });
   };
 
   private readTopicContext = async (topicId: string) => {
-    const rows = await this.db.query.messages.findMany({
-      columns: { content: true, createdAt: true, role: true },
-      limit: MAX_CONTEXT_MESSAGES,
-      orderBy: [desc(messages.createdAt)],
-      where: and(
-        this.workspaceId
-          ? eq(messages.workspaceId, this.workspaceId)
-          : and(eq(messages.userId, this.userId), isNull(messages.workspaceId)),
-        eq(messages.topicId, topicId),
-        isNull(messages.threadId),
-        // Same rule as `historicalTopicCandidates` above — exclude share-visitor messages.
-        notShareVisitorMessage(),
-      ),
-    });
+    const rows = await this.readTopicMessages(topicId, MAX_CONTEXT_MESSAGES);
     return {
       hadHumanInLoop: rows.some((row) => row.role === 'user'),
       serializedContext: rows
@@ -766,6 +802,37 @@ export class ExpertiseIngestionService {
         .map((row) => `[${row.role}] ${row.content ?? ''}`)
         .join('\n\n'),
     };
+  };
+
+  /** A topic's main-thread messages, newest first; empty when the topic is not the caller's. */
+  private readTopicMessages = async (topicId: string, limit: number) => {
+    const [topic] = await this.db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(
+        and(
+          eq(topics.id, topicId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+        ),
+      )
+      .limit(1);
+    if (!topic) return [];
+
+    return this.db.query.messages.findMany({
+      columns: { content: true, createdAt: true, id: true, role: true },
+      limit,
+      orderBy: [desc(messages.createdAt)],
+      where: and(
+        this.workspaceId
+          ? eq(messages.workspaceId, this.workspaceId)
+          : and(eq(messages.userId, this.userId), isNull(messages.workspaceId)),
+        eq(messages.topicId, topicId),
+        isNull(messages.threadId),
+        notTrashed(messages.isDeleted),
+        // Same rule as `historicalTopicCandidates` above — exclude share-visitor messages.
+        notShareVisitorMessage(),
+      ),
+    });
   };
 
   private persistDomainRun = async (input: {
@@ -861,6 +928,7 @@ export class ExpertiseIngestionService {
             outcome: observation.outcome,
             runId,
             sourceCheckResultId,
+            sourceMessageId: observation.sourceMessageId,
           })),
         );
         return sources.length;
@@ -890,6 +958,7 @@ export class ExpertiseIngestionService {
             // refuse a taste standard, and the body is written in the reviewer's own language.
             reasonKind: observation.reasonKind,
             reasonSource: observation.reasonSource,
+            specificity: observation.specificity,
             sections: [
               {
                 body: observation.subject?.trim()
@@ -926,6 +995,10 @@ export class ExpertiseIngestionService {
                 : expertiseLessons.hitRunCount,
               lastHitAt: new Date(),
               lastHitRunId: runId,
+              // Hit again in another round: whatever it looked like, it was not a one-off.
+              ...(firstHitThisRun && {
+                specificity: sql`case when ${expertiseLessons.specificity} = 'one-off' then 'general' else ${expertiseLessons.specificity} end`,
+              }),
             })
             .where(eq(expertiseLessons.id, matchedId));
         }

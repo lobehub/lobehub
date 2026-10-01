@@ -1,5 +1,6 @@
-import { Button, Center, Flexbox } from '@lobehub/ui';
-import { memo, useMemo, useState } from 'react';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
@@ -15,9 +16,7 @@ interface ConfigAlertProps {
 const ConfigAlert = memo<ConfigAlertProps>(({ provider, id }) => {
   const { t } = useTranslation('plugin');
 
-  const [resend, deleteMessage] = useChatStore((s) => [s.reInvokeToolMessage, s.deleteMessage]);
-
-  const [loading, setLoading] = useState(false);
+  const deleteMessage = useChatStore((s) => s.deleteMessage);
 
   const avatar = useMemo(() => {
     switch (provider) {
@@ -37,20 +36,6 @@ const ConfigAlert = memo<ConfigAlertProps>(({ provider, id }) => {
         <Flexbox gap={12} width={'100%'}>
           <Button
             block
-            disabled={loading}
-            style={{ marginTop: 8 }}
-            type={'primary'}
-            onClick={async () => {
-              setLoading(true);
-              resend(id).then(() => {
-                setLoading(false);
-              });
-              // deleteMessage(id);
-            }}
-          >
-            {t('search.config.confirm')}
-          </Button>
-          <Button
             onClick={() => {
               deleteMessage(id);
             }}

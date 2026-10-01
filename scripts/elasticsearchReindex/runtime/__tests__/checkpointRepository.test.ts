@@ -59,6 +59,22 @@ describe('FtsSearchReindexFileRepository', () => {
     });
   });
 
+  it('fences only selected entities once when creating a checkpoint, not when resuming it', async () => {
+    const reserveRevisionWithWriteFence = vi.fn(async () => ++revision);
+    const scopedRepository = new FtsSearchReindexFileRepository({
+      readCaptureFingerprint: vi.fn(async () => captureFingerprint),
+      readHighWaterRevision: vi.fn(async () => revision),
+      reserveRevisionWithWriteFence,
+      stateDirectory,
+    });
+
+    const created = await scopedRepository.createOrResume('scoped-search', 1, ['messages']);
+    const resumed = await scopedRepository.createOrResume('scoped-search', 1, ['messages']);
+
+    expect(resumed.run.id).toBe(created.run.id);
+    expect(reserveRevisionWithWriteFence).toHaveBeenCalledExactlyOnceWith(['messages']);
+  });
+
   it('refuses to resume a checkpoint when capture definitions changed', async () => {
     const state = await repository.createOrResume('changed-capture-search', 1);
     await repository.completeEntity(state.run.id, 'agents');
@@ -290,6 +306,45 @@ describe('FtsSearchReindexFileRepository', () => {
     expect(checkpointFiles[0]).toMatch(/^reindex-subset-search-[a-f\d]{12}-v2\.json$/);
   });
 
+  it('keeps same-schema rebuild checkpoints separate by run ID and restores them by identity', async () => {
+    const firstRunId = '00000000-0000-4000-8000-000000000001';
+    const secondRunId = '00000000-0000-4000-8000-000000000002';
+    const first = await repository.createOrResume(
+      'rebuild-search',
+      1,
+      ['messages'],
+      { messages: `rebuild-search-messages-v1-r${firstRunId}` },
+      firstRunId,
+    );
+    const second = await repository.createOrResume(
+      'rebuild-search',
+      1,
+      ['messages'],
+      { messages: `rebuild-search-messages-v1-r${secondRunId}` },
+      secondRunId,
+    );
+
+    expect(first.run.id).toBe(firstRunId);
+    expect(second.run.id).toBe(secondRunId);
+    await expect(repository.listRuns('rebuild-search')).resolves.toHaveLength(2);
+
+    const restarted = new FtsSearchReindexFileRepository({
+      readCaptureFingerprint: vi.fn(async () => captureFingerprint),
+      readHighWaterRevision: vi.fn(async () => revision),
+      reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
+      stateDirectory,
+    });
+    await expect(restarted.getRun(secondRunId)).resolves.toMatchObject({
+      progress: [
+        expect.objectContaining({ physicalIndex: `rebuild-search-messages-v1-r${secondRunId}` }),
+      ],
+      run: { id: secondRunId },
+    });
+    await expect(
+      restarted.getGenerationRun('rebuild-search', 1, firstRunId),
+    ).resolves.toMatchObject({ run: { id: firstRunId } });
+  });
+
   it('refuses to create a generation that covers no entity', async () => {
     await expect(repository.createOrResume('empty-search', 2, [])).rejects.toThrow(
       'A reindex generation must cover at least one entity',
@@ -413,12 +468,12 @@ describe('FtsSearchReindexFileRepository', () => {
     const newer = await writeTarget('pinned-search-topics-v3');
     expect(newer).toMatchObject({ message: expect.stringContaining('checkpoint is invalid') });
     expect(String(newer.cause)).toContain(
-      'Expected physical index pinned-search-topics-v<n> with n <= 2',
+      'Expected physical index pinned-search-topics-v<n>[-r<run-id>] with n <= 2',
     );
 
     const foreign = await writeTarget('other-search-topics-v1');
     expect(String(foreign.cause)).toContain(
-      'Expected physical index pinned-search-topics-v<n> with n <= 2',
+      'Expected physical index pinned-search-topics-v<n>[-r<run-id>] with n <= 2',
     );
   });
 

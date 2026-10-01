@@ -37,11 +37,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   sectionTitle: css`
     margin-block-end: 8px;
-
     font-size: 11px;
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
   `,
   statItem: css`
     color: ${cssVar.colorTextSecondary};

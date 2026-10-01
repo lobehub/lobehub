@@ -253,15 +253,56 @@ export interface ReviewProposalOutcome {
 }
 
 /**
+ * Where on a video evidence an annotation sits, in seconds from the start.
+ * `start` alone pins one frame; `start` + `end` marks a span.
+ */
+export interface AcceptanceReviewAnnotationTime {
+  end?: number;
+  start: number;
+}
+
+/**
  * A user-drawn region on one evidence image, in coordinates normalized to the
- * image box (0–1) so the overlay renders at any display size.
+ * image box (0–1) so the overlay renders at any display size. On video evidence
+ * the region is drawn on the frame at `time.start`; a note that marks a moment
+ * or a span without circling an area carries the whole frame
+ * (`FULL_FRAME_RECT` in `@lobechat/const/verify`).
  */
 export interface AcceptanceReviewAnnotation {
   /** The note attached to this region. */
   comment?: string;
+  /**
+   * The agent chapter this note disputes, quoted so the objection still reads
+   * correctly after the evidence is re-uploaded.
+   */
+  disputes?: Pick<VerifyEvidenceChapter, 'kind' | 'note' | 't'>;
   /** The evidence row (`verify_evidence.id`) the region was drawn on. */
   evidenceId: string;
   rect: { height: number; width: number; x: number; y: number };
+  /** Video evidence only: the frame or span the note is about. */
+  time?: AcceptanceReviewAnnotationTime;
+}
+
+/**
+ * How an agent marker on a video reads (runtime set: `verifyEvidenceChapterKinds`).
+ *
+ * - `step`: an action the agent performed, logged while driving the recording.
+ * - `check`: something the agent verified on this frame — a claim for the reviewer
+ *   to audit, never a pass.
+ * - `flag`: an anomaly the agent noticed and judged harmless, disclosed so the
+ *   reviewer can disagree.
+ */
+export type VerifyEvidenceChapterKind = 'check' | 'flag' | 'step';
+
+/** An agent-authored marker on a video evidence (`verify_evidence.metadata.chapters`). */
+export interface VerifyEvidenceChapter {
+  kind: VerifyEvidenceChapterKind;
+  /** Short name shown on the timeline; required for `step`. */
+  label?: string;
+  /** What the agent claims or noticed; required for `check` and `flag`. */
+  note?: string;
+  /** Seconds from the start of the video. */
+  t: number;
 }
 
 /**
@@ -375,6 +416,19 @@ export type VerifyEvidenceCapturedBy =
  * `verify_runs.user_decision` verb stays the queryable field.
  */
 export interface VerifyRunDecisionDetail {
+  /**
+   * The provider change request whose merge made this decision, when
+   * `source` is `scm_merge`. Lets the board and the verifier-training
+   * pipeline tell a human verdict apart from a merge-driven one.
+   */
+  changeRequest?: {
+    /** Provider user id of whoever merged; resolves through the SCM identities. */
+    mergedByExternalId?: string;
+    number: number;
+    provider: string;
+    repoFullName: string;
+    url: string;
+  };
   /** Free-form reason, e.g. the reject note that seeds the next repair round. */
   comment?: string;
   /** When the decision was made (ISO 8601). */
@@ -391,6 +445,12 @@ export interface VerifyRunDecisionDetail {
    * staleness falls out of the round chain.
    */
   groupFeedback?: VerifyRunGroupFeedbackEntry[];
+  /**
+   * What made the decision. Absent means a human clicked accept / reject;
+   * `scm_merge` means the linked pull request was merged, which LobeHub
+   * treats as the strongest possible acceptance signal.
+   */
+  source?: 'scm_merge';
 }
 
 /**
@@ -815,7 +875,7 @@ export interface ToulminVerdict {
 /**
  * Declares that a criterion is evidence-driven: it cannot pass on the
  * deliverable text alone — the run must capture and upload an artifact of each
- * listed `type` (via `lh verify upload-evidence`). Stored under the plan item's
+ * listed `type` (via `lh acceptance run result submit`). Stored under the plan item's
  * `verifierConfig.requiredEvidence`, so adding it needs no schema change. The
  * structural gate marks a required item `uncertain` when any listed type is
  * missing, independent of the LLM judge.

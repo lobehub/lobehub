@@ -179,16 +179,19 @@ describe('MessageService', () => {
       expect(result).toEqual([toolRow]);
     });
 
-    it('leaves a tool without a projector exactly as stored', async () => {
+    it('drops the body of a tool with no projector but keeps its state', async () => {
       const unprojected = {
         ...toolRow,
         plugin: { apiName: 'noSuchApi', arguments: '{}', identifier: 'some-mcp-server' },
       };
       vi.mocked(mockMessageModel.query).mockResolvedValue([unprojected]);
 
-      const result = await messageService.queryMessages({ topicId: 'topic-1' });
+      const [projected] = await messageService.queryMessages({ topicId: 'topic-1' });
 
-      expect(result).toEqual([unprojected]);
+      expect(projected.content).toBe('');
+      expect(projected.payloadOmitted).toBe('render');
+      // Only a per-tool projector knows which state keys the collapsed row needs.
+      expect(projected.pluginState).toEqual(unprojected.pluginState);
     });
   });
 

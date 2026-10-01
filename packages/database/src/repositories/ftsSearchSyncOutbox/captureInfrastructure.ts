@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 
 import { SEARCHABLE_TEXT_SQL_PATTERN } from '../../utils/searchableText';
+import type { FtsSearchDocumentEntity } from '../ftsSearchDocument';
 
 interface CaptureFunctionDefinition {
   body: string;
@@ -14,6 +15,8 @@ interface CaptureFunctionDefinition {
 
 interface CaptureTriggerDefinition {
   createSql: string;
+  /** Search entities whose Outbox rows this trigger can enqueue. */
+  entities: readonly FtsSearchDocumentEntity[];
   name: string;
   table: string;
 }
@@ -229,6 +232,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'agents', 'user_id', 'visibility', 'workspace_id'
       )`,
+    entities: ['agents'],
     name: 'fts_search_sync_agents',
     table: 'agents',
   },
@@ -239,6 +243,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
         'topics', 'agent_id,content,description,group_id,session_id,status,title,user_id,workspace_id',
         'user_id', 'workspace_id'
       )`,
+    entities: ['topics'],
     name: 'fts_search_sync_topics',
     table: 'topics',
   },
@@ -248,6 +253,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'files', 'user_id', 'visibility', 'workspace_id'
       )`,
+    entities: ['files'],
     name: 'fts_search_sync_files',
     table: 'files',
   },
@@ -257,6 +263,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'knowledgeBases', 'is_public', 'user_id', 'visibility', 'workspace_id'
       )`,
+    entities: ['knowledgeBases'],
     name: 'fts_search_sync_knowledge_bases',
     table: 'knowledge_bases',
   },
@@ -266,6 +273,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'chatGroups', 'user_id', 'visibility', 'workspace_id'
       )`,
+    entities: ['chatGroups'],
     name: 'fts_search_sync_chat_groups',
     table: 'chat_groups',
   },
@@ -275,6 +283,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'documents', 'user_id', 'visibility', 'workspace_id'
       )`,
+    entities: ['documents'],
     name: 'fts_search_sync_documents',
     table: 'documents',
   },
@@ -285,6 +294,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
         'messages', 'agent_id,content,group_id,role,session_id,summary,thread_id,topic_id,user_id,workspace_id',
         'user_id', 'workspace_id'
       )`,
+    entities: ['messages'],
     name: 'fts_search_sync_messages',
     table: 'messages',
   },
@@ -294,6 +304,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'userMemories', 'user_id'
       )`,
+    entities: ['userMemories'],
     name: 'fts_search_sync_user_memories',
     table: 'user_memories',
   },
@@ -301,6 +312,13 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
     createSql: `CREATE TRIGGER fts_search_sync_user_memories_fanout
       AFTER INSERT OR DELETE OR UPDATE OF captured_at, details, memory_category, memory_layer, status, summary, tags, title, user_id ON public.user_memories
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_memory_fanout()`,
+    entities: [
+      'memoryContexts',
+      'memoryPreferences',
+      'memoryActivities',
+      'memoryIdentities',
+      'memoryExperiences',
+    ],
     name: 'fts_search_sync_user_memories_fanout',
     table: 'user_memories',
   },
@@ -310,6 +328,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'memoryContexts', 'user_id'
       )`,
+    entities: ['memoryContexts'],
     name: 'fts_search_sync_memory_contexts',
     table: 'user_memories_contexts',
   },
@@ -319,6 +338,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'memoryPreferences', 'user_id'
       )`,
+    entities: ['memoryPreferences'],
     name: 'fts_search_sync_memory_preferences',
     table: 'user_memories_preferences',
   },
@@ -328,6 +348,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'memoryActivities', 'user_id'
       )`,
+    entities: ['memoryActivities'],
     name: 'fts_search_sync_memory_activities',
     table: 'user_memories_activities',
   },
@@ -337,6 +358,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'memoryIdentities', 'user_id'
       )`,
+    entities: ['memoryIdentities'],
     name: 'fts_search_sync_memory_identities',
     table: 'user_memories_identities',
   },
@@ -346,6 +368,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'memoryExperiences', 'user_id'
       )`,
+    entities: ['memoryExperiences'],
     name: 'fts_search_sync_memory_experiences',
     table: 'user_memories_experiences',
   },
@@ -355,6 +378,7 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
         'personaDocuments', 'user_id'
       )`,
+    entities: ['personaDocuments'],
     name: 'fts_search_sync_persona_documents',
     table: 'user_memory_persona_documents',
   },
@@ -362,10 +386,24 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
     createSql: `CREATE TRIGGER fts_search_sync_knowledge_base_files
       AFTER INSERT OR DELETE OR UPDATE OF file_id, knowledge_base_id ON public.knowledge_base_files
       FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_knowledge_base_files()`,
+    entities: ['files', 'documents'],
     name: 'fts_search_sync_knowledge_base_files',
     table: 'knowledge_base_files',
   },
 ];
+
+export const getFtsSearchSyncCaptureSourceTables = (
+  entities: readonly FtsSearchDocumentEntity[],
+) => {
+  const selected = new Set(entities);
+  return [
+    ...new Set(
+      CAPTURE_TRIGGER_DEFINITIONS.filter(({ entities: capturedEntities }) =>
+        capturedEntities.some((entity) => selected.has(entity)),
+      ).map(({ table }) => table),
+    ),
+  ];
+};
 
 export const normalizeFtsSearchSyncCaptureDefinition = (definition: string) => {
   const compact = definition

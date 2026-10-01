@@ -213,6 +213,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   config: 'open',
   connector: 'blocked',
   device: 'blocked',
+  deviceMetric: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
   documentComment: rw('knowledge:read', 'knowledge:write'),
   documentLike: rw('knowledge:read', 'knowledge:write'),
@@ -261,6 +262,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // human decision, not something a restricted key should automate.
   resourceTransferRequest: 'blocked',
   search: rw('chat:read', null),
+  // source-control integration wiring (installations, linked identities,
+  // tracked pull requests) is configured from Settings, not from keys
+  scm: 'blocked',
   session: rw('chat:read', 'chat:write'),
   sessionGroup: rw('chat:read', 'chat:write'),
   share: rw('chat:read', 'chat:write'),
@@ -277,6 +281,10 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   topUp: 'blocked',
   topic: rw('chat:read', 'chat:write'),
   topicComment: rw('chat:read', 'chat:write'),
+  // The recycle bin spans every content kind (chats, agents, files, tasks …) —
+  // restore / purge is a destructive cross-cutting surface, so restricted keys
+  // never reach it; only full-access keys can.
+  trash: 'blocked',
   upload: rw('file:read', 'file:write'),
   usage: rw('usage:read', null),
   user: rw('user:read', 'user:write'),

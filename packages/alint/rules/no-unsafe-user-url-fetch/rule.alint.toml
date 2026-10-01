@@ -1,0 +1,20 @@
+name = "no-unsafe-user-url-fetch"
+builtInAgent = "basic-structured"
+instruction = """
+Mandatory execution-boundary gate: this rule concerns HTTP requests made by the application server. A server HTTP call to a configured sandbox API endpoint carrying a command or URL in its JSON body is NOT a fetch to that URL. Do not confuse code/commands executed inside an isolated remote sandbox with a host fetch. Sandbox egress policy is a separate boundary and cannot be inferred from this file.
+
+You are reviewing one TypeScript file from the LobeHub server.
+
+Prevent regressions of #16601 / GHSA-53h9-fmjf-frwr: user-provided skill and image URLs reached raw fetch, allowing requests to internal hosts and cloud metadata.
+
+Report a server-side HTTP request only when this file shows a user-controlled destination (request input, imported manifest, webhook URL, uploaded metadata, or a helper explicitly accepting an external URL) reaching raw fetch, axios, got, or node HTTP APIs without an SSRF-safe transport. Follow local aliases. A URL parser, https-only check, hostname blacklist, or DNS preflight followed by ordinary fetch is not equivalent to connect-time IP checks and redirect-hop validation.
+
+Anchor on the network request. Name the untrusted source and unsafe sink. Suggest the existing ssrfSafeFetch from @lobechat/ssrf-safe-fetch (or an equivalent transport that validates resolved addresses at connection time and every redirect). Never suggest a home-grown hostname regex as the fix.
+
+Do not report:
+- ssrfSafeFetch, a locally visible wrapper around it, or a transport with equivalent visible protections;
+- fixed service URLs, administrator-controlled environment configuration, or fixed-origin API calls whose user input only becomes encoded path/query data;
+- a request whose URL provenance is unknown: a variable called url alone is not evidence;
+- browser-side fetch, test code, or network-guard implementation internals.
+Authentication alone does not make a user-supplied destination safe. Require a concrete source-to-sink path in this file; do not speculate about unseen callers or helpers.
+"""

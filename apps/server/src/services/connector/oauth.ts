@@ -82,6 +82,26 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
   return { authorizationServerUrl, metadata };
 };
 
+type RegistrationAuthMethod = 'client_secret_basic' | 'client_secret_post' | 'none';
+
+/**
+ * Pick the `token_endpoint_auth_method` to request at registration time from
+ * what the authorization server advertises. Many MCP servers only accept public
+ * PKCE clients (`none`) and reject a confidential registration outright, so we
+ * must not hardcode one. Metadata that omits the field keeps the confidential
+ * default. Token exchange/refresh later infers the method from whether a
+ * client_secret was issued.
+ */
+export const selectRegistrationAuthMethod = (
+  metadata: AuthorizationServerMetadata,
+): RegistrationAuthMethod => {
+  const supported = metadata.token_endpoint_auth_methods_supported;
+  if (!supported || supported.length === 0) return 'client_secret_post';
+
+  const preferred: RegistrationAuthMethod[] = ['client_secret_post', 'client_secret_basic', 'none'];
+  return preferred.find((method) => supported.includes(method)) ?? 'none';
+};
+
 /**
  * RFC 7591 Dynamic Client Registration — used when the user did not provide a
  * client_id. Returns the issued client_id (+ optional client_secret).
@@ -100,7 +120,7 @@ export const registerDynamicClient = async (params: {
       redirect_uris: [params.redirectUri],
       response_types: ['code'],
       scope: params.scopes?.join(' '),
-      token_endpoint_auth_method: 'client_secret_post',
+      token_endpoint_auth_method: selectRegistrationAuthMethod(params.metadata),
     },
     metadata: params.metadata,
     scope: params.scopes?.join(' '),

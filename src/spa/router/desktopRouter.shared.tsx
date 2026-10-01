@@ -12,6 +12,7 @@ import {
   LayoutPanelTopIcon,
   LibraryBigIcon,
   Mic2,
+  Scale,
   Settings,
   ShapesIcon,
   SquarePlay,
@@ -782,13 +783,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
       },
       {
         element: dynamicElement(
-          () => import('@/routes/(main)/memory/experiences'),
-          'Desktop > Memory > Experiences',
+          () => import('@/routes/(main)/memory/rules'),
+          'Desktop > Memory > Rules',
         ),
         handle: {
-          meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryExperiences' }),
+          // Same icon the memory sidebar uses, so a desktop tab and the nav item agree.
+          meta: routeMeta({ icon: Scale, titleKey: 'navigation.memoryRules' }),
         },
-        path: 'experiences',
+        path: 'rules',
       },
       {
         element: dynamicElement(
@@ -1494,6 +1496,23 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
                 ),
                 handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
                 path: 'messenger/:sub',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/integrations'),
+                  'Desktop > Workspace > Settings > Integrations',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+                path: 'integrations',
+              },
+              // Integration detail level — the page reads the integration from `sub`.
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/integrations'),
+                  'Desktop > Workspace > Settings > Integrations > Detail',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+                path: 'integrations/:sub',
               },
               // Developer tools mirrored inside the workspace (user preferences).
               {

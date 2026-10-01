@@ -1,3 +1,4 @@
+import { MirroredTerminalEchoGuard } from '../mirroredTerminalEcho';
 import type {
   AgentStreamEvent,
   AgentStreamSessionCompletion,
@@ -26,6 +27,7 @@ const INITIAL_RECONNECT_DELAY = 1000; // 1s
 const MAX_RECONNECT_DELAY = 30_000; // 30s
 const MAX_MISSED_HEARTBEATS = 3;
 const MAX_CONSECUTIVE_AUTH_FAILURES = 3;
+const MAX_CONSECUTIVE_DIAL_FAILURES = 3;
 const TOOL_RESULT_TTL = 120_000; // 120s
 const AUTH_CLOSE_CODE = 4401;
 /** Must match the hub's WebSocketRequestResponsePair byte-for-byte. */
@@ -62,6 +64,10 @@ class ListenerMap {
     };
   }
 
+  has(event: string): boolean {
+    return (this.listeners.get(event)?.size ?? 0) > 0;
+  }
+
   emit(event: string, ...args: unknown[]): void {
     const set = this.listeners.get(event);
     if (!set) return;
@@ -95,6 +101,7 @@ class OperationSubscriptionImpl implements OperationSubscription {
   private _lastEventId: string;
   private lastSeq: number;
   private readonly listeners: ListenerMap;
+  private readonly terminalEchoGuard: MirroredTerminalEchoGuard;
 
   constructor(
     private readonly mux: GatewayMuxClient,
@@ -106,6 +113,7 @@ class OperationSubscriptionImpl implements OperationSubscription {
     this._lastEventId = options.lastEventId ?? '';
     this.lastSeq = Number(this._lastEventId) || 0;
     this.listeners = new ListenerMap(`GatewayMuxClient:${operationId}`);
+    this.terminalEchoGuard = new MirroredTerminalEchoGuard(operationId, 'v2');
   }
 
   get active(): boolean {
@@ -134,11 +142,6 @@ class OperationSubscriptionImpl implements OperationSubscription {
       operationId: this.operationId,
       type: 'tool_result',
     });
-  }
-
-  sendInterrupt(): boolean {
-    if (!this._active) return false;
-    return this.mux.sendForSubscription(this, { operationId: this.operationId, type: 'interrupt' });
   }
 
   sendToolConfirmation(toolCallId: string, approved: boolean): boolean {
@@ -183,6 +186,11 @@ class OperationSubscriptionImpl implements OperationSubscription {
     this.end();
   }
 
+  /** @internal A (re)subscribe was sent: its replay starts now. */
+  beginReplay(): void {
+    this.terminalEchoGuard.beginReplay();
+  }
+
   /** @internal */
   handleMessage(message: MuxOperationMessage): void {
     if (!this._active) return;
@@ -200,24 +208,41 @@ class OperationSubscriptionImpl implements OperationSubscription {
 
     switch (message.type) {
       case 'agent_event': {
-        const agentEvent: AgentStreamEvent = message.event;
+        // The envelope already names the channel this event came down, so the
+        // hub omits `event.operationId` whenever it would repeat it — on a busy
+        // run that id is the single most repeated string on the wire. Restore
+        // it here, once, so every reader downstream keeps seeing the field it
+        // has always seen. A mirrored member event still carries its own id,
+        // which differs from the envelope's and is therefore never omitted.
+        const agentEvent: AgentStreamEvent = message.event.operationId
+          ? message.event
+          : { ...message.event, operationId: message.operationId };
         // A member's mirrored terminal must not end the supervisor's
         // subscription — only THIS op's terminal (or one with no operationId,
         // legacy gateway) is terminal here. Mirrors v1 exactly.
         const isOwnTerminal =
           (agentEvent.type === 'agent_runtime_end' || agentEvent.type === 'error') &&
           (!agentEvent.operationId || agentEvent.operationId === this.operationId);
+        this.terminalEchoGuard.observe(agentEvent);
         this.listeners.emit('agent_event', agentEvent);
         if (isOwnTerminal) this.finish({ source: 'agent_event' });
         break;
       }
 
       case 'session_complete': {
+        // A member's mirrored terminal echoed back as the end of this op — see
+        // `MirroredTerminalEchoGuard`.
+        if (this.terminalEchoGuard.consumeEcho('session_complete')) break;
         this.finish({ source: 'raw_session_complete' });
         break;
       }
 
       case 'status_change': {
+        if (
+          isTerminalStatus(message.status) &&
+          this.terminalEchoGuard.consumeEcho('status_change', message.status)
+        )
+          break;
         this.listeners.emit('status_change', message.status);
         if (isTerminalStatus(message.status)) {
           this.finish({ source: 'status_change', status: message.status });
@@ -234,9 +259,17 @@ class OperationSubscriptionImpl implements OperationSubscription {
         // `pending` = the op DO has not seen `init` yet; the hub replays later.
         // Non-terminal status = the run is alive, keep streaming. Never guess
         // completion from silence (see v1 AgentStreamClient).
-        if (!message.pending && isTerminalStatus(message.status)) {
+        if (
+          !message.pending &&
+          isTerminalStatus(message.status) &&
+          // A status left by a mirrored member's terminal — see
+          // `MirroredTerminalEchoGuard.isStaleResumeStatus`.
+          !this.terminalEchoGuard.isStaleResumeStatus(message.status, { gap: message.gap })
+        ) {
           this.finish({ source: 'resume_status', status: message.status });
+          break;
         }
+        if (!message.pending) this.terminalEchoGuard.endReplay();
         break;
       }
 
@@ -331,6 +364,11 @@ export class GatewayMuxClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
   private consecutiveAuthFailures = 0;
+  /** Dials that never reached `ready`, since the last one that did. */
+  private consecutiveDialFailures = 0;
+  /** Whether the socket now being torn down ever reached `ready`. */
+  private currentDialReachedReady = false;
+  private declaredUnavailable = false;
   private browserListenersInstalled = false;
 
   private readonly subscriptions = new Map<string, Set<OperationSubscriptionImpl>>();
@@ -347,6 +385,7 @@ export class GatewayMuxClient {
   private readonly autoReconnect: boolean;
   private readonly heartbeatIntervalMs: number;
   private readonly keepAlive: boolean;
+  private readonly maxDialFailures: number;
 
   constructor(options: GatewayMuxClientOptions) {
     this.gatewayUrl = options.gatewayUrl;
@@ -355,12 +394,18 @@ export class GatewayMuxClient {
     this.autoReconnect = options.autoReconnect ?? true;
     this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL;
     this.keepAlive = options.keepAlive ?? false;
+    this.maxDialFailures = options.maxDialFailures ?? MAX_CONSECUTIVE_DIAL_FAILURES;
   }
 
   // ─── Public API ───
 
   get status(): GatewayMuxStatus {
     return this._status;
+  }
+
+  /** True once this mux gave up on protocol v2 (see the `unavailable` event). */
+  get isUnavailable(): boolean {
+    return this.declaredUnavailable;
   }
 
   on<K extends keyof GatewayMuxClientEvents>(
@@ -376,6 +421,8 @@ export class GatewayMuxClient {
    */
   connect(): Promise<void> {
     this.clearIdleClose();
+    if (this.declaredUnavailable)
+      return Promise.reject(new Error('GatewayMuxClient is unavailable'));
     if (this._status === 'connected') return Promise.resolve();
     this.intentionalDisconnect = false;
     this.installBrowserListeners();
@@ -469,6 +516,29 @@ export class GatewayMuxClient {
     }
   }
 
+  /**
+   * Remove and return the tool results still queued for an operation.
+   *
+   * `sendForSubscription` reports a queued result as sent, so the caller that
+   * produced it will not retry. An owner moving the operation to another
+   * transport (the v1 fallback after `unavailable`) must take these first and
+   * deliver them itself — unsubscribing drops them, and the server would then
+   * sit on the tool call until it times out. Expired entries are not returned.
+   */
+  takePendingToolResults(operationId: string): ToolResultPayload[] {
+    const now = Date.now();
+    const taken: ToolResultPayload[] = [];
+    this.toolResultQueue = this.toolResultQueue.filter((entry) => {
+      if (entry.message.operationId !== operationId) return true;
+      if (now - entry.at <= TOOL_RESULT_TTL) {
+        const { operationId: _operationId, type: _type, ...payload } = entry.message;
+        taken.push(payload);
+      }
+      return false;
+    });
+    return taken;
+  }
+
   /** @internal Send now, or queue `tool_result` (TTL 120s) until the socket is ready. */
   sendForSubscription(subscription: OperationSubscriptionImpl, message: MuxClientMessage): boolean {
     if (this.sendMessage(message)) return true;
@@ -482,11 +552,17 @@ export class GatewayMuxClient {
   // ─── Connection logic ───
 
   private async doConnect(): Promise<void> {
+    if (this.declaredUnavailable) return;
     if (this.intentionalDisconnect || this.ws || this.connectInFlight) return;
     const generation = ++this.connectGeneration;
     this.connectInFlight = true;
     this.clearReconnectTimer();
     this.setStatus('connecting');
+    // Before the token round trip, not after: minting is part of the dial, and
+    // a `getToken` that keeps rejecting is exactly the "this deployment cannot
+    // serve v2" case the budget exists for. Left set from the previous socket,
+    // those attempts would never count and the page would retry forever.
+    this.currentDialReachedReady = false;
 
     let token: string;
     try {
@@ -544,6 +620,8 @@ export class GatewayMuxClient {
       case 'ready': {
         this.reconnectAttempt = 0;
         this.consecutiveAuthFailures = 0;
+        this.consecutiveDialFailures = 0;
+        this.currentDialReachedReady = true;
         this.setStatus('connected');
         this.startHeartbeat();
         // Subscribe before flushing: the hub rejects op messages from a
@@ -616,6 +694,26 @@ export class GatewayMuxClient {
   };
 
   private handleConnectionLost(delayOverride?: number): void {
+    // Only a dial that never reached `ready` counts against the budget. A
+    // socket that worked and then dropped is a network event, not evidence
+    // that this deployment cannot serve v2; a refused token (`delayOverride`
+    // 0, immediate refresh) has its own budget in `consecutiveAuthFailures`.
+    // Counting either here would spend the fallback budget on a link that is
+    // fine and strand the page on v1 for the rest of the session.
+    const failedDial = delayOverride === undefined && !this.currentDialReachedReady;
+    if (failedDial) this.consecutiveDialFailures++;
+
+    // Retrying a deployment that cannot serve v2 at all only spins: give the
+    // owner the chance to fall back instead.
+    if (
+      failedDial &&
+      this.consecutiveDialFailures >= this.maxDialFailures &&
+      this.listeners.has('unavailable')
+    ) {
+      this.markUnavailable(`no usable connection after ${this.consecutiveDialFailures} attempts`);
+      return;
+    }
+
     // An idle lazy mux that loses its socket just stays down (see isIdle).
     if (this.autoReconnect && !this.intentionalDisconnect && !this.isIdle()) {
       this.scheduleReconnect(delayOverride);
@@ -628,6 +726,14 @@ export class GatewayMuxClient {
   }
 
   private failAuth(reason: string): void {
+    // With a fallback listener attached, a refused token is a v2 problem, not
+    // the end of the run: the v1 socket mints its own per-operation token from
+    // a different endpoint, so hand the subscriptions back intact.
+    if (this.listeners.has('unavailable')) {
+      this.markUnavailable(reason);
+      return;
+    }
+
     this.cleanup();
     // Detach the subscriptions before failing them: `fail` unsubscribes, and an
     // idle-close from `removeSubscription` must not race this teardown.
@@ -638,6 +744,27 @@ export class GatewayMuxClient {
     this.setStatus('disconnected');
     this.rejectWaiters(new Error(`Gateway auth failed: ${reason}`));
     this.listeners.emit('disconnected');
+  }
+
+  /**
+   * Terminal for this mux: stop dialing and tell the owner to fall back.
+   *
+   * Subscriptions are deliberately left alone — they are not failed and no
+   * terminal status is broadcast, because the owner re-establishes each
+   * operation on the v1 transport and a `session_complete` here would end the
+   * run instead.
+   */
+  private markUnavailable(reason: string): void {
+    if (this.declaredUnavailable) return;
+    this.declaredUnavailable = true;
+    this.intentionalDisconnect = true;
+    this.connectGeneration++;
+    this.connectInFlight = false;
+    this.cleanup();
+    this.setStatus('disconnected');
+    this.rejectWaiters(new Error(`Gateway mux unavailable: ${reason}`));
+    console.error('[GatewayMuxClient] protocol v2 unavailable: %s', reason);
+    this.listeners.emit('unavailable', reason);
   }
 
   // ─── Heartbeat ───
@@ -769,6 +896,7 @@ export class GatewayMuxClient {
       type: 'subscribe',
     });
     if (!sent) return;
+    subscription.beginReplay();
     subscription.notifyStatus('connected');
     subscription.emit('connected');
   }

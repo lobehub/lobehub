@@ -2,6 +2,7 @@ import type {
   HeteroSessionImportPayload,
   HeteroSessionImportResult,
   HeteroSessionImportStatus,
+  UpdateTopicMetadataInput,
 } from '@lobechat/types';
 
 import { INBOX_SESSION_ID } from '@/const/session';
@@ -34,17 +35,15 @@ export interface TopicListItem extends ChatTopic {
    * Start time of the topic's current run (latest top-level running
    * `agent_operations` row). Only set for `running` topics; null when the run
    * never wrote an operation row (e.g. client-mode) — keep a fallback.
+   *
+   * Type widens {@link ChatTopic.runStartedAt}: over-the-wire values arrive as
+   * ISO strings, so a narrowed `Date` here contradicts the base and breaks
+   * assignment in both directions.
    */
-  runStartedAt?: Date | null;
+  runStartedAt?: ChatTopic['runStartedAt'];
 }
 
 export type TopicBatchDeleteScope = 'own' | 'workspace';
-
-type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
-
-type UpdateTopicMetadataInput = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> & {
-  onboardingSession?: OnboardingSessionMetadataPatch;
-};
 
 export class TopicService {
   cancelRateLimitContinuation = (id: string) =>

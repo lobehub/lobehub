@@ -16,6 +16,7 @@ import Deliverables from './Deliverables';
 import Findings from './Findings';
 import Frontier from './Frontier';
 import { buildGoalGraphView } from './goalGraphViewModel';
+import GoalResultTabs from './GoalResultTabs';
 import Graph from './Graph';
 import {
   isGoalClosed,
@@ -27,8 +28,10 @@ import {
 /**
  * The process-control band of the goal detail page: what can move now
  * (frontier), the map of how the goal got here, what it believes, and what it
- * has been doing. Renders only for goals that actually carry a Goal Graph —
- * a plain task-carried goal has no nodes and keeps the page it always had.
+ * has been doing. Once the goal finishes, this becomes the 执行过程 tab behind
+ * its 结果交付 (see `GoalResultTabs`). Renders only for goals that actually
+ * carry a Goal Graph — a plain task-carried goal has no nodes and keeps the
+ * page it always had.
  */
 
 interface ProcessControlProps {
@@ -97,7 +100,7 @@ const ProcessControl = memo<ProcessControlProps>(
       />
     );
 
-    return (
+    const process = (
       <Flexbox gap={20}>
         {hasExperiments && map}
         <Flexbox gap={12}>
@@ -182,6 +185,8 @@ const ProcessControl = memo<ProcessControlProps>(
         />
       </Flexbox>
     );
+
+    return <GoalResultTabs graph={graph} key={goalId} process={process} onSelect={select} />;
   },
 );
 

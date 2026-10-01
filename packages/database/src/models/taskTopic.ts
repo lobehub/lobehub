@@ -1,3 +1,4 @@
+import { DEVICE_OFFLINE_RUN_STATUS } from '@lobechat/const/goal';
 import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
 import { and, count, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 
@@ -7,7 +8,13 @@ import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
-const TERMINAL_TOPIC_STATUSES = new Set(['canceled', 'completed', 'failed', 'timeout']);
+const TERMINAL_TOPIC_STATUSES = new Set([
+  'canceled',
+  'completed',
+  DEVICE_OFFLINE_RUN_STATUS,
+  'failed',
+  'timeout',
+]);
 
 export class TaskTopicModel {
   private readonly userId: string;

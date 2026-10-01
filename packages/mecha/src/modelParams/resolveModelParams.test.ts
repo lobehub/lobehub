@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveHistoryCount, resolveModelParams } from './resolveModelParams';
+import {
+  createFrozenModelParamsProviders,
+  readFrozenModelFacts,
+  resolveHistoryCount,
+  resolveModelParams,
+} from './resolveModelParams';
 import type { ModelCardFacts, ModelParamsProviders, ModelParamsRequest } from './types';
 
 const cards: ModelCardFacts[] = [
@@ -310,5 +315,99 @@ describe('resolveHistoryCount', () => {
     expect(resolveHistoryCount(20)).toBe(21);
     expect(resolveHistoryCount(undefined)).toBeUndefined();
     expect(resolveHistoryCount(null)).toBeUndefined();
+  });
+});
+
+describe('frozen model facts', () => {
+  const liveProviders = () => ({
+    findTopicReasoningPin: vi.fn<NonNullable<ModelParamsProviders['findTopicReasoningPin']>>(
+      async () => ({
+        model: 'gpt-4',
+        provider: 'openai',
+        reasoningConfig: { reasoningEffort: 'low' },
+      }),
+    ),
+    getModelReasoningConfig: vi.fn<NonNullable<ModelParamsProviders['getModelReasoningConfig']>>(
+      async () => ({ reasoningEffort: 'high' }),
+    ),
+    getUserModelRow: vi.fn<NonNullable<ModelParamsProviders['getUserModelRow']>>(async () => ({
+      displayName: 'My GPT-4',
+    })),
+    listModelCards: vi.fn(() => cards),
+  });
+
+  it('resolves the same params off the snapshot without reading a single source again', async () => {
+    const live = liveProviders();
+    const expected = await resolveModelParams(request(), live);
+
+    const facts = await readFrozenModelFacts(request(), live);
+    const reads = liveProviders();
+    // The live sources are laid underneath on purpose: the snapshot must answer
+    // everything, so none of them may be touched.
+    const fromSnapshot = await resolveModelParams(request(), {
+      ...reads,
+      ...createFrozenModelParamsProviders(facts),
+    });
+
+    expect(fromSnapshot.modelDisplayName).toBe(expected.modelDisplayName);
+    expect(fromSnapshot.modelKnowledgeCutoff).toBe(expected.modelKnowledgeCutoff);
+    expect(fromSnapshot.modelExtendParams).toEqual(expected.modelExtendParams);
+    expect(fromSnapshot.resolvedExtendParams).toEqual(expected.resolvedExtendParams);
+    expect(fromSnapshot.capabilities.isCanUseFC('gpt-4', 'openai')).toBe(true);
+    expect(fromSnapshot.capabilities.isCanUseVision('gpt-4', 'openai')).toBe(true);
+    expect(reads.findTopicReasoningPin).not.toHaveBeenCalled();
+    expect(reads.getModelReasoningConfig).not.toHaveBeenCalled();
+    expect(reads.getUserModelRow).not.toHaveBeenCalled();
+    expect(reads.listModelCards).not.toHaveBeenCalled();
+  });
+
+  it('survives the state round-trip as plain JSON', async () => {
+    const facts = await readFrozenModelFacts(request(), liveProviders());
+    // Deliberately JSON, not structuredClone: the state is stored as JSON.
+    // eslint-disable-next-line unicorn/prefer-structured-clone
+    expect(JSON.parse(JSON.stringify(facts))).toEqual(facts);
+    // Only the two cards the rules can match, never the whole bank.
+    expect(facts.cards.map((card) => `${card.providerId}/${card.id}`)).toEqual([
+      'openai/gpt-4',
+      'lobehub/gpt-4',
+    ]);
+  });
+
+  it('keeps the effort the run started with when the user edits it mid-run', async () => {
+    const live = liveProviders();
+    const facts = await readFrozenModelFacts(request(), live);
+    expect(facts.reasoningConfig).toEqual({ reasoningEffort: 'low' });
+
+    // The user re-pins the topic and changes the model-instance config: the
+    // running operation must keep answering with what it froze.
+    live.findTopicReasoningPin.mockResolvedValue({
+      model: 'gpt-4',
+      provider: 'openai',
+      reasoningConfig: { reasoningEffort: 'high' },
+    });
+    const later = await resolveModelParams(request(), createFrozenModelParamsProviders(facts));
+    expect(later.resolvedExtendParams).toMatchObject({ reasoning_effort: 'low' });
+  });
+
+  it('freezes no reasoning source for a model that cannot consume one', async () => {
+    const live = liveProviders();
+    const facts = await readFrozenModelFacts(request({ model: 'plain' }), live);
+    expect(facts.reasoningConfig).toBeUndefined();
+    expect(live.findTopicReasoningPin).not.toHaveBeenCalled();
+    expect(live.getModelReasoningConfig).not.toHaveBeenCalled();
+  });
+
+  it('answers for the frozen model only, so another model cannot inherit its row', async () => {
+    const facts = await readFrozenModelFacts(request(), liveProviders());
+    const other = await resolveModelParams(
+      request({ model: 'plain' }),
+      createFrozenModelParamsProviders(facts),
+    );
+    expect(other.userModelRow).toBeUndefined();
+    expect(other.modelDisplayName).toBeUndefined();
+    // No card for the compression model in the snapshot: function calling is
+    // assumed and no native media is claimed, as for any unknown card.
+    expect(other.capabilities.isCanUseFC('plain', 'openai')).toBe(true);
+    expect(other.capabilities.isCanUseVision('plain', 'openai')).toBe(false);
   });
 });

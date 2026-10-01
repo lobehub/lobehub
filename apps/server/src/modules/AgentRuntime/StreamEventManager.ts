@@ -55,8 +55,10 @@ export const getDefaultReasonDetail = (finalState: any, reason?: string): string
  *   it (e.g. `execSubAgent.onComplete`) receive the full state
  *   via the local `HookContext` channel, not via the stream.
  * - `operationToolSet`, `toolManifestMap`, `toolSourceMap`, `tools`
- *   — operation-level snapshot; back-compat copies of one struct.
- * - `expertise` — immutable operation-level snapshot retained in working state.
+ *   — operation-level snapshot; the four top-level names are the legacy
+ *   mirrors of the slot, kept here for operations that still carry them.
+ * - `world.expertise` — immutable operation-level snapshot retained in working
+ *   state. The rest of `world` stays: the client renders from it.
  *
  * Mirrors the `done`-event strip in `OperationTraceRecorder.appendStep`;
  * keep the two lists in sync if either set changes.
@@ -72,9 +74,15 @@ const stripStateForStream = <T extends Record<string, any>>(
     toolManifestMap: _toolManifestMap,
     toolSourceMap: _toolSourceMap,
     tools: _tools,
+    world,
     ...rest
   } = state;
-  return rest as T;
+  // `world` had to be destructured to reach its expertise snapshot, so it must be
+  // put back: everything else on it (agent, group, channel …) has to survive.
+  if (!world || typeof world !== 'object') return rest as T;
+  if (!('expertise' in world)) return { ...rest, world } as unknown as T;
+  const { expertise: _worldExpertise, ...worldRest } = world as Record<string, unknown>;
+  return { ...rest, world: worldRest } as unknown as T;
 };
 
 /**

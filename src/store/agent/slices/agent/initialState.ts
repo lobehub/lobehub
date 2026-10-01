@@ -19,6 +19,8 @@ export interface AgentSliceState {
    * (e.g. 401s are not retried by SWR). Cleared on successful fetch / retry.
    */
   agentConfigErrorMap: Record<string, string>;
+  agentConfigScopeMap: Record<string, string>;
+  agentConfigSourceMap: Record<string, 'server' | 'storage'>;
   agentDocumentsMap: Record<string, AgentContextDocument[]>;
   agentMap: Record<string, PartialDeep<AgentItem>>;
   /**
@@ -76,6 +78,8 @@ export interface AgentSliceState {
 
 export const initialAgentSliceState: AgentSliceState = {
   agentConfigErrorMap: {},
+  agentConfigScopeMap: {},
+  agentConfigSourceMap: {},
   agentDocumentsMap: {},
   agentMap: {},
   agentNotFoundMap: {},

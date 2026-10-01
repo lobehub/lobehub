@@ -3,8 +3,8 @@ import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
 import type {
+  FtsSearchBuiltIndexMeta,
   FtsSearchDocumentBuilder,
-  FtsSearchIndexMeta,
 } from '../../../packages/database/src/repositories/ftsSearchDocument';
 import {
   buildFtsSearchIndexMeta,
@@ -13,6 +13,7 @@ import {
   getFtsSearchIndexAlias,
   getFtsSearchIndexSchemaVersion,
   getFtsSearchPhysicalIndexName,
+  parseFtsSearchPhysicalIndexName,
 } from '../../../packages/database/src/repositories/ftsSearchDocument';
 import { pruneFtsSearchDocumentForMapping } from '../../../packages/database/src/repositories/ftsSearchDocument/projectionCompatibility';
 import type {
@@ -51,7 +52,7 @@ export interface FtsSearchReindexElasticsearchClient {
 
 /** Additive mapping upgrade applied to a live index: the full declared field set plus new `_meta`. */
 export interface FtsSearchReindexMappingUpgrade {
-  _meta: Required<FtsSearchIndexMeta>;
+  _meta: FtsSearchBuiltIndexMeta;
   properties: (typeof FTS_SEARCH_INDEX_DEFINITIONS)[FtsSearchDocumentEntity]['mappings']['properties'];
 }
 
@@ -61,7 +62,7 @@ export interface FtsSearchReindexIndexOptions {
 
 export interface FtsSearchReindexIndexBody {
   mappings: (typeof FTS_SEARCH_INDEX_DEFINITIONS)[FtsSearchDocumentEntity]['mappings'] & {
-    _meta: Required<FtsSearchIndexMeta>;
+    _meta: FtsSearchBuiltIndexMeta;
   };
   settings: { analysis: typeof FTS_SEARCH_INDEX_ANALYSIS };
 }
@@ -416,7 +417,15 @@ export class FtsSearchReindexService {
             entity,
             state.run.schemaVersion,
           );
-          if (physicalIndex !== rebuildIndex && status !== 'completed') {
+          const physicalIdentity = parseFtsSearchPhysicalIndexName(
+            getFtsSearchIndexAlias(state.run.namespace, entity),
+            physicalIndex,
+          );
+          const createsNewIndex =
+            physicalIndex === rebuildIndex ||
+            (physicalIdentity?.builtSchemaVersion === state.run.schemaVersion &&
+              physicalIdentity.reindexRunId === state.run.id);
+          if (!createsNewIndex && status !== 'completed') {
             await this.upgradeIndexInPlace(state.run.namespace, entity, physicalIndex, meta);
           }
           await this.client.ensureIndex(
@@ -425,7 +434,7 @@ export class FtsSearchReindexService {
               mappings: { ...FTS_SEARCH_INDEX_DEFINITIONS[entity].mappings, _meta: meta },
               settings: { analysis: FTS_SEARCH_INDEX_ANALYSIS },
             },
-            { createIfMissing: physicalIndex === rebuildIndex && status !== 'completed' },
+            { createIfMissing: createsNewIndex && status !== 'completed' },
           );
         } catch (error) {
           throw new FtsSearchReindexEntityError(entity, error);
@@ -1017,12 +1026,20 @@ export class FtsSearchReindexService {
     namespace: string,
     schemaVersion: number,
     runEntities: readonly FtsSearchDocumentEntity[] = FTS_SEARCH_DOCUMENT_ENTITIES,
+    runId?: string,
   ): Promise<FtsSearchReindexResult> {
-    const initialState = await this.repository.createOrResume(
-      namespace,
-      schemaVersion,
-      runEntities,
-    );
+    const initialState = runId
+      ? await this.repository.getRun(runId)
+      : await this.repository.createOrResume(namespace, schemaVersion, runEntities);
+    if (!initialState) throw new Error(`Missing reindex run ${runId}`);
+    if (
+      initialState.run.namespace !== namespace ||
+      initialState.run.schemaVersion !== schemaVersion
+    ) {
+      throw new Error(
+        `Reindex run ${initialState.run.id} belongs to ${initialState.run.namespace} v${initialState.run.schemaVersion}, not ${namespace} v${schemaVersion}`,
+      );
+    }
     if (initialState.run.status === 'ready_for_incremental_sync') {
       return {
         runId: initialState.run.id,

@@ -1,6 +1,6 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Accordion, ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { Accordion, ActionIcon, Spin, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
@@ -8,7 +8,6 @@ import * as motion from 'motion/react-m';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
@@ -45,8 +44,8 @@ const WORKFLOW_EXPAND_TOGGLE_TRANSITION = {
 export type WorkflowExpandLevel = 'collapsed' | 'semi' | 'full';
 
 /** Per-phase initial level. Pass an object when streaming and completion
- *  should differ — e.g. heterogeneous agents want full while streaming but
- *  still collapse once a turn finishes. A plain string applies to both. */
+ *  should differ — e.g. a surface that wants the list open mid-run but folded
+ *  once the turn ends. A plain string applies to both. */
 export type WorkflowExpandLevelDefault =
   WorkflowExpandLevel | { completion?: WorkflowExpandLevel; streaming?: WorkflowExpandLevel };
 
@@ -55,17 +54,17 @@ interface WorkflowCollapseProps {
   assistantMessageId: string;
   blocks: RenderableAssistantContentBlock[];
   /**
-   * Fixed default expand level. When set, overrides the built-in auto
-   * behavior (expand while streaming, collapse after completion) for the
-   * initial state and resets. Users can still toggle locally.
-   * Pass an object to override only one phase (e.g. `{ streaming: 'full' }`).
-   * Undefined = legacy auto behavior. Pending intervention still forces open.
+   * Fixed default expand level. When set, overrides the built-in defaults
+   * (streaming `full`, completion `collapsed`) for the initial state and resets.
+   * Users can still toggle locally. Pass an object to override only one
+   * phase (e.g. `{ streaming: 'collapsed' }`). Undefined = built-in defaults.
+   * Pending intervention still forces open.
    */
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
   /**
-   * Skip the completion auto-collapse (semi → collapsed, an animated Accordion
-   * height transition) because the parent is about to fold the whole workflow
+   * Skip applying the completion level (an animated Accordion height
+   * transition) because the parent is about to fold the whole workflow
    * into `ProcessFold` in a single commit. Collapsing twice — once as a
    * multi-frame animation, once as the fold swap — is what makes the
    * conversation visibly jitter when a turn with tool calls finishes.
@@ -204,14 +203,15 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       () => resolveExpandDefaults(defaultWorkflowExpandLevel),
       [defaultWorkflowExpandLevel],
     );
-    const streamingInitialLevel: WorkflowExpandLevel = streamingDefault ?? 'semi';
+    // Open means open: every level that isn't an explicit summary row resolves
+    // to the full list. `semi`'s height cap only ever bought a second hop (⤢)
+    // on exactly the long tool lists people open the row to read.
+    const streamingInitialLevel: WorkflowExpandLevel = streamingDefault ?? 'full';
+    // A finished turn folds back down to its summary row: opening a topic
+    // should read as a conversation, not as a wall of every tool that ran.
+    // Inspecting the list stays one click away — and that click lands on the
+    // full list (see manualExpandLevel), so nothing is two hops deep.
     const completionInitialLevel: WorkflowExpandLevel = completionDefault ?? 'collapsed';
-    /** When a consumer opts any phase into `full`, treat the workflow as a
-     *  "fully expanded" experience — manual expands from collapsed go to
-     *  `full` instead of the legacy `semi` cap. Heterogeneous agents rely on
-     *  this so all 40+ tool calls stay visible after the user re-expands. */
-    const manualExpandLevel: WorkflowExpandLevel =
-      streamingDefault === 'full' || completionDefault === 'full' ? 'full' : 'semi';
 
     const [expandLevel, setExpandLevel] = useState<WorkflowExpandLevel>(() =>
       allComplete ? completionInitialLevel : streamingInitialLevel,
@@ -256,12 +256,19 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     ]);
 
     const streaming = !allComplete;
+    /** Where a manual open from the summary row lands: the full list, in both
+     *  phases. Opening a workflow means "show me everything that ran"; the
+     *  height cap only hides part of the answer behind another click. `semi`
+     *  survives as the ⤢ toggle's other position and for a consumer that pins
+     *  that phase to it explicitly. */
+    const manualExpandLevel: WorkflowExpandLevel =
+      (streaming ? streamingDefault : completionDefault) === 'semi' ? 'semi' : 'full';
     const forceExpanded = streaming && pendingInterventionPresent;
     const isExpanded = forceExpanded || expandLevel !== 'collapsed';
 
     useEffect(() => {
       if (streaming && pendingInterventionPresent) {
-        setExpandLevel('semi');
+        setExpandLevel('full');
       }
     }, [pendingInterventionPresent, streaming]);
 
@@ -406,7 +413,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
           pendingInterventionPresent ? (
             <Icon color={cssVar.colorInfo} icon={HandIcon} />
           ) : (
-            <NeuralNetworkLoading size={16} />
+            <Spin size="small" variant="network" />
           ),
         );
       }

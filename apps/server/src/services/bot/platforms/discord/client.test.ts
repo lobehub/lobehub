@@ -34,6 +34,20 @@ describe('DiscordGatewayClient', () => {
     });
   });
 
+  describe('shouldExpireIdleTopic', () => {
+    it('keeps the topic of a Discord guild thread regardless of idle time', () => {
+      const client = createClient();
+
+      expect(client.shouldExpireIdleTopic?.('discord:guild-1:channel-1:thread-1')).toBe(false);
+    });
+
+    it('expires idle topics in DMs', () => {
+      const client = createClient();
+
+      expect(client.shouldExpireIdleTopic?.('discord:@me:dm-channel-1')).toBe(true);
+    });
+  });
+
   describe('isSoloBotConversation', () => {
     const installFakeApi = (client: any) => {
       const listThreadMembers = vi.fn().mockResolvedValue([]);
@@ -323,6 +337,41 @@ describe('DiscordGatewayClient', () => {
 
       expect(spy).toHaveBeenCalledTimes(1);
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe('sanitizeUserInput / resolveMentions', () => {
+    // Real Discord ids are numeric snowflakes; the mention regex only matches those.
+    const createNumericClient = () =>
+      new DiscordClientFactory().createClient(
+        {
+          applicationId: '2000',
+          credentials: { botToken: 'token', publicKey: 'public-key' },
+          platform: 'discord',
+          settings: {},
+        },
+        {},
+      );
+    const raw = {
+      mentions: [
+        { global_name: 'Shadow Arvin', id: '111', username: 'shadow' },
+        { bot: true, global_name: null, id: '2000', username: 'Lobo' },
+      ],
+    };
+
+    it('names every mention and only strips the leading self mention', () => {
+      const client = createNumericClient();
+      expect(client.sanitizeUserInput!('<@111> 我搞了个 <@2000> 来抢你的活', { raw } as any)).toBe(
+        '@Shadow Arvin 我搞了个 @Lobo 来抢你的活',
+      );
+      expect(client.sanitizeUserInput!('<@2000> /new', { raw } as any)).toBe('/new');
+    });
+
+    it('resolveMentions keeps the self mention as a name', () => {
+      const client = createNumericClient();
+      expect(client.resolveMentions!('<@2000> hi <@111>', { raw } as any)).toBe(
+        '@Lobo hi @Shadow Arvin',
+      );
     });
   });
 

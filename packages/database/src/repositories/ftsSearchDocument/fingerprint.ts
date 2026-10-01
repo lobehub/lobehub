@@ -45,12 +45,18 @@ export interface FtsSearchIndexMeta {
    */
   schema_fingerprint?: string;
   schema_version: number;
+  /** Last live run that replaced this generation; meaningful only while this index is detached. */
+  superseded_by_reindex_run_id?: string;
 }
+
+export type FtsSearchBuiltIndexMeta = Required<
+  Pick<FtsSearchIndexMeta, 'reindex_run_id' | 'schema_fingerprint' | 'schema_version'>
+>;
 
 export const buildFtsSearchIndexMeta = (
   entity: FtsSearchDocumentEntity,
   reindexRunId: string,
-): Required<FtsSearchIndexMeta> => ({
+): FtsSearchBuiltIndexMeta => ({
   reindex_run_id: reindexRunId,
   schema_fingerprint: getFtsSearchIndexSchemaFingerprint(entity),
   schema_version: getFtsSearchIndexSchemaVersion(entity),

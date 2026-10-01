@@ -3,7 +3,7 @@ import debug from 'debug';
 import { appEnv } from '@/envs/app';
 
 import { AgentStateManager } from './AgentStateManager';
-import { GatewayStreamNotifier } from './GatewayStreamNotifier';
+import { GatewayStreamNotifier, type GatewayStreamNotifierOptions } from './GatewayStreamNotifier';
 import { FULL_STRIP_REDACTION } from './gatewayVisitorRedaction';
 import { inMemoryAgentStateManager } from './InMemoryAgentStateManager';
 import { inMemoryStreamEventManager } from './InMemoryStreamEventManager';
@@ -55,7 +55,9 @@ export const createAgentStateManager = (): IAgentStateManager => {
  * - If Redis is unavailable and enableQueueAgentRuntime=false (default): InMemoryStreamEventManager
  * - If Redis is unavailable and enableQueueAgentRuntime=true: throw
  */
-export const createStreamEventManager = (): IStreamEventManager => {
+export const createStreamEventManager = (
+  options?: GatewayStreamNotifierOptions,
+): IStreamEventManager => {
   let manager: IStreamEventManager;
 
   // Prefer Redis whenever it is available so the runtime worker and SSE route
@@ -98,6 +100,15 @@ export const createStreamEventManager = (): IStreamEventManager => {
         const meta = await stateManager.getOperationMetadata(operationId);
         if (!meta?.streamOwnerUserId) return null;
         return meta.visitorRedaction ?? FULL_STRIP_REDACTION;
+      },
+      {
+        ...options,
+        // Same again for the supervisor's `member_runtime_end` declaration: the
+        // worker mirroring a member's terminal may never have seen its init.
+        resolveAcceptsMemberRuntimeEnd: async (operationId) => {
+          const meta = await stateManager.getOperationMetadata(operationId);
+          return meta?.acceptsMemberRuntimeEnd === true;
+        },
       },
     );
   }

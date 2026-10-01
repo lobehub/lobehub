@@ -6,6 +6,7 @@ import {
   type ClientSecretPayload,
   type DeviceUnavailableErrorData,
   type ExecSubAgentParams,
+  type ExecutionPlan,
   type StepActivatedSkill,
   type StepContextTodoItem,
   type WorkRegistrationIntent,
@@ -27,6 +28,11 @@ export interface ServerSubAgentRunParams {
   description: string;
   /** Detailed instruction/prompt for the sub-agent run. */
   instruction: string;
+  /**
+   * Continue this earlier `callSubAgent` sub-agent (its isolation thread id)
+   * instead of starting a new one. Only set by `callSubAgent`.
+   */
+  subAgentId?: string;
   /** Optional per-run timeout in milliseconds. */
   timeout?: number;
 }
@@ -230,11 +236,22 @@ export interface ToolExecutionContext {
    */
   editingGroupId?: string;
   /**
+   * Tool ids offered to the model in this run (operation tool set plus step activations). Lets a
+   * runtime name a follow-up tool in its result only when the model can actually call it.
+   */
+  enabledToolIds?: string[];
+  /**
    * Legacy agent invocation callback forwarded from RuntimeExecutorContext.
    * Kept for tool runtimes that still dispatch through exec_sub_agent style
    * flows; `lobe-agent.callSubAgent` uses the per-call `subAgent` runner below.
    */
   execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+  /**
+   * The run's resolved execution plan. Lets a runtime explain a gate the plan
+   * imposes (e.g. a device-locked run has no device picker) instead of the
+   * gated tool just looking missing.
+   */
+  executionPlan?: ExecutionPlan;
   /** Per-call execution timeout resolved by the agent runtime. */
   executionTimeoutMs?: number;
   /** Current group ID for group chat context */

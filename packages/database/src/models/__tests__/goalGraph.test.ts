@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, goalNodes, goals, users, workspaces } from '../../schemas';
+import { agents, goalNodes, goals, topics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
 import { GoalGraphModel } from '../goalGraph';
@@ -178,6 +178,34 @@ describe('GoalGraphModel', () => {
     expect(graph?.events.filter((event) => event.entityType === 'task')).toHaveLength(1);
   });
 
+  it('refuses to bind a task to a node retired while the task was being created', async () => {
+    // Retirement fences the node before it looks for bound Tasks; a Task a
+    // concurrent coordinator finishes creating afterwards must not flip the
+    // retired node back to `active`.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Retire race' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Stray' });
+    const task = await new TaskModel(serverDB, userId).create({ instruction: 'Late task' });
+
+    expect(await graphModel.claimTaskNode(goal.id, node!.id, new Date(0))).toBeDefined();
+    await graphModel.updateNodeStatus(goal.id, node!.id, 'retired');
+
+    expect(await graphModel.bindTask(goal.id, node!.id, task.id)).toBeUndefined();
+    const [after] = (await graphModel.getGraph(goal.id))!.nodes;
+    expect(after.status).toBe('retired');
+    expect(after.taskId).toBeNull();
+  });
+
+  it('does not let a stale status write revive a retired node', async () => {
+    // A coordinator tick that loaded the node before retirement would
+    // otherwise write it back to `resolved`.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Stale write' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Stray' });
+    await graphModel.updateNodeStatus(goal.id, node!.id, 'retired');
+
+    expect(await graphModel.updateNodeStatus(goal.id, node!.id, 'resolved')).toBeUndefined();
+    expect(await graphModel.getNodeStatus(goal.id, node!.id)).toBe('retired');
+  });
+
   it('refuses to bind a task to a node that is not a task node', async () => {
     // This used to be a CHECK constraint. It lives in `bindTask`'s WHERE now,
     // so the rule needs a test on the write path or nothing enforces it.
@@ -228,6 +256,39 @@ describe('GoalGraphModel', () => {
     // Personal mode: the Work ownership predicate the workspace case needs must
     // not hide the owner's own deliverable from their own goal.
     expect(links?.[0].work).toMatchObject({ type: 'task', workId: work!.id });
+  });
+
+  it('hydrates what a file deliverable needs to be downloaded and cited', async () => {
+    // The result page's reader shows a file's format and size on its download
+    // card, and matches acceptance evidence to the file by its file-store id.
+    await serverDB.insert(topics).values({ id: 'goal-graph-file-topic', userId });
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'File goal' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Export sheet' });
+    const work = await new WorkModel(serverDB, userId).registerFile({
+      filePath: '/mnt/data/pricing.xlsx',
+      metadata: {
+        fileId: 'file-pricing',
+        filePath: '/mnt/data/pricing.xlsx',
+        fileSize: 4096,
+        fileUrl: 'https://cdn.example.com/pricing.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
+      title: 'pricing.xlsx',
+      toolIdentifier: 'goal-test',
+      toolName: 'writeFile',
+      topicId: 'goal-graph-file-topic',
+      userId,
+    });
+    await graphModel.attachWorkVersion(goal.id, node!.id, work.currentVersionId!, 'produced');
+
+    const links = (await graphModel.getGraph(goal.id))?.workVersions;
+    expect(links?.[0].work).toMatchObject({
+      fileId: 'file-pricing',
+      fileSize: 4096,
+      fileUrl: 'https://cdn.example.com/pricing.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      type: 'file',
+    });
   });
 
   it('hydrates a linked Work only for a viewer allowed to see it', async () => {

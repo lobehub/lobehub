@@ -29,13 +29,13 @@ vi.mock('@/database/models/device', () => ({
 // Import after mock setup
 const { remoteDeviceRuntime } = await import('../remoteDevice');
 
-/** Minimal drizzle-like chain that resolves the agent's workspace_id lookup. */
+/** Minimal drizzle-like chain that resolves a live agent's workspace_id lookup. */
 const makeServerDB = (workspaceId: string | null) =>
   ({
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: () => Promise.resolve(workspaceId === null ? [] : [{ workspaceId }]),
+          limit: () => Promise.resolve([{ workspaceId }]),
         }),
       }),
     }),

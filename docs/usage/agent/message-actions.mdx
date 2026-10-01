@@ -1,0 +1,109 @@
+---
+title: Message Actions
+description: >-
+  Edit, copy, translate, branch into subtopics, multi-select and
+  forward, share, regenerate, or delete individual messages in a conversation.
+tags:
+  - LobeHub
+  - Message Actions
+  - Translation
+  - Subtopics
+  - Share
+---
+
+# Message Actions
+
+Beyond managing whole topics, you can act on individual messages in a conversation: fix your own question, ask the Agent to answer again, translate a message into another language, branch off a subtopic from a specific point, or share a single reply on its own.
+
+## Open the Message Menu
+
+Hover over a message to reveal its most common actions (such as edit, copy, and regenerate). Open the message's more menu to see every action available for it.
+
+Your own messages and the Agent's messages offer slightly different actions:
+
+| Action | Your messages | Agent messages | Purpose |
+| --- | --- | --- | --- |
+| **Edit** | ✓ | ✓ | Change the message content |
+| **Copy** | ✓ | ✓ | Copy the message text to the clipboard |
+| **Copy Operation ID** | — | ✓ | Copy the identifier of the run that produced this message, for troubleshooting |
+| **Create Subtopic** | ✓ | ✓ | Branch a new line of discussion from this message |
+| **Collapse / Expand Message** | — | ✓ | Fold or unfold a long reply |
+| **Translate** | ✓ | — | Translate this message into a chosen language |
+| **Share** | — | ✓ | Export this reply as a screenshot, text, or PDF |
+| **Select** | ✓ | ✓ | Enter multi-select mode to forward or delete messages in bulk |
+| **Regenerate** | ✓ | ✓ | Get a new answer from the Agent |
+| **Delete** | ✓ | ✓ | Remove this message |
+
+The menu adapts to the message state and your permissions. A reply that is still generating offers only delete. With view-only access, actions that change the conversation—edit, delete, regenerate, translate, and create subtopic—are not shown. **Copy Operation ID** appears only when advanced tools are enabled in settings.
+
+## Edit and Copy
+
+**Edit** switches the message into an editable state; save when you are done. Editing your own message is useful for fixing typos or adding a missing condition. Editing an Agent message lets you correct its content so the rest of the conversation builds on the corrected version. Editing does not trigger a new answer by itself—use **Regenerate** when you want one.
+
+**Copy** places the message text on the clipboard for pasting elsewhere. To export with formatting or as an image, use **Share** on an Agent message.
+
+## Regenerate
+
+- **Regenerate on your message** — Sends this message to the Agent again to get a new answer. Useful when you are unhappy with the current reply but do not want to change the question.
+- **Regenerate on an Agent message** — Asks the Agent to answer the same question again. If the reply failed with an error, regenerating replaces the failed message with the new answer.
+
+Wait for the current answer to finish before regenerating the same message again.
+
+## Create a Subtopic
+
+To dig into one message without disrupting the main conversation, choose **Create Subtopic**. The subtopic forks from this message while the main conversation stays as it is.
+
+When creating it, choose how much context the subtopic inherits:
+
+- **Inherit the main chat context** — The subtopic knows everything from the start of the conversation up to this message. Good for follow-up questions.
+- **Inherit only this message** — The subtopic carries just this one message. Good for discussing a single point in isolation.
+
+Creating a subtopic requires the current topic to be saved; in a brand-new conversation, send a message first. A message that has a subtopic cannot be deleted directly.
+
+## Translate
+
+Translation is available on your own messages.
+
+**Translate**: pick a target language from the submenu. The translation appears below the original, which stays in place for side-by-side reading. Clear the translation when you no longer need it. Translation is performed by the model assigned to **Message Translation** under **System Tasks** in settings; models with strong multilingual ability generally produce more natural results.
+
+<Image alt={'Display Translated Conversation'} src={'/blog/assetsf3ccd42bf36b1c75f06f925ffe049f0c.webp'} />
+
+## Collapse Message and Copy Operation ID
+
+These two actions are available on Agent messages.
+
+**Collapse Message** folds a long reply into a compact view so the conversation is easier to scan; choose **Expand Message** to restore the full content. Collapsing only affects display and does not change the message.
+
+**Copy Operation ID** copies the identifier of the run that produced this reply. When a reply misbehaves and you need to report it, including this identifier helps support locate the issue quickly. The option appears only when advanced tools are enabled and is not needed in everyday use.
+
+## Share a Single Reply
+
+Choose **Share** on an Agent message to export just that reply instead of the whole conversation. Three formats are available:
+
+- **Screenshot** — Generate an image for messaging apps or social media.
+- **Text** — Export the text for editing or quoting.
+- **PDF** — Generate a PDF file for archiving or formal delivery.
+
+Review the preview for anything that should not be shared. To export an entire topic or publish a read-only share link, see [Topics: Export and Share](/docs/usage/agent/topic#export-and-share).
+
+## Select: Forward or Delete in Bulk
+
+Choose **Select** on any message to enter multi-select mode with that message already checked. Keep checking more messages, or use **Select to here** to select a continuous range at once.
+
+The bottom bar offers:
+
+- **Forward** — Send the selected messages to one or more other Agents, optionally with a note. The messages appear as context in a new topic for each target Agent, which then continues from there.
+- **Delete** — Remove the selected messages after confirmation.
+- **Cancel** — Leave multi-select mode.
+
+To forward an entire topic instead, use **Forward to another agent** from the topic menu.
+
+## Delete a Message
+
+Choose **Delete** to remove the message. Deletion cannot be undone; if you only want a long reply to take up less space, use **Collapse Message** instead. A message with a subtopic cannot be deleted. To clean up many messages at once, use **Select** and then delete.
+
+<Cards>
+  <Card href={'/docs/usage/agent/topic'} title={'Topics'} />
+
+  <Card href={'/docs/usage/agent/tts-stt'} title={'Voice Input'} />
+</Cards>

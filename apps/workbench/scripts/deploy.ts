@@ -1,15 +1,21 @@
 import { execFileSync, execSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import dotenv from 'dotenv';
 
 import { uploadAssets } from '../../../scripts/mobileSpaWorkflow/upload';
-import { localOperator, workerDeployAnnotationArgs } from '../../../scripts/workerDeployAnnotations';
+import {
+  localOperator,
+  workerDeployAnnotationArgs,
+} from '../../../scripts/workerDeployAnnotations';
+import { hashBuildOutput, readOutputHash } from '../../../scripts/workerOutputHash';
 
 const workbenchRoot = resolve(__dirname, '..');
 const repoRoot = resolve(workbenchRoot, '../..');
-const assetsDir = resolve(workbenchRoot, 'build/client/assets');
+const buildDir = resolve(workbenchRoot, 'build');
+const assetsDir = resolve(buildDir, 'client/assets');
+const outputHashFile = resolve(workbenchRoot, 'output-hash.txt');
 
 dotenv.config({ path: resolve(repoRoot, '.env') });
 
@@ -50,6 +56,17 @@ async function main() {
   });
 
   if (!existsSync(assetsDir)) throw new Error(`Build output not found at ${assetsDir}`);
+
+  const outputHash = hashBuildOutput(buildDir);
+  writeFileSync(outputHashFile, `${outputHash}\n`);
+
+  // A build input can change without changing a byte of output (comments, types, code the
+  // bundle tree-shakes). Redeploying that output would only push real releases out of
+  // Cloudflare's 100-version rollback window.
+  if (outputHash === readOutputHash(process.env.WORKBENCH_PREVIOUS_OUTPUT_HASH_FILE)) {
+    console.log(`\n=== Output unchanged (${outputHash.slice(0, 12)}), skipping deploy ===`);
+    return;
+  }
 
   console.log('\n=== Step 2: Upload assets to S3 ===');
   await uploadAssets(assetsDir, {

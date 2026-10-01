@@ -84,7 +84,8 @@ export const createStoreAction: CreateStore =
     ...(initialMessages
       ? {
           dbMessages: initialMessages,
-          displayMessages: parse(initialMessages).flatList,
+          displayMessages: parse(initialMessages, undefined, { threadId: context.threadId })
+            .flatList,
           messagesInit: true,
         }
       : {}),

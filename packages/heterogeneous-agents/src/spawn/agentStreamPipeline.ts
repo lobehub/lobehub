@@ -6,10 +6,12 @@ import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
   HeterogeneousToolResultImage,
+  PostRunUsageOptions,
   UsageData,
 } from '../types';
 import { CodexFileChangeTracker } from './codexFileChangeTracker';
 import { JsonlStreamProcessor } from './jsonlProcessor';
+import { readPostRunUsage } from './postRunUsage';
 import { toStreamEvent } from './streamEvent';
 
 /**
@@ -59,6 +61,7 @@ export interface AgentStreamPipelineOptions {
 export class AgentStreamPipeline {
   private readonly processor = new JsonlStreamProcessor();
   private readonly adapter: AgentEventAdapter;
+  private readonly agentType: string;
   private readonly operationId: string;
   private readonly codexTracker?: CodexFileChangeTracker;
   private readonly uploadImage?: UploadHeterogeneousImage;
@@ -66,6 +69,7 @@ export class AgentStreamPipeline {
 
   constructor(options: AgentStreamPipelineOptions) {
     this.adapter = createAdapter(options.agentType);
+    this.agentType = options.agentType;
     this.operationId = options.operationId;
     this.uploadImage = options.uploadImage;
     this.codexTracker =
@@ -128,6 +132,23 @@ export class AgentStreamPipeline {
         type: 'agent_runtime_end',
       },
     ]);
+  }
+
+  /**
+   * Read usage the CLI only wrote to disk (Kimi Code's session wire log) and
+   * let the adapter turn it into events. Call after {@link flush} and process
+   * exit. Always best-effort: agents without post-run usage, a missing log, or
+   * a failing read yield `[]`.
+   */
+  async collectPostRunUsage(options?: PostRunUsageOptions): Promise<AgentStreamEvent[]> {
+    if (!this.adapter.buildPostRunUsageEvents) return [];
+    try {
+      const usage = await readPostRunUsage(this.agentType, this.adapter.sessionId, options);
+      if (!usage) return [];
+      return this.toStreamEvents(this.adapter.buildPostRunUsageEvents(usage));
+    } catch {
+      return [];
+    }
   }
 
   /**

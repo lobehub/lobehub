@@ -95,6 +95,7 @@ export class AgentRuntimeCoordinator {
   async createAgentOperation(
     operationId: string,
     data: {
+      acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
       visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;

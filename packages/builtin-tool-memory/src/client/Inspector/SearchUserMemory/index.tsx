@@ -31,14 +31,17 @@ export const SearchUserMemoryInspector = memo<
     );
   }
 
-  // pluginState is SearchMemoryResult directly.
-  const resultCount = pluginState
-    ? (pluginState.activities?.length ?? 0) +
-      (pluginState.contexts?.length ?? 0) +
-      (pluginState.experiences?.length ?? 0) +
-      (pluginState.identities?.length ?? 0) +
-      (pluginState.preferences?.length ?? 0)
-    : 0;
+  // pluginState is SearchMemoryResult directly — except once the read path has
+  // projected it, when the buckets are gone and their total is pinned instead.
+  const resultCount =
+    pluginState?.resultCount ??
+    (pluginState
+      ? (pluginState.activities?.length ?? 0) +
+        (pluginState.contexts?.length ?? 0) +
+        (pluginState.experiences?.length ?? 0) +
+        (pluginState.identities?.length ?? 0) +
+        (pluginState.preferences?.length ?? 0)
+      : 0);
   const hasResults = resultCount > 0;
 
   return (

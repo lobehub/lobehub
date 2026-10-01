@@ -1,4 +1,7 @@
-import type { GoalItem } from '@lobechat/types';
+import { DEVICE_OFFLINE_RUN_STATUS } from '@lobechat/const/goal';
+import type { GoalItem, TaskItem } from '@lobechat/types';
+
+import { HETERO_DISPATCH_ERROR_HEADLINES } from '@/server/services/aiAgent/helpers/heteroErrors';
 
 /**
  * Attempts a Task gets before the coordinator opens a decision gate, when the
@@ -18,6 +21,13 @@ const DEFAULT_MAX_ATTEMPTS_PER_TASK = 8;
  * anyone sees a result.
  */
 const DEFAULT_MAX_CONCURRENT_TASKS = 3;
+/**
+ * Turns a goal's main Agent gets when its manager policy does not set its own.
+ * A long-horizon goal re-plans after every round of tasks and every recovery,
+ * so a low cap paused goals mid-delivery with work still queued; the owner can
+ * still set a tighter cap per goal.
+ */
+export const DEFAULT_MANAGER_MAX_TURNS = 50;
 const MAX_CONCURRENT_TASKS_CEILING = 10;
 const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 // Agent runtime refreshes the durable operation lease every third 30-second
@@ -59,3 +69,101 @@ export const resolveOperationLeaseTimeout = (goal: GoalItem): number => {
     ? Math.max(configured, MIN_OPERATION_LEASE_TIMEOUT_MS)
     : DEFAULT_OPERATION_LEASE_TIMEOUT_MS;
 };
+
+/**
+ * Retry schedule for a Task whose runs keep ending because its device is
+ * unavailable. Such a run is not charged to the attempt budget — nothing judged
+ * the work — so it needs a bound of its own: a laptop asleep overnight should
+ * resume on its own, a device that never returns should reach a person within
+ * about a day.
+ *
+ * After the Nth consecutive offline run the next retry waits
+ * `min(FIRST * 2^(N-1), MAX)`: 30min, 1h, 2h, 4h, 8h, 8h — 23.5h across
+ * `MAX_DEVICE_OFFLINE_RETRIES` retries. A device that reconnects earlier is
+ * retried as soon as presence shows it back.
+ */
+export const DEVICE_OFFLINE_FIRST_RETRY_DELAY_MS = 30 * 60 * 1000;
+export const DEVICE_OFFLINE_MAX_RETRY_DELAY_MS = 8 * 60 * 60 * 1000;
+export const MAX_DEVICE_OFFLINE_RETRIES = 6;
+/** Why the gate opens once the offline retries are spent. */
+export const DEVICE_OFFLINE_GATE_REASON = 'Task device stayed offline';
+
+/**
+ * When the next retry after `offlineFailures` consecutive offline runs is due,
+ * or `undefined` once every offline retry has been spent.
+ */
+export const nextDeviceOfflineRetryAt = (
+  offlineFailures: number,
+  lastFailureAt: Date,
+): Date | undefined => {
+  const failures = Math.max(1, offlineFailures);
+  // Every failure after the first is a retry that also found the device gone.
+  if (failures - 1 >= MAX_DEVICE_OFFLINE_RETRIES) return undefined;
+  const delay = Math.min(
+    DEVICE_OFFLINE_FIRST_RETRY_DELAY_MS * 2 ** (failures - 1),
+    DEVICE_OFFLINE_MAX_RETRY_DELAY_MS,
+  );
+  return new Date(lastFailureAt.getTime() + delay);
+};
+
+/** Runs that ended because their device was unavailable. */
+export const isDeviceOfflineRun = (run: { status: string }): boolean =>
+  run.status === DEVICE_OFFLINE_RUN_STATUS;
+
+export const countDeviceOfflineRuns = (runs: readonly { status: string }[]): number =>
+  runs.filter(isDeviceOfflineRun).length;
+
+/**
+ * Offline runs since the Task's last run that reached its device, `runs` newest
+ * first. The schedule restarts once a run gets through, so a device that drops
+ * once a week is not held to the budget of the week before.
+ */
+export const countConsecutiveDeviceOfflineRuns = (runs: readonly { status: string }[]): number => {
+  const firstReached = runs.findIndex((run) => !isDeviceOfflineRun(run));
+  return firstReached === -1 ? runs.length : firstReached;
+};
+
+/**
+ * Attempts charged to a Task's budget: every run it produced except the ones
+ * its device lost. Those retry on the offline schedule above instead.
+ */
+export const countChargedTaskAttempts = (
+  task: Pick<TaskItem, 'totalTopics'>,
+  deviceOfflineRuns: number,
+): number => Math.max(0, (task.totalTopics ?? 0) - deviceOfflineRuns);
+
+/**
+ * Dispatch failures that only say the device is not reachable right now. A
+ * reconnect is what fixes each of them — including a lost registration, which the
+ * device renews itself when it connects again — so the goal waits for it instead
+ * of opening a decision nobody can act on until the device is back.
+ */
+const DEVICE_UNAVAILABLE_CODES = [
+  'DEVICE_OFFLINE',
+  'DEVICE_CHANNEL_UNAVAILABLE',
+  'DEVICE_NOT_FOUND',
+];
+
+/**
+ * The same failure reaches `task.error` as a raw gateway code on one path and as
+ * its humanized headline on another, so match both off the one map.
+ */
+export const isDeviceUnavailableFailure = (error?: string | null): boolean =>
+  !!error &&
+  DEVICE_UNAVAILABLE_CODES.some(
+    (code) => error.includes(code) || error.includes(HETERO_DISPATCH_ERROR_HEADLINES[code]),
+  );
+
+/**
+ * The `task_topics.status` a run that errored ends with. Every writer of a failed
+ * run goes through this, so the dispatch result and a lifecycle hook delivered
+ * later agree on an offline run instead of the later one turning it back into a
+ * charged failure.
+ */
+export const resolveFailedRunStatus = (error?: string | null): string =>
+  isDeviceUnavailableFailure(error) ? DEVICE_OFFLINE_RUN_STATUS : 'failed';
+
+/** Whether a goal's main Agent has used every turn its policy allows. */
+export const managerTurnsSpent = (config: GoalItem['config']): boolean =>
+  !!config?.manager &&
+  (config.managerState?.turns ?? 0) >= (config.manager.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS);

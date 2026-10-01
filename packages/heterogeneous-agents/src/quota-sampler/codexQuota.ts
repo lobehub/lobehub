@@ -13,8 +13,8 @@ import type {
   CodexRateLimitSnapshot,
 } from '../quota';
 import { codexQuotaReadings } from '../quota/codex';
-import { parseCodexAccountIdentity } from '../quota/identity';
 import { buildCodexAppServerArgs, resolveCliSpawnPlan } from '../spawn';
+import { parseCodexAccountIdentity } from './identity';
 
 const RPC_TIMEOUT_MS = 10_000;
 const CODEX_PRIMARY_WINDOW_MINUTES = 5 * 60;

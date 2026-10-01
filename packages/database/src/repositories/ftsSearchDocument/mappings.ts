@@ -93,8 +93,37 @@ const toIndexSegment = (entity: FtsSearchDocumentEntity) =>
 export const getFtsSearchIndexAlias = (namespace: string, entity: FtsSearchDocumentEntity) =>
   `${namespace}-${toIndexSegment(entity)}`;
 
+export interface FtsSearchPhysicalIndexIdentity {
+  /** Schema generation used when this physical index was first built. */
+  builtSchemaVersion: number;
+  /** Present for an explicit rebuild of the current schema generation. */
+  reindexRunId?: string;
+}
+
+const REINDEX_RUN_ID_PATTERN =
+  '[\\da-f]{8}-[\\da-f]{4}-[1-8][\\da-f]{3}-[89ab][\\da-f]{3}-[\\da-f]{12}';
+
 export const getFtsSearchPhysicalIndexName = (
   namespace: string,
   entity: FtsSearchDocumentEntity,
   version: number = getFtsSearchIndexSchemaVersion(entity),
-) => `${getFtsSearchIndexAlias(namespace, entity)}-v${version}`;
+  reindexRunId?: string,
+) =>
+  `${getFtsSearchIndexAlias(namespace, entity)}-v${version}${reindexRunId ? `-r${reindexRunId}` : ''}`;
+
+/** Parses canonical `<alias>-v<n>` and same-schema rebuild `<alias>-v<n>-r<uuid>` names. */
+export const parseFtsSearchPhysicalIndexName = (
+  alias: string,
+  index: string,
+): FtsSearchPhysicalIndexIdentity | undefined => {
+  if (!index.startsWith(`${alias}-v`)) return;
+  const suffix = index.slice(alias.length + 2);
+  const match = new RegExp(`^(\\d+)(?:-r(${REINDEX_RUN_ID_PATTERN}))?$`, 'i').exec(suffix);
+  if (!match) return;
+  const builtSchemaVersion = Number(match[1]);
+  if (!Number.isSafeInteger(builtSchemaVersion) || builtSchemaVersion < 1) return;
+  return {
+    builtSchemaVersion,
+    ...(match[2] ? { reindexRunId: match[2].toLowerCase() } : {}),
+  };
+};

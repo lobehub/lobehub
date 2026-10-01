@@ -53,6 +53,7 @@ import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { TopicModel } from '../topic';
 import type { UserMemoryHybridSearchAggregatedResult } from './query';
 import { UserMemoryQueryModel } from './query';
+import { buildUserMemoryWhere } from './where';
 
 const normalizeRelationshipValue = (input: unknown): RelationshipEnum | null => {
   if (input === null) return null;
@@ -317,6 +318,12 @@ export interface UpdateIdentityEntryParams {
   identity?: IdentityEntryPayload;
   identityId: string;
   mergeStrategy?: MergeStrategyEnum;
+  /**
+   * With `replace`, only overwrite the identity fields present in `identity` and keep the
+   * rest. Tool calls send just the fields they change; the extractor sends a full identity
+   * and relies on omitted fields being cleared, so it leaves this off.
+   */
+  preserveOmittedFields?: boolean;
 }
 
 export interface ContextEntryPayload {
@@ -429,6 +436,17 @@ export interface GetMemoryDetailParams {
   id: string;
   layer: LayersEnum;
 }
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * Shallow-merge supplied metadata keys over the stored object inside the UPDATE itself, so
+ * concurrent partial updates of different keys cannot overwrite each other with a stale read.
+ * A stored value that is not a JSON object is treated as empty.
+ */
+const mergeMetadataKeysSql = (column: AnyColumn, supplied: Record<string, unknown>) =>
+  sql`(CASE WHEN jsonb_typeof(${column}) = 'object' THEN ${column} ELSE '{}'::jsonb END) || ${JSON.stringify(supplied)}::jsonb`;
 
 export class UserMemoryModel {
   static parseAssociatedObjects(value?: unknown): Record<string, unknown>[] {
@@ -560,8 +578,8 @@ export class UserMemoryModel {
     this.topicModel = new TopicModel(db, userId);
   }
 
-  private memoryWhere(table: { userId: any }) {
-    return eq(table.userId, this.userId);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
   private extractSourceMetadata(metadata?: Record<string, unknown> | null): {
@@ -2385,7 +2403,14 @@ export class UserMemoryModel {
           baseUpdate.updatedAt = new Date();
           await tx
             .update(userMemories)
-            .set(baseUpdate)
+            .set(
+              params.preserveOmittedFields && isPlainRecord(baseUpdate.metadata)
+                ? {
+                    ...baseUpdate,
+                    metadata: mergeMetadataKeysSql(userMemories.metadata, baseUpdate.metadata),
+                  }
+                : baseUpdate,
+            )
             .where(and(eq(userMemories.id, identity.userMemoryId), this.memoryWhere(userMemories)));
         }
       }
@@ -2416,6 +2441,14 @@ export class UserMemoryModel {
                   ? null
                   : (normalizeIdentityTypeValue(identity.type) ?? null),
           };
+
+          if (params.preserveOmittedFields) {
+            for (const key of Object.keys(identityUpdate) as (keyof typeof identityUpdate)[]) {
+              if (identity[key as keyof IdentityEntryPayload] === undefined) {
+                delete identityUpdate[key];
+              }
+            }
+          }
         } else {
           identityUpdate = merge(identityUpdate, params.identity);
 
@@ -2446,7 +2479,19 @@ export class UserMemoryModel {
           identityUpdate.updatedAt = new Date();
           await tx
             .update(userMemoriesIdentities)
-            .set(identityUpdate)
+            .set(
+              // A partial tool update names only the metadata keys it changes (e.g.
+              // scoreConfidence); keep the other stored keys such as sourceEvidence.
+              params.preserveOmittedFields && isPlainRecord(identityUpdate.metadata)
+                ? {
+                    ...identityUpdate,
+                    metadata: mergeMetadataKeysSql(
+                      userMemoriesIdentities.metadata,
+                      identityUpdate.metadata,
+                    ),
+                  }
+                : identityUpdate,
+            )
             .where(
               and(
                 eq(userMemoriesIdentities.id, params.identityId),
@@ -2495,16 +2540,17 @@ export class UserMemoryModel {
       const memoryIds = Array.isArray(context.userMemoryIds)
         ? (context.userMemoryIds as string[])
         : [];
+
+      // Delete the authorized child while its live-parent guard still matches.
+      await tx
+        .delete(userMemoriesContexts)
+        .where(and(eq(userMemoriesContexts.id, contextId), this.memoryWhere(userMemoriesContexts)));
+
       if (memoryIds.length > 0) {
         await tx
           .delete(userMemories)
           .where(and(inArray(userMemories.id, memoryIds), this.memoryWhere(userMemories)));
       }
-
-      // Delete the context entry
-      await tx
-        .delete(userMemoriesContexts)
-        .where(and(eq(userMemoriesContexts.id, contextId), this.memoryWhere(userMemoriesContexts)));
 
       return true;
     });

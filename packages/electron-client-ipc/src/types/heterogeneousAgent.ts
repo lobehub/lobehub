@@ -76,6 +76,11 @@ export type {
   CodexRateLimitResetOutcome,
   CodexRateLimitSnapshot,
 } from '@lobechat/heterogeneous-agents/quota';
+export type {
+  KimiCodeExtraUsage,
+  KimiCodeQuotaSnapshot,
+  KimiCodeQuotaUnavailableReason,
+} from '@lobechat/heterogeneous-agents/quota';
 
 export interface CodexRateLimitResetResult {
   outcome: CodexRateLimitResetOutcome;

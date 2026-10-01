@@ -1,0 +1,215 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  commandLineLooksLikeHeteroCli,
+  describeHeteroCliProcess,
+  isPidAlive,
+  isProcessAlive,
+  readProcessIdentity,
+  tokenizeCommandLine,
+  waitForProcessExit,
+} from './heteroCliProcess';
+
+describe('commandLineLooksLikeHeteroCli', () => {
+  it('matches the recorded command basename anywhere on the command line', () => {
+    expect(
+      commandLineLooksLikeHeteroCli(
+        'node /Users/me/.npm/bin/claude -p --output-format stream-json',
+        { agentType: 'claude-code', command: 'claude' },
+      ),
+    ).toBe(true);
+  });
+
+  it('falls back to the agent type when no command was recorded', () => {
+    expect(commandLineLooksLikeHeteroCli('/opt/codex exec --json', { agentType: 'codex' })).toBe(
+      true,
+    );
+  });
+
+  it('matches a Windows executable token regardless of case and suffix', () => {
+    expect(
+      commandLineLooksLikeHeteroCli(
+        'C:\\Users\\me\\bin\\Claude.exe -p --output-format stream-json',
+        {
+          agentType: 'claude-code',
+          command: 'claude',
+        },
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects an unrelated process that merely mentions the CLI name', () => {
+    // Substring matching would have killed this process tree.
+    expect(
+      commandLineLooksLikeHeteroCli('python /tmp/claude-cleanup.py --force', {
+        agentType: 'claude-code',
+        command: 'claude',
+      }),
+    ).toBe(false);
+    expect(
+      commandLineLooksLikeHeteroCli('/usr/bin/grep -r claude /var/log', {
+        agentType: 'claude-code',
+        command: 'claude',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an unrelated process that recycled the pid', () => {
+    expect(
+      commandLineLooksLikeHeteroCli('/Applications/Safari.app/Contents/MacOS/Safari', {
+        agentType: 'claude-code',
+        command: 'claude',
+      }),
+    ).toBe(false);
+    expect(commandLineLooksLikeHeteroCli(undefined, { agentType: 'claude-code' })).toBe(false);
+  });
+});
+
+describe('tokenizeCommandLine', () => {
+  it('keeps a quoted path with spaces as one token', () => {
+    expect(
+      tokenizeCommandLine('"C:\\Program Files\\nodejs\\node.exe" "C:\\app\\cli.js" -p'),
+    ).toEqual(['C:\\Program Files\\nodejs\\node.exe', 'C:\\app\\cli.js', '-p']);
+  });
+
+  it('splits an unquoted line on whitespace', () => {
+    expect(tokenizeCommandLine('  /usr/bin/node  /opt/cli.js   -p ')).toEqual([
+      '/usr/bin/node',
+      '/opt/cli.js',
+      '-p',
+    ]);
+  });
+});
+
+describe('commandLineLooksLikeHeteroCli with quoted Windows paths', () => {
+  const run = {
+    agentType: 'claude-code',
+    command: 'node',
+    scriptPath: 'C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js',
+  };
+
+  it('matches the real orphan whose executable path is quoted', () => {
+    // Splitting on whitespace yielded `"C:\Program` and `Files\nodejs\node.exe"`,
+    // so the genuine orphan failed its own check and was left running.
+    expect(
+      commandLineLooksLikeHeteroCli(
+        '"C:\\Program Files\\nodejs\\node.exe" "C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js" -p',
+        run,
+      ),
+    ).toBe(true);
+  });
+
+  it('still rejects a quoted node process running something else', () => {
+    expect(
+      commandLineLooksLikeHeteroCli(
+        '"C:\\Program Files\\nodejs\\node.exe" "C:\\other\\server.js"',
+        run,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('describeHeteroCliProcess', () => {
+  it('records the CLI script when the executable is an interpreter', () => {
+    // A Windows npm shim is unwrapped into `node <cli-script>`.
+    expect(
+      describeHeteroCliProcess('C:\\Program Files\\nodejs\\node.exe', [
+        'C:\\Program Files\\nodejs\\node.exe',
+        'C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js',
+        '-p',
+      ]),
+    ).toEqual({
+      command: 'node',
+      scriptPath: 'C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js',
+    });
+  });
+
+  it('skips interpreter flags when looking for the script', () => {
+    expect(
+      describeHeteroCliProcess('/usr/bin/node', [
+        '/usr/bin/node',
+        '--enable-source-maps',
+        '/opt/cli.js',
+      ]).scriptPath,
+    ).toBe('/opt/cli.js');
+  });
+
+  it('records no script when the executable IS the CLI', () => {
+    expect(
+      describeHeteroCliProcess('/Users/me/.local/bin/claude', [
+        '/Users/me/.local/bin/claude',
+        '-p',
+        '--output-format',
+        'stream-json',
+      ]),
+    ).toEqual({ command: 'claude', scriptPath: undefined });
+  });
+});
+
+describe('commandLineLooksLikeHeteroCli with an interpreter identity', () => {
+  const run = {
+    agentType: 'claude-code',
+    command: 'node',
+    scriptPath: 'C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js',
+  };
+
+  it('accepts the same interpreter running the recorded script', () => {
+    expect(
+      commandLineLooksLikeHeteroCli(
+        'node.exe C:\\app\\node_modules\\@anthropic-ai\\claude-code\\cli.js -p',
+        run,
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects an unrelated node process that recycled the pid', () => {
+    // `node` alone matches half the machine; the script path is what pins it.
+    expect(commandLineLooksLikeHeteroCli('node.exe C:\\other\\server.js', run)).toBe(false);
+  });
+});
+
+describe('readProcessIdentity', () => {
+  it('reports the current process as found with its command line', async () => {
+    const identity = await readProcessIdentity(process.pid, 'darwin');
+
+    expect(identity.status).toBe('found');
+    expect(identity.commandLine).toBeTruthy();
+  });
+
+  it('reports no output as unknown rather than proof of absence', async () => {
+    // `ps` exits non-zero both for "no such process" and for an operational
+    // failure, so absence is established by isPidAlive instead.
+    expect((await readProcessIdentity(2_147_483_000, 'darwin')).status).toBe('unknown');
+  });
+});
+
+describe('isPidAlive', () => {
+  it('confirms the current process and a dead pid independently of any tool', () => {
+    expect(isPidAlive(process.pid)).toBe(true);
+    expect(isPidAlive(2_147_483_000)).toBe(false);
+  });
+});
+
+describe('isProcessAlive', () => {
+  it('reports the current process alive and a dead pid gone', () => {
+    // Own pid is not a group leader; use the platform-specific target of its own group.
+    expect(isProcessAlive(process.pid, 'win32')).toBe(true);
+    expect(isProcessAlive(2_147_483_000, 'win32')).toBe(false);
+  });
+});
+
+describe('waitForProcessExit', () => {
+  it('resolves true as soon as the process is gone', async () => {
+    let polls = 0;
+    const isAlive = vi.fn(() => ++polls < 3);
+
+    await expect(waitForProcessExit(1, 1000, { isAlive, pollMs: 1 })).resolves.toBe(true);
+    expect(isAlive).toHaveBeenCalledTimes(3);
+  });
+
+  it('resolves false when the process outlives the timeout', async () => {
+    await expect(waitForProcessExit(1, 20, { isAlive: () => true, pollMs: 1 })).resolves.toBe(
+      false,
+    );
+  });
+});

@@ -10,6 +10,7 @@ import {
   FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS,
   FTS_SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS,
   FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
+  getFtsSearchSyncCaptureSourceTables,
   normalizeFtsSearchSyncCaptureDefinition,
 } from './captureInfrastructure';
 
@@ -49,13 +50,6 @@ export const FTS_SEARCH_SYNC_MAX_ATTEMPTS = 36;
 const ACKNOWLEDGEMENT_DEADLOCK_MAX_ATTEMPTS = 3;
 const ACKNOWLEDGEMENT_DEADLOCK_RETRY_BASE_DELAY_MS = 10;
 const POSTGRES_DEADLOCK_DETECTED = '40P01';
-
-const FTS_SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS = sql.join(
-  [...new Set(FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.map(({ table }) => table))].map(
-    (table) => sql`${sql.identifier('public')}.${sql.identifier(table)}`,
-  ),
-  sql`, `,
-);
 
 type FtsSearchSyncExecutor = Pick<LobeChatDatabase, 'execute'>;
 type FtsSearchSyncDatabase = Pick<LobeChatDatabase, 'execute' | 'transaction'>;
@@ -312,11 +306,18 @@ const revisionNumber = (value: number | string | undefined, operation: string, m
   return revision;
 };
 
-const lockCaptureSourceWrites = async (transaction: FtsSearchSyncExecutor): Promise<void> => {
-  await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
-  await transaction.execute(
-    sql`LOCK TABLE ${FTS_SEARCH_SYNC_CAPTURE_SOURCE_TABLE_IDENTIFIERS} IN SHARE MODE`,
+const lockCaptureSourceWrites = async (
+  transaction: FtsSearchSyncExecutor,
+  entities: readonly FtsSearchDocumentEntity[],
+): Promise<void> => {
+  const sourceTables = getFtsSearchSyncCaptureSourceTables(entities);
+  if (sourceTables.length === 0) throw new Error('Cannot fence writes for an empty entity set');
+  const sourceTableIdentifiers = sql.join(
+    sourceTables.map((table) => sql`${sql.identifier('public')}.${sql.identifier(table)}`),
+    sql`, `,
   );
+  await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
+  await transaction.execute(sql`LOCK TABLE ${sourceTableIdentifiers} IN SHARE MODE`);
 };
 
 /** Durable claim and settlement operations for the PostgreSQL-triggered search outbox. */
@@ -457,9 +458,11 @@ export class FtsSearchSyncOutboxRepository {
    * locks could include a revision whose Outbox row is still invisible and later commits after the
    * validation snapshot. The locks close that race without allocating a revision or mutating rows.
    */
-  async readCommittedRevisionBoundary(): Promise<number> {
+  async readCommittedRevisionBoundary(
+    entities: readonly FtsSearchDocumentEntity[] = FTS_SEARCH_DOCUMENT_ENTITIES,
+  ): Promise<number> {
     return this.db.transaction(async (transaction) => {
-      await lockCaptureSourceWrites(transaction);
+      await lockCaptureSourceWrites(transaction, entities);
       const result = await transaction.execute(sql`
         SELECT CASE WHEN is_called THEN last_value ELSE 0 END AS revision
         FROM fts_search_sync_revision_seq
@@ -476,7 +479,9 @@ export class FtsSearchSyncOutboxRepository {
    * Without this fence, a long transaction could commit an older Outbox revision after the
    * backfill has already written stale data at the newer base revision.
    */
-  async reserveRevisionWithWriteFence(): Promise<number> {
+  async reserveRevisionWithWriteFence(
+    entities: readonly FtsSearchDocumentEntity[],
+  ): Promise<number> {
     return this.db.transaction(async (transaction) => {
       const result = await transaction.execute(sql`
         SELECT nextval('fts_search_sync_revision_seq')::bigint AS revision
@@ -486,15 +491,8 @@ export class FtsSearchSyncOutboxRepository {
         'reserving a reindex version',
         1,
       );
-      await lockCaptureSourceWrites(transaction);
+      await lockCaptureSourceWrites(transaction, entities);
       return revision;
-    });
-  }
-
-  /** Re-establishes the write fence before resuming a checkpoint created by an older process. */
-  async fenceSourceWrites(): Promise<void> {
-    await this.db.transaction(async (transaction) => {
-      await lockCaptureSourceWrites(transaction);
     });
   }
 

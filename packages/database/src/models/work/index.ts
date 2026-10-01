@@ -9,6 +9,7 @@ import {
   type RegisterSkillToolResultWorkParams,
   type RegisterTaskWorkParams,
   type SkillToolResultWorkInput,
+  type WorkAccessScope,
   type WorkItem,
   type WorkSkillProvider,
 } from '@lobechat/types';
@@ -19,6 +20,11 @@ import { registerDocumentWork } from './document';
 import { registerExternalWork } from './external';
 import { findFileWorkVersionByToolCall, registerFileWork } from './file';
 import { normalizeGithubShellToolResult, normalizeGithubToolResult } from './githubToolResult';
+import {
+  findLatestGoalReportVersion,
+  registerGoalReportWork,
+  type RegisterGoalReportWorkParams,
+} from './goalReport';
 import { normalizeLinearToolResult } from './linearToolResult';
 import * as queries from './queries';
 import { registerTaskWork } from './task';
@@ -48,8 +54,19 @@ const SKILL_TOOL_RESULT_NORMALIZERS = {
 export class WorkModel {
   private readonly ctx: WorkContext;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
-    this.ctx = { db, userId, workspaceId };
+  /**
+   * @param accessScope - Agent Share boundary; defaults to the ordinary
+   * (creator-facing) scope. Share-runtime callers pass
+   * `agentShareWorkAccessScope(...)` so registration stamps provenance and
+   * reads stay confined to that visitor topic.
+   */
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    accessScope?: WorkAccessScope,
+  ) {
+    this.ctx = { accessScope, db, userId, workspaceId };
   }
 
   registerTask = (params: RegisterTaskWorkParams): Promise<WorkItem | null> =>
@@ -63,6 +80,11 @@ export class WorkModel {
 
   registerFile = (params: RegisterFileWorkParams): Promise<WorkItem> =>
     registerFileWork(this.ctx, params);
+
+  registerGoalReport = (params: RegisterGoalReportWorkParams): Promise<WorkItem> =>
+    registerGoalReportWork(this.ctx, params);
+
+  findLatestGoalReport = (goalId: string) => findLatestGoalReportVersion(this.ctx, goalId);
 
   /**
    * Existence probe for a file Work's one-version-per-operation dedup key, so

@@ -49,8 +49,32 @@ describe('migration command intent', () => {
     ['--apply', '--in-place', '--fresh-run', '--yes'],
     ['--fresh-run'],
     ['--version=2'],
+    ['--apply', '--rebuild-current', '--yes'],
+    ['--apply', '--rebuild-current', '--fresh-run', '--entity=messages', '--yes'],
+    ['--apply', '--run-id=00000000-0000-4000-8000-000000000001', '--yes'],
+    ['--promote', '--generation=search-messages-v1', '--version=1', '--entity=messages', '--yes'],
   ])('rejects misplaced modifiers %s', (...args) => {
     expect(() => resolveFtsSearchMigrationCommand(args)).toThrow();
+  });
+
+  it('accepts an explicit current-version rebuild and its run-id resume', () => {
+    expect(
+      resolveFtsSearchMigrationCommand([
+        '--apply',
+        '--rebuild-current',
+        '--entity=messages',
+        '--yes',
+      ]).command,
+    ).toBe('apply');
+    expect(
+      resolveFtsSearchMigrationCommand([
+        '--apply',
+        '--rebuild-current',
+        '--run-id=00000000-0000-4000-8000-000000000001',
+        '--entity=messages',
+        '--yes',
+      ]).command,
+    ).toBe('apply');
   });
 
   it('accepts the confirmed startup coordinator command', () => {
@@ -64,6 +88,7 @@ describe('migration command intent', () => {
     '--in-place',
     '--max-batches-per-entity=1',
     '--version=2',
+    '--rebuild-current',
   ])('rejects partial or operator-only startup option %s', (option) => {
     expect(() => resolveFtsSearchMigrationCommand(['--startup', '--yes', option])).toThrow(
       'cannot be used with --startup',

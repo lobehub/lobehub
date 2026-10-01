@@ -1260,7 +1260,7 @@ describe('ChatService', () => {
         );
         expect(requestMessages[0].content).toContain('<available_skills>');
         expect(requestMessages[0].content).toContain(
-          'Use the runSkill tool to activate a skill when needed.',
+          'Use the activateSkill tool to activate a skill when needed.',
         );
         expect(requestMessages[0].content).toContain('<tool name="SEO">');
         expect(requestMessages[1]).toEqual(
@@ -1917,6 +1917,25 @@ describe('ChatService', () => {
   });
 
   describe('fetchPresetTaskResult', () => {
+    it('should forward the preset task trigger as request metadata', async () => {
+      const getChatCompletionSpy = vi
+        .spyOn(chatService, 'getChatCompletion')
+        .mockResolvedValue(new Response(''));
+
+      await chatService.fetchPresetTaskResult({
+        params: {
+          messages: [{ content: 'Hello', role: 'user' as const }],
+          model: 'gpt-4',
+          provider: 'openai',
+        },
+        trigger: RequestTrigger.TopicTitle,
+      });
+
+      expect(getChatCompletionSpy.mock.calls[0][1]?.metadata).toEqual({
+        trigger: RequestTrigger.TopicTitle,
+      });
+    });
+
     it('should not wait for agent documents on preset task chains', async () => {
       vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
       vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([]);
@@ -1928,6 +1947,7 @@ describe('ChatService', () => {
           model: 'gpt-4',
           provider: 'openai',
         },
+        trigger: RequestTrigger.Translate,
       });
 
       expect(agentDocumentService.getContextDocuments).not.toHaveBeenCalled();
@@ -1972,6 +1992,7 @@ describe('ChatService', () => {
         onLoadingChange,
         abortController,
         trace,
+        trigger: RequestTrigger.Translate,
       });
 
       expect(onFinish).toHaveBeenCalledWith('AI response', {
@@ -2012,6 +2033,7 @@ describe('ChatService', () => {
         onLoadingChange,
         abortController,
         trace,
+        trigger: RequestTrigger.Translate,
       });
 
       expect(onError).toHaveBeenCalledWith(expect.any(Error), {

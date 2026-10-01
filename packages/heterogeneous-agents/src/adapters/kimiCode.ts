@@ -1,11 +1,57 @@
+import { imagePlaceholder } from '../imageEcho';
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
+  HeterogeneousToolResultImage,
+  PostRunUsage,
   ToolCallPayload,
   ToolResultData,
 } from '../types';
 
 const KIMI_CODE_IDENTIFIER = 'kimi-code';
+
+const DATA_URL_RE = /^data:([^;,]+)?(?:;[^,]*)?;base64,(.*)$/s;
+
+/**
+ * Kimi Code tool results may be an OpenAI-style content-part array — e.g.
+ * `ReadMediaFile` returns `text` parts wrapping an `image_url` part carrying a
+ * base64 data URL. Lift images onto `pluginState.images` (the runtime pipeline
+ * uploads them) and leave an `[Image: …]` placeholder in the text, which the
+ * pipeline rewrites into a markdown image URL once uploaded.
+ */
+const normalizeToolResultContent = (
+  raw: unknown,
+): Pick<ToolResultData, 'content' | 'pluginState'> => {
+  if (typeof raw === 'string') return { content: raw };
+  if (!Array.isArray(raw)) return { content: JSON.stringify(raw ?? '') };
+
+  const images: HeterogeneousToolResultImage[] = [];
+  const parts = raw.map((part): string => {
+    if (typeof part === 'string') return part;
+    if (!part || typeof part !== 'object') return '';
+    const block = part as Record<string, any>;
+    if (block.type === 'text') return typeof block.text === 'string' ? block.text : '';
+    if (block.type === 'image_url') {
+      const imageUrl = block.image_url ?? block.imageUrl;
+      const url = typeof imageUrl === 'string' ? imageUrl : imageUrl?.url;
+      if (typeof url !== 'string') return '';
+      const match = DATA_URL_RE.exec(url);
+      if (match) {
+        const mediaType = match[1] || 'image';
+        images.push({ data: match[2], mediaType });
+        return imagePlaceholder(mediaType);
+      }
+      images.push({ mediaType: 'image', url });
+      return imagePlaceholder('image');
+    }
+    return JSON.stringify(block);
+  });
+
+  return {
+    content: parts.filter(Boolean).join('\n'),
+    ...(images.length > 0 ? { pluginState: { images } } : {}),
+  };
+};
 
 interface PendingToolCall {
   stepIndex: number;
@@ -53,6 +99,25 @@ export class KimiCodeAdapter implements AgentEventAdapter {
     if (event.role === 'assistant') return this.handleAssistant(event);
     if (event.role === 'tool') return this.handleToolResult(event);
     return [];
+  }
+
+  /**
+   * Kimi Code's stream-json stdout carries no usage; the session wire log
+   * does, and the spawn pipeline reads it after exit. Emit the total as
+   * `turn_metadata` — the phase the executor persists (its `result_usage`
+   * grand-total phase is intentionally ignored), stamped on the last step.
+   */
+  buildPostRunUsageEvents(result: PostRunUsage): HeterogeneousAgentEvent[] {
+    return [
+      this.makeEvent('step_complete', {
+        // `model` lets the per-message Usage footer render (it requires a
+        // model for local heterogeneous types); `usage` carries the totals.
+        ...(result.model ? { model: result.model } : {}),
+        phase: 'turn_metadata',
+        provider: KIMI_CODE_IDENTIFIER,
+        usage: result.usage,
+      }),
+    ];
   }
 
   flush(): HeterogeneousAgentEvent[] {
@@ -158,8 +223,7 @@ export class KimiCodeAdapter implements AgentEventAdapter {
     this.settledTools.add(toolCallId);
     this.hasToolResultSinceAssistant = true;
     const result: ToolResultData = {
-      content:
-        typeof event.content === 'string' ? event.content : JSON.stringify(event.content ?? ''),
+      ...normalizeToolResultContent(event.content),
       isError: false,
       toolCallId,
     };

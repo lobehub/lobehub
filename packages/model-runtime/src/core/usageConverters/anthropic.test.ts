@@ -1,9 +1,16 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it } from 'vitest';
 
-import { convertAnthropicUsage } from './anthropic';
+import { buildAnthropicInitialUsage, convertAnthropicUsage } from './anthropic';
 
 describe('convertAnthropicUsage', () => {
+  it('preserves an explicit zero cache read without inventing a missing value', () => {
+    const usage = { input_tokens: 100, output_tokens: 10 } as Anthropic.Messages.Usage;
+    expect(buildAnthropicInitialUsage(usage)?.inputCachedTokens).toBeUndefined();
+    expect(
+      buildAnthropicInitialUsage({ ...usage, cache_read_input_tokens: 0 })?.inputCachedTokens,
+    ).toBe(0);
+  });
   it('should convert message_start usage with cache information', () => {
     const event = {
       type: 'message_start',

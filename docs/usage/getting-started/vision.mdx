@@ -13,16 +13,16 @@ tags:
 
 # Vision & Image Understanding
 
-LobeHub supports vision capabilities — Agents can see and understand images you share. This multimodal feature enables conversations that go beyond text to include rich visual context.
+Select a vision-capable model to upload images, extract text, and ask questions about visual content.
 
 ## What AI Can Do with Images
 
-Vision-enabled models can:
+With a vision-capable model, you can:
 
 - **Analyze images** — Understand photos, screenshots, diagrams, and documents
 - **Read text (OCR)** — Extract text from images, screenshots, handwritten notes, and signs
-- **Describe visuals** — Provide detailed descriptions of scenes and objects
-- **Answer questions** — Respond to queries about what's in an image
+- **Describe visuals** — Describe scenes and objects in the image
+- **Answer questions** — Ask about specific details in an image
 - **Compare images** — Analyze differences between multiple images
 - **Recognize patterns** — Identify layouts, design styles, and trends
 
@@ -32,15 +32,15 @@ Vision-enabled models can:
 
 <Tabs>
   <Tab title="Drag and Drop">
-    Drag an image file from your computer into the chat input area. Works with single or multiple images at once. The simplest method for files already on your desktop.
+    Drag an image file from your computer into the chat input area. You can add one or more images at a time.
   </Tab>
 
   <Tab title="Click to Upload">
-    Click the attachment/image icon in the input area, browse your files, and select one or more images. Best for selecting files from specific folders.
+    Click the attachment/image icon in the input area, browse your files, and select one or more images. Use this option to select files from a folder.
   </Tab>
 
   <Tab title="Paste from Clipboard">
-    Copy any image (screenshot, copied from a web page, etc.), click in the message input, and press `Ctrl+V` (or `Cmd+V` on Mac). The image appears instantly — ideal for quick screenshot questions.
+    Copy any image (screenshot, copied from a web page, etc.), click in the message input, and press `Ctrl+V` (or `Cmd+V` on Mac). The image appears in the input so you can ask about it.
   </Tab>
 </Tabs>
 
@@ -49,7 +49,7 @@ Vision-enabled models can:
 Supported formats: JPEG/JPG, PNG, WebP, GIF (static frames only), BMP
 
 - Maximum size: \~20 MB per image
-- Recommended: under 5 MB for best performance
+- Recommended size: under 5 MB
 - Large images are automatically compressed
 
 <Callout type={'info'}>
@@ -98,7 +98,7 @@ Upload several images at once and ask for comparison or combined analysis:
 
 ### Asking Specific Questions
 
-The more specific your question, the better the analysis:
+Specific questions usually produce more focused answers:
 
 <Tabs>
   <Tab title="Object Identification">
@@ -174,7 +174,7 @@ The more specific your question, the better the analysis:
   </Accordion>
 
   <Accordion title="Verify Critical Information">
-    Vision AI can and does make mistakes. Always independently verify important details, especially for medical, legal, or financial content.
+    Vision models can make mistakes. For medical, legal, financial, or other consequential decisions, verify the details against primary sources or qualified advice.
   </Accordion>
 
   <Accordion title="Optimize Image Size">
@@ -185,14 +185,14 @@ The more specific your question, the better the analysis:
 ## Limitations
 
 <Callout type={'warning'}>
-  Vision models have limitations. Always verify critical information independently.
+  Vision models can miss or misread details. For consequential decisions, verify the result against primary sources or qualified advice.
 </Callout>
 
-- **People and faces** — Cannot identify specific individuals (privacy protection by design)
+- **People and faces** — Cannot identify specific individuals
 - **Fine details** — May miss very small text or details in low-resolution images
 - **Handwriting** — Variable accuracy depending on legibility
 - **Video** — Cannot process video files; only static images are supported
-- **Medical/legal** — Not suitable for medical diagnosis or legal advice; treat as informational only
+- **Medical/legal** — Cannot provide a medical diagnosis or replace professional legal advice
 - **Privacy** — Images are processed by the AI provider's servers; avoid uploading sensitive or confidential content without redaction
 
 ## Supported Models
@@ -205,7 +205,7 @@ Vision requires a vision-capable model. Look for models with a vision indicator 
 | Anthropic | Claude Opus 4.8, Claude Sonnet 4.6, Claude Haiku 4.5 |
 | Google    | Gemini 3.1 Pro, Gemini 2.5 Pro, Gemini 2.5 Flash     |
 
-Other providers may also offer vision models — check the model's capability tags in the selector.
+Other providers may also include vision models. Check for the vision indicator in the model selector.
 
 <Cards>
   <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />

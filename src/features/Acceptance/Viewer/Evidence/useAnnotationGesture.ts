@@ -79,6 +79,13 @@ export const useAnnotationGesture = ({
     },
     onPointerUp: endGesture,
     onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
+      // A second finger means a pinch, not a box: drop whatever the first
+      // finger had started so the zoom does not leave a sliver of a region.
+      if (!event.isPrimary) {
+        gestureRef.current = null;
+        setDraft(null);
+        return;
+      }
       if (!drawing) return;
       event.currentTarget.setPointerCapture(event.pointerId);
       event.preventDefault();

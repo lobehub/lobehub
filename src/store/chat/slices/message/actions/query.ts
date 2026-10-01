@@ -97,18 +97,20 @@ export class MessageQueryActionImpl {
 
     prefetchingMessageKeys.add(messagesKey);
 
-    const request = runMessageListQuery(context, messageService.getMessages).then((messages) => {
-      // Re-check at DELIVERY time, not just at start: the user can open this
-      // topic and submit a follow-up while the request is in flight. Applying
-      // the pre-run snapshot then would drop the freshly created user/assistant
-      // rows, and streaming updates targeting those now-missing ids are silent
-      // no-ops until terminal reconciliation. Mirrors the defense-in-depth gate
-      // in `useFetchMessages`' onData; the SWR cache seed below is unaffected.
-      if (!operationSelectors.isAgentRuntimeRunningByContext(context)(this.#get())) {
-        this.#get().replaceMessages(messages, { action: 'prefetchMessages', context });
-      }
-      return messages;
-    });
+    const request = runMessageListQuery(context, messageService.getMessageListPage).then(
+      (messages) => {
+        // Re-check at DELIVERY time, not just at start: the user can open this
+        // topic and submit a follow-up while the request is in flight. Applying
+        // the pre-run snapshot then would drop the freshly created user/assistant
+        // rows, and streaming updates targeting those now-missing ids are silent
+        // no-ops until terminal reconciliation. Mirrors the defense-in-depth gate
+        // in `useFetchMessages`' onData; the SWR cache seed below is unaffected.
+        if (!operationSelectors.isAgentRuntimeRunningByContext(context)(this.#get())) {
+          this.#get().replaceMessages(messages, { action: 'prefetchMessages', context });
+        }
+        return messages;
+      },
+    );
 
     try {
       await mutate(messageListKey(context), request, { revalidate: false });
@@ -254,7 +256,9 @@ export class MessageQueryActionImpl {
     if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;
 
     // Parse messages using conversation-flow
-    const { flatList } = parse(reconciled);
+    // A thread view's rows are its ancestors plus its replies; scope the parse to that thread
+    // so the replies are not dropped as a side conversation.
+    const { flatList } = parse(reconciled, undefined, { threadId: ctx.threadId });
 
     this.#set(
       {
@@ -354,7 +358,7 @@ export class MessageQueryActionImpl {
 
     return useClientDataSWRWithSync<UIChatMessage[]>(
       shouldFetch ? messageListKey(context) : null,
-      () => runMessageListQuery(context, messageService.getMessages),
+      () => runMessageListQuery(context, messageService.getMessageListPage),
       {
         ...getMessageListFetchPolicy(context),
         onData: (data) => {
