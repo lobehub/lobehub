@@ -132,6 +132,25 @@ export class VerifyStatusService {
     return claimed;
   }
 
+  /**
+   * Run-addressed form of {@link claimVerifying}, for a run whose bound Agent Run
+   * was deleted (`onDelete: 'set null'` clears `verify_runs.operation_id`). The
+   * sweep still has to settle such a run, but the operation-addressed claim can
+   * no longer resolve it.
+   */
+  async claimVerifyingByRunId(runId: string, staleBefore: Date): Promise<boolean> {
+    const run = await this.runModel.findById(runId);
+    if (!run) return false;
+
+    const claimed = await this.runModel.claimVerifying(runId, staleBefore);
+    if (claimed && run.acceptanceId) {
+      await new AcceptanceService(this.db, this.userId, this.workspaceId).recomputeStatus(
+        run.acceptanceId,
+      );
+    }
+    return claimed;
+  }
+
   /** Explicit transitions that aren't derivable from results alone. */
   async markVerifying(operationId: string) {
     await this.setStatus(operationId, 'verifying');

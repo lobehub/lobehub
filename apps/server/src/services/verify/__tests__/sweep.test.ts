@@ -7,6 +7,7 @@ import { SWEEP_MAX_JUDGING_RUNS, sweepStuckVerifyRuns } from '../sweep';
 const {
   settleFailedRepair,
   claimVerifying,
+  claimVerifyingByRunId,
   createVerifierAgentRunner,
   executorExecute,
   findStuckVerifying,
@@ -26,6 +27,7 @@ const {
 } = vi.hoisted(() => ({
   settleFailedRepair: vi.fn(),
   claimVerifying: vi.fn(),
+  claimVerifyingByRunId: vi.fn(),
   createVerifierAgentRunner: vi.fn(),
   executorExecute: vi.fn(),
   finalizeVerifyRun: vi.fn(),
@@ -64,7 +66,7 @@ vi.mock('@/database/models/agentOperation', () => ({
 }));
 vi.mock('../statusService', () => ({
   VerifyStatusService: vi.fn(function () {
-    return { claimVerifying, recompute, recomputeByRunId };
+    return { claimVerifying, claimVerifyingByRunId, recompute, recomputeByRunId };
   }),
 }));
 vi.mock('../repairTerminal', () => ({ settleFailedRepair }));
@@ -111,6 +113,7 @@ beforeEach(() => {
   [
     settleFailedRepair,
     claimVerifying,
+    claimVerifyingByRunId,
     createVerifierAgentRunner,
     executorExecute,
     finalizeVerifyRun,
@@ -132,6 +135,7 @@ beforeEach(() => {
   findStuckCollectingEvidence.mockResolvedValue([]);
   resultListByRun.mockResolvedValue([]);
   claimVerifying.mockResolvedValue(true);
+  claimVerifyingByRunId.mockResolvedValue(true);
   executorExecute.mockResolvedValue(undefined);
   resolveVerifyModelConfig.mockResolvedValue({ model: 'gpt-4o', provider: 'openai' });
   resolveVerificationDeliverable.mockImplementation(
@@ -354,31 +358,6 @@ describe('sweepStuckVerifyRuns', () => {
     });
     expect(outcome.skipped).toBe(1);
     expect(outcome.settled).toEqual(['run-newer']);
-  });
-
-  it('shares the per-tick run cap across both scans', async () => {
-    // `scanned` used to be local to each `scan`, so the documented per-tick cap
-    // applied once per scan: the evidence half was handed a second full
-    // allowance, doubling the bounded work (and request time) under a backlog.
-    // One shared budget bounds the whole tick instead.
-    findStuckVerifying
-      .mockResolvedValueOnce([
-        stuckRun({
-          id: 'v-1',
-          operationId: 'op-v1',
-          updatedAt: new Date(NOW.getTime() - VERIFY_ABANDONED_MS - 1000),
-        }),
-      ])
-      .mockResolvedValue([]);
-    resultListByRun.mockResolvedValue([]);
-
-    const outcome = await sweepStuckVerifyRuns(db, { now: NOW, maxRuns: 1 });
-
-    expect(outcome.abandoned).toEqual(['v-1']);
-    // The verifying scan consumed the whole allowance, so the evidence scan is
-    // skipped rather than granted its own run.
-    expect(findStuckCollectingEvidence).not.toHaveBeenCalled();
-    expect(outcome.evidenceRecovered).toEqual([]);
   });
 
   it('recovers a planned repair whose operation died before judging began', async () => {
@@ -673,5 +652,68 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     // Nothing left to drive once the operation is gone.
     expect(finalizeVerifyRun).not.toHaveBeenCalled();
     expect(outcome.settled).toEqual(['ev-run-1']);
+  });
+
+  it('bounds the whole tick across both scans', async () => {
+    // `maxRuns` bounds the tick, not each scan: the two scans split it, so a
+    // backlog cannot make the cron do two full allowances of work (and hold the
+    // request open for it).
+    const aged = new Date(NOW.getTime() - VERIFY_ABANDONED_MS - 1000);
+    findStuckVerifying
+      .mockResolvedValueOnce([
+        stuckRun({ id: 'v-1', operationId: 'op-v1', updatedAt: aged }),
+        stuckRun({ id: 'v-2', operationId: 'op-v2', updatedAt: aged }),
+      ])
+      .mockResolvedValue([]);
+    singleEvidencePage([evidenceRun({ id: 'e-1' }), evidenceRun({ id: 'e-2' })]);
+    resultListByRun.mockResolvedValue([]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW, maxRuns: 2 });
+
+    expect(outcome.abandoned).toEqual(['v-1']);
+    expect(outcome.evidenceRecovered).toEqual(['e-1']);
+  });
+
+  it('still runs the evidence scan when untouchable verifying rows saturate the tick', async () => {
+    // Untouchable rows (here: rounds whose repair never lands) keep their
+    // timestamp and head the ordered scan again on every tick. Sharing one
+    // counter would let them consume the whole allowance forever, so the
+    // evidence scan would never run and its runs would strand for good.
+    findStuckVerifying
+      .mockResolvedValueOnce(
+        Array.from({ length: 6 }, (_, index) =>
+          stuckRun({ id: `v-${index}`, operationId: `op-v${index}`, status: 'planned' }),
+        ),
+      )
+      .mockResolvedValue([]);
+    settleFailedRepair.mockResolvedValue(false); // every one is left alone
+    singleEvidencePage([evidenceRun()]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW, maxRuns: 2 });
+
+    // The verifying scan spends its whole share on rows it cannot touch …
+    expect(outcome.skipped).toBe(1);
+    // … and the evidence scan still gets its own share.
+    expect(outcome.evidenceRecovered).toEqual(['ev-run-1']);
+  });
+
+  it('closes an evidence run whose builder operation was deleted before selection', async () => {
+    // The FK clears `operation_id` when the Agent Run is deleted, so the run can
+    // surface with no operation at all. There is no state to read a deliverable
+    // from — but it must still be settled by run id, or its acceptance stays
+    // blocked forever.
+    singleEvidencePage([evidenceRun({ operationId: null })]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    // Nothing to claim by operation; the run itself is claimed instead.
+    expect(claimVerifying).not.toHaveBeenCalled();
+    expect(claimVerifyingByRunId).toHaveBeenCalledWith('ev-run-1', expect.any(Date));
+    expect(upsertByCheckItem).toHaveBeenCalledWith(
+      expect.objectContaining({ checkItemId: 'c1', operationId: null, status: 'errored' }),
+    );
+    expect(recomputeByRunId).toHaveBeenCalledWith('ev-run-1');
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+    expect(outcome.abandoned).toEqual(['ev-run-1']);
   });
 });

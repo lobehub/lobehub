@@ -648,8 +648,9 @@ export class VerifyRunModel {
    *
    * No per-user scope, like `TaskModel.findStuckTasks`: this backs a global
    * cron, and each row carries the owner the recovery is then performed as.
-   * Operation-less rounds are excluded — the rollup is addressed by operation,
-   * so there is nothing to recompute for them.
+   * Operation-less rounds are excluded — this recovery is addressed by the bound
+   * operation. (The evidence half is different: see
+   * {@link findStuckCollectingEvidence}, which settles such rounds by run id.)
    *
    * Paged on the `(updatedAt, id)` keyset rather than returning a fixed oldest-N
    * slice. The sweep deliberately leaves some rows untouched (a check whose
@@ -704,6 +705,11 @@ export class VerifyRunModel {
    *
    * Shares {@link findStuckVerifying}'s no-per-user scope, keyset paging, and
    * millisecond-precision `updatedAt` handling — see that method's doc for why.
+   *
+   * Unlike `findStuckVerifying`, operation-less rounds ARE returned: when the
+   * builder operation is deleted while a run sits here, `onDelete: 'set null'`
+   * clears the link, and the sweep still has to settle the run — by its own id —
+   * or the acceptance above it stays blocked forever.
    */
   static findStuckCollectingEvidence = async (
     db: LobeChatDatabase,
@@ -714,18 +720,29 @@ export class VerifyRunModel {
       db,
       eq(verifyRuns.status, 'collecting_evidence'),
       olderThan,
-      options,
+      { ...options, includeOperationless: true },
     );
   };
 
-  /** Keyset-paged scan of runs matching `statusCondition` stuck past `olderThan`. */
+  /**
+   * Keyset-paged scan of runs matching `statusCondition` stuck past `olderThan`.
+   *
+   * `includeOperationless` widens the scan to rounds whose bound Agent Run was
+   * deleted — `onDelete: 'set null'` clears `operation_id`. Only the evidence
+   * half needs them: the sweep settles such a run by its own id. The `verifying`
+   * half keeps excluding them, since that recovery is addressed by operation.
+   */
   private static findStuckMatching = async (
     db: LobeChatDatabase,
     statusCondition: SQL,
     olderThan: Date,
-    options?: { after?: { id: string; updatedAt: Date }; limit?: number },
+    options?: {
+      after?: { id: string; updatedAt: Date };
+      includeOperationless?: boolean;
+      limit?: number;
+    },
   ): Promise<VerifyRunItem[]> => {
-    const { after, limit = 200 } = options ?? {};
+    const { after, includeOperationless = false, limit = 200 } = options ?? {};
 
     // Millisecond-truncated updatedAt — the precision the cursor round-trips at.
     const updatedAtMs = sql`date_trunc('milliseconds', ${verifyRuns.updatedAt})`;
@@ -733,7 +750,7 @@ export class VerifyRunModel {
     const conditions = [
       statusCondition,
       lt(verifyRuns.updatedAt, olderThan),
-      isNotNull(verifyRuns.operationId),
+      ...(includeOperationless ? [] : [isNotNull(verifyRuns.operationId)]),
     ];
 
     if (after) {

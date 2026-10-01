@@ -117,12 +117,18 @@ export const sweepStuckVerifyRuns = async (
     skipped: 0,
   };
 
-  // One remaining-run budget shared by both scans. The cap bounds the whole
-  // tick, not each scan — with a counter local to `scan`, the two invocations
-  // (verifying + collecting_evidence) would each get the full allowance, so a
-  // backlog would double the bounded work (and the request time) the cap exists
-  // to contain.
-  const budget = { remaining: maxRuns };
+  // Split the tick's run allowance between the two scans rather than sharing one
+  // counter. `maxRuns` bounds the whole tick, so the evidence half cannot get a
+  // second full allowance — but a single shared counter would let a backlog of
+  // *untouchable* `verifying` rows (a check whose verifier operation is still
+  // live) consume the whole allowance: those rows keep their `updated_at` and
+  // head the ordered scan again on every tick, so the `collecting_evidence` scan
+  // would never run and its runs would strand for good. A per-state slice keeps
+  // the tick bounded while guaranteeing both states make progress.
+  const verifyingRunCap = Math.floor(maxRuns / 2);
+  const evidenceRunCap = maxRuns - verifyingRunCap;
+  const verifyingRuns = { remaining: verifyingRunCap };
+  const evidenceRuns = { remaining: evidenceRunCap };
 
   const scan = async (
     find: typeof VerifyRunModel.findStuckVerifying,
@@ -130,6 +136,7 @@ export const sweepStuckVerifyRuns = async (
     recover: (
       run: VerifyRunItem,
     ) => Promise<'abandoned' | 'settled' | 'evidenceRecovered' | 'skipped'>,
+    budget: { remaining: number },
   ) => {
     // Walk the whole stranded set, not just its oldest page: rows the sweep
     // leaves alone keep their timestamp, so a single fixed-size read would
@@ -161,13 +168,25 @@ export const sweepStuckVerifyRuns = async (
     }
   };
 
-  await scan(VerifyRunModel.findStuckVerifying, staleBefore, (run) => recoverRun(db, run, now));
-  await scan(VerifyRunModel.findStuckCollectingEvidence, abandonedBound, (run) =>
-    recoverEvidenceRun(db, run, now, judging),
+  await scan(
+    VerifyRunModel.findStuckVerifying,
+    staleBefore,
+    (run) => recoverRun(db, run, now),
+    verifyingRuns,
+  );
+  await scan(
+    VerifyRunModel.findStuckCollectingEvidence,
+    abandonedBound,
+    (run) => recoverEvidenceRun(db, run, now, judging),
+    evidenceRuns,
   );
 
-  if (budget.remaining <= 0) {
-    log('sweep hit the per-tick cap (%d) — the tail is left for the next tick', maxRuns);
+  if (verifyingRuns.remaining <= 0 || evidenceRuns.remaining <= 0) {
+    log(
+      'sweep hit a per-state run cap (%d verifying / %d evidence) — the tail is left for the next tick',
+      verifyingRunCap,
+      evidenceRunCap,
+    );
   }
 
   return outcome;
@@ -219,7 +238,14 @@ const recoverEvidenceRun = async (
   judging: JudgingBudget,
 ): Promise<'abandoned' | 'settled' | 'evidenceRecovered' | 'skipped'> => {
   const operationId = run.operationId;
-  if (!operationId) return 'skipped';
+  if (!operationId) {
+    // The builder operation was deleted before the sweep ever selected this run —
+    // the FK cleared `operation_id`, so there is no state to read a deliverable
+    // from and nothing to judge against. Close the outstanding checks as
+    // `errored` by run id, the same ending a dead verifier gets, so the
+    // acceptance above can settle instead of waiting for a verdict forever.
+    return closeOutstandingAsErrored(db, run, null, now, 'abandoned');
+  }
 
   const workspaceId = run.workspaceId ?? undefined;
   const plan = (run.plan ?? []) as VerifyCheckItem[];
@@ -344,6 +370,10 @@ const probeEvidenceHook = async (
  * the finalizer — the same ending the plain sweep gives a `verifying` run whose
  * verifier died mid-flight (see {@link recoverRun}'s outstanding branch). Used
  * when the sweep owns a stranded run but holds nothing to judge with.
+ *
+ * `operationId` is the Agent Run link written onto the closed rows, or `null`
+ * once that operation was deleted — the claim then goes through the run itself.
+ * `options.leaseHeld` reuses a lease the caller already won.
  */
 const closeOutstandingAsErrored = async (
   db: LobeChatDatabase,
@@ -361,14 +391,14 @@ const closeOutstandingAsErrored = async (
   // return `skipped` — leaving the run stranded in `verifying` (and, once its FK
   // is cleared, invisible to the sweep's operation-scoped scan). Reuse the lease.
   if (!options?.leaseHeld) {
-    if (!operationId) return 'skipped';
-    if (
-      !(await statusService.claimVerifying(
-        operationId,
-        new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS),
-      ))
-    )
-      return 'skipped';
+    const staleBefore = new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS);
+    // Claim by operation when we still have one, by run id otherwise: the FK
+    // clears `operation_id` when the Agent Run is deleted, and the sweep must
+    // still settle the run it selected.
+    const claimed = operationId
+      ? await statusService.claimVerifying(operationId, staleBefore)
+      : await statusService.claimVerifyingByRunId(run.id, staleBefore);
+    if (!claimed) return 'skipped';
   }
 
   const workspaceId = run.workspaceId ?? undefined;

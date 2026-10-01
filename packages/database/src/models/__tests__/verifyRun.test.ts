@@ -269,6 +269,45 @@ describe('VerifyRunModel.findStuckVerifying', () => {
   });
 });
 
+describe('VerifyRunModel.findStuckCollectingEvidence', () => {
+  it('returns stranded evidence runs, including operation-less ones', async () => {
+    // When the builder operation is deleted while a run sits in
+    // `collecting_evidence`, the FK clears `operation_id`. The run is still
+    // stranded — nothing will ever submit evidence for it — so the sweep must
+    // select it and settle it by run id.
+    const withOp = await buildRun('op-evidence-1');
+    await new VerifyRunModel(serverDB, userId).updateStatus(withOp, 'collecting_evidence');
+    await backdate(withOp, 10 * 60 * 1000);
+
+    const orphan = await new VerifyRunModel(serverDB, userId).create({
+      status: 'collecting_evidence',
+    });
+    await backdate(orphan.id, 10 * 60 * 1000);
+
+    const stuck = await VerifyRunModel.findStuckCollectingEvidence(
+      serverDB,
+      new Date(Date.now() - 5 * 60 * 1000),
+      { limit: 500 },
+    );
+
+    const ids = stuck.map((r) => r.id);
+    expect(ids).toEqual(expect.arrayContaining([withOp, orphan.id]));
+    expect(stuck.find((r) => r.id === orphan.id)?.operationId).toBeNull();
+  });
+
+  it('leaves a freshly-entered evidence run alone', async () => {
+    const runId = await buildRun('op-evidence-2');
+    await new VerifyRunModel(serverDB, userId).updateStatus(runId, 'collecting_evidence');
+
+    const stuck = await VerifyRunModel.findStuckCollectingEvidence(
+      serverDB,
+      new Date(Date.now() - 5 * 60 * 1000),
+    );
+
+    expect(stuck.map((r) => r.id)).not.toContain(runId);
+  });
+});
+
 describe('VerifyRunModel.foldIntoRound', () => {
   const model = () => new VerifyRunModel(serverDB, userId);
   const item = (id: string) => ({
