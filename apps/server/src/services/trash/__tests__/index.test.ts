@@ -32,7 +32,7 @@ const restoreRace = vi.hoisted(() => ({
 
 vi.mock('@/database/models/agent', async (importOriginal) => {
   const mod = await importOriginal<{ AgentModel: typeof AgentModel }>();
-  class AgentModel extends mod.AgentModel {
+  class PatchedAgentModel extends mod.AgentModel {
     constructor(...args: ConstructorParameters<typeof AgentModel>) {
       super(...args);
       const hasTrashedOwner = this.hasTrashedOwner;
@@ -43,7 +43,7 @@ vi.mock('@/database/models/agent', async (importOriginal) => {
       };
     }
   }
-  return { ...mod, AgentModel };
+  return { ...mod, AgentModel: PatchedAgentModel };
 });
 
 vi.mock('@/server/services/file', () => ({
