@@ -79,6 +79,13 @@ const normalizeNode = (value: unknown): NormalizedNode => {
 
   if (isDiffNode(value)) return normalizeDiffNodeOrigin(value);
 
+  if (
+    value.type === 'listitem' &&
+    getChildren(value).some((child) => isDiffNode(child) && child.diffType === 'listItemAdd')
+  ) {
+    return REMOVED_NODE;
+  }
+
   const normalized: Record<string, unknown> = {};
 
   for (const [key, child] of Object.entries(value)) {

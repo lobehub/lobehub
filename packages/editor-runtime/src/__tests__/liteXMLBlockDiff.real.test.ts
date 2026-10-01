@@ -63,6 +63,10 @@ const setup = async (markdown: string) => {
     resolve,
     runtime,
     json: () => editor.getDocument('json'),
+    restore: async (json: Record<string, unknown>) => {
+      editor.setDocument('json', json);
+      await moment();
+    },
   };
 };
 
@@ -154,6 +158,11 @@ describe('diffLiteXMLBlocks against a real editor', () => {
       });
       expect(result.successCount).toBe(1);
       expect(page.markdownOf()).toContain('- added');
+      const history = await setup('placeholder');
+      await history.restore(
+        normalizeEditorDataDiffNodes(page.json() as unknown as Record<string, unknown>),
+      );
+      expect(history.markdownOf()).toBe(before);
       await page.resolve(DiffAction.Reject);
       expect(page.markdownOf()).toBe(before);
     },
