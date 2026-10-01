@@ -20,6 +20,12 @@ const mocks = vi.hoisted(() => ({
     isPreferenceLoading: false,
     workspaceScoped: false,
   },
+  /**
+   * What the hook resolves when it applies the ACTIVE chat topic's machine
+   * binding (no `topicId: null`), standing in for an open conversation bound
+   * to a different device than the agent.
+   */
+  activeTopicAgency: undefined as undefined | { agencyConfig: Record<string, unknown> },
   agentState: { agentMap: {} as Record<string, { workspaceId?: string }> },
   devices: [] as { deviceId: string; scope?: string; visibility?: string }[],
   deviceState: { defaultCwd: {} as Record<string, string>, workingDirs: {} as Record<string, []> },
@@ -34,7 +40,10 @@ vi.mock('@/features/DeviceManager/useDeviceList', () => ({
 }));
 
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
-  useEffectiveAgencyConfig: () => mocks.agency,
+  useEffectiveAgencyConfig: (_agentId?: string, options: { topicId?: string | null } = {}) =>
+    options.topicId === null || !mocks.activeTopicAgency
+      ? mocks.agency
+      : { ...mocks.agency, ...mocks.activeTopicAgency },
 }));
 
 vi.mock('@/helpers/gatewayMode', () => ({
@@ -68,6 +77,7 @@ const deviceBoundAgent = {
 };
 
 beforeEach(() => {
+  mocks.activeTopicAgency = undefined;
   mocks.agency.agencyConfig = {};
   mocks.agency.canSelectExecutionTarget = true;
   mocks.agency.isPreferenceLoading = false;
@@ -77,6 +87,19 @@ beforeEach(() => {
 });
 
 describe('useTaskRunTarget', () => {
+  // A task's runs never carry the open chat topic's binding, so the machine
+  // shown for a task must not follow whatever conversation happens to be active.
+  it('ignores the active chat topic device binding', () => {
+    mocks.agency.agencyConfig = deviceBoundAgent;
+    mocks.activeTopicAgency = {
+      agencyConfig: { ...deviceBoundAgent, boundDeviceId: 'device-chat-topic' },
+    };
+
+    const { result } = renderHook(() => useTaskRunTarget('agent-1'));
+
+    expect(result.current.deviceId).toBe(DEVICE_AGENT_BOUND);
+  });
+
   it('offers the directory control when the machine comes from the AGENT, not the task', () => {
     // The machine the run lands on may be the assignee's own bound device. This
     // used to report `none`, so the task showed a non-interactive hint and had

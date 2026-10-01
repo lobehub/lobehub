@@ -91,8 +91,10 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   const { t } = useTranslation('chat');
   const { data: devices, isLoading: isDevicesLoading } = useDeviceList();
   const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
+  // Agent-level, not the active chat topic's: a task run carries no topic
+  // binding, so the conversation that happens to be open must not move it.
   const { agencyConfig, canSelectExecutionTarget, isPreferenceLoading, workspaceScoped } =
-    useEffectiveAgencyConfig(agentId);
+    useEffectiveAgencyConfig(agentId, { topicId: null });
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
   const legacyAgentWorkingDirectory = useAgentStore(
     (s) => s.localAgentWorkingDirectoryMap[agentId],

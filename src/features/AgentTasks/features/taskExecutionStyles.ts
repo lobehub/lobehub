@@ -213,7 +213,5 @@ export const taskExecutionStyles = createStaticStyles(({ css }) => ({
     font-size: 11px;
     font-weight: 500;
     color: ${cssVar.colorTextQuaternary};
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
   `,
 }));
