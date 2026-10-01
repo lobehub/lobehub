@@ -482,67 +482,81 @@ const enterJudging = async (
     // Close the outstanding checks as `errored` under the lease we already hold
     // (it cannot be re-claimed once the operation is deleted) and settle the run
     // by its own id, in the same tick.
-    return closeOutstandingAsErrored(db, run, null, now, action, { leaseHeld: true });
+    return closeOutstandingAsErrored(db, run, null, now, 'abandoned', { leaseHeld: true });
   }
 
   // The backfill write follows the lease, not the skip guards — an overlapping
   // worker that reaches the insert before its claim attempt must not duplicate
   // the evidence rows against the winner's insert.
-  await recordHeterogeneousDeliverableEvidence({
-    db,
-    deliverable,
-    operation: op,
-    plan: (run.plan ?? []) as VerifyCheckItem[],
-    userId,
-    workspaceId,
-  });
-
-  const resolvedAcceptance = op.taskId
-    ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId)
-    : undefined;
-  const verifierAgentId = resolvedAcceptance?.config.verifierAgentId ?? undefined;
-
-  // The same deliverable resolution the completion lifecycle applies: task-pinned
-  // documents join the frozen output so the judge sees the full context.
-  const resolvedDeliverable = await resolveVerificationDeliverable(
-    db,
-    userId,
-    deliverable,
-    op.taskId,
-    workspaceId,
-  );
-
-  const modelConfig = await resolveVerifyModelConfig(
-    db,
-    userId,
-    {
-      parentModel: op.model,
-      parentProvider: op.provider,
-      verifierAgentId,
-    },
-    workspaceId,
-  );
-
-  const executor = new VerifyExecutorService(db, userId, workspaceId);
-  await executor.execute({
-    deliverable: resolvedDeliverable,
-    goal: run.goal ?? '',
-    modelConfig,
-    operationId,
-    runVerifierAgent: createVerifierAgentRunner({
+  try {
+    await recordHeterogeneousDeliverableEvidence({
       db,
-      deliverable: resolvedDeliverable,
-      model: modelConfig.model,
-      provider: modelConfig.provider,
-      taskId: op.taskId,
-      topicId: op.topicId,
+      deliverable,
+      operation: op,
+      plan: (run.plan ?? []) as VerifyCheckItem[],
       userId,
-      verifierAgentId,
       workspaceId,
-    }),
-  });
+    });
 
-  await finalizeVerifyRun(db, userId, operationId, {}, workspaceId);
+    const resolvedAcceptance = op.taskId
+      ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId)
+      : undefined;
+    const verifierAgentId = resolvedAcceptance?.config.verifierAgentId ?? undefined;
+
+    // The same deliverable resolution the completion lifecycle applies: task-pinned
+    // documents join the frozen output so the judge sees the full context.
+    const resolvedDeliverable = await resolveVerificationDeliverable(
+      db,
+      userId,
+      deliverable,
+      op.taskId,
+      workspaceId,
+    );
+
+    const modelConfig = await resolveVerifyModelConfig(
+      db,
+      userId,
+      {
+        parentModel: op.model,
+        parentProvider: op.provider,
+        verifierAgentId,
+      },
+      workspaceId,
+    );
+
+    const executor = new VerifyExecutorService(db, userId, workspaceId);
+    await executor.execute({
+      deliverable: resolvedDeliverable,
+      goal: run.goal ?? '',
+      modelConfig,
+      operationId,
+      runVerifierAgent: createVerifierAgentRunner({
+        db,
+        deliverable: resolvedDeliverable,
+        model: modelConfig.model,
+        provider: modelConfig.provider,
+        taskId: op.taskId,
+        topicId: op.topicId,
+        userId,
+        verifierAgentId,
+        workspaceId,
+      }),
+    });
+
+    await finalizeVerifyRun(db, userId, operationId, {}, workspaceId);
+  } catch (error) {
+    // The operation can also be deleted *after* the lookup above: the FK nulls
+    // `verify_runs.operation_id`, so every operation-addressed step here (the
+    // backfill's run lookup, the executor) fails while the run we hold stays
+    // leased in `verifying` — where the next sweep's operation-scoped scan can no
+    // longer see it. Settle it by run id under the lease instead of stranding it.
+    // Any other failure is re-thrown, so the tick records it and a later one can
+    // retry the still-operation-bound run.
+    if (!(await new AgentOperationModel(db, userId, workspaceId).findById(operationId))) {
+      return closeOutstandingAsErrored(db, run, null, now, 'abandoned', { leaseHeld: true });
+    }
+    throw error;
+  }
 
   log('recovered run %s (op %s) as %s', run.id, operationId, action);
   return action;

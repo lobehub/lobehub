@@ -651,7 +651,9 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(recompute).not.toHaveBeenCalled();
     // Nothing left to drive once the operation is gone.
     expect(finalizeVerifyRun).not.toHaveBeenCalled();
-    expect(outcome.settled).toEqual(['ev-run-1']);
+    // The checks were closed as `errored`, so this is an abandonment — not a
+    // recovery — whatever the run's entry action was.
+    expect(outcome.abandoned).toEqual(['ev-run-1']);
   });
 
   it('bounds the whole tick across both scans', async () => {
@@ -715,5 +717,56 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(recomputeByRunId).toHaveBeenCalledWith('ev-run-1');
     expect(finalizeVerifyRun).not.toHaveBeenCalled();
     expect(outcome.abandoned).toEqual(['ev-run-1']);
+  });
+
+  it('settles by run id when the builder vanishes after the lookup', async () => {
+    // The operation can be deleted *between* the lookup and the judging work.
+    // The FK then nulls the run's link, so the backfill can no longer resolve it
+    // and throws while the run we hold stays leased in `verifying` — invisible to
+    // the next sweep's operation-scoped scan.
+    singleEvidencePage([evidenceRun()]);
+    // First call is `enterJudging`'s lookup (the operation is still there); the
+    // second is the post-failure check that finds it gone.
+    operationFindById
+      .mockResolvedValueOnce({
+        id: 'op-1',
+        model: 'claude-code',
+        provider: 'heterogeneous',
+        status: 'done',
+        taskId: null,
+      })
+      .mockResolvedValueOnce(null);
+    recordHeterogeneousDeliverableEvidence.mockRejectedValueOnce(
+      new Error('Verification run is missing for heterogeneous evidence'),
+    );
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    // The lease won by `enterJudging` is reused, not re-acquired.
+    expect(claimVerifying).toHaveBeenCalledTimes(1);
+    expect(upsertByCheckItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkItemId: 'c1',
+        operationId: null,
+        status: 'errored',
+        verifyRunId: 'ev-run-1',
+      }),
+    );
+    expect(recomputeByRunId).toHaveBeenCalledWith('ev-run-1');
+    expect(outcome.abandoned).toEqual(['ev-run-1']);
+  });
+
+  it('rethrows a judging failure that is not the operation vanishing', async () => {
+    // A transient judge failure must NOT be swallowed into an `errored` close:
+    // the run keeps its operation, so a later tick can retry it.
+    singleEvidencePage([evidenceRun()]);
+    recordHeterogeneousDeliverableEvidence.mockRejectedValueOnce(new Error('transient boom'));
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.skipped).toBe(1);
+    expect(upsertByCheckItem).not.toHaveBeenCalled();
+    expect(recomputeByRunId).not.toHaveBeenCalled();
+    expect(outcome.abandoned).toEqual([]);
   });
 });
