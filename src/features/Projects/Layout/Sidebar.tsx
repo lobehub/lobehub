@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { ClipboardCheckIcon, ListTodoIcon, TargetIcon } from 'lucide-react';
+import { ClipboardCheckIcon, ListTodoIcon, SettingsIcon, TargetIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
@@ -14,6 +14,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
+import { ProjectDirectoryTopics } from '../WorkingDirectories/SidebarTopics';
 import { getProjectAcceptancePath, getProjectGoalsPath, getProjectTasksPath } from './navigation';
 import ProjectHeader from './ProjectHeader';
 
@@ -61,6 +62,18 @@ const ProjectSidebarContent = memo(() => {
             title={t('sections.acceptance')}
             onClick={() => navigate(projectAcceptancePath)}
           />
+          <NavItem
+            active={pathname.includes(`/project/${projectId}/settings`)}
+            icon={SettingsIcon}
+            title={t('topics.settings')}
+            onClick={() => navigate(`/project/${projectId}/settings/general`)}
+          />
+          {detail?.project && (
+            <ProjectDirectoryTopics
+              coordinatorAgentId={detail.project.coordinatorAgentId}
+              projectId={detail.project.id}
+            />
+          )}
         </Flexbox>
       }
     />

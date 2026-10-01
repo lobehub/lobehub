@@ -198,7 +198,12 @@ describe('project store cache scope', () => {
 
   it('updates project list and detail caches after renaming', async () => {
     const project = { id: 'project-1', name: 'Original', slug: 'launch' } as ProjectListItem;
-    const renamed = { ...project, name: 'Renamed' };
+    const renamed = {
+      ...project,
+      name: 'Renamed',
+      slug: 'new-address',
+      description: 'Updated description',
+    };
     const detail = { project } as ProjectDetail;
     const refreshProjectList = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(projectService, 'update').mockResolvedValue({
@@ -212,11 +217,23 @@ describe('project store cache scope', () => {
       refreshProjectList,
     });
 
-    await useProjectStore.getState().updateProject('project-1', { name: 'Renamed' });
+    await useProjectStore.getState().updateProject('project-1', {
+      name: 'Renamed',
+      slug: 'new-address',
+      description: 'Updated description',
+    });
 
     expect(useProjectStore.getState().projectLists['user-1:personal'][0].name).toBe('Renamed');
     expect(useProjectStore.getState().projectDetails['user-1:personal'].launch.project.name).toBe(
       'Renamed',
+    );
+    expect(useProjectStore.getState().projectDetails['user-1:personal'].launch.project.slug).toBe(
+      'new-address',
+    );
+    expect(mutate).toHaveBeenCalledWith(
+      ['project/detail', 'user-1:personal', 'launch'],
+      { data: { project: renamed }, success: true },
+      { revalidate: false },
     );
     expect(refreshProjectList).toHaveBeenCalledOnce();
   });

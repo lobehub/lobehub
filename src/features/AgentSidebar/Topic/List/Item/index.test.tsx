@@ -5,8 +5,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { TopicListScopeContext } from '../../TopicListScope';
 import TopicItem from './index';
 
+const scopedTopicMock = vi.hoisted(() => ({
+  value: undefined as { agentId: string; agentAvatar: string; agentName: string } | undefined,
+}));
 const useTopicNavigationMock = vi.hoisted(() => vi.fn());
 const prefetchMessagesMock = vi.hoisted(() => vi.fn());
 const activeTopicIdMock = vi.hoisted(() => ({ value: undefined as string | undefined }));
@@ -40,6 +44,8 @@ vi.mock('motion/react-m', () => ({
     <span {...props}>{children}</span>
   ),
 }));
+
+vi.mock('../../useScopedTopics', () => ({ useScopedTopic: () => scopedTopicMock.value }));
 
 vi.mock('@/const/version', () => ({ isDesktop: false }));
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
@@ -81,8 +87,12 @@ vi.mock('@/routes/(main)/agent/channel/const', () => ({
 vi.mock('@/store/agent', () => ({
   // `agentMap` is read by `agentSelectors.currentAgentVisibility`.
   useAgentStore: (
-    selector: (state: { activeAgentId: string; agentMap: Record<string, unknown> }) => unknown,
-  ) => selector({ activeAgentId: 'agt_test', agentMap: {} }),
+    selector: (state: {
+      activeAgentId: string;
+      agentMap: Record<string, unknown>;
+      builtinAgentIdMap: Record<string, string>;
+    }) => unknown,
+  ) => selector({ activeAgentId: 'agt_test', agentMap: {}, builtinAgentIdMap: {} }),
 }));
 vi.mock('@/store/chat', () => {
   const useChatStore = (
@@ -147,6 +157,7 @@ vi.mock('../../TopicListContent/ThreadList', () => ({
 
 describe('TopicItem active state', () => {
   afterEach(() => {
+    scopedTopicMock.value = undefined;
     prefetchMessagesMock.mockClear();
     activeTopicIdMock.value = undefined;
     agentRuntimeRunningMock.value = false;
@@ -154,6 +165,36 @@ describe('TopicItem active state', () => {
     topicUnreadCompletedMock.value = false;
     topicMetaCardMock.value = undefined;
     vi.useRealTimers();
+  });
+
+  it('renders the Project row Agent avatar and keeps its link in the Project', () => {
+    scopedTopicMock.value = {
+      agentId: 'other-agent',
+      agentAvatar: '/avatars/other.png',
+      agentName: 'Other Agent',
+    };
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: true,
+      routeTopicId: 'project-topic',
+      urlTopicId: 'project-topic',
+      focusTopicPopup: vi.fn(),
+      navigateToTopic: vi.fn(),
+    });
+    render(
+      <TopicListScopeContext value={{ projectId: 'project-1' }}>
+        <TopicItem id="project-topic" title="Project work" />
+      </TopicListScopeContext>,
+    );
+    expect(screen.getByRole('img', { name: 'Other Agent' })).toHaveAttribute(
+      'src',
+      '/avatars/other.png',
+    );
+    expect(screen.getByTestId('nav-item')).toHaveAttribute(
+      'data-href',
+      '/team/project/project-1/conversation/project-topic',
+    );
+    expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'true');
   });
 
   it('keeps the current topic highlighted on topic page sub-routes', () => {

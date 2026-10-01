@@ -3,7 +3,7 @@ import { access, readdir, readFile, realpath, stat } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
-import { detectRepoType } from '@lobechat/local-file-shell/git';
+import { detectGitHubRepository, detectRepoType } from '@lobechat/local-file-shell/git';
 import matter from 'gray-matter';
 
 import type {
@@ -267,7 +267,13 @@ export const statPath = async (params: { path: string }): Promise<StatPathResult
     const stats = await stat(params.path);
     if (!stats.isDirectory()) return { exists: true, isDirectory: false };
     const repoType = await detectRepoType(params.path);
-    return { exists: true, isDirectory: true, repoType };
+    const repositoryUrl = await detectGitHubRepository(params.path);
+    return {
+      exists: true,
+      isDirectory: true,
+      repoType,
+      ...(repositoryUrl ? { repositoryUrl } : {}),
+    };
   } catch {
     return { exists: false, isDirectory: false };
   }
