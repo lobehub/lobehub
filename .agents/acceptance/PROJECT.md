@@ -244,10 +244,16 @@ stale standalone install: a recently added workspace package fails to resolve �
 - SPA proxying note: Web smoke needs the full-stack `dev` so Next proxies the
   SPA HTML from Vite; `dev-next` alone will not serve the SPA.
 
-- Local frontend against production backend: `bun run dev:spa` prints a
-  `_dangerous_local_dev_proxy` URL that loads your local Vite SPA inside the
-  online environment (HMR against real server config) — for verifying frontend
-  behavior against production data only, NOT for testing backend branch changes.
+- **Verify against a branch-running environment, not the production proxy:**
+  `bun run dev:spa` prints a `_dangerous_local_dev_proxy` URL that loads your
+  local Vite SPA inside the online environment (HMR against real server config).
+  That is a development convenience: it serves your local frontend over
+  production's backend, origin, and data. Its output is **never acceptance
+  evidence**, and it does not prove the delivered branch. Verify Web changes in
+  the local full-stack dev server (`$SERVER_URL`, default `http://localhost:3010`),
+  or a frontend-only change in Electron (`PROCESS.md` Step 3). If a criterion
+  cannot be exercised in an environment that runs the delivered branch, record
+  that check `blocked` and report the gap — do not substitute the proxy for it.
 
 ### Electron
 

@@ -175,6 +175,12 @@ Launch commands per surface are in `PROJECT.md` §4; the operating manual for ea
 is in the skill's `surfaces/`. Escalate, don't duplicate: verify a backend change
 with the CLI first, and add a UI pass only when the change reaches the UI.
 
+Every check runs in an environment that runs the delivered branch. A
+production-hosted surface (e.g. the `_dangerous_local_dev_proxy`) serves local
+frontend code over someone else's backend and data — it is a development
+convenience, not a surface, and never replaces the local full-stack server or
+Electron.
+
 **Separate the driver from the evidence surface.** Producing the state under test
 and capturing the evidence are independent choices. Drive with the cheapest
 deterministic path the repo offers (a CLI command, an endpoint call, a seed
@@ -275,6 +281,10 @@ What is specific to this repository:
   test profile.** Follow [Publish auth preflight](#publish-auth-preflight) below
   for both looking up existing rounds and publishing. Do not unconditionally
   remove API keys or assume a stored login exists.
+- **The publish target is not the verification surface.** `app.lobehub.com` is
+  where the acceptance is stored, not where the product was verified. Reaching
+  production to publish must never decide which environment ran the delivery; name
+  the actual verification environment (local full-stack / Electron) in the report.
 
 - **Choose the subject by business continuity**, not by what is easiest to create:
   an explicit instruction first; else the current conversation's `topic:<id>` (the

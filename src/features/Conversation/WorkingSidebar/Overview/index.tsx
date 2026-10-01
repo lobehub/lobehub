@@ -46,6 +46,7 @@ import {
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
 import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from './overviewData';
 import OverviewHeader from './OverviewHeader';
@@ -434,6 +435,7 @@ const Overview = memo<OverviewProps>(
           />
         )}
 
+        <GoalSection className={sectionStyles.section} />
         <ProgressSection className={sectionStyles.section} />
 
         {visibleWorks.length > 0 && (

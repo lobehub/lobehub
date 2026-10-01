@@ -52,9 +52,15 @@ Upload the screenshot (`--type screenshot`) and the network proof (the HAR as
 
 ## Local frontend against a remote backend
 
-If you can only run the frontend locally but the backend is remote, drive the
-frontend URL the same way — just remember the backend is not your branch, so it
-proves frontend behavior, not backend changes.
+Reach for this only when the change under test is frontend-only **and** no
+self-contained local environment can run it. Drive the frontend URL the same way,
+but treat it as a fallback, not a default: the backend is not your branch and may
+be production, so it proves frontend behavior against someone else's backend and
+data — not backend changes, and not the delivered branch end to end.
+
+Keep the local dev server the project's adapter provides as the default surface.
+When a remote-backed surface is unavoidable, say so in the report so the reviewer
+knows which layers the evidence actually covers.
 
 ## Time-based behavior & OS-level steps
 
