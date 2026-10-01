@@ -78,6 +78,30 @@ describe('buildLifecycleDays', () => {
     expect(rows[0].event.entityId).toBe('node-a');
   });
 
+  it.each(['input', 'supports', 'contradicts'] as const)(
+    'keeps a later %s link on a Work another node already produced',
+    (relation) => {
+      // `GoalExplorationModel` reattaches a previously produced version as
+      // `input` when a later node reuses it, and the other relations exist for
+      // a node that relies on or disputes the Work. Those are new transitions,
+      // not another delivery of it, so each keeps its own row.
+      const days = buildLifecycleDays(
+        [
+          attach('v1', { at: '2026-09-27T07:33:41.813Z', eventId: 'e1', nodeId: 'node-a' }),
+          attach('v1', {
+            at: '2026-09-27T08:01:15.137Z',
+            eventId: 'e2',
+            nodeId: 'node-b',
+            relation,
+          }),
+        ],
+        docs,
+      );
+
+      expect(rowsOf(days).map((row) => row.event.id)).toEqual(['e2', 'e1']);
+    },
+  );
+
   it('keeps the claim when only one node ever made it', () => {
     const days = buildLifecycleDays(
       [attach('v1', { at: '2026-09-27T07:33:41.813Z', eventId: 'e1', nodeId: 'node-a' })],

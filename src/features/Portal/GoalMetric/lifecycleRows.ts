@@ -13,10 +13,12 @@ import { type LifecyclePresentation, nodeTwinKey, presentLifecycleEvent } from '
  * back into what happened:
  *
  * - **One claim per deliverable.** A Work is declared produced once, by the
- *   node that first delivered it. Later rows claiming the same Work are bookkeeping
- *   about a revision, not another delivery, and they are dropped. This mirrors
- *   the coordinator's own rule (`GoalService.attachTaskDeliverables`) and also
- *   cleans up histories written before it.
+ *   node that first delivered it. Later `produced` claims on the same Work are
+ *   bookkeeping about a revision, not another delivery, and they are dropped.
+ *   This mirrors the coordinator's own rule
+ *   (`GoalService.attachTaskDeliverables`) and also cleans up histories written
+ *   before it. A later `input` / `supports` / `contradicts` link is a different
+ *   transition in that Work's life and keeps its row.
  * - **One row per moment.** Adjacent deliverable rows of the same node and the
  *   same action that share a displayed time read as one event carrying several
  *   outputs, which is what a settle with five deliverables actually was.
@@ -59,6 +61,11 @@ const redundantClaims = (rows: LifecycleRow[], { workIdOf }: LifecycleRowContext
   const claimed = new Set<string>();
   const redundant = new Set<string>();
   for (const row of [...rows].reverse()) {
+    // Only a repeated *produced* claim is bookkeeping. The same version later
+    // reattached as `input` — `GoalExplorationModel` does exactly that — or as
+    // `supports` / `contradicts`, is a new transition in the Work's life, so
+    // its row is not a duplicate of the delivery.
+    if (row.presentation.action !== 'work.produced') continue;
     const version = row.presentation.workVersion;
     if (!version) continue;
     const workId = workIdOf(version.id);
