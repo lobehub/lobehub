@@ -5,6 +5,7 @@ import { Flexbox, Tooltip } from '@lobehub/ui';
 import { Button, Text, TextArea, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useGoalStore } from '@/store/goal';
