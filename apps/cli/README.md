@@ -11,13 +11,14 @@ Install from the repository's default branch:
 lh acceptance install
 ```
 
-Updating the skill, creating acceptances, and publishing reports require
-authentication. Sign in before updating:
+Update the installed skill:
 
 ```bash
-lh login
 lh acceptance update
 ```
+
+Creating acceptances and publishing reports require authentication. Run `lh login`
+before using those commands.
 
 This selects the same source as `npx skills add lobehub/acceptance --skill acceptance`.
 Changes merged into the default branch are available on the next install or

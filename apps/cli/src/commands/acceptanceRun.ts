@@ -1203,8 +1203,8 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
     acceptance
       .command('update')
       .description('Download the latest skill source, replacing its files and re-wiring harnesses'),
-  ).action(async (options: InstallOptions) =>
-    installAction({ ...options, force: true }, await getTrpcClient()),
+  ).action((options: InstallOptions) =>
+    installAction({ ...options, force: true }, createPublicLambdaClient()),
   );
 
   const run = acceptance

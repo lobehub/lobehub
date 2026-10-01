@@ -66,26 +66,29 @@ describe('acceptance skill installation', () => {
     await rm(directory, { force: true, recursive: true });
   });
 
-  it('installs every source resource through the anonymous server client and wires Claude', async () => {
-    await mkdir(path.join(directory, '.claude'));
+  it.each(['install', 'update'])(
+    '%s downloads every source resource without authentication and wires Claude',
+    async (command) => {
+      await mkdir(path.join(directory, '.claude'));
 
-    vi.mocked(getTrpcClient).mockRejectedValue(new Error('Not authenticated'));
-    await run('install');
+      vi.mocked(getTrpcClient).mockRejectedValue(new Error('Not authenticated'));
+      await run(command);
 
-    const skillDir = path.join(directory, '.agents/skills/acceptance');
-    expect(await readFile(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe(content);
-    for (const [file, expected] of Object.entries(bundle.files)) {
-      expect(await readFile(path.join(skillDir, file), 'utf8')).toBe(expected);
-    }
-    expect(await readlink(path.join(directory, '.claude/skills'))).toBe('../.agents/skills');
-    expect(createPublicLambdaClient).toHaveBeenCalled();
-    expect(getTrpcClient).not.toHaveBeenCalled();
-    expect(query).toHaveBeenCalledWith({ identifier: 'acceptance' });
-    expect(JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0] as string)).toMatchObject({
-      skill: 'acceptance',
-      version: '0.5.0',
-    });
-  });
+      const skillDir = path.join(directory, '.agents/skills/acceptance');
+      expect(await readFile(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe(content);
+      for (const [file, expected] of Object.entries(bundle.files)) {
+        expect(await readFile(path.join(skillDir, file), 'utf8')).toBe(expected);
+      }
+      expect(await readlink(path.join(directory, '.claude/skills'))).toBe('../.agents/skills');
+      expect(createPublicLambdaClient).toHaveBeenCalled();
+      expect(getTrpcClient).not.toHaveBeenCalled();
+      expect(query).toHaveBeenCalledWith({ identifier: 'acceptance' });
+      expect(JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0] as string)).toMatchObject({
+        skill: 'acceptance',
+        version: '0.5.0',
+      });
+    },
+  );
 
   it('emits links[] plus the legacy link alias for the Claude result', async () => {
     await mkdir(path.join(directory, '.claude'));
@@ -123,15 +126,18 @@ describe('acceptance skill installation', () => {
     await mkdir(skillDir, { recursive: true });
     await writeFile(path.join(skillDir, 'SKILL.md'), 'existing skill');
     await writeFile(path.join(skillDir, 'old.md'), 'existing resource');
+    vi.mocked(getTrpcClient).mockRejectedValue(new Error('Not authenticated'));
     query.mockRejectedValueOnce(new Error('Download unavailable'));
 
     await expect(run('update')).rejects.toThrow('Download unavailable');
 
     expect(await readFile(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('existing skill');
     expect(await readFile(path.join(skillDir, 'old.md'), 'utf8')).toBe('existing resource');
+    expect(getTrpcClient).not.toHaveBeenCalled();
   });
 
   it('preserves existing files during install, then replaces them and removes stale files on update', async () => {
+    vi.mocked(getTrpcClient).mockRejectedValue(new Error('Not authenticated'));
     await run('install');
     const skillDir = path.join(directory, '.agents/skills/acceptance');
     await writeFile(path.join(skillDir, 'SKILL.md'), 'local copy');
@@ -184,17 +190,19 @@ describe('acceptance skill installation', () => {
     expect(query).toHaveBeenCalledWith({ identifier: 'verify' });
   });
 
-  it('keeps login required and preserves installed files when authentication fails', async () => {
-    await run('install');
-    vi.mocked(getTrpcClient).mockRejectedValueOnce(new Error('Not authenticated'));
+  it.each([
+    ['create', '--requirement', 'Verify the delivery'],
+    ['run', 'list'],
+  ])('keeps authentication required for acceptance %s', async (...args) => {
+    const program = new Command().exitOverride();
+    registerAcceptanceCommands(program);
+    vi.mocked(getTrpcClient).mockRejectedValue(new Error('Not authenticated'));
 
-    await expect(run('update')).rejects.toThrow('Not authenticated');
-    expect(getTrpcClient).toHaveBeenCalledTimes(1);
-    expect(createPublicLambdaClient).toHaveBeenCalledTimes(1);
-    expect(await readFile(path.join(directory, '.agents/skills/acceptance/SKILL.md'), 'utf8')).toBe(
-      content,
-    );
-    expect(query).toHaveBeenCalledTimes(1);
+    await expect(
+      program.parseAsync(['node', 'lh', 'acceptance', ...args, '--json']),
+    ).rejects.toThrow('Not authenticated');
+    expect(createPublicLambdaClient).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
   });
 
   it('rejects a matching tag whose declared version differs from the requested version', async () => {
