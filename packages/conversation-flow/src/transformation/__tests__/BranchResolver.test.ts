@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { IdNode, Message } from '../../types';
 import { BranchResolver } from '../BranchResolver';
@@ -259,6 +259,26 @@ describe('BranchResolver', () => {
 
       // activeBranchIndex > childIds.length should be ignored, fallback to default
       expect(resolver.getActiveBranchIdFromMetadata(message, childIds, childrenMap)).toBe('msg-2');
+    });
+
+    it('returns a lone child without walking its subtree', () => {
+      // Every step of a long single-path chain resolves its one continuation
+      // here; walking the subtree each time made parse quadratic.
+      const message: Message = {
+        content: '',
+        createdAt: 0,
+        id: 'tool-1',
+        role: 'tool',
+        updatedAt: 0,
+      };
+      const childrenMap = new Map<string | null, string[]>([['ast-2', ['tool-2']]]);
+      const lookup = vi.spyOn(childrenMap, 'get');
+      const resolverWithMessages = new BranchResolver(new Map([['tool-1', message]]));
+
+      expect(
+        resolverWithMessages.getActiveBranchIdFromMetadata(message, ['ast-2'], childrenMap),
+      ).toBe('ast-2');
+      expect(lookup).not.toHaveBeenCalled();
     });
   });
 });
