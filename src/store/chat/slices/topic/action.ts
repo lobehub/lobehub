@@ -22,8 +22,9 @@ import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
 import { LOADING_FLAT } from '@/const/message';
+import { createLocalFirstSlice, type LocalFirstSyncResult, recordLens } from '@/libs/localFirst';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
+import { cronKeys, deviceKeys, isLocalFirstSyncKey, topicKeys } from '@/libs/swr/keys';
 import { aiChatService } from '@/services/aiChat';
 import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
@@ -56,18 +57,20 @@ import {
   userGeneralSettingsSelectors,
   userProfileSelectors,
 } from '@/store/user/selectors';
-import {
-  type ChatTopic,
-  type ChatTopicStatus,
-  type CreateTopicParams,
-  type TopicQuerySortBy,
-} from '@/types/topic';
+import { type ChatTopic, type ChatTopicStatus, type CreateTopicParams } from '@/types/topic';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { displayMessageSelectors } from '../message/selectors';
 import { type TopicData } from './initialState';
+import {
+  applyTopicDispatchToBucket,
+  isTopicListHydratable,
+  toPersistedTopicList,
+  type TopicListPage,
+  type TopicListParams,
+  topicListResource,
+} from './projection';
 import { type ChatTopicDispatch } from './reducer';
-import { topicReducer } from './reducer';
 import { topicSelectors } from './selectors';
 
 const n = setNamespace('t');
@@ -191,10 +194,31 @@ export class ChatTopicActionImpl {
 
   #summarizingTopicTitleIds = new Set<string>();
 
+  /**
+   * Local-first topic list: `topicDataMap[containerKey]` is its view, so every
+   * selector keeps reading the store. The binding is the only writer of that
+   * map (hydrate / replace / update / optimistic) and owns persistence.
+   */
+  readonly #topicList;
+
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#topicList = createLocalFirstSlice<ChatStore, TopicListParams, TopicData, TopicListPage>(
+      topicListResource,
+      {
+        actionPrefix: n('topicList'),
+        fetcher: this.#fetchTopicList,
+        get,
+        isHydratable: isTopicListHydratable,
+        merge: this.#mergeTopicListPage,
+        set,
+        stateKey: 'topicListLocalFirst',
+        toPersisted: (data) => toPersistedTopicList(data, get().creatingTopicIds),
+        view: recordLens<ChatStore, TopicData>('topicDataMap'),
+      },
+    );
   }
 
   #resolveTopicLinkedPullRequestRefreshParams = (
@@ -543,7 +567,10 @@ export class ChatTopicActionImpl {
       provider: string;
     },
   ): Promise<void> => {
-    const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
+    const { activeAgentId, activeGroupId } = this.#get();
+    const containerKey =
+      topicSelectors.getTopicContainerKeyById(id)(this.#get()) ??
+      topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
     const previous = topicSelectors.getTopicById(id)(this.#get());
     const { reasoningConfig: _stale, ...rest } = previous?.metadata ?? {};
     this.#get().internal_dispatchTopic({
@@ -695,7 +722,10 @@ export class ChatTopicActionImpl {
     id: string,
     metadata: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>,
   ): Promise<void> => {
-    const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
+    const { activeAgentId, activeGroupId } = this.#get();
+    const containerKey =
+      topicSelectors.getTopicContainerKeyById(id)(this.#get()) ??
+      topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
     const previous = topicSelectors.getTopicById(id)(this.#get());
     if (!previous) return;
     this.#get().internal_dispatchTopic({
@@ -1192,6 +1222,119 @@ export class ChatTopicActionImpl {
     await summaryTopicTitle(id, messages);
   };
 
+  #fetchTopicList = async ({
+    agentId,
+    groupId,
+    pageSize,
+    ...query
+  }: TopicListParams): Promise<TopicListPage> => {
+    const containerKey = topicMapKey({ agentId, groupId });
+    const currentData = this.#get().topicDataMap[containerKey];
+    const lastPageSize = currentData?.pageSize;
+
+    // Only treat as "expanding page size" when user actually increases pageSize,
+    // not when SWR revalidates or when total items < pageSize.
+    const isExpanding =
+      (currentData?.items?.length || 0) > 0 &&
+      typeof lastPageSize === 'number' &&
+      pageSize > lastPageSize;
+    if (isExpanding)
+      this.#get().internal_updateTopicData(containerKey, { isExpandingPageSize: true });
+
+    const result = await topicService.getTopics({
+      agentId,
+      current: 0,
+      groupId,
+      pageSize,
+      ...query,
+    });
+
+    if (isExpanding)
+      this.#get().internal_updateTopicData(containerKey, { isExpandingPageSize: false });
+
+    return { ...result, items: this.#applyPendingStatusWrites(result.items, 'server') };
+  };
+
+  /**
+   * Fold a fetched first page into the container bucket. Returns `undefined`
+   * when nothing changed so the store is left untouched.
+   */
+  #mergeTopicListPage = (
+    result: TopicListPage,
+    currentData: TopicData | undefined,
+    {
+      agentId,
+      excludeStatuses,
+      excludeTriggers,
+      groupId,
+      isInbox,
+      pageSize,
+      sortBy,
+      withDetails,
+    }: TopicListParams,
+  ): TopicData | undefined => {
+    const { total: totalCount } = result;
+    // The fetched list can still predate a pending status write.
+    const topics = this.#reconcileFetchedTopics(result.items, currentData?.items, 'cache');
+
+    // Fire BEFORE the no-change early return below: on a cold boot the first
+    // delivery is exactly the sweep that must warm app-closed-while-running runs.
+    this.#prefetchUnreadTopicMessages(topics, currentData?.items, { agentId, groupId });
+
+    const isRefreshingExpandedList =
+      !!currentData &&
+      currentData.currentPage > 0 &&
+      currentData.pageSize === pageSize &&
+      Boolean(currentData.isInbox) === Boolean(isInbox) &&
+      isEqual(currentData.excludeStatuses, excludeStatuses) &&
+      isEqual(currentData.excludeTriggers, excludeTriggers);
+
+    const nextItems = isRefreshingExpandedList
+      ? (() => {
+          const visibleCount = Math.min(currentData.items.length, totalCount);
+          const topicIds = new Set(topics.map((item) => item.id));
+
+          return [...topics, ...currentData.items.filter((topic) => !topicIds.has(topic.id))].slice(
+            0,
+            visibleCount,
+          );
+        })()
+      : topics;
+
+    // no need to update map if the current key's data exists and is the same
+    if (
+      currentData &&
+      isEqual(nextItems, currentData.items) &&
+      currentData.total === totalCount &&
+      isEqual(currentData.excludeStatuses, excludeStatuses) &&
+      isEqual(currentData.excludeTriggers, excludeTriggers) &&
+      currentData.sortBy === sortBy
+    ) {
+      return undefined;
+    }
+
+    return {
+      currentPage: isRefreshingExpandedList ? currentData.currentPage : 0,
+      excludeStatuses,
+      excludeTriggers,
+      hasMore: totalCount > nextItems.length,
+      isInbox: Boolean(isInbox),
+      isExpandingPageSize: false,
+      isLoadingMore: false,
+      loadMoreError: undefined,
+      items: nextItems,
+      pageSize,
+      sortBy,
+      total: totalCount,
+      withDetails,
+    };
+  };
+
+  /**
+   * Fetch orchestration for a container's topic list. Hydrates the persisted
+   * projection, then revalidates; results land in `topicDataMap` — read them
+   * through `topicSelectors`, never from this hook.
+   */
   useFetchTopics = (
     enable: boolean,
     {
@@ -1199,152 +1342,27 @@ export class ChatTopicActionImpl {
       excludeStatuses,
       excludeTriggers,
       groupId,
-      pageSize: customPageSize,
+      pageSize,
       isInbox,
       sortBy,
       withDetails,
-    }: {
-      agentId?: string;
-      excludeStatuses?: string[];
-      excludeTriggers?: string[];
-      groupId?: string;
-      isInbox?: boolean;
-      pageSize?: number;
-      sortBy?: TopicQuerySortBy;
-      withDetails?: boolean;
-    } = {},
-  ): SWRResponse<{ items: ChatTopic[]; total: number }> => {
-    const pageSize = customPageSize || 20;
-    const effectiveExcludeTriggers =
-      excludeTriggers && excludeTriggers.length > 0 ? excludeTriggers : undefined;
-    const effectiveExcludeStatuses =
-      excludeStatuses && excludeStatuses.length > 0 ? excludeStatuses : undefined;
-    // Use topicMapKey to generate the container key for topic data map
-    const containerKey = topicMapKey({ agentId, groupId });
-    const hasValidContainer = !!(groupId || agentId);
-
-    return useClientDataSWRWithSync<{ items: ChatTopic[]; total: number }>(
-      enable && hasValidContainer
-        ? topicKeys.list(containerKey, {
+    }: Partial<TopicListParams> = {},
+  ): LocalFirstSyncResult => {
+    const params: TopicListParams | null =
+      groupId || agentId
+        ? {
+            agentId,
+            excludeStatuses: excludeStatuses?.length ? excludeStatuses : undefined,
+            excludeTriggers: excludeTriggers?.length ? excludeTriggers : undefined,
+            groupId,
             isInbox,
-            pageSize,
-            ...(effectiveExcludeTriggers ? { excludeTriggers: effectiveExcludeTriggers } : {}),
-            ...(effectiveExcludeStatuses ? { excludeStatuses: effectiveExcludeStatuses } : {}),
-            ...(sortBy ? { sortBy } : {}),
-            ...(withDetails ? { withDetails: true } : {}),
-          })
-        : null,
-      async () => {
-        // agentId, groupId, isInbox, pageSize come from the outer scope closure
-        if (!agentId && !groupId) return { items: [], total: 0 };
-
-        const currentData = this.#get().topicDataMap[containerKey];
-        const lastPageSize = currentData?.pageSize;
-        const hasExistingItems = (currentData?.items?.length || 0) > 0;
-
-        // Only treat as "expanding page size" when user actually increases pageSize,
-        // not when SWR revalidates or when total items < pageSize.
-        const isExpanding =
-          hasExistingItems && typeof lastPageSize === 'number' && pageSize > lastPageSize;
-        if (isExpanding) {
-          this.#get().internal_updateTopicData(containerKey, { isExpandingPageSize: true });
-        }
-
-        const result = await topicService.getTopics({
-          agentId,
-          current: 0,
-          excludeStatuses: effectiveExcludeStatuses,
-          excludeTriggers: effectiveExcludeTriggers,
-          groupId,
-          isInbox,
-          pageSize,
-          sortBy,
-          withDetails,
-        });
-
-        // Reset expanding state after fetch completes
-        if (isExpanding) {
-          this.#get().internal_updateTopicData(containerKey, { isExpandingPageSize: false });
-        }
-
-        return { ...result, items: this.#applyPendingStatusWrites(result.items, 'server') };
-      },
-      {
-        // onData: responsible for state updates (fires for both cached and fresh data)
-        onData: (result) => {
-          if (!hasValidContainer) return;
-
-          const { total: totalCount } = result;
-
-          const currentData = this.#get().topicDataMap[containerKey];
-          // `result` can be a cached response or a list already normalized by
-          // the fetcher. Neither proves the server observed the pending write.
-          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items, 'cache');
-
-          // Fire BEFORE the no-change early return below: on a cold boot the
-          // cached list arrives with no `currentData`, and that first delivery
-          // is exactly the sweep that must warm app-closed-while-running runs.
-          this.#prefetchUnreadTopicMessages(topics, currentData?.items, { agentId, groupId });
-
-          const isRefreshingExpandedList =
-            !!currentData &&
-            currentData.currentPage > 0 &&
-            currentData.pageSize === pageSize &&
-            Boolean(currentData.isInbox) === Boolean(isInbox) &&
-            isEqual(currentData.excludeStatuses, effectiveExcludeStatuses) &&
-            isEqual(currentData.excludeTriggers, effectiveExcludeTriggers);
-
-          const nextItems = isRefreshingExpandedList
-            ? (() => {
-                const visibleCount = Math.min(currentData.items.length, totalCount);
-                const topicIds = new Set(topics.map((item) => item.id));
-
-                return [
-                  ...topics,
-                  ...currentData.items.filter((topic) => !topicIds.has(topic.id)),
-                ].slice(0, visibleCount);
-              })()
-            : topics;
-
-          const hasMore = totalCount > nextItems.length;
-
-          // no need to update map if the current key's data exists and is the same
-          if (
-            currentData &&
-            isEqual(nextItems, currentData.items) &&
-            currentData.total === totalCount &&
-            isEqual(currentData.excludeStatuses, effectiveExcludeStatuses) &&
-            isEqual(currentData.excludeTriggers, effectiveExcludeTriggers)
-          ) {
-            return;
+            pageSize: pageSize || 20,
+            sortBy,
+            withDetails: withDetails || undefined,
           }
+        : null;
 
-          this.#set(
-            {
-              topicDataMap: {
-                ...this.#get().topicDataMap,
-                [containerKey]: {
-                  currentPage: isRefreshingExpandedList ? currentData.currentPage : 0,
-                  excludeStatuses: effectiveExcludeStatuses,
-                  excludeTriggers: effectiveExcludeTriggers,
-                  hasMore,
-                  isInbox: Boolean(isInbox),
-                  isExpandingPageSize: false,
-                  isLoadingMore: false,
-                  loadMoreError: undefined,
-                  items: nextItems,
-                  pageSize,
-                  total: totalCount,
-                  withDetails,
-                },
-              },
-            },
-            false,
-            n('useFetchTopics(onData)', { containerKey }),
-          );
-        },
-      },
-    );
+    return this.#topicList.useSync(params, { enabled: enable });
   };
 
   /**
@@ -1566,15 +1584,10 @@ export class ChatTopicActionImpl {
     const currentPage = currentData?.currentPage || 0;
     const nextPage = currentPage + 1;
 
-    this.#set(
-      {
-        topicDataMap: {
-          ...topicDataMap,
-          [key]: { ...currentData!, isLoadingMore: true, loadMoreError: undefined },
-        },
-      },
-      false,
-      n('loadMoreTopics(start)'),
+    this.#topicList.update(
+      key,
+      () => ({ ...currentData!, isLoadingMore: true, loadMoreError: undefined }),
+      { persist: false },
     );
 
     try {
@@ -1600,42 +1613,30 @@ export class ChatTopicActionImpl {
       const nextItems = [...currentTopics, ...topics];
       const hasMore = result.total > nextItems.length;
 
-      this.#set(
-        {
-          topicDataMap: {
-            ...this.#get().topicDataMap,
-            [key]: {
-              currentPage: nextPage,
-              excludeStatuses,
-              excludeTriggers,
-              hasMore,
-              isInbox: currentData?.isInbox,
-              isLoadingMore: false,
-              loadMoreError: undefined,
-              items: nextItems,
-              pageSize,
-              total: result.total,
-              withDetails,
-            },
-          },
-        },
-        false,
-        n('loadMoreTopics(success)'),
+      // Later pages are memory-only: the persisted projection keeps page one.
+      this.#topicList.update(
+        key,
+        () => ({
+          currentPage: nextPage,
+          excludeStatuses,
+          excludeTriggers,
+          hasMore,
+          isInbox: currentData?.isInbox,
+          isLoadingMore: false,
+          loadMoreError: undefined,
+          items: nextItems,
+          pageSize,
+          sortBy: currentData?.sortBy,
+          total: result.total,
+          withDetails,
+        }),
+        { persist: false },
       );
     } catch (error) {
-      this.#set(
-        {
-          topicDataMap: {
-            ...this.#get().topicDataMap,
-            [key]: {
-              ...this.#get().topicDataMap[key]!,
-              isLoadingMore: false,
-              loadMoreError: error,
-            },
-          },
-        },
-        false,
-        n('loadMoreTopics(error)'),
+      this.#topicList.update(
+        key,
+        (bucket) => bucket && { ...bucket, isLoadingMore: false, loadMoreError: error },
+        { persist: false },
       );
     }
   };
@@ -1896,21 +1897,18 @@ export class ChatTopicActionImpl {
    */
   refreshTopic = async (ownerContainerKey?: string): Promise<void> => {
     const { activeAgentId, activeGroupId } = this.#get();
-    // Use topicMapKey to generate the same key used in useFetchTopics
-    // Key format: topicKeys.list(containerKey, { isInbox, pageSize })
+    // Same container key the topic-list resource uses as its entry key.
     const containerKey =
       ownerContainerKey ?? topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
     const agentViewKey =
       ownerContainerKey ?? (activeAgentId ? topicMapKey({ agentId: activeAgentId }) : null);
     await mutate(
       (key) =>
-        Array.isArray(key) &&
-        ((key[0] === topicKeys.list.root &&
-          typeof key[1] === 'string' &&
-          key[1] === containerKey) ||
-          (key[0] === topicKeys.agentView.root &&
-            agentViewKey !== null &&
-            key[1] === agentViewKey)),
+        isLocalFirstSyncKey(key, topicListResource.name, { key: containerKey }) ||
+        (Array.isArray(key) &&
+          key[0] === topicKeys.agentView.root &&
+          agentViewKey !== null &&
+          key[1] === agentViewKey),
     );
   };
 
@@ -1953,11 +1951,32 @@ export class ChatTopicActionImpl {
     // The row is not necessarily in the active agent/group bucket — resolve the
     // one that holds it, so the optimistic write and the revalidation both land
     // where the topic is actually rendered (see `getTopicContainerKeyById`).
-    const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
+    const { activeAgentId, activeGroupId } = this.#get();
+    const containerKey =
+      topicSelectors.getTopicContainerKeyById(id)(this.#get()) ??
+      topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
+    const previous = topicSelectors.getTopicById(id)(this.#get());
+    const payload: ChatTopicDispatch = { type: 'updateTopic', id, value: data, containerKey };
 
-    this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: data, containerKey });
-
-    await topicService.updateTopic(id, data);
+    // The list bucket gets a real optimistic overlay (rolled back on failure,
+    // rebased over background revalidations); the management-page and detail
+    // mirrors follow it by hand.
+    this.#mirrorTopicDispatch(containerKey, payload);
+    try {
+      await this.#topicList.optimistic(
+        containerKey,
+        (bucket) => applyTopicDispatchToBucket(bucket, payload) ?? bucket,
+        () => topicService.updateTopic(id, data),
+      );
+    } catch (error) {
+      if (previous) {
+        const restore = Object.fromEntries(
+          Object.keys(data).map((field) => [field, previous[field as keyof ChatTopic]]),
+        ) as Partial<ChatTopic>;
+        this.#mirrorTopicDispatch(containerKey, { ...payload, value: restore });
+      }
+      throw error;
+    }
     await this.#get().refreshTopic(containerKey);
   };
 
@@ -2039,39 +2058,47 @@ export class ChatTopicActionImpl {
   };
 
   /**
-   * Mirror an optimistic topic patch into the PERSISTED topic-list cache.
-   *
-   * `topic:` keys are persisted to IndexedDB by the tiered SWR provider (see
-   * `CACHE_TIERS`), and that cached page is what the sidebar paints on a cold
-   * boot, before any revalidation lands. Optimistic dispatches only touched the
-   * Zustand maps, so the terminal status a run writes when it ends ('unread' /
-   * 'active') never reached the cache: the last FETCHED snapshot — taken while
-   * the run was still `running` — stayed there, and a reload repainted a
-   * finished topic with the running spinner until the revalidation corrected it
-   * a moment later. Same write-through idea as
-   * `#writeThroughMessageCache` in the message slice.
-   *
-   * Only `updateTopic` is mirrored. It patches a row a fetch already produced,
-   * so it cannot leak a client-only row into a cache that outlives the session
-   * — unlike an optimistic `addTopic` / `replaceTopicId`, whose placeholder is
-   * reconciled per session by `#reconcileFetchedTopics`. Deletions already go
-   * through `refreshTopic`, which revalidates the same keys.
+   * Mirror a topic dispatch into the stores that hold copies of list rows: the
+   * Agent Topics management page bucket and the by-id detail cache. Without
+   * the view mirror, bulk actions on the management page would appear to do
+   * nothing until the SWR revalidation finished.
    */
-  #writeThroughTopicListCache = (containerKey: string, payload: ChatTopicDispatch): void => {
-    if (payload.type !== 'updateTopic') return;
+  #mirrorTopicDispatch = (key: string, payload: ChatTopicDispatch, action?: any): void => {
+    const viewMap = this.#get().agentTopicsViewMap;
+    const viewData = viewMap[key];
+    const nextViewData = viewData ? applyTopicDispatchToBucket(viewData, payload) : undefined;
+    const viewChanged = !!viewData && nextViewData !== viewData;
 
-    void mutate(
-      (key) => Array.isArray(key) && key[0] === topicKeys.list.root && key[1] === containerKey,
-      (cached?: { items: ChatTopic[]; total: number }) => {
-        if (!cached?.items) return cached;
+    const detailMap = this.#get().topicDetailMap ?? {};
+    const detailId = payload.type === 'addTopic' ? undefined : payload.id;
+    const detailTopic = detailId ? detailMap[detailId] : undefined;
+    let nextDetailMap = detailMap;
 
-        const items = topicReducer(cached.items, payload);
-        // `topicReducer` returns the same reference when the patch is a no-op
-        // (e.g. the row isn't on this cached page), so the entry stays untouched.
-        return items === cached.items ? cached : { ...cached, items };
-      },
-      { revalidate: false },
-    );
+    if (payload.type === 'updateTopic' && detailTopic) {
+      nextDetailMap = {
+        ...detailMap,
+        [payload.id]: { ...detailTopic, ...payload.value },
+      };
+    } else if (payload.type === 'deleteTopic' && detailTopic) {
+      const { [payload.id]: _deleted, ...remainingDetailMap } = detailMap;
+      nextDetailMap = remainingDetailMap;
+    } else if (payload.type === 'replaceTopicId' && detailTopic) {
+      const { [payload.id]: _replaced, ...remainingDetailMap } = detailMap;
+      nextDetailMap = {
+        ...remainingDetailMap,
+        [payload.nextId]: { ...detailTopic, ...payload.value, id: payload.nextId },
+      };
+    }
+
+    const detailChanged = nextDetailMap !== detailMap;
+    if (!viewChanged && !detailChanged) return;
+
+    const nextState: Partial<ChatStore> = {};
+    if (detailChanged) nextState.topicDetailMap = nextDetailMap;
+    if (viewChanged && nextViewData)
+      nextState.agentTopicsViewMap = { ...viewMap, [key]: nextViewData };
+
+    this.#set(nextState, false, action ?? n(`dispatchTopic/${payload.type}/mirror`));
   };
 
   /**
@@ -2118,97 +2145,15 @@ export class ChatTopicActionImpl {
         groupId: scopedGroupId,
         scope: payload.scope,
       });
-    const currentData = this.#get().topicDataMap[key];
-    const nextItems = topicReducer(currentData?.items, payload);
 
-    // Mirror the optimistic update into the Agent Topics management page's
-    // bucket if it has been populated for the same key. Without this mirror,
-    // bulk actions (favorite/status/delete) on the management page would
-    // appear to do nothing until the SWR revalidation finished.
-    const viewMap = this.#get().agentTopicsViewMap;
-    const viewData = viewMap[key];
-    const nextViewItems = viewData ? topicReducer(viewData.items, payload) : undefined;
-    const viewChanged = viewData ? !isEqual(nextViewItems, viewData.items) : false;
-
-    const detailMap = this.#get().topicDetailMap ?? {};
-    const detailId = payload.type === 'addTopic' ? undefined : payload.id;
-    const detailTopic = detailId ? detailMap[detailId] : undefined;
-    let nextDetailMap = detailMap;
-
-    if (payload.type === 'updateTopic' && detailTopic) {
-      nextDetailMap = {
-        ...detailMap,
-        [payload.id]: { ...detailTopic, ...payload.value },
-      };
-    } else if (payload.type === 'deleteTopic' && detailTopic) {
-      const { [payload.id]: _deleted, ...remainingDetailMap } = detailMap;
-      nextDetailMap = remainingDetailMap;
-    } else if (payload.type === 'replaceTopicId' && detailTopic) {
-      const { [payload.id]: _replaced, ...remainingDetailMap } = detailMap;
-      nextDetailMap = {
-        ...remainingDetailMap,
-        [payload.nextId]: { ...detailTopic, ...payload.value, id: payload.nextId },
-      };
-    }
-
-    // Mirror the patch into the persisted topic-list cache too — see
-    // `#writeThroughTopicListCache`. Runs before the unchanged early-return
-    // below: the cache can hold rows this bucket never loaded (a cold boot
-    // paints from it before any bucket exists), so "nothing changed in the
-    // store" says nothing about the cached page.
-    this.#writeThroughTopicListCache(key, payload);
-
-    // no need to update if all maps are unchanged
-    const mainChanged = !isEqual(nextItems, currentData?.items);
-    const detailChanged = nextDetailMap !== detailMap;
-    if (!mainChanged && !viewChanged && !detailChanged) return;
-
-    const currentTotal = currentData?.total ?? currentData?.items?.length ?? 0;
-    const total =
-      payload.type === 'addTopic'
-        ? currentTotal + 1
-        : payload.type === 'deleteTopic'
-          ? Math.max(nextItems.length, currentTotal - 1)
-          : currentTotal;
-
-    const nextState: Record<string, unknown> = {};
-
-    if (detailChanged) nextState.topicDetailMap = nextDetailMap;
-
-    if (mainChanged) {
-      nextState.topicDataMap = {
-        ...this.#get().topicDataMap,
-        [key]: {
-          ...currentData,
-          currentPage: currentData?.currentPage ?? 0,
-          hasMore: total > nextItems.length,
-          isInbox: currentData?.isInbox,
-          items: nextItems,
-          total,
-        },
-      };
-    }
-
-    if (viewChanged && viewData && nextViewItems) {
-      const viewTotal = viewData.total ?? viewData.items?.length ?? 0;
-      const viewNextTotal =
-        payload.type === 'addTopic'
-          ? viewTotal + 1
-          : payload.type === 'deleteTopic'
-            ? Math.max(nextViewItems.length, viewTotal - 1)
-            : viewTotal;
-      nextState.agentTopicsViewMap = {
-        ...viewMap,
-        [key]: {
-          ...viewData,
-          hasMore: viewNextTotal > nextViewItems.length,
-          items: nextViewItems,
-          total: viewNextTotal,
-        },
-      };
-    }
-
-    this.#set(nextState, false, action ?? n(`dispatchTopic/${payload.type}`));
+    // Status / title patches and deletions are confirmed facts the next cold
+    // boot must not repaint stale (e.g. a finished run's spinner), so they are
+    // persisted. Adds and id swaps are client-side placeholders until the
+    // server list confirms them.
+    this.#topicList.update(key, (bucket) => applyTopicDispatchToBucket(bucket, payload), {
+      persist: payload.type === 'updateTopic' || payload.type === 'deleteTopic',
+    });
+    this.#mirrorTopicDispatch(key, payload, action);
   };
 
   internal_updateTopics = (
@@ -2224,57 +2169,41 @@ export class ChatTopicActionImpl {
   ): void => {
     const { total, pageSize, currentPage = 0, append = false, groupId } = params;
     const key = topicMapKey({ agentId, groupId });
-    const currentData = this.#get().topicDataMap[key];
-    // Append mode keeps the existing items (optimistic rows included) in front,
-    // so only pass them for reconciliation on full replacement.
-    const items = this.#reconcileFetchedTopics(
-      params.items,
-      append ? undefined : currentData?.items,
-      'cache',
-    );
 
-    const nextItems = append ? [...(currentData?.items || []), ...items] : items;
+    this.#topicList.update(
+      key,
+      (currentData) => {
+        // Append mode keeps the existing items (optimistic rows included) in
+        // front, so only pass them for reconciliation on full replacement.
+        const items = this.#reconcileFetchedTopics(
+          params.items,
+          append ? undefined : currentData?.items,
+          'cache',
+        );
+        const nextItems = append ? [...(currentData?.items || []), ...items] : items;
 
-    this.#set(
-      {
-        topicDataMap: {
-          ...this.#get().topicDataMap,
-          [key]: {
-            currentPage,
-            excludeStatuses: currentData?.excludeStatuses,
-            excludeTriggers: currentData?.excludeTriggers,
-            hasMore: total > nextItems.length,
-            isInbox: currentData?.isInbox,
-            isExpandingPageSize: false,
-            isLoadingMore: false,
-            items: nextItems,
-            pageSize,
-            total,
-          },
-        },
+        return {
+          currentPage,
+          excludeStatuses: currentData?.excludeStatuses,
+          excludeTriggers: currentData?.excludeTriggers,
+          hasMore: total > nextItems.length,
+          isInbox: currentData?.isInbox,
+          isExpandingPageSize: false,
+          isLoadingMore: false,
+          items: nextItems,
+          pageSize,
+          sortBy: currentData?.sortBy,
+          total,
+        };
       },
-      false,
-      n('internal_updateTopics', { key, append }),
+      { persist: false },
     );
   };
 
   internal_updateTopicData = (key: string, data: Partial<TopicData>): void => {
-    const currentData = this.#get().topicDataMap[key];
-    if (!currentData) return;
-
-    this.#set(
-      {
-        topicDataMap: {
-          ...this.#get().topicDataMap,
-          [key]: {
-            ...currentData,
-            ...data,
-          },
-        },
-      },
-      false,
-      n('internal_updateTopicData', { key, data }),
-    );
+    this.#topicList.update(key, (currentData) => currentData && { ...currentData, ...data }, {
+      persist: false,
+    });
   };
 }
 

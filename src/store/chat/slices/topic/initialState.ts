@@ -1,4 +1,6 @@
-import { type ChatTopic } from '@/types/topic';
+import { createLocalFirstState } from '@/libs/localFirst/reducer';
+import type { LocalFirstState } from '@/libs/localFirst/types';
+import { type ChatTopic, type TopicQuerySortBy } from '@/types/topic';
 
 /**
  * Unified topic data structure for each agent
@@ -24,6 +26,8 @@ export interface TopicData {
    * or cases where total items < pageSize.
    */
   pageSize: number;
+  /** Server-side ordering the bucket was fetched with (part of its query identity). */
+  sortBy?: TopicQuerySortBy;
   total: number;
   /**
    * Tracks whether the first fetch for this container asked the server for
@@ -79,6 +83,8 @@ export interface ChatTopicState {
   topicDetailMap: Record<string, ChatTopic>;
   /** Topics with effort selections queued or being persisted. */
   topicEffortUpdatingIds: string[];
+  /** Local-first bookkeeping for `topicDataMap` (scope, optimistic overlays). */
+  topicListLocalFirst: LocalFirstState<TopicData>;
   /**
    * Internal ref-count for topic loading owners. A topic can be loading because
    * the agent is running and because title-summary is streaming at the same time.
@@ -99,6 +105,7 @@ export const initialTopicState: ChatTopicState = {
   searchTopics: [],
   topicDataMap: {},
   topicDetailMap: {},
+  topicListLocalFirst: createLocalFirstState<TopicData>(),
   topicLoadingIdCounts: {},
   topicLoadingIds: [],
   topicEffortUpdatingIds: [],
