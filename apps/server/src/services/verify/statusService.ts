@@ -3,6 +3,7 @@ import debug from 'debug';
 
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyRunModel } from '@/database/models/verifyRun';
+import type { VerifyRunItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AcceptanceService } from './acceptanceService';
@@ -44,7 +45,23 @@ export class VerifyStatusService {
   async recompute(operationId: string): Promise<VerifyRunStatus | null> {
     const run = await this.runModel.findByOperation(operationId);
     if (!run) return null;
+    return this.rollUp(run);
+  }
 
+  /**
+   * Roll up a run addressed by its own id. The operation-addressed
+   * {@link recompute} cannot resolve a run whose bound Agent Run was deleted
+   * (`onDelete: 'set null'` clears `verify_runs.operation_id`) — and that is
+   * exactly when the sweep still has to settle it.
+   */
+  async recomputeByRunId(runId: string): Promise<VerifyRunStatus | null> {
+    const run = await this.runModel.findById(runId);
+    if (!run) return null;
+    return this.rollUp(run);
+  }
+
+  /** Derive the rollup from the frozen plan + current results and persist it. */
+  private async rollUp(run: VerifyRunItem): Promise<VerifyRunStatus | null> {
     const plan = (run.plan ?? []) as VerifyCheckItem[];
     if (plan.length === 0) {
       // No plan → nothing to verify. Leave as-is (unverified / skipped).
@@ -86,7 +103,7 @@ export class VerifyStatusService {
           run.acceptanceId,
         );
       }
-      log('rollup op %s (run %s) → %s', operationId, run.id, status);
+      log('rollup op %s (run %s) → %s', run.operationId, run.id, status);
     }
 
     return status;

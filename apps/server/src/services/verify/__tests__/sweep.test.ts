@@ -19,6 +19,7 @@ const {
   resolveVerifyModelConfig,
   resolveVerificationDeliverable,
   recompute,
+  recomputeByRunId,
   resultListByRun,
   upsertByCheckItem,
   finalizeVerifyRun,
@@ -38,6 +39,7 @@ const {
   resolveVerifyModelConfig: vi.fn(),
   resolveVerificationDeliverable: vi.fn(),
   recompute: vi.fn(),
+  recomputeByRunId: vi.fn(),
   resultListByRun: vi.fn(),
   upsertByCheckItem: vi.fn(),
 }));
@@ -62,7 +64,7 @@ vi.mock('@/database/models/agentOperation', () => ({
 }));
 vi.mock('../statusService', () => ({
   VerifyStatusService: vi.fn(function () {
-    return { claimVerifying, recompute };
+    return { claimVerifying, recompute, recomputeByRunId };
   }),
 }));
 vi.mock('../repairTerminal', () => ({ settleFailedRepair }));
@@ -122,6 +124,7 @@ beforeEach(() => {
     resolveVerifyModelConfig,
     resolveVerificationDeliverable,
     recompute,
+    recomputeByRunId,
     resultListByRun,
     upsertByCheckItem,
   ].forEach((m) => m.mockReset());
@@ -352,6 +355,32 @@ describe('sweepStuckVerifyRuns', () => {
     expect(outcome.skipped).toBe(1);
     expect(outcome.settled).toEqual(['run-newer']);
   });
+
+  it('shares the per-tick run cap across both scans', async () => {
+    // `scanned` used to be local to each `scan`, so the documented per-tick cap
+    // applied once per scan: the evidence half was handed a second full
+    // allowance, doubling the bounded work (and request time) under a backlog.
+    // One shared budget bounds the whole tick instead.
+    findStuckVerifying
+      .mockResolvedValueOnce([
+        stuckRun({
+          id: 'v-1',
+          operationId: 'op-v1',
+          updatedAt: new Date(NOW.getTime() - VERIFY_ABANDONED_MS - 1000),
+        }),
+      ])
+      .mockResolvedValue([]);
+    resultListByRun.mockResolvedValue([]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW, maxRuns: 1 });
+
+    expect(outcome.abandoned).toEqual(['v-1']);
+    // The verifying scan consumed the whole allowance, so the evidence scan is
+    // skipped rather than granted its own run.
+    expect(findStuckCollectingEvidence).not.toHaveBeenCalled();
+    expect(outcome.evidenceRecovered).toEqual([]);
+  });
+
   it('recovers a planned repair whose operation died before judging began', async () => {
     singlePage([stuckRun({ status: 'planned' })]);
     settleFailedRepair.mockResolvedValue(true);
@@ -593,7 +622,9 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(upsertByCheckItem).toHaveBeenCalledWith(
       expect.objectContaining({ checkItemId: 'c1', status: 'errored', verifyRunId: 'ev-run-1' }),
     );
-    expect(recompute).toHaveBeenCalledWith('op-1');
+    // Settled by run id: the operation-addressed rollup could not resolve this
+    // run if its Agent Run had been deleted.
+    expect(recomputeByRunId).toHaveBeenCalledWith('ev-run-1');
     expect(outcome.abandoned).toEqual(['ev-run-1']);
   });
 
@@ -610,5 +641,37 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(executorExecute).not.toHaveBeenCalled();
     expect(upsertByCheckItem).toHaveBeenCalledWith(expect.objectContaining({ status: 'errored' }));
     expect(outcome.abandoned).toEqual(['ev-run-1']);
+  });
+
+  it('settles by run id when the operation vanishes after the lease is won', async () => {
+    // The op row can be deleted between `enterJudging` winning `claimVerifying`
+    // and the lookup that resolves the verifier. The FK then clears
+    // `verify_runs.operation_id`, so an operation-addressed close would re-claim
+    // the lease it just took (always losing) while the now operation-less run is
+    // invisible to the sweep — stranded in `verifying` forever.
+    singleEvidencePage([evidenceRun()]);
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'pending', verdict: null }]);
+    operationFindById.mockResolvedValue(null);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    // The lease already won by `enterJudging` is reused, not re-acquired.
+    expect(claimVerifying).toHaveBeenCalledTimes(1);
+    expect(recordHeterogeneousDeliverableEvidence).not.toHaveBeenCalled();
+    expect(executorExecute).not.toHaveBeenCalled();
+    // The closed rows carry no dangling operation link.
+    expect(upsertByCheckItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkItemId: 'c1',
+        operationId: null,
+        status: 'errored',
+        verifyRunId: 'ev-run-1',
+      }),
+    );
+    expect(recomputeByRunId).toHaveBeenCalledWith('ev-run-1');
+    expect(recompute).not.toHaveBeenCalled();
+    // Nothing left to drive once the operation is gone.
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+    expect(outcome.settled).toEqual(['ev-run-1']);
   });
 });

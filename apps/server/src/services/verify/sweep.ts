@@ -102,11 +102,12 @@ export interface VerifySweepOutcome {
  */
 export const sweepStuckVerifyRuns = async (
   db: LobeChatDatabase,
-  options?: { now?: Date; pageSize?: number },
+  options?: { now?: Date; pageSize?: number; maxRuns?: number },
 ): Promise<VerifySweepOutcome> => {
   const now = options?.now ?? new Date();
   const judging: JudgingBudget = { remaining: SWEEP_MAX_JUDGING_RUNS };
   const pageSize = options?.pageSize ?? SWEEP_PAGE_SIZE;
+  const maxRuns = options?.maxRuns ?? SWEEP_MAX_RUNS;
   const staleBefore = new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS);
   const abandonedBound = new Date(now.getTime() - VERIFY_ABANDONED_MS);
   const outcome: VerifySweepOutcome = {
@@ -115,6 +116,13 @@ export const sweepStuckVerifyRuns = async (
     evidenceRecovered: [],
     skipped: 0,
   };
+
+  // One remaining-run budget shared by both scans. The cap bounds the whole
+  // tick, not each scan — with a counter local to `scan`, the two invocations
+  // (verifying + collecting_evidence) would each get the full allowance, so a
+  // backlog would double the bounded work (and the request time) the cap exists
+  // to contain.
+  const budget = { remaining: maxRuns };
 
   const scan = async (
     find: typeof VerifyRunModel.findStuckVerifying,
@@ -128,14 +136,14 @@ export const sweepStuckVerifyRuns = async (
     // return the same untouchable rows forever and never reach the runs
     // behind them.
     let after: { id: string; updatedAt: Date } | undefined;
-    let scanned = 0;
 
-    while (scanned < SWEEP_MAX_RUNS) {
+    while (budget.remaining > 0) {
       const page = await find.call(VerifyRunModel, db, olderThan, { after, limit: pageSize });
       if (page.length === 0) break;
 
       for (const run of page) {
-        scanned += 1;
+        if (budget.remaining <= 0) break;
+        budget.remaining -= 1;
         try {
           const action = await recover(run);
           if (action === 'skipped') outcome.skipped += 1;
@@ -151,16 +159,16 @@ export const sweepStuckVerifyRuns = async (
       after = { id: last.id, updatedAt: last.updatedAt };
       if (page.length < pageSize) break;
     }
-
-    if (scanned >= SWEEP_MAX_RUNS) {
-      log('sweep hit the per-run cap (%d) — the tail is left for the next tick', SWEEP_MAX_RUNS);
-    }
   };
 
   await scan(VerifyRunModel.findStuckVerifying, staleBefore, (run) => recoverRun(db, run, now));
   await scan(VerifyRunModel.findStuckCollectingEvidence, abandonedBound, (run) =>
     recoverEvidenceRun(db, run, now, judging),
   );
+
+  if (budget.remaining <= 0) {
+    log('sweep hit the per-tick cap (%d) — the tail is left for the next tick', maxRuns);
+  }
 
   return outcome;
 };
@@ -340,18 +348,28 @@ const probeEvidenceHook = async (
 const closeOutstandingAsErrored = async (
   db: LobeChatDatabase,
   run: VerifyRunItem,
-  operationId: string,
+  operationId: string | null,
   now: Date,
   action: 'abandoned' | 'settled' | 'evidenceRecovered',
+  options?: { leaseHeld?: boolean },
 ): Promise<'abandoned' | 'settled' | 'evidenceRecovered' | 'skipped'> => {
   const statusService = new VerifyStatusService(db, run.userId, run.workspaceId ?? undefined);
-  if (
-    !(await statusService.claimVerifying(
-      operationId,
-      new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS),
-    ))
-  )
-    return 'skipped';
+
+  // The caller may already own the lease: `enterJudging` wins `claimVerifying`
+  // and only then discovers the operation is gone. Re-claiming would CAS against
+  // the very `updated_at` that claim just stamped, so it would always lose and
+  // return `skipped` — leaving the run stranded in `verifying` (and, once its FK
+  // is cleared, invisible to the sweep's operation-scoped scan). Reuse the lease.
+  if (!options?.leaseHeld) {
+    if (!operationId) return 'skipped';
+    if (
+      !(await statusService.claimVerifying(
+        operationId,
+        new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS),
+      ))
+    )
+      return 'skipped';
+  }
 
   const workspaceId = run.workspaceId ?? undefined;
   const plan = (run.plan ?? []) as VerifyCheckItem[];
@@ -364,6 +382,8 @@ const closeOutstandingAsErrored = async (
     (item) =>
       // Upsert, not update: an item with no row at all must still land as
       // `errored`, and a pending row (evidence uploaded mid-run) is closed too.
+      // `operationId` is passed through as-is: it is null once the Agent Run was
+      // deleted, and writing the dangling id would violate the FK.
       resultModel.upsertByCheckItem({
         ...planItemToPendingResult(run.id, operationId, item),
         // Re-asserted after the spread: the upsert key is required, and the
@@ -380,8 +400,13 @@ const closeOutstandingAsErrored = async (
     { concurrency: 5 },
   );
 
-  await statusService.recompute(operationId);
-  await finalizeVerifyRun(db, run.userId, operationId, {}, workspaceId);
+  // Settle by run id, not by operation: when the Agent Run was deleted the FK
+  // clears `verify_runs.operation_id`, and the operation-addressed rollup would
+  // resolve to nothing — settling this run is exactly why we are here.
+  await statusService.recomputeByRunId(run.id);
+  // With the operation gone there is nothing left to drive; the finalizer
+  // resolves by operation and would no-op anyway.
+  if (operationId) await finalizeVerifyRun(db, run.userId, operationId, {}, workspaceId);
 
   log('recovered run %s (op %s) as %s', run.id, operationId, action);
   return action;
@@ -423,10 +448,11 @@ const enterJudging = async (
 
   const op = await new AgentOperationModel(db, userId, workspaceId).findById(operationId);
   if (!op) {
-    // The operation row is gone — nothing to resolve a verifier against. Close
-    // the outstanding checks as `errored` in the same tick instead of leaving
-    // them for the next sweep to find.
-    return closeOutstandingAsErrored(db, run, operationId, now, action);
+    // The operation row is gone — nothing left to resolve a verifier against.
+    // Close the outstanding checks as `errored` under the lease we already hold
+    // (it cannot be re-claimed once the operation is deleted) and settle the run
+    // by its own id, in the same tick.
+    return closeOutstandingAsErrored(db, run, null, now, action, { leaseHeld: true });
   }
 
   // The backfill write follows the lease, not the skip guards — an overlapping
