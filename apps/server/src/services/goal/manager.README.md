@@ -19,8 +19,14 @@ Manager mode is explicit: pass `--max-manager-turns` through the CLI or
 `config.manager` through the API after ensuring the Agent has a working CLI.
 Without explicit planning options, ordinary unseeded goals keep the coordinator
 planner. Seed/exploration/legacy supervision paths retain their existing planning
-behavior. After a supervision handoff the next turn opens a management Topic in
-the new agent's history instead of continuing the previous agent's.
+behavior. A supervision handoff moves the management conversation into the new
+agent's history at once — the Goal's `managerState.topicId` is re-pointed to a
+Topic created for the new agent, so the supervision panel and its "open
+conversation" link follow the handoff immediately. A handoff that lands while a
+turn is unsettled is migrated by the next claim instead, because `settleInFlight`
+finds that turn's run through the old `topicId`. The conversations the Goal plans
+in before each move are kept in `managerState.previousTopicIds` and still count
+toward its management spend.
 
 The main Agent reads `lh goal show`, `lh task view`, `lh topic view`, and document
 commands. It submits a JSON file through `lh goal plan <goal-id> --token <turn> --file plan.json`. The runtime supplies `LOBEHUB_OPERATION_ID`. Plan actions:

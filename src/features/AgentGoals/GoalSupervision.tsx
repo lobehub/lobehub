@@ -3,7 +3,7 @@ import { agentDisplayName } from '@lobechat/types';
 import { copyToClipboard, type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Text, toast } from '@lobehub/ui/base-ui';
 import { CopyIcon, ExternalLink, MoreHorizontal, PanelRightCloseIcon } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
@@ -22,6 +22,23 @@ interface GoalSupervisionProps {
   onCollapse: () => void;
   topicId: string;
 }
+
+/**
+ * A management conversation freshly moved to another agent has no turns yet.
+ * Say so, instead of leaving the panel with an empty list.
+ */
+const WaitingForFirstRun = memo(() => {
+  const { t } = useTranslation('chat');
+  return (
+    <Flexbox align={'center'} flex={1} justify={'center'} padding={24}>
+      <Text style={{ fontSize: 14, textAlign: 'center' }} type={'secondary'}>
+        {t('goalProcess.manager.pending')}
+      </Text>
+    </Flexbox>
+  );
+});
+
+WaitingForFirstRun.displayName = 'GoalSupervisionWaiting';
 
 /** The manager's ongoing record is inspectable without sending or editing messages. */
 export const GoalSupervision = ({ agentId, goalId, onCollapse, topicId }: GoalSupervisionProps) => {
@@ -85,7 +102,7 @@ export const GoalSupervision = ({ agentId, goalId, onCollapse, topicId }: GoalSu
           }
         />
         <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
-          <ChatList disableActionsBar itemContent={itemContent} />
+          <ChatList disableActionsBar itemContent={itemContent} welcome={<WaitingForFirstRun />} />
         </Flexbox>
       </Flexbox>
     </GoalChatProvider>

@@ -566,6 +566,76 @@ describe('CLI main Agent planning', () => {
     await expect(manager().submit(id, next.token, op.id, taskPlan)).rejects.toThrow('Unrelated');
   });
 
+  it('moves the management conversation to the new agent at the handoff', async () => {
+    const { id, state, op } = await start();
+    await ops().recordCompletion(op.id, { status: 'done' });
+    expect((await service().tick(id)).outcome).toBe('advanced');
+
+    await db.insert(agents).values({ id: 'handoff-target', userId });
+    const { goal } = await service().setAgent(id, 'handoff-target');
+
+    // The row handed back to the caller already points at the new agent's topic,
+    // so the supervision panel and its "open conversation" link follow the
+    // handoff instead of staying on the previous agent until the next claim.
+    const moved = (await model().findById(id))!.config!.managerState!;
+    expect(moved.topicId).not.toBe(state.topicId);
+    expect(goal.config?.managerState?.topicId).toBe(moved.topicId);
+    const [topic] = await db.select().from(topics).where(eq(topics.id, moved.topicId));
+    expect(topic?.agentId).toBe('handoff-target');
+    expect(topic?.trigger).toBe('goal_supervision');
+    // The conversation it left behind is retained rather than orphaned.
+    expect(moved.previousTopicIds).toEqual([state.topicId]);
+  });
+
+  it('keeps counting the previous conversations in management spend', async () => {
+    const { id, state, op } = await start();
+    await db.update(agentOperations).set({ totalCost: 3 }).where(eq(agentOperations.id, op.id));
+    await ops().recordCompletion(op.id, { status: 'done' });
+    expect((await service().tick(id)).outcome).toBe('advanced');
+
+    await db.insert(agents).values({ id: 'spend-target', userId });
+    await service().setAgent(id, 'spend-target');
+    expect((await service().tick(id)).outcome).toBe('waiting_external');
+
+    const next = (await model().findById(id))!.config!.managerState!;
+    // The turn now runs in the new agent's topic; the spend already booked in
+    // the conversation it left still belongs to the goal's management budget.
+    expect(next.topicId).not.toBe(state.topicId);
+    expect((await manager().usage(next)).totalCost).toBe(3);
+  });
+
+  it('leaves a live turn on the previous agent topic instead of migrating mid-turn', async () => {
+    const { id, state } = await start();
+    await db.insert(agents).values({ id: 'mid-turn-target', userId });
+
+    // The first turn is dispatched but not settled: `settleInFlight` finds its
+    // run through `state.topicId`, so re-pointing now would strand it.
+    await service().setAgent(id, 'mid-turn-target');
+
+    const untouched = (await model().findById(id))!.config!.managerState!;
+    expect(untouched.topicId).toBe(state.topicId);
+    expect(untouched.previousTopicIds).toBeUndefined();
+    expect(
+      await db.select().from(topics).where(eq(topics.agentId, 'mid-turn-target')),
+    ).toHaveLength(0);
+  });
+
+  it('migrates on the next claim after a mid-turn handoff and retains the old conversation', async () => {
+    const { id, state, op } = await start();
+    await db.insert(agents).values({ id: 'late-target', userId });
+    await service().setAgent(id, 'late-target');
+
+    await ops().recordCompletion(op.id, { status: 'done' });
+    expect((await service().tick(id)).outcome).toBe('advanced');
+    expect((await service().tick(id)).outcome).toBe('waiting_external');
+
+    const next = (await model().findById(id))!.config!.managerState!;
+    const [topic] = await db.select().from(topics).where(eq(topics.id, next.topicId));
+    expect(topic?.agentId).toBe('late-target');
+    // The conversation the handoff moved out of keeps counting.
+    expect(next.previousTopicIds).toEqual([state.topicId]);
+  });
+
   it('rejects wrong owner, operation, pause and changed graph without adding tasks', async () => {
     const { id, state, op } = await start();
     await expect(

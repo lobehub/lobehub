@@ -1132,6 +1132,10 @@ export class GoalService {
    * coordinator creates from here on goes to the new agent and — unless the
    * caller opts out — the unfinished ones move with it. A goal whose Tasks go
    * to a dedicated executor keeps them there; see `setTaskAgent`.
+   *
+   * The management conversation moves with supervision: it lives in the goal
+   * agent's own history, so it is re-created for the new agent here instead of
+   * being left pointing at the previous agent's topic until the next claim.
    */
   setAgent = async (
     goalId: string,
@@ -1145,11 +1149,22 @@ export class GoalService {
     const goal = await this.goalModel.update(goalId, { agentId });
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
 
+    // The receipt carries the management topic, so the caller must get the row
+    // with the migrated one — not the copy read before the handoff.
+    const migrated = await new GoalManagerService(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).moveConversationTo(goalId, agentId);
+
     const reassignedTaskIds =
       options?.goalOnly || goal.config?.taskAgentId
         ? []
         : await this.reassignUnfinishedTasks(goalId, agentId);
-    return { goal, reassignedTaskIds };
+    return {
+      goal: migrated ? ((await this.goalModel.findById(goalId)) ?? goal) : goal,
+      reassignedTaskIds,
+    };
   };
 
   /**
