@@ -49,6 +49,7 @@ describe('chainExpertiseTopicIngestion', () => {
     expect(Object.keys(observation.properties)).toContain('existingLessonCode');
     expect(Object.keys(observation.properties)).not.toContain('existingCode');
     expect(observation.required).toContain('existingLessonCode');
+    expect(observation.required).toContain('quote');
   });
 
   it('keeps filtering policy, input serialization, schema, and version together', () => {
@@ -57,7 +58,7 @@ describe('chainExpertiseTopicIngestion', () => {
       domains: [{ domainFilter: '比喻写作', id: 'domain-1' }],
     });
 
-    expect(EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION).toBe('v2');
+    expect(EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION).toBe('v3');
     expect(EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA.name).toBe('expertise_topic_ingestion');
     expect(result.messages[0].content).toContain('domainFilter and outOfScope');
     expect(result.messages[0].content).toContain('matches=false');

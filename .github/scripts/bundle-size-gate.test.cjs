@@ -5,6 +5,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 
 const {
+  buildHeadline,
   countJsFiles,
   diffResolvedDeps,
   measureEntryGraph,
@@ -103,9 +104,18 @@ const runCheck = ({ baselineGraphCount, baselineJsTotal, currentGraphCount, curr
     path.join(root, 'baseline.json'),
     '--js-chunk-percent',
     '5',
+    '--label',
+    'Web dist',
+    '--report',
+    path.join(root, 'report.md'),
   ];
 
-  return spawnSync(process.execPath, args, { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, args, { encoding: 'utf8' });
+  const reportPath = path.join(root, 'report.md');
+  return {
+    ...result,
+    report: fs.existsSync(reportPath) ? fs.readFileSync(reportPath, 'utf8') : '',
+  };
 };
 
 test('Vite JS output file count over the baseline percentage limit fails the gate', () => {
@@ -137,6 +147,62 @@ test('reachable graph count increase alone does not fail the gate', () => {
     currentJsTotal: 100,
   });
   assert.equal(result.status, 0);
+});
+
+test('a passing gate states the entry count and the largest delta in the heading', () => {
+  const result = runCheck({
+    baselineGraphCount: 10,
+    baselineJsTotal: 100,
+    currentGraphCount: 20,
+    currentJsTotal: 100,
+  });
+
+  assert.equal(result.status, 0);
+  assert.ok(result.report.startsWith('### ✅ Web dist — 1 entry, largest Δ +0.0 KB (+100.00%)'));
+});
+
+test('a rising file count never reports itself as a byte delta', () => {
+  const result = runCheck({
+    baselineGraphCount: 10,
+    baselineJsTotal: 100,
+    currentGraphCount: 10,
+    currentJsTotal: 105,
+  });
+
+  assert.equal(result.status, 0);
+  // +5 files is a file count, not "+0.0 KB (+5.00%)" of gzip output
+  assert.ok(result.report.startsWith('### ✅ Web dist — 1 entry, largest Δ 0.0 KB (0.00%)'));
+});
+
+test('buildHeadline formats bytes only, but still counts a file-count breach', () => {
+  const byteEntry = { base: 1024, delta: 0, over: false, unit: 'bytes' };
+  const fileEntry = { base: 100, delta: 5, over: false, unit: 'files' };
+
+  assert.equal(buildHeadline([byteEntry, fileEntry]), '1 entry, largest Δ 0.0 KB (0.00%)');
+  assert.equal(
+    buildHeadline([byteEntry, { ...fileEntry, over: true }]),
+    'exceeds the gate on 1 of 2 entries',
+  );
+});
+
+test('a failing gate states how many entries are over it in the heading', () => {
+  const result = runCheck({
+    baselineGraphCount: 10,
+    baselineJsTotal: 100,
+    currentGraphCount: 10,
+    currentJsTotal: 106,
+  });
+
+  assert.equal(result.status, 1);
+  assert.ok(result.report.startsWith('### ❌ Web dist — exceeds the gate on 1 of 2 entries'));
+});
+
+test('buildHeadline stays empty when nothing was comparable', () => {
+  assert.equal(buildHeadline([]), '');
+  assert.equal(
+    buildHeadline([{ base: 1024, delta: -512, over: false }]),
+    '1 entry, largest Δ -0.5 KB (-50.00%)',
+  );
 });
 
 test('readResolvedDeps turns pnpm virtual store entries into name@version and drops peer suffixes', () => {

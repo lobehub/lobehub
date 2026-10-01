@@ -1,7 +1,13 @@
 import type { ModelUsage } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 
-import { isEmptyModelCompletion, ModelEmptyError } from '../../errors';
+import {
+  extractErrorMessage,
+  isEmptyModelCompletion,
+  isModelRefusalFinishReason,
+  ModelEmptyError,
+  ModelRefusalError,
+} from '../../errors';
 import type { ChatMethodOptions, ChatStreamCallbacks, OnFinishData } from '../../types';
 import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import { AgentRuntimeError } from '../../utils/createError';
@@ -24,13 +30,23 @@ export const getChatAttemptObservation = (response: Response): ChatAttemptObserv
 const getReasoningContent = (data: OnFinishData | undefined) =>
   data?.thinking ?? data?.reasoning?.content ?? '';
 
-const createStreamChunkError = (error: unknown, provider: string) =>
-  Object.assign(
-    new Error(error instanceof Error ? error.message : String(error), { cause: error }),
+/**
+ * Stream errors are often plain runtime payloads such as
+ * `{ type: 'ProviderContentPolicyViolation', body: { message } }`; `String()` would turn them
+ * into `[object Object]` and lose the provider reason in error logs.
+ */
+const streamErrorMessage = (error: unknown): string =>
+  (error instanceof Error ? error.message : extractErrorMessage(error)) ?? String(error);
+
+const createStreamChunkError = (error: unknown, provider: string) => {
+  const message = streamErrorMessage(error);
+
+  return Object.assign(
+    new Error(message, { cause: error }),
     AgentRuntimeError.chat({
       error: {
         cause: error,
-        message: error instanceof Error ? error.message : String(error),
+        message,
         name: 'StreamChunkError',
       },
       errorType: AgentRuntimeErrorType.StreamChunkError,
@@ -38,6 +54,7 @@ const createStreamChunkError = (error: unknown, provider: string) =>
     }),
     { name: 'StreamChunkError' },
   );
+};
 
 /**
  * Observe the actual response body lifecycle. Terminal callbacks are delayed until
@@ -164,6 +181,7 @@ export const observeChatAttempt = async (
       diagnostics: attemptDiagnostics,
       durationMs: durationMs ?? completedAt - attempt.startedAt,
       error: finalError,
+      finishReason: finishData?.finishReason,
       outcome,
       speed: finishData?.speed
         ? {
@@ -200,30 +218,45 @@ export const observeChatAttempt = async (
     const finalContent = content || latestFinishData.text;
     const finalReasoning = reasoning || getReasoningContent(latestFinishData);
     const finalToolCallCount = Math.max(latestFinishData.toolsCalling?.length ?? 0, toolCallCount);
+    /**
+     * A refusal needs ordinary response output to count as a successful completion.
+     * Provider-internal reasoning alone must not turn a blank refusal into a success.
+     */
+    const isRefusal = isModelRefusalFinishReason(latestFinishData.finishReason);
     const empty = isEmptyModelCompletion({
       content: finalContent,
       hasGrounding: Boolean(latestFinishData.grounding ?? grounding),
       imageCount,
       outputTokens: latestFinishData.usage?.totalOutputTokens ?? observedUsage?.totalOutputTokens,
-      reasoning: finalReasoning,
+      reasoning: isRefusal ? '' : finalReasoning,
       toolCallCount: finalToolCallCount,
     });
 
     if (!empty) return finish('completed');
 
+    const diagnostics = {
+      contentLength: finalContent.length,
+      cost: latestFinishData.usage?.cost,
+      finishReason: latestFinishData.finishReason,
+      imageCount,
+      model: attempt.model,
+      outputTokens: latestFinishData.usage?.totalOutputTokens ?? observedUsage?.totalOutputTokens,
+      provider: attempt.providerId,
+      reasoningLength: finalReasoning.length,
+      toolCallCount: finalToolCallCount,
+    };
+
+    /**
+     * A blank turn stopped by a provider refusal or moderation finish reason (e.g. Anthropic
+     * `refusal`, GLM `sensitive`) is a policy decision, not a provider malfunction. Keep the
+     * `empty` outcome for route metrics, but surface the refusal so callers can show a
+     * policy-specific message instead of the generic empty-completion error.
+     */
     return finish(
       'empty',
-      new ModelEmptyError(undefined, {
-        contentLength: finalContent.length,
-        cost: latestFinishData.usage?.cost,
-        finishReason: latestFinishData.finishReason,
-        imageCount,
-        model: attempt.model,
-        outputTokens: latestFinishData.usage?.totalOutputTokens ?? observedUsage?.totalOutputTokens,
-        provider: attempt.providerId,
-        reasoningLength: finalReasoning.length,
-        toolCallCount: finalToolCallCount,
-      }),
+      isRefusal
+        ? new ModelRefusalError(undefined, diagnostics)
+        : new ModelEmptyError(undefined, diagnostics),
     );
   };
 

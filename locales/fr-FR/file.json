@@ -243,6 +243,7 @@
   "preview.downloadFile": "Télécharger le fichier",
   "preview.raw": "Brut",
   "preview.render": "Aperçu",
+  "preview.tooLarge": "Ce fichier est trop volumineux pour être prévisualisé. Téléchargez-le pour en consulter le contenu.",
   "preview.unsupportedFileAndContact": "Ce format de fichier n’est pas encore pris en charge pour l’aperçu en ligne. Si vous souhaitez en faire la demande, n’hésitez pas à <1>nous contacter</1>.",
   "resource": "Ressource",
   "resourceList.batchCopyDescription": "Cloner les ressources sélectionnées dans un autre espace de travail.",

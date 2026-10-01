@@ -54,6 +54,13 @@ export interface StepResult {
 }
 
 export interface AgentOperationMetadata {
+  /**
+   * The client that started this operation handles `member_runtime_end`. Only
+   * then does the Gateway stream notifier rename a mirrored group member's
+   * terminal on this operation's channel; a client released before the rename
+   * still gets the verbatim `agent_runtime_end` it retires member columns on.
+   */
+  acceptsMemberRuntimeEnd?: boolean;
   agentConfig?: any;
   createdAt: string;
   lastActiveAt: string;
@@ -313,6 +320,7 @@ export class AgentStateManager {
       }
 
       return {
+        acceptsMemberRuntimeEnd: metadata.acceptsMemberRuntimeEnd === 'true' || undefined,
         agentConfig: metadata.agentConfig ? JSON.parse(metadata.agentConfig) : undefined,
         visitorRedaction: metadata.visitorRedaction
           ? JSON.parse(metadata.visitorRedaction)
@@ -342,6 +350,7 @@ export class AgentStateManager {
   async createOperationMetadata(
     operationId: string,
     data: {
+      acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
       visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
@@ -355,6 +364,7 @@ export class AgentStateManager {
 
     try {
       const metadata: AgentOperationMetadata = {
+        acceptsMemberRuntimeEnd: data.acceptsMemberRuntimeEnd,
         agentConfig: data.agentConfig,
         visitorRedaction: data.visitorRedaction,
         createdAt: new Date().toISOString(),
@@ -383,6 +393,7 @@ export class AgentStateManager {
       if (metadata.workspaceId) redisData.workspaceId = metadata.workspaceId;
       if (metadata.mirrorToOperationId)
         redisData.mirrorToOperationId = metadata.mirrorToOperationId;
+      if (metadata.acceptsMemberRuntimeEnd) redisData.acceptsMemberRuntimeEnd = 'true';
       if (metadata.modelRuntimeConfig)
         redisData.modelRuntimeConfig = JSON.stringify(metadata.modelRuntimeConfig);
       if (metadata.agentConfig) redisData.agentConfig = JSON.stringify(metadata.agentConfig);

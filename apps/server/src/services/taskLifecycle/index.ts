@@ -27,7 +27,7 @@ import type {
   TaskSchedulerContext,
   TaskTopicHandoff,
 } from '@lobechat/types';
-import { ChatErrorType, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
+import { ChatErrorType, DEFAULT_BRIEF_ACTIONS, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -43,6 +43,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { translation } from '@/libs/i18n/serverTranslation';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
@@ -337,7 +338,12 @@ export class TaskLifecycleService {
         );
       }
     } else if (reason === 'error') {
-      if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'failed');
+      if (topicId)
+        await this.taskTopicModel.updateStatus(
+          taskId,
+          topicId,
+          resolveFailedRunStatus(errorMessage),
+        );
 
       const errorText = errorMessage || 'Unknown error';
 
@@ -805,7 +811,7 @@ export class TaskLifecycleService {
           schema: { name: TASK_TOPIC_HANDOFF_SCHEMA_NAME, schema: TASK_TOPIC_HANDOFF_SCHEMA },
         },
         {
-          metadata: { trigger: 'task_handoff' },
+          metadata: { trigger: RequestTrigger.Task },
           tracing: {
             promptVersion: TASK_TOPIC_HANDOFF_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TaskHandoff,
@@ -919,7 +925,7 @@ export class TaskLifecycleService {
             schema: { name: JUDGE_BRIEF_EMIT_SCHEMA_NAME, schema: JUDGE_BRIEF_EMIT_SCHEMA },
           },
           {
-            metadata: { trigger: 'task_brief_judge' },
+            metadata: { trigger: RequestTrigger.Task },
             tracing: {
               promptVersion: JUDGE_BRIEF_EMIT_PROMPT_VERSION,
               scenario: TRACING_SCENARIOS.TaskBriefJudge,
@@ -984,7 +990,7 @@ export class TaskLifecycleService {
           schema: { name: GENERATE_BRIEF_SCHEMA_NAME, schema: GENERATE_BRIEF_SCHEMA },
         },
         {
-          metadata: { trigger: 'task_brief' },
+          metadata: { trigger: RequestTrigger.Task },
           tracing: {
             promptVersion: GENERATE_BRIEF_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TaskBrief,

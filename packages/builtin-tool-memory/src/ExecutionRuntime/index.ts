@@ -5,7 +5,7 @@ import {
   ExperienceMemoryItemSchema,
   PreferenceMemoryItemSchema,
   RemoveIdentityActionSchema,
-  UpdateIdentityActionSchema,
+  UpdateIdentityToolInputSchema,
 } from '@lobechat/memory-user-memory/schemas';
 import { formatMemorySearchResults } from '@lobechat/prompts';
 import type {
@@ -46,7 +46,7 @@ export interface MemoryRuntimeService {
   ) => Promise<RemoveIdentityMemoryResult>;
   searchMemory: (params: SearchMemoryParams) => Promise<SearchMemoryResult>;
   updateIdentityMemory: (
-    params: z.infer<typeof UpdateIdentityActionSchema>,
+    params: z.output<typeof UpdateIdentityToolInputSchema>,
   ) => Promise<UpdateIdentityMemoryResult>;
 }
 
@@ -240,11 +240,11 @@ export class MemoryExecutionRuntime {
   }
 
   async updateIdentityMemory(
-    params: z.infer<typeof UpdateIdentityActionSchema>,
+    params: z.input<typeof UpdateIdentityToolInputSchema>,
   ): Promise<BuiltinServerRuntimeOutput> {
     if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
-      const input = UpdateIdentityActionSchema.parse(params);
+      const input = UpdateIdentityToolInputSchema.parse(params);
       const result = await this.service.updateIdentityMemory(input);
 
       if (!result.success) {

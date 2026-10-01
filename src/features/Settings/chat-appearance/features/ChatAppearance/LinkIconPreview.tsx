@@ -5,8 +5,7 @@ import { memo } from 'react';
 import { Trans } from 'react-i18next';
 
 import { OFFICIAL_SITE } from '@/const/url';
-import { type LobeLinkKind } from '@/features/Conversation/Markdown/plugins/Link/parse';
-import LinkRender from '@/features/Conversation/Markdown/plugins/Link/Render';
+import { EntityLinkRender, type LobeLinkKind } from '@/features/EntityLink';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   bubble: css`
@@ -34,14 +33,14 @@ interface SampleLinkProps {
 // Reuse the real message link renderer so the preview reflects the live
 // `enableMessageLinkIcon` setting exactly as chat messages do.
 const SampleLink = memo<SampleLinkProps>(({ kind, href, label, domain }) => (
-  <LinkRender
+  <EntityLinkRender
     id={`link-icon-preview-${kind}`}
     node={{ properties: { linkDomain: domain, linkHref: href, linkKind: kind, linkLabel: label } }}
     tagName="lobeLink"
     type="element"
   >
     {null}
-  </LinkRender>
+  </EntityLinkRender>
 ));
 
 const LinkIconPreview = memo(() => (

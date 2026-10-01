@@ -4,16 +4,20 @@ import path from 'node:path';
 
 import type {
   AcceptanceSubjectType,
+  VerifyEvidenceChapter,
   VerifyRunOrigin,
   VerifyRunScenario,
   VerifySurface,
 } from '@lobechat/const/verify';
 import {
   acceptanceSubjectTypes,
+  formatVideoTimestamp,
   GOMS_KLM_TRACE_FILE,
+  isFullFrameRect,
   isProgrammaticTestCheck,
   normalizeVerifySurface,
   PROGRAMMATIC_TEST_CHECK_HINT,
+  readEvidenceChapters,
   verifyEvidenceTypes,
   verifyRunScenarios,
   verifySurfaces,
@@ -139,6 +143,8 @@ export function inlineTextEvidenceForFile(
 
 /** Normalize a case's `evidence` field (string | string[] | {path}[]) to path strings. */
 export interface ReportEvidenceInput {
+  /** Video only: agent markers on the timeline — steps it took, claims it checked, flags it raised. */
+  chapters?: VerifyEvidenceChapter[];
   comparison?: {
     id: string;
     label?: string;
@@ -419,6 +425,7 @@ export function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
       }
       const layout = comparison?.layout === 'vertical' ? 'vertical' : undefined;
       return {
+        chapters: reportEvidenceChapters(evidencePath, value.chapters),
         comparison:
           id && (role === 'before' || role === 'after')
             ? { id, label: firstString(comparison?.label), layout, role }
@@ -428,6 +435,33 @@ export function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
       };
     })
     .filter((item): item is ReportEvidenceInput => item !== null);
+}
+
+/**
+ * A video's chapters, with every dropped marker named: a marker the reviewer
+ * never sees is a claim the agent believes it made, so the author must know.
+ */
+function reportEvidenceChapters(
+  evidencePath: string,
+  raw: unknown,
+): VerifyEvidenceChapter[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (evidenceTypeForFile(evidencePath) !== 'video') {
+    log.warn(`evidence ${evidencePath}: chapters only apply to video evidence — ignoring them`);
+    return undefined;
+  }
+  if (!Array.isArray(raw)) {
+    log.warn(`evidence ${evidencePath}: chapters must be an array — ignoring them`);
+    return undefined;
+  }
+  const chapters = readEvidenceChapters(raw) ?? [];
+  const dropped = raw.length - chapters.length;
+  if (dropped > 0) {
+    log.warn(
+      `evidence ${evidencePath}: dropped ${dropped} of ${raw.length} chapters — each needs a non-negative "t" (seconds), a "kind" of step/check/flag, a "label" for a step and a "note" for a check or flag`,
+    );
+  }
+  return chapters.length > 0 ? chapters : undefined;
 }
 
 export function firstString(...values: unknown[]): string | undefined {
@@ -784,6 +818,77 @@ export function planFromResult(result: Record<string, unknown>, droppedIds?: Set
   return items;
 }
 
+interface ExistingAcceptanceCheck {
+  id: string;
+  planItem?: { id?: string; sourceCriterionId?: string | null } | null;
+}
+
+/**
+ * Line a new round's plan up with the checks its acceptance already holds.
+ * The server mints a fresh criterion for every item that arrives without one,
+ * and the union keys rows by criterion — so a re-verification that skips this
+ * lands every check as a brand-new row instead of the next entry in its history.
+ */
+export function reuseSourceCriteria<T extends { id: string; sourceCriterionId?: string | null }>(
+  plan: T[] | undefined,
+  checks: ExistingAcceptanceCheck[] | null | undefined,
+): T[] | undefined {
+  if (!plan || !checks?.length) return plan;
+
+  return plan.map((item) => ({
+    ...item,
+    sourceCriterionId:
+      item.sourceCriterionId ??
+      checks.find((check) => check.id === item.id || check.planItem?.id === item.id)?.planItem
+        ?.sourceCriterionId ??
+      undefined,
+  }));
+}
+
+interface ExistingAcceptanceRound {
+  report?: { content?: string | null; summary?: string | null } | null;
+  run: {
+    id: string;
+    plan?: { id: string; title: string }[] | null;
+    roundIndex?: number | null;
+  };
+}
+
+/**
+ * The acceptance's latest round when it already publishes exactly this report.
+ * Re-running the same ingest (a retry loop, a re-sent command) would otherwise
+ * stack identical rounds on the page. Compares what the author wrote — body,
+ * conclusion and plan — not the published counts, which the ingest derives
+ * later from evidence uploads. Only a report with a body counts: without one,
+ * two genuinely different runs of the same plan are indistinguishable here.
+ */
+export function findIdenticalLatestRound(
+  rounds: ExistingAcceptanceRound[] | null | undefined,
+  incoming: {
+    plan?: { id: string; title: string }[];
+    report: { content?: string; summary?: string };
+  },
+): ExistingAcceptanceRound['run'] | undefined {
+  if (!incoming.report.content || !rounds?.length) return undefined;
+
+  const latest = rounds.reduce((a, b) =>
+    (b.run.roundIndex ?? 0) > (a.run.roundIndex ?? 0) ? b : a,
+  );
+  const published = latest.report;
+  if (!published) return undefined;
+
+  const same = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
+  const planKey = (items: { id: string; title: string }[] | null | undefined) =>
+    JSON.stringify((items ?? []).map(({ id, title }) => [id, title]));
+
+  const identical =
+    same(published.content, incoming.report.content) &&
+    same(published.summary, incoming.report.summary) &&
+    planKey(latest.run.plan) === planKey(incoming.plan);
+
+  return identical ? latest.run : undefined;
+}
+
 /**
  * The LobeHub conversation this harness is running inside, read off the env the
  * agent runtime echoes into the child process. Lets a report published from an
@@ -944,12 +1049,21 @@ export function statusColor(status: string): string {
   return pc.dim(status);
 }
 
-/** A region a reviewer circled on one evidence image. */
+/** A region a reviewer circled on one evidence image, or on one video frame or span. */
 export interface ReviewAnnotationRegion {
   comment?: string;
+  /** The agent chapter the reviewer disagrees with. */
+  disputes?: { kind?: string; note?: string; t?: number };
   evidenceId?: string;
   rect?: { height?: number; width?: number; x?: number; y?: number };
+  time?: { end?: number; start?: number };
 }
+
+/** `m:ss.cc` — shared with the acceptance page so both read the same moment. */
+export const formatVideoTime = formatVideoTimestamp;
+
+const isSeconds = (value?: number): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0;
 
 const asPercent = (value?: number) =>
   typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value * 100)}%` : undefined;
@@ -960,7 +1074,8 @@ const asPercent = (value?: number) =>
  * The comment alone is not enough to act on: a screenshot usually has several
  * plausible targets, and without the image and the rect the reader has to guess
  * which one was circled. `rect` is normalized to the image box (0–1), so it is
- * printed as percentages.
+ * printed as percentages. On a video the frame or span comes first, since the
+ * reader has to seek there before any region means anything.
  *
  * Returns `undefined` when the annotation carries no location at all — an older
  * review, or one made before regions existed.
@@ -973,18 +1088,47 @@ export function formatAnnotationRegion(
     ? (evidenceLabels?.get(annotation.evidenceId) ?? annotation.evidenceId)
     : undefined;
 
-  const { rect } = annotation;
+  const { rect, time } = annotation;
+  let moment: string | undefined;
+  if (isSeconds(time?.start))
+    moment = isSeconds(time.end)
+      ? `${formatVideoTime(time.start)}–${formatVideoTime(time.end)}`
+      : `frame at ${formatVideoTime(time.start)}`;
+  // A video note that marks a moment without circling an area spans the whole
+  // frame; printing "0%,0% · 100%×100%" would read as a real region.
+  const wholeFrame =
+    moment !== undefined &&
+    rect !== undefined &&
+    isFullFrameRect({
+      height: rect.height ?? 0,
+      width: rect.width ?? 0,
+      x: rect.x ?? -1,
+      y: rect.y ?? -1,
+    });
+
   const x = asPercent(rect?.x);
   const y = asPercent(rect?.y);
   const width = asPercent(rect?.width);
   const height = asPercent(rect?.height);
   const at = x && y ? `${x},${y}` : undefined;
   const size = width && height ? `${width}×${height}` : undefined;
-  const position = [at, size].filter(Boolean).join(' · ');
+  const position = [moment, wholeFrame ? undefined : at, wholeFrame ? undefined : size]
+    .filter(Boolean)
+    .join(' · ');
 
   if (!label && !position) return undefined;
   if (!position) return label;
   return label ? `${label} @ ${position}` : position;
+}
+
+/**
+ * The agent's own claim a reviewer objected to, quoted back so the repair run
+ * sees exactly which of its statements was judged wrong.
+ */
+export function formatDisputedChapter(disputes?: ReviewAnnotationRegion['disputes']) {
+  if (!disputes?.note) return undefined;
+  const at = isSeconds(disputes.t) ? ` at ${formatVideoTime(disputes.t)}` : '';
+  return `your ${disputes.kind ?? 'claim'}${at}: "${disputes.note}"`;
 }
 
 /** Keep file identity when small text artifacts are stored inline. */

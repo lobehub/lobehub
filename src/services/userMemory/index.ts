@@ -5,7 +5,7 @@ import {
   type ExperienceMemoryItemSchema,
   type PreferenceMemoryItemSchema,
   type RemoveIdentityActionSchema,
-  type UpdateIdentityActionSchema,
+  type UpdateIdentityToolInputSchema,
 } from '@lobechat/memory-user-memory/schemas';
 import {
   type ActivityListParams,
@@ -161,7 +161,7 @@ class UserMemoryService {
   };
 
   updateIdentityMemory = async (
-    params: z.infer<typeof UpdateIdentityActionSchema>,
+    params: z.output<typeof UpdateIdentityToolInputSchema>,
   ): Promise<UpdateIdentityMemoryResult> => {
     return lambdaClient.userMemories.toolUpdateIdentityMemory.mutate(params);
   };

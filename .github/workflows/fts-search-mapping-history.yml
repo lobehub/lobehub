@@ -8,11 +8,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: fts-search-mapping-history-${{ github.event.pull_request.number }}
+  # Metadata-only edits must not cancel a queued or running history check.
+  group: fts-search-mapping-history-${{ github.event.pull_request.number }}-${{ github.event.action == 'edited' && !github.event.changes.base.ref.from && github.run_id || 'verify' }}
   cancel-in-progress: true
 
 jobs:
   verify:
+    # Retargeting changes the comparison baseline; title/body edits do not.
+    if: github.event.action != 'edited' || github.event.changes.base.ref.from
     name: Verify Append-Only History
     runs-on: ubuntu-latest
     steps:

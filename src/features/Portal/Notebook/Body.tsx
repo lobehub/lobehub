@@ -1,7 +1,7 @@
 'use client';
 
 import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { Spin } from 'antd';
+import { Spin } from '@lobehub/ui/base-ui';
 import { BookOpenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

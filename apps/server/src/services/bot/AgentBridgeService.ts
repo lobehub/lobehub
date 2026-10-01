@@ -23,13 +23,15 @@ import { deferBotMessages, isDeferredMessagesAvailable } from './deferredMessage
 import { runDeferredReplay, scheduleDeferredReplay } from './deferredReplay';
 import { buildBotSender, formatPrompt as formatPromptUtil } from './formatPrompt';
 import { getSourceMessages } from './mergeMessages';
-import type { BotReplyLocale, PlatformClient } from './platforms';
+import type { BotReactionMode, BotReplyLocale, PlatformClient } from './platforms';
 import {
+  DEFAULT_BOT_REACTION_MODE,
   getBotReplyLocale,
   getStepReactionEmoji,
   platformFromThreadId,
   platformRegistry,
   RECEIVED_REACTION_EMOJI,
+  shouldApplyReaction,
   THINKING_REACTION_EMOJI,
 } from './platforms';
 import { resolveUnsupportedMessageApis } from './platforms/messageCapabilities';
@@ -208,6 +210,11 @@ interface BridgeHandlerOpts {
   charLimit?: number;
   client?: PlatformClient;
   displayToolCalls?: boolean;
+  /**
+   * Status-reaction verbosity (see `BotReactionMode`). Defaults to
+   * `DEFAULT_BOT_REACTION_MODE` for callers that predate the setting.
+   */
+  reactionMode?: BotReactionMode;
   /**
    * Locale for system-generated reply text (errors, stopped notice, etc.).
    * Picked per platform — see `getBotReplyLocale`. When omitted we fall back
@@ -524,6 +531,7 @@ export class AgentBridgeService {
     opts: BridgeHandlerOpts,
   ): Promise<void> {
     const { agentId, botContext, charLimit, displayToolCalls } = opts;
+    const reactionMode = opts.reactionMode ?? DEFAULT_BOT_REACTION_MODE;
     const replyLocale = this.resolveReplyLocale(opts);
 
     log(
@@ -553,7 +561,9 @@ export class AgentBridgeService {
       // Immediate feedback: mark as received + show typing. Both are
       // non-essential UX niceties; a transient platform network error here
       // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
-      await this.setReaction(thread, message, client, RECEIVED_REACTION_EMOJI, botContext);
+      if (shouldApplyReaction(reactionMode, 'received')) {
+        await this.setReaction(thread, message, client, RECEIVED_REACTION_EMOJI, botContext);
+      }
 
       // Auto-subscribe to thread (platforms can opt out, e.g. Discord top-level channels)
       const subscribe = client?.shouldSubscribe?.(thread.id) ?? true;
@@ -570,7 +580,9 @@ export class AgentBridgeService {
       // the agent runtime. The first afterStep hook fires only after the
       // first LLM call completes (often 5-10s), so without this swap the
       // user would see 👀 for the entire duration of the first LLM call.
-      await this.setReaction(thread, message, client, THINKING_REACTION_EMOJI, botContext);
+      if (shouldApplyReaction(reactionMode, 'thinking')) {
+        await this.setReaction(thread, message, client, THINKING_REACTION_EMOJI, botContext);
+      }
 
       try {
         // executeWithCallback handles progress message (post + edit at each step)
@@ -582,6 +594,7 @@ export class AgentBridgeService {
           charLimit,
           client,
           displayToolCalls,
+          reactionMode,
           replyLocale,
           trigger: RequestTrigger.Bot,
         });
@@ -621,6 +634,7 @@ export class AgentBridgeService {
     opts: BridgeHandlerOpts,
   ): Promise<void> {
     const { agentId, botContext, charLimit, displayToolCalls } = opts;
+    const reactionMode = opts.reactionMode ?? DEFAULT_BOT_REACTION_MODE;
     const replyLocale = this.resolveReplyLocale(opts);
     const threadState = await thread.state;
     const topicId = threadState?.topicId;
@@ -685,8 +699,12 @@ export class AgentBridgeService {
         await thread.setState({ ...threadState, topicId: undefined });
         return this.handleMention(thread, message, opts);
       }
+      // A platform thread that is itself a bounded conversation (e.g. a
+      // Discord guild thread) keeps its topic regardless of idle time — a
+      // reply hours later is still the same conversation.
+      const expiresWhenIdle = opts.client?.shouldExpireIdleTopic?.(thread.id) ?? true;
       const elapsed = Date.now() - new Date(existingTopic.updatedAt).getTime();
-      if (elapsed > TOPIC_STALE_THRESHOLD) {
+      if (expiresWhenIdle && elapsed > TOPIC_STALE_THRESHOLD) {
         log(
           'handleSubscribedMessage: topic=%s is stale (%.1fh since last activity), creating new topic',
           topicId,
@@ -736,14 +754,18 @@ export class AgentBridgeService {
       // Immediate feedback: mark as received + show typing. Both are
       // non-essential UX niceties; a transient platform network error here
       // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
-      await this.setReaction(thread, message, opts.client, RECEIVED_REACTION_EMOJI, botContext);
+      if (shouldApplyReaction(reactionMode, 'received')) {
+        await this.setReaction(thread, message, opts.client, RECEIVED_REACTION_EMOJI, botContext);
+      }
       await safeSideEffect(() => thread.startTyping(), 'startTyping');
 
       // Transition from "received" to "thinking" right before we hand off to
       // the agent runtime. The first afterStep hook fires only after the
       // first LLM call completes (often 5-10s), so without this swap the
       // user would see 👀 for the entire duration of the first LLM call.
-      await this.setReaction(thread, message, opts.client, THINKING_REACTION_EMOJI, botContext);
+      if (shouldApplyReaction(reactionMode, 'thinking')) {
+        await this.setReaction(thread, message, opts.client, THINKING_REACTION_EMOJI, botContext);
+      }
 
       try {
         // executeWithCallback handles progress message (post + edit at each step)
@@ -754,6 +776,7 @@ export class AgentBridgeService {
           charLimit,
           client: opts.client,
           displayToolCalls,
+          reactionMode,
           replyLocale,
           topicId,
           trigger: RequestTrigger.Bot,
@@ -824,6 +847,7 @@ export class AgentBridgeService {
       charLimit?: number;
       client?: PlatformClient;
       displayToolCalls?: boolean;
+      reactionMode?: BotReactionMode;
       replyLocale: BotReplyLocale;
       topicId?: string;
       trigger?: string;
@@ -874,6 +898,7 @@ export class AgentBridgeService {
       charLimit,
       client,
       displayToolCalls,
+      reactionMode,
       replyLocale,
       topicId,
       trigger,
@@ -1104,6 +1129,7 @@ export class AgentBridgeService {
       gatewayConnectionId,
       progressMessage,
       prompt,
+      reactionMode,
       replyLocale,
       toolModeOverride,
       topicId,
@@ -1309,6 +1335,7 @@ export class AgentBridgeService {
       gatewayConnectionId?: string;
       progressMessage?: SentMessage;
       prompt: string;
+      reactionMode?: BotReactionMode;
       replyLocale: BotReplyLocale;
       toolModeOverride?: ThreadState['toolMode'];
       topicId?: string;
@@ -1330,6 +1357,7 @@ export class AgentBridgeService {
       files,
       gatewayConnectionId,
       prompt,
+      reactionMode = DEFAULT_BOT_REACTION_MODE,
       replyLocale,
       toolModeOverride,
       topicId,
@@ -1384,7 +1412,11 @@ export class AgentBridgeService {
           hooks: [
             {
               handler: async (event) => {
-                if (event.shouldContinue && userMessage) {
+                if (
+                  event.shouldContinue &&
+                  userMessage &&
+                  shouldApplyReaction(reactionMode, 'step')
+                ) {
                   const desiredEmoji = getStepReactionEmoji(event.stepType, event.toolsCalling);
                   await this.setReaction(thread, userMessage, client, desiredEmoji, botContext);
                 }
@@ -1940,6 +1972,7 @@ export class AgentBridgeService {
    */
   private formatPrompt(message: Message, client?: PlatformClient): string {
     return formatPromptUtil(message as any, {
+      resolveMentions: client?.resolveMentions?.bind(client),
       sanitizeUserInput: client?.sanitizeUserInput?.bind(client),
     });
   }

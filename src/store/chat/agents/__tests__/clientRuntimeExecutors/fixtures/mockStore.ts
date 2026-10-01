@@ -107,8 +107,6 @@ export const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore =
 
     optimisticUpdateMessagePlugin: vi.fn().mockResolvedValue(undefined),
 
-    optimisticUpdateMessagePluginError: vi.fn().mockResolvedValue(undefined),
-
     optimisticUpdatePluginArguments: vi.fn().mockResolvedValue(undefined),
 
     optimisticUpdatePluginState: vi.fn().mockResolvedValue(undefined),

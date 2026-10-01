@@ -59,6 +59,8 @@ export function registerStatusCommand(program: Command) {
         gatewayUrl: gatewayUrl || OFFICIAL_GATEWAY_URL,
         logger: log,
         serverUrl: auth.serverUrl,
+        // Status is a one-shot probe, not a serving connection.
+        tunnel: false,
         token: auth.token,
         tokenType: auth.tokenType,
         userId: auth.userId,

@@ -7,7 +7,10 @@ import type { Pricing } from 'model-bank';
 
 import { ErrorClassifier } from '../../errors';
 import { stripUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/claudePrefill';
-import { rejectsDisabledThinkingAtEffort } from '../../providers/anthropic/modelId';
+import {
+  isAlwaysThinkingClaudeModel,
+  rejectsDisabledThinkingAtEffort,
+} from '../../providers/anthropic/modelId';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -584,6 +587,17 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
             requestPayload.model,
             requestPayload.messages,
           );
+        }
+
+        // Same for disabled thinking: handlePayload resolved it by the logical id, but the
+        // mapped request model may be an always-thinking Claude that rejects `disabled` with a
+        // 400. Omitting the config is the documented fallback (see resolveClaudeThinkingConfig).
+        if (
+          requestPayload.model &&
+          (requestPayload as { thinking?: { type?: string } }).thinking?.type === 'disabled' &&
+          isAlwaysThinkingClaudeModel(requestPayload.model)
+        ) {
+          delete (requestPayload as { thinking?: unknown }).thinking;
         }
 
         const shouldDebugChatCompletion = debugParams?.chatCompletion?.() ?? false;

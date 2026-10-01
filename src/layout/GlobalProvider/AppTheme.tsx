@@ -100,10 +100,11 @@ const AppTheme = memo<AppThemeProps>(
     const language = useGlobalStore(systemStatusSelectors.language);
     const isDark = useIsDark();
 
-    const [primaryColor, neutralColor, animationMode] = useUserStore((s) => [
+    const [primaryColor, neutralColor, animationMode, fontAntialiasing] = useUserStore((s) => [
       userGeneralSettingsSelectors.primaryColor(s),
       userGeneralSettingsSelectors.neutralColor(s),
       userGeneralSettingsSelectors.animationMode(s),
+      userGeneralSettingsSelectors.fontAntialiasing(s),
     ]);
     const [userFontFamily, userFontFamilyCode] = useUserStore((s) => [
       preferenceSelectors.fontFamily(s),
@@ -154,6 +155,11 @@ const AppTheme = memo<AppThemeProps>(
     useEffect(() => {
       setCookie(LOBE_THEME_NEUTRAL_COLOR, neutralColor);
     }, [neutralColor]);
+
+    useEffect(() => {
+      if (fontAntialiasing) delete document.documentElement.dataset.fontAntialiasing;
+      else document.documentElement.dataset.fontAntialiasing = 'off';
+    }, [fontAntialiasing]);
 
     const currentAppearence = isDark ? 'dark' : 'light';
 

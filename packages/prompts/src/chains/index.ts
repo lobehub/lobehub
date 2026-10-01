@@ -18,7 +18,6 @@ export * from './rewriteGenerationPrompt';
 export * from './summaryAgentName';
 export * from './summaryDescription';
 export * from './summaryGenerationTitle';
-export * from './summaryHistory';
 export * from './summaryTags';
 export * from './summaryTitle';
 export * from './taskInstruction';

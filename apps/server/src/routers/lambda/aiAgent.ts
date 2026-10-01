@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
 
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { selectUserInterventionConfig } from '@lobechat/agent-runtime';
 import { LOADING_FLAT } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
 import { getServerDefaultHeterogeneousAgentConfig } from '@lobechat/heterogeneous-agents';
-import type { ExecAgentResult, TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
+import type {
+  ExecAgentResult,
+  TaskCurrentActivity,
+  TaskStatusResult,
+  UserInterventionConfig,
+  UserToolConfig,
+} from '@lobechat/types';
 import {
   CreateThreadWithMessageSchema,
   entityIdPattern,
@@ -57,6 +64,7 @@ import { UserModel } from '@/database/models/user';
 import { agentOperations, topics, workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { notShareVisitorTopicRef } from '@/database/utils/shareVisitor';
+import { notTrashed } from '@/database/utils/softDelete';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJwt';
@@ -74,6 +82,7 @@ import {
   assertCanUseTopicTargets,
   assertCanViewMessageTargets,
 } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
+import { toClientExecAgentResult } from '@/server/routers/lambda/_helpers/groupMemberContinuationResult';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import {
   GetAgentInterventionReviewBySourceSchema,
@@ -82,6 +91,7 @@ import {
   ResolveAgentInterventionSchema,
 } from '@/server/routers/lambda/_schema/agentIntervention';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import { MAX_CLIENT_OPERATION_SNAPSHOT } from '@/server/services/agentRuntime/foregroundOperation';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
 import { getFileProxyUrl } from '@/server/services/file';
@@ -461,6 +471,54 @@ const repairRuntimeActionContinuationAnchor = async (
 };
 
 /**
+ * The approval mode a continuation runs under. A continuation carries on the
+ * run the user just answered, so it inherits that run's intervention policy —
+ * otherwise `execAgent` falls back to `headless` and the next question or
+ * approval in the continuation is blocked instead of waiting for the user.
+ *
+ * When the parked run's state has already expired, fall back to the owner's
+ * foreground approval preference: only a run that could wait for a human can
+ * park on an intervention, so the answered run was never headless.
+ *
+ * The owner's persisted allow list is merged in either way: an "Approve, and
+ * don't ask again" answer writes the tool key there before this dispatch, and
+ * the snapshot in the parked run predates it.
+ */
+const resolveContinuationUserInterventionConfig = async (
+  resolution: ClaimedAgentInterventionResolution,
+  sourceOperationId: string,
+  ctx: AgentInterventionDispatchContext,
+): Promise<UserInterventionConfig> => {
+  const [sourceState, settings] = await Promise.all([
+    ctx.aiAgentService.loadInterventionContinuationState(sourceOperationId).catch((error) => {
+      log('failed to load source state for %s: %O', sourceOperationId, error);
+      return null;
+    }),
+    new UserModel(ctx.serverDB, resolution.ownerUserId).getUserSettings().catch((error) => {
+      log('failed to load intervention settings for %s: %O', resolution.ownerUserId, error);
+      return undefined;
+    }),
+  ]);
+  const intervention = (settings?.tool as UserToolConfig | undefined)?.humanIntervention;
+  const persistedAllowList = intervention?.allowList ?? [];
+
+  const inherited = sourceState ? selectUserInterventionConfig(sourceState) : undefined;
+  if (inherited) {
+    const inheritedAllowList = inherited.allowList ?? [];
+    const remembered = persistedAllowList.filter((key) => !inheritedAllowList.includes(key));
+    if (remembered.length === 0) return inherited;
+    return { ...inherited, allowList: [...inheritedAllowList, ...remembered] };
+  }
+
+  const approvalMode =
+    intervention?.approvalMode === 'headless'
+      ? 'auto-run'
+      : (intervention?.approvalMode ?? 'manual');
+
+  return { allowList: persistedAllowList, approvalMode };
+};
+
+/**
  * One dispatch boundary shared by token Review and the active Web source
  * bridge. Both paths arrive here only after Cloud has won the same durable
  * first-winner claim.
@@ -468,6 +526,13 @@ const repairRuntimeActionContinuationAnchor = async (
 const dispatchClaimedAgentIntervention = async (
   resolution: ClaimedAgentInterventionResolution,
   ctx: AgentInterventionDispatchContext,
+  /**
+   * `acceptsMemberRuntimeEnd`: the resolving client's own declaration when that
+   * client is the one subscribing to the continuation (the Web source bridge).
+   * Left unset for a resolver that isn't (token Review), so the continuation
+   * inherits the parked operation's declaration.
+   */
+  options: { acceptsMemberRuntimeEnd?: boolean } = {},
 ): Promise<{ execution?: ExecAgentResult; status: AgentInterventionReviewStatus }> => {
   const { runtimeAction } = resolution;
   let execution: ExecAgentResult | undefined;
@@ -513,6 +578,18 @@ const dispatchClaimedAgentIntervention = async (
     }
 
     if (dispatchProbe.state !== 'dispatched' && shouldDispatchRuntimeAction) {
+      /**
+       * A continuation is a fresh operation started by the user resolving an
+       * intervention, and the durable app context does not carry the parked
+       * run's trigger. Without an explicit trigger every LLM call in the
+       * continuation lands in route attempt logs with an unknown source.
+       */
+      const continuationTrigger = RequestTrigger.Chat;
+      const continuation = continuationRuntimeAction(runtimeAction);
+      const userInterventionConfig = continuation
+        ? await resolveContinuationUserInterventionConfig(resolution, continuation.operationId, ctx)
+        : undefined;
+
       switch (runtimeAction.type) {
         case 'execute_custom_interaction': {
           const customAction = runtimeAction.input.action;
@@ -539,6 +616,7 @@ const dispatchClaimedAgentIntervention = async (
             const skipped = customAction.type === 'skipped';
             execution = await ctx.aiAgentService.execAgent({
               agentId: runtimeAction.agentId,
+              acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
               approvalResolutionRequestId: resolution.resolutionRequestId,
               approvalSourceOperationId: runtimeAction.operationId,
               appContext: runtimeAction.appContext,
@@ -555,6 +633,8 @@ const dispatchClaimedAgentIntervention = async (
                 toolCallId: runtimeAction.toolCallId,
               },
               topicStartReservationId: deterministicContinuationOperationId,
+              trigger: continuationTrigger,
+              userInterventionConfig,
             });
           }
           break;
@@ -571,6 +651,7 @@ const dispatchClaimedAgentIntervention = async (
           const [singleDecision] = runtimeAction.decisions;
           execution = await ctx.aiAgentService.execAgent({
             agentId: runtimeAction.agentId,
+            acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
             approvalResolutionRequestId: resolution.resolutionRequestId,
             approvalSourceOperationId: runtimeAction.operationId,
             appContext: runtimeAction.appContext,
@@ -583,12 +664,15 @@ const dispatchClaimedAgentIntervention = async (
               ? { resumeApproval: singleDecision }
               : { resumeApprovals: runtimeAction.decisions }),
             topicStartReservationId: deterministicContinuationOperationId,
+            trigger: continuationTrigger,
+            userInterventionConfig,
           });
           break;
         }
         case 'resume_tool_result': {
           execution = await ctx.aiAgentService.execAgent({
             agentId: runtimeAction.agentId,
+            acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
             approvalResolutionRequestId: resolution.resolutionRequestId,
             approvalSourceOperationId: runtimeAction.operationId,
             appContext: runtimeAction.appContext,
@@ -606,6 +690,8 @@ const dispatchClaimedAgentIntervention = async (
               toolCallId: runtimeAction.toolCallId,
             },
             topicStartReservationId: deterministicContinuationOperationId,
+            trigger: continuationTrigger,
+            userInterventionConfig,
           });
           break;
         }
@@ -692,7 +778,7 @@ const resolveHeteroTopicWorkspace = async (params: {
   const [topic] = await db
     .select({ userId: topics.userId, workspaceId: topics.workspaceId })
     .from(topics)
-    .where(eq(topics.id, topicId))
+    .where(and(eq(topics.id, topicId), notTrashed(topics.isDeleted)))
     .limit(1);
 
   if (!topic || (requestedWorkspaceId != null && requestedWorkspaceId !== topic.workspaceId)) {
@@ -934,9 +1020,26 @@ const StartExecutionSchema = z.object({
 /**
  * Schema for execAgent - execute a single Agent
  */
+/**
+ * Whether the calling client declared it handles `member_runtime_end`
+ * (`streamFeatures`). Always a boolean for a client-facing route: a client that
+ * declares nothing (a released desktop, a stale tab) is a `false` of its own,
+ * never "unknown" — only a server-internal continuation, with no caller of its
+ * own, inherits the parked operation's declaration.
+ */
+const acceptsMemberRuntimeEndOf = (streamFeatures: string[] | undefined): boolean =>
+  streamFeatures?.includes('member_runtime_end') ?? false;
+
 const ExecAgentSchema = z
   .object({
     includeFinalState: z.boolean().optional(),
+    /**
+     * Gateway stream features the calling client handles. `member_runtime_end`:
+     * a group member's terminal arrives on the supervisor's channel under that
+     * name instead of `agent_runtime_end`. Free-form strings so an older server
+     * ignores features it does not know rather than rejecting the run.
+     */
+    streamFeatures: z.array(z.string()).optional(),
     /** The agent ID to run (either agentId or slug is required) */
     agentId: z.string().optional(),
     /** Application context for message storage */
@@ -1005,6 +1108,21 @@ const ExecAgentSchema = z
     parentMessageId: z.string().optional(),
     /** Existing gateway operation this fresh turn atomically supersedes. */
     replacesOperationId: z.string().optional(),
+    /**
+     * The server runs the composer tracked on this conversation at send time.
+     * Diagnostic only: recorded when this send has to supersede a live run.
+     */
+    clientOperations: z
+      .array(
+        z.object({
+          isAborting: z.boolean().optional(),
+          operationId: z.string(),
+          status: z.string(),
+          visibleLoadingDone: z.boolean().optional(),
+        }),
+      )
+      .max(MAX_CLIENT_OPERATION_SNAPSHOT)
+      .optional(),
     /** The user input/prompt */
     prompt: z.string(),
     /**
@@ -2311,20 +2429,27 @@ export const aiAgentRouter = router({
             if (sourceResolution.state === 'already_resolved') {
               throw new HumanApprovalAlreadyResolvedError(parentMessageId ?? 'intervention');
             }
-            const dispatch = await dispatchClaimedAgentIntervention(sourceResolution, ctx);
+            const dispatch = await dispatchClaimedAgentIntervention(sourceResolution, ctx, {
+              acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
+            });
             if (!dispatch.execution) {
               throw new Error('Durable intervention resume did not create an operation');
             }
-            return dispatch.execution;
+            return toClientExecAgentResult(dispatch.execution);
           }
         }
       }
 
-      return await ctx.aiAgentService.execAgent({
+      const result = await ctx.aiAgentService.execAgent({
+        acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
         agentId,
         appContext,
         autoStart,
         clientIds: input.clientIds,
+        clientRunSnapshot: {
+          operations: input.clientOperations ?? [],
+          replacesOperationId: input.replacesOperationId,
+        },
         includeFinalState: input.includeFinalState,
         // This procedure serves the composer (`aiAgentService.execAgentTask`).
         // The client already queues follow-ups behind a live run and shows the
@@ -2342,6 +2467,7 @@ export const aiAgentRouter = router({
         mentionedAgents,
         parentMessageId,
         prompt,
+        replacesOperationId: input.replacesOperationId,
         // When parentMessageId is provided, this is a regeneration/continue or a
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
@@ -2355,6 +2481,7 @@ export const aiAgentRouter = router({
         userAgent: ctx.userAgent ?? undefined,
         userInterventionConfig,
       });
+      return toClientExecAgentResult(result);
     } catch (error: any) {
       console.error('execAgent failed: %O', error);
 
@@ -2480,6 +2607,7 @@ export const aiAgentRouter = router({
           workspaceId: ctx.workspaceId,
         });
         const result = await ctx.aiAgentService.execAgent({
+          acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(task.streamFeatures),
           includeFinalState: task.includeFinalState,
           agentId,
           appContext,
@@ -2900,7 +3028,7 @@ export const aiAgentRouter = router({
       );
 
       // 6.1 Parse messages using conversation-flow for UI display
-      const { flatList: parsedMessages } = parse(threadMessages);
+      const { flatList: parsedMessages } = parse(threadMessages, undefined, { threadId });
 
       // 7. Get result content when task is completed or failed
       let resultContent: string | undefined;
@@ -3407,11 +3535,13 @@ export const aiAgentRouter = router({
         };
       }
 
-      const dispatch = await dispatchClaimedAgentIntervention(resolution, ctx);
+      const dispatch = await dispatchClaimedAgentIntervention(resolution, ctx, {
+        acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
+      });
       return {
         contractVersion: 2 as const,
         ...(resolution.conversationUrl && { conversationUrl: resolution.conversationUrl }),
-        ...(dispatch.execution && { execution: dispatch.execution }),
+        ...(dispatch.execution && { execution: toClientExecAgentResult(dispatch.execution) }),
         state: resolution.state,
         status: dispatch.status,
         success: true as const,

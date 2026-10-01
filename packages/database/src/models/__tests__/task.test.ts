@@ -8,6 +8,7 @@ import {
   agents,
   briefs,
   documents,
+  taskDocuments,
   tasks,
   topics,
   users,
@@ -53,6 +54,31 @@ describe('TaskModel', () => {
   });
 
   describe('create', () => {
+    // LLMs (notably gpt-family models) fill optional tool fields with "". An
+    // empty id must mean "unassigned", never reach the FK columns as ''.
+    it('should store empty-string assigneeUserId as null instead of violating the FK', async () => {
+      const agentId = await createAgent('task-empty-assignee-agent');
+      const model = new TaskModel(serverDB, userId);
+
+      const task = await model.create({
+        assigneeAgentId: agentId,
+        assigneeUserId: '',
+        instruction: 'y',
+        name: 'x',
+      });
+
+      expect(task.assigneeUserId).toBeNull();
+      expect(task.assigneeAgentId).toBe(agentId);
+    });
+
+    it('should store blank assigneeAgentId as null instead of violating the FK', async () => {
+      const model = new TaskModel(serverDB, userId);
+
+      const task = await model.create({ assigneeAgentId: '  ', instruction: 'y', name: 'x' });
+
+      expect(task.assigneeAgentId).toBeNull();
+    });
+
     it('should create a task with auto-generated identifier', async () => {
       const model = new TaskModel(serverDB, userId);
       const result = await model.create({
@@ -220,6 +246,21 @@ describe('TaskModel', () => {
 
       expect(updated!.instruction).toBe('Updated instruction');
       expect(updated!.name).toBe('Updated name');
+    });
+
+    it('should clear assignees when updated with empty strings instead of violating the FK', async () => {
+      const agentId = await createAgent('task-update-empty-assignee-agent');
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        assigneeAgentId: agentId,
+        assigneeUserId: userId,
+        instruction: 'Original',
+      });
+
+      const updated = await model.update(task.id, { assigneeAgentId: '', assigneeUserId: '' });
+
+      expect(updated!.assigneeAgentId).toBeNull();
+      expect(updated!.assigneeUserId).toBeNull();
     });
 
     it('should not update task owned by another user', async () => {
@@ -984,6 +1025,27 @@ describe('TaskModel', () => {
     });
   });
 
+  describe('deleteIfStatus (delete vs. run start)', () => {
+    it('keeps a task that a run started after the delete looked at it', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      // The runner wins the race: backlog → running before the delete lands.
+      await model.updateStatusIfCurrent(task.id, 'backlog', 'running');
+
+      expect(await model.deleteIfStatus(task.id, 'backlog')).toBe(false);
+      expect((await model.findById(task.id))?.status).toBe('running');
+    });
+
+    it('stops the run start when the delete lands first', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      expect(await model.deleteIfStatus(task.id, 'backlog')).toBe(true);
+      expect(await model.updateStatusIfCurrent(task.id, 'backlog', 'running')).toBeNull();
+    });
+  });
+
   describe('heartbeat', () => {
     it('should update heartbeat timestamp', async () => {
       const model = new TaskModel(serverDB, userId);
@@ -1134,6 +1196,35 @@ describe('TaskModel', () => {
       const pinned = await model.getPinnedDocuments(task.id);
       expect(pinned).toHaveLength(1);
       expect(pinned[0].documentId).toBe(doc.id);
+    });
+
+    it('refuses to pin a document after the task is trashed', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Soon deleted' });
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: '',
+          fileType: 'text/plain',
+          source: 'test',
+          sourceType: 'file',
+          title: 'Must not pin',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+        })
+        .returning();
+      await serverDB
+        .update(tasks)
+        .set({ deletedAt: new Date('2026-09-10T00:00:00Z'), isDeleted: true })
+        .where(eq(tasks.id, task.id));
+
+      await expect(model.pinDocument(task.id, doc.id)).rejects.toThrow('Task not found');
+      const pins = await serverDB
+        .select({ taskId: taskDocuments.taskId })
+        .from(taskDocuments)
+        .where(eq(taskDocuments.taskId, task.id));
+      expect(pins).toHaveLength(0);
     });
 
     it('tombstones a pinned document in the workspace tree once its owner flips it back to private', async () => {
@@ -2482,6 +2573,45 @@ describe('TaskModel', () => {
       const ids = result.map((t) => t.id);
       expect(ids).toContain(eligible.id);
       expect(ids).not.toContain(running.id);
+    });
+  });
+
+  describe('static swapDispatchedScheduleOccurrence', () => {
+    it('reserves an occurrence once and keeps the rest of the context', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        automationMode: 'schedule',
+        instruction: 'Daily',
+        schedulePattern: '0 9 * * *',
+      });
+      await model.updateContext(task.id, {
+        scheduler: { scheduleStartedAt: '2026-09-20T00:00:00.000Z' },
+      });
+      const occurrence = '2026-09-21T09:00:00.000Z';
+
+      expect(
+        await TaskModel.swapDispatchedScheduleOccurrence(serverDB, task.id, null, occurrence),
+      ).toBe(true);
+      // A second dispatcher tick that read the pre-reservation state loses.
+      expect(
+        await TaskModel.swapDispatchedScheduleOccurrence(serverDB, task.id, null, occurrence),
+      ).toBe(false);
+
+      const stored = await model.findById(task.id);
+      expect(stored?.context).toMatchObject({
+        scheduler: {
+          lastDispatchedOccurrenceAt: occurrence,
+          scheduleStartedAt: '2026-09-20T00:00:00.000Z',
+        },
+      });
+
+      // Releasing (e.g. after a failed publish) restores the previous value.
+      expect(
+        await TaskModel.swapDispatchedScheduleOccurrence(serverDB, task.id, occurrence, null),
+      ).toBe(true);
+      expect(
+        await TaskModel.swapDispatchedScheduleOccurrence(serverDB, task.id, null, occurrence),
+      ).toBe(true);
     });
   });
 

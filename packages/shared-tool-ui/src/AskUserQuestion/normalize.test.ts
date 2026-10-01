@@ -146,4 +146,14 @@ describe('normalizeAskUserQuestions', () => {
       },
     ]);
   });
+
+  it('keeps a question description a host supplies', () => {
+    expect(
+      normalizeAskUserQuestions({
+        questions: [
+          { description: 'Decides the tone', header: 'Q1', options: [], question: 'Who?' },
+        ],
+      }),
+    ).toEqual([{ description: 'Decides the tone', header: 'Q1', options: [], question: 'Who?' }]);
+  });
 });

@@ -54,8 +54,9 @@ Every osascript platform script shares one interface:
 ```
 
 The script activates the app, navigates to the channel/contact, sends the
-message, waits, and screenshots the result window (via the generic skill's
-`../../acceptance/scripts/capture-app-window.sh`). iMessage is the exception: it
+message, waits, and screenshots the result window (via the project adapter's
+`../../acceptance/scripts/capture-app-window.sh`, which runs the installed
+acceptance skill's screen-recording preflight). iMessage is the exception: it
 uses a BlueBubbles bridge, not osascript — see [imessage/index.md](./imessage/index.md).
 
 ## osascript prerequisites
@@ -74,8 +75,11 @@ Screen Recording (TCC) permission is missing OR the display is asleep / locked /
 on a screensaver. Gate BEFORE any bot capture:
 
 ```bash
-./.agents/acceptance/scripts/check-screen-recording.sh # exit 0 = OS capture will work
+bash .agents/skills/acceptance/scripts/check-screen-recording.sh
 ```
+
+Only exit 0 confirms both permission and a measured non-black frame. Missing
+tools or an undetermined check must block capture, not count as a pass.
 
 Keep the display awake for the whole capture session (`caffeinate -dimsu &`, kill
 when done). Because this surface depends on OS capture and native macOS apps,

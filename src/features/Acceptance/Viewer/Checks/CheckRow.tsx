@@ -1,5 +1,6 @@
 'use client';
 
+import { readEvidenceChapters } from '@lobechat/const/verify';
 import type { AcceptanceCommentThread } from '@lobechat/types';
 import { copyToClipboard, Flexbox, Icon, TextArea, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Button, Tag, Text } from '@lobehub/ui/base-ui';
@@ -38,14 +39,20 @@ import { openEvidenceCommentModal } from '../Comments/EvidenceCommentModal';
 import { useAcceptanceComments } from '../Comments/hooks';
 import ThreadEvidence from '../Comments/ThreadEvidence';
 import { threadsForCheck } from '../Comments/threads';
-import { evidenceCounts, hasAnnotatableEvidence, isAnnotatable } from '../Evidence/evidence';
+import {
+  canMarkEvidence,
+  evidenceCounts,
+  hasAnnotatableEvidence,
+  isRejectable,
+} from '../Evidence/evidence';
 import { EvidenceList } from '../Evidence/EvidenceList';
 import type { EvidenceOverlayMap } from '../Evidence/overlay';
 import { openCheckRejectModal } from '../Review/CheckRejectModal';
 import type { CheckProposal } from '../Review/proposal';
 import { classifyProposalEdit } from '../Review/proposal';
 import ProposalCard from '../Review/ProposalCard';
-import { useAcceptanceBundle } from '../useAcceptanceBundle';
+import { useAcceptanceBundle, useEvidenceUrlRefresh } from '../useAcceptanceBundle';
+import { canCommentOnAcceptanceEvidence } from '../visibility';
 import {
   AcceptedNote,
   collectEvidenceById,
@@ -55,6 +62,7 @@ import {
 } from './CheckHistory';
 import { shouldCollapseAfterReview, userReviewState } from './checkState';
 import { STATE_META } from './checkStatus';
+import { hasCheckHistory, splitCheckReviews } from './readPresentation';
 import { checkRowDisclosure } from './rowDisclosure';
 import { styles } from './styles';
 import type { AcceptanceCheck, CheckReviewInput, ProposalDismissInput } from './types';
@@ -125,11 +133,8 @@ export const AcceptanceCheckRow = memo<{
     // The decision is stamped on the check's result row — a never-executed
     // check has no evidence to judge, so it exposes no review actions.
     const reviewable = canReview && Boolean(check.result);
-    const activeReview =
-      check.userReview && !check.userReview.stale
-        ? check.reviews.at(-1) // the standing verdict is always the newest entry
-        : undefined;
-    const historyReviews = check.reviews.filter((entry) => entry !== activeReview);
+    // The standing verdict is always the newest entry; consumed verdicts belong to history.
+    const { activeReview, historyReviews } = splitCheckReviews(check);
     const evidenceById = collectEvidenceById(check);
 
     // Regions the proposal wants drawn on the evidence images already in this
@@ -146,12 +151,13 @@ export const AcceptanceCheckRow = memo<{
       });
       return map.size > 0 ? map : undefined;
     }, [proposalOpen, check.prediction]);
-    const hasHistory = check.revisions > 1 || historyReviews.length > 0;
+    const hasHistory = hasCheckHistory(check, historyReviews);
 
     // Collaboration: threads circled on this check's evidence. Only inside the
     // viewer — the row also renders in hosts with no acceptance scope.
     const scope = useOptionalAcceptanceScope();
     const { data: bundle } = useAcceptanceBundle(scope?.acceptanceId ?? '');
+    const refreshEvidenceUrl = useEvidenceUrlRefresh(scope?.acceptanceId);
     const comments = useAcceptanceComments(scope?.acceptanceId);
     const authorColor = useAcceptanceAuthorColor();
     const viewerId = useUserStore(userProfileSelectors.userId);
@@ -226,7 +232,9 @@ export const AcceptanceCheckRow = memo<{
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [proposalOverlays, checkThreads, comments.canComment, canResolveThread, authorColor]);
     const canCommentEvidence =
-      comments.canComment && Boolean(check.result) && hasAnnotatableEvidence(check);
+      canCommentOnAcceptanceEvidence(bundle, comments.canComment) &&
+      Boolean(check.result) &&
+      hasAnnotatableEvidence(check);
     const openEvidenceComment = () =>
       openEvidenceCommentModal({
         evidence: check.evidence,
@@ -258,12 +266,16 @@ export const AcceptanceCheckRow = memo<{
         previousAnnotations:
           activeReview?.action === 'reject' ? activeReview.annotations : undefined,
         previousComment: activeReview?.action === 'reject' ? activeReview.comment : undefined,
+        refreshEvidenceUrl,
         checkDescription: check.planItem?.description,
         checkTitle: `C${check.seq} · ${title}`,
         draftKey: `${check.result?.id ?? 'unexecuted'}:${check.id}`,
-        evidence: check.evidence
-          .filter((item) => isAnnotatable(item))
-          .map((item) => ({ fileUrl: item.fileUrl!, id: item.id })),
+        evidence: check.evidence.filter(isRejectable).map((item) => ({
+          chapters: item.type === 'video' ? readEvidenceChapters(item.metadata) : undefined,
+          fileUrl: item.fileUrl!,
+          id: item.id,
+          type: item.type,
+        })),
         initialAnnotations: fromProposal?.annotations ?? undefined,
         initialComment: fromProposal?.comment ?? reviewComment,
         onConfirm: async ({ annotations, comment, fileIds }) => {
@@ -640,6 +652,8 @@ export const AcceptanceCheckRow = memo<{
             <EvidenceList
               evidence={check.evidence}
               overlays={commentOverlays}
+              reviewNotes={activeReview?.action === 'reject' ? activeReview.annotations : undefined}
+              onRefreshEvidenceUrl={refreshEvidenceUrl}
               onReviewEvidence={canReview ? (id) => openReject(undefined, id) : undefined}
             />
             {staleThreads.length > 0 && (
@@ -828,7 +842,7 @@ export const AcceptanceCheckRow = memo<{
               not a verdict. The rounds this check already went through then
               sit between that and the verdict buttons: context for the
               decision, never an appendix to one already made. */}
-            {detailMode && reviewable && !activeReview && hasAnnotatableEvidence(check) && (
+            {detailMode && reviewable && !activeReview && canMarkEvidence(check, desktop) && (
               <Button
                 outdent
                 icon={<Icon icon={Images} />}

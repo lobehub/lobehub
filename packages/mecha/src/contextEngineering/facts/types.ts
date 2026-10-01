@@ -98,6 +98,11 @@ export interface ContextFactRequest {
   executionTarget?: string;
   /** Which connector families this deployment offers. */
   features: { composio: boolean; lobehubSkill: boolean };
+  /**
+   * The run is a sub-agent (`origin.lineage.isSubAgent`). Nested agent
+   * dispatch is rejected there, so no fact may invite delegation.
+   */
+  isSubAgent?: boolean;
   /** Agents the user @-mentioned in the turn. */
   mentionedAgents?: RuntimeMentionedAgent[];
   /** Conversation as the engine will see it (history hints already applied). */

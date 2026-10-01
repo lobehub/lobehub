@@ -6,7 +6,6 @@ import {
   consumeOnboardingCallbackUrl,
   isSafeRedirectPath,
   peekOnboardingCallbackUrl,
-  POST_ONBOARDING_HOME_TASK_URL,
   resolvePostOnboardingTargetUrl,
   stashOnboardingCallbackUrl,
   toAbsoluteAuthCallbackUrl,
@@ -122,6 +121,13 @@ describe('stash/peek/consumeOnboardingCallbackUrl', () => {
 });
 
 describe('resolvePostOnboardingTargetUrl', () => {
+  it('should preserve an explicit task-mode callback', () => {
+    stashOnboardingCallbackUrl('?callbackUrl=%2F%3Fonboarding%3Dtask');
+
+    expect(resolvePostOnboardingTargetUrl()).toBe('/?onboarding=task');
+    expect(peekOnboardingCallbackUrl()).toBeUndefined();
+  });
+
   it('should use the stashed callbackUrl when one exists', () => {
     stashOnboardingCallbackUrl('?callbackUrl=%2Fagent%2Fabc%3Fmessage%3Dhi');
 
@@ -129,8 +135,8 @@ describe('resolvePostOnboardingTargetUrl', () => {
     expect(peekOnboardingCallbackUrl()).toBeUndefined();
   });
 
-  it('should mark the home entry for task mode when no callbackUrl exists', () => {
-    expect(resolvePostOnboardingTargetUrl()).toBe(POST_ONBOARDING_HOME_TASK_URL);
+  it('should return the default home without opting into task mode when no callbackUrl exists', () => {
+    expect(resolvePostOnboardingTargetUrl()).toBe('/');
   });
 });
 

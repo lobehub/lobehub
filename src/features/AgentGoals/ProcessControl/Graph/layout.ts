@@ -69,6 +69,8 @@ export interface LayoutBox {
 
 /** A synthetic edge standing in for a ranked chain that runs through hidden nodes. */
 export interface GraphBridge {
+  /** How many nodes left off the map the link stands in for, when the host knows. */
+  hops?: number;
   sourceNodeId: string;
   targetNodeId: string;
 }

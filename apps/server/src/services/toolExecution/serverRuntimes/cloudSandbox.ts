@@ -7,6 +7,7 @@ import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
 import {
+  isDirectLhInvocation,
   isLhCommand,
   preprocessLhCommand,
   SHARE_VISITOR_LH_BLOCKED_MESSAGE,
@@ -31,7 +32,7 @@ const SHELL_TOOL_NAMES = new Set(['execScript', 'runCommand']);
  *
  * `isShareVisitor` (set from `context.agentShareVisitor`, see the factory
  * below) disables the shim entirely: a share visitor's run executes under the
- * creator's identity, so the shim's `lh() { LOBEHUB_JWT=… }` prelude would
+ * creator's identity, so the shim's `LOBEHUB_JWT=…` `lh` wrapper would
  * otherwise hand a JWT scoped to the CREATOR's own account into a shell the
  * VISITOR fully controls. `lobe-cloud-sandbox` is allowlisted for share
  * visitors specifically because this shim is skipped for them — see
@@ -61,7 +62,7 @@ const withLhPreprocessing = (
     // silently falling through to `preprocessLhCommand` (which independently
     // refuses too — see its `shareVisitorBlocked` param — but this is the
     // primary, intended-to-be-load-bearing check).
-    if (resolve.isShareVisitor && isLhCommand(command)) {
+    if (resolve.isShareVisitor && isDirectLhInvocation(command)) {
       // Deliberately no command content: it is visitor/model-controlled and
       // may carry an inline token — same as the `preprocessLhCommand` refusal.
       log(

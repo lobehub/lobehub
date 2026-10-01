@@ -42,6 +42,8 @@ export interface IAgentStateManager {
   createOperationMetadata: (
     operationId: string,
     data: {
+      /** See {@link AgentOperationMetadata.acceptsMemberRuntimeEnd}. */
+      acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
       visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
@@ -184,6 +186,13 @@ export interface IStreamEventManager {
    * Close connections
    */
   disconnect: () => Promise<void>;
+
+  /**
+   * Wait for the gateway pushes this process issued for an operation to land.
+   * Only the gateway-backed manager has anything to drain; the invocation that
+   * produced the pushes calls it before it can be frozen or handed over.
+   */
+  drainPushes?: (operationId: string) => Promise<void>;
 
   /**
    * Get count of active operations

@@ -3,8 +3,7 @@
 import { type ErrorShape, type ImportFileUploadState } from '@lobechat/types';
 import { ImportStage } from '@lobechat/types';
 import { Center } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { Upload } from 'antd';
+import { Button, toast, Upload } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ImportIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -75,21 +74,19 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
 
   // Keeps the import modal in place on a bad file so the retry stays one click
   // away; the reason itself is transient and belongs to the toast.
-  const handleBeforeUpload = useCallback(
+  const handleFile = useCallback(
     async (file: File) => {
       const result = await parseConfigFile(file);
 
       if (!result.success) {
         setHasConfigError(true);
         toast.error({ description: result.error, title: t('importModal.error.invalidConfig') });
-        return false;
+        return;
       }
 
       setHasConfigError(false);
       setImportPgData(result.data);
       setShowImportModal(true);
-
-      return false;
     },
     [t],
   );
@@ -194,10 +191,9 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
           <Center gap={24} padding={40}>
             <Upload
               accept={'application/json'}
-              beforeUpload={handleBeforeUpload}
               className={cx(styles.wrapper)}
               maxCount={1}
-              showUploadList={false}
+              onFiles={([file]) => handleFile(file)}
             >
               <Button>{t('importModal.error.selectAnotherFile')}</Button>
             </Upload>
@@ -208,10 +204,9 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
       </DataStyleModal>
       <Upload
         accept={'application/json'}
-        beforeUpload={handleBeforeUpload}
         className={cx(styles.wrapper)}
         maxCount={1}
-        showUploadList={false}
+        onFiles={([file]) => handleFile(file)}
       >
         {/* a very hackable solution: add a pseudo before to have a large hot zone */}
         <div className={cx(styles.children)}>{children}</div>

@@ -100,15 +100,12 @@ interface LinkedGoalTrayProps {
 
 /**
  * The goals this conversation planned, floating above the composer with their
- * live status (behind the `enableTopicAcceptance` lab). The conversation is the
+ * live status (behind the `enableGoals` lab). The conversation is the
  * goal's planning conversation, so its progress belongs here — clicking a row
  * opens the whole goal in the Portal, beside the chat that shaped it.
- *
- * Not the topic checklist (`VerifyTray/GoalTray`): that is a sentence and
- * tracking checks stored on the topic; this points at real `goals` rows.
  */
 const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
-  const enabled = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const enabled = useUserStore(labPreferSelectors.enableGoals);
   const topicId = useConversationStore((s) => s.context.topicId);
   const displayMessages = useConversationStore(dataSelectors.displayMessages);
   const useFetchTopicGoals = useGoalStore((s) => s.useFetchTopicGoals);

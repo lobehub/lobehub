@@ -25,7 +25,7 @@ export const createRealtimeAsrSession = async (
 
   let response: Response;
   try {
-    response = await fetcher('/api/asr/realtime/session', {
+    response = await fetcher('/webapi/asr/realtime/session', {
       body: JSON.stringify({ platform: 'web' }),
       headers,
       method: 'POST',

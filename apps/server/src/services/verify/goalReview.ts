@@ -1,3 +1,4 @@
+import { isDraftVerifyRun } from '@lobechat/const/verify';
 import type { VerifyRunMetadata } from '@lobechat/types';
 
 import { GoalModel } from '@/database/models/goal';
@@ -8,7 +9,29 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AcceptanceService, buildAcceptanceCheckUnion } from './acceptanceService';
 import { mapWithConcurrency } from './concurrency';
 import { resolveGoalReviewModelConfig } from './goalReviewModelConfig';
-import { REVIEW_PREDICT_CONCURRENCY, VerifyReviewPredictorService } from './reviewPredictor';
+import {
+  GATE_REVIEW_MAX_VISUALS,
+  REVIEW_PREDICT_CONCURRENCY,
+  VerifyReviewPredictorService,
+} from './reviewPredictor';
+
+/**
+ * The startup failures this review can name back to a person. Everything else that
+ * can throw in here — the database, the acceptance and evidence reads, the model
+ * lookup — could carry SQL, identifiers or provider diagnostics, and the feedback
+ * string is persisted on the run and quoted into the escalation, so those stay in
+ * the server log only.
+ */
+const REVIEW_BLOCKERS = {
+  acceptanceMissing: 'Goal Acceptance was not found',
+  noAcceptance: 'Goal delivery has no Acceptance',
+  noRequiredChecks: 'Goal Acceptance has no required checks',
+} as const;
+
+const namedBlocker = (error: unknown): string | undefined => {
+  const message = error instanceof Error ? error.message : undefined;
+  return Object.values(REVIEW_BLOCKERS).find((blocker) => blocker === message);
+};
 
 /** Called under the verify run's task-drive claim, before completing a Goal task. */
 export const reviewGoalDelivery = async (
@@ -29,18 +52,38 @@ export const reviewGoalDelivery = async (
     status: 'passed',
   };
   try {
-    if (!run?.acceptanceId) throw new Error('Goal delivery has no Acceptance');
+    if (!run?.acceptanceId) throw new Error(REVIEW_BLOCKERS.noAcceptance);
     const service = new AcceptanceService(db, userId, workspaceId);
     const acceptance = await service.acceptanceModel.findById(run.acceptanceId);
-    if (!acceptance) throw new Error('Goal Acceptance was not found');
+    if (!acceptance) throw new Error(REVIEW_BLOCKERS.acceptanceMissing);
     const { results, runs } = await service.loadRounds(acceptance.id);
+    // An unconfirmed draft was never frozen, so its checks are not part of the
+    // contract being judged. It can sit behind an executed round — an abandoned
+    // draft, or one a CLI-driven verification was appended past — and its
+    // result-less items would otherwise each read as missing evidence and turn a
+    // passing delivery into a rejection.
+    const confirmed = runs.filter((round) => !isDraftVerifyRun(round));
+    // A result filed under an id its round never planned surfaces as a row of its
+    // own, required by default. No later round plans it, so the builder is never
+    // asked to re-answer it and it is never flagged as carried forward — its
+    // stale evidence was re-judged on every attempt until the budget ran out. The
+    // planned checklist is the contract, so each round keeps only the results that
+    // answer its own plan items, matched on the exact id: the union keys planned
+    // rows by `sourceCriterionId`, which an off-plan id could otherwise collide
+    // with. Only a plan-less Acceptance is judged on its results alone.
+    const hasPlan = confirmed.some((round) => (round.plan ?? []).length > 0);
     const checks = buildAcceptanceCheckUnion(
-      runs.map((round) => ({
-        results: results.filter((result) => result.verifyRunId === round.id),
-        run: round,
-      })),
+      confirmed.map((round) => {
+        const roundResults = results.filter((result) => result.verifyRunId === round.id);
+        if (!hasPlan) return { results: roundResults, run: round };
+        const planIds = new Set(((round.plan ?? []) as { id: string }[]).map((item) => item.id));
+        return {
+          results: roundResults.filter((result) => planIds.has(result.checkItemId)),
+          run: round,
+        };
+      }),
     ).filter((check) => check.required);
-    if (!checks.length) throw new Error('Goal Acceptance has no required checks');
+    if (!checks.length) throw new Error(REVIEW_BLOCKERS.noRequiredChecks);
 
     const evidenceModel = new VerifyEvidenceModel(db, userId, workspaceId);
     const evidence = await Promise.all(
@@ -104,6 +147,9 @@ export const reviewGoalDelivery = async (
             checkResultId,
             includeTextEvidence: true,
             instructionDocumentId: check.planItem?.documentId,
+            // This review gates the Task, so it must see the frames the check
+            // carries rather than the shadow lane's cost-capped sample.
+            maxVisuals: GATE_REVIEW_MAX_VISUALS,
             modelConfig,
             requirement: acceptance.requirement,
             surface: check.surface,
@@ -136,8 +182,14 @@ export const reviewGoalDelivery = async (
   } catch (error) {
     console.error('[goal-review] Acceptance review failed:', error);
     review.status = 'errored';
-    review.feedback =
-      'Automatic Acceptance review could not complete. Configure an available model on the Acceptance verifier agent and retry the review before advancing.';
+    // The reason has to travel: this string is what the escalation quotes back to
+    // the person who has to unblock the Goal. A single canned sentence sent every
+    // failure — a missing Acceptance link included — to look like an unconfigured
+    // review model, which is a different problem with a different fix.
+    const blocker = namedBlocker(error);
+    review.feedback = blocker
+      ? `Automatic Acceptance review could not complete: ${blocker}. Resolve the cause and retry the review before advancing.`
+      : 'Automatic Acceptance review could not complete (internal error); the server log holds the reason. Retry the review before advancing.';
   }
   if (run) {
     // Preserve the task-drive claim and the run's existing policy/provenance.

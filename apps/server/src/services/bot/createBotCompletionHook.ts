@@ -1,6 +1,6 @@
 import type { ChatTopicBotContext } from '@lobechat/types';
 
-import type { AgentHookWebhook } from '@/server/services/agentRuntime/hooks/types';
+import type { NotificationWebhook } from '@/server/services/agentRuntime/hooks/types';
 
 const BOT_CALLBACK_URL = '/api/agent/webhooks/bot-callback';
 
@@ -16,7 +16,7 @@ export const createBotCompletionWebhook = ({
   body,
   userId,
   workspaceId,
-}: CreateBotCompletionHookParams): AgentHookWebhook => ({
+}: CreateBotCompletionHookParams): NotificationWebhook => ({
   body: {
     applicationId: botContext.applicationId,
     messengerInstallationKey: botContext.messengerInstallationKey,

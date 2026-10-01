@@ -2,7 +2,7 @@ import { MESSENGER_PUSH_CONTENT_MAX_LENGTH } from '@lobechat/builtin-tool-messag
 import { fetchQrCode, pollQrStatus } from '@lobechat/chat-adapter-wechat';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -32,6 +32,7 @@ import { RbacModel } from '@/database/models/rbac';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { agents, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
@@ -212,7 +213,7 @@ const resolveAuthorizedAgentScope = async (
   const [agentRow] = await serverDB
     .select({ title: agents.title, userId: agents.userId, workspaceId: agents.workspaceId })
     .from(agents)
-    .where(eq(agents.id, agentId))
+    .where(and(eq(agents.id, agentId), notTrashed(agents.isDeleted)))
     .limit(1);
   if (!agentRow) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'messenger.error.agentNotFound' });

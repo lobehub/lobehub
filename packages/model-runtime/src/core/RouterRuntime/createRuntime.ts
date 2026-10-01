@@ -29,7 +29,7 @@ import type {
   CreateImageResponse,
   CreateVideoMethodOptions,
   CreateVideoPayload,
-  CreateVideoResponse,
+  CreateVideoResult,
   EmbeddingsOptions,
   EmbeddingsPayload,
   GenerateObjectOptions,
@@ -38,6 +38,7 @@ import type {
   HandleCreateVideoWebhookResult,
   ILobeAgentRuntimeErrorType,
   TextToSpeechPayload,
+  VideoPollingRoute,
 } from '../../types';
 import { AgentRuntimeError } from '../../utils/createError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
@@ -45,6 +46,7 @@ import { postProcessModelList } from '../../utils/postProcessModelList';
 import { isImageDecodingRequestError, shouldStopFallbackForError } from '../../utils/routeFallback';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { setRuntimeSignatureScopeSource } from '../../utils/signatureScope';
+import { createVideoWithCompletionMode } from '../../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from '../BaseAI';
 import type {
   CreateImageOptions,
@@ -56,6 +58,7 @@ import { getChatAttemptObservation, observeChatAttempt } from './chatAttempt';
 import type { ChatStreamFallbackAttempt } from './chatStreamFallback';
 import { createChatStreamFallbackResponse } from './chatStreamFallback';
 import type { RouteAttemptFinished, RouteAttemptResult, RouteAttemptStart } from './routeAttempt';
+import { createRouteRequestTasks } from './routeRequestTasks';
 
 export type { RouteAttemptResult } from './routeAttempt';
 
@@ -128,12 +131,14 @@ interface RouteAttemptContext {
   allowedApiTypes?: ReadonlySet<ApiType>;
   metadata?: Record<string, unknown>;
   method: RouterRuntimeMethod;
+  /** Skip routing and fallback: only the route's router/channel may serve the request. */
+  pinnedRoute?: VideoPollingRoute;
   pricingContext?: ModelPricingContext;
   toolsCount?: number;
   user?: string;
 }
 
-const RAW_AUDIO_API_TYPES = new Set<ApiType>(['google', 'openai', 'vertexai']);
+const RAW_AUDIO_API_TYPES = new Set<ApiType>(['google', 'openai', 'vertexai', 'xiaomimimo']);
 
 const hasRawAudioInput = (payload: ChatStreamPayload) =>
   payload.messages.some(
@@ -163,7 +168,9 @@ export interface RouteSuccessParams {
   firstChannelId?: string;
   method: RouterRuntimeMethod;
   model: string;
+  routeRequestManaged?: boolean;
   routerId?: string;
+  trackDeferredWork?: (task: Promise<void>) => void;
   userId?: string;
   weighted: boolean;
 }
@@ -210,7 +217,7 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
   createVideo?: (
     payload: CreateVideoPayload,
     options: CreateVideoOptions,
-  ) => Promise<CreateVideoResponse>;
+  ) => Promise<CreateVideoResult>;
   customClient?: CustomClientOptions<T>;
   debug?: {
     chatCompletion: () => boolean;
@@ -242,6 +249,8 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
     ) => ChatStreamPayload;
   };
   routers: Routers;
+  /** Register once while the request context is available. */
+  scheduleRouteRequestSettled?: (settled: Promise<void>) => void | Promise<void>;
   shouldFallbackChatAttempt?: (result: RouteAttemptFinished) => boolean | Promise<boolean>;
   shouldStopFallback?: (params: {
     error: unknown;
@@ -269,6 +278,7 @@ export const createRouterRuntime = ({
 }: CreateRouterRuntimeOptions) => {
   return class UniformRuntime implements LobeRuntimeAI {
     public _options: LobeClientOptions & Record<string, any>;
+    orchestratesVideoGenerationCompletion = true;
     private _routers: Routers;
     private _params: any;
     private _id: string;
@@ -657,14 +667,22 @@ export const createRouterRuntime = ({
       }
       const firstChannelId = routerOptions[0]?.id;
       const weighted = routerOptions.some((option) => option.weight !== undefined);
+      const routeTasks = params.scheduleRouteRequestSettled
+        ? await createRouteRequestTasks(params.scheduleRouteRequestSettled)
+        : undefined;
 
       const reportReturnedAttempt = (
         attempt: RouteAttemptStart,
         result: Partial<RouteAttemptResult> & Pick<RouteAttemptResult, 'durationMs' | 'success'>,
       ) => {
-        params.onRouteAttempt?.({ ...attempt, ...result } as RouteAttemptResult).catch((error) => {
+        if (!params.onRouteAttempt) return;
+        try {
+          const task = params.onRouteAttempt({ ...attempt, ...result } as RouteAttemptResult);
+          if (routeTasks) routeTasks.track(task);
+          else task.catch((error) => log('onRouteAttempt callback error: %O', error));
+        } catch (error) {
           log('onRouteAttempt callback error: %O', error);
-        });
+        }
       };
 
       const shouldContinueAfterRequestError = async (error: unknown, optionIndex: number) => {
@@ -712,6 +730,7 @@ export const createRouterRuntime = ({
           providerId: id,
           remark,
           requestId,
+          routeRequestManaged: Boolean(routeTasks),
           routerId: matchedRouter.id,
           startedAt: Date.now(),
           userId: routeAttemptUserId,
@@ -723,7 +742,11 @@ export const createRouterRuntime = ({
             options,
             attempt,
             payload.stream !== false,
-            params.onRouteAttemptFinished!,
+            (result) => {
+              const task = params.onRouteAttemptFinished!(result);
+              if (routeTasks) routeTasks.track(Promise.resolve(task));
+              else return task;
+            },
             { deferCallbacks: true },
           );
           const durationMs = Date.now() - attempt.startedAt;
@@ -754,16 +777,25 @@ export const createRouterRuntime = ({
               if (!params.onRouteSuccess) return;
 
               try {
-                await params.onRouteSuccess({
-                  channelId,
-                  channelWeight: optionItem.weight,
-                  firstChannelId,
-                  method: routeContext.method,
-                  model: payload.model,
-                  routerId: matchedRouter.id,
-                  userId: routeAttemptUserId,
-                  weighted,
+                /** Report failures here so the request tracker only waits for the handled task. */
+                const task = Promise.resolve(
+                  params.onRouteSuccess({
+                    channelId,
+                    channelWeight: optionItem.weight,
+                    firstChannelId,
+                    method: routeContext.method,
+                    model: payload.model,
+                    routerId: matchedRouter.id,
+                    routeRequestManaged: Boolean(routeTasks),
+                    trackDeferredWork: routeTasks?.track,
+                    userId: routeAttemptUserId,
+                    weighted,
+                  }),
+                ).catch((error) => {
+                  console.error('[RouterRuntime] onRouteSuccess callback failed:', error);
                 });
+                routeTasks?.track(task);
+                await task;
               } catch (error) {
                 // Affinity storage must not turn a successful upstream response into a fallback.
                 console.error('[RouterRuntime] onRouteSuccess callback failed:', error);
@@ -798,18 +830,24 @@ export const createRouterRuntime = ({
         }
       };
 
-      return createChatStreamFallbackResponse({
-        shouldFallback: async (result) => {
-          try {
-            return Boolean(await params.shouldFallbackChatAttempt?.(result));
-          } catch (error) {
-            log('shouldFallbackChatAttempt callback error: %O', error);
-            return false;
-          }
-        },
-        startAttempt,
-        totalAttempts: routerOptions.length,
-      });
+      try {
+        return await createChatStreamFallbackResponse({
+          onSettled: routeTasks?.settle,
+          shouldFallback: async (result) => {
+            try {
+              return Boolean(await params.shouldFallbackChatAttempt?.(result));
+            } catch (error) {
+              log('shouldFallbackChatAttempt callback error: %O', error);
+              return false;
+            }
+          },
+          startAttempt,
+          totalAttempts: routerOptions.length,
+        });
+      } catch (error) {
+        routeTasks?.settle();
+        throw error;
+      }
     }
 
     private async runWithFallback<T>(
@@ -819,8 +857,11 @@ export const createRouterRuntime = ({
     ): Promise<T> {
       const totalStartedAt = Date.now();
       const requestId = nanoid();
-      const { allowedApiTypes, metadata, pricingContext, toolsCount, user } = routeContext;
-      const matchedRouter = await this.resolveMatchedRouter(model, pricingContext);
+      const { allowedApiTypes, metadata, pinnedRoute, pricingContext, toolsCount, user } =
+        routeContext;
+      const pinned = await this.resolvePinnedRoute(model, pinnedRoute);
+      const matchedRouter =
+        pinned?.router ?? (await this.resolveMatchedRouter(model, pricingContext));
       const eligibleRouterOptions = this.normalizeRouterOptions(matchedRouter).filter(
         (option) =>
           !allowedApiTypes || allowedApiTypes.has(option.apiType ?? matchedRouter.apiType),
@@ -828,12 +869,14 @@ export const createRouterRuntime = ({
       if (eligibleRouterOptions.length === 0) {
         throw new TypeError(`No provider route supports raw audio input for model ${model}`);
       }
-      const routerOptions = await this.applySortRouterOptions(
-        matchedRouter,
-        model,
-        eligibleRouterOptions,
-        routeContext,
-      );
+      const routerOptions = pinned
+        ? [pinned.option]
+        : await this.applySortRouterOptions(
+            matchedRouter,
+            model,
+            eligibleRouterOptions,
+            routeContext,
+          );
       const totalOptions = routerOptions.length;
       const firstChannelId = routerOptions[0]?.id;
       const weighted = routerOptions.some((option) => option.weight !== undefined);
@@ -1204,23 +1247,78 @@ export const createRouterRuntime = ({
     async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {
       return this.runWithFallback(
         payload.model,
-        (runtime) => runtime.createVideo!(payload, options),
+        (runtime) => createVideoWithCompletionMode(runtime, payload, options),
         {
           metadata: options?.metadata,
           method: 'createVideo',
+          pinnedRoute: options?.route,
           pricingContext: options?.pricingContext,
         },
       );
     }
 
-    async handlePollVideoStatus(inferenceId: string) {
-      const resolvedRouters = await this.resolveRouters();
-      const matchedRouter = this._options.baseURL
-        ? (resolvedRouters.find((router) => router.baseURLPattern?.test(this._options.baseURL!)) ??
-          resolvedRouters.at(-1)!)
-        : resolvedRouters.at(-1)!;
-      const routerOptions = this.normalizeRouterOptions(matchedRouter);
-      const { runtime } = await this.createRuntimeFromOption(matchedRouter, routerOptions[0]);
+    /**
+     * Resolve the exact router/channel that created a video instead of re-running normal
+     * routing: stateful providers such as Gemini Omni scope the interaction to the creating
+     * API key, so another channel's key can neither read nor continue it. Fail loudly when
+     * that route disappears rather than silently switching keys.
+     */
+    private async resolvePinnedRoute(model: string | undefined, route?: VideoPollingRoute) {
+      if (!route?.routerId && !route?.channelId) return;
+
+      const resolvedRouters = await this.resolveRouters({ model });
+      const router = route.routerId
+        ? resolvedRouters.find((item) => item.id === route.routerId)
+        : resolvedRouters.find((item) =>
+            this.normalizeRouterOptions(item).some((option) => option.id === route.channelId),
+          );
+
+      if (!router) {
+        throw new Error('The video generation route is no longer available');
+      }
+
+      const routerOptions = this.normalizeRouterOptions(router);
+      const option = route.channelId
+        ? routerOptions.find((item) => item.id === route.channelId)
+        : routerOptions[0];
+
+      if (!option) {
+        throw new Error('The video generation channel is no longer available');
+      }
+
+      return { option, router };
+    }
+
+    async handlePollVideoStatus(inferenceId: string, model?: string, route?: VideoPollingRoute) {
+      const pinned = await this.resolvePinnedRoute(model, route);
+      let matchedRouter = pinned?.router;
+
+      if (!matchedRouter && model) {
+        matchedRouter = await this.resolveMatchedRouter(model);
+      }
+
+      if (!matchedRouter) {
+        const resolvedRouters = await this.resolveRouters({ model });
+        const { baseURL } = this._options;
+        matchedRouter =
+          (baseURL
+            ? resolvedRouters.find((router) => router.baseURLPattern?.test(baseURL))
+            : undefined) ?? resolvedRouters.at(-1)!;
+      }
+
+      const selectedOption = pinned?.option ?? this.normalizeRouterOptions(matchedRouter)[0];
+      if (!selectedOption) {
+        throw new Error('The video generation channel is no longer available');
+      }
+
+      const { id: apiType, runtime } = await this.createRuntimeFromOption(
+        matchedRouter,
+        selectedOption,
+      );
+
+      if (route?.apiType && apiType !== route.apiType) {
+        throw new Error('The video generation provider route has changed');
+      }
 
       if (!runtime.handlePollVideoStatus) {
         throw new Error('Video polling is not supported by the matched runtime');
@@ -1230,7 +1328,7 @@ export const createRouterRuntime = ({
     }
 
     async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
-      const model = (payload.body as any)?.model;
+      const model = payload.model ?? (payload.body as { model?: string } | undefined)?.model;
       const resolvedRouters = await this.resolveRouters({ model });
       const routerOptions = this.normalizeRouterOptions(resolvedRouters[0]);
       const { runtime } = await this.createRuntimeFromOption(resolvedRouters[0], routerOptions[0]);
@@ -1281,7 +1379,7 @@ export const createRouterRuntime = ({
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.transcribe!(payload, options),
-        { method: 'transcribe', user: options?.user },
+        { metadata: options?.metadata, method: 'transcribe', user: options?.user },
       );
     }
   };

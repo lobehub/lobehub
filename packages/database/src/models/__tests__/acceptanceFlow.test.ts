@@ -1,12 +1,20 @@
 // @vitest-environment node
 import { randomUUID } from 'node:crypto';
 
-import type { AcceptanceFlowDefinition } from '@lobechat/types';
+import { FULL_FRAME_RECT } from '@lobechat/const/verify';
+import type { AcceptanceFlowDefinition, AcceptanceReviewAnnotation } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { acceptances, users, verifyCheckResults, verifyCriteria, verifyRuns } from '../../schemas';
+import {
+  acceptances,
+  users,
+  verifyCheckResults,
+  verifyCriteria,
+  verifyEvidence,
+  verifyRuns,
+} from '../../schemas';
 import { AcceptanceFlowModel, validateFlow } from '../acceptanceFlow';
 
 const db = await getTestDB();
@@ -384,6 +392,44 @@ describe('check assets and round snapshots', () => {
         .from(verifyCheckResults)
         .where(eq(verifyCheckResults.verifyRunId, fresh.id)),
     ).toHaveLength(0);
+  });
+
+  it('accepts video annotations only when they name a frame, and screenshot ones only without', async () => {
+    const { flowId } = await model.publish(acceptanceId, definition);
+    const run = await model.start(acceptanceId, flowId);
+    const plan = (await roundPlan(run.id)).plan!;
+    const result = await model.record(acceptanceId, {
+      checkItemId: plan[0].id,
+      observation: 'Skeleton flashed',
+      verdict: 'passed',
+      verifyRunId: run.id,
+    });
+    const [video, screenshot] = await db
+      .insert(verifyEvidence)
+      .values([
+        { checkResultId: result.id, content: 'clip', type: 'video', userId: owner },
+        { checkResultId: result.id, content: 'shot', type: 'screenshot', userId: owner },
+      ])
+      .returning();
+    const rect = { height: 0.2, width: 0.5, x: 0.1, y: 0.1 };
+    const reject = (annotations: AcceptanceReviewAnnotation[]) =>
+      model.review(acceptanceId, result.id, 'rejected', 'Flashes', owner, { annotations });
+
+    await expect(reject([{ evidenceId: video.id, rect }])).rejects.toThrow('video frame');
+    await expect(reject([{ evidenceId: screenshot.id, rect, time: { start: 1 } }])).rejects.toThrow(
+      'video frame',
+    );
+
+    const updated = await reject([
+      { comment: 'skeleton here', evidenceId: video.id, rect, time: { start: 7.2 } },
+      { evidenceId: video.id, rect: FULL_FRAME_RECT, time: { end: 7.6, start: 6.8 } },
+      { evidenceId: screenshot.id, rect },
+    ]);
+    expect(updated.userDecisionDetail?.annotations?.map((a) => a.time)).toEqual([
+      { start: 7.2 },
+      { end: 7.6, start: 6.8 },
+      undefined,
+    ]);
   });
 
   it('keeps old definitions unchanged after asset edits and allows replay of the frozen round', async () => {

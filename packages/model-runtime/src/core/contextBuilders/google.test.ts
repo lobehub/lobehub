@@ -507,6 +507,31 @@ describe('google contextBuilders', () => {
       });
     });
 
+    it('should send audio MIME when an inlined audio URL is sniffed as a video container', async () => {
+      const audioUrl = 'https://example.com/voice-message.m4a';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(false);
+      vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
+        base64: 'm4aBase64Data',
+        mimeType: 'video/mp4',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: audioUrl },
+        type: 'audio_url',
+      };
+
+      await expect(buildGooglePart(content, { model: 'gemini-3.5-flash-lite' })).resolves.toEqual({
+        inlineData: { data: 'm4aBase64Data', mimeType: 'audio/mp4' },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
     it('should return undefined for unsupported SVG image (base64)', async () => {
       const svgBase64 =
         'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==';

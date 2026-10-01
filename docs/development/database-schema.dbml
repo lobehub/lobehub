@@ -14,6 +14,8 @@ table acceptance_comments {
   content text [not null]
   editor_data jsonb
   attachments jsonb
+  source jsonb
+  metadata jsonb
   client_id text [not null]
   resolved_at "timestamp with time zone"
   resolved_by_user_id text
@@ -1510,6 +1512,7 @@ table expertise_hits {
   evidence_id uuid
   operation_id text
   source_check_result_id uuid
+  source_message_id text
   user_decision text
   user_decision_at "timestamp with time zone"
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -1521,6 +1524,7 @@ table expertise_hits {
     run_id [name: 'expertise_hits_run_idx']
     (domain_id, outcome) [name: 'expertise_hits_domain_outcome_idx']
     operation_id [name: 'expertise_hits_operation_idx']
+    source_message_id [name: 'expertise_hits_source_message_idx']
   }
 }
 
@@ -1590,6 +1594,8 @@ table expertise_lessons {
   rejected_reason text
   salvaged_from_id uuid
   retired_at "timestamp with time zone"
+  sort_order integer
+  enforcement text
   compilability text [not null, default: 'compilable']
   backtest jsonb
   compiled_criterion_id uuid
@@ -4414,14 +4420,15 @@ table works {
   user_id text [not null]
   workspace_id text
   visibility text [not null]
+  metadata jsonb
   deleted_at "timestamp with time zone"
   is_deleted boolean
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (resource_type, resource_id, user_id) [name: 'works_resource_user_unique', unique]
-    (workspace_id, resource_type, resource_id) [name: 'works_resource_workspace_unique', unique]
+    (resource_type, resource_id, user_id) [name: 'works_resource_user_scope_unique', unique]
+    (workspace_id, resource_type, resource_id) [name: 'works_resource_workspace_scope_unique', unique]
     user_id [name: 'works_user_id_idx']
     workspace_id [name: 'works_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'works_workspace_visibility_idx']

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as RefreshModule from '../auth/refresh';
+
 const mockCreateTRPCClient = vi.hoisted(() => vi.fn(() => ({ marker: 'client' })));
 const mockHttpLink = vi.hoisted(() => vi.fn((opts: unknown) => opts));
 
@@ -8,7 +10,8 @@ vi.mock('@trpc/client', () => ({
   httpLink: mockHttpLink,
 }));
 
-vi.mock('../auth/refresh', () => ({
+vi.mock('../auth/refresh', async (importOriginal) => ({
+  ...(await importOriginal<typeof RefreshModule>()),
   getValidToken: vi.fn(),
 }));
 
@@ -54,6 +57,29 @@ describe('api/client workspace scoping', () => {
 
     process.env.LOBEHUB_JWT = 'renewed-jwt';
     expect(headersOfLastLink()).toMatchObject({ 'Oidc-Auth': 'renewed-jwt' });
+  });
+
+  it('creates an anonymous Lambda client without resolving credentials or workspace headers', async () => {
+    delete process.env.LOBEHUB_JWT;
+    process.env.LOBEHUB_WORKSPACE_ID = 'workspace-1';
+    const { getValidToken } = await import('../auth/refresh');
+    const { createPublicLambdaClient } = await import('./client');
+
+    createPublicLambdaClient();
+
+    expect(getValidToken).not.toHaveBeenCalled();
+    expect(mockHttpLink).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'https://app.lobehub.com/trpc/lambda' }),
+    );
+    expect(headersOfLastLink()).toBeUndefined();
+  });
+
+  it('does not attach an environment credential to public downloads', async () => {
+    const { createPublicLambdaClient } = await import('./client');
+
+    createPublicLambdaClient();
+
+    expect(headersOfLastLink()).toBeUndefined();
   });
 
   // The tools router is workspace aware like lambda; without the header every

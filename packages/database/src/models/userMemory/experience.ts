@@ -8,6 +8,7 @@ import { userMemories, userMemoriesExperiences } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
+import { buildUserMemoryWhere } from './where';
 
 export class UserMemoryExperienceModel {
   private userId: string;
@@ -24,8 +25,8 @@ export class UserMemoryExperienceModel {
     this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
-  private memoryWhere(table: { userId: any }) {
-    return eq(table.userId, this.userId);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
   create = async (params: Omit<NewUserMemoryExperience, 'userId'>) => {

@@ -208,7 +208,7 @@ describe('useMediaUploadAbility', () => {
     expect(result.current.canUploadVideo).toBe(true);
   });
 
-  it('should reject image uploads for Kimi Code agents', () => {
+  it('should bypass the media gate for Kimi Code agents', () => {
     mockedUseAgentStore.mockImplementation((selector: any) =>
       selector({ enableMode: false, heterogeneous: true, heterogeneousType: 'kimi-code' } as any),
     );
@@ -216,7 +216,7 @@ describe('useMediaUploadAbility', () => {
     const { result } = renderHook(() => useMediaUploadAbility('model', 'provider', 'agent-1'));
 
     expect(result.current.canUploadAudio).toBe(true);
-    expect(result.current.canUploadImage).toBe(false);
+    expect(result.current.canUploadImage).toBe(true);
     expect(result.current.canUploadVideo).toBe(true);
   });
 

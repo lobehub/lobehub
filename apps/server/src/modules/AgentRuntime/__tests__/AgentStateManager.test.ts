@@ -53,6 +53,24 @@ describe('AgentStateManager', () => {
 
       await expect(stateManager.createOperationMetadata(operationId, data)).resolves.not.toThrow();
     });
+
+    it('round-trips the client member_runtime_end declaration', async () => {
+      await stateManager.createOperationMetadata('op-supervisor', {
+        acceptsMemberRuntimeEnd: true,
+        userId: 'user-123',
+      });
+      const stored = redisMock.hmset.mock.calls.at(-1)?.[1] as Record<string, string>;
+      expect(stored.acceptsMemberRuntimeEnd).toBe('true');
+
+      redisMock.hgetall.mockResolvedValueOnce(stored);
+      const meta = await stateManager.getOperationMetadata('op-supervisor');
+      expect(meta?.acceptsMemberRuntimeEnd).toBe(true);
+
+      redisMock.hgetall.mockResolvedValueOnce({ ...stored, acceptsMemberRuntimeEnd: undefined });
+      expect((await stateManager.getOperationMetadata('op-old'))?.acceptsMemberRuntimeEnd).toBe(
+        undefined,
+      );
+    });
   });
 
   describe('saveAgentState', () => {

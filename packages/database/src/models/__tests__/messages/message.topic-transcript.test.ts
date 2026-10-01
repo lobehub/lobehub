@@ -163,10 +163,7 @@ describe('MessageModel.queryTopicTranscript', () => {
         offset: 0,
         topicId,
       }),
-    ).resolves.toEqual({
-      items: [expect.objectContaining({ id: 'topic-transcript-other-owner-message' })],
-      total: 1,
-    });
+    ).resolves.toEqual({ items: [], total: 0 });
   });
 
   it('isolates personal and workspace transcripts for the same user', async () => {

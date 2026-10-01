@@ -6,6 +6,7 @@ import type {
   GoalTickOutcome,
 } from '@lobechat/agent-tracing';
 import {
+  ABANDONED_OPERATION_ERROR_PREFIX,
   GOAL_ACCEPTANCE_TASK_TITLE,
   LEASE_EXPIRED_ERROR,
   VERIFICATION_ERRORED_ERROR,
@@ -19,12 +20,33 @@ import type {
 } from '@lobechat/types';
 import { toMetricScale } from '@lobechat/types';
 
+import { isGoalReportNode } from './report';
+
 export { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 
 /** Reason strings the recovery paths key off, written by the settle path. */
 export { LEASE_EXPIRED_ERROR, VERIFICATION_ERRORED_ERROR, VERIFICATION_FAILED_ERROR };
 
 export const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
+
+/**
+ * A Task node the coordinator decides on. The wrap-up report node is a Task too,
+ * but it runs after the Goal-level acceptance has ended and never takes part in
+ * the Goal's status: its failure or timeout must not open a gate, occupy a slot
+ * or keep a Goal from being judged.
+ */
+export const isCoordinatedTask = (
+  graph: Pick<GoalGraphSnapshot, 'goal'>,
+  node: Pick<GoalGraphNode, 'id' | 'kind'>,
+) => node.kind === 'task' && !isGoalReportNode(graph, node);
+
+/**
+ * Whether a paused Task lost its run rather than failed it: the coordinator
+ * reclaimed an expired lease, or the gateway watchdog abandoned a silent run.
+ * Either way nothing judged the work, so another attempt is the recovery.
+ */
+export const isLostRunError = (error?: string | null): boolean =>
+  error === LEASE_EXPIRED_ERROR || !!error?.startsWith(ABANDONED_OPERATION_ERROR_PREFIX);
 
 export interface FrontierSelection {
   /** Every eligible task node, best first — the trace-shaped view. */
@@ -48,7 +70,7 @@ export const selectFrontier = (graph: GoalGraphSnapshot): FrontierSelection => {
   );
 
   const eligible = graph.nodes
-    .filter((node) => node.kind === 'task' && !TERMINAL_NODE_STATUSES.has(node.status))
+    .filter((node) => isCoordinatedTask(graph, node) && !TERMINAL_NODE_STATUSES.has(node.status))
     .map((node) => ({
       blockedBy: graph.edges
         .filter(
@@ -94,7 +116,7 @@ export const needsBudget = (task?: TaskItem | null): boolean => {
   // A failure the coordinator can retry spends money too.
   if (task.status === 'paused') {
     return (
-      task.error === LEASE_EXPIRED_ERROR ||
+      isLostRunError(task.error) ||
       task.error === VERIFICATION_FAILED_ERROR ||
       task.error === VERIFICATION_ERRORED_ERROR
     );
@@ -127,6 +149,13 @@ export const frontierNeedsBudget = (
  * historical parks back cannot drift from the wording that wrote them.
  */
 export const MEASURED_ACCEPTANCE_PAUSE_REASON = 'Measured acceptance not met';
+
+/**
+ * Reason recorded when the coordinator parks a goal because nothing on the
+ * frontier can run. Shared so a graph edit that removes the blocker (node
+ * retirement) can recognise this park and lift it.
+ */
+export const NO_FRONTIER_PAUSE_REASON = 'no eligible task to advance';
 
 /** Evaluate one numeric clause. Kept beside the gate that consumes it. */
 export const compareMetric = (
@@ -166,7 +195,7 @@ export const compareMetric = (
  */
 export const needsMetricCriteria = (graph: GoalGraphSnapshot): boolean => {
   if (!graph.goal.config?.acceptance?.metrics?.length) return false;
-  const taskNodes = graph.nodes.filter((node) => node.kind === 'task');
+  const taskNodes = graph.nodes.filter((node) => isCoordinatedTask(graph, node));
   return taskNodes.length > 0 && taskNodes.every((node) => TERMINAL_NODE_STATUSES.has(node.status));
 };
 
@@ -275,7 +304,7 @@ export const decideNextMove = ({
   // re-picked every tick, and reported `waiting_external`, which ends the
   // advance before anything behind it is even considered.
   const inFlight = graph.nodes.filter(
-    (node) => node.kind === 'task' && isInFlight(tasksById.get(node.taskId ?? '')),
+    (node) => isCoordinatedTask(graph, node) && isInFlight(tasksById.get(node.taskId ?? '')),
   ).length;
 
   let parked = false;
@@ -388,7 +417,7 @@ const decideWithoutFrontier = (
   metricCriteria?: GoalMetricCriteriaState,
 ): GoalMove => {
   const base = { candidates };
-  const taskNodes = graph.nodes.filter((node) => node.kind === 'task');
+  const taskNodes = graph.nodes.filter((node) => isCoordinatedTask(graph, node));
 
   // A goal with no tasks at all has not been planned yet — decompose it into
   // explorable directions before anything runs, instead of parking it.
@@ -516,7 +545,7 @@ const decideForTask = (
     if (
       budget?.deadlinePassed &&
       task.status === 'paused' &&
-      (task.error === LEASE_EXPIRED_ERROR ||
+      (isLostRunError(task.error) ||
         task.error === VERIFICATION_FAILED_ERROR ||
         task.error === VERIFICATION_ERRORED_ERROR)
     ) {
@@ -527,7 +556,7 @@ const decideForTask = (
         outcome: 'no_progress',
       };
     }
-    if (task.status === 'paused' && task.error === LEASE_EXPIRED_ERROR) {
+    if (task.status === 'paused' && isLostRunError(task.error)) {
       if (!capacity) return 'needs-capacity';
       return {
         ...base,

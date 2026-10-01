@@ -8,6 +8,7 @@ import {
   RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
   UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
 } from '@lobechat/const';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { TRPCError } from '@trpc/server';
 import isEqual from 'fast-deep-equal';
 import pMap from 'p-map';
@@ -269,10 +270,15 @@ export const fileRouter = router({
       //   2. Otherwise an explicit caller value wins.
       //   3. Otherwise inherit the parent document's visibility so a file
       //      uploaded inside a private folder stays private.
-      //   4. Otherwise default top-level uploads to 'private' so new content
+      //   4. Agent-document uploads default to 'public' to match their document's
+      //      access contract; their source keeps them out of resource listings.
+      //   5. Otherwise default top-level uploads to 'private' so new content
       //      starts in the creator's private space (mirrors the Pages spec).
       const resolvedVisibility: 'private' | 'public' | undefined = ctx.workspaceId
-        ? (knowledgeBaseVisibility ?? input.visibility ?? parentVisibility ?? 'private')
+        ? (knowledgeBaseVisibility ??
+          input.visibility ??
+          parentVisibility ??
+          (input.source === FileSource.AgentDocument ? 'public' : 'private'))
         : undefined;
 
       if (latestUpload?.status === 'settled') {
@@ -917,7 +923,8 @@ export const fileRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.fileModel.findById(input.id);
-      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+      // Import failure cleanup can run on both server and client; retries are harmless.
+      if (!existing) return;
       await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
       const file = await ctx.fileModel.deleteUnreferenced(input.id, {
@@ -1009,7 +1016,21 @@ export const fileRouter = router({
       }
 
       if (Object.keys(updates).length > 0) {
-        await ctx.fileModel.update(id, updates);
+        const wsId = ctx.workspaceId ?? undefined;
+        await ctx.serverDB.transaction(async (tx) => {
+          const trx = tx as unknown as LobeChatDatabase;
+          // The knowledge-base tree reads `documents.parent_id`, so the file's
+          // backing document row(s) must move (and rename) together with it.
+          // Documents are written before the file, matching updateDocument's
+          // lock order so concurrent moves cannot deadlock.
+          if (updates.parentId !== undefined || updates.name !== undefined) {
+            await new DocumentModel(trx, ctx.userId, wsId).syncFromFile(id, {
+              name: updates.name,
+              parentId: updates.parentId,
+            });
+          }
+          await new FileModel(trx, ctx.userId, wsId).update(id, updates);
+        });
       }
 
       return { success: true };

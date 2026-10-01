@@ -10,7 +10,9 @@ import {
   type ChatTopicMetadata,
   type HeterogeneousReasoningEffort,
   type MessageMapScope,
+  RequestTrigger,
   type UIChatMessage,
+  type UpdateTopicMetadataInput,
 } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
@@ -385,7 +387,7 @@ export class ChatTopicActionImpl {
             messagesForTitle,
             userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
           ),
-          metadata: { topicId },
+          metadata: { topicId, trigger: RequestTrigger.TopicTitle },
           model,
           provider,
           schema: TOPIC_TITLE_JSON_SCHEMA,
@@ -460,7 +462,10 @@ export class ChatTopicActionImpl {
     );
   };
 
-  updateTopicMetadata = async (id: string, metadata: Partial<ChatTopicMetadata>): Promise<void> => {
+  updateTopicMetadata = async (
+    id: string,
+    metadata: UpdateTopicMetadataInput & Pick<ChatTopicMetadata, 'onboardingSession'>,
+  ): Promise<void> => {
     const topic = topicSelectors.getTopicById(id)(this.#get());
     if (!topic) {
       await topicService.updateTopicMetadata(id, metadata);
@@ -2043,7 +2048,7 @@ export class ChatTopicActionImpl {
    * 'active') never reached the cache: the last FETCHED snapshot — taken while
    * the run was still `running` — stayed there, and a reload repainted a
    * finished topic with the running spinner until the revalidation corrected it
-   * a moment later (LOBE-14032). Same write-through idea as
+   * a moment later. Same write-through idea as
    * `#writeThroughMessageCache` in the message slice.
    *
    * Only `updateTopic` is mirrored. It patches a row a fetch already produced,

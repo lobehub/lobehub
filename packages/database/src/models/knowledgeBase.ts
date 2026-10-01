@@ -112,7 +112,7 @@ export class KnowledgeBaseModel {
 
       await this.db
         .update(documents)
-        .set({ updatedAt: now, visibility: kb.visibility })
+        .set({ visibility: kb.visibility })
         .where(
           and(
             documentLink,
@@ -345,6 +345,7 @@ export class KnowledgeBaseModel {
               inArray(files.id, linkedFileIds),
               eq(files.userId, this.userId),
               buildWorkspaceWhere(creatorScope, {
+                isDeleted: files.isDeleted,
                 userId: files.userId,
                 workspaceId: files.workspaceId,
               }),
@@ -359,12 +360,13 @@ export class KnowledgeBaseModel {
 
       await trx
         .update(documents)
-        .set({ updatedAt: now, visibility })
+        .set({ visibility })
         .where(
           and(
             documentLink,
             eq(documents.userId, this.userId),
             buildWorkspaceWhere(creatorScope, {
+              isDeleted: documents.isDeleted,
               userId: documents.userId,
               workspaceId: documents.workspaceId,
             }),
@@ -499,7 +501,7 @@ export class KnowledgeBaseModel {
 
       await trx
         .update(documents)
-        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: now })
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(documentWhere);
 
       return { id };

@@ -1,5 +1,6 @@
 import { mutate } from '@/libs/swr';
 import { agentConfigKeys, groupKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { useHomeStore } from '@/store/home';
 
 /**
@@ -19,7 +20,7 @@ export const refreshCachesAfterOwnershipChange = async (
 ): Promise<void> => {
   await Promise.all([
     resourceType === 'agent'
-      ? mutate(agentConfigKeys.config(resourceId))
+      ? mutate(agentConfigKeys.config(resourceId, getCacheScope()))
       : mutate(groupKeys.detail(resourceId)),
     useHomeStore.getState().refreshAgentList(),
   ]);

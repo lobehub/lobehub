@@ -143,6 +143,14 @@ export { JsonlStreamProcessor } from './jsonlProcessor';
 // import time. Import it from the dedicated `@lobechat/heterogeneous-agents/
 // resolveCliCommand` subpath instead.
 export {
+  buildClaudeCodeDirectEnv,
+  type BuildClaudeCodeDirectEnvInput,
+  type BuildClaudeCodeDirectEnvResult,
+  normalizeAnthropicSdkBaseURL,
+  sanitizeClaudeCodeDirectArgs,
+  sanitizeClaudeCodeDirectEnv,
+} from './claudeCodeDirectEnv';
+export {
   ensureClaudeCodeResumeTranscript,
   type EnsureResumeTranscriptReason,
   type EnsureResumeTranscriptResult,

@@ -13,6 +13,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
@@ -20,6 +21,8 @@ import { buildTaskPrompt } from './buildTaskPrompt';
 const log = debug('task-runner');
 
 export interface RunTaskParams {
+  /** Extra builtin tools this run mounts beside the Task skill, e.g. the Goal report tool. */
+  additionalPluginIds?: string[];
   continueTopicId?: string;
   extraPrompt?: string;
   /** Optional per-operation cap. Omitted means the agent runtime remains uncapped. */
@@ -70,6 +73,7 @@ export class TaskRunnerService {
 
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
     const {
+      additionalPluginIds,
       taskId: idOrIdentifier,
       continueTopicId,
       extraPrompt,
@@ -156,10 +160,20 @@ export class TaskRunnerService {
       );
 
       if (task.status !== 'running') {
-        await this.taskModel.updateStatus(task.id, 'running', {
-          error: null,
-          startedAt: new Date(),
-        });
+        // Conditional on the status read above: a task deleted (or started by
+        // another caller) in the meantime must not get an agent dispatched.
+        const started = await this.taskModel.updateStatusIfCurrent(
+          task.id,
+          task.status,
+          'running',
+          { error: null, startedAt: new Date() },
+        );
+        if (!started) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'The task changed or was deleted before its run could start.',
+          });
+        }
         weSetRunning = true;
       } else if (task.error) {
         await this.taskModel.update(task.id, { error: null });
@@ -198,6 +212,7 @@ export class TaskRunnerService {
       // turn, which mounts this tool exclusively and therefore can only ever
       // restate text it already wrote.
       if (acceptanceEnabled) pluginIds.push(AcceptanceEvidenceIdentifier);
+      if (additionalPluginIds) pluginIds.push(...additionalPluginIds);
 
       const taskConfig = (task.config ?? {}) as Record<string, unknown>;
 
@@ -276,23 +291,62 @@ export class TaskRunnerService {
           });
         }
         if (result.topicId) {
-          await this.taskTopicModel.updateStatus(task.id, result.topicId, 'failed');
+          await this.taskTopicModel.updateStatus(
+            task.id,
+            result.topicId,
+            resolveFailedRunStatus(result.error),
+          );
         }
         throw new Error(result.error || result.message || 'Agent run failed to start');
       }
 
       if (result.topicId) {
-        if (continueTopicId) {
-          await this.taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
-          await this.taskTopicModel.updateOperationId(task.id, continueTopicId, result.operationId);
-          await this.taskModel.updateCurrentTopic(task.id, continueTopicId);
-        } else {
-          await this.taskModel.incrementTopicCount(task.id);
-          await this.taskModel.updateCurrentTopic(task.id, result.topicId);
-          await this.taskTopicModel.add(task.id, result.topicId, {
-            operationId: result.operationId,
-            seq: (task.totalTopics || 0) + 1,
-            trigger,
+        const topicId = result.topicId;
+        // Record the run under the task's row lock (see TaskService.deleteTask).
+        // If the task was deleted — or canceled, e.g. by a Goal retiring its
+        // node — while this run was being dispatched, whoever did it found no
+        // topic to stop yet. Nobody else will stop it, so stop it here instead
+        // of recording an operation that keeps running behind the cancellation.
+        const recorded = await this.db.transaction(async (tx) => {
+          const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
+          const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
+          if (!(await taskModel.lockForUpdate(task.id))) return 'deleted' as const;
+          if ((await taskModel.findById(task.id))?.status === 'canceled') {
+            return 'canceled' as const;
+          }
+          if (continueTopicId) {
+            await taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
+            await taskTopicModel.updateOperationId(task.id, continueTopicId, result.operationId);
+            await taskModel.updateCurrentTopic(task.id, continueTopicId);
+          } else {
+            await taskModel.incrementTopicCount(task.id);
+            await taskModel.updateCurrentTopic(task.id, topicId);
+            await taskTopicModel.add(task.id, topicId, {
+              operationId: result.operationId,
+              seq: (task.totalTopics || 0) + 1,
+              trigger,
+            });
+          }
+          return 'recorded' as const;
+        });
+        if (recorded !== 'recorded') {
+          const stop = await aiAgentService
+            .interruptTask({ operationId: result.operationId })
+            .catch((error) => {
+              log('runTask: failed to stop orphaned run: %O', error);
+              return undefined;
+            });
+          // Same confirmation gate as TaskService.interruptTaskOperation.
+          const stopped = !!stop?.success && stop.deviceCancellationConfirmed !== false;
+          throw new TRPCError({
+            code: stopped
+              ? recorded === 'deleted'
+                ? 'NOT_FOUND'
+                : 'CONFLICT'
+              : 'INTERNAL_SERVER_ERROR',
+            message: stopped
+              ? `The task was ${recorded} while its run was starting; the run was stopped.`
+              : `The task was ${recorded} while its run was starting, and stopping that run (operation ${result.operationId}) could not be confirmed.`,
           });
         }
       }

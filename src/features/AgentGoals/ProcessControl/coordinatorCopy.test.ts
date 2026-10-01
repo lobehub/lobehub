@@ -9,9 +9,12 @@ import {
 const decision = (ids: string[]) => ({ options: ids.map((id) => ({ id, label: id })) }) as any;
 
 describe('coordinatorGateKind', () => {
-  it('recognizes the two coordinator gate shapes and nothing else', () => {
+  it('recognizes the coordinator gate shapes and nothing else', () => {
     expect(coordinatorGateKind(decision(['retry', 'retire']))).toBe('recoverTask');
     expect(coordinatorGateKind(decision(['retry', 'fail']))).toBe('goalAcceptance');
+    // The terminal acceptance gate also offers abandoning it.
+    expect(coordinatorGateKind(decision(['retry', 'retire', 'fail']))).toBe('goalAcceptance');
+    expect(coordinatorGateKind(decision(['option-1', 'assume', 'answer']))).toBe('clarifyGoal');
     expect(coordinatorGateKind(decision(['approve', 'reject']))).toBeUndefined();
     expect(coordinatorGateKind(undefined)).toBeUndefined();
   });
@@ -61,6 +64,11 @@ describe('coordinatorGateReason', () => {
         'Goal-level acceptance did not pass. Retry Goal acceptance or fail this Goal?',
       ),
     ).toBe('Goal-level acceptance did not pass');
+    expect(
+      coordinatorGateReason(
+        'Goal-level acceptance did not pass. Retry Goal acceptance, abandon it, or fail this Goal?',
+      ),
+    ).toBe('Goal-level acceptance did not pass');
   });
 
   it('returns non-template questions verbatim', () => {
@@ -90,6 +98,14 @@ describe('coordinatorReasonCopy', () => {
     expect(coordinatorReasonCopy('Automatic recovery could not start the next attempt')).toEqual({
       key: 'goalProcess.gate.reason.recoveryFailed',
     });
+  });
+
+  it('wraps a bare runtime error type in a localized sentence', () => {
+    expect(coordinatorReasonCopy('InvalidProviderAPIKey')).toEqual({
+      key: 'goalProcess.gate.reason.runError',
+      params: { code: 'InvalidProviderAPIKey' },
+    });
+    expect(coordinatorReasonCopy('Timeout')).toBeUndefined();
   });
 
   it('passes unknown reasons through as undefined so the raw text renders', () => {

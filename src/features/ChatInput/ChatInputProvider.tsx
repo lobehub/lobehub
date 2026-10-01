@@ -35,6 +35,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     slashPlacement,
     getMessages,
     resolveSendBlocked,
+    topicId,
   }) => {
     const editor = useEditor();
     const slashMenuRef = useRef<HTMLDivElement>(null);
@@ -59,6 +60,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
             sendMenu,
             slashMenuRef,
             slashPlacement,
+            topicId,
           })
         }
       >
@@ -80,6 +82,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
           sendButtonProps={sendButtonProps}
           sendMenu={sendMenu}
           slashPlacement={slashPlacement}
+          topicId={topicId}
           onMarkdownContentChange={onMarkdownContentChange}
           onSend={onSend}
           onVoiceMessageSend={onVoiceMessageSend}

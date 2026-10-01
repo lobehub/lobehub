@@ -7,6 +7,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { tasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { notTrashed } from '@/database/utils/softDelete';
 
 import { TaskRunnerService } from './index';
 
@@ -48,7 +49,9 @@ export async function runScheduleTick(
   const [task] = await db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId)))
+    .where(
+      and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId), notTrashed(tasks.isDeleted)),
+    )
     .limit(1);
   if (!task) {
     log('skip task=%s reason=not-found', taskId);

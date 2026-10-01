@@ -396,7 +396,11 @@ export class DataImporterRepos {
           const workspaceFilter =
             'workspaceId' in table
               ? buildWorkspaceWhere(
-                  { userId: this.userId, workspaceId: this.workspaceId },
+                  {
+                    includeTrashed: true,
+                    userId: this.userId,
+                    workspaceId: this.workspaceId,
+                  },
                   table as any,
                 )
               : eq(table.userId, this.userId);
@@ -552,7 +556,11 @@ export class DataImporterRepos {
             if ('workspaceId' in table) {
               whereConditions.push(
                 buildWorkspaceWhere(
-                  { userId: this.userId, workspaceId: this.workspaceId },
+                  {
+                    includeTrashed: true,
+                    userId: this.userId,
+                    workspaceId: this.workspaceId,
+                  },
                   table as any,
                 ),
               );

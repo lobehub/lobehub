@@ -1,0 +1,112 @@
+import type { VideoGenerationModelSummary } from '@lobechat/builtin-tool-video-generation';
+import { VideoGenerationIdentifier } from '@lobechat/builtin-tool-video-generation';
+import { VideoGenerationExecutionRuntime } from '@lobechat/builtin-tool-video-generation/executionRuntime';
+import { RequestTrigger, toAgentShareVisitorIds } from '@lobechat/types';
+import type { AiProviderModelListItem, VideoModelParamsSchema } from 'model-bank';
+
+import { aiModelRouter } from '@/server/routers/lambda/aiModel';
+import { aiProviderRouter } from '@/server/routers/lambda/aiProvider';
+import { generationRouter } from '@/server/routers/lambda/generation';
+import { generationTopicRouter } from '@/server/routers/lambda/generationTopic';
+import { videoRouter } from '@/server/routers/lambda/video';
+import { runWithScheduledWorkScope } from '@/server/utils/scheduleAfterResponse';
+
+import { type ServerRuntimeRegistration } from './types';
+
+const normalizeModel = (model: AiProviderModelListItem): VideoGenerationModelSummary => ({
+  description: model.description,
+  displayName: model.displayName,
+  id: model.id,
+  parameters: model.parameters as VideoModelParamsSchema | undefined,
+  pricing: model.pricing,
+  releasedAt: model.releasedAt,
+});
+
+export const videoGenerationRuntime: ServerRuntimeRegistration = {
+  factory: (context) => {
+    if (!context.userId) {
+      throw new Error('userId is required for Video Generation tool execution');
+    }
+
+    const callerContext = {
+      clientIp: context.clientIp,
+      /**
+       * A share-visitor run executes under the shared agent's CREATOR, so the
+       * video spend it triggers is indistinguishable from the creator's own
+       * usage unless the origin is stamped on the charge. Projected fields
+       * only — never spread `context.agentShareVisitor`, which also carries the
+       * run's tool/memory permissions.
+       */
+      spendOrigin: context.agentShareVisitor
+        ? {
+            agentShare: toAgentShareVisitorIds(context.agentShareVisitor),
+            trigger: RequestTrigger.AgentShare,
+          }
+        : undefined,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+    };
+    const aiModelCaller = aiModelRouter.createCaller(callerContext);
+    const aiProviderCaller = aiProviderRouter.createCaller(callerContext);
+    const generationCaller = generationRouter.createCaller(callerContext);
+    const generationTopicCaller = generationTopicRouter.createCaller(callerContext);
+    const videoCaller = videoRouter.createCaller(callerContext);
+
+    return new VideoGenerationExecutionRuntime({
+      createGenerationTopic: (type, title) =>
+        generationTopicCaller.createTopic({
+          title,
+          type,
+          ...(context.agentVisibility === 'private' || context.agentVisibility === 'public'
+            ? { visibility: context.agentVisibility }
+            : {}),
+        }),
+      /**
+       * `generateVideo` waits for this generation inside the same request by polling its status.
+       * Outside a scheduled-work scope (e.g. the default local queue runtime), `after()` defers
+       * provider polling until the response is sent, so the wait would never see a terminal
+       * status. The scope makes `after()` start polling now; it keeps running after the scope
+       * returns.
+       */
+      createVideo: (payload) => runWithScheduledWorkScope(() => videoCaller.createVideo(payload)),
+      getGenerationStatus: async ({ asyncTaskId, generationId }) => {
+        const result = await generationCaller.getGenerationStatus({ asyncTaskId, generationId });
+        return {
+          ...result,
+          asyncTaskId,
+          generationId,
+        };
+      },
+      getVideoModelLatencies: (models) => videoCaller.getModelLatencies({ models }),
+      listVideoModels: async ({ provider, limit }) => {
+        const runtimeState = await aiProviderCaller.getAiProviderRuntimeState({});
+        const enabledProviders = provider
+          ? runtimeState.enabledVideoAiProviders.filter((item) => item.id === provider)
+          : runtimeState.enabledVideoAiProviders;
+        const providers = await Promise.all(
+          enabledProviders.map(async (item) => {
+            const models = await aiModelCaller.getAiProviderModelList({
+              enabled: true,
+              id: item.id,
+              limit,
+              type: 'video',
+            });
+
+            return {
+              id: item.id,
+              models: models.map(normalizeModel),
+              name: item.name || item.id,
+            };
+          }),
+        );
+        const nonEmptyProviders = providers.filter((item) => item.models.length > 0);
+
+        return {
+          providers: nonEmptyProviders,
+          totalModels: nonEmptyProviders.reduce((sum, item) => sum + item.models.length, 0),
+        };
+      },
+    });
+  },
+  identifier: VideoGenerationIdentifier,
+};

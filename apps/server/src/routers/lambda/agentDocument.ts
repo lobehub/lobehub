@@ -971,6 +971,18 @@ export const agentDocumentRouter = router({
       return ctx.agentDocumentService.associateDocument(input.agentId, input.documentId);
     }),
 
+  importFile: agentDocumentProcedureWrite
+    .input(
+      z.object({
+        agentId: z.string(),
+        fileId: z.string(),
+        parentId: z.string().nullish(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.agentDocumentService.importFile(input.agentId, input.fileId, input.parentId);
+    }),
+
   /**
    * Tool-oriented: create document
    */

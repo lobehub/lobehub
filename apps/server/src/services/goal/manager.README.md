@@ -124,7 +124,7 @@ no concurrent resume or new claim occurred before removing the Goal. This is not
 persistent device process journal. A committed plan survives an errored ending,
 but coordinator dispatch still waits for that terminal operation.
 
-Manager turns are capped separately (default 12, maximum 100); recorded manager
+Manager turns are capped separately (default 50, maximum 100); recorded manager
 cost/tokens are included in detailed Goal spend. External subscription execution
 can be unmetered, so a zero recorded cost is not proof of zero spend. The CLI sends operation-token plan submissions to a dedicated ingestion endpoint,
 which checks the live operation principal and then the Goal turn binding. Normal

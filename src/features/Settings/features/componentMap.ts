@@ -29,6 +29,9 @@ export const componentMap = {
   [SettingsTabs.Messenger]: dynamic(() => import('../messenger'), {
     loading: loading('Settings > Messenger'),
   }),
+  [SettingsTabs.Integrations]: dynamic(() => import('../integrations'), {
+    loading: loading('Settings > Integrations'),
+  }),
   [SettingsTabs.Notification]: dynamic(
     () => import('@/business/client/BusinessSettingPages/Notification'),
     {
@@ -49,6 +52,9 @@ export const componentMap = {
   }),
   [SettingsTabs.Storage]: dynamic(() => import('../storage'), {
     loading: loading('Settings > Storage'),
+  }),
+  [SettingsTabs.Trash]: dynamic(() => import('../trash'), {
+    loading: loading('Settings > Trash'),
   }),
   [SettingsTabs.Devices]: dynamic(() => import('../devices'), {
     loading: loading('Settings > Devices'),
@@ -83,6 +89,9 @@ export const componentMap = {
   }),
   [SettingsTabs.Connector]: dynamic(() => import('../connector'), {
     loading: loading('Settings > Connector'),
+  }),
+  [SettingsTabs.Tools]: dynamic(() => import('../tools'), {
+    loading: loading('Settings > Tools'),
   }),
 
   [SettingsTabs.Plans]: dynamic(() => import('@/business/client/BusinessSettingPages/Plans'), {

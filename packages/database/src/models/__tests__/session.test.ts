@@ -583,7 +583,7 @@ describe('SessionModel', () => {
           groupId: 'non-existent-group',
         },
       ];
-      const result = await sessionModel.batchCreate(sessions);
+      await sessionModel.batchCreate(sessions);
 
       // Assert results
       // expect(result[0].group).toBe('default');
@@ -768,6 +768,114 @@ describe('SessionModel', () => {
       expect(
         await serverDB.select().from(agents).where(eq(agents.id, 'still-linked')),
       ).toHaveLength(1);
+    });
+  });
+
+  describe('recycle-bin gate (linked agent trashed)', () => {
+    const seedTrashedShell = async () => {
+      // A shell whose agent sits in the recycle bin: the agent is the
+      // restorable unit, so the session must vanish from every legacy read
+      // and write until the agent comes back.
+      await serverDB.insert(sessions).values([
+        { id: 'trashed-shell', slug: 'trashed-shell', userId },
+        { id: 'live-shell', userId },
+      ]);
+      await serverDB.insert(agents).values([
+        { deletedAt: new Date(), id: 'trashed-agent', isDeleted: true, userId },
+        { id: 'live-agent', userId },
+      ]);
+      await serverDB.insert(agentsToSessions).values([
+        { agentId: 'trashed-agent', sessionId: 'trashed-shell', userId },
+        { agentId: 'live-agent', sessionId: 'live-shell', userId },
+      ]);
+      await serverDB
+        .insert(topics)
+        .values({ id: 'recoverable', sessionId: 'trashed-shell', userId });
+    };
+
+    it('hides the shell from list, lookup and count', async () => {
+      await seedTrashedShell();
+      expect((await sessionModel.query()).map((s) => s.id)).toEqual(['live-shell']);
+      expect(await sessionModel.findByIdOrSlug('trashed-shell')).toBeUndefined();
+      expect(await sessionModel.findByIdOrSlug('live-shell')).toBeTruthy();
+      expect(await sessionModel.count()).toBe(1);
+    });
+
+    it('turns delete / batchDelete / update into no-ops so the recoverable topics survive', async () => {
+      await seedTrashedShell();
+
+      const single = await sessionModel.delete('trashed-shell');
+      expect(single.orphanedAgentIds).toEqual([]);
+      const batch = await sessionModel.batchDelete(['trashed-shell', 'live-shell']);
+      expect(batch.orphanedAgentIds).toEqual(['live-agent']);
+      await sessionModel.update('trashed-shell', { title: 'renamed' });
+
+      const [shell] = await serverDB
+        .select()
+        .from(sessions)
+        .where(eq(sessions.id, 'trashed-shell'));
+      expect(shell).toBeTruthy();
+      expect(shell.title).toBeNull();
+      // the link and the topics behind it are untouched — restoring the agent brings everything back
+      expect(
+        await serverDB
+          .select()
+          .from(agentsToSessions)
+          .where(eq(agentsToSessions.sessionId, 'trashed-shell')),
+      ).toHaveLength(1);
+      expect(await serverDB.select().from(topics).where(eq(topics.id, 'recoverable'))).toHaveLength(
+        1,
+      );
+      expect(
+        await serverDB.select().from(sessions).where(eq(sessions.id, 'live-shell')),
+      ).toHaveLength(0);
+    });
+
+    it('keeps a legacy group session with live members reachable, minus the trashed member', async () => {
+      await serverDB.insert(sessions).values({ id: 'group-shell', type: 'group', userId });
+      await serverDB.insert(agents).values([
+        { deletedAt: new Date(), id: 'trashed-member', isDeleted: true, userId },
+        { id: 'live-member', userId },
+      ]);
+      await serverDB.insert(agentsToSessions).values([
+        { agentId: 'trashed-member', sessionId: 'group-shell', userId },
+        { agentId: 'live-member', sessionId: 'group-shell', userId },
+      ]);
+
+      const [group] = await sessionModel.query();
+      expect(group.id).toBe('group-shell');
+      expect(group.agentsToSessions.map((l: any) => l.agent.id)).toEqual(['live-member']);
+      expect((await sessionModel.findByIdOrSlug('group-shell'))?.agent.id).toBe('live-member');
+      expect(await sessionModel.count()).toBe(1);
+
+      // still write-protected: hard-deleting it would cascade the trashed member's link away
+      await sessionModel.delete('group-shell');
+      expect(
+        await serverDB.select().from(sessions).where(eq(sessions.id, 'group-shell')),
+      ).toHaveLength(1);
+    });
+
+    it('hides a legacy group session once every member is trashed', async () => {
+      await serverDB.insert(sessions).values({ id: 'group-shell', type: 'group', userId });
+      await serverDB
+        .insert(agents)
+        .values({ deletedAt: new Date(), id: 'trashed-member', isDeleted: true, userId });
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId: 'trashed-member', sessionId: 'group-shell', userId });
+
+      expect(await sessionModel.query()).toEqual([]);
+      expect(await sessionModel.findByIdOrSlug('group-shell')).toBeUndefined();
+    });
+
+    it('deleteAll leaves the hidden shell in place', async () => {
+      await seedTrashedShell();
+      await sessionModel.deleteAll();
+      const remaining = await serverDB.select().from(sessions).where(eq(sessions.userId, userId));
+      expect(remaining.map((s) => s.id)).toEqual(['trashed-shell']);
+      expect(await serverDB.select().from(topics).where(eq(topics.id, 'recoverable'))).toHaveLength(
+        1,
+      );
     });
   });
 

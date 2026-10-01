@@ -25,12 +25,14 @@ const mockCreate = vi.fn();
 const mockSetMetricCriteria = vi.fn();
 const mockRecordObservation = vi.fn();
 const mockFindById = vi.fn();
+const mockRetireNodes = vi.fn();
 
 vi.mock('@/server/services/goal', () => ({
   GoalService: vi.fn(function () {
     return {
       create: mockCreate,
       recordObservation: mockRecordObservation,
+      retireNodes: mockRetireNodes,
       setMetricCriteria: mockSetMetricCriteria,
     };
   }),
@@ -150,6 +152,59 @@ describe('goalRouter numeric acceptance', () => {
       expect(mockScheduleGoalAdvance).not.toHaveBeenCalled();
       // `shouldAdvance` is coordination bookkeeping, not part of the response.
       expect(result.data).not.toHaveProperty('shouldAdvance');
+    });
+  });
+
+  describe('retireNodes', () => {
+    const nodeId = '00000000-0000-4000-8000-000000000001';
+
+    it("refuses a workspace member retiring a colleague's goal nodes", async () => {
+      // Retiring cancels the nodes' Tasks and recovery gates, so it is held to
+      // the same creator-or-owner rule as restart and delete.
+      mockFindById.mockResolvedValue({ id: 'goal_1', userId: 'colleague' });
+      const memberCaller = goalRouter.createCaller({
+        ...ctx,
+        workspaceId: 'ws-1',
+        workspaceRole: 'member',
+      });
+
+      await expect(memberCaller.retireNodes({ id: 'goal_1', nodeIds: [nodeId] })).rejects.toThrow(
+        /Only the creator or a workspace owner/,
+      );
+      expect(mockRetireNodes).not.toHaveBeenCalled();
+      expect(mockScheduleGoalAdvance).not.toHaveBeenCalled();
+    });
+
+    it('lets the creator retire nodes and wakes the coordinator', async () => {
+      mockRetireNodes.mockResolvedValue({ retiredNodeIds: [nodeId] });
+      const memberCaller = goalRouter.createCaller({
+        ...ctx,
+        workspaceId: 'ws-1',
+        workspaceRole: 'member',
+      });
+
+      await memberCaller.retireNodes({ id: 'goal_1', nodeIds: [nodeId] });
+
+      expect(mockRetireNodes).toHaveBeenCalledWith('goal_1', [nodeId], undefined);
+      expect(mockScheduleGoalAdvance).toHaveBeenCalledWith(
+        expect.objectContaining({ goalId: 'goal_1' }),
+      );
+    });
+
+    it("advances as the goal's owner when a workspace owner retires a colleague's nodes", async () => {
+      mockFindById.mockResolvedValue({ id: 'goal_1', userId: 'colleague' });
+      mockRetireNodes.mockResolvedValue({ retiredNodeIds: [nodeId] });
+      const ownerCaller = goalRouter.createCaller({
+        ...ctx,
+        workspaceId: 'ws-1',
+        workspaceRole: 'owner',
+      });
+
+      await ownerCaller.retireNodes({ id: 'goal_1', nodeIds: [nodeId] });
+
+      expect(mockScheduleGoalAdvance).toHaveBeenCalledWith(
+        expect.objectContaining({ goalId: 'goal_1', userId: 'colleague', workspaceId: 'ws-1' }),
+      );
     });
   });
 });

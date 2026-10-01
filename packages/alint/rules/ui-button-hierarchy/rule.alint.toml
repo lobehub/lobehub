@@ -1,0 +1,23 @@
+name = "ui-button-hierarchy"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one React component file from LobeHub's web client. Buttons come from `@lobehub/ui/base-ui`, whose `Button` takes `type: 'default' | 'primary' | 'fill' | 'dashed' | 'link' | 'text'` and `size: 'small' | 'middle' | 'large'` (there is no `variant` prop).
+
+Team rule, distilled from the product owner's review rejections ("按钮用 filled 而不是 primary", "这个需要用轻量的 filled，不是 primary", "检查更新用文本按钮", "声明指标做成文本按钮", "按钮太小了，换成默认按钮大小", "默认用 small 不对吧，应该默认 default"): a button's visual weight must match how important the action is on its surface.
+
+Report ONLY these three patterns. They can be decided from this file alone; anything else about button weight is taste and is not this rule's job.
+1. Two or more `type="primary"` buttons rendered in the same action group — one footer, one toolbar, one row of actions — including a `danger` primary next to another primary. Anchor on the second one. Suggest keeping the primary on the commit action and making the other `type="default"`.
+2. A `type="primary"` button rendered once per item of a list — inside a `.map()` over rows, results, cards or options — so the list shows a column of primaries. Suggest `type="default"` (or `fill`) for the per-row action.
+3. `size="small"` on the single call to action of an empty state or a centered failure / retry state. Suggest the default size ("默认用 small 不对吧，应该默认 default").
+Anchor on the line of the button's opening tag. In the message, name the action (from its label or handler) and which pattern it matches.
+
+Do not report:
+- any single primary button that is not in a list row, whatever its label — deciding which action deserves the primary needs the product context;
+- a secondary button that is `default`, `fill`, `text` or `link` — never suggest changing one non-primary type into another;
+- `danger` buttons inside a destructive confirmation dialog;
+- buttons whose type or size is a prop passed in by the caller;
+- a primary inside an inline notice, banner or `Alert` action: when it is the notice's one way forward, primary is right;
+- small buttons anywhere other than pattern 3 (toolbars, table cells, list rows, tags, popovers, section-title `extra`s, graph node headers).
+
+If an exclusion applies, return no finding. If uncertain, use low confidence.
+"""

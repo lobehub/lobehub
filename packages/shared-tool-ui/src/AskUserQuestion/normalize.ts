@@ -65,9 +65,11 @@ const normalizeQuestion = (value: unknown): AskUserQuestionItem | undefined => {
     ? rawOptions.map(normalizeOption).filter(isQuestionOption)
     : [];
   const header = pickString(item?.header) ?? '';
+  const description = pickString(item?.description);
   const multiSelect = typeof item?.multiSelect === 'boolean' ? item.multiSelect : undefined;
 
   return {
+    ...(description ? { description } : {}),
     header,
     ...(multiSelect === undefined ? {} : { multiSelect }),
     options,

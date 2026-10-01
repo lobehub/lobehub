@@ -17,16 +17,18 @@ type LabFeatureI18nKey =
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
+  | 'deviceTunnel'
   | 'evalCapture'
-  | 'gatewayMux'
+  | 'goals'
   | 'heteroSessionImport'
   | 'imessage'
   | 'inputMarkdown'
+  | 'integrations'
+  | 'memoryRules'
   | 'messageTextSelectionActions'
   | 'oauthApps'
   | 'projects'
-  | 'selfLearning'
-  | 'topicAcceptance';
+  | 'selfLearning';
 
 export interface LabFeatureItem {
   /** Only rendered (and searchable) in the Electron shell */
@@ -66,6 +68,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
+    flag: 'enableMemoryRules',
+    i18nKey: 'memoryRules',
+    searchKeywords: ['rules', 'memory rules', 'delivery rules', 'verifier'],
+    stage: 'alpha',
+  },
+  {
     flag: 'enableSelfLearning',
     i18nKey: 'selfLearning',
     searchKeywords: ['self-evolving', 'self learning', 'rule base'],
@@ -78,15 +86,15 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    flag: 'enableGatewayMux',
-    i18nKey: 'gatewayMux',
-    searchKeywords: ['gateway', 'websocket', 'multiplex'],
-    stage: 'alpha',
+    flag: 'enableGoals',
+    i18nKey: 'goals',
+    searchKeywords: ['goal', 'goals', 'objective'],
+    stage: 'beta',
   },
   {
-    flag: 'enableTopicAcceptance',
-    i18nKey: 'topicAcceptance',
-    searchKeywords: ['acceptance', 'checklist'],
+    flag: 'enableDeviceTunnel',
+    i18nKey: 'deviceTunnel',
+    searchKeywords: ['tunnel', 'port forwarding', 'dev server', 'localhost'],
     stage: 'alpha',
   },
   {
@@ -100,6 +108,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'oauthApps',
     searchKeywords: ['oauth', 'oauth apps'],
     stage: 'beta',
+  },
+  {
+    flag: 'enableIntegrations',
+    i18nKey: 'integrations',
+    searchKeywords: ['integrations', 'github', 'github app', 'pull request'],
+    stage: 'alpha',
   },
   {
     flag: 'enableArtifactDeployment',

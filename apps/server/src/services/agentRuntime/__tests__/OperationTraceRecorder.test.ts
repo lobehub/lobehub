@@ -570,6 +570,42 @@ describe('OperationTraceRecorder', () => {
       expect(step.contextEngine.output).toBeUndefined();
     });
 
+    it('stores CE pipeline metadata and dedupes it independently', async () => {
+      const withMeta = {
+        input: { messages: ['hello'] },
+        metadata: { staleToolResultTrim: { savedChars: 100, trimmedMessages: 2 } },
+        output: { tokens: 42 },
+      };
+      // NB: the recorder caches the partial in memory between appendStep calls,
+      // so each call appends to the same running partial — read the last step.
+      const lastStep = () => {
+        const saved = store.savePartial.mock.calls.at(-1)![1];
+        return saved.steps.at(-1);
+      };
+
+      await appendStepWithCe(withMeta, []);
+      expect(lastStep().contextEngine.metadata).toEqual({
+        staleToolResultTrim: { savedChars: 100, trimmedMessages: 2 },
+      });
+
+      // identical metadata on the next step is stripped like input/output
+      await appendStepWithCe(withMeta, []);
+      expect(lastStep().contextEngine.metadata).toBeUndefined();
+
+      // changed metadata is kept while identical input/output are stripped
+      const changedMeta = {
+        ...withMeta,
+        metadata: { staleToolResultTrim: { savedChars: 250, trimmedMessages: 5 } },
+      };
+      await appendStepWithCe(changedMeta, []);
+      const step = lastStep();
+      expect(step.contextEngine.input).toBeUndefined();
+      expect(step.contextEngine.output).toBeUndefined();
+      expect(step.contextEngine.metadata).toEqual({
+        staleToolResultTrim: { savedChars: 250, trimmedMessages: 5 },
+      });
+    });
+
     it('resolves input and output independently from different previous steps', async () => {
       // step 0 stored only input (output was stripped vs its own predecessor)
       // step 1 stored only output (input was stripped vs step 0)

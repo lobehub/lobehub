@@ -19,8 +19,8 @@ Treat them as common knowledge — you never need to call any tool to discover t
 1. **Answer identity questions directly.** When the user asks anything like "who are
    you", "what's your name / id / description", "what topic are we in", "what's the
    topic id", etc., respond IMMEDIATELY using the values above. Do **NOT** call
-   \`runCommand\`, \`activateSkill\`, \`lh agent get\`, \`lh agent search\`, \`lh agent list\`,
-   \`lh topic show\`, \`lh topic list\`, or any other tool to look up information that is
+   \`runCommand\`, \`activateSkill\`, \`lh agent view\`, \`lh agent list\`, \`lh topic view\`,
+   \`lh topic list\`, or any other tool to look up information that is
    already in the table above. Calling a tool to retrieve facts you already have
    wastes the user's time and tokens.
 
@@ -60,14 +60,18 @@ run commands.
 | \`lh plugin\` | Plugin management |
 | \`lh bot\` | Bot integration management (Discord, Slack, Telegram, etc.) |
 | \`lh eval\` | Evaluation workflow management |
-| \`lh config\` | User info and usage statistics |
+| \`lh whoami\` / \`lh usage\` | User info and usage statistics (top-level commands, not a \`config\` module) |
 
 # Usage Pattern
 
 1. Read the reference file for the relevant module to learn detailed commands
 2. Run commands via \`runCommand\` — the \`lh\` prefix is automatically handled
-3. Use \`--json\` flag on any command for structured output
-4. Use \`lh <module> --help\` for full command-line help
+3. Add \`--json\` for structured output on commands that support it (most \`list\` / \`view\`
+   commands do; many write commands do not)
+4. Use \`lh <module> <command> --help\` for the exact flags of a command
+5. If the CLI rejects a command or flag shown in these references (\`unknown command\` /
+   \`unknown option\`), the installed \`lh\` is a different version from this guide. Run
+   \`lh <module> <command> --help\` once and use what it lists — do not retry guessed variants
 
 # Examples
 
@@ -90,7 +94,7 @@ lh agent run -a <agentId> -p "Summarize today's tasks"
 
 # Important Notes
 
-- All commands support \`--json\` for machine-readable output
+- \`--json\` is available on most read commands; check \`--help\` before relying on it
 - Use \`--yes\` to skip confirmation prompts on destructive operations
 - IDs can be found via \`list\` commands
 - For detailed usage of any module, read its reference file using \`readReference\`

@@ -81,6 +81,15 @@ vi.mock('@/utils/apiKey', async (importOriginal) => {
 
 const mockCanUseWorkspaceApiKeys = vi.hoisted(() => vi.fn(async () => true));
 
+const mockGetRequestClientIP = vi.hoisted(() => vi.fn());
+vi.mock('@/utils/requestClientIP', async (importOriginal) => {
+  const actual = (await importOriginal()) as {
+    getRequestClientIP: (headers: Headers) => string | undefined;
+  };
+  mockGetRequestClientIP.mockImplementation(actual.getRequestClientIP);
+  return { getRequestClientIP: mockGetRequestClientIP };
+});
+
 vi.mock('@/business/server/workspaceApiKey', () => ({
   canUseWorkspaceApiKeys: mockCanUseWorkspaceApiKeys,
 }));
@@ -231,6 +240,17 @@ describe('createLambdaContext', () => {
       type: 'web',
       version: '2.2.10',
     });
+  });
+
+  it('should resolve clientIp through the overridable request IP module', async () => {
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'x-forwarded-for': '198.51.100.3, 10.0.0.1' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(mockGetRequestClientIP).toHaveBeenCalledWith(request.headers);
+    expect(context.clientIp).toBe('198.51.100.3');
   });
 
   it('should authenticate with API key and skip session fallback', async () => {

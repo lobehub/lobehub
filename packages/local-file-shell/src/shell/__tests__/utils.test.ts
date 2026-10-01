@@ -46,7 +46,8 @@ const decodeEncodedCommand = (encoded: string): string =>
 /** UTF-8 console setup prepended to every PowerShell script (see getShellConfig). */
 const ENCODING_PREAMBLE =
   'try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}' +
-  '\n$OutputEncoding = [System.Text.Encoding]::UTF8\n';
+  '\n$OutputEncoding = [System.Text.Encoding]::UTF8' +
+  "\n$ProgressPreference = 'SilentlyContinue'\n";
 
 const EXIT_CODE_GUARD =
   '\n$__lobeExecOk = $?' +
@@ -83,14 +84,6 @@ describe('getShellConfig', () => {
     expect(config.cmd).toBe('/bin/sh');
     expect(config.args).toEqual(['-c', 'echo hello']);
   });
-
-  it('should keep /bin/sh -c behavior on linux', async () => {
-    setPlatform('linux');
-    const config = await getShellConfig('ls -la');
-    expect(config.cmd).toBe('/bin/sh');
-    expect(config.args).toEqual(['-c', 'ls -la']);
-  });
-
   it('should use pwsh with -EncodedCommand when pwsh.exe is on PATH', async () => {
     setPlatform('win32');
     // NB: use a delimiter-safe fake dir. On the CI/dev host the default `path`
@@ -108,6 +101,25 @@ describe('getShellConfig', () => {
     expect(decodeEncodedCommand(config.args[3])).toBe(
       `${ENCODING_PREAMBLE}Get-ChildItem "C:\\Program Files"${EXIT_CODE_GUARD}`,
     );
+  });
+
+  it('silences progress records before the command runs', async () => {
+    // Redirected progress lands in the saved stderr log as raw CLIXML
+    // ("Preparing modules for first use."), which the model then reads back.
+    setPlatform('win32');
+    process.env.PATH = 'C:\\Tools';
+    process.env.SystemRoot = 'C:\\Windows';
+    mockExisting(
+      path.join('C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+    );
+
+    const script = decodeEncodedCommand(
+      (await getShellConfig('Get-Module -ListAvailable')).args[3],
+    );
+
+    const silence = script.indexOf("$ProgressPreference = 'SilentlyContinue'");
+    expect(silence).toBeGreaterThanOrEqual(0);
+    expect(silence).toBeLessThan(script.indexOf('Get-Module -ListAvailable'));
   });
 
   it('should fall back to Windows PowerShell 5.1 when only powershell.exe exists', async () => {
@@ -265,6 +277,165 @@ describe('normalizeEnvVarRefs', () => {
       // rewritten just because the PATH env var exists.
       const command = 'foreach ($path in Get-ChildItem) { Write-Output $path }';
       expect(normalizeEnvVarRefs(command, env, 'pwsh')).toBe(command);
+    });
+
+    // Regression: a .cmd batch file written through a single-quoted here-string
+    // had its `%PATH%` rewritten to `${env:PATH}`, which PowerShell then wrote
+    // to disk verbatim — the batch file lost its PATH.
+    it('should leave %VAR% inside a single-quoted here-string verbatim', () => {
+      const command = [
+        "$dsh = @'",
+        '@echo off',
+        'set "DSH_HOME=%USERPROFILE%\\.dsh"',
+        'set "PATH=D:\\DeepSeekHarness\\npm-global;%PATH%"',
+        '\'@; [IO.File]::WriteAllText("$env:TEMP\\dsh.cmd", $dsh)',
+        'Write-Output "%USERPROFILE%"',
+      ].join('\r\n');
+
+      expect(normalizeEnvVarRefs(command, env, 'pwsh')).toBe(
+        [
+          "$dsh = @'",
+          '@echo off',
+          'set "DSH_HOME=%USERPROFILE%\\.dsh"',
+          'set "PATH=D:\\DeepSeekHarness\\npm-global;%PATH%"',
+          '\'@; [IO.File]::WriteAllText("$env:TEMP\\dsh.cmd", $dsh)',
+          'Write-Output "${env:USERPROFILE}"',
+        ].join('\r\n'),
+      );
+    });
+
+    it('should leave %VAR% inside a double-quoted here-string verbatim', () => {
+      const command = '$bat = @"\nset "PATH=C:\\tools;%PATH%"\necho $name\n"@\necho %PATH%';
+
+      expect(normalizeEnvVarRefs(command, env, 'powershell')).toBe(
+        '$bat = @"\nset "PATH=C:\\tools;%PATH%"\necho $name\n"@\necho ${env:PATH}',
+      );
+    });
+
+    it('should lex $( ) subexpressions inside a double-quoted here-string as code', () => {
+      // The here-string body is literal, but `$( ... )` inside it is executed.
+      expect(
+        normalizeEnvVarRefs(
+          '$s = @"\nset PATH=%PATH%\nvalue: $(Write-Output %PATH%)\n"@\necho %PATH%',
+          env,
+          'pwsh',
+        ),
+      ).toBe('$s = @"\nset PATH=%PATH%\nvalue: $(Write-Output ${env:PATH})\n"@\necho ${env:PATH}');
+      // Literals inside the subexpression still stay verbatim.
+      expect(normalizeEnvVarRefs(`$s = @"\n$('%PATH%' + "%PATH%") %PATH%\n"@`, env, 'pwsh')).toBe(
+        `$s = @"\n$('%PATH%' + "\${env:PATH}") %PATH%\n"@`,
+      );
+    });
+
+    it("should leave %VAR% inside single-quoted strings verbatim ('' is an escaped quote)", () => {
+      expect(normalizeEnvVarRefs("Write-Output '%PATH%'", env, 'pwsh')).toBe(
+        "Write-Output '%PATH%'",
+      );
+      expect(
+        normalizeEnvVarRefs("Set-Content a.cmd 'it''s %PATH%'; echo %PATH%", env, 'pwsh'),
+      ).toBe("Set-Content a.cmd 'it''s %PATH%'; echo ${env:PATH}");
+    });
+
+    it('should lex $( ) subexpressions inside double-quoted strings as code', () => {
+      expect(
+        normalizeEnvVarRefs(`Write-Output "$('%PATH%') and $(("%PATH%"))" %PATH%`, env, 'pwsh'),
+      ).toBe(`Write-Output "$('%PATH%') and $(("\${env:PATH}"))" \${env:PATH}`);
+    });
+
+    it('should recognize a comment right after a standalone subtraction operator', () => {
+      // `2 -# …` is subtraction followed by a comment (verified in pwsh: the
+      // expression continues on the next line), while `a-#b` stays a bare word.
+      expect(
+        normalizeEnvVarRefs("$x = 2 -# don't expand %PATH%\n1\nWrite-Output %PATH%", env, 'pwsh'),
+      ).toBe("$x = 2 -# don't expand %PATH%\n1\nWrite-Output ${env:PATH}");
+      expect(normalizeEnvVarRefs('Write-Output a-#b %PATH%', env, 'pwsh')).toBe(
+        'Write-Output a-#b ${env:PATH}',
+      );
+    });
+
+    it.each(['/', '%', '*'])(
+      'should recognize a comment right after a standalone %s operator',
+      (op) => {
+        expect(
+          normalizeEnvVarRefs(
+            `$x = 4 ${op}# don't expand %PATH%\n2\nWrite-Output %PATH%`,
+            env,
+            'pwsh',
+          ),
+        ).toBe(`$x = 4 ${op}# don't expand %PATH%\n2\nWrite-Output \${env:PATH}`);
+        expect(normalizeEnvVarRefs(`Write-Output a${op}#b %PATH%`, env, 'pwsh')).toBe(
+          `Write-Output a${op}#b \${env:PATH}`,
+        );
+      },
+    );
+
+    it.each(['1', '0xFF', '1.5e3', '10kb', '$y', '$env:PATH', '${my var}', '=1'])(
+      'should recognize a comment right after the completed expression token %s',
+      (token) => {
+        // `$x = 1# …` is a number followed by a comment: the apostrophe in the
+        // comment must not open a string that swallows the following lines.
+        expect(
+          normalizeEnvVarRefs(
+            `$x = ${token}# don't expand %PATH%\nWrite-Output %PATH%`,
+            env,
+            'pwsh',
+          ),
+        ).toBe(`$x = ${token}# don't expand %PATH%\nWrite-Output \${env:PATH}`);
+      },
+    );
+
+    it('should keep # inside a bare word that contains digits', () => {
+      expect(normalizeEnvVarRefs('tool v1#b a1#b %PATH%', env, 'pwsh')).toBe(
+        'tool v1#b a1#b ${env:PATH}',
+      );
+    });
+
+    it('should keep # inside a bare argument that already started, even after punctuation', () => {
+      // Verified in pwsh: `key=#literal`, `a+#b`, `x:#y` print as one word each.
+      expect(normalizeEnvVarRefs('tool key=#literal %PATH%', env, 'pwsh')).toBe(
+        'tool key=#literal ${env:PATH}',
+      );
+      expect(normalizeEnvVarRefs('tool a+#b x:#y %PATH%', env, 'pwsh')).toBe(
+        'tool a+#b x:#y ${env:PATH}',
+      );
+      // …but a token terminator or a standalone `=` starts a new token.
+      expect(normalizeEnvVarRefs("$x =# don't %PATH%\n5\nWrite-Output %PATH%", env, 'pwsh')).toBe(
+        "$x =# don't %PATH%\n5\nWrite-Output ${env:PATH}",
+      );
+      expect(normalizeEnvVarRefs("echo a,# don't %PATH%\nWrite-Output %PATH%", env, 'pwsh')).toBe(
+        "echo a,# don't %PATH%\nWrite-Output ${env:PATH}",
+      );
+    });
+
+    it('should end a block comment at the first #> (PowerShell block comments do not nest)', () => {
+      expect(normalizeEnvVarRefs('<# a <# b #> Write-Output %PATH% #>', env, 'pwsh')).toBe(
+        '<# a <# b #> Write-Output ${env:PATH} #>',
+      );
+    });
+
+    it('should recognize a comment right after an operator', () => {
+      expect(
+        normalizeEnvVarRefs("$x = 1 +# don't expand %PATH%\n2\nWrite-Output %PATH%", env, 'pwsh'),
+      ).toBe("$x = 1 +# don't expand %PATH%\n2\nWrite-Output ${env:PATH}");
+      // `#` inside a bare word is not a comment.
+      expect(normalizeEnvVarRefs('echo a#b %PATH%', env, 'pwsh')).toBe('echo a#b ${env:PATH}');
+    });
+
+    it('should still rewrite %VAR% in bare words and ordinary double-quoted strings', () => {
+      expect(normalizeEnvVarRefs('cd "%USERPROFILE%\\Desktop"', env, 'pwsh')).toBe(
+        'cd "${env:USERPROFILE}\\Desktop"',
+      );
+      // An apostrophe inside a double-quoted string or a comment must not open
+      // a single-quoted literal that swallows the rest of the command.
+      expect(
+        normalizeEnvVarRefs(
+          'Write-Output "it\'s here"; # don\'t\ncd %USERPROFILE%; dir "%ProgramFiles(x86)%"',
+          env,
+          'pwsh',
+        ),
+      ).toBe(
+        'Write-Output "it\'s here"; # don\'t\ncd ${env:USERPROFILE}; dir "${env:ProgramFiles(x86)}"',
+      );
     });
   });
 

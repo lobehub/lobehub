@@ -12,6 +12,7 @@ import {
   agentBotProviders,
   agentCronJobs,
   agents,
+  agentShares,
   chatGroups,
   chatGroupsAgents,
   projectAgents,
@@ -38,6 +39,7 @@ import {
 } from '../utils/groupMembership';
 import { normalizeInboxAgentAvatar } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { AGENT_SHARED_TRANSFER_BLOCKED } from './agent';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from './agentTransferJob';
 
@@ -72,6 +74,7 @@ export class ChatGroupModel {
     buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
       {
+        isDeleted: chatGroups.isDeleted,
         userId: chatGroups.userId,
         workspaceId: chatGroups.workspaceId,
         visibility: chatGroups.visibility,
@@ -89,6 +92,7 @@ export class ChatGroupModel {
     buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
       {
+        isDeleted: agents.isDeleted,
         userId: agents.userId,
         workspaceId: agents.workspaceId,
         visibility: agents.visibility,
@@ -104,9 +108,9 @@ export class ChatGroupModel {
    */
   private memberAgentVisibleExists = () => {
     if (!this.workspaceId) {
-      return sql`EXISTS (SELECT 1 FROM "agents" "ma" WHERE "ma"."id" = ${chatGroupsAgents.agentId} AND "ma"."user_id" = ${this.userId} AND "ma"."workspace_id" IS NULL)`;
+      return sql`EXISTS (SELECT 1 FROM "agents" "ma" WHERE "ma"."id" = ${chatGroupsAgents.agentId} AND "ma"."user_id" = ${this.userId} AND "ma"."workspace_id" IS NULL AND "ma"."is_deleted" IS NOT TRUE)`;
     }
-    return sql`EXISTS (SELECT 1 FROM "agents" "ma" WHERE "ma"."id" = ${chatGroupsAgents.agentId} AND "ma"."workspace_id" = ${this.workspaceId} AND ("ma"."visibility" IS NULL OR "ma"."visibility" = 'public' OR ("ma"."visibility" = 'private' AND "ma"."user_id" = ${this.userId})))`;
+    return sql`EXISTS (SELECT 1 FROM "agents" "ma" WHERE "ma"."id" = ${chatGroupsAgents.agentId} AND "ma"."workspace_id" = ${this.workspaceId} AND ("ma"."visibility" IS NULL OR "ma"."visibility" = 'public' OR ("ma"."visibility" = 'private' AND "ma"."user_id" = ${this.userId})) AND "ma"."is_deleted" IS NOT TRUE)`;
   };
 
   /**
@@ -310,6 +314,7 @@ export class ChatGroupModel {
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
             {
+              isDeleted: sessionGroups.isDeleted,
               userId: sessionGroups.userId,
               visibility: sessionGroups.visibility,
               workspaceId: sessionGroups.workspaceId,
@@ -547,6 +552,7 @@ export class ChatGroupModel {
             buildWorkspaceWhere(
               { userId: this.userId, workspaceId: this.workspaceId },
               {
+                isDeleted: agents.isDeleted,
                 userId: agents.userId,
                 workspaceId: agents.workspaceId,
                 visibility: agents.visibility,
@@ -899,6 +905,18 @@ export class ChatGroupModel {
         .where(inArray(agents.id, agentIds))
         .orderBy(asc(agents.id))
         .for('update');
+    }
+
+    // A share row keeps the agent bound to its current owner and workspace,
+    // including when the share is paused. Check only owned members: referenced
+    // standalone agents remain with their owner and do not move with the group.
+    if (ownedAgentIds.length > 0) {
+      const [existingShare] = await trx
+        .select({ id: agentShares.id })
+        .from(agentShares)
+        .where(inArray(agentShares.agentId, ownedAgentIds))
+        .limit(1);
+      if (existingShare) throw new Error(AGENT_SHARED_TRANSFER_BLOCKED);
     }
 
     // A REFERENCED member that is private to someone other than the recipient

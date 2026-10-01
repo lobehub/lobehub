@@ -26,6 +26,7 @@ import {
   releasePairingClaim,
 } from './dmPairingStore';
 import { submitBotFeedback } from './feedbackSubmit';
+import { isWholeGroupChatThreadId } from './isWholeGroupChatThreadId';
 import { buildReplayMessages, getSameSenderMessages, mergeBotMessages } from './mergeMessages';
 import { patchSenderBatches } from './patchSenderBatches';
 import {
@@ -46,6 +47,7 @@ import {
   type GuestSettings,
   messageMatchesWatchKeyword,
   normalizeAllowFromEntries,
+  normalizeBotReactionMode,
   normalizeBotReplyLocale,
   type PlatformClient,
   type PlatformDefinition,
@@ -485,7 +487,7 @@ export class BotMessageRouter {
       strategy,
       debounceMs,
       (message) => {
-        const text = client.sanitizeUserInput?.(message.text ?? '') ?? message.text;
+        const text = client.sanitizeUserInput?.(message.text ?? '', message) ?? message.text;
         return BotMessageRouter.dispatchTextCommand(text, commands) !== null;
       },
     );
@@ -692,6 +694,7 @@ export class BotMessageRouter {
     const bridge = new AgentBridgeService(serverDB, userId, workspaceId);
     const charLimit = (info.settings?.charLimit as number) || undefined;
     const displayToolCalls = info.settings?.displayToolCalls === true;
+    const reactionMode = normalizeBotReactionMode(info.settings?.reactionMode);
     const dmSettings: DmSettings = extractDmSettings(info.settings);
     const guestSettings: GuestSettings = extractGuestSettings(info.settings);
     const groupSettings: GroupSettings = extractGroupSettings(info.settings);
@@ -1368,6 +1371,7 @@ export class BotMessageRouter {
           charLimit,
           client,
           displayToolCalls,
+          reactionMode,
           replyLocale,
         });
       } catch (error) {
@@ -1466,7 +1470,11 @@ export class BotMessageRouter {
         // first skip in this thread → tell participants the bot
         // is now mention-only so newcomers don't think it broke. Dedupe by
         // thread id so we never announce more than once.
-        if (!thread.isDM && (humanCount >= 2 || platformReportsShared)) {
+        if (
+          !thread.isDM &&
+          !isWholeGroupChatThreadId(thread.id) &&
+          (humanCount >= 2 || platformReportsShared)
+        ) {
           try {
             const fresh = await bot
               .getState()
@@ -1598,6 +1606,7 @@ export class BotMessageRouter {
           charLimit,
           client,
           displayToolCalls,
+          reactionMode,
           replyLocale,
         });
       } catch (error) {
@@ -1822,6 +1831,7 @@ export class BotMessageRouter {
             charLimit,
             client,
             displayToolCalls,
+            reactionMode,
             replyLocale,
           });
         } catch (error) {
@@ -2308,7 +2318,7 @@ export class BotMessageRouter {
     const regex = new RegExp(`(?:^|\\s)\\/(?:${namePattern})(?:\\s|$|@)`);
     bot.onNewMessage(regex, async (thread, message) => {
       if (message.author.isBot === true) return;
-      const sanitized = client.sanitizeUserInput?.(message.text ?? '') ?? message.text;
+      const sanitized = client.sanitizeUserInput?.(message.text ?? '', message) ?? message.text;
       const result = BotMessageRouter.dispatchTextCommand(sanitized, commands);
       if (!result) return;
       const replyLocale = locale.detectFromMessage(message);

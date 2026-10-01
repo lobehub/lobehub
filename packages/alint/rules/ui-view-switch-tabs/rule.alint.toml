@@ -1,0 +1,21 @@
+name = "ui-view-switch-tabs"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one React component file from LobeHub's web client.
+
+Team rule, distilled from the product owner's review rejections ("这个用 tab 而不是 Segmented，URL 也要对应变的", "你怎么给我改成 segmented 了？？我要的是 tab 啊？？", "验收流程应该是第二个 tab，默认应该进到验收清单里"): switching between the main views of a page or panel is navigation. It uses tabs (`Tabs` from @lobehub/ui or antd), and the active tab lives in the URL (a route segment or a search param through the router), so a view can be linked, reloaded and navigated back to.
+
+Report:
+1. a `Segmented` (or a row of toggle buttons) whose options switch between whole views / panels of a page or portal — each option mounts a different section with its own content — rather than filtering or toggling one list;
+2. page- or panel-level `Tabs` whose active key is kept only in `useState` when the surface has its own route (a page, a portal view, a settings panel), so the view is lost on reload and cannot be linked.
+Anchor on the line of the `Segmented` / `Tabs` element. In the message, name the views being switched. In the suggestion, say to use `Tabs` and where the active key should live in the URL.
+
+Do not report:
+- `Segmented` used as a filter, a sort order, a unit or a display mode of the same data (list / grid, day / week, all / mine);
+- small in-card or in-popover switches, form controls, and tabs inside modals;
+- tabs whose key is already read from the URL or passed in by a parent (controlled `activeTab` / `onTabChange` props);
+- tabs in a component hosted by a modal (`*Modal` files, `createModal`, `open*Modal` helpers). If you cannot see that the component is a routed page or portal view, return no finding;
+- sheet / slide strips inside document viewers, filter pills in sidebar sections, and transient switchers inside a chat message.
+
+If an exclusion applies, return no finding. If uncertain, use low confidence.
+"""

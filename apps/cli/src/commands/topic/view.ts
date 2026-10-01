@@ -17,6 +17,7 @@ interface TopicViewOptions {
   limit?: string;
   messages?: boolean;
   to?: string;
+  workspace?: string;
 }
 
 interface PersistedToolPayload {
@@ -267,12 +268,16 @@ export function registerTopicViewCommand(topic: Command) {
     .option('--to <n>', 'Show messages up to this index (inclusive)')
     .option('--no-messages', 'Skip messages, show topic metadata only')
     .option('--json', 'Output JSON')
+    .option(
+      '--workspace <id>',
+      "Read the topic from this workspace (overrides LOBEHUB_WORKSPACE_ID and 'workspace use')",
+    )
     .action(async (id: string, options: TopicViewOptions) => {
       const includeMessages = options.messages !== false;
       const pagination = includeMessages
         ? resolvePagination(options)
         : { from: 1, limit: DEFAULT_LIMIT, offset: 0 };
-      const client = await getTrpcClient();
+      const client = await getTrpcClient(options.workspace);
       const result = await client.topic.getTopicTranscript.query({
         includeMessages,
         limit: pagination.limit,

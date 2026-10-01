@@ -29,6 +29,12 @@ export interface ElectronMainStore {
   };
   gatewayDeviceId: string;
   gatewayEnabled: boolean;
+  /**
+   * Keep the computer from idle-sleeping while the device gateway connection
+   * is enabled, so the device stays reachable from other clients. The display
+   * can still sleep.
+   */
+  gatewayKeepAwake: boolean;
   gatewayUrl: string;
   /**
    * Workspaces this machine's personal gateway connection has been shared into

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { coverageGaps, readRequiredEvidence } from '../evidenceCoverage';
+import { coverageGaps, readRequiredEvidence, runEvidenceGaps } from '../evidenceCoverage';
 
 describe('readRequiredEvidence', () => {
   it('reads a requiredEvidence array off the verifier config', () => {
@@ -13,6 +13,21 @@ describe('readRequiredEvidence', () => {
     expect(readRequiredEvidence({})).toBeUndefined();
     expect(readRequiredEvidence(null)).toBeUndefined();
     expect(readRequiredEvidence({ requiredEvidence: 'screenshot' })).toBeUndefined();
+  });
+});
+
+describe('runEvidenceGaps', () => {
+  it('only gates run evidence; deliverable and task artifacts are resolved by the verifier', () => {
+    const config = {
+      requiredEvidence: [
+        { scope: 'deliverable', type: 'text' },
+        { scope: 'task_artifacts', type: 'transcript' },
+        { scope: 'run_evidence', type: 'screenshot' },
+        { type: 'video' },
+      ],
+    };
+    expect(runEvidenceGaps(config, [])).toEqual(['screenshot', 'video']);
+    expect(runEvidenceGaps(config, [{ type: 'screenshot' }, { type: 'video' }])).toEqual([]);
   });
 });
 

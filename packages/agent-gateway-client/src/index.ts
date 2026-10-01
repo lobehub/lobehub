@@ -1,6 +1,11 @@
 export { AgentStreamClient } from './client';
 export { sanitizeAgentInterventionRequestForReview } from './intervention';
 export {
+  MirroredTerminalEchoGuard,
+  type MirroredTerminalEchoProtocol,
+  type MirroredTerminalEchoSignal,
+} from './mirroredTerminalEcho';
+export {
   createOperationClient,
   type OperationClient,
   type OperationClientEvents,
@@ -17,7 +22,6 @@ export type {
   MuxHeartbeatAckMessage,
   MuxHeartbeatMessage,
   MuxInputRequestMessage,
-  MuxInterruptMessage,
   MuxOperationMessage,
   MuxOperationMeta,
   MuxOpLifecycleMessage,
@@ -48,6 +52,7 @@ export type {
   AgentInterventionRequestData,
   AgentInterventionResponseData,
   AgentStreamClientEvents,
+  AgentStreamClientFeature,
   AgentStreamClientOptions,
   AgentStreamEvent,
   AgentStreamEventType,

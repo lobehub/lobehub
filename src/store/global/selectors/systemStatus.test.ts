@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { merge } from '@/utils/merge';
 
@@ -17,12 +17,6 @@ import {
   SIDEBAR_SPACER_ID,
   systemStatusSelectors,
 } from './systemStatus';
-
-// Mock version constants
-vi.mock('@/const/version', () => ({
-  isServerMode: false,
-  isUsePgliteDB: true,
-}));
 
 describe('systemStatusSelectors', () => {
   describe('sessionGroupKeys', () => {
@@ -172,6 +166,42 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.modelDetailPanelExpandedKeys(s)).toEqual(
         MODEL_DETAIL_PANEL_EXPANDABLE_KEYS,
       );
+    });
+  });
+
+  describe('modelSwitchPanelGroupMode', () => {
+    it('should default to byModel so the everyday list looks unchanged before the user flips the switch', () => {
+      const s: GlobalState = {
+        ...initialState,
+        status: { ...initialState.status, modelSwitchPanelGroupBy: undefined },
+      };
+
+      expect(systemStatusSelectors.modelSwitchPanelGroupMode(s)).toBe('byModel');
+    });
+
+    it('should not seed the preference into the initial status', () => {
+      // `updateSystemStatus` persists the whole merged status, so a seeded
+      // value would be written to storage as if the user had chosen it.
+      expect(INITIAL_STATUS).not.toHaveProperty('modelSwitchPanelGroupBy');
+    });
+
+    it('should return the persisted byProvider preference', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { modelSwitchPanelGroupBy: 'byProvider' },
+      });
+
+      expect(systemStatusSelectors.modelSwitchPanelGroupMode(s)).toBe('byProvider');
+    });
+
+    it('should ignore the legacy seeded byProvider value from a pre-upgrade persisted status', () => {
+      // Before the key was renamed, the store seeded `byProvider` and persisted
+      // it for everyone; the switch itself was hidden behind developer tools,
+      // so these users were effectively on `byModel` and must stay there.
+      const s: GlobalState = merge(initialState, {
+        status: { modelSwitchPanelGroupMode: 'byProvider' } as Record<string, unknown>,
+      });
+
+      expect(systemStatusSelectors.modelSwitchPanelGroupMode(s)).toBe('byModel');
     });
   });
 

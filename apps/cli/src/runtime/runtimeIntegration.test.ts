@@ -1,4 +1,4 @@
-import type { AgentRuntimeHost } from '@lobechat/agent-runtime';
+import type { AgentRuntimeHost, AgentState } from '@lobechat/agent-runtime';
 import { callTool, callToolsBatch } from '@lobechat/agent-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,21 +33,19 @@ const createUsage = () => ({
   tools: { byTool: [], totalCalls: 0, totalTimeMs: 0 },
 });
 
-const createState = (overrides?: Record<string, unknown>) =>
-  ({
-    cost: createCost(),
-    createdAt: '2026-07-09T00:00:00.000Z',
-    lastModified: '2026-07-09T00:00:00.000Z',
-    maxSteps: 100,
-    messages: [],
-    metadata: { agentId: 'agent-1', topicId: 'topic-1' },
-    operationId: 'op-1',
-    status: 'running',
-    stepCount: 0,
-    toolManifestMap: {},
-    usage: createUsage(),
-    ...overrides,
-  }) as never;
+const createState = (overrides?: Partial<AgentState>): AgentState => ({
+  cost: createCost(),
+  createdAt: '2026-07-09T00:00:00.000Z',
+  lastModified: '2026-07-09T00:00:00.000Z',
+  maxSteps: 100,
+  messages: [],
+  operationId: 'op-1',
+  origin: { agentId: 'agent-1', topicId: 'topic-1' },
+  status: 'running',
+  stepCount: 0,
+  usage: createUsage(),
+  ...overrides,
+});
 
 const createToolCall = (id = 'tool-call-1') => ({
   apiName: 'search',

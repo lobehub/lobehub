@@ -30,6 +30,13 @@ export interface ToolCallConfig {
  * Tool Call Processor
  * Responsible for converting ChatMessage format tool calls to OpenAI format
  */
+/**
+ * Stand-in for a deferred tool result that has not been delivered yet. Worded
+ * so the model neither reports the call as empty nor re-runs it.
+ */
+export const PENDING_TOOL_RESULT_CONTENT =
+  'This call is still running in the background and has not returned a result yet. It is not an empty result: its output will be delivered to the turn that started it. Do not repeat the call; tell the user it is still in progress if they ask for it.';
+
 export class ToolCallProcessor extends BaseProcessor {
   readonly name = 'ToolCallProcessor';
 
@@ -135,19 +142,17 @@ export class ToolCallProcessor extends BaseProcessor {
     // whose tool_calls arguments are invalid JSON (e.g. persisted before the
     // server-side sanitizer landed, or produced by an older client). Strict
     // providers like NVIDIA NIM otherwise 400 on the entire request. See .
-    const tool_calls = message.tools.map(
-      (tool: any): MessageToolCall => ({
-        function: {
-          arguments: sanitizeToolCallArguments(tool.arguments),
-          name: this.config.genToolCallingName
-            ? this.config.genToolCallingName(tool.identifier, tool.apiName, tool.type)
-            : `${tool.identifier}.${tool.apiName}`,
-        },
-        id: tool.id,
-        thoughtSignature: tool.thoughtSignature,
-        type: 'function',
-      }),
-    );
+    const tool_calls = message.tools.map((tool: any): MessageToolCall => ({
+      function: {
+        arguments: sanitizeToolCallArguments(tool.arguments),
+        name: this.config.genToolCallingName
+          ? this.config.genToolCallingName(tool.identifier, tool.apiName, tool.type)
+          : `${tool.identifier}.${tool.apiName}`,
+      },
+      id: tool.id,
+      thoughtSignature: tool.thoughtSignature,
+      type: 'function',
+    }));
 
     return { ...message, tool_calls };
   }
@@ -156,10 +161,15 @@ export class ToolCallProcessor extends BaseProcessor {
    * Process tool message
    */
   private processToolMessage(message: any, supportTools: boolean): any {
+    const content = this.isPendingToolResult(message)
+      ? PENDING_TOOL_RESULT_CONTENT
+      : message.content;
+
     if (!supportTools) {
       // If tools not supported, convert tool message to user message
       return {
         ...message,
+        content,
         name: undefined,
         plugin: undefined,
         role: 'user',
@@ -180,9 +190,25 @@ export class ToolCallProcessor extends BaseProcessor {
 
     return {
       ...message,
+      content,
       name: toolName,
       // Keep tool_call_id for association
     };
+  }
+
+  /**
+   * A deferred tool (callSubAgent, callAgent, group members) persists an empty
+   * placeholder with `pluginState.status: 'pending'` and parks its turn until
+   * the result is backfilled. A NEW user turn on the same topic can run in the
+   * meantime and would otherwise read that slot as an empty result.
+   */
+  private isPendingToolResult(message: any): boolean {
+    const isEmpty =
+      message.content === undefined ||
+      message.content === null ||
+      (typeof message.content === 'string' && !message.content.trim());
+
+    return isEmpty && message.pluginState?.status === 'pending';
   }
 
   /**

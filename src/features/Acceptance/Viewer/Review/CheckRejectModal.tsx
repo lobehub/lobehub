@@ -26,15 +26,21 @@ interface CheckRejectModalProps extends RejectReviewInput {
  * submit rule. This is the single place that picks between them.
  */
 export const CheckRejectModalContent = memo<CheckRejectModalProps>(
-  ({ checkDescription: _checkDescription, checkTitle, ...input }) => {
+  ({ checkDescription: _checkDescription, checkTitle: _checkTitle, ...input }) => {
     const { md = true } = useResponsive();
-    const model = useRejectReview(input);
-
-    return md ? (
-      <DesktopEvidenceReview checkTitle={checkTitle} model={model} />
-    ) : (
-      <MobileEvidenceReview model={model} />
+    // Frame-anchored notes need the desktop stage (keys, a timeline wide
+    // enough to scrub); on a phone the video still plays inline in the row.
+    const model = useRejectReview(
+      md
+        ? input
+        : {
+            ...input,
+            evidence: input.evidence.filter((item) => item.type !== 'video'),
+            keptEvidence: input.evidence.filter((item) => item.type === 'video'),
+          },
     );
+
+    return md ? <DesktopEvidenceReview model={model} /> : <MobileEvidenceReview model={model} />;
   },
 );
 

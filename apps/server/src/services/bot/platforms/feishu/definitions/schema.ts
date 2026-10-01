@@ -11,6 +11,7 @@ import {
   makeDmPolicyField,
   makeGroupPolicyFields,
   makeUserIdField,
+  reactionModeField,
   watchKeywordsField,
 } from '../../const';
 import type { FieldSchema } from '../../types';
@@ -107,6 +108,7 @@ export const sharedSchema: FieldSchema[] = [
         type: 'boolean',
       },
       displayToolCallsField,
+      reactionModeField,
       {
         key: 'historyLimit',
         default: DEFAULT_BOT_HISTORY_LIMIT,

@@ -1,3 +1,4 @@
+import { LayersEnum } from '@lobechat/types';
 import {
   and,
   eq,
@@ -31,6 +32,7 @@ import { libraryVisibleFile, notAgentShareFileReference } from '../../../utils/f
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
 import { searchableMessage } from '../../../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
+import { notTrashed } from '../../../utils/softDelete';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
   FtsSearchAgentResult,
@@ -112,6 +114,9 @@ export const hydrateUserMemories = async (
           hits.map(({ id }) => id),
         ),
         eq(userMemories.userId, scope.userId),
+        // Experience memory is retired and has no page to land on; keep it out of unified search.
+        ne(userMemories.memoryLayer, LayersEnum.Experience),
+        notTrashed(userMemories.isDeleted),
       ),
     );
 

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
+import { openRenameModal } from '@/components/RenameModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
@@ -17,10 +18,7 @@ import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
 import { useHomeStore } from '@/store/home';
 
-export const useRecentItemDropdownMenu = (
-  item: RecentItem,
-  toggleEditing: (visible?: boolean) => void,
-) => {
+export const useRecentItemDropdownMenu = (item: RecentItem) => {
   const { t } = useTranslation(['common', 'topic', 'components']);
   const scope = useCacheScope();
   const [renameRecent, refreshRecents] = useHomeStore((s) => [s.renameRecent, s.refreshRecents]);
@@ -90,7 +88,7 @@ export const useRecentItemDropdownMenu = (
         icon: <Icon icon={PencilLineIcon} />,
         key: 'rename',
         label: t('rename'),
-        onClick: () => toggleEditing(true),
+        onClick: () => openRenameModal({ defaultValue: item.title, onSave: handleRename }),
         sfSymbol: 'pencil',
       },
       ...(transferMenuItems ?? []),
@@ -106,7 +104,7 @@ export const useRecentItemDropdownMenu = (
       },
     ];
     return items as MenuProps['items'];
-  }, [canEdit, t, toggleEditing, handleDelete, transferMenuItems]);
+  }, [canEdit, t, item.title, handleRename, handleDelete, transferMenuItems]);
 
-  return { dropdownMenu, handleRename };
+  return { dropdownMenu };
 };

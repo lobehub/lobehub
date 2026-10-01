@@ -1,3 +1,4 @@
+import { MirroredTerminalEchoGuard } from './mirroredTerminalEcho';
 import type {
   AgentStreamClientEvents,
   AgentStreamClientOptions,
@@ -83,6 +84,7 @@ export class AgentStreamClient extends TypedEmitter {
   private readonly autoReconnect: boolean;
   private readonly resumeOnConnect: boolean;
   private token: string;
+  private readonly terminalEchoGuard: MirroredTerminalEchoGuard;
 
   constructor(options: AgentStreamClientOptions) {
     super();
@@ -91,6 +93,8 @@ export class AgentStreamClient extends TypedEmitter {
     this.token = options.token;
     this.autoReconnect = options.autoReconnect ?? true;
     this.resumeOnConnect = options.resumeOnConnect ?? false;
+    this.lastEventId = options.lastEventId ?? '';
+    this.terminalEchoGuard = new MirroredTerminalEchoGuard(options.operationId);
   }
 
   // ─── Public API ───
@@ -137,13 +141,6 @@ export class AgentStreamClient extends TypedEmitter {
     this.cleanup();
     this.setStatus('disconnected');
     this.emit('disconnected');
-  }
-
-  /**
-   * Send an interrupt command to stop the running agent.
-   */
-  sendInterrupt(): void {
-    this.sendMessage({ type: 'interrupt' });
   }
 
   /**
@@ -256,6 +253,7 @@ export class AgentStreamClient extends TypedEmitter {
           // gateway will hand back the real session status. Legacy gateways
           // ignore the flag and just replay — we then rely on live events, never
           // guessing completion from silence.
+          this.terminalEchoGuard.beginReplay();
           this.sendMessage({ lastEventId: this.lastEventId, type: 'resume', wantStatus: true });
           this.emit('connected');
           break;
@@ -282,6 +280,7 @@ export class AgentStreamClient extends TypedEmitter {
         case 'agent_event': {
           const agentEvent: AgentStreamEvent = message.event;
           if (message.id) this.lastEventId = message.id;
+          this.terminalEchoGuard.observe(agentEvent);
 
           // A single WebSocket is multiplexed: alongside this op's events it may
           // carry forwarded events from other operations (e.g. broadcast council
@@ -335,9 +334,11 @@ export class AgentStreamClient extends TypedEmitter {
           }
 
           const terminal =
-            message.status === 'completed' ||
-            message.status === 'error' ||
-            message.status === 'interrupted';
+            (message.status === 'completed' ||
+              message.status === 'error' ||
+              message.status === 'interrupted') &&
+            // A status left by a mirrored member's terminal, not this op's end.
+            !this.terminalEchoGuard.isStaleResumeStatus(message.status);
 
           if (terminal) {
             this.sessionEnded = true;
@@ -355,6 +356,9 @@ export class AgentStreamClient extends TypedEmitter {
         }
 
         case 'session_complete': {
+          // A member's mirrored terminal, echoed back as the end of THIS
+          // session by gateways that end on any `agent_runtime_end`.
+          if (this.terminalEchoGuard.consumeEcho('session_complete')) break;
           this.sessionEnded = true;
           // Flush any buffered resume events before disconnecting
           if (this.resumeMode) {

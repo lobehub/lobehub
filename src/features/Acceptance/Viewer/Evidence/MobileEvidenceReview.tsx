@@ -116,7 +116,9 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
     activeAnnotations,
     activeEvidence,
     activeIndex,
-    annotations,
+    // Only what this phone can edit — videos' notes are kept in the model and
+    // submitted untouched, but have no stage here to point back to.
+    editableAnnotations: annotations,
     attachments,
     canSubmit,
     canvas,

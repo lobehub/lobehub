@@ -10,7 +10,7 @@ Manage agents (AI assistants with custom configurations).
 - \`lh agent edit [agentId] [-t <title>] [-d <description>] [-m <model>] [-s <systemRole>] [--config-file <path>] [--json]\` - Update agent
 - \`lh agent delete <agentId> [--yes]\` - Delete agent
 - \`lh agent duplicate <agentId> [-t <title>]\` - Duplicate agent
-- \`lh agent run -a <agentId> -p <prompt> [-t <topicId>] [--replay]\` - Run agent with a prompt
+- \`lh agent run -a <agentId> -p <prompt> [-t <topicId>] [--json]\` - Run agent with a prompt
 - \`lh agent status <operationId> [--history]\` - Check agent operation status
 
 ## Editing your own configuration
@@ -37,8 +37,8 @@ actually landed instead of assuming it did.
 ## Tips
 
 - Use \`--slug\` to reference agents by slug instead of ID
-- \`lh agent run --replay\` replays the full conversation output
-- \`lh agent status --history\` shows operation execution history
+- \`lh agent run --replay <file>\` replays events from a JSON file saved by an earlier \`--json\` run (offline)
+- \`lh agent status <operationId> --history\` shows operation execution history
 - Commands run in the same workspace as you. \`lh whoami\` prints that scope —
   check it first if an agent, topic or file you expect to exist reports "not found"
 `;

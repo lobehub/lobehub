@@ -4,6 +4,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import {
+  type BuiltinToolResolveContext,
   type DeviceExecutionTarget,
   executionTargetToRuntimeMode,
   type LobeBuiltinTool,
@@ -49,7 +50,10 @@ export const resolveInvocationToolIds = (request: InvocationToolIdsRequest): str
 
 export interface DiscoveryPoolRequest {
   /** Builtin tools after the device walls, with their `discoverable` flag. */
-  builtinTools: readonly Pick<LobeBuiltinTool, 'discoverable' | 'identifier' | 'manifest'>[];
+  builtinTools: readonly Pick<
+    LobeBuiltinTool,
+    'discoverable' | 'identifier' | 'manifest' | 'resolveManifest'
+  >[];
   /** Disabled-filtered Composio manifests. */
   composio?: readonly LobeToolManifest[];
   /** Gateway device facts; absent without a gateway. */
@@ -70,6 +74,13 @@ export interface DiscoveryPoolRequest {
   executionTarget: DeviceExecutionTarget;
   /** Disabled-filtered LobeHub skill manifests. */
   lobehubSkills?: readonly LobeToolManifest[];
+  /**
+   * Runtime context for context-aware builtin manifests — the same one the
+   * tools engine resolved the enabled set with. A discoverable builtin is
+   * activated mid-run from THIS map, so it must be trimmed for the run too
+   * (e.g. agent-management drops `callAgent` inside a sub-agent run).
+   */
+  manifestContext?: BuiltinToolResolveContext;
 }
 
 export interface DiscoveryPool {
@@ -144,9 +155,13 @@ export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPo
     if (!isManifestIngestAllowed(tool.identifier)) continue;
     if (tool.identifier === CloudSandboxManifest.identifier && !cloudSandboxAllowed) continue;
     if (stripDeviceTools && isDeviceToolIdentifier(tool.identifier)) continue;
-    if (tool.discoverable !== false && !manifestMap[tool.identifier]) {
-      manifestMap[tool.identifier] = tool.manifest as LobeToolManifest;
-    }
+    if (tool.discoverable === false || manifestMap[tool.identifier]) continue;
+    const manifest =
+      request.manifestContext && tool.resolveManifest
+        ? tool.resolveManifest(request.manifestContext)
+        : tool.manifest;
+    // A resolver returning `null` opts the tool out of this run entirely.
+    if (manifest) manifestMap[tool.identifier] = manifest as LobeToolManifest;
   }
 
   // Local-system and Computer Use are only `discoverable` on the desktop, so

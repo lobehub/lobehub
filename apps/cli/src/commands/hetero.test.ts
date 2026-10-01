@@ -4,7 +4,7 @@ import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
+import { createAdapter, HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
 import type * as HeteroSpawn from '@lobechat/heterogeneous-agents/spawn';
 import { Command } from 'commander';
@@ -186,6 +186,93 @@ describe('hetero exec command', () => {
     ]);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
+
+  // The inherited-group case is the desktop / connected-device dispatch: there
+  // an external signal already reaches the agent, so ordinary cancellation does
+  // not forward it — but an ingest-loss abort has no external signal behind it.
+  it.each([
+    { inheritsProcessGroup: false, name: 'its own process group' },
+    { inheritsProcessGroup: true, name: 'an inherited wrapper group' },
+  ])(
+    'stops the agent as soon as the server starts discarding its output ($name)',
+    async ({ inheritsProcessGroup }) => {
+      if (inheritsProcessGroup) vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '1');
+
+      // A refusal is terminal for the whole run: the operation no longer owns the
+      // topic, so every later batch is discarded the same way. The verdict used
+      // to surface only at `drain()` — i.e. after the agent had finished — so a
+      // run whose output was already being thrown away kept working for as long
+      // as it had left (observed: 15 minutes of a CLI producing output nobody
+      // stored, then one error card).
+      mockHeteroIngestMutate.mockResolvedValue({ accepted: false, reason: 'stale-operation' });
+
+      let markKilled!: () => void;
+      const killed = new Promise<void>((resolve) => {
+        markKilled = resolve;
+      });
+      const kill = vi.fn(() => markKilled());
+      const stderr = new PassThrough();
+      stderr.end();
+
+      mockSpawnAgent.mockReturnValue(
+        Promise.resolve({
+          // A long-running agent: one event, then nothing until it is killed.
+          events: {
+            [Symbol.asyncIterator]() {
+              let sent = false;
+              return {
+                async next() {
+                  if (!sent) {
+                    sent = true;
+                    return {
+                      done: false,
+                      value: {
+                        data: { chunkType: 'text', content: 'working' },
+                        operationId: 'op-1',
+                        stepIndex: 0,
+                        timestamp: Date.now(),
+                        type: 'stream_chunk',
+                      },
+                    };
+                  }
+                  await killed;
+                  return { done: true, value: undefined };
+                },
+              };
+            },
+          } as AsyncIterable<any>,
+          exit: killed.then(() => ({ code: null, signal: 'SIGTERM' as NodeJS.Signals })),
+          kill,
+          pid: 12_345,
+          stderr,
+        }),
+      );
+
+      await runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'claude-code',
+        '--prompt',
+        'hi',
+        '--topic',
+        'topic-1',
+        '--operation-id',
+        'op-1',
+      ]);
+
+      expect(kill).toHaveBeenCalledWith('SIGTERM');
+      // And it is reported as a failed run, not a cancellation: nobody stopped
+      // this agent, and `cancelled` would leave the server operation running with
+      // nothing left to drive it.
+      expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({ message: expect.stringContaining('stale-operation') }),
+          result: 'error',
+        }),
+      );
+    },
+  );
 
   it('supports exactly the local agent descriptor types', () => {
     expect([...SUPPORTED_AGENT_TYPES].toSorted()).toEqual(
@@ -1455,6 +1542,77 @@ describe('hetero exec command', () => {
       );
     });
 
+    it('does not fall back to a fresh run once the server has refused this run output', async () => {
+      // The ingester is shared across attempts and a refusal is permanent: a
+      // fallback run would stream into a dead pipe, and the one-shot abort that
+      // stopped attempt 1 could not stop it again.
+      mockHeteroIngestMutate.mockResolvedValue({ accepted: false, reason: 'stale-operation' });
+
+      let markKilled!: () => void;
+      const killed = new Promise<void>((resolve) => {
+        markKilled = resolve;
+      });
+      const stderr = new PassThrough();
+      stderr.end();
+      const events = [
+        {
+          data: { chunkType: 'text', content: 'working' },
+          operationId: 'op-refused',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'stream_chunk',
+        },
+        {
+          data: { message: 'No conversation found with session ID cc-stale' },
+          operationId: 'op-refused',
+          stepIndex: 0,
+          timestamp: 2,
+          type: 'error',
+        },
+      ];
+      mockSpawnAgent.mockReturnValueOnce(
+        Promise.resolve({
+          events: {
+            [Symbol.asyncIterator]() {
+              let i = 0;
+              return {
+                async next() {
+                  if (i < events.length) return { done: false, value: events[i++] };
+                  await killed;
+                  return { done: true, value: undefined };
+                },
+              };
+            },
+          } as AsyncIterable<any>,
+          exit: killed.then(() => ({ code: null, signal: 'SIGTERM' as NodeJS.Signals })),
+          kill: vi.fn(() => markKilled()),
+          pid: 12_345,
+          stderr,
+        }),
+      );
+      mockSpawnAgent.mockReturnValue(createFakeHandle({ exitCode: 0 }));
+
+      await runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'claude-code',
+        '--prompt',
+        'continue',
+        '--resume',
+        'cc-stale',
+        '--operation-id',
+        'op-refused',
+        '--topic',
+        'topic-refused',
+      ]);
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+      expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ result: 'error' }),
+      );
+    });
+
     it('does not consume the recovery prompt when native resume succeeds', async () => {
       const dir = await mkdtemp(`${tmpdir()}/hetero-resume-primary-`);
       const file = path.join(dir, 'input.json');
@@ -1907,6 +2065,83 @@ describe('hetero exec command', () => {
 
     expect(callOrder).toEqual(['ingest', 'finish', 'renewal:stop']);
   });
+
+  it.each([false, true])(
+    'finishes a Codex reconnect followed by tools and an answer with its actual outcome (failed=%s)',
+    async (failed) => {
+      const adapter = createAdapter('codex');
+      const events = [
+        { type: 'turn.started' },
+        { message: 'Reconnecting... 2/5 (request timed out)', type: 'error' },
+        {
+          item: {
+            command: 'printf inspected',
+            id: 'inspect',
+            status: 'in_progress',
+            type: 'command_execution',
+          },
+          type: 'item.started',
+        },
+        {
+          item: {
+            aggregated_output: 'inspected',
+            command: 'printf inspected',
+            exit_code: 0,
+            id: 'inspect',
+            status: 'completed',
+            type: 'command_execution',
+          },
+          type: 'item.completed',
+        },
+        {
+          item: {
+            id: 'answer',
+            text: 'Version checks do not publish releases.',
+            type: 'agent_message',
+          },
+          type: 'item.completed',
+        },
+        failed
+          ? { error: { message: 'stream closed before response.completed' }, type: 'turn.failed' }
+          : { type: 'turn.completed' },
+      ].flatMap((raw) => adapter.adapt(raw));
+      mockSpawnAgent.mockReturnValue(createFakeHandle({ events, exitCode: 0 }));
+
+      await runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'codex',
+        '--prompt',
+        'hi',
+        '--topic',
+        'topic-1',
+        '--operation-id',
+        'op-reconnect',
+        '--render',
+        'none',
+      ]);
+
+      const ingested = mockHeteroIngestMutate.mock.calls.flatMap(([input]) => input.events);
+      expect(ingested.filter((event) => event.type === 'stream_retry')).toHaveLength(1);
+      expect(ingested.filter((event) => event.type === 'error')).toHaveLength(failed ? 1 : 0);
+      expect(ingested).toContainEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ newStep: true }),
+          type: 'stream_start',
+        }),
+      );
+      expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
+      const finish = mockHeteroFinishMutate.mock.calls[0][0];
+      expect(finish.result).toBe(failed ? 'error' : 'success');
+      if (failed) {
+        expect(finish.error.message).toBe('stream closed before response.completed');
+      } else {
+        expect(finish.error).toBeUndefined();
+      }
+      expect(exitSpy).toHaveBeenCalledWith(failed ? 1 : 0);
+    },
+  );
 
   it('finishes with result "error" when a terminal error event is pushed despite a clean exit', async () => {
     // CC relays an API/rate-limit error as an in-stream `error` event but still

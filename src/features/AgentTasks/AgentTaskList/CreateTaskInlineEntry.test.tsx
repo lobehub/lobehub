@@ -252,7 +252,7 @@ vi.mock('../shared/useAgentVisibility', () => ({
 }));
 
 /** Flips the Labs toggles the composer still reads. */
-const setLabs = (lab: { enableTopicAcceptance?: boolean }) => {
+const setLabs = (lab: { enableGoals?: boolean }) => {
   userStateMock.lab = lab as Record<string, boolean>;
 };
 
@@ -496,7 +496,7 @@ describe('CreateTaskInlineEntry', () => {
 
   describe('intent recognition', () => {
     beforeEach(() => {
-      setLabs({ enableTopicAcceptance: true });
+      setLabs({ enableGoals: true });
       editorMarkdownMock.value = 'Write a project plan';
     });
 
@@ -583,6 +583,46 @@ describe('CreateTaskInlineEntry', () => {
       ]);
       // One press: the rewrite and the create, with no page in between.
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+    });
+
+    it('creates with the answer a keyboard pick submits in the same keystroke', async () => {
+      analyzeIntentMock.mockResolvedValue({
+        ...clearReading,
+        clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
+        confidence: 'medium',
+      });
+
+      render(<CreateTaskInlineEntry variant="hero" />);
+      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+      await screen.findByText('taskIntent.reviewStep');
+
+      // A digit picks the option and, being the last answer, submits at once.
+      fireEvent.keyDown(document.body, { key: '1' });
+
+      await waitFor(() => expect(synthesizeInstructionMock).toHaveBeenCalledTimes(1));
+      expect(synthesizeInstructionMock.mock.calls[0][0].answers).toEqual([
+        { answer: 'lobe-chat', question: 'Which repo?' },
+      ]);
+    });
+
+    it('creates the draft as typed when the questions are skipped, even after a pick', async () => {
+      analyzeIntentMock.mockResolvedValue({
+        ...clearReading,
+        clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
+        confidence: 'medium',
+      });
+
+      render(<CreateTaskInlineEntry variant="hero" />);
+      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+      await screen.findByText('taskIntent.reviewStep');
+      fireEvent.click(screen.getByText('lobe-chat'));
+      fireEvent.click(screen.getByText('taskIntent.skipQuestions'));
+
+      await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+      // Skipping is declining to narrow the scope: no rewrite, no answers.
+      expect(synthesizeInstructionMock).not.toHaveBeenCalled();
+      expect(createTaskMock.mock.calls[0][0].instruction).not.toContain('lobe-chat');
     });
 
     it('names the last step "create", answered or not', async () => {
