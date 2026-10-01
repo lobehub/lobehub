@@ -688,7 +688,9 @@ const Body = memo<BodyProps>(
                       type="default"
                       onClick={() =>
                         confirmModal({
-                          title: t('channel.settingsResetConfirm'),
+                          content: t('channel.settingsResetConfirm'),
+                          okText: t('channel.settingsResetDefault'),
+                          title: t('channel.settingsResetDefault'),
                           onOk: handleResetSettings,
                         })
                       }

@@ -136,7 +136,8 @@ const DevModal = memo<DevModalProps>(
                   onDelete?.();
                   toast.success(t('dev.deleteSuccess'));
                 },
-                title: t('dev.confirmDeleteDevPlugin'),
+                content: t('dev.confirmDeleteDevPlugin'),
+                title: t('delete', { ns: 'common' }),
               })
             }
           >

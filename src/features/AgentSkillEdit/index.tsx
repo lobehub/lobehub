@@ -121,7 +121,8 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
             okButtonProps: { danger: true },
             okText: tc('ok'),
             onOk: handleDelete,
-            title: tp('dev.confirmDeleteDevPlugin'),
+            content: tp('dev.confirmDeleteDevPlugin'),
+            title: tc('delete'),
           })
         }
       >

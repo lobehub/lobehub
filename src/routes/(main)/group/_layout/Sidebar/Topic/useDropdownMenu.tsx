@@ -193,7 +193,8 @@ export const useTopicActionsDropdownMenu = (
                   cancelText: t('cancel', { ns: 'common' }),
                   okText: t('ok', { ns: 'common' }),
                   onOk: () => handleArchiveMergedPullRequests('workspace'),
-                  title: t('actions.confirmArchiveMergedPullRequestsWorkspace'),
+                  content: t('actions.confirmArchiveMergedPullRequestsWorkspace'),
+                  title: t('actions.archiveMergedPullRequestsWorkspace'),
                 });
               },
             },

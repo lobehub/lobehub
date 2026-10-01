@@ -326,6 +326,7 @@ export default {
   'permission.collaborators.libraryDesc':
     'Collaborators can open this knowledge base and view the files inside even when the access level is "No access"',
   'permission.collaborators.remove': 'Remove',
+  'permission.collaborators.removeConfirmDesc': '{{name}} will lose access to this resource.',
   'permission.collaborators.removeConfirmTitle': 'Remove {{name}}?',
   'permission.collaborators.title': 'Collaborators',
   'permission.generalAccess.trigger': 'Members: {{level}}',
@@ -966,7 +967,7 @@ export default {
   'myAgents.actions.deprecate': 'Deprecate Permanently',
   'myAgents.actions.deprecateConfirmContent':
     'After deprecation, this agent will be permanently removed from the market and cannot be republished. This action is irreversible, please proceed with caution.',
-  'myAgents.actions.deprecateConfirmTitle': 'Confirm Deprecate Agent?',
+  'myAgents.actions.deprecateConfirmTitle': 'Deprecate Agent',
   'myAgents.actions.deprecateError': 'Failed to deprecate agent',
   'myAgents.actions.deprecateLoading': 'Deprecating agent...',
   'myAgents.actions.deprecateSuccess': 'Agent deprecated',

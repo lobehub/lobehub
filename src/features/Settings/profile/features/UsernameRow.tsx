@@ -90,43 +90,45 @@ const UsernameRow = () => {
 
   return (
     <ProfileRow anchor={'profile-username'} label={t('profile.username')}>
-      <Flexbox horizontal align="center" gap={8}>
-        {saving && <Spin size="small" style={{ opacity: 0.5 }} />}
+      <Flexbox align="flex-start" gap={4}>
+        <Flexbox horizontal align="center" gap={8}>
+          <Input
+            aria-invalid={!!error}
+            data-invalid={error ? '' : undefined}
+            defaultValue={username || ''}
+            disabled={saving}
+            key={username}
+            placeholder={t('profile.usernamePlaceholder')}
+            ref={inputRef}
+            variant="filled"
+            onBlur={handleSave}
+            onChange={handleChange}
+            onPressEnter={handleSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                handleCancel();
+              }
+            }}
+          />
+          {dirty && !saving && (
+            <Button
+              size="small"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                handleCancel();
+              }}
+            >
+              {t('profile.cancel')}
+            </Button>
+          )}
+          {saving && <Spin size="small" style={{ opacity: 0.5 }} />}
+        </Flexbox>
         {error && (
-          <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }} type="danger">
+          <Text fontSize={12} type="danger">
             {error}
           </Text>
         )}
-        {dirty && !saving && (
-          <Button
-            size="small"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              handleCancel();
-            }}
-          >
-            {t('profile.cancel')}
-          </Button>
-        )}
-        <Input
-          aria-invalid={!!error}
-          data-invalid={error ? '' : undefined}
-          defaultValue={username || ''}
-          disabled={saving}
-          key={username}
-          placeholder={t('profile.usernamePlaceholder')}
-          ref={inputRef}
-          variant="filled"
-          onBlur={handleSave}
-          onChange={handleChange}
-          onPressEnter={handleSave}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              handleCancel();
-            }
-          }}
-        />
       </Flexbox>
     </ProfileRow>
   );

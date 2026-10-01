@@ -179,7 +179,10 @@ describe('useTopicActionsDropdownMenu', () => {
       workspaceArchiveItem.onClick?.({} as never);
     }
     expect(confirmModalMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ title: 'actions.confirmArchiveMergedPullRequestsWorkspace' }),
+      expect.objectContaining({
+        content: 'actions.confirmArchiveMergedPullRequestsWorkspace',
+        title: 'actions.archiveMergedPullRequestsWorkspace',
+      }),
     );
     await confirmModalMock.mock.calls[0][0].onOk();
     expect(chatStoreMock.updateTopicStatus).toHaveBeenCalledTimes(2);

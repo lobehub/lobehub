@@ -52,6 +52,7 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
           autoFocus
           placeholder={t('username.placeholder')}
           size="large"
+          style={{ paddingBlock: 8 }}
           title={t('username.hint')}
           value={value}
           prefix={

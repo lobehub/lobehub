@@ -112,6 +112,7 @@ const CollaboratorList = memo<CollaboratorListProps>(({ resourceId, resourceType
                   okButtonProps: { danger: true },
                   okText: t('permission.collaborators.remove'),
                   onOk: () => void removeCollaborator(collaborator.userId),
+                  content: t('permission.collaborators.removeConfirmDesc', { name }),
                   title: t('permission.collaborators.removeConfirmTitle', { name }),
                 })
               }
