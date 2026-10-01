@@ -51,6 +51,16 @@ const isCallbackSignal = (sig: MessageSignal | undefined): boolean =>
 const isTaskCompletionSignal = (sig: MessageSignal | undefined): boolean =>
   sig?.type === 'task-completion';
 
+/** Lookups over one message array, each list in that array's order. */
+interface MessageArrayIndex {
+  /** Keyed by the raw `parentId` (not `childrenMap`, which remaps orphans and compressed groups). */
+  childrenByParentId: Map<string, Message[]>;
+  position: Map<string, number>;
+  toolById: Map<string, Message>;
+}
+
+const EMPTY_MESSAGES: readonly Message[] = [];
+
 /**
  * MessageCollector - Handles collection of related messages
  *
@@ -69,6 +79,15 @@ export class MessageCollector {
     private threadScope: ThreadScope = undefined,
   ) {}
 
+  private scopedMessagesCache?: Message[];
+
+  /**
+   * Message arrays handed to the collector are never mutated during a parse, so
+   * index each once. Rescanning the whole array per chain step made parse
+   * quadratic: a 2,883-message agent topic took 30x longer than with these indexes.
+   */
+  private readonly arrayIndexes = new WeakMap<readonly Message[], MessageArrayIndex>();
+
   /**
    * Every message the current scope may walk.
    *
@@ -78,10 +97,36 @@ export class MessageCollector {
    * group instead of its own bubble.
    */
   private scopedMessages(): Message[] {
-    const messages = [...this.messageMap.values()];
-    if (this.threadScope === undefined) return messages;
+    this.scopedMessagesCache ??= [...this.messageMap.values()].filter(
+      (message) => this.threadScope === undefined || isInThreadScope(message, this.threadScope),
+    );
+    return this.scopedMessagesCache;
+  }
 
-    return messages.filter((message) => isInThreadScope(message, this.threadScope));
+  private messageIndex(messages: readonly Message[]): MessageArrayIndex {
+    const cached = this.arrayIndexes.get(messages);
+    if (cached) return cached;
+
+    const index: MessageArrayIndex = {
+      childrenByParentId: new Map(),
+      position: new Map(),
+      toolById: new Map(),
+    };
+    messages.forEach((message, i) => {
+      index.position.set(message.id, i);
+      if (message.role === 'tool') index.toolById.set(message.id, message);
+      if (message.parentId == null) return;
+
+      const siblings = index.childrenByParentId.get(message.parentId);
+      if (siblings) siblings.push(message);
+      else index.childrenByParentId.set(message.parentId, [message]);
+    });
+    this.arrayIndexes.set(messages, index);
+    return index;
+  }
+
+  private childrenOf(messages: readonly Message[], parentId: string): readonly Message[] {
+    return this.messageIndex(messages).childrenByParentId.get(parentId) ?? EMPTY_MESSAGES;
   }
 
   /**
@@ -98,9 +143,7 @@ export class MessageCollector {
     const tools = assistant.tools || [];
     if (tools.length === 0) return [];
 
-    const toolMessagesById = new Map(
-      messages.filter((m) => m.role === 'tool').map((m) => [m.id, m]),
-    );
+    const toolMessagesById = this.messageIndex(messages).toolById;
     const collected: Message[] = [];
     const collectedIds = new Set<string>();
 
@@ -118,8 +161,8 @@ export class MessageCollector {
         continue;
       }
 
-      const fallbackToolMessage = messages.find(
-        (m) => m.role === 'tool' && m.parentId === assistant.id && m.tool_call_id === tool.id,
+      const fallbackToolMessage = this.childrenOf(messages, assistant.id).find(
+        (m) => m.role === 'tool' && m.tool_call_id === tool.id,
       );
 
       if (fallbackToolMessage && !collectedIds.has(fallbackToolMessage.id)) {
@@ -297,8 +340,7 @@ export class MessageCollector {
     let hasFanOutTool = false;
     for (const toolMsg of toolMessages) {
       const isCouncil = (toolMsg.metadata as any)?.agentCouncil === true;
-      const toolChildren = allMessages.filter((m) => m.parentId === toolMsg.id);
-      const hasTaskChild = toolChildren.some((m) => m.role === 'task');
+      const hasTaskChild = this.childrenOf(allMessages, toolMsg.id).some((m) => m.role === 'task');
       if (isCouncil || hasTaskChild) {
         hasFanOutTool = true;
         continue;
@@ -308,11 +350,14 @@ export class MessageCollector {
     // Assistant-anchored continuation only counts when this step did not fan out.
     if (!hasFanOutTool) candidateParentIds.add(currentAssistant.id);
 
-    const candidates = allMessages
-      .filter((m) => m.parentId != null && candidateParentIds.has(m.parentId))
+    // Equal timestamps fall back to array order, as a stable sort of the
+    // whole array did before the index.
+    const { position } = this.messageIndex(allMessages);
+    const candidates = [...candidateParentIds]
+      .flatMap((parentId) => this.childrenOf(allMessages, parentId))
       .filter((m) => m.role !== 'tool' && !processedIds.has(m.id))
       .filter((m) => m.role === 'assistant' && m.agentId === groupAgentId && !getMessageSignal(m))
-      .sort((a, b) => a.createdAt - b.createdAt);
+      .sort((a, b) => a.createdAt - b.createdAt || position.get(a.id)! - position.get(b.id)!);
 
     const activeId = this.resolveActiveContinuationId(candidates, currentAssistant);
     if (!activeId) {
@@ -443,7 +488,7 @@ export class MessageCollector {
     }[] = [];
 
     for (const toolMsg of allToolMessages) {
-      const children = allMessages.filter((m) => m.parentId === toolMsg.id);
+      const children = this.childrenOf(allMessages, toolMsg.id);
       const callbacks: Message[] = [];
       for (const child of children) {
         if (!isCallbackSignal(getMessageSignal(child))) continue;
@@ -483,7 +528,7 @@ export class MessageCollector {
   collectFlatTaskCompletions(allToolMessages: Message[], allMessages: Message[]): Message[] {
     const completions: Message[] = [];
     for (const toolMsg of allToolMessages) {
-      const children = allMessages.filter((m) => m.parentId === toolMsg.id);
+      const children = this.childrenOf(allMessages, toolMsg.id);
       for (const child of children) {
         if (!isTaskCompletionSignal(getMessageSignal(child))) continue;
         completions.push(child);

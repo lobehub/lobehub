@@ -67,9 +67,9 @@ const buildChain = (rounds: number, stepsPerRound: number, withTools = false): M
   return messages;
 };
 
-// These assert stack depth, not speed: parse still rescans the transcript per
-// chain step, so a loaded parallel run can take several seconds here.
-describe('parse on deep message chains', { timeout: 30_000 }, () => {
+// These assert stack depth. Chain collection looks steps up through per-parse
+// indexes rather than rescanning the transcript, so they also stay fast.
+describe('parse on deep message chains', () => {
   // The recursive walk overflowed Node's stack from ~2,000 plain / ~3,000
   // tool-call messages; browsers hit it near 1,200 inside a React render.
   it('parses a 4,000-message plain chain without overflowing the stack', () => {
