@@ -647,7 +647,11 @@ const recoverRun = async (
     );
   }
 
-  await statusService.recompute(operationId);
+  // Settle by run id: this recovery owns the run it just claimed, and the
+  // operation-addressed rollup would silently resolve to nothing if that
+  // operation were deleted mid-flight — leaving the run leased in `verifying`,
+  // where (with its FK cleared) the next sweep's scan can no longer see it.
+  await statusService.recomputeByRunId(run.id);
   // No report context — the sweep holds no deliverable. The task is still driven,
   // which is the whole point: the goal has been waiting on this verdict.
   await finalizeVerifyRun(db, run.userId, operationId, {}, workspaceId);

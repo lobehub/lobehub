@@ -166,7 +166,7 @@ describe('sweepStuckVerifyRuns', () => {
     expect(outcome.settled).toEqual(['run-1']);
     // Nothing is re-judged — the sweep only derives.
     expect(upsertByCheckItem).not.toHaveBeenCalled();
-    expect(recompute).toHaveBeenCalledWith('op-1');
+    expect(recomputeByRunId).toHaveBeenCalledWith('run-1');
     expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
   });
 
@@ -193,7 +193,7 @@ describe('sweepStuckVerifyRuns', () => {
 
     expect(outcome.skipped).toBe(1);
     expect(upsertByCheckItem).not.toHaveBeenCalled();
-    expect(recompute).not.toHaveBeenCalled();
+    expect(recomputeByRunId).not.toHaveBeenCalled();
   });
 
   it('errors out checks left pending past the abandoned bound, then rolls up', async () => {
@@ -212,7 +212,7 @@ describe('sweepStuckVerifyRuns', () => {
     expect(upsertByCheckItem).toHaveBeenCalledWith(
       expect.objectContaining({ checkItemId: 'c1', status: 'errored', verifyRunId: 'run-1' }),
     );
-    expect(recompute).toHaveBeenCalledWith('op-1');
+    expect(recomputeByRunId).toHaveBeenCalledWith('run-1');
   });
 
   it('never touches a check whose verifier operation is still live', async () => {
@@ -227,7 +227,7 @@ describe('sweepStuckVerifyRuns', () => {
 
     expect(outcome.skipped).toBe(1);
     expect(upsertByCheckItem).not.toHaveBeenCalled();
-    expect(recompute).not.toHaveBeenCalled();
+    expect(recomputeByRunId).not.toHaveBeenCalled();
   });
 
   it('closes a check whose verifier operation already died', async () => {
@@ -291,7 +291,7 @@ describe('sweepStuckVerifyRuns', () => {
     expect(upsertByCheckItem).toHaveBeenCalledWith(
       expect.objectContaining({ checkItemId: 'c1', status: 'errored', verifyRunId: 'run-1' }),
     );
-    expect(recompute).toHaveBeenCalledWith('op-1');
+    expect(recomputeByRunId).toHaveBeenCalledWith('run-1');
   });
 
   it('drops a run whose lease another delivery already holds', async () => {
@@ -307,7 +307,7 @@ describe('sweepStuckVerifyRuns', () => {
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
     expect(outcome.skipped).toBe(1);
-    expect(recompute).not.toHaveBeenCalled();
+    expect(recomputeByRunId).not.toHaveBeenCalled();
     expect(finalizeVerifyRun).not.toHaveBeenCalled();
   });
 
@@ -648,7 +648,6 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
       }),
     );
     expect(recomputeByRunId).toHaveBeenCalledWith('ev-run-1');
-    expect(recompute).not.toHaveBeenCalled();
     // Nothing left to drive once the operation is gone.
     expect(finalizeVerifyRun).not.toHaveBeenCalled();
     // The checks were closed as `errored`, so this is an abandonment — not a
