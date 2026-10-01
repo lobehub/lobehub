@@ -33,21 +33,40 @@ export const MANY_DELIVERABLES = 6;
 const RELATION_RANK: Record<string, number> = { produced: 0 };
 
 /**
- * One row per Work version. A version is linked to every node that touched it
- * — the task that `produced` it and each task that took it as `input` — and a
- * goal-level list must name it once, under the task that made it.
+ * One row per Work. Two things used to arrive here as several rows for one
+ * deliverable:
+ *
+ * - A version is linked to every node that touched it — the task that
+ *   `produced` it and each task that took it as `input` — and a goal-level list
+ *   must name it once, under the task that made it.
+ * - A Work several runs revised gets a new version per claim, and every node
+ *   that revised it declared that version as its own delivery. A shared backlog
+ *   document therefore listed once per task (17 rows for 5 deliverables in the
+ *   case that surfaced this). The deliverable is the same one: the row belongs
+ *   to whoever delivered it first, which is the rule the coordinator now writes
+ *   with too.
+ *
+ * So the surviving row is the best claim on the Work — `produced` beats a mere
+ * `input` — and the earliest of those, so the list names the producer rather
+ * than the last task that happened to touch it.
  */
 export const dedupeArtifacts = (artifacts: GoalArtifactView[]): GoalArtifactView[] => {
-  const byVersion = new Map<string, GoalArtifactView>();
+  const rankOf = (artifact: GoalArtifactView) => RELATION_RANK[artifact.relation ?? ''] ?? 1;
+  const byWork = new Map<string, GoalArtifactView>();
   for (const artifact of artifacts) {
-    const seen = byVersion.get(artifact.workVersionId);
-    if (
-      !seen ||
-      (RELATION_RANK[artifact.relation ?? ''] ?? 1) < (RELATION_RANK[seen.relation ?? ''] ?? 1)
-    )
-      byVersion.set(artifact.workVersionId, artifact);
+    const seen = byWork.get(artifact.workId);
+    if (!seen) {
+      byWork.set(artifact.workId, artifact);
+      continue;
+    }
+    // Same version, or a later claim on the same Work: keep the one that owns
+    // the delivery — an explicit `produced`, and the earliest of those.
+    const better =
+      rankOf(artifact) < rankOf(seen) ||
+      (rankOf(artifact) === rankOf(seen) && artifact.createdAt < seen.createdAt);
+    if (better) byWork.set(artifact.workId, artifact);
   }
-  return [...byVersion.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return [...byWork.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 };
 
 /**
