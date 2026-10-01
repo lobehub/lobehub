@@ -422,7 +422,7 @@ const DeliverableReader = ({ index, items, onClose, onIndexChange }: Deliverable
         <div className={styles.body}>
           {/* The reader covers the page it was opened from, so a detail opened
               in a side panel would be invisible — entity links navigate. */}
-          <EntityLinkHostProvider portal={false}>
+          <EntityLinkHostProvider portal={false} onDismiss={onClose}>
             <Body item={current} key={current.artifact.workVersionId} />
           </EntityLinkHostProvider>
         </div>

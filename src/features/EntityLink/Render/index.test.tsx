@@ -642,6 +642,37 @@ describe('Link Render — host portal scope', () => {
     expect(mockOpenAcceptance).not.toHaveBeenCalled();
   });
 
+  it('closes the covering reader and opens the acceptance panel on desktop', () => {
+    // Electron registers no standalone `/acceptance` route, so the navigation
+    // fallback would land on a dead destination.
+    mockConst.isDesktop = true;
+    const onDismiss = vi.fn();
+    const { getByRole } = render(
+      <EntityLinkHostProvider portal={false} onDismiss={onDismiss}>
+        <Render
+          id="msg-1"
+          tagName="lobeLink"
+          type="element"
+          node={{
+            properties: {
+              linkHref: '/acceptance/acceptance-1',
+              linkKind: 'generic',
+              linkLabel: 'Acceptance',
+            },
+          }}
+        >
+          {null}
+        </Render>
+      </EntityLinkHostProvider>,
+    );
+
+    fireEvent.click(getByRole('link', { name: 'Acceptance' }));
+
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(mockOpenAcceptance).toHaveBeenCalledWith('acceptance-1');
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
   it('navigates entity kinds the host cannot present', () => {
     const { getByRole } = renderLinkInHost(
       { linkHref: '/task/T-198', linkKind: 'generic', linkLabel: 'T-198' },

@@ -23,7 +23,7 @@ import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocu
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
-import { useEntityLinkPortal } from '../host';
+import { useEntityLinkHostDismiss, useEntityLinkPortal } from '../host';
 import { type InternalLinkReference, isBareLinkLabel, isEntityIdLabel } from '../internalLink';
 import {
   getPreviewData,
@@ -88,6 +88,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
   const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const portalAvailable = useEntityLinkPortal(reference.type);
+  const dismissHost = useEntityLinkHostDismiss();
   const [
     openAcceptance,
     openAgentDetail,
@@ -184,6 +185,14 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       // does nothing. The entity's own route is the destination that works
       // there — never a new browser tab for our own content.
       if (!portalAvailable) {
+        // Electron registers no standalone acceptance route, so navigating
+        // there lands on a dead destination. An overlay over a portal-capable
+        // page can close and let that page's panel show the report instead.
+        if (isDesktop && reference.type === 'acceptance' && dismissHost) {
+          dismissHost();
+          openAcceptance(reference.acceptanceId);
+          return;
+        }
         navigate(reference.pathname);
         return;
       }
@@ -232,6 +241,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
     [
       activeAgentId,
       agentDocuments,
+      dismissHost,
       navigate,
       openAcceptance,
       openAgentDetail,

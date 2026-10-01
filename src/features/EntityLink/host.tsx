@@ -21,10 +21,25 @@ export type EntityLinkPortalScope = boolean | readonly InternalLinkReference['ty
  */
 const EntityLinkPortalContext = createContext<EntityLinkPortalScope>(true);
 
-export const EntityLinkHostProvider: FC<PropsWithChildren<{ portal: EntityLinkPortalScope }>> = ({
-  children,
-  portal,
-}) => <EntityLinkPortalContext value={portal}>{children}</EntityLinkPortalContext>;
+/**
+ * How a host that covers a portal-capable page gets out of the way. Set only by
+ * overlays (the deliverable reader): closing them uncovers a page whose side
+ * panel can show the detail, for destinations that have no route on every
+ * platform.
+ */
+const EntityLinkDismissContext = createContext<(() => void) | undefined>(undefined);
+
+export const EntityLinkHostProvider: FC<
+  PropsWithChildren<{ onDismiss?: () => void; portal: EntityLinkPortalScope }>
+> = ({ children, onDismiss, portal }) => (
+  <EntityLinkPortalContext value={portal}>
+    <EntityLinkDismissContext value={onDismiss}>{children}</EntityLinkDismissContext>
+  </EntityLinkPortalContext>
+);
+
+/** The covering host's close callback, when it has one — see {@link EntityLinkHostProvider}. */
+export const useEntityLinkHostDismiss = (): (() => void) | undefined =>
+  use(EntityLinkDismissContext);
 
 /**
  * Whether this host can open `referenceType`'s detail in a panel. A `route`
