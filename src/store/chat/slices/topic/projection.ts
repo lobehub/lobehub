@@ -1,6 +1,6 @@
 import isEqual from 'fast-deep-equal';
 
-import { defineLocalFirstResource } from '@/libs/localFirst';
+import { defineLocalFirstPagedResource, defineLocalFirstResource } from '@/libs/localFirst';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import type { ChatTopic, TopicQuerySortBy } from '@/types/topic';
 
@@ -18,61 +18,72 @@ export interface TopicListParams {
   withDetails?: boolean;
 }
 
-export interface TopicListPage {
-  items: ChatTopic[];
-  total: number;
+export interface TopicAgentViewParams {
+  agentId: string;
+  pageSize: number;
+  withDetails?: boolean;
 }
+
+const topicPaging = {
+  direction: 'forward',
+  getId: (topic: ChatTopic) => topic.id,
+  mode: 'offset',
+  // A reload repaints what the first network page would show, never a stale tail.
+  persist: { pages: 1 },
+} as const;
 
 /**
  * Sidebar topic list, one entry per container (`agent_<id>` / `group_<id>` …).
  * The view is `topicDataMap[containerKey]`, so every existing selector keeps
- * reading the same place.
+ * reading the same place. Filters are the query identity: a projection taken
+ * under other filters never paints (e.g. completed topics after hiding them).
  */
-export const topicListResource = defineLocalFirstResource<
+export const topicListResource = defineLocalFirstPagedResource<
   TopicListParams,
-  TopicData,
-  TopicListPage
+  ChatTopic,
+  number,
+  TopicData
 >({
   key: ({ agentId, groupId }) => topicMapKey({ agentId, groupId }),
   name: 'topicList',
+  paging: topicPaging,
+  query: ({ excludeStatuses, excludeTriggers, isInbox, sortBy, withDetails }) => ({
+    excludeStatuses,
+    excludeTriggers,
+    isInbox: Boolean(isInbox),
+    sortBy,
+    withDetails: Boolean(withDetails),
+  }),
+  storage: 'indexedDB',
+  version: 2,
+});
+
+/**
+ * Agent Topics management page (`/agent/:aid/topics`): a different shape of
+ * the same entity — `withDetails` columns and a larger page — so it is its
+ * own resource with its own view (`agentTopicsViewMap`) instead of a mirror.
+ */
+export const topicAgentViewResource = defineLocalFirstPagedResource<
+  TopicAgentViewParams,
+  ChatTopic,
+  number,
+  TopicData
+>({
+  key: ({ agentId }) => topicMapKey({ agentId }),
+  name: 'topicAgentView',
+  paging: topicPaging,
+  query: ({ withDetails }) => ({ withDetails: Boolean(withDetails) }),
   storage: 'indexedDB',
   version: 1,
 });
 
-/**
- * A container bucket is keyed by container only, not by filters, so a cached
- * page written under other filters must not paint (e.g. completed topics after
- * the user hid them).
- */
-export const isTopicListHydratable = (cached: TopicData, params: TopicListParams) =>
-  Boolean(cached.isInbox) === Boolean(params.isInbox) &&
-  isEqual(cached.excludeStatuses, params.excludeStatuses) &&
-  isEqual(cached.excludeTriggers, params.excludeTriggers) &&
-  cached.sortBy === params.sortBy &&
-  Boolean(cached.withDetails) === Boolean(params.withDetails);
-
-/**
- * Persist only the first page, without transient paging flags or client-only
- * rows: a reload repaints what the first network page would show, never a
- * stale tail or a placeholder whose server row may not exist.
- */
-export const toPersistedTopicList = (
-  data: TopicData,
-  clientOnlyIds: readonly string[],
-): TopicData => {
-  const items = (
-    clientOnlyIds.length > 0
-      ? data.items.filter((item) => !clientOnlyIds.includes(item.id))
-      : data.items
-  ).slice(0, data.pageSize || undefined);
-  const {
-    isExpandingPageSize: _expanding,
-    isLoadingMore: _loadingMore,
-    loadMoreError: _loadMoreError,
-    ...rest
-  } = data;
-  return { ...rest, currentPage: 0, hasMore: data.total > items.length, items };
-};
+/** By-id topic detail cache (`topicDetailMap[topicId]`), for topics outside loaded lists. */
+export const topicDetailResource = defineLocalFirstResource<string, ChatTopic, ChatTopic | null>({
+  key: (topicId) => topicId,
+  name: 'topicDetail',
+  storage: 'indexedDB',
+  version: 1,
+});
 
 /** Apply a topic dispatch to one container bucket (counts and `hasMore` included). */
 export const applyTopicDispatchToBucket = (

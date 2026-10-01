@@ -1036,12 +1036,11 @@ describe('topic action', () => {
       const archived = { id: 'archived-topic', status: 'completed', title: 'Archived Topic' };
       (topicService.getTopicDetail as Mock).mockResolvedValue(archived);
 
-      const { result } = renderHook(() => useChatStore().useFetchTopicDetail('archived-topic'));
+      renderHook(() => useChatStore().useFetchTopicDetail('archived-topic'));
 
       await waitFor(() => {
-        expect(result.current.data).toEqual(archived);
+        expect(useChatStore.getState().topicDetailMap['archived-topic']).toEqual(archived);
       });
-      expect(useChatStore.getState().topicDetailMap['archived-topic']).toEqual(archived);
     });
 
     it('does not fetch when no topic id is given', () => {
@@ -2592,6 +2591,56 @@ describe('topic action', () => {
           result.current.internal_updateTopic(topicId, { title: 'New' }),
         ).rejects.toThrow('rename failed');
       });
+    });
+
+    it('propagates a topic change to the sidebar, management page and detail resources', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-entity';
+      const key = topicMapKey({ agentId });
+      const topic = { favorite: false, id: 'topic-entity', title: 'Topic' } as ChatTopic;
+      const bucket = { currentPage: 0, hasMore: false, items: [topic], pageSize: 20, total: 1 };
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          agentTopicsViewMap: { [key]: { ...bucket, withDetails: true } },
+          topicDataMap: { [key]: bucket },
+          topicDetailMap: { [topic.id]: topic },
+        });
+      });
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+      const server = vi.spyOn(topicService, 'updateTopic');
+
+      // A failed write rolls back in every resource.
+      server.mockRejectedValueOnce(new Error('rename failed'));
+      await act(async () => {
+        await expect(
+          result.current.internal_updateTopic(topic.id, { title: 'Renamed' }),
+        ).rejects.toThrow('rename failed');
+      });
+      let state = useChatStore.getState();
+      expect(state.topicDataMap[key].items[0].title).toBe('Topic');
+      expect(state.agentTopicsViewMap[key].items[0].title).toBe('Topic');
+      expect(state.topicDetailMap[topic.id].title).toBe('Topic');
+
+      // A confirmed write lands in all three.
+      server.mockResolvedValueOnce(undefined as any);
+      await act(async () => {
+        await result.current.internal_updateTopic(topic.id, { favorite: true });
+      });
+      state = useChatStore.getState();
+      expect(state.topicDataMap[key].items[0].favorite).toBe(true);
+      expect(state.agentTopicsViewMap[key].items[0].favorite).toBe(true);
+      expect(state.topicDetailMap[topic.id].favorite).toBe(true);
+
+      // A delete reaches all three, with list totals adjusted.
+      act(() => {
+        result.current.internal_dispatchTopic({ id: topic.id, type: 'deleteTopic' });
+      });
+      state = useChatStore.getState();
+      expect(state.topicDataMap[key]).toMatchObject({ items: [], total: 0 });
+      expect(state.agentTopicsViewMap[key]).toMatchObject({ items: [], total: 0 });
+      expect(state.topicDetailMap[topic.id]).toBeUndefined();
     });
   });
   describe('cleanupStaleRunningTopics', () => {

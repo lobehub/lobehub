@@ -65,8 +65,11 @@ const wrapper =
 
 const runningTopic = { id: 'tpc-lobe-14032', status: 'running', title: '抚州明天天气查询' };
 
+// Default sidebar params (no filters) — rows are stored per query.
+const SIDEBAR_STORAGE_KEY = topicListResource.storageKey({ agentId: AGENT_ID, pageSize: 20 });
+
 const persistedTopicStatus = async (scope: string): Promise<string | undefined> => {
-  const projection = await topicListResource.storage!.get({ queryKey: CONTAINER_KEY, scope });
+  const projection = await topicListResource.storage!.get({ queryKey: SIDEBAR_STORAGE_KEY, scope });
   return projection?.data.items.find((item) => item.id === runningTopic.id)?.status ?? undefined;
 };
 
@@ -102,7 +105,7 @@ describe('persisted topic list across a reload', () => {
     await Promise.all(
       [...scopes].flatMap((scope) => [
         localDataCache.clearScope(scope),
-        topicListResource.storage!.remove({ queryKey: CONTAINER_KEY, scope }),
+        topicListResource.storage!.remove({ queryKey: SIDEBAR_STORAGE_KEY, scope }),
       ]),
     );
     scopes.clear();
@@ -244,7 +247,9 @@ describe('persisted topic list across a reload', () => {
       { wrapper: wrapper(provider) },
     );
     await waitFor(() =>
-      expect(primedAgentView.result.current.data?.items[0].status).toBe('active'),
+      expect(useChatStore.getState().agentTopicsViewMap[CONTAINER_KEY]?.items[0].status).toBe(
+        'active',
+      ),
     );
     primedAgentView.unmount();
 
