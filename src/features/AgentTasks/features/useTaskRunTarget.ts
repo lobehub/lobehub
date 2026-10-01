@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { resolveWorkspaceSurface } from '@/features/ChatInput/ControlBar/useWorkspaceSurface';
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
-import { devicePoolForAgent } from '@/features/ExecutionTargetPicker';
+import { devicePoolForAgent, devicePoolForTask } from '@/features/ExecutionTargetPicker';
 import { resolveAgentWorkingDirectoryConfig } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
@@ -107,7 +107,11 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   // under the workspace principal, not under whoever is looking at it, so a pin
   // outside the pool is one automation can never resolve. Same rule the chat
   // picker applies, shared through `devicePoolForAgent` so the two cannot drift.
-  const pool = devicePoolForAgent(devices, !!agentWorkspaceId);
+  // A task narrows it further to public workspace devices: its automated runs
+  // execute as the task's creator, who cannot resolve a colleague's private
+  // machine (see `devicePoolForTask`).
+  const agentPool = devicePoolForAgent(devices, !!agentWorkspaceId);
+  const pool = devicePoolForTask(devices, !!agentWorkspaceId);
 
   const inheritedTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
@@ -175,7 +179,9 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   const unknownLabel = t('heteroAgent.executionTarget.unknownDevice');
   const inheritedLabel = (() => {
     if (inheritedTarget === 'device') {
-      const bound = pool.find((device) => device.deviceId === agencyConfig?.boundDeviceId);
+      // The agent's own binding may be a private device: label it from the
+      // agent's pool, not the narrower set a task may pin.
+      const bound = agentPool.find((device) => device.deviceId === agencyConfig?.boundDeviceId);
       return bound ? deviceLabel(bound, unknownLabel) : unknownLabel;
     }
     return t(`heteroAgent.executionTarget.${inheritedTarget}`);

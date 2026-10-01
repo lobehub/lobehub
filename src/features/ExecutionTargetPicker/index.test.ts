@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   devicePoolForAgent,
+  devicePoolForTask,
   executionTargetValue,
   groupExecutionTargetDevices,
   isSharedExecutionTarget,
@@ -143,5 +144,11 @@ describe('devicePoolForAgent', () => {
   it('survives an unloaded list', () => {
     expect(devicePoolForAgent(undefined, true)).toEqual([]);
     expect(devicePoolForAgent(undefined, false)).toEqual([]);
+  });
+
+  it('lets a workspace task pin only public workspace devices', () => {
+    expect(devicePoolForTask(all, true)).toEqual([publicWorkspace]);
+    expect(devicePoolForTask(all, false)).toEqual([personal]);
+    expect(devicePoolForTask(undefined, true)).toEqual([]);
   });
 });

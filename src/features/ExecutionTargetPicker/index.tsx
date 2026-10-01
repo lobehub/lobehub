@@ -132,6 +132,26 @@ export const devicePoolForAgent = (
   return workspaceAgent ? [...privateWorkspace, ...workspace] : personal;
 };
 
+/**
+ * The devices a Task may pin.
+ *
+ * Narrower than {@link devicePoolForAgent} for a workspace agent: a Task's
+ * scheduled and heartbeat runs execute as the task's creator, and a private
+ * workspace device is only resolvable by the member who enrolled it
+ * (`DeviceModel.findWorkspaceDeviceById`). A collaborator's private machine
+ * pinned on a shared task is therefore unreachable for automation — and the
+ * creator's private machine is unreachable for a collaborator's manual run — so
+ * only public workspace devices are offered.
+ */
+export const devicePoolForTask = (
+  devices: DeviceListItem[] | undefined,
+  workspaceAgent: boolean,
+): DeviceListItem[] => {
+  const { personal, publicWorkspace } = groupExecutionTargetDevices(devices);
+
+  return workspaceAgent ? publicWorkspace : personal;
+};
+
 interface ExecutionTargetIconProps {
   devicePlatform?: string | null;
   size?: number;
