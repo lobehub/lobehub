@@ -7,6 +7,7 @@ const MAX_BOOT_FAILURES = 3;
 const VERSION_NAME = /^[\w.+-]{1,64}$/;
 const UNSAFE_SEGMENT = /^\.\.?$/;
 const MAIN_ENTRY = 'dist/main/index.js';
+const RENDERER_PREFIX = 'dist/renderer/';
 
 const canonicalJson = (value) => {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -46,7 +47,7 @@ const writeJson = (file, value) => {
   fs.renameSync(`${file}.tmp`, file);
 };
 
-const verifyCandidate = (dir, { abi, publicKey }) => {
+const verifyCandidate = (dir, { abi, builtinHashes, publicKey, storeDir }) => {
   const manifest = readJson(path.join(dir, 'manifest.json'));
   if (!manifest) throw new Error('manifest missing or unreadable');
   if (!verifyManifestSignature(manifest, publicKey)) throw new Error('bad signature');
@@ -65,7 +66,12 @@ const verifyCandidate = (dir, { abi, publicKey }) => {
   // Content hashes are verified once while staging; hashing ~110 MB here cost ~600 ms on a
   // cold Windows boot. Sizes still catch truncated, deleted or quarantined files.
   for (const file of manifest.tree) {
-    const stat = fs.statSync(path.join(dir, file.path), { throwIfNoEntry: false });
+    const overlaid = file.path.startsWith(RENDERER_PREFIX);
+    // Renderer content is never materialized: the core serves it by hash from the builtin
+    // archive or the OTA object store.
+    if (overlaid && builtinHashes.has(file.sha256)) continue;
+    const source = overlaid ? path.join(storeDir, file.sha256) : path.join(dir, file.path);
+    const stat = fs.statSync(source, { throwIfNoEntry: false });
     if (!stat) throw new Error(`missing ${file.path}`);
     if (stat.size !== file.size) throw new Error(`size mismatch ${file.path}`);
   }
@@ -101,6 +107,10 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
 
   const builtinManifest = readJson(path.join(builtinDir, 'manifest.json')) ?? null;
   const builtinSeq = typeof builtinManifest?.seq === 'number' ? builtinManifest.seq : null;
+  const builtinHashes = new Set(
+    Array.isArray(builtinManifest?.tree) ? builtinManifest.tree.map((file) => file.sha256) : [],
+  );
+  const storeDir = path.join(otaRoot, 'store');
   const channel = typeof pointer.channel === 'string' ? pointer.channel : builtinManifest?.channel;
   // seq counters are per channel: a full release ships a builtin core with a seq above every
   // published core of its own channel, so older external cores of that channel must not outlive it.
@@ -137,7 +147,8 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
       throw new Error(`invalid core version name ${JSON.stringify(version)}`);
     if (blacklist.includes(version)) throw new Error('blacklisted');
     const dir = path.join(otaRoot, 'cores', version);
-    if (!verified.has(version)) verified.set(version, verifyCandidate(dir, { abi, publicKey }));
+    if (!verified.has(version))
+      verified.set(version, verifyCandidate(dir, { abi, builtinHashes, publicKey, storeDir }));
     return { dir, manifest: verified.get(version) };
   };
   const verifies = (version) => {

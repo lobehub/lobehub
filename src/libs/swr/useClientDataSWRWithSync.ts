@@ -38,7 +38,7 @@ interface UseClientDataSWRWithSyncOptions<T> extends SWRConfiguration<T> {
  * @example
  * ```ts
  * useClientDataSWRWithSync(
- *   isLogin ? agentKeys.list(isLogin) : null,
+ *   isLogin ? agentKeys.list(isLogin, scope) : null,
  *   () => homeService.getSidebarAgentList(),
  *   {
  *     onData: (data) => {

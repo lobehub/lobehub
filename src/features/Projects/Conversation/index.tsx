@@ -58,7 +58,7 @@ const ProjectConversation = memo(() => {
   if (detailSWR.error) {
     return <AsyncError error={detailSWR.error} variant="page" onRetry={detailSWR.mutate} />;
   }
-  if (detailSWR.isLoading || !coordinatorAgentId) {
+  if (!detail || !coordinatorAgentId) {
     return (
       <Center height="100%" width="100%">
         <Spin size="small" />

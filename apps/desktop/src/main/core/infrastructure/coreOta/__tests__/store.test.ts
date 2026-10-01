@@ -9,6 +9,7 @@ import { zipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type CoreManifestV3 as CoreManifest, sha256File } from '../manifest';
+import { treeRendererSource } from '../rendererSource';
 import { cleanupLegacy, CoreStore, indexLocal, isSafeVersion } from '../store';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -91,6 +92,24 @@ const readTree = (dir: string) =>
       }),
   );
 
+const readVersion = (dir: string, builtin: { dir: string; manifest: CoreManifest }) => {
+  const manifest: CoreManifest = JSON.parse(readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+  const renderer = treeRendererSource({
+    builtinDir: builtin.dir,
+    builtinTree: builtin.manifest.tree,
+    storeDir: path.join(root, 'ota/store'),
+    tree: manifest.tree,
+  });
+  return Object.fromEntries(
+    manifest.tree.map((file) => {
+      const source = file.path.startsWith('dist/renderer/')
+        ? renderer.resolve(file.path.slice('dist/renderer/'.length))!
+        : path.join(dir, file.path);
+      return [file.path, readFileSync(source, 'utf8')];
+    }),
+  );
+};
+
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), 'core-store-'));
   served = new Map();
@@ -134,7 +153,7 @@ describe('CoreStore.stage', () => {
     expect(result.fallbackFull).toBe(false);
     expect(result.downloaded).toMatchObject({ objects: 7, patches: 0 });
     expect(result.downloaded.bytes).toBeGreaterThan(0);
-    expect(readTree(result.dir)).toEqual(files);
+    expect(readVersion(result.dir, builtin)).toEqual(files);
     expect(JSON.parse(readFileSync(path.join(result.dir, 'manifest.json'), 'utf8'))).toEqual(
       remote,
     );
@@ -152,7 +171,7 @@ describe('CoreStore.stage', () => {
 
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(result.downloaded).toEqual({ bytes: 0, objects: 0, patches: 0 });
-    expect(readTree(result.dir)).toEqual(ENTRY_FILES);
+    expect(readVersion(result.dir, builtin)).toEqual(ENTRY_FILES);
   });
 
   it('prefers a patch when the base sha is local', async () => {
@@ -213,7 +232,7 @@ describe('CoreStore.stage', () => {
 
     expect(result.fallbackFull).toBe(true);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect(readTree(result.dir)).toEqual(files);
+    expect(readVersion(result.dir, builtin)).toEqual(files);
   });
 
   it('never lands a sha-mismatched object in the store', async () => {
@@ -255,13 +274,69 @@ describe('CoreStore.stage', () => {
     expect(existsSync(path.join(root, 'ota/cores'))).toBe(false);
   });
 
+  it('keeps renderer files out of the version dir and reads unchanged ones from the builtin core', async () => {
+    const builtin = await localCore('builtin', ENTRY_FILES);
+    const remote = manifestFor('1.1.0', {
+      ...ENTRY_FILES,
+      'cli/x.js': 'new',
+      'dist/renderer/assets/index.js': 'index-new',
+    });
+
+    const result = await stage(remote, null, builtin);
+
+    expect(readTree(result.dir)).toEqual({ 'cli/x.js': 'new' });
+    expect(readdirSync(path.join(root, 'ota/store')).sort()).toEqual(
+      [sha256File(Buffer.from('new')), sha256File(Buffer.from('index-new'))].sort(),
+    );
+    expect(readVersion(result.dir, builtin)).toMatchObject({
+      'dist/renderer/assets/index.js': 'index-new',
+      'dist/renderer/assets/popup.js': 'popup',
+    });
+  });
+
+  it('ignores renderer paths of the current version, which is never materialized', async () => {
+    const builtin = await localCore('builtin', ENTRY_FILES);
+    const current = await localCore('current', { 'cli/x.js': 'new' });
+    const currentManifest = manifestFor('current', { ...ENTRY_FILES, 'cli/x.js': 'new' });
+
+    const result = await stage(
+      manifestFor('1.1.0', { ...ENTRY_FILES, 'cli/x.js': 'new' }),
+      { dir: current.dir, manifest: currentManifest },
+      builtin,
+    );
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(readVersion(result.dir, builtin)).toEqual({ ...ENTRY_FILES, 'cli/x.js': 'new' });
+  });
+
+  it('rejects a tree whose entry html references a missing asset', async () => {
+    const builtin = await localCore('builtin', ENTRY_FILES);
+    const remote = manifestFor('1.1.0', {
+      ...ENTRY_FILES,
+      'dist/renderer/apps/desktop/index.html': '<script src="/assets/missing.js"></script>',
+    });
+
+    await expect(stage(remote, null, builtin)).rejects.toThrow('Entry integrity check failed');
+    expect(existsSync(path.join(root, 'ota/cores/1.1.0'))).toBe(false);
+  });
+
+  it('reuses an already assembled version', async () => {
+    const builtin = await localCore('builtin', ENTRY_FILES);
+    const remote = manifestFor('1.1.0', { ...ENTRY_FILES, 'cli/x.js': 'new' });
+
+    const first = await stage(remote, null, builtin);
+    const second = await stage(remote, null, builtin);
+
+    expect(second.dir).toBe(first.dir);
+    expect(readVersion(second.dir, builtin)).toEqual({ ...ENTRY_FILES, 'cli/x.js': 'new' });
+  });
+
   it('hard-links assembled files and copies when link fails', async () => {
     const builtin = await localCore('builtin', ENTRY_FILES);
     const remote = manifestFor('1.1.0', { ...ENTRY_FILES, 'cli/x.js': 'new' });
 
     const linked = await stage(remote, null, builtin);
     expect(statSync(path.join(linked.dir, 'cli/x.js')).nlink).toBe(2);
-    expect(statSync(path.join(linked.dir, 'dist/renderer/assets/index.js')).nlink).toBe(2);
 
     vi.mocked(link).mockRejectedValue(Object.assign(new Error('EXDEV'), { code: 'EXDEV' }));
     const copied = await stage(
@@ -270,7 +345,7 @@ describe('CoreStore.stage', () => {
       builtin,
     );
     expect(statSync(path.join(copied.dir, 'cli/x.js')).nlink).toBe(1);
-    expect(readTree(copied.dir)).toEqual({ ...ENTRY_FILES, 'cli/x.js': 'new' });
+    expect(readVersion(copied.dir, builtin)).toEqual({ ...ENTRY_FILES, 'cli/x.js': 'new' });
     vi.mocked(link).mockReset();
   });
 });
@@ -292,7 +367,7 @@ describe('CoreStore.gc', () => {
 
     expect(readdirSync(path.join(ota, 'cores'))).toEqual(['1.1.0']);
     expect(existsSync(path.join(ota, 'staging'))).toBe(false);
-    expect(readTree(keep.dir)).toEqual({ ...ENTRY_FILES, 'cli/a.js': 'keep' });
+    expect(readVersion(keep.dir, builtin)).toEqual({ ...ENTRY_FILES, 'cli/a.js': 'keep' });
     expect(readdirSync(path.join(ota, 'store')).sort()).toEqual(
       [...new Set(kept.tree.map((file) => file.sha256))].sort(),
     );
