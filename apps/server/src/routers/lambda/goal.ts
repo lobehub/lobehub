@@ -692,6 +692,26 @@ export const goalRouter = router({
     }),
 
   /**
+   * End the goal by hand — achieved or canceled — and interrupt its live runs.
+   * Reopening a closed goal is `resume`.
+   */
+  close: goalWriteProcedure
+    .input(idInput.extend({ status: z.enum(['achieved', 'canceled']) }))
+    .mutation(async ({ ctx, input: { id, status } }) => {
+      try {
+        // Closing cancels live runs, so it carries the same ownership check as restart.
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
+        const data = await ctx.goalService.close(id, status);
+        return { data, message: `Goal ${status}`, success: true };
+      } catch (error) {
+        mapGoalError(error, 'close');
+      }
+    }),
+
+  /**
    * Start every unfinished Task node over (cancel stale runs, back to
    * `backlog`), optionally under a different agent, and kick the coordinator
    * so the goal begins moving without a second gesture.

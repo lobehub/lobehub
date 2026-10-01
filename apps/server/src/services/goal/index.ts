@@ -112,6 +112,8 @@ const REPORT_CHECK_OUTCOMES = new Set<GoalTickResult['outcome']>([
 /** A Goal whose delivery the owner can still send back for rework. */
 const REOPENABLE_GOAL_STATUSES = new Set(['achieved', 'running']);
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
+/** Ends a person reached, or the coordinator's verdict of success: nothing reopens these but `resume`. */
+const GOAL_ENDED_STATUSES = new Set<string>(['achieved', 'canceled']);
 /** Advisory-lock namespace for goal dispatch. `0x676f_6469` is ASCII `godi`. */
 const GOAL_DISPATCH_LOCK_NAMESPACE = 0x67_6f_64_69;
 
@@ -1428,8 +1430,152 @@ export class GoalService {
     return goal ?? graph.goal;
   };
 
+  /**
+   * A person ends the goal themselves — declaring it achieved or dropping it.
+   *
+   * Everything still spending on the goal is interrupted first — the main
+   * Agent's planning turn, the supervisor's diagnosis and every Task run — the
+   * same way `delete` does, because a terminal status alone only stops the
+   * coordinator from dispatching more. Reopening goes through `resume`, which
+   * accepts any status.
+   */
+  close = async (goalId: string, to: 'achieved' | 'canceled') => {
+    // Fence new claims before scanning: `dispatchWork` claims under this row
+    // lock and only while the goal reads `running`, so an advance overlapping
+    // the close cannot start a Task after the scan below. The pause is the
+    // person's, so no measurement lifts it if the close is refused later on.
+    await this.db.transaction(async (db) => {
+      const model = new GoalModel(db, this.userId, this.workspaceId);
+      const current = await model.lockById(goalId);
+      // Only a goal that can still dispatch needs fencing.
+      if (!current || ['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) return;
+      await model.updateStatus(goalId, 'paused');
+      await model.updatePauseReason(goalId, 'user');
+      await new GoalGraphModel(db, this.userId, this.workspaceId).recordGoalStatus(
+        goalId,
+        current.status,
+        'paused',
+        'Stopping Goal before closing',
+      );
+    });
+    const graph = await this.requireGraph(goalId);
+
+    // Deliberately not swallowed, as in `delete`: an operation whose exit is
+    // unconfirmed keeps spending, and a goal reading "ended" would hide it. The
+    // goal stays paused so nothing new starts, and the person can retry.
+    const notClosed = (error: unknown) =>
+      new TRPCError({
+        cause: error,
+        code: 'PRECONDITION_FAILED',
+        message:
+          'Could not stop the work still running for this goal, so it was not closed. Try again once the run is reachable.',
+      });
+    try {
+      if (graph.goal.config?.manager)
+        await new GoalManagerService(this.db, this.userId, this.workspaceId).stop(graph);
+      if (graph.goal.config?.supervision?.enabled || graph.goal.config?.supervisorState)
+        await new GoalSupervisorService(this.db, this.userId, this.workspaceId).stop(graph);
+    } catch (error) {
+      throw notClosed(error);
+    }
+
+    const unfinishedTaskIds = graph.nodes.flatMap((node) =>
+      node.kind === 'task' && node.taskId && !TERMINAL_NODE_STATUSES.has(node.status)
+        ? [node.taskId]
+        : [],
+    );
+    if (unfinishedTaskIds.length > 0) {
+      // Claims whose run has not been recorded yet. `dispatchWork` marks the
+      // Task `running` before `runTask` records the topic, so the scan below
+      // cannot see that run, and only a recorded run can be interrupted with
+      // confirmation. A fresh claim therefore refuses the close: the goal stays
+      // fenced, and a retry a moment later finds the run recorded and stops it
+      // the confirmed way. A claim older than the operation lease is one whose
+      // startup died; it is withdrawn to `backlog` under the task row lock the
+      // recording also takes, so a straggler recording stops its own run.
+      const staleBefore = Date.now() - resolveOperationLeaseTimeout(graph.goal);
+      let starting = false;
+      for (const taskId of unfinishedTaskIds) {
+        await this.db.transaction(async (tx) => {
+          const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
+          if (!(await taskModel.lockForUpdate(taskId))) return;
+          const task = await taskModel.findById(taskId);
+          if (task?.status !== 'running') return;
+          const recorded = await new TaskTopicModel(
+            tx,
+            this.userId,
+            this.workspaceId,
+          ).findRunningByTaskIds([taskId]);
+          if (recorded.length > 0) return;
+          if (task.updatedAt.getTime() > staleBefore) {
+            starting = true;
+            return;
+          }
+          await taskModel.updateStatusIfCurrent(taskId, 'running', 'backlog', { error: null });
+        });
+      }
+      if (starting)
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'A run for this goal is still starting, so it was not closed. No new work will start; try again in a moment.',
+        });
+
+      const runningTopics = await this.taskTopicModel.findRunningByTaskIds(unfinishedTaskIds);
+      for (const topic of runningTopics) {
+        if (!topic.topicId) continue;
+        try {
+          await this.taskService.cancelTopic(topic.topicId);
+        } catch (error) {
+          throw notClosed(error);
+        }
+        // Reset right after its own interruption, as in `restart`: left `paused`
+        // it reads as parked on a person and a reopened goal waits on it. Doing
+        // it per run means a later failed interruption cannot strand the ones
+        // already stopped — a retry no longer sees them as running. CAS so a
+        // row a concurrent tick just moved is never yanked.
+        const task = await this.taskModel.findById(topic.taskId);
+        if (task && task.status !== 'completed') {
+          await this.taskModel.updateStatusIfCurrent(task.id, task.status, 'backlog', {
+            error: null,
+          });
+        }
+      }
+    }
+    // Commit under the same lock the fence took, and only if the fence still
+    // holds: a resume from another tab during the interruption pass lets an
+    // advance claim work this pass never saw, and ending the goal over it
+    // would leave that run spending on a goal reading "ended".
+    const reason = to === 'achieved' ? 'marked achieved by user' : 'canceled by user';
+    const goal = await this.db.transaction(async (db) => {
+      const model = new GoalModel(db, this.userId, this.workspaceId);
+      const current = await model.lockById(goalId);
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      if (!['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'The goal was resumed while it was being closed, so it was not closed.',
+        });
+      }
+      await model.updatePauseReason(goalId, undefined);
+      if (current.status === to) return current;
+      const updated = await model.updateStatus(goalId, to);
+      await new GoalGraphModel(db, this.userId, this.workspaceId)
+        .recordGoalStatus(goalId, current.status, to, reason)
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+      return updated;
+    });
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return goal;
+  };
+
   decide = async (goalId: string, decisionId: string, optionId: string, resolution?: string) => {
     const graph = await this.requireGraph(goalId);
+    // A goal a person ended stays ended: a gate another tab still shows must
+    // not reopen it. Checked again under the lock before the status moves.
+    if (GOAL_ENDED_STATUSES.has(graph.goal.status)) {
+      throw new TRPCError({ code: 'CONFLICT', message: 'This goal has ended' });
+    }
     const decision = graph.decisions.find((item) => item.id === decisionId);
     if (!decision || decision.status !== 'pending') {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Pending decision not found' });
@@ -1481,11 +1627,25 @@ export class GoalService {
         : terminalAcceptance && optionId === 'retire'
           ? 'canceled'
           : 'running';
-    await this.transitionStatus(
-      graph.goal,
-      nextStatus,
-      `decision "${decision.question}" resolved: ${optionId}`,
-    );
+    // Serialized with `close`, which commits under this row lock: a goal that
+    // ended while this answer was being written is left ended.
+    await this.db.transaction(async (tx) => {
+      const current = await new GoalModel(tx, this.userId, this.workspaceId).lockById(goalId);
+      if (!current || GOAL_ENDED_STATUSES.has(current.status)) return;
+      if (current.status === nextStatus) return;
+      await new GoalModel(tx, this.userId, this.workspaceId).updateStatus(goalId, nextStatus);
+      await new GoalGraphModel(tx, this.userId, this.workspaceId, {
+        id: GOAL_COORDINATOR_ACTOR_ID,
+        type: 'system',
+      })
+        .recordGoalStatus(
+          goalId,
+          current.status,
+          nextStatus,
+          `decision "${decision.question}" resolved: ${optionId}`,
+        )
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+    });
     return resolved;
   };
 
@@ -2184,6 +2344,18 @@ export class GoalService {
       };
     }
 
+    // The goal was paused or ended (a close fenced it) while this advance was
+    // deciding: start nothing and do not reopen it.
+    if (recovery.outcome === 'goal-stopped') {
+      return {
+        goalId: graph.goal.id,
+        message: 'Goal stopped while recovery was being decided',
+        nodeId,
+        outcome: 'no_progress',
+        taskId: task.id,
+      };
+    }
+
     // Nothing failed: somebody settled the Task while this advance was deciding.
     // Opening a gate would ask them to judge their own decision.
     if (recovery.outcome === 'settled') {
@@ -2517,6 +2689,18 @@ export class GoalService {
         message: `Task ${task.identifier} is waiting for its device to reconnect`,
         nodeId,
         outcome: 'waiting_external',
+        taskId: task.id,
+      };
+    }
+
+    // The goal was paused or ended (a close fenced it) while this advance was
+    // deciding: start nothing and do not reopen it.
+    if (recovery.outcome === 'goal-stopped') {
+      return {
+        goalId: graph.goal.id,
+        message: 'Goal stopped while recovery was being decided',
+        nodeId,
+        outcome: 'no_progress',
         taskId: task.id,
       };
     }
