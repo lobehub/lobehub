@@ -644,6 +644,50 @@ export class MessageCollector {
   }
 
   /**
+   * Visit, in order, every tool result along a group's main chain: each tool
+   * child of a step, then the steps under its first same-agent, non-signal
+   * follower before the next sibling tool. Walked with an explicit stack: one
+   * agent run can chain thousands of steps.
+   */
+  private forEachMainChainTool(
+    idNode: IdNode,
+    groupAgentId: string | undefined,
+    visit: (toolNode: IdNode) => void,
+  ): void {
+    const visited = new Set<string>();
+    // Each frame resumes a step's children where its last descent left off.
+    const stack: { children: IdNode[]; index: number }[] = [];
+    const enter = (node: IdNode) => {
+      if (visited.has(node.id)) return;
+      visited.add(node.id);
+      stack.push({ children: node.children, index: 0 });
+    };
+
+    enter(idNode);
+    while (stack.length > 0) {
+      const frame = stack.at(-1)!;
+      if (frame.index >= frame.children.length) {
+        stack.pop();
+        continue;
+      }
+
+      const child = frame.children[frame.index++];
+      if (this.messageMap.get(child.id)?.role !== 'tool') continue;
+
+      visit(child);
+      const follower = child.children.find((next) => {
+        const nextMsg = this.messageMap.get(next.id);
+        return (
+          nextMsg?.role === 'assistant' &&
+          nextMsg.agentId === groupAgentId &&
+          !getMessageSignal(nextMsg)
+        );
+      });
+      if (follower) enter(follower);
+    }
+  }
+
+  /**
    * Collect signal-callback blocks for an AssistantGroup — one
    * SignalCallbacksNode per source tool that fired signals (Monitor
    * stdout pushes triggering toolless follow-up turns, etc.).
@@ -659,62 +703,38 @@ export class MessageCollector {
   collectSignalCallbacks(message: Message, idNode: IdNode): SignalCallbacksNode[] {
     const groupAgentId = message.agentId;
     const blocks: SignalCallbacksNode[] = [];
-    const visited = new Set<string>();
-
-    const walk = (node: IdNode): void => {
-      if (visited.has(node.id)) return;
-      visited.add(node.id);
-
-      for (const child of node.children) {
-        const childMsg = this.messageMap.get(child.id);
-        if (childMsg?.role !== 'tool') continue;
-
-        // Gather callback-typed signal toolless siblings among this
-        // tool's children. `getMessageSignal` already returns undefined
-        // for tool-using assistants and non-assistants; `task-completion`
-        // turns are excluded here so they render outside the accordion
-        // (see `collectTaskCompletions`).
-        const callbacks: Message[] = [];
-        for (const toolChild of child.children) {
-          const toolChildMsg = this.messageMap.get(toolChild.id);
-          if (!toolChildMsg) continue;
-          if (!isCallbackSignal(getMessageSignal(toolChildMsg))) continue;
-          callbacks.push(toolChildMsg);
-        }
-
-        if (callbacks.length > 0) {
-          // Sort by sequence; missing sequence sorts to the end.
-          callbacks.sort((a, b) => {
-            const sa = getMessageSignal(a)?.sequence ?? Number.POSITIVE_INFINITY;
-            const sb = getMessageSignal(b)?.sequence ?? Number.POSITIVE_INFINITY;
-            return sa - sb;
-          });
-          const first = getMessageSignal(callbacks[0])!;
-          blocks.push({
-            callbacks: callbacks.map((m) => ({ id: m.id, type: 'message' as const })),
-            id: `signalCallbacks-${child.id}`,
-            sourceToolCallId: first.sourceToolCallId,
-            sourceToolMessageId: child.id,
-            sourceToolName: first.sourceToolName,
-            type: 'signalCallbacks',
-          });
-        }
-
-        // Continue walking the main chain — recurse into the next
-        // main-chain follower under this tool (skipping signal
-        // callbacks, just like `collectAssistantGroupMessages` does).
-        for (const nextChild of child.children) {
-          const nextMsg = this.messageMap.get(nextChild.id);
-          if (nextMsg?.role !== 'assistant') continue;
-          if (nextMsg.agentId !== groupAgentId) continue;
-          if (getMessageSignal(nextMsg)) continue;
-          walk(nextChild);
-          break;
-        }
+    this.forEachMainChainTool(idNode, groupAgentId, (child) => {
+      // Gather callback-typed signal toolless siblings among this
+      // tool's children. `getMessageSignal` already returns undefined
+      // for tool-using assistants and non-assistants; `task-completion`
+      // turns are excluded here so they render outside the accordion
+      // (see `collectTaskCompletions`).
+      const callbacks: Message[] = [];
+      for (const toolChild of child.children) {
+        const toolChildMsg = this.messageMap.get(toolChild.id);
+        if (!toolChildMsg) continue;
+        if (!isCallbackSignal(getMessageSignal(toolChildMsg))) continue;
+        callbacks.push(toolChildMsg);
       }
-    };
 
-    walk(idNode);
+      if (callbacks.length > 0) {
+        // Sort by sequence; missing sequence sorts to the end.
+        callbacks.sort((a, b) => {
+          const sa = getMessageSignal(a)?.sequence ?? Number.POSITIVE_INFINITY;
+          const sb = getMessageSignal(b)?.sequence ?? Number.POSITIVE_INFINITY;
+          return sa - sb;
+        });
+        const first = getMessageSignal(callbacks[0])!;
+        blocks.push({
+          callbacks: callbacks.map((m) => ({ id: m.id, type: 'message' as const })),
+          id: `signalCallbacks-${child.id}`,
+          sourceToolCallId: first.sourceToolCallId,
+          sourceToolMessageId: child.id,
+          sourceToolName: first.sourceToolName,
+          type: 'signalCallbacks',
+        });
+      }
+    });
     return blocks;
   }
 
@@ -738,39 +758,15 @@ export class MessageCollector {
   collectTaskCompletions(message: Message, idNode: IdNode): MessageNode[] {
     const groupAgentId = message.agentId;
     const nodes: MessageNode[] = [];
-    const visited = new Set<string>();
-
-    const walk = (node: IdNode): void => {
-      if (visited.has(node.id)) return;
-      visited.add(node.id);
-
-      for (const child of node.children) {
-        const childMsg = this.messageMap.get(child.id);
-        if (childMsg?.role !== 'tool') continue;
-
-        for (const toolChild of child.children) {
-          const toolChildMsg = this.messageMap.get(toolChild.id);
-          if (!toolChildMsg) continue;
-          if (toolChildMsg.agentId !== groupAgentId) continue;
-          if (!isTaskCompletionSignal(getMessageSignal(toolChildMsg))) continue;
-          nodes.push({ id: toolChildMsg.id, type: 'message' });
-        }
-
-        // Continue walking the main chain into the next non-signal
-        // follower under this tool (same skip rule as
-        // `collectAssistantGroupMessages`).
-        for (const nextChild of child.children) {
-          const nextMsg = this.messageMap.get(nextChild.id);
-          if (nextMsg?.role !== 'assistant') continue;
-          if (nextMsg.agentId !== groupAgentId) continue;
-          if (getMessageSignal(nextMsg)) continue;
-          walk(nextChild);
-          break;
-        }
+    this.forEachMainChainTool(idNode, groupAgentId, (child) => {
+      for (const toolChild of child.children) {
+        const toolChildMsg = this.messageMap.get(toolChild.id);
+        if (!toolChildMsg) continue;
+        if (toolChildMsg.agentId !== groupAgentId) continue;
+        if (!isTaskCompletionSignal(getMessageSignal(toolChildMsg))) continue;
+        nodes.push({ id: toolChildMsg.id, type: 'message' });
       }
-    };
-
-    walk(idNode);
+    });
     return nodes;
   }
 

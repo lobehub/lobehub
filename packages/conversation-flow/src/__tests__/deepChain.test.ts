@@ -94,4 +94,15 @@ describe('parse on deep message chains', () => {
     );
     expect(result.flatList.at(-1)?.children).toHaveLength(10);
   });
+
+  it('parses one agent run of 3,000 tool steps without overflowing the stack', () => {
+    // A single run keeps every step inside one assistant group, so the group's
+    // own chain walks see the whole depth, not just one round of it.
+    const messages = buildChain(1, 3000, true);
+
+    const result = parse(messages);
+
+    expect(result.flatList.map((m) => m.role)).toEqual(['user', 'assistantGroup']);
+    expect(result.flatList.at(-1)?.children).toHaveLength(3000);
+  });
 });
