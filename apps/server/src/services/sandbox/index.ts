@@ -1,5 +1,6 @@
 export { isSandboxAvailableForUser } from './availability';
 export { isPathWithin, sandboxStorageBinding } from './binding';
+export { injectSandboxCreds, type InjectSandboxCredsParams } from './credentials';
 export { getSandboxProviderKind } from './deployment';
 export type { DriveAccess } from './driveAccess';
 export { createDriveAccess } from './driveAccess';

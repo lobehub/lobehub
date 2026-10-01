@@ -25,6 +25,12 @@ const DEFAULT_JIT_TTL_SEC = 1800;
 const JIT_TOKEN_PREFIX = 'obx_jit_v1.';
 const WRITE_FILE_CHUNK_BYTES = 48 * 1024;
 const SKILL_ARCHIVE_CACHE_DIR = '/tmp/lobe-skills';
+/**
+ * Variables every later command in the session runs with (injected
+ * credentials). Kept apart from `~/.creds/env`, which other writers own.
+ */
+const COMMAND_ENV_FILE = '.creds/sandbox-env.sh';
+const COMMAND_ENV_PRELUDE = `if [ -r "$HOME/${COMMAND_ENV_FILE}" ]; then . "$HOME/${COMMAND_ENV_FILE}"; fi`;
 
 interface OnlyboxesTaskResponse {
   error?: { code?: string; message?: string };
@@ -218,9 +224,32 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
     }
   }
 
+  /**
+   * Add variables to the environment of every later command in this session,
+   * replacing earlier values of the same name. Market's credential injection
+   * writes into Market's own sandbox, so on Onlyboxes the injected
+   * credentials arrive this way.
+   */
+  async writeCommandEnv(env: Record<string, string>): Promise<void> {
+    if (!this.baseUrl || !this.jitSigningKey) {
+      throw new Error('ONLYBOXES_BASE_URL and ONLYBOXES_JIT_SIGNING_KEY are required');
+    }
+
+    const result = await this.runJsonScript(writeCommandEnvScript, { env }, DEFAULT_TIMEOUT_MS);
+
+    if (!result.success) {
+      throw new Error(result.error?.message || 'Failed to write the sandbox command environment');
+    }
+  }
+
   private get sessionId() {
     const scope = `${this.options.userId}-${this.options.topicId}`;
     return `lobe-${scope.replaceAll(/[^\w.-]/g, '-')}`;
+  }
+
+  /** Run a model-issued command with the session's injected variables. */
+  private withCommandEnv(command: string) {
+    return `${COMMAND_ENV_PRELUDE}\n${command}`;
   }
 
   private async executeCode(params: Record<string, unknown>): Promise<SandboxCallToolResult> {
@@ -255,7 +284,7 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
       return writeResult;
     }
 
-    const command = `${runner} '${filePath}'`;
+    const command = this.withCommandEnv(`${runner} '${filePath}'`);
     const terminal = await this.execTerminal(command, this.timeout(params));
 
     return {
@@ -304,7 +333,7 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
       ? `${workspaceDir}/${this.safeSkillDirName(defaultSkillName)}`
       : workspaceDir;
     const result = await this.execTerminal(
-      `cd ${this.shellQuote(runDir)} && ${command}`,
+      this.withCommandEnv(`cd ${this.shellQuote(runDir)} && ${command}`),
       timeoutMs,
     );
 
@@ -332,7 +361,7 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
       const task = await this.submitTask(
         'terminalExec',
         {
-          command,
+          command: this.withCommandEnv(command),
           create_if_missing: true,
           lease_ttl_sec: this.leaseTTLSec,
           session_id: this.sessionId,
@@ -355,7 +384,7 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
       };
     }
 
-    const terminal = await this.execTerminal(command, this.timeout(params));
+    const terminal = await this.execTerminal(this.withCommandEnv(command), this.timeout(params));
 
     return {
       result: {
@@ -773,6 +802,32 @@ def main(encoded):
     with path.open('ab') as file:
         file.write(chunk)
     emit({'bytesWritten': len(chunk), 'success': True})
+`;
+
+const writeCommandEnvScript = `${scriptPrelude}
+import shlex
+
+ENV_NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
+
+def main(encoded):
+    args = load_args(encoded)
+    path = Path.home() / '${COMMAND_ENV_FILE}'
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    env = {}
+    if path.exists():
+        for token in shlex.split(path.read_text()):
+            name, sep, value = token.partition('=')
+            if sep and ENV_NAME.fullmatch(name):
+                env[name] = value
+    for name, value in (args.get('env') or {}).items():
+        if ENV_NAME.fullmatch(name):
+            env[name] = str(value)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as file:
+        for name, value in env.items():
+            file.write(f'export {name}={shlex.quote(value)}\\n')
+    os.chmod(path, 0o600)
+    emit({'names': sorted(env), 'success': True})
 `;
 
 const editFileScript = `${scriptPrelude}
