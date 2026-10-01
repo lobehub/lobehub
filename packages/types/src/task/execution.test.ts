@@ -120,6 +120,26 @@ describe('directory axis', () => {
     });
   });
 
+  it('pins the inherited machine a directory was picked on', () => {
+    // Following an agent bound to device-a: the path exists on device-a only,
+    // so it must not travel once the agent moves to another machine.
+    expect(applyTaskDirectorySelection(undefined, { path: '/srv/app' }, 'device-a')).toEqual({
+      boundDeviceId: 'device-a',
+      repos: undefined,
+      workingDirectory: '/srv/app',
+      workingDirectoryConfig: { path: '/srv/app' },
+    });
+    // An explicit pin is the user's own and is never replaced.
+    expect(
+      applyTaskDirectorySelection({ boundDeviceId: 'device-b' }, { path: '/srv/app' }, 'device-a')
+        .boundDeviceId,
+    ).toBe('device-b');
+    // Clearing the directory pins nothing.
+    expect(applyTaskDirectorySelection(undefined, undefined, 'device-a').boundDeviceId).toBe(
+      undefined,
+    );
+  });
+
   it('clearing the directory keeps the target', () => {
     expect(
       clearTaskDirectorySelection({

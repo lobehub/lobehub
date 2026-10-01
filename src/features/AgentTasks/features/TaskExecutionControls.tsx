@@ -106,9 +106,11 @@ const TaskExecutionControlsInner = memo<
 
   const handleDirectoryChange = useCallback(
     (config?: WorkingDirConfig) => {
-      emit(applyTaskDirectorySelection(value, config));
+      // The path lives on the run's machine; pin it so the directory never
+      // travels to another target the agent later moves to.
+      emit(applyTaskDirectorySelection(value, config, target.deviceId));
     },
-    [emit, value],
+    [emit, target.deviceId, value],
   );
 
   if (isPreferenceLoading || !canExecuteSomewhere) return null;

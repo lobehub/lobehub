@@ -126,12 +126,21 @@ export const applyTaskReposSelection = (
  * The device surface's counterpart of {@link applyTaskReposSelection}: there the
  * directory is an absolute path on the device, so a repo selection is dropped —
  * a repo identifier means nothing to a run that is not in the cloud sandbox.
+ *
+ * An absolute path belongs to one machine, so picking one also pins the machine
+ * it was picked on (`deviceId`, the run's effective device) when the task only
+ * inherited it from the agent. Without the pin the path carries no device
+ * affinity: once the agent moved to another machine, was reassigned, or was
+ * fixed to the sandbox, the next run would forward this machine's path there.
+ * With it, the runner drops the path whenever the run lands elsewhere.
  */
 export const applyTaskDirectorySelection = (
   execution: TaskExecutionConfig | undefined,
   config?: WorkingDirConfig,
+  deviceId?: string,
 ): TaskExecutionConfig => ({
   ...execution,
+  ...(config && deviceId && !execution?.boundDeviceId ? { boundDeviceId: deviceId } : {}),
   repos: undefined,
   workingDirectory: config?.path,
   workingDirectoryConfig: config,

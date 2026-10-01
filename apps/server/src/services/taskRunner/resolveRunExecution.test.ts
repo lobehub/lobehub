@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { LobeAgentAgencyConfig, TaskExecutionConfig } from '@lobechat/types';
-import { toTaskExecutionConfigPatch } from '@lobechat/types';
+import { applyTaskDirectorySelection, toTaskExecutionConfigPatch } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -10,6 +10,22 @@ import {
 } from './resolveRunExecution';
 
 describe('resolveTaskRunExecution', () => {
+  it('keeps a directory picked on an inherited device on that device', () => {
+    // Picked while following an agent bound to device-a; the agent is later
+    // fixed to device-b by its author.
+    const execution = applyTaskDirectorySelection(undefined, { path: '/srv/app' }, 'device-a');
+    const movedAgent = {
+      boundDeviceId: 'device-b',
+      executionTarget: 'device',
+      executionTargetSelectionPolicy: 'fixed',
+    } as const;
+    const runDeviceId = resolveRunDeviceId(execution, movedAgent, 'ws-1');
+
+    expect(runDeviceId).toBe('device-b');
+    // device-a's path must not be forwarded to device-b.
+    expect(resolveTaskRunExecution(execution, runDeviceId)?.initialTopicMetadata).toBeUndefined();
+  });
+
   it('returns nothing for a task that pins nothing, so the run inherits the agent', () => {
     expect(resolveTaskRunExecution(undefined, undefined)).toBeUndefined();
     expect(resolveTaskRunExecution({} as TaskExecutionConfig, undefined)).toBeUndefined();
