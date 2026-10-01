@@ -1338,7 +1338,9 @@ export class GoalService {
           message: `Node ${nodeId} is a ${node.kind}; only task nodes can be retired`,
         });
       }
-      if (TERMINAL_NODE_STATUSES.has(node.status)) {
+      // An already-retired node is accepted so an interrupted retirement (its
+      // fence landed, stopping the run did not) can be finished by retrying.
+      if (node.status !== 'retired' && TERMINAL_NODE_STATUSES.has(node.status)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: `Node ${nodeId} is already ${node.status}`,
@@ -1380,6 +1382,7 @@ export class GoalService {
     // node reads `retired`, `bindTask` (which only binds an `active` node) can
     // no longer attach that Task, and the creator discards it.
     for (const node of targets) {
+      if (node.status === 'retired') continue;
       await this.graphModel.updateNodeStatus(goalId, node.id, 'retired', reason);
     }
 
@@ -3127,6 +3130,18 @@ export class GoalService {
     taskId: string,
     effects: GoalAdvanceEffect[] = [],
   ): Promise<GoalTickResult> => {
+    // `graph` can predate a retirement that landed while this tick ran. A
+    // retired node's late output must not enter the Goal as a finding or
+    // deliverable (and `updateNodeStatus` refuses to revive the node).
+    if ((await this.coordinatorGraph.getNodeStatus(graph.goal.id, nodeId)) === 'retired') {
+      return {
+        goalId: graph.goal.id,
+        message: 'Node was retired; the task outcome is discarded',
+        nodeId,
+        outcome: 'no_progress',
+        taskId,
+      };
+    }
     const existingFinding = graph.edges.some(
       (edge) => edge.sourceNodeId === nodeId && edge.kind === 'produces',
     );

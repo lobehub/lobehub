@@ -1150,6 +1150,58 @@ describe('GoalService', () => {
     expect(after.nodes.find((node) => node.id === stray.id)?.status).toBe('retired');
   });
 
+  it('lets an interrupted retirement be finished by retrying it', async () => {
+    // The fence lands before the run is stopped; when stopping it cannot be
+    // confirmed the call fails with the node already retired. A retry must
+    // still stop the task instead of rejecting the node as terminal.
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({ tasks: ['Running', 'Keep'], title: 'Retry retire' });
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const created = await service.tick(graph.goal.id);
+    vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockResolvedValue([
+      { taskId: created.taskId!, topicId: 'tpc_running' },
+    ] as never);
+    const cancelTopic = vi
+      .spyOn(TaskService.prototype, 'cancelTopic')
+      .mockRejectedValueOnce(new Error('interrupt not confirmed'))
+      .mockResolvedValue(undefined as never);
+
+    await expect(service.retireNodes(graph.goal.id, [created.nodeId!])).rejects.toThrow(
+      'interrupt not confirmed',
+    );
+    expect(
+      (await service.graph(graph.goal.id)).nodes.find((node) => node.id === created.nodeId)?.status,
+    ).toBe('retired');
+
+    const retried = await service.retireNodes(graph.goal.id, [created.nodeId!]);
+
+    expect(retried.retiredNodeIds).toEqual([created.nodeId]);
+    expect(cancelTopic).toHaveBeenCalledTimes(2);
+    expect((await taskModel.findById(created.taskId!))?.status).toBe('canceled');
+  });
+
+  it('discards a stale tick outcome for a node retired while it ran', async () => {
+    const service = new GoalService(serverDB, userId);
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const graph = await service.create({ tasks: ['Stray', 'Keep'], title: 'Stale tick' });
+    const created = await service.tick(graph.goal.id);
+    // The coordinator loaded this snapshot before the retirement landed.
+    const stale = await service.graph(graph.goal.id);
+    await service.retireNodes(graph.goal.id, [created.nodeId!]);
+
+    const result = await (service as any).consumeCompletedTask(
+      stale,
+      created.nodeId!,
+      created.taskId!,
+    );
+
+    expect(result.outcome).toBe('no_progress');
+    const after = await service.graph(graph.goal.id);
+    expect(after.nodes.find((node) => node.id === created.nodeId)?.status).toBe('retired');
+    expect(after.nodes.some((node) => node.kind === 'finding')).toBe(false);
+  });
+
   it('reopens a goal parked by no_frontier once the blocking nodes are retired', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ tasks: ['A', 'B', 'Keep'], title: 'Deadlocked branch' });

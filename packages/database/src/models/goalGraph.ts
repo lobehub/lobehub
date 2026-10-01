@@ -14,7 +14,20 @@ import type {
   GoalStatus,
 } from '@lobechat/types';
 import { experimentMembers, experimentOwner, experimentStatus } from '@lobechat/utils/goalGraph';
-import { and, asc, count, desc, eq, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
 import {
@@ -572,6 +585,17 @@ export class GoalGraphModel {
       return node;
     });
 
+  /** Current status of one node, read fresh — for writers holding an older snapshot. */
+  getNodeStatus = async (goalId: string, nodeId: string): Promise<GoalNodeStatus | undefined> => {
+    const [row] = await this.db
+      .select({ status: goalNodes.status })
+      .from(goalNodes)
+      .innerJoin(goals, eq(goals.id, goalNodes.goalId))
+      .where(and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId), this.ownership()))
+      .limit(1);
+    return row?.status as GoalNodeStatus | undefined;
+  };
+
   updateNodeStatus = async (
     goalId: string,
     nodeId: string,
@@ -587,7 +611,17 @@ export class GoalGraphModel {
           status,
           updatedAt: new Date(),
         })
-        .where(and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId)))
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.id, nodeId),
+            // Retirement is a person's final word on a node. A coordinator tick
+            // that loaded the node before it was retired must not write it back
+            // to `resolved` / `active` afterwards; the goal row lock taken above
+            // serializes this check with the retirement itself.
+            status === 'retired' ? undefined : ne(goalNodes.status, 'retired'),
+          ),
+        )
         .returning();
       if (!node) return undefined;
       const eventType: GoalEventType =

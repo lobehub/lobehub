@@ -195,6 +195,17 @@ describe('GoalGraphModel', () => {
     expect(after.taskId).toBeNull();
   });
 
+  it('does not let a stale status write revive a retired node', async () => {
+    // A coordinator tick that loaded the node before retirement would
+    // otherwise write it back to `resolved`.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Stale write' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Stray' });
+    await graphModel.updateNodeStatus(goal.id, node!.id, 'retired');
+
+    expect(await graphModel.updateNodeStatus(goal.id, node!.id, 'resolved')).toBeUndefined();
+    expect(await graphModel.getNodeStatus(goal.id, node!.id)).toBe('retired');
+  });
+
   it('refuses to bind a task to a node that is not a task node', async () => {
     // This used to be a CHECK constraint. It lives in `bindTask`'s WHERE now,
     // so the rule needs a test on the write path or nothing enforces it.
