@@ -134,3 +134,7 @@ CONSOLE_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
   文件导出仍会把沙箱内产物写入 LobeHub 配置的 S3 存储。如果用户需要下载沙箱生成的文件，请同时配置 S3
   相关环境变量。
 </Callout>
+
+### 凭证
+
+使用 Onlyboxes 时，Agent 通过 `injectCredsToSandbox` 注入的凭证会写入沙箱内的 `~/.creds/sandbox-env.sh`（权限 `600`），之后的每条 Shell 命令、脚本和代码执行都会加载该文件。只有 `kv-env` 类型的凭证可以通过这种方式注入：OAuth 令牌只保留在 Market 中，Market 在任何沙箱中都会跳过 `kv-header` 凭证，Onlyboxes 暂不支持 `file` 凭证，因此这些凭证会以「沙箱不支持」的结果返回给 Agent。如需在 Shell 命令中使用 GitHub 个人访问令牌等令牌，请将其保存为 `kv-env` 凭证，例如 `GITHUB_TOKEN`。

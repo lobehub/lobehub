@@ -8,6 +8,7 @@ import { cloudWorkspaceAuth } from '@/business/server/trpc-middlewares/workspace
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, requireMarketAuth, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MarketService } from '@/server/services/market';
+import { injectSandboxCreds } from '@/server/services/sandbox';
 
 const log = debug('lambda-router:market:creds');
 
@@ -356,8 +357,10 @@ export const credsRouter = router({
           });
         }
 
-        const result = await ctx.marketService.market.creds.inject({
+        const result = await injectSandboxCreds({
+          getCredsAccessor: () => ctx.marketService.market.creds,
           keys: input.keys,
+          marketService: ctx.marketService,
           sandbox: input.sandbox,
           topicId: input.topicId,
           userId,
