@@ -10,6 +10,7 @@ import AsyncError from '@/components/AsyncError';
 import Avatar from '@/components/Avatar';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { AgentNotFound } from '@/features/AgentNotFound';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -24,7 +25,9 @@ const Body = memo(() => {
   const openingMessage = useAgentStore(
     (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage,
   );
-  const hasConfig = useAgentStore((s) => Boolean(s.agentMap[agentId]));
+  const scope = useCacheScope();
+  // A config cached by the previous workspace must not render as this one's.
+  const hasConfig = useAgentStore(agentByIdSelectors.hasAgentConfigInScope(agentId, scope));
   const isNotFound = useAgentStore(agentByIdSelectors.isAgentNotFoundById(agentId));
   const displayName = agentDisplayName(meta, t('defaultSession', { ns: 'common' }));
 
