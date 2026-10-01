@@ -32,7 +32,6 @@ import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors } from '@/store/task/selectors';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { styles } from '../shared/style';
@@ -41,6 +40,7 @@ import RunVerifyDetail from './RunVerifyDetail';
 import RunVerifyTag from './RunVerifyTag';
 import { shouldShowRunFollowUp } from './shouldShowRunFollowUp';
 import TopicStatusIcon from './TopicStatusIcon';
+import { resolveRunAgentId, useRunFollowUp } from './useRunFollowUp';
 
 // The run's last message (`content`) is the raw assistant output — markdown, and
 // often long. Render it as rich text, but keep it a bounded preview in the feed:
@@ -91,17 +91,12 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const cancelTopic = useTaskStore((s) => s.cancelTopic);
   const deleteTopic = useTaskStore((s) => s.deleteTopic);
-  const addComment = useTaskStore((s) => s.addComment);
-  const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const { canFollowUp, submitFollowUp } = useRunFollowUp(activity);
   const { allowed: canEditTask } = usePermission('create_content');
   const [commenting, setCommenting] = useState(false);
   const isRunning = activity.status === 'running';
-  // A descendant run shown in a parent detail belongs to `sourceTaskId`, not the
-  // currently open parent (`activeTaskId`) — file the follow-up on the task that
-  // owns the run so it appears where the run lives. Direct runs fall back to the
-  // active task.
-  const runTaskId = activity.sourceTaskId ?? activeTaskId;
-  const canFollowUp = canEditTask && !!runTaskId;
+  // A run cannot be answered while it is still going: the follow-up is a turn
+  // in the same conversation, so it would land mid-run.
   const showRunFollowUp = shouldShowRunFollowUp(canFollowUp, isRunning);
   const hasBody = Boolean(
     activity.summary || activity.content || showRunFollowUp || activity.verify?.total,
@@ -130,11 +125,10 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
   const handleOpen = useCallback(() => {
     if (!activity.id) return;
     openTopicDrawer(activity.id, {
-      agentId:
-        activity.author?.type === 'agent' ? activity.author.id : activity.agentId || undefined,
+      agentId: resolveRunAgentId(activity),
       title: activity.title,
     });
-  }, [activity.agentId, activity.author, activity.id, activity.title, openTopicDrawer]);
+  }, [activity, openTopicDrawer]);
 
   const handleTitleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -395,7 +389,7 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
                 <RunReplyEditor
                   onCancel={() => setCommenting(false)}
                   onSubmit={async (text) => {
-                    await addComment(runTaskId!, text, { topicId: activity.id });
+                    await submitFollowUp(text);
                     setCommenting(false);
                   }}
                 />
@@ -405,7 +399,8 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
                 {/* The run's own conversation was reachable only by clicking the
                     title, which said nothing about being a door. Asking the
                     agent a follow-up is the natural next move after reading a
-                    delivery, so it gets a real affordance. */}
+                    delivery, so it gets a real affordance — it sends into that
+                    conversation and opens it. */}
                 <ActionIcon
                   icon={MessagesSquare}
                   size={'small'}

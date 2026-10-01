@@ -9,6 +9,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import TopicCard from './TopicCard';
 
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
+
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: any) => unknown) =>
     selector({
@@ -29,6 +34,13 @@ vi.mock('@/hooks/useActivityTime', () => ({
 vi.mock('./RunReplyEditor', () => ({ default: () => null }));
 vi.mock('./RunVerifyDetail', () => ({ default: () => null }));
 vi.mock('./RunVerifyTag', () => ({ default: () => null }));
+
+// The follow-up's own behaviour lives in useRunFollowUp.test.ts; this file only
+// covers the card's wiring to it.
+vi.mock('./useRunFollowUp', () => ({
+  resolveRunAgentId: () => 'agt_1',
+  useRunFollowUp: () => ({ canFollowUp: true, submitting: false, submitFollowUp: vi.fn() }),
+}));
 
 vi.mock('@/features/AgentProfileCard/AgentProfilePopup', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -55,5 +67,11 @@ describe('TopicCard', () => {
     // through to the card behind it. user-event refuses to click through that
     // rule, which is exactly what a reader hit: a link that ignores the mouse.
     await expect(userEvent.click(link)).resolves.not.toThrow();
+  });
+
+  it('offers the follow-up affordance when the hook allows answering the run', () => {
+    render(<TopicCard activity={activity} />);
+
+    expect(screen.getByRole('button', { name: 'taskDetail.runFollowUp' })).toBeInTheDocument();
   });
 });
