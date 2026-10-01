@@ -1,3 +1,4 @@
+diff --git a/es/headless.js b/es/headless.js
 --- a/es/headless.js
 +++ b/es/headless.js
 @@ -2580,7 +2580,7 @@
@@ -91,6 +92,7 @@
  		};
  		markdownService.registerMarkdownWriter(ListItemNode.getType(), (ctx, node) => {
  			const parent = node.getParent();
+diff --git a/es/plugins/list/plugin/index.js b/es/plugins/list/plugin/index.js
 --- a/es/plugins/list/plugin/index.js
 +++ b/es/plugins/list/plugin/index.js
 @@ -130,7 +130,8 @@
@@ -103,6 +105,7 @@
  		};
  		markdownService.registerMarkdownWriter(ListItemNode.getType(), (ctx, node) => {
  			const parent = node.getParent();
+diff --git a/es/plugins/litexml/command/diffCommand.js b/es/plugins/litexml/command/diffCommand.js
 --- a/es/plugins/litexml/command/diffCommand.js
 +++ b/es/plugins/litexml/command/diffCommand.js
 @@ -125,7 +125,7 @@
@@ -114,6 +117,7 @@
  	}
  }
  function registerLiteXMLDiffCommand(editor) {
+diff --git a/es/plugins/litexml/command/index.js b/es/plugins/litexml/command/index.js
 --- a/es/plugins/litexml/command/index.js
 +++ b/es/plugins/litexml/command/index.js
 @@ -96,7 +96,7 @@
@@ -172,6 +176,7 @@
  						const diffNode = $createDiffNode("add");
  						diffNode.append(node);
  						return diffNode;
+diff --git a/es/plugins/litexml/plugin/index.js b/es/plugins/litexml/plugin/index.js
 --- a/es/plugins/litexml/plugin/index.js
 +++ b/es/plugins/litexml/plugin/index.js
 @@ -86,6 +86,7 @@
