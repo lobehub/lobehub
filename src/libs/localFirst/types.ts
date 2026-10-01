@@ -1,5 +1,7 @@
 import type { QueryProjectionStorage } from '@/libs/queryProjectionStorage';
 
+import type { LocalFirstPagingConfig } from './paging';
+
 /**
  * Where the confirmed value of an entry came from.
  * - `storage`: hydrated from the persisted projection (may be stale)
@@ -32,7 +34,11 @@ export interface LocalFirstEntryMeta<T> {
    * otherwise the view itself is the confirmed value.
    */
   base?: T;
+  /** Params of the last hydrate/replace — what `loadMore` pages with. */
+  params?: unknown;
   pending: LocalFirstPendingMutation<T>[];
+  /** Stable query identity beyond the key (filters, page size). */
+  query?: string;
   source: LocalFirstSource;
   updatedAt: number;
 }
@@ -45,14 +51,25 @@ export interface LocalFirstState<T> {
 }
 
 export interface LocalFirstResource<TParams, TData, TFetched = TData> {
-  fetcher?: (params: TParams) => Promise<TFetched>;
+  /** Paged resources receive the page cursor (`undefined` = head page). */
+  fetcher?: (params: TParams, cursor?: any) => Promise<TFetched>;
   key: (params: TParams) => string;
   name: string;
   /** Storage namespace — `name` + `version`, so a version bump orphans old rows. */
   namespace: string;
+  /** Present on paged resources (`defineLocalFirstPagedResource`). */
+  paging?: LocalFirstPagingConfig<any>;
   /** Whether the resource survives a reload (`storage !== 'memory'`). */
   persisted: boolean;
+  /**
+   * Query identity beyond `key` (filters, page size). Persisted rows are
+   * stored per query, so a different query never hydrates; in memory a query
+   * change resets loaded pages.
+   */
+  query: (params: TParams) => string | undefined;
   scope: LocalFirstScope;
   storage?: QueryProjectionStorage<TData>;
+  /** Row key in `storage` for these params (`key`, plus `?query` when set). */
+  storageKey: (params: TParams) => string;
   version: number;
 }

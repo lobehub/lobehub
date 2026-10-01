@@ -1,3 +1,4 @@
+import isEqual from 'fast-deep-equal';
 import { useLayoutEffect } from 'react';
 import type { SWRConfiguration } from 'swr';
 
@@ -5,6 +6,20 @@ import { QueryProjectionWriteQueue } from '@/libs/queryProjectionStorage';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { isLocalFirstSyncKey, localFirstKeys } from '@/libs/swr/keys';
 
+import { localFirstStorageKey, stableQueryKey } from './defineResource';
+import {
+  applyHeadPage,
+  applyNextPage,
+  collapseToHead,
+  getNextPageCursor,
+  hasPagedItem,
+  insertHeadItems,
+  type LocalFirstPagedData,
+  type LocalFirstPageResult,
+  type LocalFirstPagingContext,
+  mapPagedItem,
+  toPersistedPage,
+} from './paging';
 import type { LocalFirstAction, LocalFirstEffect, LocalFirstViewWrite } from './reducer';
 import { localFirstReducer } from './reducer';
 import type { LocalFirstResource, LocalFirstState } from './types';
@@ -18,20 +33,37 @@ type Setter<TStore> = (partial: Partial<TStore>, replace?: false, action?: any) 
 export interface LocalFirstLens<TStore, TData> {
   clear: (state: TStore) => Partial<TStore>;
   get: (state: TStore, key: string) => TData | undefined;
+  /** Enumerate loaded keys (needed for entity propagation). */
+  keys?: (state: TStore) => string[];
   set: (state: TStore, key: string, data: TData | undefined) => Partial<TStore>;
+}
+
+/**
+ * How an entity (e.g. one topic) appears inside this resource's value. Paged
+ * resources get it for free from `paging.getId`; a single-entity resource
+ * (a detail cache) passes `getId`.
+ */
+export interface LocalFirstEntityAdapter<TData, TItem> {
+  /** Map the entity value into the resource value; defaults to identity. */
+  apply?: (data: TData, item: TItem) => TData;
+  getId: (data: TData) => string;
 }
 
 export interface CreateLocalFirstSliceOptions<TStore, TParams, TData, TFetched> {
   /** Devtools action-name prefix. Defaults to the resource name. */
   actionPrefix?: string;
+  /** Single-entity resources only: how to find / patch the entity. */
+  entity?: LocalFirstEntityAdapter<TData, any>;
   /** Overrides `resource.fetcher` when the fetch needs store context. */
-  fetcher?: (params: TParams) => Promise<TFetched>;
+  fetcher?: (params: TParams, cursor?: any) => Promise<TFetched>;
   get: () => TStore;
-  /** Reject a persisted value that cannot serve these params (e.g. other filters). */
+  /** Paged: rows that only exist client-side (kept across refreshes, never persisted). */
+  isClientOnly?: (item: any) => boolean;
+  /** Reject a persisted value that cannot serve these params. Rarely needed: rows are stored per query. */
   isHydratable?: (cached: TData, params: TParams) => boolean;
   /**
-   * Fold a server response into the confirmed value. Return `undefined` to
-   * keep the current value (no-op). Defaults to "the response is the value".
+   * Non-paged: fold a server response into the confirmed value. Return
+   * `undefined` to keep the current value. Defaults to "the response is the value".
    */
   merge?: (incoming: TFetched, confirmed: TData | undefined, params: TParams) => TData | undefined;
   set: Setter<TStore>;
@@ -41,6 +73,8 @@ export interface CreateLocalFirstSliceOptions<TStore, TParams, TData, TFetched> 
   toPersisted?: (data: TData) => TData | undefined;
   /** Where the view lives in the store; `recordLens(field)` covers `Record<key, TData>`. */
   view: LocalFirstLens<TStore, TData>;
+  /** Paged: domain fields derived from params, written with every head page. */
+  viewFields?: (params: TParams) => Partial<TData>;
 }
 
 export interface LocalFirstSyncOptions<TFetched> {
@@ -65,40 +99,58 @@ export interface OptimisticMutationOptions<TData, TResult> {
   revalidate?: boolean;
 }
 
+/** Handle of an optimistic overlay that is settled later (see `beginOptimistic`). */
+export interface LocalFirstOptimisticToken<TData> {
+  commit: (confirm?: (data: TData) => TData) => void;
+  rollback: () => void;
+}
+
 /**
  * Bind a local-first resource to a domain Zustand store.
  *
  * The domain store stays the only UI source of truth: components read the
  * `view` location through their usual selectors. The binding owns the
- * transitions around it — hydrate-if-empty, server replace, optimistic
- * overlay with commit/rollback, scope isolation and serialized persistence —
- * and exposes a `useSync` hook that only orchestrates fetching.
+ * transitions around it — hydrate-if-empty, server replace, pagination,
+ * optimistic overlay with commit/rollback, scope isolation and serialized
+ * persistence — and exposes a `useSync` hook that only orchestrates fetching.
  */
 export const createLocalFirstSlice = <TStore, TParams, TData, TFetched = TData>(
   resource: LocalFirstResource<TParams, TData, TFetched>,
   options: CreateLocalFirstSliceOptions<TStore, TParams, TData, TFetched>,
 ) => {
   const { get, set, stateKey, view } = options;
+  const paging = resource.paging;
+  const pagingCtx: LocalFirstPagingContext<any> = { isClientOnly: options.isClientOnly };
   const prefix = options.actionPrefix ?? resource.name;
   const writeQueue = resource.storage
     ? new QueryProjectionWriteQueue<TData>(resource.storage)
     : undefined;
   const fetcher = options.fetcher ?? resource.fetcher;
   let mutationSeq = 0;
+  /** Keys with a `loadMore` request in flight (the only valid `isLoadingMore`). */
+  const loadingMore = new Set<string>();
 
   const getSlot = () => get()[stateKey] as unknown as LocalFirstState<TData>;
+  const storageKey = (key: string, query?: string) => ({
+    queryKey: localFirstStorageKey(key, query),
+  });
+
+  const toPersisted = (data: TData): TData | undefined => {
+    const paged = paging ? (toPersistedPage(data as any, paging, pagingCtx) as TData) : data;
+    return options.toPersisted ? options.toPersisted(paged) : paged;
+  };
 
   const runEffects = (effects: LocalFirstEffect<TData>[]) => {
     if (!writeQueue || effects.length === 0) return;
     // Until identity resolves the scope is a guess; never write into it.
     if (!resource.scope.canPersist()) return;
     for (const effect of effects) {
-      const key = { queryKey: effect.key, scope: effect.scope };
+      const key = { ...storageKey(effect.key, effect.query), scope: effect.scope };
       if (effect.type === 'remove') {
         writeQueue.remove(key);
         continue;
       }
-      const data = options.toPersisted ? options.toPersisted(effect.data) : effect.data;
+      const data = toPersisted(effect.data);
       if (data !== undefined) writeQueue.set(key, { data, updatedAt: Date.now() });
     }
   };
@@ -163,26 +215,73 @@ export const createLocalFirstSlice = <TStore, TParams, TData, TFetched = TData>(
   const hydrate = async (params: TParams, scope = resource.scope.get()) => {
     if (!resource.storage) return false;
     const key = resource.key(params);
-    const cached = await resource.storage.get({ queryKey: key, scope });
+    const query = resource.query(params);
+    const cached = await resource.storage.get({ ...storageKey(key, query), scope });
     if (!cached) return false;
     if (options.isHydratable && !options.isHydratable(cached.data, params)) return false;
     return dispatch({
       data: cached.data,
       key,
+      params,
+      query,
       scope,
       type: 'hydrate',
       updatedAt: cached.updatedAt,
     });
   };
 
-  const replace = (params: TParams, incoming: TFetched, scope = resource.scope.get()) =>
-    dispatch({
+  const viewMatchesFields = (current: TData | undefined, params: TParams) => {
+    const fields = options.viewFields?.(params);
+    if (!current || !fields) return true;
+    // Falsy descriptors (undefined / false / null) are equivalent.
+    const norm = (value: unknown) => stableQueryKey(value || null);
+    return Object.entries(fields).every(
+      ([field, value]) => norm(value) === norm((current as Record<string, unknown>)[field]),
+    );
+  };
+
+  const mergeHead = (
+    key: string,
+    incoming: TFetched,
+    confirmed: TData | undefined,
+    params: TParams,
+    reset: boolean,
+  ) => {
+    const page = incoming as unknown as LocalFirstPageResult<unknown, unknown>;
+    const pageSize = (params as { pageSize?: number }).pageSize ?? page.items.length;
+    const merged = {
+      ...applyHeadPage(confirmed as any, page, { pageSize, reset }, paging!, pagingCtx),
+      ...options.viewFields?.(params),
+      isLoadingMore: loadingMore.has(key),
+    };
+    // Keep domain-only fields of the current view (e.g. transient flags).
+    const next = { ...(confirmed as object), ...merged } as TData;
+    return confirmed !== undefined && isEqual(next, confirmed) ? undefined : next;
+  };
+
+  const replace = (params: TParams, incoming: TFetched, scope = resource.scope.get()) => {
+    const key = resource.key(params);
+    const query = resource.query(params);
+    const entry = getSlot().entries[key];
+    // A different query (filters, sort) must not merge with loaded pages. A
+    // view seeded without bookkeeping is compared by its `viewFields`.
+    const reset = entry
+      ? entry.query !== query
+      : paging !== undefined && !viewMatchesFields(view.get(get(), key), params);
+    return dispatch({
       data: (confirmed) =>
-        options.merge ? options.merge(incoming, confirmed, params) : (incoming as unknown as TData),
-      key: resource.key(params),
+        paging
+          ? mergeHead(key, incoming, confirmed, params, reset)
+          : options.merge
+            ? options.merge(incoming, confirmed, params)
+            : (incoming as unknown as TData),
+      key,
+      params,
+      query,
       scope,
       type: 'replace',
     });
+  };
 
   /** Confirmed local write: patches the view (and the base under any overlay). */
   const update = (
@@ -198,6 +297,24 @@ export const createLocalFirstSlice = <TStore, TParams, TData, TFetched = TData>(
       isLocalFirstSyncKey(swrKey, resource.name, { key, scope: resource.scope.get() }),
     );
 
+  /** Start an optimistic overlay now and settle it later (multi-resource flows). */
+  const beginOptimistic = (
+    key: string,
+    apply: (data: TData) => TData,
+  ): LocalFirstOptimisticToken<TData> => {
+    const scope = resource.scope.get();
+    const id = ++mutationSeq;
+    dispatch({ apply, id, key, scope, type: 'optimistic' });
+    return {
+      commit: (confirm) => {
+        dispatch({ confirm, id, key, scope, type: 'commit' });
+      },
+      rollback: () => {
+        dispatch({ id, key, scope, type: 'rollback' });
+      },
+    };
+  };
+
   /**
    * Apply `apply` to the view right away, run `serverCall`, then commit (the
    * confirmed value is persisted) or roll back (the view is rebuilt from the
@@ -209,25 +326,152 @@ export const createLocalFirstSlice = <TStore, TParams, TData, TFetched = TData>(
     serverCall: () => Promise<TResult>,
     mutationOptions: OptimisticMutationOptions<TData, TResult> = {},
   ): Promise<TResult> => {
-    const scope = resource.scope.get();
-    const id = ++mutationSeq;
-    dispatch({ apply, id, key, scope, type: 'optimistic' });
+    const token = beginOptimistic(key, apply);
     try {
       const result = await serverCall();
-      dispatch({ confirm: mutationOptions.confirm?.(result), id, key, scope, type: 'commit' });
+      token.commit(mutationOptions.confirm?.(result));
       return result;
     } catch (error) {
-      dispatch({ id, key, scope, type: 'rollback' });
+      token.rollback();
       throw error;
     } finally {
       if (mutationOptions.revalidate) void revalidate(key);
     }
   };
 
+  // ---- pagination --------------------------------------------------------
+
+  /**
+   * Fetch and merge the next page with the params of the loaded head page
+   * (`fallbackParams` covers views seeded outside `useSync`). In `cursor` mode
+   * paging only starts from a server-confirmed head page: a hydrated cursor
+   * may be stale. A result is dropped when the scope, the query or the loaded
+   * depth changed while it was in flight.
+   */
+  const loadMore = async (key: string, fallbackParams?: TParams): Promise<void> => {
+    if (!paging || !fetcher) return;
+    const entry = getSlot().entries[key];
+    const current = view.get(get(), key) as LocalFirstPagedData<unknown, unknown> | undefined;
+    if (!current || loadingMore.has(key)) return;
+    if (paging.mode === 'cursor' && entry?.source === 'storage') return;
+    const params = (entry?.params ?? fallbackParams) as TParams | undefined;
+    if (params === undefined) return;
+    const cursor = getNextPageCursor(current, paging);
+    if (cursor === null || cursor === undefined) return;
+
+    const query = entry?.query;
+    const scope = resource.scope.get();
+    const depth = current.currentPage;
+    const setLoading = (patch: object) =>
+      update(key, (data) => data && ({ ...data, ...patch } as TData), { persist: false });
+
+    loadingMore.add(key);
+    setLoading({ isLoadingMore: true, loadMoreError: undefined });
+    const isCurrent = () => {
+      const latest = view.get(get(), key) as LocalFirstPagedData<unknown, unknown> | undefined;
+      return (
+        resource.scope.get() === scope &&
+        getSlot().entries[key]?.query === query &&
+        latest?.currentPage === depth
+      );
+    };
+    try {
+      const page = (await fetcher(params, cursor)) as unknown as LocalFirstPageResult<
+        unknown,
+        unknown
+      >;
+      if (!isCurrent()) return void setLoading({ isLoadingMore: false });
+      update(
+        key,
+        (data) => data && (applyNextPage(data as any, page, paging, pagingCtx) as TData),
+        { persist: (paging.persist?.pages ?? 1) > 1 },
+      );
+    } catch (error) {
+      setLoading({ isLoadingMore: false, loadMoreError: isCurrent() ? error : undefined });
+    } finally {
+      loadingMore.delete(key);
+    }
+  };
+
+  /** Insert rows at the head (new / streamed items). */
+  const insertHead = <TItem>(key: string, items: TItem[], { persist = false } = {}) =>
+    paging
+      ? update(key, (data) => data && (insertHeadItems(data as any, items, paging) as TData), {
+          persist,
+        })
+      : false;
+
+  /** Drop loaded pages, keeping the head (e.g. after an edit inside older pages). */
+  const collapse = (key: string) =>
+    paging
+      ? update(key, (data) => data && (collapseToHead(data as any, paging) as TData), {
+          persist: false,
+        })
+      : false;
+
+  // ---- entity propagation -----------------------------------------------
+
+  const entityKeys = (id: string): string[] => {
+    const state = get();
+    const keys = view.keys?.(state) ?? Object.keys(getSlot().entries);
+    return keys.filter((key) => {
+      const data = view.get(state, key);
+      if (data === undefined) return false;
+      if (paging) return hasPagedItem(data as any, id, paging);
+      return options.entity ? options.entity.getId(data) === id : false;
+    });
+  };
+
+  /** Map one entity inside a value; `undefined` from `fn` removes it (paged only). */
+  const mapEntity = <TItem>(
+    data: TData,
+    id: string,
+    fn: (item: TItem) => TItem | undefined,
+  ): TData | undefined => {
+    if (paging) return mapPagedItem(data as any, id, fn as any, paging) as TData;
+    const entity = options.entity;
+    if (!entity || entity.getId(data) !== id) return data;
+    const next = fn(data as unknown as TItem);
+    if (next === undefined) return undefined;
+    return entity.apply ? entity.apply(data, next) : (next as unknown as TData);
+  };
+
+  const updateEntity = <TItem>(
+    id: string,
+    fn: (item: TItem) => TItem | undefined,
+    { persist = true }: { persist?: boolean } = {},
+  ) => {
+    for (const key of entityKeys(id)) {
+      const current = view.get(get(), key);
+      if (current === undefined) continue;
+      const next = mapEntity(current, id, fn);
+      if (next === undefined) remove(key);
+      else
+        update(key, (data) => (data === undefined ? data : (mapEntity(data, id, fn) ?? data)), {
+          persist,
+        });
+    }
+  };
+
+  const beginEntityOptimistic = <TItem>(
+    id: string,
+    fn: (item: TItem) => TItem | undefined,
+  ): LocalFirstOptimisticToken<TData>[] =>
+    entityKeys(id).flatMap((key) => {
+      // Removing a single-entity value is applied on commit, not optimistically.
+      if (!paging) {
+        const current = view.get(get(), key);
+        if (current !== undefined && mapEntity(current, id, fn) === undefined) return [];
+      }
+      return [beginOptimistic(key, (data) => mapEntity(data, id, fn) ?? data)];
+    });
+
+  // ---- fetch orchestration ----------------------------------------------
+
   /**
    * Fetch orchestration only: hydrates the persisted projection once per
-   * scope/key, then lets SWR fetch and revalidate. Data never flows through
-   * the return value — read it from the store.
+   * scope/key/query, then lets SWR fetch and revalidate the head. Data never
+   * flows through the return value — read it from the store.
    */
   const useSync = (
     params: TParams | null | undefined,
@@ -245,7 +489,12 @@ export const createLocalFirstSlice = <TStore, TParams, TData, TFetched = TData>(
 
     const hydration = useClientDataSWR<boolean>(
       active && resource.persisted
-        ? localFirstKeys.hydrate(resource.name, resource.version, scope, key!)
+        ? localFirstKeys.hydrate(
+            resource.name,
+            resource.version,
+            scope,
+            resource.storageKey(params!),
+          )
         : null,
       async () => {
         await hydrate(params!, scope);
@@ -258,7 +507,7 @@ export const createLocalFirstSlice = <TStore, TParams, TData, TFetched = TData>(
       active && fetcher
         ? localFirstKeys.sync(resource.name, resource.version, scope, key!, params)
         : null,
-      () => fetcher!(params!),
+      () => fetcher!(params!, undefined),
       {
         ...swr,
         onSuccess: (data: TFetched, swrKey: string, config: any) => {
@@ -277,16 +526,23 @@ export const createLocalFirstSlice = <TStore, TParams, TData, TFetched = TData>(
   };
 
   return {
+    beginEntityOptimistic,
+    beginOptimistic,
+    collapse,
     dispatch,
     ensureScope,
+    entityKeys,
     getConfirmed,
     hydrate,
+    insertHead,
+    loadMore,
     optimistic,
     remove,
     replace,
     resource,
     revalidate,
     update,
+    updateEntity,
     useSync,
   };
 };
@@ -301,6 +557,7 @@ export const recordLens = <TStore, TData>(
 ): LocalFirstLens<TStore, TData> => ({
   clear: () => ({ [field]: {} }) as Partial<TStore>,
   get: (state, key) => (state[field] as Record<string, TData> | undefined)?.[key],
+  keys: (state) => Object.keys((state[field] as Record<string, TData> | undefined) ?? {}),
   set: (state, key, data) => {
     const next = { ...(state[field] as Record<string, TData> | undefined) };
     if (data === undefined) delete next[key];

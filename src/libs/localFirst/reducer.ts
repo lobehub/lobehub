@@ -10,11 +10,21 @@ import type { LocalFirstEntryMeta, LocalFirstPendingMutation, LocalFirstState } 
  * domain can keep its existing state shape (e.g. `topicDataMap`).
  */
 export type LocalFirstAction<T> =
-  | { data: T; key: string; scope: string; type: 'hydrate'; updatedAt?: number }
+  | {
+      data: T;
+      key: string;
+      params?: unknown;
+      query?: string;
+      scope: string;
+      type: 'hydrate';
+      updatedAt?: number;
+    }
   | {
       /** Receives the confirmed value (base or view); `undefined` keeps it. */
       data: (confirmed: T | undefined) => T | undefined;
       key: string;
+      params?: unknown;
+      query?: string;
       scope: string;
       type: 'replace';
     }
@@ -32,8 +42,8 @@ export type LocalFirstAction<T> =
   | { scope: string; type: 'resetScope' };
 
 export type LocalFirstEffect<T> =
-  | { data: T; key: string; scope: string; type: 'persist' }
-  | { key: string; scope: string; type: 'remove' };
+  | { data: T; key: string; query?: string; scope: string; type: 'persist' }
+  | { key: string; query?: string; scope: string; type: 'remove' };
 
 export type LocalFirstViewWrite<T> = { data: T | undefined; key: string } | { type: 'clear' };
 
@@ -97,7 +107,13 @@ export const localFirstReducer = <T>(
       if (entry || view !== undefined) return noop(state);
       return {
         effects: [],
-        state: withEntry({ pending: [], source: 'storage', updatedAt: action.updatedAt ?? now }),
+        state: withEntry({
+          params: action.params,
+          pending: [],
+          query: action.query,
+          source: 'storage',
+          updatedAt: action.updatedAt ?? now,
+        }),
         writes: [{ data: action.data, key: action.key }],
       };
     }
@@ -105,9 +121,12 @@ export const localFirstReducer = <T>(
     case 'replace': {
       const pending = entry?.pending ?? [];
       const next = action.data(confirmed) ?? confirmed;
+      const query = 'query' in action ? action.query : entry?.query;
       const nextState = withEntry({
         base: pending.length ? next : undefined,
+        params: action.params ?? entry?.params,
         pending,
+        query,
         source: 'server',
         updatedAt: now,
       });
@@ -116,7 +135,7 @@ export const localFirstReducer = <T>(
       // so a background revalidation never flickers them away.
       const nextView = materialize(next, pending);
       return {
-        effects: [{ data: next, key: action.key, scope, type: 'persist' }],
+        effects: [{ data: next, key: action.key, query, scope, type: 'persist' }],
         state: nextState,
         writes: nextView === view ? [] : [{ data: nextView, key: action.key }],
       };
@@ -130,9 +149,10 @@ export const localFirstReducer = <T>(
       return {
         effects:
           action.persist && nextBase !== undefined
-            ? [{ data: nextBase, key: action.key, scope, type: 'persist' }]
+            ? [{ data: nextBase, key: action.key, query: entry?.query, scope, type: 'persist' }]
             : [],
         state: withEntry({
+          ...entry,
           base: pending.length ? nextBase : undefined,
           pending,
           source: entry?.source ?? 'local',
@@ -148,6 +168,7 @@ export const localFirstReducer = <T>(
       return {
         effects: [],
         state: withEntry({
+          ...entry,
           base: confirmed,
           pending,
           source: entry?.source ?? 'local',
@@ -173,9 +194,10 @@ export const localFirstReducer = <T>(
       return {
         effects:
           action.type === 'commit' && base !== undefined
-            ? [{ data: base, key: action.key, scope, type: 'persist' }]
+            ? [{ data: base, key: action.key, query: entry.query, scope, type: 'persist' }]
             : [],
         state: withEntry({
+          ...entry,
           base: pending.length ? base : undefined,
           pending,
           source: entry.source,
@@ -187,7 +209,7 @@ export const localFirstReducer = <T>(
 
     case 'remove': {
       return {
-        effects: [{ key: action.key, scope, type: 'remove' }],
+        effects: [{ key: action.key, query: entry?.query, scope, type: 'remove' }],
         state: withEntry(undefined),
         writes: view === undefined ? [] : [{ data: undefined, key: action.key }],
       };
