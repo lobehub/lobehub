@@ -85,6 +85,36 @@ describe('ContextSelectionsInjector', () => {
   });
 
   describe('page selections', () => {
+    it('distinguishes an exact phrase selection from the containing block', async () => {
+      const injector = new ContextSelectionsInjector({ enabled: true });
+      const result = await injector.process(
+        createContext([
+          {
+            content: 'Rewrite only the selection',
+            metadata: {
+              contextSelections: [
+                {
+                  content: 'a<b\n  and c>d',
+                  id: 'sel-1',
+                  pageId: 'page-1',
+                  source: 'page',
+                  xml: '<p id="ab12">Before a&lt;b and c&gt;d after</p>',
+                },
+              ],
+            },
+            role: 'user',
+          },
+        ]),
+      );
+
+      expect(result.messages[0].content).toContain(
+        '<selected_text>a&lt;b\n  and c&gt;d</selected_text>',
+      );
+      expect(result.messages[0].content).toContain('<containing_blocks>');
+      expect(result.messages[0].content).toContain(
+        '<p id="ab12">Before a&lt;b and c&gt;d after</p>',
+      );
+    });
     it('injects a page selection as its LiteXML, node ids included', async () => {
       const injector = new ContextSelectionsInjector({ enabled: true });
 

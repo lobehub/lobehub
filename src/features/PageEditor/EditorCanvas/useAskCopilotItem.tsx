@@ -65,7 +65,7 @@ export const useAskCopilotItem = (
                 (editor.getSelectionDocument?.('litexml') as string) ||
                 '';
               const plainText = (editor.getSelectionDocument?.('text') as string) || '';
-              const content = xml.trim() || plainText.trim();
+              const content = plainText || xml;
 
               if (!content) return;
 
@@ -87,6 +87,7 @@ export const useAskCopilotItem = (
                   preview,
                   title: 'Selection',
                   type: 'text',
+                  xml,
                 },
               });
 

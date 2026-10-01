@@ -22,6 +22,9 @@ const setup = (markdown: string, initialTitle = 'Old Title') => {
 
   return {
     getTitle: () => title,
+    setTitle: (next: string) => {
+      title = next;
+    },
     runtime,
     markdown: () => headless.export().markdown.trim(),
     run: (command: string) => runPageBash(runtime, command),
@@ -29,6 +32,38 @@ const setup = (markdown: string, initialTitle = 'Old Title') => {
 };
 
 describe('runPageBash', () => {
+  it.each(['title', 'page'])(
+    'does not rename after %s changes while the body is saved',
+    async (change) => {
+      const page = setup('body');
+      page.runtime.setCurrentDocId('original');
+      page.runtime.setAfterMutateHandler(async () => {
+        // The real client hook waits for a network save before editTitle runs.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (change === 'title') page.setTitle('User title');
+        else page.runtime.setCurrentDocId('another-page');
+      });
+
+      await expect(
+        page.run("sed -i 's/body/BODY/' /doc.xml; echo 'Agent title' > /title"),
+      ).rejects.toThrow(/body changes.*review.*title.*not/i);
+      expect(page.markdown()).toBe('BODY');
+      expect(page.getTitle()).toBe(change === 'title' ? 'User title' : 'Old Title');
+    },
+  );
+
+  it('rechecks after an asynchronous pre-mutation hook', async () => {
+    const page = setup('body');
+    page.runtime.setBeforeMutateHandler(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      page.setTitle('User title');
+    });
+
+    await expect(page.run("sed -i 's/body/BODY/' /doc.xml")).rejects.toBeInstanceOf(
+      PageChangedDuringCommandError,
+    );
+    expect(page.markdown()).toBe('body');
+  });
   it('reads the page without changing it', async () => {
     const page = setup('para one\n\npara two\n');
 

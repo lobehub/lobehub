@@ -94,9 +94,11 @@ const readIfExists = async (
 ) => ((await fs.exists(path)) ? decodeByteSequences(await fs.readFile(path)) : undefined);
 
 export class PageChangedDuringCommandError extends Error {
-  constructor() {
+  constructor(bodyChanged = false) {
     super(
-      'The page changed while the command was running (it was edited or another page was opened), so nothing was written. Tell the user; if they still want the edit, read the page again before retrying.',
+      bodyChanged
+        ? 'The body changes were saved for review, but the page changed while saving, so the title was not changed. Tell the user what completed and read the page again before retrying.'
+        : 'The page changed while the command was running (it was edited or another page was opened), so nothing was written. Tell the user; if they still want the edit, read the page again before retrying.',
     );
     this.name = 'PageChangedDuringCommandError';
   }
@@ -105,15 +107,25 @@ export class PageChangedDuringCommandError extends Error {
 // The command works on a snapshot; a live editor can change under it while it
 // runs, and applying ids from that snapshot would overwrite the user's typing
 // or land on another page.
-const assertPageUnchanged = (runtime: EditorRuntime, xml: string, title: string) => {
+const assertPageUnchanged = (
+  runtime: EditorRuntime,
+  xml: string,
+  title: string,
+  documentId: string | undefined,
+  bodyChanged = false,
+) => {
   let current: ReturnType<EditorRuntime['getPageContentContext']>;
   try {
     current = runtime.getPageContentContext('xml');
   } catch {
-    throw new PageChangedDuringCommandError();
+    throw new PageChangedDuringCommandError(bodyChanged);
   }
-  if ((current.xml ?? '') !== xml || current.metadata.title !== title) {
-    throw new PageChangedDuringCommandError();
+  if (
+    runtime.getCurrentDocId() !== documentId ||
+    (!bodyChanged && (current.xml ?? '') !== xml) ||
+    current.metadata.title !== title
+  ) {
+    throw new PageChangedDuringCommandError(bodyChanged);
   }
 };
 
@@ -127,6 +139,7 @@ export const runPageBash = async (
     metadata: { title },
     xml = '',
   } = runtime.getPageContentContext('xml');
+  const documentId = runtime.getCurrentDocId();
   const outline = buildOutline(xml);
 
   const bash = new Bash({
@@ -218,29 +231,34 @@ export const runPageBash = async (
   const diff = xmlChanged ? diffLiteXMLBlocks(xml, nextXml!) : undefined;
   if (diff && !diff.ok) return reject(`${DOC_XML} ${diff.reason}.`);
 
-  if (xmlChanged || titleChanged) assertPageUnchanged(runtime, xml, title);
+  if (xmlChanged || titleChanged) assertPageUnchanged(runtime, xml, title, documentId);
 
   let changed = false;
 
   if (diff?.ok && diff.operations.length === 0) {
     output.push(`${DOC_XML}: no block changes detected.`);
   } else if (diff?.ok) {
-    const result = await runtime.modifyNodes({ operations: diff.operations });
+    const result = await runtime.modifyNodes({ operations: diff.operations }, () =>
+      assertPageUnchanged(runtime, xml, title, documentId),
+    );
     const { inserted, modified, removed } = diff.summary;
     output.push(
       `${DOC_XML}: ${modified} modified, ${inserted} inserted, ${removed} removed; changes await the user's review.`,
       formatModifyNodesResult(result),
     );
-    changed = result.successCount > 0;
+    changed =
+      result.successCount > 0 || result.results.some((operation) => operation.partiallyApplied);
   }
 
   if (titleChanged) {
-    await runtime.editTitle({ title: nextTitle!.trim() });
+    await runtime.editTitle({ title: nextTitle!.trim() }, () =>
+      assertPageUnchanged(runtime, xml, title, documentId, changed),
+    );
     output.push(`${TITLE}: renamed to "${nextTitle!.trim()}".`);
     changed = true;
   }
 
-  if (changed) {
+  if (changed && runtime.isReady() && runtime.getCurrentDocId() === documentId) {
     const refreshed = buildOutline(runtime.getPageContentContext('xml').xml ?? '');
     output.push(`${OUTLINE} (ids refreshed; use these from now on):\n${refreshed}`);
   }
