@@ -1240,6 +1240,8 @@ export class CodexAdapter implements AgentEventAdapter {
     return {
       ...(this.currentModel ? { model: this.currentModel } : {}),
       provider: CODEX_IDENTIFIER,
+      // Persist the native thread before a non-zero exec exit can skip finish-path persistence.
+      ...(this.sessionId ? { sessionId: this.sessionId } : {}),
       ...extra,
     };
   }

@@ -2898,59 +2898,84 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       useElectronStore.setState({ gatewayDeviceInfo: undefined });
     });
 
-    it('persists a newly reported session id even when sendPrompt exits non-zero', async () => {
-      let topicMeta: ChatTopicMetadata = {};
-      const store = createMockStore({
-        topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata: topicMeta }] } },
-      });
-      store.updateTopicMetadata = vi.fn(async (_id: string, patch: Partial<ChatTopicMetadata>) => {
-        topicMeta = { ...topicMeta, ...patch };
-        store.topicDataMap['agent-1__main'].items[0].metadata = topicMeta;
-      });
-      const get = vi.fn(() => store);
-      let rejectSendPrompt!: (reason?: unknown) => void;
-      mockSendPrompt.mockReturnValue(
-        new Promise<void>((_resolve, reject) => {
-          rejectSendPrompt = reject;
-        }),
-      );
+    it.each(['claude-code', 'codex'] as const)(
+      'persists a newly reported %s session id even when sendPrompt exits non-zero',
+      async (agentType) => {
+        const nativeSessionId = `${agentType}-session-before-error`;
+        const bindingKey = `native:v1:${agentType}`;
+        let topicMeta: ChatTopicMetadata = {};
+        const store = createMockStore({
+          topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata: topicMeta }] } },
+        });
+        store.updateTopicMetadata = vi.fn(
+          async (_id: string, patch: Partial<ChatTopicMetadata>) => {
+            topicMeta = { ...topicMeta, ...patch };
+            store.topicDataMap['agent-1__main'].items[0].metadata = topicMeta;
+          },
+        );
+        const get = vi.fn(() => store);
+        let rejectSendPrompt!: (reason?: unknown) => void;
+        mockSendPrompt.mockReturnValue(
+          new Promise<void>((_resolve, reject) => {
+            rejectSendPrompt = reject;
+          }),
+        );
 
-      const executorPromise = executeHeterogeneousAgent(get, {
-        ...defaultParams,
-        workingDirectory: '/repo',
-      });
-      await flush();
+        const executorPromise = executeHeterogeneousAgent(get, {
+          ...defaultParams,
+          heterogeneousProvider: {
+            command: agentType === 'codex' ? 'codex' : 'claude',
+            type: agentType,
+          },
+          workingDirectory: '/repo',
+        });
+        await flush();
 
-      ipc.emitRawLine('ipc-sess-1', ccInit('cc-session-rate-limited'));
-      await flush();
+        if (agentType === 'codex') {
+          ipc.emitRawLine('ipc-sess-1', { thread_id: nativeSessionId, type: 'thread.started' });
+          ipc.emitRawLine('ipc-sess-1', { type: 'turn.started' });
+        } else {
+          ipc.emitRawLine('ipc-sess-1', ccInit(nativeSessionId));
+        }
+        await flush();
 
-      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
-        heteroSessionBindingKey: 'native:v1:claude-code',
-        heteroSessionBindingKeyByWorkingDirectory: {
-          '/repo': 'native:v1:claude-code',
-        },
-        heteroSessionId: 'cc-session-rate-limited',
-        heteroSessionIdByWorkingDirectory: {
-          '/repo': 'cc-session-rate-limited',
-        },
-        workingDirectory: '/repo',
-        workingDirectoryConfig: { path: '/repo' },
-      });
+        expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+          heteroSessionBindingKey: bindingKey,
+          heteroSessionBindingKeyByWorkingDirectory: {
+            '/repo': bindingKey,
+          },
+          heteroSessionId: nativeSessionId,
+          heteroSessionIdByWorkingDirectory: {
+            '/repo': nativeSessionId,
+          },
+          workingDirectory: '/repo',
+          workingDirectoryConfig: { path: '/repo' },
+        });
 
-      rejectSendPrompt(new Error('rate limit'));
-      await executorPromise;
-      await flush();
+        if (agentType === 'codex') {
+          ipc.emitRawLine('ipc-sess-1', { message: 'Model not supported', type: 'error' });
+          ipc.emitRawLine('ipc-sess-1', {
+            error: { message: 'Model not supported' },
+            type: 'turn.failed',
+          });
+        }
+        rejectSendPrompt(new Error('Agent exited with code 1'));
+        await executorPromise;
+        await flush();
 
-      expect(
-        resolveHeteroResume(topicMeta, '/repo', {
-          currentBindingKey: 'native:v1:claude-code',
-        }),
-      ).toEqual({
-        cwdChanged: false,
-        resumeBindingKey: 'native:v1:claude-code',
-        resumeSessionId: 'cc-session-rate-limited',
-      });
-    });
+        // A rejected send skips the finish-path IPC lookup; only the streamed ID can survive.
+        expect(mockGetSessionInfo).not.toHaveBeenCalled();
+        expect(
+          resolveHeteroResume(topicMeta, '/repo', {
+            currentBindingKey: bindingKey,
+          }),
+        ).toEqual({
+          cwdChanged: false,
+          resumeBindingKey: bindingKey,
+          resumeSessionId: nativeSessionId,
+        });
+      },
+    );
 
     // ────────────────────────────────────────────────────
     // Per-cwd session id lifecycle — executor keying primitive

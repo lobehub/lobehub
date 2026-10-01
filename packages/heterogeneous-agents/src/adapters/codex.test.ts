@@ -25,6 +25,25 @@ describe('CodexAdapter', () => {
     expect(adapter.sessionId).toBe('thread-123');
   });
 
+  it('includes the native thread id in initial and deferred stream starts', () => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({ thread_id: 'thread-resumable', type: 'thread.started' });
+
+    expect(adapter.adapt({ type: 'turn.started' })).toMatchObject([
+      { data: { provider: 'codex', sessionId: 'thread-resumable' }, type: 'stream_start' },
+    ]);
+
+    adapter.adapt({ type: 'turn.started' });
+    const nextStep = adapter.adapt({
+      item: { id: 'item-next', text: 'Next step', type: 'agent_message' },
+      type: 'item.completed',
+    });
+    expect(nextStep[0]).toMatchObject({
+      data: { newStep: true, provider: 'codex', sessionId: 'thread-resumable' },
+      type: 'stream_start',
+    });
+  });
+
   it('emits stream start and text chunks for turn + agent messages', () => {
     const adapter = new CodexAdapter();
 
@@ -42,6 +61,7 @@ describe('CodexAdapter', () => {
       data: { provider: 'codex' },
       type: 'stream_start',
     });
+    expect(start[0].data).not.toHaveProperty('sessionId');
     expect(text[0]).toMatchObject({
       data: { chunkType: 'text', content: 'hello from codex' },
       type: 'stream_chunk',
