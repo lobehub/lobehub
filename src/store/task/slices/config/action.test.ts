@@ -55,6 +55,37 @@ describe('TaskConfigSliceAction', () => {
       expect(taskService.updateCheckpoint).toHaveBeenCalledWith('T-1', checkpoint);
     });
 
+    it('keeps config.checkpoint in sync so a later schedule edit does not restore the old one', async () => {
+      vi.mocked(taskService.updateCheckpoint).mockResolvedValue({ success: true } as any);
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...mockDetail,
+            config: { checkpoint: { onAgentRequest: false }, schedule: { maxExecutions: null } },
+            schedule: { pattern: '0 9 * * *', timezone: 'UTC' },
+          },
+        },
+      });
+
+      await useTaskStore.getState().updateCheckpoint('T-1', { onAgentRequest: true });
+      await useTaskStore.getState().updateSchedule('T-1', {
+        maxExecutions: null,
+        pattern: '0 18 * * *',
+        timezone: 'UTC',
+      });
+
+      expect(useTaskStore.getState().taskDetailMap['T-1'].config?.checkpoint).toEqual({
+        onAgentRequest: true,
+      });
+      expect(taskService.update).toHaveBeenCalledWith(
+        'T-1',
+        expect.objectContaining({
+          config: expect.objectContaining({ checkpoint: { onAgentRequest: true } }),
+        }),
+      );
+    });
+
     it('rolls back and marks the save failed when the PUT rejects', async () => {
       const { mutate } = await import('@/libs/swr');
       const { toast } = await import('@lobehub/ui/base-ui');

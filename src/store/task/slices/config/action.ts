@@ -177,6 +177,10 @@ export class TaskConfigSliceActionImpl {
         const target = draft.taskDetailMap[id];
         if (!target) return;
         target.checkpoint = checkpoint;
+        // `config.checkpoint` is the same column the whole-config writers
+        // (updateSchedule → task.update) spread back to the server; leaving it
+        // stale would let the next schedule edit restore the old checkpoint.
+        target.config = { ...target.config, checkpoint };
       },
     });
   };
