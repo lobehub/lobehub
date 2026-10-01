@@ -5,14 +5,13 @@ LobeHub command-line interface.
 ## Acceptance skill
 
 The acceptance skill is maintained in [lobehub/acceptance](https://github.com/lobehub/acceptance).
-Install from the repository's default branch without signing in (requires a CLI
-and server that support anonymous installs):
+Install from the repository's default branch:
 
 ```bash
 lh acceptance install
 ```
 
-Updating the skill, creating acceptances, and publishing reports still require
+Updating the skill, creating acceptances, and publishing reports require
 authentication. Sign in before updating:
 
 ```bash
@@ -32,12 +31,8 @@ skill from that snapshot before files are changed. `--json` reports the exact
 source commit and the version declared in `SKILL.md`; that version is a label,
 not the selector for default updates.
 
-The updated `lh acceptance install` uses the public `verify.getSkillBundle`
-endpoint on the configured LobeHub server without sending credentials. Older
-servers return `401` and must be upgraded before anonymous installs work. Older
-CLIs and the deprecated `lh verify init` / `lh verify install` commands still
-require login. After the server adapter is deployed, already-published CLIs
-follow the default branch without upgrading.
+Use an up-to-date CLI and LobeHub server. Older servers may return `401` during
+installation and need to be upgraded.
 
 To select an existing version tag explicitly, use `lh acceptance update --skill-version 0.5.0` (requires the updated CLI and server), or the equivalent
 [tagged skill source](https://github.com/lobehub/acceptance/tree/v0.5.0/skills/acceptance)
