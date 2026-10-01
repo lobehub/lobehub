@@ -64,7 +64,7 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
       <AccordionPanel>
         {error ? (
           <AsyncError error={error} variant="inline" onRetry={() => mutate()} />
-        ) : isLoading ? (
+        ) : isLoading && projects.length === 0 ? (
           <SkeletonList rows={3} />
         ) : projects.length === 0 ? (
           <NavItem

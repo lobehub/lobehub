@@ -4,8 +4,8 @@ import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, Drawer, toast } from '@lobehub/ui/base-ui';
-import { Form as AForm, Popconfirm } from 'antd';
+import { Alert, Button, confirmModal, Drawer, toast } from '@lobehub/ui/base-ui';
+import { Form as AForm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -112,23 +112,22 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
 
   const footer = (
     <Flexbox horizontal flex={1} gap={12} justify={'space-between'}>
-      <Popconfirm
-        arrow={false}
-        cancelText={tc('cancel')}
-        okText={tc('ok')}
-        placement={'topLeft'}
-        title={tp('dev.confirmDeleteDevPlugin')}
-        okButtonProps={{
-          danger: true,
-          disabled: !canEdit,
-          type: 'primary',
-        }}
-        onConfirm={handleDelete}
+      <Button
+        danger
+        disabled={!canEdit}
+        onClick={() =>
+          confirmModal({
+            cancelText: tc('cancel'),
+            okButtonProps: { danger: true },
+            okText: tc('ok'),
+            onOk: handleDelete,
+            content: tp('dev.confirmDeleteDevPlugin'),
+            title: tc('delete'),
+          })
+        }
       >
-        <Button danger disabled={!canEdit}>
-          {tc('delete')}
-        </Button>
-      </Popconfirm>
+        {tc('delete')}
+      </Button>
       <Flexbox horizontal gap={12}>
         <Button onClick={onClose}>{tc('cancel')}</Button>
         <Button

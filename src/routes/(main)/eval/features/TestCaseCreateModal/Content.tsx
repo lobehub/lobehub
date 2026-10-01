@@ -1,7 +1,15 @@
 'use client';
 
-import { Flexbox, Input, TextArea } from '@lobehub/ui';
-import { Accordion, Select, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import {
+  Accordion,
+  Input,
+  Select,
+  Text,
+  TextArea,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type FC } from 'react';

@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Crosshair, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';

@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, TextArea, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import type { CSSProperties } from 'react';
 import { memo, useState } from 'react';

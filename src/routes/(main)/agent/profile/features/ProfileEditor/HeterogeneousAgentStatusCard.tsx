@@ -12,8 +12,8 @@ import type {
   HeterogeneousAuthMode,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
-import { CopyButton, Flexbox, Icon, Input, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { ActionIcon, Button, Segmented, Select, Spin, Tag, Text } from '@lobehub/ui/base-ui';
+import { CopyButton, Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { ActionIcon, Button, Input, Segmented, Select, Spin, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { PencilLine, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -125,51 +125,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   commandInput: css`
     width: 100%;
+    height: ${COMMAND_LINE_HEIGHT}px;
+    border-radius: 999px;
+
     font-family: ${cssVar.fontFamilyCode};
-
-    &,
-    &.ant-input,
-    &.ant-input-affix-wrapper,
-    &.ant-input-outlined,
-    & input,
-    & .ant-input,
-    & .ant-input-affix-wrapper,
-    & .ant-input-outlined {
-      box-sizing: border-box;
-      height: ${COMMAND_LINE_HEIGHT}px;
-      min-height: ${COMMAND_LINE_HEIGHT}px;
-      max-height: ${COMMAND_LINE_HEIGHT}px;
-      border-radius: 999px !important;
-
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 14px;
-      line-height: ${COMMAND_LINE_HEIGHT - 2}px;
-    }
-
-    &,
-    &.ant-input,
-    &.ant-input-outlined,
-    & input,
-    & .ant-input,
-    & .ant-input-outlined {
-      padding-block: 0;
-      padding-inline: 12px;
-    }
-
-    &.ant-input-affix-wrapper,
-    & .ant-input-affix-wrapper {
-      overflow: hidden;
-      padding-block: 0;
-      padding-inline: 12px;
-    }
-
-    &.ant-input-affix-wrapper input,
-    & .ant-input-affix-wrapper input {
-      height: ${COMMAND_LINE_HEIGHT - 2}px;
-      padding: 0;
-      border-radius: 999px !important;
-      line-height: ${COMMAND_LINE_HEIGHT - 2}px;
-    }
+    font-size: 14px;
   `,
   commandInputWrap: css`
     display: flex;
@@ -614,7 +574,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                   className={styles.commandInput}
                   disabled={!canEdit || savingCommand}
                   placeholder={t('heterogeneousStatus.command.placeholder')}
-                  ref={commandInputRef as never}
+                  ref={commandInputRef}
                   value={commandInput}
                   onBlur={() => {
                     void commitCommand();

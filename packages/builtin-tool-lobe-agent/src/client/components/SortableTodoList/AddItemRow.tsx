@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
-import { ActionIcon, Checkbox } from '@lobehub/ui/base-ui';
-import type { InputRef } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Checkbox, Input } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
@@ -29,7 +28,7 @@ interface AddItemRowProps {
 
 const AddItemRow = memo<AddItemRowProps>(({ placeholder, showDragHandle = true, className }) => {
   const { t } = useTranslation('tool');
-  const inputRef = useRef<InputRef>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const defaultPlaceholder = placeholder || t('lobe-agent.addTodo.placeholder');
 
   const newItemText = useTodoListStore((s) => s.newItemText);
@@ -45,7 +44,7 @@ const AddItemRow = memo<AddItemRowProps>(({ placeholder, showDragHandle = true, 
   useEffect(() => {
     // Only restore cursor when focus changes TO this input (not on every cursorPosition change)
     if (focusedId === ADD_ITEM_ID && prevFocusedIdRef.current !== ADD_ITEM_ID) {
-      const input = inputRef.current?.input;
+      const input = inputRef.current;
       if (input) {
         input.focus();
         // Clamp cursor position to text length

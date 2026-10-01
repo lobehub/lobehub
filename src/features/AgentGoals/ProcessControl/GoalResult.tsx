@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox, Markdown } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Divider, Skeleton } from '@lobehub/ui/base-ui';
 
 import { useEntityMarkdown } from '@/features/EntityLink';
 import { useClientDataSWR } from '@/libs/swr';

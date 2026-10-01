@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Accordion, Avatar, Spin, Tag, Text } from '@lobehub/ui/base-ui';
-import { Steps } from 'antd';
+import { Accordion, Avatar, Spin, Steps, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
@@ -50,15 +49,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
     white-space: pre-wrap;
-  `,
-  stepsContainer: css`
-    .ant-steps-item-content {
-      min-height: auto;
-    }
-
-    .ant-steps-item-description {
-      padding-block-end: 12px !important;
-    }
   `,
   suggestion: css`
     padding-block: 8px;
@@ -201,10 +191,7 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                   children: (
                     <Flexbox paddingBlock={'8px 12px'} paddingInline={8}>
                       <Steps
-                        className={styles.stepsContainer}
-                        current={null as any}
-                        direction="vertical"
-                        size="small"
+                        orientation="vertical"
                         items={contextItems.map((item) => ({
                           description: <div className={styles.stepContent}>{item.content}</div>,
                           icon: (
@@ -249,10 +236,7 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                   children: (
                     <Flexbox paddingBlock={'8px 12px'} paddingInline={8}>
                       <Steps
-                        className={styles.stepsContainer}
-                        current={null as any}
-                        direction="vertical"
-                        size="small"
+                        orientation="vertical"
                         items={appContextItems.map((item) => ({
                           description: <div className={styles.stepContent}>{item.content}</div>,
                           icon: (

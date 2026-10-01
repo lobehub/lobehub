@@ -1,8 +1,15 @@
 'use client';
 
-import { Flexbox, InputNumber } from '@lobehub/ui';
-import { ActionIcon, SliderWithInput, Switch, Tabs, Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Divider,
+  InputNumber,
+  SliderWithInput,
+  Switch,
+  Tabs,
+  Text,
+} from '@lobehub/ui/base-ui';
 import { Clock3, Dices } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

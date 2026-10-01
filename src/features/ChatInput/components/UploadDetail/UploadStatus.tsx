@@ -1,8 +1,7 @@
-import { CheckCircleFilled } from '@ant-design/icons';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Progress, Spin, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { CircleAlertIcon } from 'lucide-react';
+import { CircleAlertIcon, CircleCheckIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -57,7 +56,7 @@ const UploadStatus = memo<UploadStateProps>(({ error, status, size, uploadState 
     case 'success': {
       return (
         <Flexbox horizontal align={'center'} gap={4}>
-          <CheckCircleFilled style={{ color: cssVar.colorSuccess, fontSize: 12 }} />
+          <Icon color={cssVar.colorSuccess} icon={CircleCheckIcon} size={12} />
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {formatSize(size)}
           </Text>

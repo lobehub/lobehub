@@ -3,8 +3,8 @@
 import { isDesktop } from '@lobechat/const';
 import type { WorkingDirEntry } from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
-import { Flexbox, Icon, Input, Popover, Tooltip } from '@lobehub/ui';
-import { ActionIcon, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Input, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
@@ -174,14 +174,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 2px;
     padding-inline: 8px;
     border-block-end: 1px solid ${cssVar.colorSplit};
-
-    .ant-input-affix-wrapper {
-      padding-inline: 0;
-    }
-
-    .ant-input-prefix {
-      margin-inline-end: 8px;
-    }
   `,
   sectionTitle: css`
     padding-block: 6px 2px;
@@ -502,6 +494,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
             placeholder={t('workingDirectory.searchPlaceholder')}
             prefix={<Icon icon={SearchIcon} size={14} />}
             size="small"
+            style={{ paddingInline: 0 }}
             value={search}
             variant="borderless"
             onChange={(e) => setSearch(e.target.value)}

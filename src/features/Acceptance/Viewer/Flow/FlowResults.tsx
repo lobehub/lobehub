@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, Select, Text, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Select, Text, TextArea, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ClipboardCheck, History, X } from 'lucide-react';
 import { useState } from 'react';

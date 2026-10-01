@@ -2,12 +2,13 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
-import { Flexbox, Icon, Input, SortableList } from '@lobehub/ui';
+import { Flexbox, Icon, SortableList } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
   Button,
   confirmModal,
+  Input,
   Tabs,
   Tag,
   Text,

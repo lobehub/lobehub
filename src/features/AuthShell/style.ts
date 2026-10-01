@@ -1,10 +1,6 @@
 import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  divider: css`
-    height: 24px;
-  `,
-
   innerContainerDark: css`
     position: relative;
 

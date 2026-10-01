@@ -416,7 +416,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
             toast.error(t('channel.removeFailed'));
           }
         },
-        title: t('channel.deleteConfirm'),
+        title: t('channel.removeChannel'),
       });
     }, [readOnly, currentConfig, agentId, deleteBotProvider, t, form]);
 

@@ -1,8 +1,7 @@
 import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { Microsoft } from '@lobehub/icons';
 import { Block, Empty, Flexbox, Icon, Popover, Snippet } from '@lobehub/ui';
-import { Accordion, ActionIcon, Tag } from '@lobehub/ui/base-ui';
-import { Divider, Steps } from 'antd';
+import { Accordion, ActionIcon, Divider, Steps, Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
 import {
@@ -162,11 +161,9 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                       <p style={{ margin: 0 }}>{item.description}</p>
                       {setupSteps && setupSteps.length > 0 && (
                         <Steps
-                          progressDot
-                          current={-1}
-                          direction="vertical"
-                          size={'small'}
+                          orientation="vertical"
                           style={{ marginTop: 12 }}
+                          variant="dot"
                           items={setupSteps.map((i) => ({
                             title: <p style={{ color: cssVar.colorText }}>{i}</p>,
                           }))}
@@ -276,7 +273,7 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                                       />
                                       {dep.checkCommand && (
                                         <>
-                                          <Divider style={{ margin: 0 }} />
+                                          <Divider />
                                           <Descriptions
                                             rows={1}
                                             items={[

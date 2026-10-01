@@ -1,8 +1,7 @@
 'use client';
 
 import { Block, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Table } from 'antd';
+import { Table, type TableColumn, Text } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,7 +17,7 @@ interface ModelBreakdownProps {
 const ModelBreakdown = memo<ModelBreakdownProps>(({ rows, isLoading }) => {
   const { t } = useTranslation('spend');
 
-  const columns = [
+  const columns: TableColumn<AgentUsageModelRow>[] = [
     {
       dataIndex: 'model',
       key: 'model',
@@ -36,21 +35,21 @@ const ModelBreakdown = memo<ModelBreakdownProps>(({ rows, isLoading }) => {
       title: t('usageStats.breakdown.model'),
     },
     {
-      align: 'right' as const,
+      align: 'right',
       dataIndex: 'requests',
       key: 'requests',
       render: (value: number) => formatNumber(value),
       title: t('usageStats.breakdown.requests'),
     },
     {
-      align: 'right' as const,
+      align: 'right',
       dataIndex: 'totalTokens',
       key: 'totalTokens',
       render: (value: number) => formatUsageValue(value),
       title: t('usageStats.breakdown.totalTokens'),
     },
     {
-      align: 'right' as const,
+      align: 'right',
       dataIndex: 'cost',
       key: 'cost',
       render: (value: number) => `$${formatNumber(value, 2)}`,

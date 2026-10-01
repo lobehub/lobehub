@@ -84,6 +84,16 @@ const isAgentConfigLoadingById = (agentId: string) => (s: AgentStoreState) =>
   !agentId || (!s.agentMap[agentId] && !s.agentNotFoundMap[agentId]);
 
 /**
+ * Whether the cached config for `agentId` belongs to `scope` and may be
+ * rendered. `agentMap` is not partitioned by workspace, so an entry left by
+ * the previous scope must not stand in for the active one while it loads.
+ */
+const hasAgentConfigInScope =
+  (agentId: string, scope: string) =>
+  (s: AgentStoreState): boolean =>
+    !!agentId && !!s.agentMap[agentId] && s.agentConfigScopeMap[agentId] === scope;
+
+/**
  * Get agent mode by agentId.
  * Agent mode is the default — only an explicit `chatConfig.enableAgentMode === false`
  * collapses the agent to chat mode.
@@ -227,6 +237,7 @@ export const agentByIdSelectors = {
   getAgentTTSById,
   getAgentTTSVoiceById,
   getAgentWorkingDirectoryById,
+  hasAgentConfigInScope,
   isAgentConfigLoadingById,
   isAgentHeterogeneousById,
   isAgentNotFoundById,

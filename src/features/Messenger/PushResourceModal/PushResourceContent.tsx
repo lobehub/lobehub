@@ -2,10 +2,12 @@
 
 import type { MessengerOversizeImageStrategy } from '@lobechat/const';
 import { DEFAULT_OVERSIZE_IMAGE_STRATEGY } from '@lobechat/const';
-import { Block, Flexbox, Input } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
 import {
   Alert,
   Button,
+  Divider,
+  Input,
   ModalFooter,
   Segmented,
   Select,
@@ -13,7 +15,6 @@ import {
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';

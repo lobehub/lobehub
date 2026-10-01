@@ -1,9 +1,7 @@
 'use client';
 
 import { Flexbox, Icon, SortableList } from '@lobehub/ui';
-import { ActionIcon, Checkbox } from '@lobehub/ui/base-ui';
-import type { InputRef } from 'antd';
-import { Input } from 'antd';
+import { ActionIcon, Checkbox, Input } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CircleArrowRight, Trash2 } from 'lucide-react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
@@ -37,13 +35,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       }
     }
   `,
-  textCompleted: css`
-    color: ${cssVar.colorTextQuaternary};
-    text-decoration: line-through;
-  `,
-  textProcessing: css`
-    color: ${cssVar.colorWarningText};
-  `,
 }));
 
 interface TodoItemRowProps {
@@ -53,7 +44,7 @@ interface TodoItemRowProps {
 
 const TodoItemRow = memo<TodoItemRowProps>(({ id, placeholder }) => {
   const { t } = useTranslation('tool');
-  const inputRef = useRef<InputRef>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const defaultPlaceholder = placeholder || t('lobe-agent.todoItem.placeholder');
 
   // Find item by stable id
@@ -77,7 +68,7 @@ const TodoItemRow = memo<TodoItemRowProps>(({ id, placeholder }) => {
   useEffect(() => {
     // Only restore cursor when focus changes TO this item (not on every cursorPosition change)
     if (focusedId === id && prevFocusedIdRef.current !== id) {
-      const input = inputRef.current?.input;
+      const input = inputRef.current;
       if (input) {
         input.focus();
         // Clamp cursor position to text length
@@ -148,13 +139,19 @@ const TodoItemRow = memo<TodoItemRowProps>(({ id, placeholder }) => {
         />
       )}
       <Input
-        className={cx(isCompleted && styles.textCompleted, isProcessing && styles.textProcessing)}
         placeholder={defaultPlaceholder}
         ref={inputRef}
         size="small"
         style={{ flex: 1 }}
         value={text}
         variant="borderless"
+        styles={{
+          input: isCompleted
+            ? { color: cssVar.colorTextQuaternary, textDecoration: 'line-through' }
+            : isProcessing
+              ? { color: cssVar.colorWarningText }
+              : undefined,
+        }}
         onChange={handleChange}
         onFocus={handleFocus}
         onKeyDown={handleKeyDown}

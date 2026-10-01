@@ -2,8 +2,7 @@
 
 import { BarChart, ChartTooltipFrame, ChartTooltipRow } from '@lobehub/charts';
 import { Block, Flexbox } from '@lobehub/ui';
-import { Segmented, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Divider, Segmented, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -94,7 +93,7 @@ const UsageTrendChart = memo<UsageTrendChartProps>(({ buckets, isLoading }) => {
                 </Flexbox>
                 {visibleItems.length > 0 && (
                   <>
-                    <Divider style={{ margin: 0 }} />
+                    <Divider />
                     <Flexbox gap={4} paddingBlock={8} paddingInline={16}>
                       {visibleItems.map(({ color, name, value }) => (
                         <ChartTooltipRow

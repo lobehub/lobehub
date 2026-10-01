@@ -35,7 +35,6 @@ import type {
   VerifyRunItem,
 } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
-import { TaskService } from '@/server/services/task';
 import { ExpertiseRejectionWorkflow } from '@/server/workflows/expertiseRejection';
 
 import { type AcceptanceMergeSummary, mergeAcceptanceRounds } from './acceptanceMerge';
@@ -1137,7 +1136,10 @@ export class AcceptanceService {
       if (!task || ['canceled', 'completed', 'failed'].includes(task.status)) return;
 
       // TaskService cascades checkpoint / sibling rollup / downstream unlock —
-      // the same completion path settle.ts drives on a passed verify.
+      // the same completion path settle.ts drives on a passed verify. Loaded
+      // lazily because `TaskService` reaches this module through its acceptance
+      // resolution, so a static import would close a module cycle.
+      const { TaskService } = await import('../task');
       await new TaskService(this.db, this.userId, this.workspaceId).updateStatus({
         id: task.id,
         status: 'completed',

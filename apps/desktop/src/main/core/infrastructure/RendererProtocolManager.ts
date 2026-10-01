@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -7,7 +6,9 @@ import { app, protocol } from 'electron';
 
 import { createLogger } from '@/utils/logger';
 
-type ResolveRendererFilePath = (url: URL) => Promise<string | null>;
+export type RendererFile = { filePath: string; name: string };
+
+type ResolveRendererFilePath = (url: URL) => Promise<RendererFile | null>;
 
 /**
  * Request interceptor: inspects an `app://` request and either produces a Response
@@ -118,17 +119,11 @@ export class RendererProtocolManager {
  * unknown routes, and supports HTTP `Range` requests for media playback.
  */
 export class StaticRendererFallback implements RendererFallbackStrategy {
-  private readonly rendererDir: string;
   private readonly resolveRendererFilePath: ResolveRendererFilePath;
   private readonly logger = createLogger('core:StaticRendererFallback');
 
-  constructor(rendererDir: string, resolveRendererFilePath: ResolveRendererFilePath) {
-    this.rendererDir = rendererDir;
+  constructor(resolveRendererFilePath: ResolveRendererFilePath) {
     this.resolveRendererFilePath = resolveRendererFilePath;
-
-    if (!existsSync(this.rendererDir)) {
-      this.logger.warn(`Renderer directory not found: ${this.rendererDir}`);
-    }
   }
 
   async handle(request: Request, url: URL): Promise<Response> {
@@ -136,30 +131,30 @@ export class StaticRendererFallback implements RendererFallbackStrategy {
     const isAssetRequest = this.isAssetRequest(pathname);
     const isExplicit404HtmlRequest = pathname.endsWith('/404.html');
 
-    let filePath = await this.resolveRendererFilePath(url);
+    let file = await this.resolveRendererFilePath(url);
 
-    if (filePath && this.is404Html(filePath) && !isExplicit404HtmlRequest) {
-      filePath = null;
+    if (file && this.is404Html(file) && !isExplicit404HtmlRequest) {
+      file = null;
     }
 
-    if (!filePath) {
+    if (!file) {
       if (isAssetRequest) {
         return new Response('File Not Found', { status: 404 });
       }
 
-      filePath = await this.resolveEntryFilePath(url);
-      if (!filePath || this.is404Html(filePath)) {
+      file = await this.resolveEntryFilePath(url);
+      if (!file || this.is404Html(file)) {
         return new Response('Render file Not Found', { status: 404 });
       }
     }
 
     try {
-      return await this.buildFileResponse(request, filePath);
+      return await this.buildFileResponse(request, file);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
 
       if (code === 'ENOENT') {
-        this.logger.warn(`Export asset missing on disk ${filePath}, falling back`, error);
+        this.logger.warn(`Export asset missing on disk ${file.filePath}, falling back`, error);
 
         if (isAssetRequest) {
           return new Response('File Not Found', { status: 404 });
@@ -173,12 +168,15 @@ export class StaticRendererFallback implements RendererFallbackStrategy {
         try {
           return await this.buildFileResponse(request, fallbackPath);
         } catch (fallbackError) {
-          this.logger.error(`Failed to serve fallback entry ${fallbackPath}:`, fallbackError);
+          this.logger.error(
+            `Failed to serve fallback entry ${fallbackPath.filePath}:`,
+            fallbackError,
+          );
           return new Response('Internal Server Error', { status: 500 });
         }
       }
 
-      this.logger.error(`Failed to serve export asset ${filePath}:`, error);
+      this.logger.error(`Failed to serve export asset ${file.filePath}:`, error);
       return new Response('Internal Server Error', { status: 500 });
     }
   }
@@ -187,13 +185,13 @@ export class StaticRendererFallback implements RendererFallbackStrategy {
     return this.resolveRendererFilePath(new URL(`${url.protocol}//${url.host}/`));
   }
 
-  private async buildFileResponse(request: Request, targetPath: string): Promise<Response> {
-    const fileStat = await stat(targetPath);
+  private async buildFileResponse(request: Request, file: RendererFile): Promise<Response> {
+    const fileStat = await stat(file.filePath);
     const totalSize = fileStat.size;
 
-    const buffer = await readFile(targetPath);
+    const buffer = await readFile(file.filePath);
     const headers = new Headers();
-    const mimeType = tryGetMimeType(targetPath);
+    const mimeType = tryGetMimeType(file.name);
 
     if (mimeType) headers.set('Content-Type', mimeType);
 
@@ -280,8 +278,8 @@ export class StaticRendererFallback implements RendererFallbackStrategy {
     );
   }
 
-  private is404Html(filePath: string) {
-    return path.basename(filePath) === '404.html';
+  private is404Html(file: RendererFile) {
+    return file.name === '404.html';
   }
 }
 

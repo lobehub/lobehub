@@ -2,9 +2,8 @@
 
 import type { IEditor } from '@lobehub/editor';
 import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
-import { Block, Icon } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { Space } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Check, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -133,7 +132,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
         padding={4}
         variant="outlined"
       >
-        <Space>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Button
             size={'small'}
             type="text"
@@ -160,7 +159,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
             <Icon color={'green'} icon={Check} size={16} />
             {t('modifier.acceptAll')}
           </Button>
-        </Space>
+        </Flexbox>
       </Block>
     </div>
   );

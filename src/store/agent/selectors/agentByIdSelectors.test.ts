@@ -210,6 +210,25 @@ describe('agentByIdSelectors', () => {
     });
   });
 
+  describe('hasAgentConfigInScope', () => {
+    it('only treats a cached config as renderable in the scope that wrote it', () => {
+      const state = createState({
+        agentConfigScopeMap: { 'agent-1': 'user-1:workspace-a' },
+        agentMap: { 'agent-1': { title: 'From workspace A' } },
+      });
+
+      expect(agentByIdSelectors.hasAgentConfigInScope('agent-1', 'user-1:workspace-a')(state)).toBe(
+        true,
+      );
+      // After a workspace switch the entry is still in `agentMap`, but it
+      // belongs to the previous scope.
+      expect(agentByIdSelectors.hasAgentConfigInScope('agent-1', 'user-1:workspace-b')(state)).toBe(
+        false,
+      );
+      expect(agentByIdSelectors.hasAgentConfigInScope('', 'user-1:workspace-a')(state)).toBe(false);
+    });
+  });
+
   describe('isAgentNotFoundById', () => {
     it('returns true only for agents flagged in agentNotFoundMap', () => {
       const state = createState({ agentNotFoundMap: { 'agent-gone': true } });

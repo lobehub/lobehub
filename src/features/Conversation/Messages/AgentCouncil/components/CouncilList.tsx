@@ -2,7 +2,7 @@
 
 import { type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Fragment, memo } from 'react';
 
@@ -81,7 +81,7 @@ const CouncilList = memo<CouncilListProps>(({ members, displayMode, activeTab })
                     <Divider
                       dashed
                       orientation={'vertical'}
-                      style={{ height: 'unset', marginInline: 16 }}
+                      style={{ alignSelf: 'stretch', height: 'unset', marginInline: 16 }}
                     />
                   )}
                 </Fragment>

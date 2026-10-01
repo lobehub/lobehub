@@ -3,8 +3,16 @@
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Flexbox, Form } from '@lobehub/ui';
-import { Button, RadioGroup, Skeleton, Switch, toast } from '@lobehub/ui/base-ui';
-import { Form as AntdForm, Input } from 'antd';
+import {
+  Button,
+  Input,
+  InputPassword,
+  RadioGroup,
+  Skeleton,
+  Switch,
+  toast,
+} from '@lobehub/ui/base-ui';
+import { Form as AntdForm } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -276,7 +284,7 @@ const ProxyForm = () => {
             },
             {
               children: (
-                <Input.Password
+                <InputPassword
                   autoComplete="new-password"
                   placeholder={t('proxy.password_placeholder')}
                 />

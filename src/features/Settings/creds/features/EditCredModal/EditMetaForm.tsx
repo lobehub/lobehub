@@ -1,9 +1,9 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Input, TextArea } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Form, Input } from 'antd';
+import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -78,7 +78,7 @@ const EditMetaForm: FC<EditMetaFormProps> = ({ cred, credsApi, onCancel, onSucce
       </Form.Item>
 
       <Form.Item label={t('creds.form.description')} name="description">
-        <Input.TextArea
+        <TextArea
           disabled={!canManageCredentials}
           placeholder={t('creds.form.descriptionPlaceholder')}
           rows={2}

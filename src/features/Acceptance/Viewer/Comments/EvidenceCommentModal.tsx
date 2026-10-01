@@ -1,8 +1,8 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { Flexbox, TextArea } from '@lobehub/ui';
-import { Button, createModal, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, createModal, Text, TextArea, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { t } from 'i18next';
 import { memo, useState } from 'react';

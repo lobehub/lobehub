@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   fetchAgentList: vi.fn(),
   homeState: {
     agentGroups: [] as any[],
+    agentOptimisticPatches: {},
     isAgentListInit: true,
     pinnedAgents: [] as any[],
     privateAgentGroups: [] as any[],

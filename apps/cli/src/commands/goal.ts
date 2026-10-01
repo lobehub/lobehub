@@ -729,6 +729,19 @@ export function registerGoalCommand(program: Command) {
     });
 
   goal
+    .command('retire <id> <node-ids...>')
+    .description(
+      'Retire task nodes that should not run; unfinished tasks depending on them must be retired together',
+    )
+    .option('--reason <text>', 'Why the nodes are retired')
+    .action(async (id: string, nodeIds: string[], options) => {
+      const result = await (
+        await getTrpcClient()
+      ).goal.retireNodes.mutate({ id, nodeIds, reason: options.reason });
+      log.info(result.message);
+    });
+
+  goal
     .command('add-node <id> <kind> <title>')
     .description('Add a question, experiment container, task, finding, or decision node')
     .option('--scope <experiment-id>', 'Contain this node in an experiment')

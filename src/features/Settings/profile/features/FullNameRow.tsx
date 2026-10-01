@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Input, Spin } from '@lobehub/ui/base-ui';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,10 +16,10 @@ const FullNameRow = () => {
   const fullName = useUserStore(userProfileSelectors.fullName);
   const updateFullName = useUserStore((s) => s.updateFullName);
   const [saving, setSaving] = useState(false);
-  const inputRef = useRef<InputRef>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async () => {
-    const value = inputRef.current?.input?.value?.trim();
+    const value = inputRef.current?.value?.trim();
     if (!value || value === fullName) return;
 
     try {

@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
-import { confirmModal, Text, toast, Upload } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { confirmModal, Input, Text, TextArea, toast, Upload } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
@@ -72,6 +72,8 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
     const { t } = useTranslation('marketAuth');
 
     const [form] = Form.useForm<FormValues>();
+    const displayName = Form.useWatch('displayName', form);
+    const userName = Form.useWatch('userName', form);
     const [loading, setLoading] = useState(false);
     const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
@@ -394,9 +396,9 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                 ]}
               >
                 <Input
-                  showCount
                   maxLength={50}
                   placeholder={t('profileSetup.fields.displayName.placeholder')}
+                  suffix={`${displayName?.length ?? 0} / 50`}
                 />
               </Form.Item>
               <Form.Item
@@ -426,10 +428,10 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                 ]}
               >
                 <Input
-                  showCount
                   maxLength={32}
                   placeholder={t('profileSetup.fields.userName.placeholder')}
                   prefix="@"
+                  suffix={`${userName?.length ?? 0} / 32`}
                 />
               </Form.Item>
             </Flexbox>

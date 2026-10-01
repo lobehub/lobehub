@@ -86,4 +86,33 @@ describe('generate-openapi', () => {
       }
     }
   });
+
+  it('declares the success status the handler actually returns', () => {
+    const spec = parse(readFileSync(path.join(PKG_ROOT, 'openapi.yml'), 'utf8'));
+
+    const successStatuses = (method: string, path: string) =>
+      Object.keys(spec.paths[path][method].responses).filter((status) => status.startsWith('2'));
+
+    // Creating and enqueueing are not 200 responses; the document (and the SDK
+    // generated from it) used to advertise 200 for all of them, so a
+    // status-discriminating client branched on a status the runtime never sends.
+    expect(successStatuses('post', '/api/v1/goals')).toEqual(['201']);
+    expect(successStatuses('post', '/api/v1/tasks')).toEqual(['201']);
+    expect(successStatuses('post', '/api/v1/signals/source-events')).toEqual(['202']);
+    expect(successStatuses('post', '/api/v1/signals/trigger')).toEqual(['202']);
+
+    // Exactly one success status per operation: a leftover placeholder 200 next
+    // to the real 201/202 is the same wrong contract, just harder to spot.
+    for (const [path, item] of Object.entries(
+      spec.paths as Record<string, Record<string, { responses: Record<string, unknown> }>>,
+    )) {
+      for (const [method, op] of Object.entries(item)) {
+        if (!['delete', 'get', 'patch', 'post', 'put'].includes(method)) continue;
+        expect(
+          Object.keys(op.responses).filter((status) => status.startsWith('2')),
+          `${method.toUpperCase()} ${path}`,
+        ).toHaveLength(1);
+      }
+    }
+  });
 });

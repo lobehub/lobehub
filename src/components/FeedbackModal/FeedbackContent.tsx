@@ -2,8 +2,8 @@
 
 import { BRANDING_EMAIL } from '@lobechat/business-const';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, toast, Upload, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, Input } from 'antd';
+import { Button, Input, toast, Upload, useModalContext } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { ImagePlus, Send } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -30,6 +30,7 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
 
   const { close } = useModalContext();
   const [form] = Form.useForm<FormValues>();
+  const title = Form.useWatch('title', form);
 
   const [loading, setLoading] = useState(false);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
@@ -132,7 +133,11 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
             { max: 200, message: t('feedback.fields.title.maxLength') },
           ]}
         >
-          <Input showCount maxLength={200} placeholder={t('feedback.fields.title.placeholder')} />
+          <Input
+            maxLength={200}
+            placeholder={t('feedback.fields.title.placeholder')}
+            suffix={`${title?.length ?? 0} / 200`}
+          />
         </Form.Item>
 
         <Form.Item

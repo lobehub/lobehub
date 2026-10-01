@@ -1,5 +1,5 @@
 import { Empty, Flexbox } from '@lobehub/ui';
-import { Table } from 'antd';
+import { Table } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Wrench } from 'lucide-react';
 import { memo } from 'react';

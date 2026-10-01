@@ -79,8 +79,8 @@ const Nav = memo(() => {
         <Menu
           compact
           selectable
+          activeKey={activeKey}
           items={items}
-          selectedKeys={[activeKey]}
           onClick={({ key }) => {
             scrollToTop();
             if (key === DiscoverTab.Home) {
