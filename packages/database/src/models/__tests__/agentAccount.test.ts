@@ -1,0 +1,252 @@
+// @vitest-environment node
+import { sql } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { getTestDB } from '../../core/getTestDB';
+import { agentAccounts, agents, users, workspaces } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { AgentAccountModel } from '../agentAccount';
+
+const serverDB: LobeChatDatabase = await getTestDB();
+
+const userId = 'agent-account-test-user-id';
+const userId2 = 'agent-account-test-user-id-2';
+const agentId = 'agent-account-test-agent-id';
+const agentId2 = 'agent-account-test-agent-id-2';
+
+const mockGateKeeper = {
+  decrypt: vi.fn(async (ciphertext: string) => ({ plaintext: ciphertext })),
+  encrypt: vi.fn(async (plaintext: string) => plaintext),
+};
+
+beforeEach(async () => {
+  await serverDB.delete(users);
+  await serverDB.insert(users).values([{ id: userId }, { id: userId2 }]);
+  await serverDB.insert(agents).values([
+    { id: agentId, userId },
+    { id: agentId2, userId: userId2 },
+  ]);
+});
+
+afterEach(async () => {
+  await serverDB.delete(agentAccounts);
+  await serverDB.delete(agents);
+  await serverDB.delete(users);
+  vi.clearAllMocks();
+});
+
+const seedWorkspace = async (id: string) => {
+  await serverDB
+    .insert(workspaces)
+    .values({ id, name: id, primaryOwnerId: userId, slug: id })
+    .onConflictDoNothing();
+
+  return id;
+};
+
+/** A minimal mail account, with per-test identifier overrides. */
+const mailAccount = (identifier = 'agent@lobe.id') => ({
+  agentId,
+  capabilities: { receive: true, send: true },
+  identifier,
+  kind: 'mail' as const,
+  provider: 'agent-mail',
+});
+
+describe('AgentAccountModel credential discipline', () => {
+  it('returns hasCredential but never the ciphertext', async () => {
+    const model = new AgentAccountModel(serverDB, userId, mockGateKeeper);
+
+    const created = await model.create({
+      ...mailAccount('discipline@lobe.id'),
+      credential: { webhookSecret: 'whsec_abc' },
+    });
+
+    expect(created.hasCredential).toBe(true);
+    expect(created).not.toHaveProperty('credentials');
+
+    const listed = await model.query({ agentId });
+    expect(listed[0].hasCredential).toBe(true);
+    expect(listed[0]).not.toHaveProperty('credentials');
+
+    const found = await model.findById(created.id);
+    expect(found!.hasCredential).toBe(true);
+    expect(found).not.toHaveProperty('credentials');
+  });
+
+  it('stores the credential as ciphertext through the gatekeeper', async () => {
+    const model = new AgentAccountModel(serverDB, userId, mockGateKeeper);
+
+    await model.create({
+      ...mailAccount('cipher@lobe.id'),
+      credential: { webhookSecret: 'whsec_abc' },
+    });
+
+    expect(mockGateKeeper.encrypt).toHaveBeenCalledWith(
+      JSON.stringify({ webhookSecret: 'whsec_abc' }),
+    );
+  });
+
+  it('refuses to store a credential without a gatekeeper, with an actionable message', async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+
+    await expect(
+      model.create({ ...mailAccount('nogk@lobe.id'), credential: { webhookSecret: 'x' } }),
+    ).rejects.toThrow(/needs a gatekeeper to store credentials/);
+  });
+
+  it('exposes the credential only through getCredential', async () => {
+    const model = new AgentAccountModel(serverDB, userId, mockGateKeeper);
+    const created = await model.create({
+      ...mailAccount('getcred@lobe.id'),
+      credential: { apiKey: 'am_123' },
+    });
+
+    await expect(model.getCredential(created.id)).resolves.toEqual({ apiKey: 'am_123' });
+  });
+
+  it('returns null from getCredential for an account without one', async () => {
+    const model = new AgentAccountModel(serverDB, userId, mockGateKeeper);
+    const created = await model.create(mailAccount('nocred@lobe.id'));
+
+    expect(created.hasCredential).toBe(false);
+    await expect(model.getCredential(created.id)).resolves.toBeNull();
+  });
+
+  it('stamps rotatedAt and replaces the secret on setCredential', async () => {
+    const model = new AgentAccountModel(serverDB, userId, mockGateKeeper);
+    const created = await model.create({
+      ...mailAccount('rotate@lobe.id'),
+      credential: { apiKey: 'am_old' },
+    });
+
+    await model.setCredential(created.id, { apiKey: 'am_new' }, { masked: '•••• new' });
+
+    const found = await model.findById(created.id);
+    expect(found!.credentialHint).toMatchObject({ masked: '•••• new' });
+    expect(found!.credentialHint?.rotatedAt).toBeTruthy();
+    await expect(model.getCredential(created.id)).resolves.toEqual({ apiKey: 'am_new' });
+  });
+
+  it('purges the credential when revoking, unless asked to keep it', async () => {
+    const model = new AgentAccountModel(serverDB, userId, mockGateKeeper);
+    const purged = await model.create({
+      ...mailAccount('revoke-purge@lobe.id'),
+      credential: { apiKey: 'am_1' },
+    });
+    const kept = await model.create({
+      ...mailAccount('revoke-keep@lobe.id'),
+      credential: { apiKey: 'am_2' },
+    });
+
+    await model.revoke(purged.id);
+    await model.revoke(kept.id, { purgeCredential: false });
+
+    const purgedRow = await model.findById(purged.id);
+    expect(purgedRow!.status).toBe('revoked');
+    expect(purgedRow!.revokedAt).toBeTruthy();
+    expect(purgedRow!.hasCredential).toBe(false);
+    expect(purgedRow!.credentialHint).toBeNull();
+
+    const keptRow = await model.findById(kept.id);
+    expect(keptRow!.status).toBe('revoked');
+    expect(keptRow!.hasCredential).toBe(true);
+  });
+});
+
+describe('AgentAccountModel scope and writes', () => {
+  it('does not expose another user account', async () => {
+    const model1 = new AgentAccountModel(serverDB, userId);
+    const model2 = new AgentAccountModel(serverDB, userId2);
+
+    const created = await model1.create(mailAccount('private@lobe.id'));
+
+    expect(await model2.findById(created.id)).toBeUndefined();
+    expect(await model2.query()).toHaveLength(0);
+  });
+
+  it('does not let another user patch or revoke an account', async () => {
+    const model1 = new AgentAccountModel(serverDB, userId);
+    const model2 = new AgentAccountModel(serverDB, userId2);
+    const created = await model1.create(mailAccount('iso@lobe.id'));
+
+    await model2.update(created.id, { displayName: 'hijacked' });
+    await model2.revoke(created.id);
+
+    const found = await model1.findById(created.id);
+    expect(found!.displayName).toBeNull();
+    expect(found!.status).toBe('provisioning');
+  });
+
+  it('resolves an account from the routing key across every scope', async () => {
+    const workspaceId = await seedWorkspace('agent-account-routing-ws');
+    const inWorkspace = new AgentAccountModel(serverDB, userId, undefined, workspaceId);
+    await inWorkspace.create(mailAccount('routing@lobe.id'));
+
+    // Personal scope cannot see it…
+    const personal = new AgentAccountModel(serverDB, userId);
+    expect(await personal.query()).toHaveLength(0);
+
+    // …but an inbound webhook resolves it by (provider, identifier).
+    const route = await AgentAccountModel.findByRoutingKey(
+      serverDB,
+      'agent-mail',
+      'routing@lobe.id',
+    );
+    expect(route?.workspaceId).toBe(workspaceId);
+    expect(route?.hasCredential).toBe(false);
+  });
+
+  it('decrypts for inbound signature verification, and only with a gatekeeper', async () => {
+    const model = new AgentAccountModel(serverDB, userId, mockGateKeeper);
+    await model.create({
+      ...mailAccount('verify@lobe.id'),
+      credential: { webhookSecret: 'whsec_verify' },
+    });
+
+    const withGatekeeper = await AgentAccountModel.findForInboundVerification(
+      serverDB,
+      'agent-mail',
+      'verify@lobe.id',
+      mockGateKeeper,
+    );
+    expect(withGatekeeper?.credential).toEqual({ webhookSecret: 'whsec_verify' });
+
+    const withoutGatekeeper = await AgentAccountModel.findForInboundVerification(
+      serverDB,
+      'agent-mail',
+      'verify@lobe.id',
+    );
+    expect(withoutGatekeeper).toBeUndefined();
+  });
+
+  it('keeps one account per (agent, kind, provider, identifier)', async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+    await model.create(mailAccount('dupe@lobe.id'));
+
+    await expect(model.create(mailAccount('dupe@lobe.id'))).rejects.toThrow();
+  });
+});
+
+describe('AgentAccountModel schema invariants', () => {
+  it('gets a database-generated uuid id, not a prefixed nanoid', async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+    const created = await model.create(mailAccount('uuid@lobe.id'));
+
+    expect(created.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  });
+
+  it('requires capabilities to be stated instead of silently defaulting to "does nothing"', async () => {
+    // The column is NOT NULL with no default on purpose: a producer that cannot
+    // say what the account does has not finished provisioning it, and a silent
+    // `{ receive: false, send: false }` would install a dead account that looks
+    // healthy. Insert without the column and let the database refuse the row —
+    // if a default is ever reintroduced, this insert starts succeeding.
+    await expect(
+      serverDB.execute(
+        sql`INSERT INTO agent_accounts (agent_id, user_id, kind, identifier, provider)
+            VALUES (${agentId}, ${userId}, 'mail', 'nocaps@lobe.id', 'agent-mail')`,
+      ),
+    ).rejects.toThrow();
+  });
+});
