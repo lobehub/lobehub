@@ -6,6 +6,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
 import { SessionModel } from '@/database/models/session';
 import { SessionGroupModel } from '@/database/models/sessionGroup';
 import { insertAgentSchema, insertSessionSchema } from '@/database/schemas';
@@ -254,7 +255,17 @@ export const sessionRouter = router({
           ctx.userId,
           ctx.workspaceId ?? undefined,
         );
-        return trashService.trashAgent(session.agent.id);
+        const trashed = await trashService.trashAgent(session.agent.id);
+        // Same as `agent.removeAgent`: the trashed agent is invisible to a
+        // pending handover's recipient too, so an acceptance would move
+        // ownership of recycle-bin content — void it now.
+        if (ctx.workspaceId) {
+          await new ResourceTransferRequestModel(
+            ctx.serverDB,
+            ctx.workspaceId,
+          ).invalidateForResources('agent', [session.agent.id]);
+        }
+        return trashed;
       }
 
       // No linked agent (a stray legacy row) or a shell the agent does not
