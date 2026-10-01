@@ -74,6 +74,17 @@ const TIMEOUT_MS = 20 * 60_000;
 /** Source message id prefix of a dispatched planning turn; the suffix is its token. */
 const MANAGER_SOURCE_MESSAGE_PREFIX = 'msg_goal_manager_';
 
+/**
+ * The token a planning turn is keyed by, carrying the Goal it belongs to.
+ *
+ * The source message `msg_goal_manager_<token>` is the only durable link from a
+ * manager operation back to its Goal, so the Goal id has to sit inside it for
+ * management spend to be attributable. Without it, a conversation this Goal was
+ * moved out of — which can be a normal conversation that later supervised
+ * another Goal — would charge that other Goal's turns to this one's budget.
+ */
+const managerTurnToken = (goalId: string) => `${goalId}_${randomUUID()}`;
+
 /** Excludes only the manager's own receipt. Concurrent policy/graph changes invalidate its plan. */
 export const managerSnapshot = (graph: GoalGraphSnapshot) => {
   const { managerState: _state, ...config } = graph.goal.config ?? {};
@@ -126,7 +137,7 @@ export class GoalManagerService {
     private readonly workspaceId?: string,
   ) {}
 
-  usage = async (state?: GoalManagerState) => {
+  usage = async (goalId: string, state?: GoalManagerState) => {
     // The planning topic can be the user's own conversation (`/goal`), so only
     // manager turns count as management spend: the dispatched ones by their
     // server-minted source message, the adopted one by its operation id. The
@@ -139,16 +150,26 @@ export class GoalManagerService {
     // A handoff moves later turns to the new agent's topic; the turns already
     // spent in the conversations it left behind still belong to the Goal, so
     // they are summed too instead of dropping out of its budget.
-    const topicIds = [...new Set([state.topicId, ...(state.previousTopicIds ?? [])])];
-    const operations = (
-      await Promise.all(topicIds.map((topicId) => model.listByTopic(topicId, 100)))
-    )
-      .flat()
-      .filter(
-        (op) =>
-          op.appContext?.sourceMessageId?.startsWith(MANAGER_SOURCE_MESSAGE_PREFIX) ||
-          op.id === adoptedId,
-      );
+    const goalTokenPrefix = `${MANAGER_SOURCE_MESSAGE_PREFIX}${goalId}_`;
+    const reads = await Promise.all(
+      [state.topicId, ...(state.previousTopicIds ?? [])].map(async (topicId, index) => ({
+        current: index === 0,
+        operations: await model.listByTopic(topicId, 100),
+      })),
+    );
+    const operations = reads.flatMap(({ current, operations: topicOperations }) =>
+      topicOperations.filter((op) => {
+        if (op.id === adoptedId) return true;
+        const source = op.appContext?.sourceMessageId;
+        // The Goal's own conversation keeps the historical prefix match: a turn
+        // dispatched before the token carried the Goal id has no marker to match.
+        if (current) return source?.startsWith(MANAGER_SOURCE_MESSAGE_PREFIX);
+        // A conversation the Goal moved out of is matched on the Goal's own
+        // marker only. It can be shared with another Goal created in the same
+        // conversation, whose turns are not this Goal's spend.
+        return source?.startsWith(goalTokenPrefix);
+      }),
+    );
     // The adopted run lives on the conversation that created the Goal; keep it
     // counted even when it is not among the topics read above.
     if (adoptedId && !operations.some((op) => op.id === adoptedId)) {
@@ -232,7 +253,10 @@ export class GoalManagerService {
    * Declines while a turn is unclaimed in flight: `settleInFlight` finds that
    * turn's run through `state.topicId`, so re-pointing early would strand it as
    * unconfirmed and pause the Goal. `startTurn` migrates on the next claim in
-   * that case. The Goal row is locked, like every other receipt write.
+   * that case. It also declines when the Goal no longer belongs to the target: an
+   * overlapping handoff that landed later owns the answer, and migrating to this
+   * call's stale target would leave the conversation owned by an agent the Goal
+   * is not assigned to. The Goal row is locked, like every other receipt write.
    */
   moveConversationTo = async (
     goalId: string,
@@ -242,7 +266,7 @@ export class GoalManagerService {
       const model = new GoalModel(db, this.userId, this.workspaceId);
       const goal = await model.lockById(goalId);
       const state = goal?.config?.managerState;
-      if (!goal || !state || !state.consumed) return;
+      if (!goal || !state || !state.consumed || goal.agentId !== agentId) return;
       const topicModel = new TopicModel(db, this.userId, this.workspaceId);
       const current = await topicModel.findById(state.topicId);
       if (current?.agentId === agentId) return;
@@ -310,6 +334,7 @@ export class GoalManagerService {
       graph.nodes.flatMap((n) => (n.taskId ? [n.taskId] : [])),
     );
     const management = await new GoalManagerService(db, this.userId, this.workspaceId).usage(
+      graph.goal.id,
       graph.goal.config?.managerState,
     );
     const goal = graph.goal;
@@ -636,7 +661,7 @@ export class GoalManagerService {
         reviewSnapshot: reviews.hash,
         topicId,
         turns: (state?.turns ?? 0) + 1,
-        token: randomUUID(),
+        token: managerTurnToken(goal.id),
         snapshot: managerSnapshot(current),
         startedAt: new Date().toISOString(),
       };

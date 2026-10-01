@@ -353,7 +353,7 @@ describe('CLI main Agent planning', () => {
       });
       const state = (await model().findById(graph.goal.id))!.config!.managerState!;
 
-      expect((await manager().usage(state)).totalCost).toBe(2);
+      expect((await manager().usage(graph.goal.id, state)).totalCost).toBe(2);
     });
 
     it('keeps the adopted run in management spend after a later turn replaces the receipt', async () => {
@@ -380,10 +380,11 @@ describe('CLI main Agent planning', () => {
         turns: 2,
       };
 
-      expect((await manager().usage(laterTurn)).totalCost).toBe(2);
+      expect((await manager().usage(graph.goal.id, laterTurn)).totalCost).toBe(2);
       // After a handoff the later turn lives on another topic; the run still counts.
       expect(
-        (await manager().usage({ ...laterTurn, topicId: 'tpc_other_supervisor' })).totalCost,
+        (await manager().usage(graph.goal.id, { ...laterTurn, topicId: 'tpc_other_supervisor' }))
+          .totalCost,
       ).toBe(2);
     });
 
@@ -601,7 +602,7 @@ describe('CLI main Agent planning', () => {
     // The turn now runs in the new agent's topic; the spend already booked in
     // the conversation it left still belongs to the goal's management budget.
     expect(next.topicId).not.toBe(state.topicId);
-    expect((await manager().usage(next)).totalCost).toBe(3);
+    expect((await manager().usage(id, next)).totalCost).toBe(3);
   });
 
   it('leaves a live turn on the previous agent topic instead of migrating mid-turn', async () => {
@@ -634,6 +635,61 @@ describe('CLI main Agent planning', () => {
     expect(topic?.agentId).toBe('late-target');
     // The conversation the handoff moved out of keeps counting.
     expect(next.previousTopicIds).toEqual([state.topicId]);
+  });
+
+  it('does not charge another Goal’s turns in a shared conversation to this one', async () => {
+    const a = await start();
+    const shared = a.state.topicId;
+    // A second Goal is created from the same conversation and plans there too —
+    // the shared conversation a retained topic can turn out to be.
+    const sharedRunId = 'op-shared-conversation-run';
+    await ops().recordStart({
+      agentId,
+      appContext: { sourceMessageId: 'msg_user_second_goal' },
+      operationId: sharedRunId,
+      topicId: shared,
+    });
+    const { graph: b } = await service().createFromConversation(sharedRunId, {
+      title: 'Second goal',
+    });
+    await ops().recordCompletion(sharedRunId, { status: 'done' });
+    expect((await service().tick(b.goal.id)).outcome).toBe('advanced');
+    expect((await service().tick(b.goal.id)).outcome).toBe('waiting_external');
+    const bState = (await model().findById(b.goal.id))!.config!.managerState!;
+    const bTurn = await ops().findByTopicSourceMessage(shared, `msg_goal_manager_${bState.token}`);
+    expect(bTurn).toBeTruthy();
+    await db.update(agentOperations).set({ totalCost: 9 }).where(eq(agentOperations.id, bTurn!.id));
+
+    // A hands over, retaining the shared conversation as one it moved out of.
+    await ops().recordCompletion(a.op.id, { status: 'done' });
+    expect((await service().tick(a.id)).outcome).toBe('advanced');
+    await db.insert(agents).values({ id: 'shared-target', userId });
+    await service().setAgent(a.id, 'shared-target');
+    const retained = (await model().findById(a.id))!.config!.managerState!;
+    expect(retained.previousTopicIds).toEqual([shared]);
+
+    await db.update(agentOperations).set({ totalCost: 1 }).where(eq(agentOperations.id, a.op.id));
+    // Only A's own turn counts; the other Goal's run in the same conversation does not.
+    expect((await manager().usage(a.id, retained)).totalCost).toBe(1);
+  });
+
+  it('declines a handoff migration whose target is no longer the goal agent', async () => {
+    const { id, op } = await start();
+    await ops().recordCompletion(op.id, { status: 'done' });
+    expect((await service().tick(id)).outcome).toBe('advanced');
+    await db.insert(agents).values([
+      { id: 'first-target', userId },
+      { id: 'second-target', userId },
+    ]);
+
+    // Two overlapping handoffs: this call's migration runs after the later one
+    // has already re-assigned the Goal, so its target is stale.
+    await service().setAgent(id, 'second-target');
+    expect(await manager().moveConversationTo(id, 'first-target')).toBeUndefined();
+
+    const state = (await model().findById(id))!.config!.managerState!;
+    const [topic] = await db.select().from(topics).where(eq(topics.id, state.topicId));
+    expect(topic?.agentId).toBe('second-target');
   });
 
   it('rejects wrong owner, operation, pause and changed graph without adding tasks', async () => {

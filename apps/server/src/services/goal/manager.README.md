@@ -131,7 +131,9 @@ persistent device process journal. A committed plan survives an errored ending,
 but coordinator dispatch still waits for that terminal operation.
 
 Manager turns are capped separately (default 50, maximum 100); recorded manager
-cost/tokens are included in detailed Goal spend. External subscription execution
+cost/tokens are included in detailed Goal spend. A turn's source message carries
+the Goal it was dispatched for, so its cost stays with that Goal after a handoff
+and a conversation shared with another Goal cannot charge its turns here. External subscription execution
 can be unmetered, so a zero recorded cost is not proof of zero spend. The CLI sends operation-token plan submissions to a dedicated ingestion endpoint,
 which checks the live operation principal and then the Goal turn binding. Normal
 user credentials retain the existing scoped endpoint. Prompt instructions are not a
