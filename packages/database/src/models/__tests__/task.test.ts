@@ -1847,6 +1847,33 @@ describe('TaskModel', () => {
       expect(await model.getActivities(task.id)).toHaveLength(0);
     });
 
+    it('merges a config patch under the lock instead of replacing the column', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        automationMode: 'schedule',
+        instruction: 'Test',
+        schedulePattern: '0 9 * * *',
+      });
+      // Another tab / member saved a different key after this client loaded.
+      await model.updateTaskConfig(task.id, { checkpoint: { onAgentRequest: true } });
+
+      const updated = await model.updateWithLog(
+        task.id,
+        { schedulePattern: '0 18 * * *' },
+        { userId },
+        { configPatch: { schedule: { maxExecutions: 3 } } },
+      );
+
+      expect(updated!.config).toEqual({
+        checkpoint: { onAgentRequest: true },
+        schedule: { maxExecutions: 3 },
+      });
+      expect(updated!.schedulePattern).toBe('0 18 * * *');
+      const [activity] = await model.getActivities(task.id);
+      expect(activity.type).toBe('automation');
+      expect((activity.payload as any).to.maxExecutions).toBe(3);
+    });
+
     it('drops the previous assignee cloud-repo selection when the task is reassigned', async () => {
       const model = new TaskModel(serverDB, userId);
       await createAgent('agt_repos_a');

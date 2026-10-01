@@ -78,12 +78,9 @@ describe('TaskConfigSliceAction', () => {
       expect(useTaskStore.getState().taskDetailMap['T-1'].config?.checkpoint).toEqual({
         onAgentRequest: true,
       });
-      expect(taskService.update).toHaveBeenCalledWith(
-        'T-1',
-        expect.objectContaining({
-          config: expect.objectContaining({ checkpoint: { onAgentRequest: true } }),
-        }),
-      );
+      // The schedule save sends only its own key, never a config snapshot that
+      // could carry a stale checkpoint back to the server.
+      expect(vi.mocked(taskService.update).mock.calls[0][1]).not.toHaveProperty('config');
     });
 
     it('rolls back and marks the save failed when the PUT rejects', async () => {
@@ -162,6 +159,39 @@ describe('TaskConfigSliceAction', () => {
         expect(service()).toHaveBeenCalledTimes(1);
       },
     );
+
+    it('keeps an edit queued behind a review write when the review refetch lands', async () => {
+      const { mutate } = await import('@/libs/swr');
+      let settleReview!: () => void;
+      vi.mocked(taskService.updateReview).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settleReview = () => resolve({ success: true } as any);
+          }),
+      );
+      vi.mocked(taskService.updateCheckpoint).mockResolvedValue({ success: true } as any);
+      // The refetch returns server data that predates the queued checkpoint edit.
+      vi.mocked(mutate).mockImplementation(async () => {
+        useTaskStore.setState({
+          taskDetailMap: {
+            'T-1': { ...mockDetail, checkpoint: { onAgentRequest: false } },
+          },
+        });
+      });
+
+      const store = useTaskStore.getState();
+      const review = store.updateReview('T-1', { enabled: true } as any);
+      await flush();
+      const checkpoint = store.updateCheckpoint('T-1', { onAgentRequest: true });
+      settleReview();
+      await Promise.all([review, checkpoint]);
+
+      expect(taskService.updateCheckpoint).toHaveBeenCalledOnce();
+      expect(useTaskStore.getState().taskDetailMap['T-1'].checkpoint).toEqual({
+        onAgentRequest: true,
+      });
+      vi.mocked(mutate).mockReset();
+    });
 
     it('updateVerifyConfig still rejects so multi-step callers can abort', async () => {
       vi.mocked(taskService.updateVerifyConfig).mockRejectedValue(new Error('fail'));
@@ -759,7 +789,7 @@ describe('TaskConfigSliceAction', () => {
       });
       expect((detail.config as any).schedule.maxExecutions).toBe(5);
       expect(taskService.update).toHaveBeenCalledWith('T-1', {
-        config: { schedule: { maxExecutions: 5 } },
+        configPatch: { schedule: { maxExecutions: 5 } },
         schedulePattern: '0 9 * * 1-5',
         scheduleTimezone: 'Asia/Shanghai',
       });

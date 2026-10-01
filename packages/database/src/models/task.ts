@@ -2194,8 +2194,18 @@ export class TaskModel {
     id: string,
     data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
     actor: { agentId?: string | null; userId?: string | null },
+    options: {
+      /**
+       * Deep-merged into the `config` column under this update's row lock,
+       * instead of replacing it. A client that edits one key (the schedule
+       * cap) must not send back a whole-config snapshot that can predate
+       * another tab's or member's write of a different key.
+       */
+      configPatch?: Record<string, unknown>;
+    } = {},
   ): Promise<TaskItem | null> {
-    const touched = TRACKED_TASK_COLUMNS.some((col) => data[col] !== undefined);
+    const { configPatch } = options;
+    const touched = !!configPatch || TRACKED_TASK_COLUMNS.some((col) => data[col] !== undefined);
     // Nothing to diff against: an ordinary rename should not pay for a lock.
     if (!touched) return this.update(id, data);
 
@@ -2225,7 +2235,16 @@ export class TaskModel {
       // selection — lives in `update`, which is the only writer of the assignee
       // column, so this locked read is kept for the activity-log diff only and
       // the write below re-checks the rule in the same transaction.
-      const updated = await scoped.update(id, data);
+      const writeData = configPatch
+        ? {
+            ...data,
+            config: merge(
+              ((data.config ?? before.config) as Record<string, unknown> | null) ?? {},
+              configPatch,
+            ),
+          }
+        : data;
+      const updated = await scoped.update(id, writeData);
       if (!updated) return null;
 
       const events: { payload: TaskActivityLogPayload; type: TaskActivityLogType }[] = [];

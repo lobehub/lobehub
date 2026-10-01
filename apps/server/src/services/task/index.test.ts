@@ -2191,6 +2191,7 @@ describe('TaskService', () => {
         'task_001',
         { assigneeAgentId: 'agt_new' },
         { agentId: 'agt_actor', userId: 'user_actor' },
+        {},
       );
     });
 

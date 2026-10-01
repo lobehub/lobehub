@@ -936,9 +936,10 @@ export class TaskService {
     taskId: string,
     data: Parameters<TaskModel['update']>[1],
     actor: { agentId?: string | null; userId?: string | null } = {},
+    options: Parameters<TaskModel['updateWithLog']>[3] = {},
   ): Promise<TaskItem | null> {
     return this.withAssigneeUserLock(data.assigneeUserId, (db) =>
-      new TaskModel(db, this.userId, this.workspaceId).updateWithLog(taskId, data, actor),
+      new TaskModel(db, this.userId, this.workspaceId).updateWithLog(taskId, data, actor, options),
     );
   }
 

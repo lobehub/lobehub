@@ -139,6 +139,18 @@ export class TaskConfigSliceActionImpl {
     }
   };
 
+  /**
+   * Refetch a task's detail from inside a serialized config write. Edits queued
+   * behind this write (run location, model, checkpoint) have already applied
+   * their optimistic patch but not reached the server, so the refetch predates
+   * them; re-apply their patches on top, since none of them refetches when it
+   * lands.
+   */
+  #refreshDetailKeepingQueuedEdits = async (id: string): Promise<void> => {
+    await this.#get().internal_refreshTaskDetail(id);
+    this.#getDetailWriteEngine().reapplyPending();
+  };
+
   markBriefRead = async (briefId: string): Promise<void> => {
     await taskService.markBriefRead(briefId);
     const { activeTaskId, internal_refreshTaskDetail } = this.#get();
@@ -196,7 +208,7 @@ export class TaskConfigSliceActionImpl {
     await this.#commitConfigWrite(id, {
       mutate: async () => {
         await taskService.updateReview({ id, review });
-        await this.#get().internal_refreshTaskDetail(id);
+        await this.#refreshDetailKeepingQueuedEdits(id);
       },
       name: 'updateReview',
       onError: async (error) => {
@@ -219,7 +231,7 @@ export class TaskConfigSliceActionImpl {
     await this.#commitConfigWrite(id, {
       mutate: async () => {
         await taskService.updateVerifyConfig({ id, verify });
-        await this.#get().internal_refreshTaskDetail(id);
+        await this.#refreshDetailKeepingQueuedEdits(id);
       },
       name: 'updateVerifyConfig',
       onError: async (error) => {
@@ -471,8 +483,11 @@ export class TaskConfigSliceActionImpl {
       };
     });
     tx.mutation = async () => {
+      // Send only the key this edit owns, merged server-side under the row
+      // lock: a whole-config snapshot from this tab can predate another tab's
+      // or member's write (an execution pin, a model) and would erase it.
       await taskService.update(id, {
-        config: nextConfig,
+        configPatch: { schedule: { maxExecutions: schedule.maxExecutions } },
         schedulePattern: schedule.pattern,
         scheduleTimezone: schedule.timezone,
       });
