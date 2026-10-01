@@ -1,9 +1,8 @@
 'use client';
 
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
-import { Empty, Flexbox } from '@lobehub/ui';
+import { Block, Empty, Flexbox } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui/base-ui';
-import { Card } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight, Database } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -14,12 +13,21 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import DatasetRow from './DatasetRow';
 import type { useExperimentActions } from './useExperimentActions';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  cardBody: css`
+    padding-block: 4px;
+    padding-inline: 8px;
+  `,
+  cardHeader: css`
+    min-height: 56px;
+    padding-inline: 24px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    font-size: 16px;
+    font-weight: 600;
+  `,
   listCard: css`
-    .ant-card-body {
-      padding-block: 4px;
-      padding-inline: 8px;
-    }
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   sectionTitle: css`
     margin: 0;
@@ -52,26 +60,30 @@ const BenchmarksSection = memo<BenchmarksSectionProps>(({ actions, experiment })
     <Flexbox gap={12}>
       <h3 className={styles.sectionTitle}>{t('experiment.detail.benchmarks')}</h3>
       {groups.map(({ benchmark, datasets }) => (
-        <Card
-          className={styles.listCard}
-          key={benchmark.id}
-          title={benchmark.name}
-          extra={
+        <Block className={styles.listCard} key={benchmark.id} variant={'outlined'}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={styles.cardHeader}
+            justify={'space-between'}
+          >
+            <span>{benchmark.name}</span>
             <WorkspaceLink to={`/eval/bench/${benchmark.id}`}>
               <ActionIcon icon={ChevronRight} size={'small'} />
             </WorkspaceLink>
-          }
-        >
-          {datasets.length === 0 ? (
-            <Empty description={t('experiment.detail.benchmarksEmpty')} icon={Database} />
-          ) : (
-            <Flexbox gap={0}>
-              {datasets.map((dataset) => (
-                <DatasetRow dataset={dataset} key={dataset.id} onAddRun={actions.addRun} />
-              ))}
-            </Flexbox>
-          )}
-        </Card>
+          </Flexbox>
+          <div className={styles.cardBody}>
+            {datasets.length === 0 ? (
+              <Empty description={t('experiment.detail.benchmarksEmpty')} icon={Database} />
+            ) : (
+              <Flexbox gap={0}>
+                {datasets.map((dataset) => (
+                  <DatasetRow dataset={dataset} key={dataset.id} onAddRun={actions.addRun} />
+                ))}
+              </Flexbox>
+            )}
+          </div>
+        </Block>
       ))}
     </Flexbox>
   );

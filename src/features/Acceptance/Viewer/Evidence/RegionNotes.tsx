@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Crosshair, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -54,6 +54,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface RegionNoteRowProps {
+  /** Focus the field on mount — a note just made is a note about to be written. */
+  autoFocus?: boolean;
   /** Rendered beside the field — the desktop's number badge. */
   badge?: ReactNode;
   /** Rendered above the field — the phone's jump-back link. */
@@ -68,8 +70,8 @@ interface RegionNoteRowProps {
   value: string;
 }
 
-const RegionNoteRow = memo<RegionNoteRowProps>(
-  ({ badge, caption, fontSize, index, placeholder, value, onChange, onRemove }) => {
+export const RegionNoteRow = memo<RegionNoteRowProps>(
+  ({ autoFocus, badge, caption, fontSize, index, placeholder, value, onChange, onRemove }) => {
     const { t } = useTranslation('verify');
 
     return (
@@ -79,6 +81,7 @@ const RegionNoteRow = memo<RegionNoteRowProps>(
           {badge}
           <TextArea
             aria-label={t('acceptance.review.annotationPlaceholder', { index })}
+            autoFocus={autoFocus}
             autoSize={{ maxRows: 5, minRows: 1 }}
             placeholder={placeholder}
             style={{ flex: 1, fontSize }}

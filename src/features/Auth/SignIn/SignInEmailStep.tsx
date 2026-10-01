@@ -1,8 +1,8 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Flexbox, Icon, Input } from '@lobehub/ui';
-import { Alert, Badge, Button, Text } from '@lobehub/ui/base-ui';
-import { type FormInstance, type InputRef } from 'antd';
-import { Divider, Form } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Alert, Badge, Button, Divider, Input, Text } from '@lobehub/ui/base-ui';
+import { type FormInstance } from 'antd';
+import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Mail } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef } from 'react';
@@ -71,14 +71,14 @@ export const SignInEmailStep = ({
 }: SignInEmailStepProps) => {
   const { t } = useTranslation('auth');
   const { agreementChecked, continueWithAgreement, setAgreementChecked } = useAuthAgreement();
-  const emailInputRef = useRef<InputRef>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     emailInputRef.current?.focus();
   }, []);
 
   const divider = (
-    <Divider>
+    <Divider style={{ marginBlock: 16 }}>
       <Text fontSize={12} type={'secondary'}>
         {t('betterAuth.signin.orContinueWith')}
       </Text>

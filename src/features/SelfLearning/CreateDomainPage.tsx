@@ -1,8 +1,17 @@
 'use client';
 
-import { Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, Popover, Spin, Text, toast } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  Divider,
+  Input,
+  Popover,
+  Spin,
+  Text,
+  TextArea,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   AnchorIcon,
@@ -525,7 +534,7 @@ const CreateDomainPage = memo(() => {
                     </Button>
                   </Flexbox>
                 </Flexbox>
-                <Divider style={{ margin: 0 }} />
+                <Divider />
                 <Flexbox className={styles.reviewSection} gap={12}>
                   <Flexbox horizontal align={'flex-start'} gap={8} justify={'space-between'}>
                     <Text fontSize={14} type={'secondary'}>

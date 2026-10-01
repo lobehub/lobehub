@@ -11,7 +11,8 @@ import {
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
 import { Form, type FormItemProps } from '@lobehub/ui';
-import { Form as AForm, type FormInstance, Input } from 'antd';
+import { Input, TextArea } from '@lobehub/ui/base-ui';
+import { Form as AForm, type FormInstance } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -104,7 +105,7 @@ const SkillEditForm = memo<SkillEditFormProps>(
       },
       {
         children: (
-          <Input.TextArea
+          <TextArea
             autoSize={{ maxRows: 4, minRows: 2 }}
             disabled={disabled}
             placeholder={t('agentSkillModal.descriptionPlaceholder')}

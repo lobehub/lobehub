@@ -1,8 +1,7 @@
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { Flexbox } from '@lobehub/ui';
-import { Accordion, Skeleton } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Accordion, Divider, Skeleton } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 

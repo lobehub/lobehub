@@ -1,6 +1,6 @@
-import { Icon, InputPassword } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { type FormInstance, type InputRef } from 'antd';
+import { Icon } from '@lobehub/ui';
+import { Button, InputPassword, Text } from '@lobehub/ui/base-ui';
+import { type FormInstance } from 'antd';
 import { Form } from 'antd';
 import { Lock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
@@ -28,7 +28,7 @@ export const SignInPasswordStep = ({
   onSubmit,
 }: SignInPasswordStepProps) => {
   const { t } = useTranslation('auth');
-  const passwordInputRef = useRef<InputRef>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     passwordInputRef.current?.focus();

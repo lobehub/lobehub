@@ -1,7 +1,7 @@
 'use client';
 
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { Block, Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -12,6 +12,7 @@ import {
   Spin,
   Tag,
   Text,
+  TextArea,
   toast,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';

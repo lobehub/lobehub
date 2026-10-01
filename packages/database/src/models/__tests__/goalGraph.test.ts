@@ -178,6 +178,34 @@ describe('GoalGraphModel', () => {
     expect(graph?.events.filter((event) => event.entityType === 'task')).toHaveLength(1);
   });
 
+  it('refuses to bind a task to a node retired while the task was being created', async () => {
+    // Retirement fences the node before it looks for bound Tasks; a Task a
+    // concurrent coordinator finishes creating afterwards must not flip the
+    // retired node back to `active`.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Retire race' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Stray' });
+    const task = await new TaskModel(serverDB, userId).create({ instruction: 'Late task' });
+
+    expect(await graphModel.claimTaskNode(goal.id, node!.id, new Date(0))).toBeDefined();
+    await graphModel.updateNodeStatus(goal.id, node!.id, 'retired');
+
+    expect(await graphModel.bindTask(goal.id, node!.id, task.id)).toBeUndefined();
+    const [after] = (await graphModel.getGraph(goal.id))!.nodes;
+    expect(after.status).toBe('retired');
+    expect(after.taskId).toBeNull();
+  });
+
+  it('does not let a stale status write revive a retired node', async () => {
+    // A coordinator tick that loaded the node before retirement would
+    // otherwise write it back to `resolved`.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Stale write' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Stray' });
+    await graphModel.updateNodeStatus(goal.id, node!.id, 'retired');
+
+    expect(await graphModel.updateNodeStatus(goal.id, node!.id, 'resolved')).toBeUndefined();
+    expect(await graphModel.getNodeStatus(goal.id, node!.id)).toBe('retired');
+  });
+
   it('refuses to bind a task to a node that is not a task node', async () => {
     // This used to be a CHECK constraint. It lives in `bindTask`'s WHERE now,
     // so the rule needs a test on the write path or nothing enforces it.

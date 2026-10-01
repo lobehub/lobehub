@@ -326,6 +326,7 @@ export default {
   'permission.collaborators.libraryDesc':
     'Collaborators can open this knowledge base and view the files inside even when the access level is "No access"',
   'permission.collaborators.remove': 'Remove',
+  'permission.collaborators.removeConfirmDesc': '{{name}} will lose access to this resource.',
   'permission.collaborators.removeConfirmTitle': 'Remove {{name}}?',
   'permission.collaborators.title': 'Collaborators',
   'permission.generalAccess.trigger': 'Members: {{level}}',
@@ -966,7 +967,7 @@ export default {
   'myAgents.actions.deprecate': 'Deprecate Permanently',
   'myAgents.actions.deprecateConfirmContent':
     'After deprecation, this agent will be permanently removed from the market and cannot be republished. This action is irreversible, please proceed with caution.',
-  'myAgents.actions.deprecateConfirmTitle': 'Confirm Deprecate Agent?',
+  'myAgents.actions.deprecateConfirmTitle': 'Deprecate Agent',
   'myAgents.actions.deprecateError': 'Failed to deprecate agent',
   'myAgents.actions.deprecateLoading': 'Deprecating agent...',
   'myAgents.actions.deprecateSuccess': 'Agent deprecated',
@@ -1137,6 +1138,9 @@ export default {
   'settingAppearance.contextMenuMode.disabled': 'Disabled',
   'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
   'settingAppearance.desktop.title': 'Desktop',
+  'settingAppearance.font.antialiasing.desc':
+    'Render text with grayscale antialiasing for a thinner, crisper look. Turn off to use the system default rendering. Only affects macOS.',
+  'settingAppearance.font.antialiasing.title': 'Font Antialiasing',
   'settingAppearance.font.fontFamily.default': 'System Default',
   'settingAppearance.font.fontFamily.desc':
     'Choose a font installed on this device for the whole interface. System Default follows the built-in font stack of your current language.',

@@ -109,7 +109,13 @@ export async function uploadReportEvidence(
     const absolutePath = path.resolve(params.dir, input.path);
     const type = evidenceTypeForFile(absolutePath);
     const description = evidenceDescriptionForFile(input.description, absolutePath);
-    const metadata = input.comparison ? { comparison: input.comparison } : undefined;
+    const metadata =
+      input.comparison || input.chapters
+        ? {
+            ...(input.chapters ? { chapters: input.chapters } : {}),
+            ...(input.comparison ? { comparison: input.comparison } : {}),
+          }
+        : undefined;
     let fileId: string | undefined;
     let missing = false;
     try {

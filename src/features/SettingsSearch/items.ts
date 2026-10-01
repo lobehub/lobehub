@@ -370,6 +370,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     labelKey: 'settingChatAppearance.fontSize.title',
     tab: SettingsTabs.Appearance,
   },
+  {
+    anchor: 'appearance-font-antialiasing',
+    descKey: 'settingAppearance.font.antialiasing.desc',
+    keywords: ['font', 'antialiasing', 'smoothing', 'text', 'rendering'],
+    labelKey: 'settingAppearance.font.antialiasing.title',
+    tab: SettingsTabs.Appearance,
+  },
   // System Tools
   {
     anchor: 'system-tools-shell',

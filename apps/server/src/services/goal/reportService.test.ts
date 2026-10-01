@@ -195,6 +195,135 @@ describe('GoalService wrap-up branch', () => {
   });
 
   /**
+   * Regression: a re-dispatch reuses the wrap-up Task, and the previous run can
+   * outlive a failed cancel. Any run in the Task's history could submit, so the
+   * superseded one could land stale content as the newest report version.
+   */
+  it('accepts a report only from the current wrap-up run after a re-dispatch', async () => {
+    const service = new GoalService(serverDB, userId);
+    const { acceptanceTaskId, goalId, taskModel } = await runToAcceptance(service);
+    await taskModel.updateStatus(acceptanceTaskId, 'completed');
+    await service.tick(goalId);
+    await service.tick(goalId);
+    const acceptanceNode = (await service.graph(goalId)).nodes.find(
+      (node) => node.taskId === acceptanceTaskId,
+    )!;
+    await serverDB
+      .update(goalNodes)
+      .set({ resolvedAt: new Date(Date.now() + 60_000), status: 'resolved' })
+      .where(eq(goalNodes.id, acceptanceNode.id));
+    await service.tick(goalId);
+
+    const graph = await service.graph(goalId);
+    const { dispatch } = graph.report!;
+    const runs = await new TaskTopicModel(serverDB, userId).findByTaskId(dispatch.taskId!);
+    const current = runs.find((run) => run.operationId === dispatch.operationId)!;
+    const superseded = runs.find((run) => run.operationId !== dispatch.operationId)!;
+    const buildNode = graph.nodes.find((node) => node.title === 'Build the thing')!;
+    const metadata: GoalReportMetadata = {
+      chapters: [
+        {
+          detours: [],
+          findingIds: [],
+          narrative: 'Built it.',
+          nodeIds: [buildNode.id],
+          title: 'Building',
+          workVersionIds: [],
+        },
+      ],
+      graphCursor: graph.events[0].id,
+      headline: 'Delivered',
+      mainline: { edgeIds: [], nodeIds: [buildNode.id] },
+      nextSteps: [],
+    };
+    const reports = new GoalReportStore(serverDB, userId);
+
+    await expect(
+      reports.submit(goalId, { content: '# Stale', metadata }, { topicId: superseded.topicId }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const stored = await reports.submit(
+      goalId,
+      { content: '# Current', metadata },
+      { topicId: current.topicId },
+    );
+    expect(stored.version).toBe(1);
+  });
+
+  /**
+   * Regression: while a re-dispatch was still starting its run, the receipt had
+   * no operation yet and the newest run — the superseded one — counted as
+   * current, so it could still land stale content.
+   */
+  it('refuses the superseded run while a re-dispatch has not recorded its run yet', async () => {
+    const service = new GoalService(serverDB, userId);
+    const { acceptanceTaskId, goalId, taskModel } = await runToAcceptance(service);
+    await taskModel.updateStatus(acceptanceTaskId, 'completed');
+    await service.tick(goalId);
+    await service.tick(goalId);
+    const first = (await service.graph(goalId)).report!.dispatch;
+    const [oldRun] = await new TaskTopicModel(serverDB, userId).findByTaskId(first.taskId!);
+
+    // A re-dispatch claimed its receipt, but its run has not been recorded yet.
+    const goalRow = (await serverDB.select().from(goals).where(eq(goals.id, goalId)))[0];
+    await serverDB
+      .update(goals)
+      .set({
+        config: {
+          ...goalRow.config,
+          report: {
+            ...first,
+            acceptanceKey: `${first.acceptanceKey}:again`,
+            dispatchedAt: new Date(Date.now() + 1000).toISOString(),
+            operationId: undefined,
+          },
+        },
+      })
+      .where(eq(goals.id, goalId));
+
+    const graph = await service.graph(goalId);
+    const buildNode = graph.nodes.find((node) => node.title === 'Build the thing')!;
+    const metadata: GoalReportMetadata = {
+      chapters: [
+        {
+          detours: [],
+          findingIds: [],
+          narrative: 'Built it.',
+          nodeIds: [buildNode.id],
+          title: 'Building',
+          workVersionIds: [],
+        },
+      ],
+      graphCursor: graph.events[0].id,
+      headline: 'Delivered',
+      mainline: { edgeIds: [], nodeIds: [buildNode.id] },
+      nextSteps: [],
+    };
+    await expect(
+      new GoalReportStore(serverDB, userId).submit(
+        goalId,
+        { content: '# Stale', metadata },
+        { topicId: oldRun.topicId },
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  /**
+   * Regression: the wrap-up node was recognised by its title, so planned work
+   * that happened to be called the same was hidden from the coordinator.
+   */
+  it('dispatches ordinary work that only shares the wrap-up title', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'Write it up',
+      tasks: [GOAL_REPORT_TASK_TITLE],
+      title: 'Lookalike goal',
+    });
+    const result = await service.tick(graph.goal.id);
+    expect(result.taskId).toBeDefined();
+    expect(reportTaskRuns()).toHaveLength(0);
+  });
+
+  /**
    * Regression: a heterogeneous wrap-up agent never receives server tools, so an
    * instruction naming only the report tool could never be followed.
    */
@@ -315,7 +444,7 @@ describe('GoalReportStore.submit', () => {
 
     await expect(
       reports.submit(goalId, { content: '# Report', metadata }, { topicId: 'tpc_other' }),
-    ).rejects.toThrow('not the wrap-up run');
+    ).rejects.toThrow('not the current wrap-up run');
 
     expect(await new WorkModel(serverDB, userId).findLatestGoalReport(goalId)).toBeUndefined();
     expect((await service.graph(goalId)).report?.status).toBe('running');

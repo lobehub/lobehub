@@ -1,5 +1,5 @@
-import { Flexbox, Icon, Input, usePopoverContext } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, usePopoverContext } from '@lobehub/ui';
+import { Input, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -39,14 +39,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 2px 8px;
     padding-inline: 14px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    .ant-input-affix-wrapper,
-    .ant-input {
-      padding-inline: 0;
-      border: none !important;
-      background: transparent !important;
-      box-shadow: none !important;
-    }
+  `,
+  searchInput: css`
+    padding-inline: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
   `,
   section: css`
     padding-block: 6px 2px;
@@ -102,6 +100,7 @@ const SwitcherMenu = memo<SwitcherMenuProps>(
           <Input
             allowClear
             autoFocus
+            className={styles.searchInput}
             placeholder={searchPlaceholder}
             prefix={<Icon color={cssVar.colorTextTertiary} icon={SearchIcon} size={14} />}
             size={'small'}

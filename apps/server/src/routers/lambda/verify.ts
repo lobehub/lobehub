@@ -1,5 +1,6 @@
 import { fetchAcceptanceSkillBundle } from '@lobechat/builtin-skills/acceptance';
 import {
+  normalizeEvidenceMetadata,
   normalizeVerifySurface,
   verifyRunScenarios,
   verifySurfaces,
@@ -667,10 +668,10 @@ export const verifyRouter = router({
 
   /**
    * Serve a pullable skill bundle (`SKILL.md` + inline resource files) by
-   * identifier. Keep the authenticated contract and legacy alias while sourcing
+   * identifier without authentication. Keep the legacy alias while sourcing
    * all installers from the upstream default branch (or an explicitly selected tag).
    */
-  getSkillBundle: wsCompatProcedure
+  getSkillBundle: publicProcedure
     .input(
       z.object({
         identifier: z.string(),
@@ -969,7 +970,7 @@ export const verifyRouter = router({
         content: input.content ?? null,
         description: input.description ?? null,
         fileId: input.fileId ?? null,
-        metadata: input.metadata ?? null,
+        metadata: normalizeEvidenceMetadata(input.metadata, input.type) ?? null,
         type: input.type,
       });
     }),

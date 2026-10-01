@@ -61,6 +61,7 @@ import {
   LEASE_EXPIRED_ERROR,
   MEASURED_ACCEPTANCE_PAUSE_REASON,
   needsMetricCriteria,
+  NO_FRONTIER_PAUSE_REASON,
   selectFrontier,
   TERMINAL_NODE_STATUSES,
 } from './decideNextMove';
@@ -1241,7 +1242,7 @@ export class GoalService {
     const unfinishedNodes = graph.nodes.filter(
       (node) =>
         node.kind === 'task' &&
-        !isGoalReportNode(node) &&
+        !isGoalReportNode(graph, node) &&
         node.taskId &&
         !TERMINAL_NODE_STATUSES.has(node.status),
     );
@@ -1309,6 +1310,176 @@ export class GoalService {
       goal = (await this.resume(goalId)) ?? goal;
     }
     return { goal, restartedTaskIds };
+  };
+
+  /**
+   * Task access under the goal owner's principal — the identity the goal's
+   * coordinator creates and runs its Tasks as. Only for acting on Tasks already
+   * bound to this goal's nodes, after the caller's right to manage the goal has
+   * been checked.
+   */
+  private goalOwnerTaskScope = (goal: { userId: string }) =>
+    goal.userId === this.userId
+      ? {
+          taskModel: this.taskModel,
+          taskService: this.taskService,
+          taskTopicModel: this.taskTopicModel,
+        }
+      : {
+          taskModel: new TaskModel(this.db, goal.userId, this.workspaceId),
+          taskService: new TaskService(this.db, goal.userId, this.workspaceId),
+          taskTopicModel: new TaskTopicModel(this.db, goal.userId, this.workspaceId),
+        };
+
+  /**
+   * Retire Task nodes a person no longer wants run — a duplicated plan branch,
+   * work that landed elsewhere. Without this a stray node that never got a Task
+   * stays unfinished forever and the coordinator can never reach acceptance.
+   *
+   * Nodes are retired as one set: any unfinished Task still depending on a node
+   * in the set must be in the set too, otherwise it would wait on a
+   * prerequisite that will never resolve.
+   */
+  retireNodes = async (
+    goalId: string,
+    nodeIds: string[],
+    reason?: string,
+  ): Promise<{ retiredNodeIds: string[] }> => {
+    const graph = await this.requireGraph(goalId);
+    const targetIds = new Set(nodeIds);
+
+    const targets = [...targetIds].map((nodeId) => {
+      const node = graph.nodes.find((item) => item.id === nodeId);
+      if (!node) throw new TRPCError({ code: 'NOT_FOUND', message: `Node ${nodeId} not found` });
+      if (node.kind !== 'task') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Node ${nodeId} is a ${node.kind}; only task nodes can be retired`,
+        });
+      }
+      // An already-retired node is accepted so an interrupted retirement (its
+      // fence landed, stopping the run did not) can be finished by retrying.
+      if (node.status !== 'retired' && TERMINAL_NODE_STATUSES.has(node.status)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Node ${nodeId} is already ${node.status}`,
+        });
+      }
+      // Retiring the terminal acceptance fails the whole Goal; that verdict
+      // belongs to its decision gate, not to a graph edit.
+      if (node.title === GOAL_ACCEPTANCE_TASK_TITLE) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'The Goal acceptance task cannot be retired',
+        });
+      }
+      return node;
+    });
+
+    const strandedIds = graph.edges
+      .filter(
+        (edge) =>
+          edge.kind === 'depends_on' &&
+          targetIds.has(edge.targetNodeId) &&
+          !targetIds.has(edge.sourceNodeId),
+      )
+      .map((edge) => graph.nodes.find((node) => node.id === edge.sourceNodeId))
+      .filter(
+        (node): node is NonNullable<typeof node> =>
+          !!node && node.kind === 'task' && !TERMINAL_NODE_STATUSES.has(node.status),
+      )
+      .map((node) => node.id);
+    if (strandedIds.length > 0) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: `Unfinished tasks depend on these nodes; retire them together: ${[...new Set(strandedIds)].join(', ')}`,
+      });
+    }
+
+    // Fence the nodes BEFORE looking for their Tasks. The snapshot above can
+    // miss a Task a concurrent tick is creating for a proposed node; once the
+    // node reads `retired`, `bindTask` (which only binds an `active` node) can
+    // no longer attach that Task, and the creator discards it.
+    for (const node of targets) {
+      if (node.status === 'retired') continue;
+      await this.graphModel.updateNodeStatus(goalId, node.id, 'retired', reason);
+    }
+
+    // Stop what the nodes are still running, so a retired node cannot keep
+    // spending or deliver into the Goal afterwards. Bound Tasks are read after
+    // the fence so a Task bound just before it is included.
+    const fenced = await this.requireGraph(goalId);
+    const taskIds = fenced.nodes.flatMap((node) =>
+      targetIds.has(node.id) && node.taskId ? [node.taskId] : [],
+    );
+    if (taskIds.length > 0) {
+      // The caller may be a workspace owner retiring a colleague's goal (the
+      // router authorizes that). The nodes' Tasks were created by the goal's
+      // coordinator, which runs as the goal's owner — and may be `private`,
+      // inherited from that owner's private agent — so reads under the caller's
+      // visibility would miss them and leave them running. Stop them under the
+      // goal owner's principal instead, limited to the Tasks bound to the nodes
+      // being retired.
+      const { taskModel, taskService, taskTopicModel } = this.goalOwnerTaskScope(fenced.goal);
+      const cancelTasks = async () => {
+        for (const id of taskIds) {
+          // CAS against the status just read; a runner flipping the Task to
+          // `running` in between makes it miss, so re-read and try again.
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const [task] = await taskModel.findByIds([id]);
+            if (!task || ['canceled', 'completed', 'failed'].includes(task.status)) break;
+            if (await taskModel.updateStatusIfCurrent(id, task.status, 'canceled')) break;
+          }
+        }
+      };
+      // Cancel the Tasks FIRST: that is the fence a run still being dispatched
+      // checks under the Task's row lock before recording its operation, so a
+      // run started from here on stops itself (TaskRunnerService.runTask).
+      // Runs recorded before the fence are then found and stopped below.
+      await cancelTasks();
+      for (const topic of await taskTopicModel.findRunningByTaskIds(taskIds)) {
+        if (topic.topicId) await taskService.cancelTopic(topic.topicId);
+      }
+      // `cancelTopic` parks its Task as `paused`; settle them back to canceled.
+      await cancelTasks();
+    }
+
+    // A pending recovery gate on a retired node asks a question nobody needs
+    // answered any more; left pending it keeps the Goal parked in review.
+    for (const decision of fenced.decisions) {
+      if (decision.status !== 'pending') continue;
+      const gatedByTarget = fenced.edges.some(
+        (edge) =>
+          edge.kind === 'leads_to' &&
+          edge.targetNodeId === decision.nodeId &&
+          targetIds.has(edge.sourceNodeId),
+      );
+      if (gatedByTarget) {
+        await this.graphModel.cancelDecision(goalId, decision.id, 'Superseded by node retirement');
+      }
+    }
+
+    // Reopen a goal the coordinator parked because of what was just retired:
+    // `review` held by the retired node's gate, or `paused` by `no_frontier`
+    // (the stray branch left nothing runnable). A pause somebody chose — or
+    // one the coordinator took for another reason, like a budget — is left.
+    const after = await this.requireGraph(goalId);
+    const lastTransition = after.events.find((event) => event.entityType === 'goal');
+    const parkedOnNoFrontier =
+      after.goal.status === 'paused' &&
+      !after.goal.config?.pausedBy &&
+      lastTransition?.actorType !== 'user' &&
+      lastTransition?.reason === NO_FRONTIER_PAUSE_REASON;
+    if (after.goal.status === 'review' || parkedOnNoFrontier) {
+      const hasPendingDecision = after.decisions.some((decision) => decision.status === 'pending');
+      if (!hasPendingDecision) {
+        await this.transitionStatus(after.goal, 'running', 'nodes retired by user', 'user');
+      } else if (parkedOnNoFrontier) {
+        await this.transitionStatus(after.goal, 'review', 'nodes retired by user', 'user');
+      }
+    }
+
+    return { retiredNodeIds: targets.map((node) => node.id) };
   };
 
   setBudget = async (
@@ -1405,7 +1576,7 @@ export class GoalService {
         (node) =>
           node.kind === 'task' &&
           node.title !== GOAL_ACCEPTANCE_TASK_TITLE &&
-          !isGoalReportNode(node),
+          !isGoalReportNode(before, node),
       ).length >= (goal.config?.exploration?.maxExperiments ?? 0)
     )
       return goal;
@@ -1800,7 +1971,7 @@ export class GoalService {
         // sweep's window. A `running` goal that always reports `no_progress` is
         // picked by every scan forever, and enough of them starve every other
         // stalled goal out of the newest-first limit.
-        await this.transitionStatus(graph.goal, 'paused', 'no eligible task to advance');
+        await this.transitionStatus(graph.goal, 'paused', NO_FRONTIER_PAUSE_REASON);
         effects.push({ type: 'goal_status', detail: 'paused' });
         return observe({ goalId, message: move.message, outcome: move.outcome });
       }
@@ -3000,6 +3171,18 @@ export class GoalService {
     taskId: string,
     effects: GoalAdvanceEffect[] = [],
   ): Promise<GoalTickResult> => {
+    // `graph` can predate a retirement that landed while this tick ran. A
+    // retired node's late output must not enter the Goal as a finding or
+    // deliverable (and `updateNodeStatus` refuses to revive the node).
+    if ((await this.coordinatorGraph.getNodeStatus(graph.goal.id, nodeId)) === 'retired') {
+      return {
+        goalId: graph.goal.id,
+        message: 'Node was retired; the task outcome is discarded',
+        nodeId,
+        outcome: 'no_progress',
+        taskId,
+      };
+    }
     const existingFinding = graph.edges.some(
       (edge) => edge.sourceNodeId === nodeId && edge.kind === 'produces',
     );

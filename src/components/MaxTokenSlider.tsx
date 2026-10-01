@@ -1,4 +1,5 @@
-import { Flexbox, InputNumber } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { InputNumber } from '@lobehub/ui/base-ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useMergeState from 'use-merge-value';
@@ -85,6 +86,7 @@ const MaxTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defaultValu
           changeOnWheel
           min={0}
           step={4 * Kibi}
+          style={{ width: 120 }}
           value={token}
           onChange={(e) => {
             if (!e && e !== 0) return;

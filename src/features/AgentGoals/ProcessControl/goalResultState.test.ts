@@ -10,6 +10,7 @@ import {
   buildStoryChapters,
   buildUserDecisions,
   type CheckLike,
+  countGoalTasks,
   deriveGoalResultStatus,
   deriveSignOffState,
   findFinalAcceptanceView,
@@ -608,6 +609,7 @@ describe('buildResultTrail', () => {
       artifacts: [artifact('v-a', 'task-a', 12), artifact('v-b', 'task-b', 7)],
       byId: { 'task-a': taskA, 'task-b': taskB, 'task-idle': idle },
       findings: [findingA, orphan, findingB],
+      goal: { config: {} } as any,
     });
 
     expect(trail.map((step) => step.key)).toEqual(['task-b', 'task-a', 'unattributed']);
@@ -645,9 +647,29 @@ describe('buildResultTrail without the wrap-up Task', () => {
       ],
       byId: { 'task': work, 'task-a': work, 'wrap': wrapUp },
       findings: [finding],
+      goal: { config: { report: { nodeId: 'wrap' } } } as any,
     });
 
     expect(trail.map((step) => step.key)).toEqual(['task-a']);
+  });
+
+  /**
+   * Regression: the wrap-up was recognised by its title, so ordinary work that
+   * happened to be called the same vanished from the trail and the task count.
+   */
+  it('keeps a task that only shares the wrap-up title', () => {
+    const lookalike = task('task-b', GOAL_REPORT_TASK_TITLE, 3);
+    const goal = { config: { report: { nodeId: 'wrap' } } } as any;
+
+    const trail = buildResultTrail({
+      artifacts: [{ createdAt: at(3), nodeId: 'task-b', workVersionId: 'v-b' } as any],
+      byId: { 'task-b': lookalike },
+      findings: [],
+      goal,
+    });
+
+    expect(trail.map((step) => step.key)).toEqual(['task-b']);
+    expect(countGoalTasks({ goal, nodes: [lookalike] })).toBe(1);
   });
 });
 

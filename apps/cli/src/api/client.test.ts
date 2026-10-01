@@ -59,6 +59,29 @@ describe('api/client workspace scoping', () => {
     expect(headersOfLastLink()).toMatchObject({ 'Oidc-Auth': 'renewed-jwt' });
   });
 
+  it('creates an anonymous Lambda client without resolving credentials or workspace headers', async () => {
+    delete process.env.LOBEHUB_JWT;
+    process.env.LOBEHUB_WORKSPACE_ID = 'workspace-1';
+    const { getValidToken } = await import('../auth/refresh');
+    const { createPublicLambdaClient } = await import('./client');
+
+    createPublicLambdaClient();
+
+    expect(getValidToken).not.toHaveBeenCalled();
+    expect(mockHttpLink).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'https://app.lobehub.com/trpc/lambda' }),
+    );
+    expect(headersOfLastLink()).toBeUndefined();
+  });
+
+  it('does not attach an environment credential to public downloads', async () => {
+    const { createPublicLambdaClient } = await import('./client');
+
+    createPublicLambdaClient();
+
+    expect(headersOfLastLink()).toBeUndefined();
+  });
+
   // The tools router is workspace aware like lambda; without the header every
   // `lh search` ran against personal scope and billed the personal budget.
   it('scopes the tools client to the run workspace', async () => {

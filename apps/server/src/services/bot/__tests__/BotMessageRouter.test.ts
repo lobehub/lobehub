@@ -1113,6 +1113,28 @@ describe('BotMessageRouter', () => {
         expect(thread.post).toHaveBeenCalledTimes(1);
       });
 
+      it('does not announce mention-only mode in a Feishu group main chat', async () => {
+        // Feishu group mains are already mention-only. Membership reports
+        // shared (isSoloBotConversation=false) but posting the English notice
+        // is spam.
+        mockGetList.mockResolvedValue([]);
+        const isSoloBotConversation = vi.fn().mockResolvedValue(false);
+        withMembershipLookup(isSoloBotConversation);
+        const handler = await loadSubscribedHandler();
+        const thread = makeThread({ id: 'feishu:group:oc_citic_sentry', isDM: false });
+
+        await handler(thread, makeMessage({ isMention: false, text: 'just chatting' }));
+
+        expect(isSoloBotConversation).toHaveBeenCalledWith('feishu:group:oc_citic_sentry');
+        expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+        expect(thread.post).not.toHaveBeenCalled();
+        expect(mockStateSetIfNotExists).not.toHaveBeenCalledWith(
+          expect.stringContaining('mention-required-announced'),
+          expect.anything(),
+          expect.anything(),
+        );
+      });
+
       it('routes real Discord membership verdicts and preserves batched participants', async () => {
         const { DiscordClientFactory } = await import('../platforms/discord/client');
         const { clearDiscordChatCompositionMemoryCache } =

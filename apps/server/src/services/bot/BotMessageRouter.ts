@@ -26,6 +26,7 @@ import {
   releasePairingClaim,
 } from './dmPairingStore';
 import { submitBotFeedback } from './feedbackSubmit';
+import { isWholeGroupChatThreadId } from './isWholeGroupChatThreadId';
 import { buildReplayMessages, getSameSenderMessages, mergeBotMessages } from './mergeMessages';
 import { patchSenderBatches } from './patchSenderBatches';
 import {
@@ -1469,7 +1470,11 @@ export class BotMessageRouter {
         // first skip in this thread → tell participants the bot
         // is now mention-only so newcomers don't think it broke. Dedupe by
         // thread id so we never announce more than once.
-        if (!thread.isDM && (humanCount >= 2 || platformReportsShared)) {
+        if (
+          !thread.isDM &&
+          !isWholeGroupChatThreadId(thread.id) &&
+          (humanCount >= 2 || platformReportsShared)
+        ) {
           try {
             const fresh = await bot
               .getState()

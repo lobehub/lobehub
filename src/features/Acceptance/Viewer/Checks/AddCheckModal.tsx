@@ -1,13 +1,15 @@
 'use client';
 
 import type { AcceptanceChecklistItem } from '@lobechat/types';
-import { Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  Input,
   type ModalInstance,
   Select,
   Text,
+  TextArea,
   useModalContext,
 } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';

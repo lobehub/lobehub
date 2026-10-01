@@ -1,6 +1,5 @@
 import { Block, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Divider, Skeleton } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
@@ -31,7 +30,7 @@ const BriefCardSkeleton = memo(() => {
         <Skeleton.Avatar shape={'circle'} size={'small'} style={{ flex: 'none' }} />
       </Flexbox>
 
-      <Divider dashed style={{ marginBlock: 0 }} />
+      <Divider dashed />
 
       <Skeleton.Text fontSize={14} rows={3} style={{ marginBottom: 0 }} />
 

@@ -25,6 +25,23 @@ const METHOD_NAME_OVERRIDES: Record<string, string> = {
   'POST /api/v1/knowledge-bases/{id}/files/batch': 'addFiles',
   'POST /api/v1/knowledge-bases/{id}/files/move': 'moveFiles',
   'POST /api/v1/messages/replies': 'createReply',
+  // Personal-agent sub-actions: the `{method} {path}` rule would call these
+  // `createAdvance` / `createPause`, and the two memory DELETEs both reduce to
+  // `delete` (colliding into `delete2`), so each needs an explicit name.
+  'DELETE /api/v1/memories': 'deleteAll',
+  'DELETE /api/v1/memories/{category}/{id}': 'deleteEntry',
+  'GET /api/v1/memories/{category}': 'listCategory',
+  'GET /api/v1/notifications/counts': 'getCounts',
+  'POST /api/v1/goals/{id}/advance': 'advance',
+  'POST /api/v1/goals/{id}/pause': 'pause',
+  'POST /api/v1/goals/{id}/restart': 'restart',
+  'POST /api/v1/goals/{id}/resume': 'resume',
+  'POST /api/v1/notifications/archive-all': 'archiveAll',
+  'POST /api/v1/notifications/read': 'markRead',
+  'POST /api/v1/notifications/read-all': 'markAllRead',
+  'POST /api/v1/notifications/{id}/archive': 'archive',
+  'POST /api/v1/signals/source-events': 'emit',
+  'POST /api/v1/signals/trigger': 'trigger',
 };
 
 const pascal = (segment: string) =>

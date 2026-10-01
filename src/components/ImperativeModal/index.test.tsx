@@ -1,5 +1,5 @@
-import { Input, MotionProvider } from '@lobehub/ui';
-import { ModalHost } from '@lobehub/ui/base-ui';
+import { MotionProvider } from '@lobehub/ui';
+import { Input, ModalHost } from '@lobehub/ui/base-ui';
 import { act, render, screen } from '@testing-library/react';
 import { motion } from 'motion/react';
 import { useState } from 'react';

@@ -9,15 +9,17 @@ import type {
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   Alert,
   Button,
   Checkbox,
   createModal,
+  Input,
   type ModalInstance,
   ScrollArea,
   Text,
+  TextArea,
   useModalContext,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';

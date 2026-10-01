@@ -1,8 +1,7 @@
 'use client';
 
 import { type CredType } from '@lobechat/types';
-import { useModalContext } from '@lobehub/ui/base-ui';
-import { Steps } from 'antd';
+import { Steps, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -82,7 +81,6 @@ const CreateCredModalContent: FC<CreateCredModalContentProps> = ({ credsApi, onS
       <Steps
         className={styles.steps}
         current={step}
-        size={'small'}
         items={[
           { title: t('creds.createModal.selectType') },
           { title: t('creds.createModal.fillForm') },

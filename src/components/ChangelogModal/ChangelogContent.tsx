@@ -1,6 +1,6 @@
 import { Typography } from '@lobehub/ui';
+import { Divider } from '@lobehub/ui/base-ui';
 import { Image } from '@lobehub/ui/mdx';
-import { Divider } from 'antd';
 import { Fragment, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type Components } from 'react-markdown';
@@ -36,7 +36,7 @@ const PostItem = ({ id, versionRange, locale, showDivider = true }: PostItemProp
 
   return (
     <>
-      {showDivider && <Divider />}
+      {showDivider && <Divider style={{ marginBlock: 24 }} />}
       <Typography headerMultiple={0.2}>
         <a
           href={urlJoin(OFFICIAL_SITE, '/changelog', id)}

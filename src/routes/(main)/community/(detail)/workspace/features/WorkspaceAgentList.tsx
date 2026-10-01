@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox, Grid } from '@lobehub/ui';
-import { Pagination, Tag, Text } from '@lobehub/ui/base-ui';
-import { Input } from 'antd';
+import { Flexbox, Grid, Icon } from '@lobehub/ui';
+import { Input, Pagination, Tag, Text } from '@lobehub/ui/base-ui';
+import { SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -68,9 +68,10 @@ const WorkspaceAgentList = memo<WorkspaceAgentListProps>(({ rows = 4, pageSize =
         </Flexbox>
         {canEdit && (
           <Flexbox horizontal align={'center'} gap={8}>
-            <Input.Search
+            <Input
               allowClear
               placeholder={t('user.searchPlaceholder')}
+              prefix={<Icon icon={SearchIcon} size={14} />}
               style={{ width: 200 }}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

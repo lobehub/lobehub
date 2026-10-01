@@ -4,9 +4,9 @@ import {
   AccordionItem,
   AccordionRoot,
   AccordionTrigger,
+  Divider,
   Text,
 } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { ClipboardCheckIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -84,11 +84,7 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
     <Text fontSize={12} type={'secondary'}>
       {count}
     </Text>
-    {sub ? (
-      <Divider style={{ margin: 0, borderColor: cssVar.colorBorder }} />
-    ) : (
-      <Flexbox flex={1} />
-    )}
+    {sub ? <Divider style={{ borderColor: cssVar.colorBorder, flex: 1 }} /> : <Flexbox flex={1} />}
   </Flexbox>
 );
 

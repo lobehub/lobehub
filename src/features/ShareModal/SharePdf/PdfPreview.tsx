@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Button, createModal, Spin } from '@lobehub/ui/base-ui';
-import { Input } from 'antd';
+import { Button, createModal, Input, Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronLeft, ChevronRight, Expand, FileText } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -88,7 +87,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   fullscreenPageInput: css`
     width: 60px;
-    text-align: center;
   `,
   fullscreenPageText: css`
     min-width: 20px;
@@ -109,7 +107,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   pageInput: css`
     width: 50px;
-    text-align: center;
   `,
   pageNumberText: css`
     font-size: 12px;
@@ -177,6 +174,7 @@ const FullscreenContent = memo<FullscreenContentProps>(({ pdfDataUri, initialPag
                 max={numPages}
                 min={1}
                 size="small"
+                styles={{ input: { textAlign: 'center' } }}
                 type="number"
                 value={pageNumber}
                 onChange={(e) => {
@@ -341,6 +339,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
                 max={numPages}
                 min={1}
                 size="small"
+                styles={{ input: { textAlign: 'center' } }}
                 type="number"
                 value={pageNumber}
                 onChange={(e) => {

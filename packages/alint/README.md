@@ -6,14 +6,26 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 
 ## Rules
 
-| Rule                          | Severity | Scope                                                         | Source of the rule                                             |
-| ----------------------------- | -------- | ------------------------------------------------------------- | -------------------------------------------------------------- |
-| `pmap-over-promise-all`       | error    | `apps/server/src`, `packages/database`                        | fan-out over a runtime-sized list needs `pMap`                 |
-| `no-transactions-in-models`   | error    | `packages/database/src/models`                                | cross-aggregate write transactions use repositories            |
-| `no-effect-fetching`          | error    | `src/**/*.tsx`                                                | `data-fetching-architecture` skill                             |
-| `no-dynamic-import-in-server` | warn     | `apps/server/src`, `packages/database`                        | backend code uses static top-level imports                     |
-| `no-mode-flags`               | warn     | `src/**/*.tsx`                                                | `compose-atoms` skill                                          |
-| `no-node-in-browser`          | error    | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | no Node-only npm package where the SPA runs it (paths: ESLint) |
+| Rule                               | Severity | Scope                                                         | Source of the rule                                                      |
+| ---------------------------------- | -------- | ------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `pmap-over-promise-all`            | error    | `apps/server/src`, `packages/database`                        | fan-out over a runtime-sized list needs `pMap`                          |
+| `no-transactions-in-models`        | error    | `packages/database/src/models`                                | cross-aggregate write transactions use repositories                     |
+| `no-effect-fetching`               | error    | `src/**/*.tsx`                                                | `data-fetching-architecture` skill                                      |
+| `no-dynamic-import-in-server`      | warn     | `apps/server/src`, `packages/database`                        | backend code uses static top-level imports                              |
+| `no-mode-flags`                    | warn     | `src/**/*.tsx`                                                | `compose-atoms` skill                                                   |
+| `no-node-in-browser`               | error    | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | no Node-only npm package where the SPA runs it (paths: ESLint)          |
+| `no-unsafe-user-url-fetch`         | warn     | `apps/server/src`                                             | user-controlled URLs must use SSRF-safe transport (#16601)              |
+| `no-unscoped-resource-mutation`    | warn     | database models/repositories                                  | ownership checks for resource and junction mutations (#13683, #16586)   |
+| `no-untrusted-path-io`             | warn     | server and Electron main process                              | confine uploaded/remote filenames before filesystem IO (#13684, #13937) |
+| `no-shell-command-injection`       | warn     | server, desktop main, CLI, agent/file-shell adapters          | shell interpolation and interpreter command strings (RCE)               |
+| `no-untrusted-code-execution`      | warn     | server, desktop main, agent/file-shell adapters               | untrusted eval/Function/vm/interpreter execution (RCE)                  |
+| `no-unsafe-html-execution`         | warn     | web, server, shared utilities                                 | HTML/SVG and artifact iframe XSS-to-RCE (#13529)                        |
+| `no-unsafe-raw-sql`                | warn     | server and database                                           | raw values/identifiers entering SQL                                     |
+| `no-secret-exposure`               | warn     | server, desktop main, CLI, web, env                           | credentials in logs, responses, public config (#19452)                  |
+| `no-auth-verification-bypass`      | warn     | server, web auth shells/helpers                               | unverified JWT identity and fail-open signed webhooks                   |
+| `no-unvalidated-redirect`          | warn     | server and web                                                | unvalidated return/callback targets                                     |
+| `no-prototype-pollution`           | warn     | server, desktop main, shared utilities                        | untrusted keys/paths reaching prototype setters                         |
+| `no-privileged-untrusted-electron` | warn     | Electron main/preload                                         | remote content with Node privileges or unrestricted IPC bridges         |
 
 Package-level rules, kept next to the package they describe:
 
@@ -40,6 +52,65 @@ Rules come in two layers, and each layer is registered as its own plugin in `ali
 A per-file rule cannot see an import graph. When a package's boundary matters, pair its package-level rule with a deterministic test of the graph: `heterogeneous-agents` lists its browser entries in `browser-entries.json`; `src/runtimeBoundary.test.ts` walks everything those entries reach and fails on Node built-ins, Node globals such as `Buffer`, or files owned by a Node-only entry, and the root ESLint config reads the same list to reject value imports of any other entry from `src/`.
 
 To add a package-level rule: register the directory as a plugin in the rule's `[[config.group]]`, add a fixture group for it, and add its fixtures directory with the plugin prefix to `FIXTURE_ROOTS` in `fixtures.test.ts`. CI already keys the cache on `packages/*/alint/rules/**` and runs calibration when `packages/*/alint/**` changes.
+
+## Security rules
+
+The twelve security rules combine regressions from actual fixes with other common
+injection and trust-boundary mistakes. They use concrete source-to-sink checks.
+Historical anchors:
+
+- **SSRF:** [#16601](https://github.com/lobehub/lobehub/pull/16601)
+  (GHSA-53h9-fmjf-frwr) replaced raw fetch for imported skill/image URLs with
+  `@lobechat/ssrf-safe-fetch`. URL parsing or HTTPS-only validation is insufficient.
+  Fixed destinations, administrator configuration, and unknown URL provenance are
+  excluded to avoid treating every backend fetch as vulnerable.
+
+- **IDOR:** [#13683](https://github.com/lobehub/lobehub/pull/13683) added target
+  knowledge-base ownership checks; [#16586](https://github.com/lobehub/lobehub/pull/16586)
+  scoped group-membership deletion. Relation creation must account for both endpoints;
+  deleting ownership-scoped junction rows does not require redundant endpoint checks.
+  Workspace ownership, fail-closed parent guards, and documented privileged primitives
+  are recognized. Cross-file caller authorization still needs human verification.
+
+- **Path traversal:** [#13684](https://github.com/lobehub/lobehub/pull/13684)
+  (GHSA-2g9j-v25c-4j97, temporary-file overwrite) and [#13937](https://github.com/lobehub/lobehub/pull/13937) sanitized
+  untrusted filenames. `join`/`resolve` alone and bare string-prefix containment are
+  unsafe. Flat private temp stores, properly confined nested paths, generated names,
+  and filesystem tools with explicit approved-path guards are accepted.
+
+- **HTML artifact XSS-to-RCE:** [#13529](https://github.com/lobehub/lobehub/pull/13529)
+  (GHSA-xq4x-622m-q8fq) introduced HTML sanitization and iframe sandboxing.
+  The HTML rule covers the injection entry point; the Electron rule covers the
+  privilege boundary that can turn renderer script execution into host execution.
+
+- **Credential disclosure:** [#19452](https://github.com/lobehub/lobehub/pull/19452)
+  removed credentials from bot inventories and masked detail reads. The secret rule
+  distinguishes accidental logging/list disclosure from intentional issuance to
+  an authenticated credential owner.
+
+Additional coverage targets shell command construction, dynamic host code execution,
+raw SQL, JWT/webhook verification, callback redirects and object prototype mutation.
+RCE is an impact, so it is covered at several entry points: command injection,
+untrusted code execution, writable paths, HTML artifacts, and Electron privileges.
+A Node `vm` context is not treated as an isolation boundary. An argument array still
+needs scrutiny when its target is `bash -c`, `node -e`, or another interpreter.
+
+Safe patterns have explicit carve-outs: approved agent terminals, isolated code
+sandboxes, parameterized SQL, sanitized HTML, opaque-origin sandboxed previews,
+verified claims, fixed/validated redirects, redacted credentials, null-prototype
+records, and narrow Electron bridges. Dynamic execution features are not blanket
+violations. A rule needs visible evidence that its trust boundary is missing.
+
+The security fixtures include unsafe examples and legitimate exceptions. They use
+illustrative imports, like the existing fixtures, and are analyzed as source text,
+not executed as application code. New rules start at `warn`; model-backed per-file
+lint cannot establish exploitability across callers or replace security review.
+Only tooling changes are involved, so product acceptance is not required.
+
+Calibration details and known limitations are recorded in
+[security-calibration.md](security-calibration.md). Rules remain `warn`: per-file
+analysis can miss caller authorization, vary between runs, or misread large files.
+No zero-false-positive or complete-vulnerability-coverage claim is made.
 
 ## Setup and run
 

@@ -2,7 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { Flexbox, FormGroup } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider } from '@lobehub/ui/base-ui';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 

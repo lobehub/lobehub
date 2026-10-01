@@ -1,7 +1,7 @@
-import { Flexbox, FormItem, Input, InputPassword } from '@lobehub/ui';
-import { Alert, Button, RadioGroup } from '@lobehub/ui/base-ui';
+import { Flexbox, FormItem } from '@lobehub/ui';
+import { Alert, Button, Divider, Input, InputPassword, RadioGroup } from '@lobehub/ui/base-ui';
 import { type FormInstance } from 'antd';
-import { Divider, Form } from 'antd';
+import { Form } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -395,7 +395,7 @@ const MCPManifestForm = ({
             />
           )}
           <FormItem noStyle name={'manifest'} />
-          <Divider />
+          <Divider style={{ marginBlock: 24 }} />
           <FormItem
             desc={t('dev.mcp.desc.desc')}
             label={t('dev.mcp.desc.label')}

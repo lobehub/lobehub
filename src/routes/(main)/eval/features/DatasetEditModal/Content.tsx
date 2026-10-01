@@ -1,7 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
-import { Select, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Input, Select, Text, TextArea, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckIcon } from 'lucide-react';

@@ -66,6 +66,11 @@ const RuleRow = ({
           <Flexbox horizontal align={'baseline'} gap={6} wrap={'wrap'}>
             <span className={styles.title}>{rule.title}</span>
             {authored && <Tag size={'small'}>{t('rules.tag.authored')}</Tag>}
+            {rule.specificity === 'one-off' && !archived && (
+              <Tooltip title={t('rules.origin.oneOff')}>
+                <Tag size={'small'}>{t('rules.tag.oneOff')}</Tag>
+              </Tooltip>
+            )}
             {archived && (
               <span className={styles.muted}>
                 {t('rules.archived.at', {

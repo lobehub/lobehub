@@ -74,6 +74,23 @@ const graph = (overrides: Partial<GoalGraphSnapshot> = {}): GoalGraphSnapshot =>
     ...overrides,
   }) as GoalGraphSnapshot;
 
+/** A graph whose wrap-up was dispatched to the node `report` — the only way a node is the wrap-up. */
+const withReportDispatched = (snapshot: GoalGraphSnapshot): GoalGraphSnapshot => ({
+  ...snapshot,
+  goal: {
+    ...snapshot.goal,
+    config: {
+      ...snapshot.goal.config,
+      report: {
+        acceptanceKey: 'acc:resolved',
+        dispatchedAt: new Date(0).toISOString(),
+        nodeId: 'report',
+        trigger: 'accepted',
+      },
+    },
+  },
+});
+
 const acceptance = (overrides: Partial<GoalGraphNode> = {}) =>
   node('acc', { title: GOAL_ACCEPTANCE_TASK_TITLE, ...overrides });
 
@@ -251,9 +268,11 @@ describe('the wrap-up node does not take part in the Goal status', () => {
   });
 
   it('a failed wrap-up Task opens no gate and does not block acceptance', () => {
-    const snapshot = graph({
-      nodes: [node('t1', { status: 'resolved' }), reportNode],
-    });
+    const snapshot = withReportDispatched(
+      graph({
+        nodes: [node('t1', { status: 'resolved' }), reportNode],
+      }),
+    );
     const move = decideNextMove({
       concurrency: 1,
       frontier: selectFrontier(snapshot),
@@ -270,7 +289,7 @@ describe('the wrap-up node does not take part in the Goal status', () => {
   });
 
   it('a running wrap-up Task holds no concurrency slot and never becomes the frontier', () => {
-    const snapshot = graph({ nodes: [node('t1'), reportNode] });
+    const snapshot = withReportDispatched(graph({ nodes: [node('t1'), reportNode] }));
     const frontier = selectFrontier(snapshot);
     expect(frontier.candidates.map((candidate) => candidate.nodeId)).toEqual(['t1']);
     const move = decideNextMove({
@@ -288,41 +307,43 @@ describe('the wrap-up node does not take part in the Goal status', () => {
 describe('buildGoalReportSkeleton', () => {
   // problem → t1 (resolved) → t2 (resolved, depends on t1) → acc (depends on t2)
   // t1b: an earlier protocol revised by t2; t0: a retired direction off t1.
-  const snapshot = graph({
-    edges: [
-      edge('t2', 'depends_on', 't1'),
-      edge('acc', 'depends_on', 't2'),
-      edge('t1', 'produces', 'f1'),
-      edge('t2', 'produces', 'f2'),
-      edge('t2', 'revises', 't1b'),
-      edge('t0', 'depends_on', 't1'),
-    ],
-    events: [
-      { createdAt: new Date(1), id: 'evt_old' },
-      { createdAt: new Date(9), id: 'evt_new' },
-    ] as GoalGraphSnapshot['events'],
-    nodes: [
-      node('problem', { kind: 'problem', status: 'resolved' }),
-      node('t1', { createdAt: new Date(1), status: 'resolved' }),
-      node('f1', { kind: 'finding', status: 'resolved' }),
-      node('t1b', { createdAt: new Date(2), status: 'resolved' }),
-      node('t0', { createdAt: new Date(3), status: 'retired' }),
-      node('t2', { createdAt: new Date(4), status: 'resolved' }),
-      node('f2', { kind: 'finding', status: 'resolved' }),
-      acceptance({ createdAt: new Date(5), status: 'resolved' }),
-      node('report', { title: GOAL_REPORT_TASK_TITLE }),
-    ],
-    workVersions: [
-      {
-        createdAt: new Date(6),
-        id: 'l1',
-        nodeId: 't2',
-        relation: 'produced',
-        work: { title: 'Final doc', type: 'document', workId: 'work_doc' },
-        workVersionId: 'wv_doc',
-      },
-    ] as GoalGraphSnapshot['workVersions'],
-  });
+  const snapshot = withReportDispatched(
+    graph({
+      edges: [
+        edge('t2', 'depends_on', 't1'),
+        edge('acc', 'depends_on', 't2'),
+        edge('t1', 'produces', 'f1'),
+        edge('t2', 'produces', 'f2'),
+        edge('t2', 'revises', 't1b'),
+        edge('t0', 'depends_on', 't1'),
+      ],
+      events: [
+        { createdAt: new Date(1), id: 'evt_old' },
+        { createdAt: new Date(9), id: 'evt_new' },
+      ] as GoalGraphSnapshot['events'],
+      nodes: [
+        node('problem', { kind: 'problem', status: 'resolved' }),
+        node('t1', { createdAt: new Date(1), status: 'resolved' }),
+        node('f1', { kind: 'finding', status: 'resolved' }),
+        node('t1b', { createdAt: new Date(2), status: 'resolved' }),
+        node('t0', { createdAt: new Date(3), status: 'retired' }),
+        node('t2', { createdAt: new Date(4), status: 'resolved' }),
+        node('f2', { kind: 'finding', status: 'resolved' }),
+        acceptance({ createdAt: new Date(5), status: 'resolved' }),
+        node('report', { title: GOAL_REPORT_TASK_TITLE }),
+      ],
+      workVersions: [
+        {
+          createdAt: new Date(6),
+          id: 'l1',
+          nodeId: 't2',
+          relation: 'produced',
+          work: { title: 'Final doc', type: 'document', workId: 'work_doc' },
+          workVersionId: 'wv_doc',
+        },
+      ] as GoalGraphSnapshot['workVersions'],
+    }),
+  );
 
   it('traces the main path back from the deliverable and hangs detours under their fork', () => {
     const skeleton = buildGoalReportSkeleton(snapshot);

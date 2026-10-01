@@ -34,8 +34,7 @@ describe('StatisticCard', () => {
 
     expect(screen.getByText('Total Cost')).toBeInTheDocument();
     expect(screen.getByText('$')).toBeInTheDocument();
-    expect(screen.getByText('1,234')).toBeInTheDocument();
-    expect(screen.getByText('.50')).toBeInTheDocument();
+    expect(screen.getByText('1,234.50')).toBeInTheDocument();
     expect(screen.getByText('k')).toBeInTheDocument();
   });
 
@@ -75,14 +74,14 @@ describe('StatisticCard', () => {
   });
 
   it('applies valueStyle to the statistic content', () => {
-    const { container } = render(
+    render(
       <StatisticCard
         statistic={{ value: 10, valueStyle: { color: 'rgb(255, 0, 0)' } }}
         title="Savings"
       />,
     );
 
-    expect(container.querySelector('.ant-statistic-content')).toHaveStyle({
+    expect(screen.getByText('10').parentElement).toHaveStyle({
       color: 'rgb(255, 0, 0)',
     });
   });

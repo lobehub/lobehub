@@ -1,8 +1,6 @@
 'use client';
 
-import { Input } from '@lobehub/ui';
-import { ActionIcon, toast } from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
+import { ActionIcon, Input, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { type Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -86,7 +84,7 @@ const EditableCell = memo<EditableCellProps>(
     const [isEditing, setIsEditing] = useState(false);
 
     // Ref for the Input element
-    const inputRef = useRef<InputRef>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     // Format display value
     const formatDisplayValue = (val: string | null) => {
@@ -109,7 +107,7 @@ const EditableCell = memo<EditableCellProps>(
     // Submit edit
     const handleSubmit = () => {
       if (type === 'text') {
-        const inputValue = inputRef.current?.input?.value;
+        const inputValue = inputRef.current?.value;
 
         if (!inputValue) {
           toast.warning(t('apikey.validation.required'));
@@ -165,18 +163,7 @@ const EditableCell = memo<EditableCellProps>(
         case 'date': {
           const dateValue = value && dayjs(value).isValid() ? dayjs(value) : null;
 
-          return (
-            <ApiKeyDatePicker
-              defaultValue={dateValue}
-              open={true}
-              onChange={handleDatePickerSubmit}
-              onOpenChange={() => {
-                if (isEditing) {
-                  setIsEditing(false);
-                }
-              }}
-            />
-          );
+          return <ApiKeyDatePicker defaultValue={dateValue} onChange={handleDatePickerSubmit} />;
         }
 
         default: {
@@ -200,7 +187,12 @@ const EditableCell = memo<EditableCellProps>(
 
     // Date type editing mode, showing date picker
     if (type === 'date' && isEditing) {
-      return renderEditMode();
+      return (
+        <div className={styles.editingContainer}>
+          {renderEditMode()}
+          <ActionIcon icon={X} size="small" onClick={handleCancel} />
+        </div>
+      );
     }
 
     // Display mode

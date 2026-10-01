@@ -1,7 +1,6 @@
 import { formatDuration as formatDurationMs } from '@lobechat/utils';
 import { Block, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Divider, Skeleton } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -88,7 +87,7 @@ const HeatmapStats = memo(() => {
       <Flexbox horizontal align={'center'} width={'100%'}>
         {items.map((item, index) => (
           <Fragment key={item.label}>
-            {index > 0 && <Divider style={{ height: 32, margin: 0 }} type={'vertical'} />}
+            {index > 0 && <Divider orientation={'vertical'} style={{ height: 32 }} />}
             <Flexbox align={'center'} flex={1} gap={4}>
               <div style={{ fontSize: 20, fontWeight: 'bold' }}>
                 {loading || item.loading ? <Skeleton height={28} width={56} /> : item.value}

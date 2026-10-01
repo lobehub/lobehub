@@ -244,10 +244,16 @@ stale standalone install: a recently added workspace package fails to resolve �
 - SPA proxying note: Web smoke needs the full-stack `dev` so Next proxies the
   SPA HTML from Vite; `dev-next` alone will not serve the SPA.
 
-- Local frontend against production backend: `bun run dev:spa` prints a
-  `_dangerous_local_dev_proxy` URL that loads your local Vite SPA inside the
-  online environment (HMR against real server config) — for verifying frontend
-  behavior against production data only, NOT for testing backend branch changes.
+- **Verify against a branch-running environment, not the production proxy:**
+  `bun run dev:spa` prints a `_dangerous_local_dev_proxy` URL that loads your
+  local Vite SPA inside the online environment (HMR against real server config).
+  That is a development convenience: it serves your local frontend over
+  production's backend, origin, and data. Its output is **never acceptance
+  evidence**, and it does not prove the delivered branch. Verify Web changes in
+  the local full-stack dev server (`$SERVER_URL`, default `http://localhost:3010`),
+  or a frontend-only change in Electron (`PROCESS.md` Step 3). If a criterion
+  cannot be exercised in an environment that runs the delivered branch, record
+  that check `blocked` and report the gap — do not substitute the proxy for it.
 
 ### Electron
 
@@ -334,6 +340,39 @@ inspection, fall back to raw `agent-browser --cdp 9222 eval`. The agent-gateway
 closed-loop probe/dump/analyze tooling lives at
 `.agents/acceptance/scripts/agent-gateway/`; the closed-loop + JWKS setup workflow is
 in `.agents/acceptance/references/agent-gateway.md`.
+
+`.agents/acceptance/scripts/acceptance-guard.sh` bounds a run's memory. It wraps the
+skill's [resource guard](../skills/acceptance/references/resource-guard.md) with this
+repository's groups and thresholds and pins a per-run state directory, so a round
+that boots a browser, a dev server and type-check workers cannot swap the host out
+and freeze the client driving the run. Run and teardown discipline:
+[`PROCESS.md`](./PROCESS.md) Step 4 and Step 6.
+
+```bash
+GUARD=.agents/acceptance/scripts/acceptance-guard.sh
+export ACCEPTANCE_RUN_TAG="acceptance-<subject>-<timestamp>-$$"   # required
+
+bash "$GUARD" start                     # before the first heavy command
+bash "$GUARD" claim <pid>...            # a process this run started
+bash "$GUARD" claim-browser <session>   # the browser behind an agent-browser session
+bash "$GUARD" check --json              # one verdict; 0 green, 10 yellow, 20 red
+bash "$GUARD" status --json             # samples, tiers, recorded stops
+bash "$GUARD" stop                      # teardown, always
+```
+
+| Setting                   | Default                                       | Why                                                        |
+| ------------------------- | --------------------------------------------- | ---------------------------------------------------------- |
+| `ACCEPTANCE_RUN_TAG`      | — (required)                                  | Proves ownership; must be ≥ 8 chars and `[A-Za-z0-9._-]+`  |
+| `ACCEPTANCE_GUARD_DIR`    | `${TMPDIR:-/tmp}/lobe-acceptance/guard/<tag>` | Keeps the run's samples and claims out of the working tree |
+| `ACCEPTANCE_GUARD_YELLOW` | `swap=60,free=20`                             | Recycle before red                                         |
+| `ACCEPTANCE_GUARD_RED`    | `swap=80,free=8`                              | Stop this run's claimed processes                          |
+
+Thresholds are host-level on purpose. The groups (`Google Chrome for Testing`,
+`next-server|vite`, `tsgo`) also match other worktrees' servers and other runs'
+browsers — five such processes held \~20 GB here — so a group or total RSS cap turns a
+merely busy machine red and stops a healthy run. Swap exhaustion is what actually
+freezes the host, so that is what the tier is made of; the groups exist so
+`stop-owned` has something it is allowed to stop.
 
 ## 6. Known constraints
 

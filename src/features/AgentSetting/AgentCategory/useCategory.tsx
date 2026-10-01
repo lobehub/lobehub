@@ -1,5 +1,4 @@
 import { Icon } from '@lobehub/ui';
-import { type MenuItemType } from 'antd/es/menu/interface';
 import { Activity, Bot, Handshake, LinkIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,11 +27,11 @@ export const useCategory = ({ mobile }: UseCategoryOptions = {}) => {
           key: ChatSettingsTabs.Prompt,
           label: t('agentTab.prompt'),
         },
-        (!isInbox && {
+        !isInbox && {
           icon: <Icon icon={Handshake} size={iconSize} />,
           key: ChatSettingsTabs.Opening,
           label: t('agentTab.opening'),
-        }) as MenuItemType,
+        },
         enableAgentSelfIteration && {
           icon: <Icon icon={Activity} size={iconSize} />,
           key: ChatSettingsTabs.SelfIteration,

@@ -1,7 +1,7 @@
 'use client';
 
-import { ContextMenuHost, ModalHost, TooltipGroup } from '@lobehub/ui';
-import { ModalHost as BaseModalHost, ToastHost } from '@lobehub/ui/base-ui';
+import { ContextMenuHost, TooltipGroup } from '@lobehub/ui';
+import { ModalHost, ToastHost } from '@lobehub/ui/base-ui';
 import { StyleProvider } from 'antd-style';
 import { domMax, LazyMotion } from 'motion/react';
 import { Component, type CSSProperties, lazy, memo, type PropsWithChildren, Suspense } from 'react';
@@ -109,7 +109,6 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                   </StyleProvider>
                 </TooltipGroup>
                 <ModalHost />
-                <BaseModalHost />
                 <ToastHost />
                 <ContextMenuHost />
                 <Suspense>

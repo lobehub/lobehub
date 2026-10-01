@@ -1,5 +1,5 @@
 // Regression + behavior tests for MessageModel.queryTopicMessagesByCursor
-// (round-boundary cursor pagination — LOBE-12011, stage 2 server layer).
+// (round-boundary cursor pagination — stage 2 server layer).
 import { MessageGroupType } from '@lobechat/types';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -167,7 +167,7 @@ describe('MessageModel.queryTopicMessagesByCursor', () => {
     expect(page.nextCursor).toBeNull();
   });
 
-  // LOBE-12011 P1: `messages.createdAt` is a timestamptz whose now() default can
+  // `messages.createdAt` is a timestamptz whose now() default can
   // carry microseconds. A cursor round-tripped through a millisecond JS Date would
   // round sub-millisecond boundaries and drop/duplicate rows across pages. Seed
   // rows that all share ONE millisecond but differ by microseconds and prove the
@@ -218,7 +218,7 @@ describe('MessageModel.queryTopicMessagesByCursor', () => {
     expect(new Set(rebuilt).size).toBe(ids.length);
   });
 
-  // LOBE-12011 P1: the cursor path must constrain MessageGroup assembly to the
+  // the cursor path must constrain MessageGroup assembly to the
   // page's time window. Otherwise every page eagerly loads (and repeats) the whole
   // topic's compression groups — exactly the compressed history cursor pagination
   // exists to defer.
@@ -323,7 +323,7 @@ describe('MessageModel.queryTopicMessagesByCursor', () => {
     ]);
   });
 
-  // LOBE-12011 P1: compression can move EVERY message of a topic into a group,
+  // compression can move EVERY message of a topic into a group,
   // leaving no mainline rows. The cursor path must still surface the synthetic
   // `compressedGroup` node (as `query` does) instead of an empty transcript.
   it('returns the compressed group for a topic whose whole history is compressed', async () => {
@@ -367,7 +367,7 @@ describe('MessageModel.queryTopicMessagesByCursor', () => {
     expect(page.nextCursor).toBeNull();
   });
 
-  // LOBE-12011 P1: a concrete topic is the conversation boundary. A caller passing
+  // a concrete topic is the conversation boundary. A caller passing
   // its own agentId must still see rows written by another agent in the same topic
   // (e.g. `callAgent` / delegated replies), matching `query`.
   it('keeps rows from other agents in the same topic when agentId is given', async () => {

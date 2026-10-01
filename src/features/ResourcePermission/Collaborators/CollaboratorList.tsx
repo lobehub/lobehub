@@ -1,8 +1,15 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Avatar, SkeletonAvatar, SkeletonText, Tag, Text } from '@lobehub/ui/base-ui';
-import { Popconfirm } from 'antd';
+import {
+  ActionIcon,
+  Avatar,
+  confirmModal,
+  SkeletonAvatar,
+  SkeletonText,
+  Tag,
+  Text,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -94,22 +101,22 @@ const CollaboratorList = memo<CollaboratorListProps>(({ resourceId, resourceType
               ) : null}
             </Flexbox>
             {levelLabel ? <Tag>{levelLabel}</Tag> : null}
-            <Popconfirm
-              arrow={false}
-              cancelText={t('cancel', { ns: 'common' })}
-              okButtonProps={{ danger: true }}
-              okText={t('permission.collaborators.remove')}
-              placement={'topRight'}
-              title={t('permission.collaborators.removeConfirmTitle', { name })}
-              onConfirm={() => void removeCollaborator(collaborator.userId)}
-            >
-              <ActionIcon
-                disabled={mutating}
-                icon={XIcon}
-                size={'small'}
-                title={t('permission.collaborators.remove')}
-              />
-            </Popconfirm>
+            <ActionIcon
+              disabled={mutating}
+              icon={XIcon}
+              size={'small'}
+              title={t('permission.collaborators.remove')}
+              onClick={() =>
+                confirmModal({
+                  cancelText: t('cancel', { ns: 'common' }),
+                  okButtonProps: { danger: true },
+                  okText: t('permission.collaborators.remove'),
+                  onOk: () => void removeCollaborator(collaborator.userId),
+                  content: t('permission.collaborators.removeConfirmDesc', { name }),
+                  title: t('permission.collaborators.removeConfirmTitle', { name }),
+                })
+              }
+            />
           </Flexbox>
         );
       })}

@@ -281,7 +281,7 @@ describe('Agent channel permission gates', () => {
     expect(screen.getByRole('textbox', { name: 'channel.applicationId' })).toBeDisabled();
     expect(screen.queryByTestId('info-tooltip')).not.toBeInTheDocument();
     expect(screen.getByLabelText('channel.botToken')).toBeDisabled();
-    expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.settingsResetDefault' })).toBeDisabled();
   });
 
@@ -290,11 +290,11 @@ describe('Agent channel permission gates', () => {
 
     const header = document.querySelector('.ant-collapse-header') as HTMLElement;
     expect(header).not.toBeNull();
-    expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeInTheDocument();
 
     const panel = () =>
       screen
-        .getByRole('spinbutton', { hidden: true, name: 'channel.charLimit' })
+        .getByRole('textbox', { hidden: true, name: 'channel.charLimit' })
         .closest('.ant-collapse-panel');
 
     fireEvent.click(header);

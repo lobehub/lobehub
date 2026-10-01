@@ -1,5 +1,4 @@
-import { Input } from '@lobehub/ui';
-import { Checkbox, Select } from '@lobehub/ui/base-ui';
+import { Checkbox, Input, Select } from '@lobehub/ui/base-ui';
 import type { FormInstance } from 'antd';
 import { Form } from 'antd';
 import type { AiModelType } from 'model-bank';

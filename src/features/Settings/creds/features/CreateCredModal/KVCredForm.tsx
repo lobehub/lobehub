@@ -1,9 +1,9 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Input, InputPassword, TextArea } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Form, Input } from 'antd';
+import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Minus, Plus } from 'lucide-react';
 import { type FC } from 'react';
@@ -125,7 +125,7 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onS
                     name={[name, 'value']}
                     style={{ flex: 2, marginBottom: 0 }}
                   >
-                    <Input.Password
+                    <InputPassword
                       autoComplete="new-password"
                       disabled={disabled}
                       placeholder={t('creds.form.valuePlaceholder')}
@@ -157,7 +157,7 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onS
       </Form.Item>
 
       <Form.Item label={t('creds.form.description')} name="description">
-        <Input.TextArea
+        <TextArea
           disabled={disabled}
           placeholder={t('creds.form.descriptionPlaceholder')}
           rows={2}

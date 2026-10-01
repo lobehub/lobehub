@@ -3,8 +3,7 @@
 import { type HeterogeneousProviderConfig, type UserCredSummary } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Select, Spin, Tag } from '@lobehub/ui/base-ui';
-import { Input, Typography } from 'antd';
+import { Avatar, Button, Input, InputPassword, Select, Spin, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckCircle2, KeyRound, X } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -181,7 +180,7 @@ const TokenSection = memo<TokenSectionProps>(({ existingCred, onSaved, onEnvChan
         </Flexbox>
       ) : (
         <Flexbox horizontal gap={8}>
-          <Input.Password
+          <InputPassword
             autoComplete="new-password"
             autoFocus={!!existingCred}
             disabled={!canEdit}
@@ -250,9 +249,9 @@ const RepoListSection = memo<RepoListSectionProps>(({ repos, onReposChange }) =>
           {repos.map((repo) => (
             <div className={styles.repoItem} key={repo}>
               <Github size={14} style={{ flexShrink: 0 }} />
-              <Typography.Text ellipsis style={{ flex: 1, fontSize: 13 }}>
+              <Text ellipsis fontSize={13} style={{ flex: 1 }}>
                 {repo}
-              </Typography.Text>
+              </Text>
               <button
                 className={`${styles.repoDeleteBtn} repo-delete-btn`}
                 disabled={!canEdit}
@@ -318,9 +317,9 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
           {cred.oauthAvatar ? <Avatar avatar={cred.oauthAvatar} size={16} /> : <Github size={14} />}
           <span>{cred.name}</span>
           {cred.oauthUsername && (
-            <Typography.Text style={{ fontSize: 12 }} type="secondary">
+            <Text as={'span'} fontSize={12} type={'secondary'}>
               @{cred.oauthUsername}
-            </Typography.Text>
+            </Text>
           )}
         </span>
       ),

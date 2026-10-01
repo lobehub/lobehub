@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, InputNumber } from '@lobehub/ui';
-import { ActionIcon, Tabs, type TabsItem } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, InputNumber, Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { Check, Plus, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -29,7 +29,7 @@ const ImageNum = memo<ImageNumSelectorProps>(
     const [isEditing, setIsEditing] = useState(false);
     const [customCount, setCustomCount] = useState<number | null>(null);
     const customCountRef = useRef<number | null>(null);
-    const inputRef = useRef<any>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     const isCustomValue = !presetCounts.includes(imageNum);
 

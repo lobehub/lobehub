@@ -3,8 +3,17 @@
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentEvalRunStatus, EvalRunInputConfig } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Accordion, ActionIcon, Avatar, Select, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, Input, InputNumber, Space } from 'antd';
+import {
+  Accordion,
+  ActionIcon,
+  Avatar,
+  Input,
+  InputNumber,
+  Select,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
@@ -171,7 +180,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
   return (
     <Form form={form} layout="vertical" name={formId} onFinish={handleFinish}>
       <Form.Item label={t('run.create.dataset')}>
-        <Space>
+        <Flexbox horizontal align={'center'} gap={8}>
           <span>{currentDataset?.name || run.datasetId}</span>
           {currentDataset?.testCaseCount !== undefined && (
             <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
@@ -186,7 +195,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
               onClick={() => navigate(`/eval/bench/${benchmarkId}/datasets/${run.datasetId}`)}
             />
           )}
-        </Space>
+        </Flexbox>
       </Form.Item>
 
       <Form.Item label={t('run.create.name')} name="name">

@@ -43,12 +43,10 @@ export default {
   'channel.comingSoonTitle': '{{name}} integration is coming soon',
   'channel.copy': 'Copy',
   'channel.deleteAllChannels': 'Remove All Channels',
-  'channel.deleteAllConfirm': 'Are you sure you want to remove all channels?',
   'channel.deleteAllConfirmDesc':
     'This action will permanently remove all message channels and their configurations for this agent. This cannot be undone.',
   'channel.deleteAllSuccess': 'All channels removed',
   'channel.deleteAllFailed': 'Failed to remove all channels',
-  'channel.deleteConfirm': 'Are you sure you want to remove this channel?',
   'channel.deleteConfirmDesc':
     'This action will permanently remove this message channel and its configuration. This cannot be undone.',
   'channel.devWebhookProxyUrl': 'HTTPS Tunnel URL',

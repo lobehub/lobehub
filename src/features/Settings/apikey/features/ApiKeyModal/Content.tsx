@@ -1,7 +1,7 @@
 'use client';
 
-import { CopyButton, Flexbox, Icon, Input } from '@lobehub/ui';
-import { Button, Select, Text, useModalContext } from '@lobehub/ui/base-ui';
+import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Input, Select, Text, useModalContext } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type Dayjs } from 'dayjs';

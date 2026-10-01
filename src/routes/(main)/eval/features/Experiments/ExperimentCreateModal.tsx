@@ -3,13 +3,15 @@
 import type { AgentEvalExperiment } from '@lobechat/types';
 import {
   Button,
+  Input,
   ModalFooter,
   type ModalInstance,
   Select,
+  TextArea,
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Form, Input } from 'antd';
+import { Form } from 'antd';
 import { t } from 'i18next';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -88,7 +90,7 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
         </Form.Item>
 
         <Form.Item label={t('experiment.create.description.label')} name="description">
-          <Input.TextArea placeholder={t('experiment.create.description.placeholder')} rows={3} />
+          <TextArea placeholder={t('experiment.create.description.placeholder')} rows={3} />
         </Form.Item>
 
         <Form.Item

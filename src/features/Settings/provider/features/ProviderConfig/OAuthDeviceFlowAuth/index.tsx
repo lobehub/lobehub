@@ -1,12 +1,10 @@
 'use client';
 
-import { CheckCircleFilled } from '@ant-design/icons';
 import { MAX_WIDTH } from '@lobechat/const';
 import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Modal, Spin } from '@lobehub/ui/base-ui';
-import { Typography } from 'antd';
+import { Avatar, Button, confirmModal, Modal, Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { LogOutIcon, UnplugIcon } from 'lucide-react';
+import { CircleCheckIcon, LogOutIcon, UnplugIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,8 +13,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { lambdaQuery } from '@/libs/trpc/client';
 
 import { useOAuthDeviceFlow } from './useOAuthDeviceFlow';
-
-const { Text, Link } = Typography;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -235,7 +231,9 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
         return (
           <div className={styles.content}>
             <Spin size="middle" />
-            <Text type="secondary">{t('providerModels.config.oauth.connecting')}</Text>
+            <Text as={'span'} type={'secondary'}>
+              {t('providerModels.config.oauth.connecting')}
+            </Text>
           </div>
         );
 
@@ -246,7 +244,9 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
           <div className={styles.content}>
             <Flexbox horizontal align="center" gap={8}>
               <Icon color={cssVar.colorError} icon={UnplugIcon} size={20} />
-              <Text className={styles.errorText}>{t(errorKey as any)}</Text>
+              <Text as={'span'} className={styles.errorText}>
+                {t(errorKey as any)}
+              </Text>
             </Flexbox>
             <Flexbox gap={12} style={{ width: '100%' }}>
               <Button block disabled={!canManageProvider} type="primary" onClick={handleStartAuth}>
@@ -267,9 +267,9 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
         <div className={styles.content}>
           <div className={styles.hint}>
             {t('providerModels.config.oauth.enterCode')}{' '}
-            <Link href={deviceCodeInfo.verificationUri} target="_blank">
+            <a href={deviceCodeInfo.verificationUri} rel="noopener noreferrer" target="_blank">
               {deviceCodeInfo.verificationUri}
-            </Link>
+            </a>
           </div>
 
           <Flexbox horizontal align="center" gap={12} style={{ width: '100%' }}>
@@ -295,7 +295,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
               {title}
               {enabled && isAuthenticated && (
                 <div className={styles.successBadge}>
-                  <CheckCircleFilled />
+                  <Icon icon={CircleCheckIcon} />
                   <span>{t('providerModels.config.oauth.connected')}</span>
                 </div>
               )}

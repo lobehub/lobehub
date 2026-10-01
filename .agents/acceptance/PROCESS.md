@@ -175,6 +175,12 @@ Launch commands per surface are in `PROJECT.md` §4; the operating manual for ea
 is in the skill's `surfaces/`. Escalate, don't duplicate: verify a backend change
 with the CLI first, and add a UI pass only when the change reaches the UI.
 
+Every check runs in an environment that runs the delivered branch. A
+production-hosted surface (e.g. the `_dangerous_local_dev_proxy`) serves local
+frontend code over someone else's backend and data — it is a development
+convenience, not a surface, and never replaces the local full-stack server or
+Electron.
+
 **Separate the driver from the evidence surface.** Producing the state under test
 and capturing the evidence are independent choices. Drive with the cheapest
 deterministic path the repo offers (a CLI command, an endpoint call, a seed
@@ -195,14 +201,39 @@ will not take the intended path, call the server endpoint directly.
 Project scripts live in `.agents/acceptance/scripts/` and are described in
 `PROJECT.md` §5:
 
-| Script                  | Use                                                                 |
-| ----------------------- | ------------------------------------------------------------------- |
-| `report-init.sh`        | Scaffold a report directory grouped by acceptance subject           |
-| `fixture.mjs`           | Per-check fixtures: `init-check`, `list`, `compose`                 |
-| `record-gif.sh`         | Frame sequence → GIF for time-based behavior                        |
-| `capture-app-window.sh` | Screenshot one app window (macOS OS capture)                        |
-| `record-app-screen.sh`  | Record an app screen (CDP frames → video + gallery)                 |
-| `agent-browser-klm.mjs` | Wrap an `agent-browser` action and append its interaction-cost atom |
+| Script                  | Use                                                                    |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `acceptance-guard.sh`   | Bound the run's memory: tier the host, stop this run's heavy processes |
+| `report-init.sh`        | Scaffold a report directory grouped by acceptance subject              |
+| `fixture.mjs`           | Per-check fixtures: `init-check`, `list`, `compose`                    |
+| `record-gif.sh`         | Frame sequence → GIF for time-based behavior                           |
+| `capture-app-window.sh` | Screenshot one app window (macOS OS capture)                           |
+| `record-app-screen.sh`  | Record an app screen (CDP frames → video + gallery)                    |
+| `agent-browser-klm.mjs` | Wrap an `agent-browser` action and append its interaction-cost atom    |
+
+**Bound the run's memory before the first heavy command.** A browser, a dev server
+and type-check workers grow while the round runs. Unbounded they swap the host out
+and freeze the client driving the run — measured here at 30.9 GB / 31.7 GB of swap
+with 867 MB free, while the round was still mid-capture. Start the project guard
+with the run's own tag, and hand it every long-lived process the run starts:
+
+```bash
+GUARD=.agents/acceptance/scripts/acceptance-guard.sh
+export ACCEPTANCE_RUN_TAG="acceptance-<subject>-$(date +%Y%m%d-%H%M%S)-$$"
+
+bash "$GUARD" start                                    # before the first heavy command
+
+SESSION="app-$ACCEPTANCE_RUN_TAG"
+agent-browser --session "$SESSION" open "http://localhost:3000/"
+bash "$GUARD" claim-browser "$SESSION"                 # the browser this run opened
+
+bun run dev >"$DIR/devserver.log" 2>&1 &
+bash "$GUARD" claim "$!"                               # the dev server this run started
+```
+
+`stop-owned` stops only what this run tagged or claimed, so a sibling run's browser
+and a dev server the user started are never in its kill set. `bash "$GUARD" check --json` gives one verdict on the same thresholds the watcher uses (0 green, 10
+yellow, 20 red). Thresholds and groups are in `PROJECT.md` §5.
 
 Generic capture helpers come from the installed skill, not the project layer:
 
@@ -275,6 +306,11 @@ What is specific to this repository:
   test profile.** Follow [Publish auth preflight](#publish-auth-preflight) below
   for both looking up existing rounds and publishing. Do not unconditionally
   remove API keys or assume a stored login exists.
+
+- **The publish target is not the verification surface.** `app.lobehub.com` is
+  where the acceptance is stored, not where the product was verified. Reaching
+  production to publish must never decide which environment ran the delivery; name
+  the actual verification environment (local full-stack / Electron) in the report.
 
 - **Choose the subject by business continuity**, not by what is easiest to create:
   an explicit instruction first; else the current conversation's `topic:<id>` (the
@@ -403,6 +439,11 @@ in a source file corrupts the next run and the next agent's mental model.
 - **Keep the report and its evidence** until the round is published. It lives in
   the temp report root, never in the working tree; the published round is the
   durable copy.
+- **Stop the resource guard last**, after the browsers and dev servers above:
+  `bash .agents/acceptance/scripts/acceptance-guard.sh stop`. Read its verdict with
+  `... status --json` and put the peak tier in the round report. A run that reached
+  red says so and marks the checks it could not finish `blocked` — never `passed`.
+  A guard left running keeps sampling a machine nobody is verifying any more.
 - **Check `git status` before calling the tree clean.** Some dev servers write
   managed files on start.
 

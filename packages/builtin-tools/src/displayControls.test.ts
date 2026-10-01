@@ -41,6 +41,44 @@ describe('getBuiltinRenderDisplayControl', () => {
     expect(getBuiltinRenderDisplayControl('claude-code', 'Read', {})).toBeUndefined();
   });
 
+  it('opens the shared readFile card when either file-system host read an image', () => {
+    const imageRead = {
+      images: [{ mediaType: 'image/png', url: 'https://cdn/a.png' }],
+      path: 'shots/g1.png',
+    };
+
+    expect(getBuiltinRenderDisplayControl('lobe-local-system', 'readFile', imageRead)).toBe(
+      'expand',
+    );
+    expect(getBuiltinRenderDisplayControl('lobe-cloud-sandbox', 'readFile', imageRead)).toBe(
+      'expand',
+    );
+  });
+
+  it('opens the shared card for a legacy readLocalFile image read too', () => {
+    const imageRead = {
+      images: [{ mediaType: 'image/png', url: 'https://cdn/a.png' }],
+      path: 'shots/g1.png',
+    };
+
+    expect(getBuiltinRenderDisplayControl('lobe-local-system', 'readLocalFile', imageRead)).toBe(
+      'expand',
+    );
+    expect(getBuiltinRenderDisplayControl('lobe-cloud-sandbox', 'readLocalFile', imageRead)).toBe(
+      'expand',
+    );
+  });
+
+  it('leaves a text read on either file-system host undecided', () => {
+    // Text is not the payload of the call, so the card must not auto-open on it.
+    expect(
+      getBuiltinRenderDisplayControl('lobe-local-system', 'readFile', { content: 'openai' }),
+    ).toBeUndefined();
+    expect(
+      getBuiltinRenderDisplayControl('lobe-cloud-sandbox', 'readFile', { content: 'openai' }),
+    ).toBeUndefined();
+  });
+
   it('returns undefined without an identifier or apiName', () => {
     expect(getBuiltinRenderDisplayControl(undefined, 'Read')).toBeUndefined();
     expect(getBuiltinRenderDisplayControl('claude-code', undefined)).toBeUndefined();

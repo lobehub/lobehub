@@ -1,7 +1,7 @@
 'use client';
 
 import { Center, Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider } from '@lobehub/ui/base-ui';
 import { cx, useTheme } from 'antd-style';
 import { type FC, type PropsWithChildren, useEffect } from 'react';
 import { useLocation } from 'react-router';
@@ -57,7 +57,7 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
           <Flexbox horizontal align={'center'} gap={16}>
             <Flexbox horizontal align={'center'}>
               <LangButton compact placement={'bottomRight'} />
-              <Divider className={styles.divider} orientation={'vertical'} />
+              <Divider orientation={'vertical'} style={{ height: 24, marginInline: 8 }} />
               <ThemeButton placement={'bottomRight'} size={18} />
             </Flexbox>
           </Flexbox>

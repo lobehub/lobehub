@@ -7,6 +7,7 @@ import { ArrowRight, PackageOpen, SearchIcon, SearchX, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useEntityMarkdown } from '@/features/EntityLink';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useClientDataSWR } from '@/libs/swr';
 import { portalKeys } from '@/libs/swr/keys';
@@ -145,6 +146,9 @@ const DeliverableRow = ({ item, onOpen }: { item: DeliverableItem; onOpen: () =>
 };
 
 const PrimaryExcerpt = ({ documentId }: { documentId: string }) => {
+  // The card is a preview, not a reader: `aria-hidden` rows keep the inline
+  // entity chips (no raw URLs) but take no click of their own.
+  const markdownProps = useEntityMarkdown();
   const { data: document, isLoading } = useClientDataSWR(
     portalKeys.documentHeader(documentId),
     () => documentService.getDocumentById(documentId),
@@ -162,7 +166,7 @@ const PrimaryExcerpt = ({ documentId }: { documentId: string }) => {
   if (!excerpt) return null;
   return (
     <div aria-hidden className={styles.excerpt}>
-      <Markdown fontSize={13} variant={'chat'}>
+      <Markdown fontSize={13} variant={'chat'} {...markdownProps}>
         {excerpt}
       </Markdown>
     </div>

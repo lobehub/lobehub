@@ -91,8 +91,13 @@ const deriveCliGoal = (tool: ChatToolPayloadWithResult): OperationGoal[] => {
  * group — the builtin Goal tool for server-side agents, an `lh goal create`
  * shell call for heterogeneous ones. Like the edited-files aggregate, this is
  * display-only: no Work row is created and nothing enters Work Gallery/history.
+ *
+ * Takes the tools-bearing slice of a block, so callers can pass either one
+ * group's parsed content blocks or whole messages from the conversation.
  */
-export const deriveOperationGoals = (blocks: AssistantContentBlock[] = []): OperationGoal[] => {
+export const deriveOperationGoals = (
+  blocks: { tools?: AssistantContentBlock['tools'] }[] = [],
+): OperationGoal[] => {
   const goals = blocks.flatMap((block) =>
     (block.tools ?? []).flatMap((tool) => {
       const builtin = deriveBuiltinGoal(tool);

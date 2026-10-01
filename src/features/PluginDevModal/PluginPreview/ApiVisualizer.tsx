@@ -1,10 +1,9 @@
 'use client';
 
 import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
-import { Input, Space } from 'antd';
+import { Input, Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, SearchIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -125,7 +124,7 @@ const ApiItem = memo<ApiItemProps>(({ api }) => {
           ) : (
             <>
               <div className={styles.params}>{t('dev.preview.api.params')}</div>
-              <Space direction="vertical" style={{ width: '100%' }}>
+              <Flexbox gap={8} width={'100%'}>
                 {params.map(([name, param]) => {
                   const isRequired = api.parameters.required?.includes(name);
                   return (
@@ -139,7 +138,7 @@ const ApiItem = memo<ApiItemProps>(({ api }) => {
                     </div>
                   );
                 })}
-              </Space>
+              </Flexbox>
             </>
           )}
         </Flexbox>
@@ -165,20 +164,21 @@ const ApiVisualizer = memo<ApiVisualizerProps>(({ apis = [] }) => {
   return (
     <Flexbox gap={8} width={'100%'}>
       <div className={styles.searchWrapper}>
-        <Input.Search
+        <Input
           placeholder={t('dev.preview.api.searchPlaceholder')}
+          prefix={<Icon icon={SearchIcon} />}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
       </div>
 
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Flexbox gap={8} width={'100%'}>
         {filteredApis.length > 0 ? (
           filteredApis.map((api, index) => <ApiItem api={api} key={index} />)
         ) : (
           <div className={styles.emptyState}>{t('dev.preview.api.noResults')}</div>
         )}
-      </Space>
+      </Flexbox>
     </Flexbox>
   );
 });

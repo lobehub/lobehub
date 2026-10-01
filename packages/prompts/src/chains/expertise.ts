@@ -230,7 +230,7 @@ export const chainExpertiseRuleGroupDraft = ({
   ],
 });
 
-export const EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION = 'v2';
+export const EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION = 'v3';
 
 export const EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA = {
   name: 'expertise_topic_ingestion',
@@ -251,6 +251,10 @@ export const EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA = {
                   example: { type: 'string' },
                   layer: { type: ['string', 'null'] },
                   outcome: { enum: ['pass', 'violation'], type: 'string' },
+                  // A verbatim excerpt of the one message the observation rests on. The service
+                  // looks it up in the topic to link the hit to that message, so the reader can
+                  // jump from a rule to the turn that taught it; "" when no single message does.
+                  quote: { type: 'string' },
                   reasoning: { type: 'string' },
                   title: { type: 'string' },
                 },
@@ -259,6 +263,7 @@ export const EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA = {
                   'existingLessonCode',
                   'layer',
                   'outcome',
+                  'quote',
                   'reasoning',
                   'title',
                 ],
@@ -290,6 +295,8 @@ For a match, turn concrete evidence into observations. Attaching to an existing 
 - Only when no listed lesson carries the judgment, set existingLessonCode to null and propose one reusable lesson. Before doing so, state to yourself what it adds that every listed lesson misses; if you cannot, attach instead. Rewording a listed lesson is not a new lesson.
 - Do not turn implementation trivia or a one-off fact into a lesson.
 
+For each observation, put in \`quote\` one short excerpt (a sentence or less) copied character for character from the single message the observation rests on — usually the user's correction or the reply that showed the judgment. Do not paraphrase, translate or join text from two messages; answer "" when no single message carries it.
+
 Use only declared layer keys. Keep evidence short and grounded in the supplied conversation, and write human-facing text in the language of the conversation.`;
 
 export const chainExpertiseTopicIngestion = (input: {
@@ -305,7 +312,7 @@ export const chainExpertiseTopicIngestion = (input: {
   ],
 });
 
-export const EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION = 'v3';
+export const EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION = 'v4';
 
 export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
   name: 'expertise_rejection_ingestion',
@@ -339,7 +346,14 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
                   // makes a standard transferable — but an explanation it invented must never read
                   // as something the reviewer stated.
                   reasonSource: { enum: ['reviewer', 'inferred'], type: 'string' },
+                  // The reviewer's own sentence stating the cause, copied verbatim, or "". The
+                  // service checks it against what they actually wrote, so a claimed quote that is
+                  // not in the rejection cannot make an inferred reason read as theirs.
+                  reviewerWords: { type: 'string' },
                   sourceRefs: { items: { type: 'string' }, minItems: 1, type: 'array' },
+                  // Whether this is a standard at all or an instruction about one delivery. Only
+                  // decided for a new lesson; attaching to a listed one is itself proof it recurs.
+                  specificity: { enum: ['general', 'one-off'], type: 'string' },
                   // Naming the abstracted subject is what forces the climb: a model that cannot
                   // say what the concrete thing is an example of has not generalized at all.
                   subject: { type: 'string' },
@@ -353,7 +367,9 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
                   'reasonKind',
                   'reasonSource',
                   'reasoning',
+                  'reviewerWords',
                   'sourceRefs',
+                  'specificity',
                   'subject',
                   'title',
                 ],
@@ -407,11 +423,15 @@ For each observation return:
 
   For "taste", do not dress the verdict up. State the preference plainly and in a form the next delivery can act on: "the owner does not accept dividers that were not asked for; regions are separated by spacing and container edges alone" is a complete and honest reason. A fabricated mechanism is worse than an admitted preference, because it reads as objective and gets enforced as if it were;
 - reasonSource — where that reason came from, decided by one test you can actually run: does the reviewer's own text state a consequence or a cause, not just an instruction? "the cyan is too light, I can't see it" states a consequence → "reviewer". "put it in one row, annotations left, actions right" and "there's an extra line here" are instructions with no cause → "inferred", however obvious the cause seems. So is "this is ugly" / "this is wrong" / "this doesn't work". When in doubt answer "inferred": over-claiming the reviewer said something is the one failure this field exists to prevent, and under-claiming costs nothing;
+- reviewerWords — when reasonSource is "reviewer", the reviewer's own sentence that states the consequence or cause, copied character for character from what they said or wrote on a circled region. Do not translate, trim into a paraphrase, or merge two remarks. The reader trusts a standard far more when its reason is in their own words, so this is shown first and your mechanism after it. Answer "" when reasonSource is "inferred";
 - example — how it showed up this time, concretely enough to recognise again;
-- limits — the boundary THE REVIEWER drew. Fill it only when they said where the standard stops, or when another rejection in this same round contradicts it. Otherwise answer exactly "边界未由评审者说明" (or the same sentence in their language). An invented exemption is worse than an empty one: it silently narrows a standard the reviewer stated without limit;
+- limits — the boundary THE REVIEWER drew. Fill it only when they said where the standard stops, or when another rejection in this same round contradicts it. Otherwise answer "". Never write a sentence saying that no boundary was given — an empty field already says that. An invented exemption is worse than an empty one: it silently narrows a standard the reviewer stated without limit;
+- specificity — only matters when you propose a new lesson. Ask: would anyone check this on a delivery that does not contain this very element? If not, answer "one-off". Typical one-offs: a version number, a padding or size on one particular header, the wording of one label, removing one specific button, a fact about this project's release state. They stay one-offs even after you phrase them generally — "keep the top padding of section headers compact" is still that one header. Answer "general" only when the standard would plausibly be broken again on an unrelated screen. A one-off kept and labelled is useful; a one-off dressed as a standard dilutes every real one;
 - sourceRefs — the reference labels (for example "R2") of every rejection supporting it. Never invent a label that is not listed.
 
-Leave existingLessonCode and layer as an empty string rather than null when they do not apply — never as an object. Use only declared layer keys. Write human-facing text in the language the reviewer used.`;
+Leave existingLessonCode and layer as an empty string rather than null when they do not apply — never as an object. Use only declared layer keys.
+
+Write every human-facing field — title, subject, reasoning, example, limits — in the language the reviewer wrote their rejections in, even when the domains, these instructions or the promised checks are in another language. A Chinese reviewer gets Chinese standards.`;
 
 export const chainExpertiseRejectionIngestion = (input: {
   domains: readonly unknown[];
@@ -534,7 +554,7 @@ Return \`limits\` as the exemptions you are ADDING. Each entry:
 - \`text\` — where the standard stops, in the reviewer's language.
 - \`shippedRefs\` — the labels of the SHIPPED deliveries it was read from (for example ["S2"]). Every entry must name at least one. An entry that names none, or names an instance, is discarded — and so is any label that is not listed.
 
-Do not repeat the limits the standard already carries; they are kept for you, word for word, and nothing you write can remove one. Set \`currentLimitsArePlaceholder\` to true only when the standard's current \`limits\` is ingestion's "边界未由评审者说明" placeholder (in any language) rather than a boundary the reviewer drew — that is the one case where the existing text is dropped, and only if you supply a real exemption to replace it.
+Do not repeat the limits the standard already carries; they are kept for you, word for word, and nothing you write can remove one. Set \`currentLimitsArePlaceholder\` to true only when the standard's current \`limits\` is the "边界未由评审者说明" placeholder older ingestion wrote (in any language) rather than a boundary the reviewer drew — that is the one case where the existing text is dropped, and only if you supply a real exemption to replace it.
 
 Rules on this, in order:
 - Only a shipped delivery whose frame you have actually read can justify a new exemption. Never infer one from the instances, from the standard's own wording, or from what a reasonable person "would obviously" exempt — an invented exemption silently narrows a standard the reviewer stated without limit.

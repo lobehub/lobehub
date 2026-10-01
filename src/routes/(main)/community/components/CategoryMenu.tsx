@@ -1,46 +1,38 @@
 'use client';
 
-import { type MenuProps } from '@lobehub/ui';
-import { Menu } from '@lobehub/ui';
+import { List, type ListClickInfo, type ListItemType } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { type CSSProperties, memo } from 'react';
 
-const prefixCls = 'ant';
+const styles = createStaticStyles(({ css }) => ({
+  item: css`
+    min-height: 36px;
+  `,
+}));
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    menu: css`
-      padding: 0 !important;
-      .${prefixCls}-menu-item {
-        display: flex;
-        gap: 4px;
+export interface CategoryMenuProps {
+  className?: string;
+  items: ListItemType[];
+  mode?: 'inline';
+  onClick?: (info: ListClickInfo) => void;
+  selectedKeys?: string[];
+  style?: CSSProperties;
+}
 
-        width: 100%;
-        height: 36px;
-        margin-inline: 0;
-        padding-inline-start: 12px !important;
-
-        font-size: 14px;
-
-        .${prefixCls}-menu-title-content > a {
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-      }
-    `,
-  };
-});
-
-const CategoryMenu = memo<MenuProps>(({ style, ...rest }) => {
-  return (
-    <Menu
-      className={styles.menu}
-      data-testid="category-menu"
-      mode="inline"
-      style={style}
-      {...rest}
-    />
-  );
-});
+const CategoryMenu = memo<CategoryMenuProps>(
+  ({ className, items, onClick, selectedKeys, style }) => {
+    return (
+      <List
+        activeKey={selectedKeys?.[0]}
+        className={className}
+        classNames={{ item: styles.item }}
+        data-testid="category-menu"
+        items={items}
+        style={style}
+        onClick={onClick}
+      />
+    );
+  },
+);
 
 export default CategoryMenu;

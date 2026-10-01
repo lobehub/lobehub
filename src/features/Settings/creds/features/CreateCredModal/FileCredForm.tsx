@@ -1,8 +1,8 @@
 'use client';
 
-import { Button, toast, Upload } from '@lobehub/ui/base-ui';
+import { Button, Input, TextArea, toast, Upload } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Form, Input } from 'antd';
+import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -152,7 +152,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
       </Form.Item>
 
       <Form.Item label={t('creds.form.description')} name="description">
-        <Input.TextArea
+        <TextArea
           disabled={disabled}
           placeholder={t('creds.form.descriptionPlaceholder')}
           rows={2}

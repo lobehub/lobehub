@@ -60,7 +60,9 @@ const DocumentItem = memo<DocumentItemProps>(({ document, topicId }) => {
           setDeleting(false);
         }
       },
-      title: t('notebook.confirmDelete'),
+      content: t('notebook.confirmDelete'),
+      okText: t('delete', { ns: 'common' }),
+      title: t('delete', { ns: 'common' }),
     });
   };
 

@@ -4,21 +4,23 @@ import type { RuleItem, RuleRevision, RuleScope } from '@/services/expertise';
 
 export type RuleSectionKey = 'rule' | 'why' | 'how' | 'limits';
 
+/**
+ * What older distillation wrote into `limits` when the reviewer drew no boundary. It means "none
+ * yet", so it reads as an empty section and the first real exception replaces it rather than
+ * sitting under it — the same thing consolidation does.
+ */
+const UNSTATED_LIMITS = new Set(['边界未由评审者说明']);
+
 /** One section's text, or undefined when the rule has nothing under that heading. */
-export const sectionBody = (rule: Pick<RuleItem, 'sections'>, key: RuleSectionKey) =>
-  rule.sections?.find((section) => section.key === key)?.body?.trim() || undefined;
+export const sectionBody = (rule: Pick<RuleItem, 'sections'>, key: RuleSectionKey) => {
+  const body = rule.sections?.find((section) => section.key === key)?.body?.trim() || undefined;
+  return key === 'limits' && body && UNSTATED_LIMITS.has(body) ? undefined : body;
+};
 
 /**
  * The "when it does not apply" text after adding one more exception. Exceptions accumulate: the
  * composer adds a line, it never replaces what the reviewer already narrowed.
  */
-/**
- * What distillation writes into `limits` when the reviewer drew no boundary (see the ingestion
- * prompt in `@lobechat/prompts`). It means "none yet", so the first real exception replaces it
- * rather than sitting under it — the same thing consolidation does.
- */
-const UNSTATED_LIMITS = new Set(['边界未由评审者说明']);
-
 export const appendException = (existing: string | undefined, exception: string) => {
   const next = exception.trim();
   const trimmed = existing?.trim();
@@ -26,6 +28,23 @@ export const appendException = (existing: string | undefined, exception: string)
   if (!current) return next;
   if (!next || current.split('\n').some((line) => line.trim() === next)) return current;
   return `${current}\n${next}`;
+};
+
+/**
+ * Which "where it came from" line a rule gets. Rejections and conversation observations are
+ * counted apart because only the first is "you sent a delivery back for this"; a rule learned in
+ * conversation must not claim the reviewer rejected anything.
+ */
+export const ruleOrigin = (
+  rule: Pick<RuleItem, 'authored' | 'conversationHitCount' | 'rejectionHitCount'>,
+) => {
+  const { conversationHitCount: conversations, rejectionHitCount: rejections } = rule;
+  if (rule.authored) return { key: 'authored' } as const;
+  if (rejections > 0 && conversations > 0)
+    return { key: 'distilledAndObserved', params: { conversations, rejections } } as const;
+  if (rejections > 0) return { key: 'distilled', params: { hits: rejections } } as const;
+  if (conversations > 0) return { key: 'observed', params: { hits: conversations } } as const;
+  return { key: 'learned' } as const;
 };
 
 /** Where a rule went when it was archived by a merge, or null for a plain archive. */
