@@ -1,10 +1,10 @@
 'use client';
 
 import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
-import { Input, Space } from 'antd';
+import { Input, Tag } from '@lobehub/ui/base-ui';
+import { Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, SearchIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -165,8 +165,9 @@ const ApiVisualizer = memo<ApiVisualizerProps>(({ apis = [] }) => {
   return (
     <Flexbox gap={8} width={'100%'}>
       <div className={styles.searchWrapper}>
-        <Input.Search
+        <Input
           placeholder={t('dev.preview.api.searchPlaceholder')}
+          prefix={<Icon icon={SearchIcon} />}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />

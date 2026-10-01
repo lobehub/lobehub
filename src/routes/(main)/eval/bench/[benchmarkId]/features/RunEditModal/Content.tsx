@@ -3,8 +3,17 @@
 import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentEvalRunStatus, EvalRunInputConfig } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Accordion, ActionIcon, Avatar, Select, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, Input, InputNumber, Space } from 'antd';
+import {
+  Accordion,
+  ActionIcon,
+  Avatar,
+  Input,
+  InputNumber,
+  Select,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
+import { Form, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';

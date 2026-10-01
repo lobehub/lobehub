@@ -1,9 +1,8 @@
 'use client';
 
-import { Flexbox, Grid } from '@lobehub/ui';
-import { Button, Pagination, Tag, Text } from '@lobehub/ui/base-ui';
-import { Input } from 'antd';
-import { Plus } from 'lucide-react';
+import { Flexbox, Grid, Icon } from '@lobehub/ui';
+import { Button, Input, Pagination, Tag, Text } from '@lobehub/ui/base-ui';
+import { Plus, SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -65,9 +64,10 @@ const UserSkillList = memo<UserSkillListProps>(({ rows = 4, pageSize = 8 }) => {
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8}>
             {isOwner && skills.length > 0 && (
-              <Input.Search
+              <Input
                 allowClear
                 placeholder={t('user.searchPlaceholder')}
+                prefix={<Icon icon={SearchIcon} size={14} />}
                 style={{ width: 200 }}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

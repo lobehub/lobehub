@@ -3,8 +3,8 @@
 import { isMaskedBotCredential } from '@lobechat/const';
 import { Block, Flexbox, Form, FormGroup, FormItem, Icon } from '@lobehub/ui';
 import type { SelectOption } from '@lobehub/ui/base-ui';
-import { Button, Select, Switch, Tag, Text } from '@lobehub/ui/base-ui';
-import { Form as AntdForm, type FormInstance, InputNumber, Popconfirm } from 'antd';
+import { Button, confirmModal, InputNumber, Select, Switch, Tag, Text } from '@lobehub/ui/base-ui';
+import { Form as AntdForm, type FormInstance } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import {
   Fingerprint,
@@ -681,19 +681,20 @@ const Body = memo<BodyProps>(
                 variant="borderless"
                 extra={
                   settingsActive ? (
-                    <Popconfirm
-                      title={t('channel.settingsResetConfirm')}
-                      onConfirm={disabled ? undefined : handleResetSettings}
+                    <Button
+                      disabled={disabled}
+                      icon={<RotateCcw size={14} />}
+                      size="small"
+                      type="default"
+                      onClick={() =>
+                        confirmModal({
+                          title: t('channel.settingsResetConfirm'),
+                          onOk: handleResetSettings,
+                        })
+                      }
                     >
-                      <Button
-                        disabled={disabled}
-                        icon={<RotateCcw size={14} />}
-                        size="small"
-                        type="default"
-                      >
-                        {t('channel.settingsResetDefault')}
-                      </Button>
-                    </Popconfirm>
+                      {t('channel.settingsResetDefault')}
+                    </Button>
                   ) : undefined
                 }
                 onCollapse={setSettingsActive}

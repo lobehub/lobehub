@@ -6,12 +6,14 @@ import {
   Accordion,
   ActionIcon,
   Avatar,
+  Input,
+  InputNumber,
   Select,
   Text,
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Form, Input, InputNumber, Space } from 'antd';
+import { Form, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';

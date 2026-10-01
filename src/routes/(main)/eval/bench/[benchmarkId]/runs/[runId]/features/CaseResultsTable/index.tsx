@@ -3,11 +3,18 @@
 import type { EvalThreadResult } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Badge, Select, Tag, Tooltip } from '@lobehub/ui/base-ui';
-import { Input, Table } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import {
+  ActionIcon,
+  Badge,
+  Input,
+  Select,
+  Table,
+  type TableColumn,
+  Tag,
+  Tooltip,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Footprints, Play, RotateCcw } from 'lucide-react';
+import { Footprints, Play, RotateCcw, SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -336,8 +343,8 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
       { color: cssVar.colorTextQuaternary, value: distribution.pending },
     ];
 
-    const columns: ColumnsType<any> = useMemo(() => {
-      const cols: ColumnsType<any> = [
+    const columns: TableColumn<any>[] = useMemo(() => {
+      const cols: TableColumn<any>[] = [
         {
           key: 'index',
           render: (_: any, record: any, index: number) => (
@@ -347,14 +354,13 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
           width: 48,
         },
         {
-          dataIndex: ['testCase', 'content', 'input'],
           key: 'input',
-          render: (text: string, record: any) => (
+          render: (_: any, record: any) => (
             <WorkspaceLink
               className={styles.caseLink}
               to={`/eval/bench/${benchmarkId}/runs/${runId}/cases/${record.testCaseId}`}
             >
-              {text}
+              {record.testCase?.content?.input}
             </WorkspaceLink>
           ),
           title: t('table.columns.input'),
@@ -423,7 +429,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
             }
             return '-';
           },
-          sortDirections: ['descend', 'ascend'] as const,
+          sortDirections: ['descend', 'ascend'],
           sorter: (a: any, b: any) => (a.evalResult?.duration ?? 0) - (b.evalResult?.duration ?? 0),
           title: t('table.columns.duration'),
           width: 100,
@@ -453,7 +459,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
               </Flexbox>
             );
           },
-          sortDirections: ['descend', 'ascend'] as const,
+          sortDirections: ['descend', 'ascend'],
           sorter: (a: any, b: any) => (a.evalResult?.steps ?? 0) - (b.evalResult?.steps ?? 0),
           title: t('table.columns.steps'),
           width: 120,
@@ -475,7 +481,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
               </Flexbox>
             );
           },
-          sortDirections: ['descend', 'ascend'] as const,
+          sortDirections: ['descend', 'ascend'],
           sorter: (a: any, b: any) => (a.evalResult?.cost ?? 0) - (b.evalResult?.cost ?? 0),
           title: t('table.columns.cost'),
           width: 120,
@@ -501,7 +507,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
               </Flexbox>
             );
           },
-          sortDirections: ['descend', 'ascend'] as const,
+          sortDirections: ['descend', 'ascend'],
           sorter: (a: any, b: any) =>
             (a.evalResult?.totalCost ?? 0) - (b.evalResult?.totalCost ?? 0),
           title: t('table.columns.totalCost'),
@@ -612,9 +618,10 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
 
         {/* Filters */}
         <Flexbox horizontal align="center" className={styles.filterBar} gap={8}>
-          <Input.Search
+          <Input
             allowClear
             placeholder={t('table.search.placeholder')}
+            prefix={<Icon icon={SearchIcon} size={14} />}
             style={{ width: 240 }}
             onChange={(e) => setSearchText(e.target.value)}
           />
@@ -645,7 +652,6 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
           pagination={{
             pageSize,
             showSizeChanger: true,
-            size: 'small',
             onShowSizeChange: (_, size) => setPageSize(size),
           }}
         />

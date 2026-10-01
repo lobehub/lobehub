@@ -1,9 +1,10 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  Input,
   ModalFooter,
   Text,
   toast,

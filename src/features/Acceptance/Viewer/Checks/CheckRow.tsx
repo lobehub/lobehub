@@ -2,8 +2,8 @@
 
 import { readEvidenceChapters } from '@lobechat/const/verify';
 import type { AcceptanceCommentThread } from '@lobechat/types';
-import { copyToClipboard, Flexbox, Icon, TextArea, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, Tag, Text } from '@lobehub/ui/base-ui';
+import { copyToClipboard, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Button, Tag, Text, TextArea } from '@lobehub/ui/base-ui';
 import { cssVar, cx, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import {

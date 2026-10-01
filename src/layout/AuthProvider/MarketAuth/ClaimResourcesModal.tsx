@@ -2,7 +2,6 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { Checkbox, Text, toast } from '@lobehub/ui/base-ui';
-import { List } from 'antd';
 import { cssVar } from 'antd-style';
 import { Package, Wrench } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -108,6 +107,7 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
 
     const renderItem = (
       item: ClaimableResource,
+      index: number,
       selected: boolean,
       onToggle: () => void,
       icon: React.ReactNode,
@@ -116,26 +116,30 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
       const displayName = item.name || item.parsedUrl?.fullName || item.identifier;
 
       return (
-        <List.Item
+        <Flexbox
+          horizontal
+          align="center"
+          gap={12}
+          key={item.id}
           style={{
+            borderBlockStart: index > 0 ? `1px solid ${cssVar.colorSplit}` : undefined,
             cursor: 'pointer',
             padding: '8px 12px',
+            width: '100%',
           }}
           onClick={onToggle}
         >
-          <Flexbox horizontal align="center" gap={12} style={{ width: '100%' }}>
-            <Checkbox checked={selected} />
-            {icon}
-            <Flexbox flex={1} gap={2}>
-              <Text style={{ fontSize: 14 }}>{displayName}</Text>
-              {item.description && (
-                <Text style={{ fontSize: 12 }} type="secondary">
-                  {item.description}
-                </Text>
-              )}
-            </Flexbox>
+          <Checkbox checked={selected} />
+          {icon}
+          <Flexbox flex={1} gap={2}>
+            <Text style={{ fontSize: 14 }}>{displayName}</Text>
+            {item.description && (
+              <Text style={{ fontSize: 12 }} type="secondary">
+                {item.description}
+              </Text>
+            )}
           </Flexbox>
-        </List.Item>
+        </Flexbox>
       );
     };
 
@@ -166,20 +170,22 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
             <Text style={{ fontSize: 13 }} type="secondary">
               {t('claimResources.pluginSection', { defaultValue: 'Plugins' })}
             </Text>
-            <List
-              bordered
-              dataSource={resources.plugins}
-              size="small"
-              style={{ borderRadius: cssVar.borderRadiusLG }}
-              renderItem={(item) =>
+            <Flexbox
+              style={{
+                border: `1px solid ${cssVar.colorBorder}`,
+                borderRadius: cssVar.borderRadiusLG,
+              }}
+            >
+              {resources.plugins.map((item, index) =>
                 renderItem(
                   item,
+                  index,
                   selectedPlugins.has(String(item.id)),
                   () => togglePlugin(String(item.id)),
                   <Package size={18} style={{ color: cssVar.colorTextSecondary }} />,
-                )
-              }
-            />
+                ),
+              )}
+            </Flexbox>
           </Flexbox>
         )}
 
@@ -188,20 +194,22 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
             <Text style={{ fontSize: 13 }} type="secondary">
               {t('claimResources.skillSection', { defaultValue: 'Skills' })}
             </Text>
-            <List
-              bordered
-              dataSource={resources.skills}
-              size="small"
-              style={{ borderRadius: cssVar.borderRadiusLG }}
-              renderItem={(item) =>
+            <Flexbox
+              style={{
+                border: `1px solid ${cssVar.colorBorder}`,
+                borderRadius: cssVar.borderRadiusLG,
+              }}
+            >
+              {resources.skills.map((item, index) =>
                 renderItem(
                   item,
+                  index,
                   selectedSkills.has(String(item.id)),
                   () => toggleSkill(String(item.id)),
                   <Wrench size={18} style={{ color: cssVar.colorTextSecondary }} />,
-                )
-              }
-            />
+                ),
+              )}
+            </Flexbox>
           </Flexbox>
         )}
 

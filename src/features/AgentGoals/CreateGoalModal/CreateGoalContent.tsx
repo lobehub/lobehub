@@ -5,8 +5,15 @@ import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-too
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Spin, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { InputNumber } from 'antd';
+import {
+  ActionIcon,
+  Button,
+  InputNumber,
+  Spin,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
@@ -597,7 +604,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   min={2}
                   size={'small'}
                   style={{ width: '100%' }}
-                  value={plan.maxIterations ?? undefined}
+                  value={plan.maxIterations ?? null}
                   variant={'filled'}
                   suffix={
                     <Text fontSize={12} type={'secondary'}>

@@ -1,6 +1,6 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import { useDeferredMount } from '@/hooks/useDeferredMount';
@@ -45,7 +45,7 @@ const TitleBar = memo(() => {
         </Flexbox>
         {showCustomWinControl && (
           <>
-            <Divider orientation={'vertical'} />
+            <Divider orientation={'vertical'} style={{ marginInline: 8 }} />
             <WinControl />
           </>
         )}

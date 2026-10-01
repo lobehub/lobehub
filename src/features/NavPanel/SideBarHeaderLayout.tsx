@@ -1,9 +1,7 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import type { BreadcrumbProps } from 'antd';
-import { Breadcrumb } from 'antd';
+import { Breadcrumb, type BreadcrumbItem, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -17,26 +15,17 @@ import { isModifierClick } from '@/utils/navigation';
 import BackButton from './components/BackButton';
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 
-const prefixCls = 'ant';
-
 const styles = createStaticStyles(({ css, cssVar }) => ({
   breadcrumb: css`
-    ol {
-      align-items: center;
-    }
-    .${prefixCls}-breadcrumb-separator {
-      margin-inline: 4px;
-    }
-    .${prefixCls}-breadcrumb-link {
-      display: flex !important;
-      align-items: center !important;
+    li,
+    li[aria-current='page'] {
       font-size: 12px;
+      font-weight: normal;
       color: ${cssVar.colorTextDescription};
     }
-    a.${prefixCls}-breadcrumb-link {
-      &:hover {
-        color: ${cssVar.colorText};
-      }
+
+    a:hover {
+      color: ${cssVar.colorText};
     }
   `,
   container: css`
@@ -44,11 +33,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-type BreadcrumbItem = NonNullable<BreadcrumbProps['items']>[number];
-
 interface SideBarHeaderLayoutProps {
   backTo?: string;
-  breadcrumb?: BreadcrumbProps['items'];
+  breadcrumb?: BreadcrumbItem[];
   /** Override the leading home breadcrumb item (defaults to home icon → `/`). */
   homeItem?: BreadcrumbItem;
   left?: ReactNode;

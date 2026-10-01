@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -8,6 +8,7 @@ import {
   Input,
   Spin,
   Text,
+  TextArea,
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';

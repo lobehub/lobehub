@@ -2,8 +2,7 @@
 
 import type { FormGroupItemType } from '@lobehub/ui';
 import { Flexbox, Form, Icon } from '@lobehub/ui';
-import { Alert, Text, toast } from '@lobehub/ui/base-ui';
-import { Breadcrumb as AntBreadcrumb } from 'antd';
+import { Alert, Breadcrumb, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight, InfoIcon, UsersIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
@@ -33,13 +32,7 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
   `,
   breadcrumb: css`
-    ol {
-      align-items: center;
-    }
-
-    li,
-    .ant-breadcrumb-link,
-    .ant-breadcrumb-link > a {
+    a {
       display: flex;
       align-items: center;
     }
@@ -162,7 +155,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
         <NavHeader
           styles={{ left: { paddingInlineStart: 24 } }}
           left={
-            <AntBreadcrumb
+            <Breadcrumb
               className={styles.breadcrumb}
               separator={<Icon icon={ChevronRight} size={14} />}
               items={[

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ExpertiseEnforcement, ExpertiseReasonKind } from '@lobechat/types';
-import { Block, Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -10,6 +10,7 @@ import {
   SkeletonText,
   Tag,
   Text,
+  TextArea,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';

@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider } from '@lobehub/ui/base-ui';
 import { Fragment } from 'react';
 
 import TaskItemSkeleton from '@/features/AgentTasks/AgentTaskList/TaskItemSkeleton';
@@ -23,7 +23,7 @@ const TasksSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
         {Array.from({ length: 5 }).map((_, index) => (
           <Fragment key={index}>
             <TaskItemSkeleton />
-            {index !== 4 && <Divider dashed style={{ margin: 0 }} />}
+            {index !== 4 && <Divider dashed />}
           </Fragment>
         ))}
       </Block>

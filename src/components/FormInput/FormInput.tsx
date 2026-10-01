@@ -1,6 +1,4 @@
-import { type InputProps as Props } from '@lobehub/ui';
-import { Input } from '@lobehub/ui';
-import { type InputRef } from 'antd/es/input/Input';
+import { Input, type InputProps as Props } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useRef, useState } from 'react';
 
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
@@ -10,7 +8,7 @@ interface FormInputProps extends Omit<Props, 'onChange'> {
 }
 
 const FormInput = memo<FormInputProps>(({ onChange, value: defaultValue, ...props }) => {
-  const ref = useRef<InputRef>(null);
+  const ref = useRef<HTMLInputElement>(null);
   const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
   const [value, setValue] = useState(defaultValue as string);

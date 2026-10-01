@@ -1,5 +1,4 @@
-import { toast } from '@lobehub/ui/base-ui';
-import { Input } from 'antd';
+import { Input, InputPassword, toast } from '@lobehub/ui/base-ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -372,7 +371,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
               />
-              <Input.Password
+              <InputPassword
                 autoComplete="new-password"
                 placeholder={t('connector.add.clientSecret', 'OAuth Client Secret (optional)')}
                 value={clientSecret}

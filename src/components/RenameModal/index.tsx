@@ -1,14 +1,14 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  Input,
   type ModalInstance,
   Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
 import { t } from 'i18next';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,11 +25,12 @@ const RenameModalContent = memo<RenameModalContentProps>(
     const { close } = useModalContext();
     const [value, setValue] = useState(defaultValue);
     const [loading, setLoading] = useState(false);
-    const inputRef = useRef<InputRef>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
       queueMicrotask(() => {
-        inputRef.current?.focus({ cursor: 'all' });
+        inputRef.current?.focus();
+        inputRef.current?.select();
       });
     }, []);
 

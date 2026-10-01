@@ -1,10 +1,20 @@
 'use client';
 
 import { OFFICIAL_URL } from '@lobechat/const';
-import { Block, Center, Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, Tabs, Tag, Text, toast, Upload } from '@lobehub/ui/base-ui';
-import type { TableColumnsType } from 'antd';
-import { Input as AntInput, Table } from 'antd';
+import { Block, Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import {
+  Avatar,
+  Button,
+  Input,
+  Table,
+  type TableColumn,
+  Tabs,
+  Tag,
+  Text,
+  TextArea,
+  toast,
+  Upload,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
@@ -153,7 +163,7 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
     }
   }, [refresh, t]);
 
-  const columns = useMemo<TableColumnsType<CommunityWorkspaceMember>>(
+  const columns = useMemo<TableColumn<CommunityWorkspaceMember>[]>(
     () => [
       {
         dataIndex: 'displayName',
@@ -253,13 +263,11 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
         pagination={false}
         rowKey={'accountId'}
         size={'middle'}
-        locale={{
-          emptyText: (
-            <Text style={{ fontSize: 13 }} type="secondary">
-              {t('user.workspaceProfile.settings.members.empty')}
-            </Text>
-          ),
-        }}
+        emptyText={
+          <Text style={{ fontSize: 13 }} type="secondary">
+            {t('user.workspaceProfile.settings.members.empty')}
+          </Text>
+        }
       />
     </SettingCard>
   );
@@ -505,10 +513,10 @@ const CommunityWorkspaceSettings = memo(() => {
             )}
           >
             <Input
-              showCount
               disabled={!canEdit}
               maxLength={DISPLAY_NAME_MAX}
               style={{ maxWidth: 420 }}
+              suffix={`${displayName.length} / ${DISPLAY_NAME_MAX}`}
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
             />
@@ -527,13 +535,14 @@ const CommunityWorkspaceSettings = memo(() => {
               })
             }
           >
-            <AntInput
-              showCount
-              addonBefore={ORGANIZATION_URL_PREFIX}
+            <Input
+              aria-invalid={!!namespaceValidation}
+              data-invalid={namespaceValidation ? '' : undefined}
               disabled={!canEdit}
               maxLength={NAMESPACE_MAX}
-              status={namespaceValidation ? 'error' : undefined}
+              prefix={ORGANIZATION_URL_PREFIX}
               style={{ maxWidth: 560 }}
+              suffix={`${namespace.length} / ${NAMESPACE_MAX}`}
               value={namespace}
               onChange={(e) => {
                 setNamespace(e.target.value);
@@ -570,8 +579,9 @@ const CommunityWorkspaceSettings = memo(() => {
             )}
           >
             <Input
+              aria-invalid={!!websiteError}
+              data-invalid={websiteError ? '' : undefined}
               disabled={!canEdit}
-              status={websiteError ? 'error' : undefined}
               style={{ maxWidth: 560 }}
               value={websiteUrl}
               prefix={

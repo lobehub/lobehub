@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
-import { ActionIcon, Alert, Button, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Alert, Button, Input, Text } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';

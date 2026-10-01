@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
-import { Button, Spin, Text } from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Input, Spin, Text } from '@lobehub/ui/base-ui';
 import { type ChangeEvent } from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +18,7 @@ const UsernameRow = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
-  const inputRef = useRef<InputRef>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const usernameRegex = /^\w+$/;
 
@@ -32,7 +31,7 @@ const UsernameRow = () => {
   };
 
   const handleSave = useCallback(async () => {
-    const value = inputRef.current?.input?.value?.trim();
+    const value = inputRef.current?.value?.trim();
     if (!value || value === username) {
       setError('');
       return;
@@ -76,13 +75,13 @@ const UsernameRow = () => {
   };
 
   const handleCancel = useCallback(() => {
-    if (inputRef.current?.input) {
+    if (inputRef.current) {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
         HTMLInputElement.prototype,
         'value',
       )?.set;
-      nativeInputValueSetter?.call(inputRef.current.input, username || '');
-      inputRef.current.input.dispatchEvent(new Event('input', { bubbles: true }));
+      nativeInputValueSetter?.call(inputRef.current, username || '');
+      inputRef.current.dispatchEvent(new Event('input', { bubbles: true }));
     }
     setError('');
     setDirty(false);
@@ -110,12 +109,13 @@ const UsernameRow = () => {
           </Button>
         )}
         <Input
+          aria-invalid={!!error}
+          data-invalid={error ? '' : undefined}
           defaultValue={username || ''}
           disabled={saving}
           key={username}
           placeholder={t('profile.usernamePlaceholder')}
           ref={inputRef}
-          status={error ? 'error' : undefined}
           variant="filled"
           onBlur={handleSave}
           onChange={handleChange}

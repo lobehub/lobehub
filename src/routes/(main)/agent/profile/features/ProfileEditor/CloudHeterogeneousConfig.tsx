@@ -3,8 +3,8 @@
 import { type HeterogeneousProviderConfig, type UserCredSummary } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Select, Spin, Tag } from '@lobehub/ui/base-ui';
-import { Input, Typography } from 'antd';
+import { Avatar, Button, Input, InputPassword, Select, Spin, Tag } from '@lobehub/ui/base-ui';
+import { Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckCircle2, KeyRound, X } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -181,7 +181,7 @@ const TokenSection = memo<TokenSectionProps>(({ existingCred, onSaved, onEnvChan
         </Flexbox>
       ) : (
         <Flexbox horizontal gap={8}>
-          <Input.Password
+          <InputPassword
             autoComplete="new-password"
             autoFocus={!!existingCred}
             disabled={!canEdit}

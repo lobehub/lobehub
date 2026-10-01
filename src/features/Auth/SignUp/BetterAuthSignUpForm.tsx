@@ -2,8 +2,8 @@
 
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { Form, Input, type InputRef } from 'antd';
+import { Button, Input, InputPassword, Text } from '@lobehub/ui/base-ui';
+import { Form } from 'antd';
 import { Lock, Mail } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,8 +23,8 @@ const BetterAuthSignUpForm = () => {
   const [searchParams] = useSearchParams();
   const { agreementChecked, continueWithAgreement, setAgreementChecked } = useAuthAgreement();
 
-  const emailInputRef = useRef<InputRef>(null);
-  const passwordInputRef = useRef<InputRef>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const email = searchParams.get('email');
@@ -105,7 +105,7 @@ const BetterAuthSignUpForm = () => {
             },
           ]}
         >
-          <Input.Password
+          <InputPassword
             autoComplete="new-password"
             placeholder={t('betterAuth.signup.passwordPlaceholder')}
             ref={passwordInputRef}
@@ -135,7 +135,7 @@ const BetterAuthSignUpForm = () => {
             }),
           ]}
         >
-          <Input.Password
+          <InputPassword
             autoComplete="new-password"
             placeholder={t('betterAuth.signup.confirmPasswordPlaceholder')}
             size="large"

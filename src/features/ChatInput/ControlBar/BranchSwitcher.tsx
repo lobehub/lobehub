@@ -1,5 +1,5 @@
 import type { DeviceGitWorktreeListItem } from '@lobechat/types';
-import { copyToClipboard, Icon, Input, Tooltip } from '@lobehub/ui';
+import { copyToClipboard, Icon, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
   DropdownMenuFooter,
@@ -11,6 +11,7 @@ import {
   DropdownMenuRoot,
   DropdownMenuScrollViewport,
   DropdownMenuTrigger,
+  Input,
   toast,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -166,14 +167,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 4px;
     padding-inline: 12px;
     border-block-end: 1px solid ${cssVar.colorSplit};
-
-    .ant-input-affix-wrapper {
-      padding-inline: 0;
-    }
-
-    .ant-input-prefix {
-      margin-inline-end: 8px;
-    }
   `,
   refreshButton: css`
     cursor: pointer;
@@ -494,6 +487,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                     placeholder={t('workingDirectory.branchSearchPlaceholder')}
                     prefix={<Icon icon={SearchIcon} size={14} />}
                     size="small"
+                    style={{ paddingInline: 0 }}
                     value={search}
                     variant="borderless"
                     onChange={(e) => setSearch(e.target.value)}

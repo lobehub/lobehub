@@ -60,7 +60,7 @@ const Versions = memo(() => {
               title: t('mcp.details.versions.table.isValidated'),
             },
             {
-              align: 'end',
+              align: 'right',
               dataIndex: 'createdAt',
               render: (_, record) => <PublishedTime date={record.createdAt} />,
               title: t('mcp.details.versions.table.publishAt'),

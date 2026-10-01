@@ -1,8 +1,7 @@
 'use client';
 
-import { Badge, Checkbox, Tag, Tooltip } from '@lobehub/ui/base-ui';
-import { Table, Typography } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Badge, Checkbox, Table, type TableColumn, Tag, Tooltip } from '@lobehub/ui/base-ui';
+import { Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type FC, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -94,7 +93,7 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
     });
   }, [confirm, onSelectionReady, selectedIds]);
 
-  const columns: ColumnsType<ResumableCase> = useMemo(
+  const columns: TableColumn<ResumableCase>[] = useMemo(
     () => [
       {
         key: 'select',
@@ -168,7 +167,6 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
       pagination={{
         pageSize,
         showSizeChanger: true,
-        size: 'small',
         onShowSizeChange: (_, size) => setPageSize(size),
       }}
     />

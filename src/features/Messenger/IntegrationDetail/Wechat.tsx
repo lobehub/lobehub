@@ -2,8 +2,7 @@
 
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Alert, Button, Spin, Text, toast } from '@lobehub/ui/base-ui';
-import { QRCode } from 'antd';
+import { Alert, Button, QRCode, Spin, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLinkIcon, QrCodeIcon, RefreshCwIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
