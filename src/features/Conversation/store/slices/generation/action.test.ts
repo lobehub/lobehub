@@ -1725,13 +1725,14 @@ describe('Generation Actions', () => {
   // upcoming lifecycle refactor cannot silently change them. They assert what
   // the code does NOW — including behavior that looks buggy (called out inline).
   // ===========================================================================
-  describe('regenerate hetero branch characterization (lifecycle refactor regression net)', () => {
+  /** @example Both local CLI providers preserve attachments and topic configuration on retry. */
+  describe.each(['claude-code', 'codex'] as const)('regenerate %s branch', (providerType) => {
     // The hetero regenerate path lives behind `runtimeType === 'hetero'`. We
     // force that decision (it normally requires desktop + a local CLI provider)
     // by stubbing `selectRuntimeType`, and supply a `heterogeneousProvider` via
     // the agent config selector so the `runtimeType === 'hetero' && provider`
     // guard passes.
-    const heterogeneousProvider = { type: 'claude-code' } as any;
+    const heterogeneousProvider = { type: providerType };
 
     const setupHeteroChatStore = async (overrides: Record<string, any> = {}) => {
       const mockRefreshMessages = vi.fn().mockResolvedValue(undefined);
@@ -1823,7 +1824,7 @@ describe('Generation Actions', () => {
         expect.objectContaining({
           parentId: 'msg-1',
           role: 'assistant',
-          provider: 'claude-code',
+          provider: providerType,
         }),
       );
 
@@ -1849,10 +1850,11 @@ describe('Generation Actions', () => {
     });
 
     it('regenerates with the topic-pinned heterogeneous model', async () => {
+      const pinnedModel = providerType === 'codex' ? 'gpt-5.4' : 'opus';
       await setupHeteroChatStore({
         topicDataMap: {
           test: {
-            items: [{ id: 'topic-1', model: 'opus', provider: 'claude-code' }],
+            items: [{ id: 'topic-1', model: pinnedModel, provider: providerType }],
           },
         },
       });
@@ -1873,7 +1875,7 @@ describe('Generation Actions', () => {
       expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
         expect.any(Function),
         expect.objectContaining({
-          heterogeneousProvider: expect.objectContaining({ model: 'opus', type: 'claude-code' }),
+          heterogeneousProvider: expect.objectContaining({ model: pinnedModel, type: providerType }),
         }),
       );
     });
