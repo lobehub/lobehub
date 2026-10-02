@@ -2,8 +2,9 @@ import type {
   AgentAccountCapabilities,
   AgentAccountCredentialHint,
   AgentAccountKind,
+  AgentAccountStatus,
 } from '@lobechat/types';
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import type { AgentAccountItem, NewAgentAccount } from '../schemas';
 import { agentAccounts } from '../schemas';
@@ -72,6 +73,16 @@ const viewColumns = {
   userId: agentAccounts.userId,
   workspaceId: agentAccounts.workspaceId,
 };
+
+/**
+ * Statuses an inbound delivery may still reach.
+ *
+ * `provisioning` counts as live: both providers open an account synchronously,
+ * so the handle is usable the moment the row exists. `revoked` and `suspended`
+ * do not — releasing an identity has to stop its inbound, not merely its
+ * outbound.
+ */
+const INBOUND_ROUTABLE_STATUSES: AgentAccountStatus[] = ['active', 'provisioning'];
 
 /**
  * Agent accounts (mail / phone / wallet / service) and their credentials.
@@ -266,22 +277,27 @@ export class AgentAccountModel {
    * the key may then carry both the revoked row and its live replacement; this
    * filter mirrors that index so inbound traffic (and the credential used to
    * verify it) always resolves to the live account.
+   *
+   * `statuses` narrows the lookup further when the caller has a liveness rule to
+   * apply; inbound routing passes {@link INBOUND_ROUTABLE_STATUSES}.
    */
   static findByRoutingKey = async (
     db: LobeChatDatabase,
     provider: string,
     identifier: string,
+    statuses?: AgentAccountStatus[],
   ): Promise<AgentAccountView | undefined> => {
+    const conditions = [
+      eq(agentAccounts.provider, provider),
+      eq(agentAccounts.identifier, identifier),
+      ne(agentAccounts.status, 'revoked'),
+    ];
+    if (statuses) conditions.push(inArray(agentAccounts.status, statuses));
+
     const [row] = await db
       .select(viewColumns)
       .from(agentAccounts)
-      .where(
-        and(
-          eq(agentAccounts.provider, provider),
-          eq(agentAccounts.identifier, identifier),
-          ne(agentAccounts.status, 'revoked'),
-        ),
-      )
+      .where(and(...conditions))
       .limit(1);
 
     return row;
@@ -291,6 +307,13 @@ export class AgentAccountModel {
    * Decrypt an account's credential while resolving an inbound webhook, so the
    * signature can be verified *before* the request is trusted. The trust model
    * is the same as the bot path: nothing else may call this.
+   *
+   * Only a live account is routable. A revoked number that keeps receiving is
+   * the worst kind of release: the row says the identity is gone while the
+   * carrier still delivers to it — and for Linq it is not even caught by the
+   * credential check, because the signing secret comes from deployment config
+   * rather than the account. Suspended accounts are excluded for the same
+   * reason.
    */
   static findForInboundVerification = async (
     db: LobeChatDatabase,
@@ -298,7 +321,12 @@ export class AgentAccountModel {
     identifier: string,
     gateKeeper?: AgentAccountGateKeeper,
   ): Promise<{ credential: Record<string, string> | null; view: AgentAccountView } | undefined> => {
-    const view = await AgentAccountModel.findByRoutingKey(db, provider, identifier);
+    const view = await AgentAccountModel.findByRoutingKey(
+      db,
+      provider,
+      identifier,
+      INBOUND_ROUTABLE_STATUSES,
+    );
     if (!view) return undefined;
 
     const [row] = await db

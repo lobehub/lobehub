@@ -263,6 +263,48 @@ describe('AgentAccountModel scope and writes', () => {
     expect(withoutGatekeeper).toBeUndefined();
   });
 
+  it('stops routing inbound once an account is released', async () => {
+    const model = new AgentAccountModel(serverDB, userId, mockGateKeeper);
+    const created = await model.create({
+      ...mailAccount('released@lobe.id'),
+      credential: { webhookSecret: 'whsec_released' },
+    });
+
+    // Live: the webhook resolves the account and can decrypt its credential.
+    await expect(
+      AgentAccountModel.findForInboundVerification(
+        serverDB,
+        'agent-mail',
+        'released@lobe.id',
+        mockGateKeeper,
+      ),
+    ).resolves.toMatchObject({ credential: { webhookSecret: 'whsec_released' } });
+
+    await model.revoke(created.id);
+
+    // Released: a delivery addressed to the same handle must no longer resolve.
+    // Revocation that stops sending but keeps receiving is not a release.
+    await expect(
+      AgentAccountModel.findForInboundVerification(
+        serverDB,
+        'agent-mail',
+        'released@lobe.id',
+        mockGateKeeper,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('stops routing inbound while an account is suspended', async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+    const created = await model.create(mailAccount('suspended@lobe.id'));
+
+    await model.update(created.id, { status: 'suspended' });
+
+    await expect(
+      AgentAccountModel.findForInboundVerification(serverDB, 'agent-mail', 'suspended@lobe.id'),
+    ).resolves.toBeUndefined();
+  });
+
   it('keeps one account per (agent, kind, provider, identifier)', async () => {
     const model = new AgentAccountModel(serverDB, userId);
     await model.create(mailAccount('dupe@lobe.id'));
