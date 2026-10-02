@@ -65,7 +65,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextDescription};
   `,
   hintGlyph: css`
+    cursor: help;
+
     display: none;
+
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+
+    color: inherit;
+
+    background: none;
 
     /* Too narrow to spare a sentence on the send timing: keep the meaning on the
        glyph's tooltip instead of squeezing the message text. */
@@ -312,12 +322,17 @@ const QueueTray = memo(() => {
                 message row right after the content instead of taking a line.
                 Several queued messages are merged into a single send on drain,
                 so the wording changes with the queue size. */}
-            <Tooltip title={hintText}>
-              <span className={styles.hint}>
-                <Icon className={styles.hintGlyph} icon={Info} size={13} />
-                <span className={styles.hintText}>{hintText}</span>
-              </span>
-            </Tooltip>
+            <span className={styles.hint}>
+              {/* Collapsed form. It is display:none while the sentence fits, so
+                  it adds no tab stop there; when it shows it is a real
+                  focusable control carrying the wording as its name. */}
+              <Tooltip title={hintText}>
+                <button aria-label={hintText} className={styles.hintGlyph} type={'button'}>
+                  <Icon icon={Info} size={13} />
+                </button>
+              </Tooltip>
+              <span className={styles.hintText}>{hintText}</span>
+            </span>
             <div style={{ flex: 1 }} />
             <ActionIcon
               aria-label={t('inputQueue.edit')}
