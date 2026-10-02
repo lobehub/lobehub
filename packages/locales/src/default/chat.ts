@@ -2035,6 +2035,16 @@ export default {
   'goalDetail.taskStatus': 'Execution status',
   'goalDetail.unnamedRun': 'Untitled run',
   'goalDetail.viewPlan': 'View execution plan',
+  'goalProcess.acceptanceHierarchy.accept': 'Accept',
+  'goalProcess.acceptanceHierarchy.acceptAll': 'Accept all',
+  'goalProcess.acceptanceHierarchy.acceptAllConfirm':
+    '{{count}} acceptances will be accepted in one go. Each keeps its own result — this only records your sign-off.',
+  'goalProcess.acceptanceHierarchy.acceptAllDone': 'Accepted {{count}} acceptances',
+  'goalProcess.acceptanceHierarchy.acceptAllPartial':
+    '{{count}} acceptances could not be accepted and were left as they were',
+  'goalProcess.acceptanceHierarchy.acceptAllTitle': 'Accept every waiting acceptance?',
+  'goalProcess.acceptanceHierarchy.acceptError': 'Could not save the sign-off. Try again.',
+  'goalProcess.acceptanceHierarchy.accepted': 'Accepted “{{title}}”',
   'goalProcess.acceptanceHierarchy.checksError': 'Failed to load this acceptance’s checks',
   'goalProcess.acceptanceHierarchy.collapseAll': 'Collapse all',
   'goalProcess.acceptanceHierarchy.criterion.failed': 'Failed',
