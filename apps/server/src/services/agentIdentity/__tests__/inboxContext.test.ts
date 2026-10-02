@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { AgentState } from '@lobechat/agent-runtime';
+import { AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { gatherContextFacts } from '@lobechat/mecha';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -83,6 +84,10 @@ describe('Agent identity as first-class runtime state', () => {
     });
 
     // 1. The fact is gathered from the real DB through the real provider.
+    // Note `enabledToolIds: []` — the account tool is NOT enabled on this run.
+    // The identity/inbox still reaches the model, which is the whole point: it
+    // is state, not a tool result.
+    expect(factsRequest().enabledToolIds).not.toContain(AgentAccountIdentifier);
     const facts = await gatherContextFacts(factsRequest(), providers());
     expect(facts.step.agentAccountContext).toBeDefined();
     expect(facts.step.agentAccountContext?.accounts).toHaveLength(1);
