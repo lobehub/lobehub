@@ -18,7 +18,7 @@ import AsyncError from '@/components/AsyncError';
 import { useEntityMarkdown } from '@/features/EntityLink';
 import { useChatStore } from '@/store/chat';
 
-import { GroupLabel, SectionTitle } from './GoalResultFollowUps';
+import { SectionTitle } from './GoalResultFollowUps';
 import type { CriterionOutcome, CriterionOutcomeState, EvidenceLike } from './goalResultState';
 
 /**
@@ -282,9 +282,6 @@ const GoalCriteriaResults = ({
       >
         {t('goalProcess.result.criteria.title')}
       </SectionTitle>
-      {/* The goal-level acceptance IS this list, so it reads as the section's
-          first group rather than repeating as a tally row of its own. */}
-      <GroupLabel>{t('goalProcess.result.criteria.group')}</GroupLabel>
       {error ? (
         <AsyncError error={error} variant={'block'} onRetry={onRetry} />
       ) : loading ? (

@@ -66,6 +66,15 @@ const styles = createStaticStyles(({ css }) => ({
       background: none;
     }
   `,
+  /* The task's position in the Goal graph, the same handle the process view
+     refers to it by — quiet, but a step above the faintest tone so a row can
+     still be read back and pointed at. */
+  seq: css`
+    flex: none;
+    min-width: 22px;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
   title: css`
     overflow: hidden;
     flex: 1;
@@ -161,11 +170,13 @@ interface LevelRowProps {
   dim?: boolean;
   meta?: string;
   onToggle?: () => void;
+  /** The task's position in the Goal graph, so a row can be pointed at. */
+  seq?: string;
   state: AcceptanceLevelState;
   title: string;
 }
 
-const LevelRow = memo<LevelRowProps>(({ chevron, dim, meta, onToggle, state, title }) => {
+const LevelRow = memo<LevelRowProps>(({ chevron, dim, meta, onToggle, seq, state, title }) => {
   const { t } = useTranslation('chat');
   return (
     <button
@@ -181,6 +192,7 @@ const LevelRow = memo<LevelRowProps>(({ chevron, dim, meta, onToggle, state, tit
         size={16}
         style={{ flex: 'none' }}
       />
+      {seq && <span className={styles.seq}>{seq}</span>}
       <span className={cx(styles.title, dim && styles.titleQuiet)}>{title}</span>
       {meta && <span className={styles.meta}>{meta}</span>}
       {chevron && <Icon color={cssVar.colorTextQuaternary} icon={chevron} size={15} />}
@@ -339,6 +351,7 @@ const GoalAcceptanceHierarchy = memo<GoalAcceptanceHierarchyProps>(({ tree }) =>
               chevron={expanded.has(level.key) ? ChevronDown : ChevronRight}
               dim={level.state === 'unavailable'}
               meta={tallyText(level.checks)}
+              seq={level.node.seq ? `#${level.node.seq}` : undefined}
               state={level.state}
               title={level.node.node.title}
               onToggle={() => toggle(level.key)}
