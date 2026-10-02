@@ -7,13 +7,17 @@ import type {
   GoalReportMetadata,
   TaskItem,
 } from '@lobechat/types';
+import { GoalReportMetadataSchema } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { decideNextMove, selectFrontier } from './decideNextMove';
 import {
+  alignGoalReportStoryline,
+  backfillGoalReportDetours,
   buildGoalReportInstruction,
   buildGoalReportSkeleton,
   decideGoalReport,
+  reconcileGoalReport,
   validateGoalReport,
 } from './report';
 
@@ -391,6 +395,43 @@ describe('buildGoalReportSkeleton', () => {
   });
 
   /**
+   * Regression: with the default wrap-up model the stored report carried zero
+   * detours even though the skeleton listed two. The instruction read as an
+   * invitation ("decide which detours are worth telling"), so a weak model
+   * dropped them all and the promised detour chapter never appeared. When the
+   * skeleton found candidate detours, the contract must make one mandatory.
+   */
+  it('requires at least one detour when the skeleton offers candidate detours', () => {
+    const text = buildGoalReportInstruction(snapshot, 'accepted', {
+      kind: 'tool',
+      toolName: 'lobe-goal-report.submitGoalReport',
+    });
+    expect(text).toContain('2 candidate detour');
+    expect(text).toContain('at least one MUST appear in your report');
+    expect(text).toContain('at least ONE of these must be told as a detour');
+  });
+
+  it('does not demand a detour when the skeleton found none', () => {
+    const noDetours = withReportDispatched(
+      graph({
+        edges: [edge('t1', 'depends_on', 'problem'), edge('acc', 'depends_on', 't1')],
+        nodes: [
+          node('problem', { kind: 'problem', status: 'resolved' }),
+          node('t1', { status: 'resolved' }),
+          acceptance({ status: 'resolved' }),
+          node('report', { title: GOAL_REPORT_TASK_TITLE }),
+        ],
+      }),
+    );
+    const text = buildGoalReportInstruction(noDetours, 'accepted', {
+      kind: 'tool',
+      toolName: 'lobe-goal-report.submitGoalReport',
+    });
+    expect(text).not.toContain('MUST appear in your report');
+    expect(text).toContain('- none');
+  });
+
+  /**
    * Regression: a heterogeneous wrap-up agent (Claude Code, Codex) never
    * receives server tools, so an instruction that only named the report tool
    * left it with no way to submit — no report could ever be stored.
@@ -440,6 +481,63 @@ describe('buildGoalReportSkeleton', () => {
     it('accepts references that belong to the Goal', () => {
       expect(
         validateGoalReport(snapshot, valid, { eventIds: new Set(['evt_old', 'evt_new']) }),
+      ).toEqual([]);
+    });
+
+    /**
+     * Regression: the default wrap-up model submitted charts-only metadata with
+     * `detours: []` for a Goal whose skeleton offered dead ends, and the store
+     * accepted it — the report on the results page had no detour chapter. The
+     * contract must reject a report that drops every candidate detour, so the
+     * agent fixes it instead of the user losing the promised detours.
+     */
+    it('rejects a report that drops every candidate detour the skeleton offered', () => {
+      const dropped = {
+        ...valid,
+        chapters: valid.chapters.map((chapter) => ({ ...chapter, detours: [] })),
+      };
+      expect(validateGoalReport(snapshot, dropped)).toEqual([
+        'chapters: the skeleton offers 2 candidate detour(s) (t1b, t0); the report must tell at least one detour, with its reason and lesson',
+      ]);
+
+      // Telling even one candidate detour satisfies the contract.
+      expect(
+        validateGoalReport(snapshot, {
+          ...valid,
+          chapters: [
+            { ...valid.chapters[0], detours: [valid.chapters[0].detours[0]] },
+            valid.chapters[1],
+          ],
+        }),
+      ).toEqual([]);
+    });
+
+    it('does not require a detour when the skeleton offered none', () => {
+      const noDetours = graph({
+        edges: [edge('t1', 'depends_on', 'problem'), edge('acc', 'depends_on', 't1')],
+        nodes: [
+          node('problem', { kind: 'problem', status: 'resolved' }),
+          node('t1', { status: 'resolved' }),
+          acceptance({ status: 'resolved' }),
+        ],
+      });
+      expect(
+        validateGoalReport(noDetours, {
+          chapters: [
+            {
+              detours: [],
+              findingIds: [],
+              narrative: 'N',
+              nodeIds: ['t1', 'acc'],
+              title: 'C1',
+              workVersionIds: [],
+            },
+          ],
+          graphCursor: 'evt_any',
+          headline: 'H',
+          mainline: { edgeIds: [], nodeIds: ['t1', 'acc'] },
+          nextSteps: [],
+        }),
       ).toEqual([]);
     });
 
@@ -547,6 +645,196 @@ describe('buildGoalReportSkeleton', () => {
           'mainline.nodeIds: acc is on the mainline but no chapter tells it',
         ]);
       });
+    });
+  });
+
+  describe('backfillGoalReportDetours', () => {
+    const detourless: GoalReportMetadata = {
+      chapters: [
+        {
+          detours: [],
+          findingIds: ['f1', 'f2'],
+          narrative: 'N',
+          nodeIds: ['t1', 't2'],
+          title: 'C1',
+          workVersionIds: ['wv_doc'],
+        },
+        {
+          detours: [],
+          findingIds: [],
+          narrative: 'N',
+          nodeIds: ['acc'],
+          title: 'C2',
+          workVersionIds: [],
+        },
+      ],
+      deliverableWorkId: 'work_doc',
+      graphCursor: 'evt_new',
+      headline: 'H',
+      mainline: {
+        edgeIds: ['t2-depends_on-t1', 'acc-depends_on-t2', 't2-produces-f2'],
+        nodeIds: ['problem', 't1', 't2', 'f2', 'acc'],
+      },
+      nextSteps: [{ nodeIds: ['t2'], reason: 'R', title: 'Next' }],
+    };
+
+    /**
+     * Regression: the default model narrated the whole path and submitted every
+     * chapter with an empty detours array — the original bug. Rejecting the
+     * whole report for that would leave the user with no storyline at all, so
+     * the store fills the detours from the candidates the skeleton found.
+     */
+    it('fills the candidates the skeleton found when the report tells none', () => {
+      const filled = backfillGoalReportDetours(snapshot, detourless);
+      expect(filled.chapters.flatMap((c) => c.detours.flatMap((d) => d.nodeIds))).toEqual([
+        't1b',
+        't0',
+      ]);
+      expect(filled.chapters[0].detours.map((detour) => detour.kind)).toEqual([
+        'superseded',
+        'dead_end',
+      ]);
+      // The narrative the agent wrote (chapter nodeIds) is untouched.
+      expect(filled.chapters.map((c) => c.nodeIds)).toEqual(
+        detourless.chapters.map((c) => c.nodeIds),
+      );
+      // The filled report is now a valid submission.
+      expect(validateGoalReport(snapshot, filled)).toEqual([]);
+    });
+
+    it('leaves a report that already tells a detour untouched', () => {
+      const told: GoalReportMetadata = {
+        ...detourless,
+        chapters: [
+          {
+            ...detourless.chapters[0],
+            detours: [{ kind: 'dead_end', lesson: 'L', nodeIds: ['t0'], reason: 'R', title: 'T' }],
+          },
+          detourless.chapters[1],
+        ],
+      };
+      expect(backfillGoalReportDetours(snapshot, told)).toBe(told);
+    });
+
+    it('does nothing when the skeleton found no detour', () => {
+      const noDetours = graph({
+        edges: [edge('t1', 'depends_on', 'problem'), edge('acc', 'depends_on', 't1')],
+        nodes: [
+          node('problem', { kind: 'problem', status: 'resolved' }),
+          node('t1', { status: 'resolved' }),
+          acceptance({ status: 'resolved' }),
+        ],
+      });
+      expect(backfillGoalReportDetours(noDetours, detourless)).toBe(detourless);
+    });
+
+    /**
+     * Regression: the default model opened a chapter for a detour and marked the
+     * acceptance node on the mainline without narrating it, so validation
+     * rejected the whole report. The storyline is reconciled with the graph, and
+     * the promised detours are still filled.
+     */
+    it('aligns a detour chapter back to a detour and drops a mainline node no chapter tells', () => {
+      const messy: GoalReportMetadata = {
+        ...detourless,
+        chapters: [
+          detourless.chapters[0],
+          {
+            detours: [],
+            findingIds: [],
+            narrative: 'A detour told as its own chapter.',
+            nodeIds: ['t0'],
+            title: 'Detour chapter',
+            workVersionIds: [],
+          },
+        ],
+        mainline: {
+          edgeIds: ['t2-depends_on-t1', 'acc-depends_on-t2', 't2-produces-f2'],
+          nodeIds: ['problem', 't1', 't2', 'f2', 'acc'],
+        },
+      };
+
+      const aligned = alignGoalReportStoryline(snapshot, messy);
+      expect(aligned.chapters.map((c) => c.nodeIds)).toEqual([['t1', 't2'], []]);
+      expect(aligned.mainline!.nodeIds).toEqual(['problem', 't1', 't2', 'f2']);
+      expect(aligned.mainline!.edgeIds).toEqual(['t2-depends_on-t1', 't2-produces-f2']);
+
+      const reconciled = reconcileGoalReport(snapshot, messy);
+      expect(
+        reconciled.chapters.flatMap((c) => c.detours.flatMap((d) => d.nodeIds)).sort(),
+      ).toEqual(['t0', 't1b']);
+      expect(validateGoalReport(snapshot, reconciled)).toEqual([]);
+    });
+
+    it('leaves a fully consistent report unchanged', () => {
+      const detached: GoalReportMetadata = {
+        chapters: [
+          {
+            detours: [
+              { kind: 'superseded', lesson: 'L', nodeIds: ['t1b'], reason: 'R', title: 'Old' },
+            ],
+            findingIds: ['f1', 'f2'],
+            narrative: 'N',
+            nodeIds: ['t1', 't2'],
+            title: 'C1',
+            workVersionIds: ['wv_doc'],
+          },
+          {
+            detours: [],
+            findingIds: [],
+            narrative: 'N',
+            nodeIds: ['acc'],
+            title: 'C2',
+            workVersionIds: [],
+          },
+        ],
+        deliverableWorkId: 'work_doc',
+        graphCursor: 'evt_new',
+        headline: 'H',
+        mainline: {
+          edgeIds: ['t2-depends_on-t1', 'acc-depends_on-t2', 't2-produces-f2'],
+          nodeIds: ['problem', 't1', 't2', 'f2', 'acc'],
+        },
+        nextSteps: [],
+      };
+      expect(alignGoalReportStoryline(snapshot, detached)).toEqual(detached);
+      expect(validateGoalReport(snapshot, detached)).toEqual([]);
+    });
+
+    /**
+     * Regression: reconciliation must never empty the mainline.
+     * `GoalReportMetadataSchema` requires at least one mainline node, while the
+     * filter that keeps the mainline to the path the chapters tell drops every
+     * resolved task a chapter never names. A weak model that marks a mainline
+     * but gives no chapter a nodeId therefore produced `mainline.nodeIds: []`,
+     * which was persisted and then failed the schema on the next read — the
+     * recovered storyline disappeared instead of surfacing an actionable error.
+     */
+    it('never empties the mainline when no chapter tells a node', () => {
+      const unreconciled: GoalReportMetadata = {
+        chapters: [
+          {
+            detours: [
+              { kind: 'dead_end', lesson: 'L', nodeIds: ['t0'], reason: 'R', title: 'Dead' },
+            ],
+            findingIds: [],
+            narrative: 'The whole path, told with no chapter nodeIds.',
+            nodeIds: [],
+            title: 'C1',
+            workVersionIds: [],
+          },
+        ],
+        graphCursor: 'evt_new',
+        headline: 'H',
+        mainline: { edgeIds: ['t2-depends_on-t1'], nodeIds: ['t1', 't2'] },
+        nextSteps: [],
+      };
+      expect(GoalReportMetadataSchema.safeParse(unreconciled).success).toBe(true);
+
+      const reconciled = reconcileGoalReport(snapshot, unreconciled);
+
+      expect(reconciled.mainline!.nodeIds.length).toBeGreaterThan(0);
+      expect(GoalReportMetadataSchema.safeParse(reconciled).success).toBe(true);
     });
   });
 });

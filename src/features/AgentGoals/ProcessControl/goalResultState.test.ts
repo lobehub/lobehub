@@ -16,7 +16,9 @@ import {
   findFinalAcceptanceView,
   findGoalAcceptanceGate,
   findOpenChangeRequest,
+  goalResultHeadline,
   hasGoalResult,
+  isGoalReportOrganizing,
   latestRoundRunId,
   resultTrailSource,
 } from './goalResultState';
@@ -792,5 +794,29 @@ describe('buildStoryChapters', () => {
     expect(chapters[0].detourNodeIds).toEqual(['dead']);
     expect(chapters[1].artifacts.map((item) => item.workVersionId)).toEqual(['v-1']);
     expect(chapters[1].detourNodeIds).toEqual([]);
+  });
+});
+
+describe('goalResultHeadline', () => {
+  const reportAt = (status: string, headline?: string) =>
+    ({
+      report: { latest: headline ? { metadata: { headline } } : undefined, status },
+    }) as unknown as Pick<GoalGraphView, 'report'>;
+
+  /**
+   * Regression: a new result's wrap-up runs while `report.latest` is still the
+   * version written for the previous one, so the header named the old result on
+   * top of the rework. The headline of this result only exists once its own run
+   * has landed; until then the caller shows the organizing state.
+   */
+  it('names this result, but never the previous one while the next is being written', () => {
+    expect(goalResultHeadline(reportAt('completed', 'Shipped the brief'))).toBe(
+      'Shipped the brief',
+    );
+    expect(goalResultHeadline(reportAt('running', 'Old headline'))).toBeUndefined();
+    expect(isGoalReportOrganizing(reportAt('running', 'Old headline'))).toBe(true);
+
+    expect(goalResultHeadline(reportAt('completed'))).toBeUndefined();
+    expect(isGoalReportOrganizing(reportAt('completed', 'Shipped the brief'))).toBe(false);
   });
 });

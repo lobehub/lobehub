@@ -10,6 +10,30 @@ import { z } from 'zod';
  */
 const idList = z.array(z.string().trim().min(1)).max(200);
 
+/**
+ * The shapes a client uses to say "this id is not set". A wrap-up agent reads
+ * "Final deliverable: none linked to the graph." and copies a placeholder into
+ * `deliverableWorkId` instead of omitting the field, so a Goal that produced no
+ * deliverable could never submit its report. All of these mean the same as
+ * leaving the field out.
+ */
+const NO_VALUE_TOKENS = new Set(['', '-', '—', 'n/a', 'na', 'nil', 'none', 'null', 'undefined']);
+
+/**
+ * An optional id that folds the "no value" shapes into absence: `null`, an
+ * empty or blank string, and a placeholder such as `"none"` all parse as
+ * `undefined`, exactly as if the field were omitted. Anything else must still be
+ * a real, non-empty id — a wrong id is rejected downstream, not silently
+ * dropped.
+ */
+const optionalId = z.preprocess((value) => {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (trimmed === '' || NO_VALUE_TOKENS.has(trimmed.toLowerCase())) return undefined;
+  return trimmed;
+}, z.string().trim().min(1).optional());
+
 export const goalReportDetourKinds = ['dead_end', 'superseded', 'retry'] as const;
 export type GoalReportDetourKind = (typeof goalReportDetourKinds)[number];
 
@@ -62,7 +86,12 @@ export type GoalReportMainline = z.infer<typeof GoalReportMainlineSchema>;
 export const GoalReportMetadataSchema = z
   .object({
     chapters: z.array(GoalReportChapterSchema).min(1).max(30),
-    deliverableWorkId: z.string().trim().min(1).optional(),
+    /**
+     * The Goal's final deliverable, when it produced one. A placeholder such as
+     * `""` or `"none"` is read as "no deliverable" rather than rejected, so a
+     * Goal without one can still report.
+     */
+    deliverableWorkId: optionalId,
     /** The newest `goal_events.id` the report was written against. */
     graphCursor: z.string().trim().min(1),
     headline: z.string().trim().min(1).max(500),

@@ -2,13 +2,14 @@
 
 import type { GoalGraphDecision } from '@lobechat/types';
 import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Button, Text, TextArea, toast } from '@lobehub/ui/base-ui';
+import { Button, Spin, Text, TextArea, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useGoalStore } from '@/store/goal';
+import { shinyTextStyles } from '@/styles';
 
 import { coordinatorGateReason, coordinatorReasonCopy } from './coordinatorCopy';
 import { useGateOptionLabel } from './Frontier';
@@ -17,6 +18,8 @@ import {
   deriveGoalResultStatus,
   findGoalAcceptanceGate,
   findOpenChangeRequest,
+  goalResultHeadline,
+  isGoalReportOrganizing,
 } from './goalResultState';
 import type { GoalResultData } from './useGoalResultData';
 
@@ -117,6 +120,7 @@ interface GoalResultHeaderProps {
 }
 
 const GoalResultHeader = ({ data, graph }: GoalResultHeaderProps) => {
+  const { t } = useTranslation('chat');
   const { goal } = graph;
   const { outcomes } = data;
   const gate = findGoalAcceptanceGate(graph);
@@ -128,14 +132,34 @@ const GoalResultHeader = ({ data, graph }: GoalResultHeaderProps) => {
     goalStatus: goal.status,
     unmetCriteria: outcomes.filter((outcome) => outcome.state === 'failed').length,
   });
-  const headline = graph.report?.latest?.metadata.headline;
+  const organizing = isGoalReportOrganizing(graph);
+  const headline = goalResultHeadline(graph);
 
   return (
     <Flexbox data-goal-result-status={status} gap={14}>
-      {headline && (
-        <Text fontSize={20} style={{ lineHeight: 1.4 }} weight={600}>
-          {headline}
-        </Text>
+      {organizing ? (
+        // The next wrap-up is writing this result's title. `report.latest` is
+        // still the previous version, so naming it here put the old result on
+        // top of the rework. Say that this one is being organized instead, with
+        // the same pending animation the storyline section uses; the title
+        // swaps in by itself when the run completes.
+        <Flexbox horizontal align={'center'} gap={8} role={'status'}>
+          <Spin size={'small'} variant={'network'} />
+          <Text
+            className={shinyTextStyles.shinyText}
+            fontSize={20}
+            style={{ lineHeight: 1.4 }}
+            weight={600}
+          >
+            {t('goalProcess.result.headline.pending')}
+          </Text>
+        </Flexbox>
+      ) : (
+        headline && (
+          <Text fontSize={20} style={{ lineHeight: 1.4 }} weight={600}>
+            {headline}
+          </Text>
+        )
       )}
       {status === 'awaitingDecision' && gate?.kind === 'pending' && (
         <DecisionStrip
