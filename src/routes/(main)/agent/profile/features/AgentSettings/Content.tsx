@@ -1,7 +1,7 @@
 'use client';
 
 import isEqual from 'fast-deep-equal';
-import { ActivityIcon, GitBranchIcon, MessageSquareHeartIcon } from 'lucide-react';
+import { ActivityIcon, GitBranchIcon, IdCardIcon, MessageSquareHeartIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
@@ -22,6 +22,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 const TAB_META = {
   [ChatSettingsTabs.Graph]: { icon: GitBranchIcon, labelKey: 'agentTab.graph' },
+  [ChatSettingsTabs.Identity]: { icon: IdCardIcon, labelKey: 'agentTab.identity' },
   [ChatSettingsTabs.Opening]: { icon: MessageSquareHeartIcon, labelKey: 'agentTab.opening' },
   [ChatSettingsTabs.SelfIteration]: {
     icon: ActivityIcon,
@@ -48,6 +49,7 @@ const Content = memo(() => {
     () =>
       [
         ChatSettingsTabs.Opening,
+        ChatSettingsTabs.Identity,
         enableAgentSelfIteration ? ChatSettingsTabs.SelfIteration : null,
         showGraphTab ? ChatSettingsTabs.Graph : null,
       ].filter(Boolean) as ChatSettingsTabs[],
