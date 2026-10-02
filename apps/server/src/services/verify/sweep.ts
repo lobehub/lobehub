@@ -543,6 +543,15 @@ const enterJudging = async (
       }),
     });
 
+    // `execute` ends by rolling the round up **by operation**, and the finalizer
+    // resolves the run the same way. Both return silently if the operation was
+    // deleted mid-judge, so there is no error for the catch below to react to and
+    // the run would stay leased in `verifying` — invisible to the next sweep's
+    // operation-scoped scan. Roll up by run id under the held lease so the verdict
+    // the executor just produced actually lands. Idempotent: `rollUp` derives the
+    // status from the plan and results, so a run already settled is left alone.
+    await statusService.recomputeByRunId(run.id);
+
     await finalizeVerifyRun(db, userId, operationId, {}, workspaceId);
   } catch (error) {
     // The operation can also be deleted *after* the lookup above: the FK nulls

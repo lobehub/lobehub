@@ -440,6 +440,11 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
       expect.objectContaining({ deliverable: 'final patch text', goal: '', operationId: 'op-1' }),
     );
     expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+    // The executor and the finalizer both address the round by operation, and both
+    // return silently if it is deleted mid-judge — so the recovered verdict must
+    // also land through the run id, or the run would stay leased in `verifying`
+    // with no error to fall back on.
+    expect(recomputeByRunId).toHaveBeenCalledWith('ev-run-1');
   });
 
   // Each recovery is a full judge pass run inside the cron request; an
