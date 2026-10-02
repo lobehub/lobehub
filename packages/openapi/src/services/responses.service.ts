@@ -1,6 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 
-import { InMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
+import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import type {
   StreamChunkData,
   StreamEvent,
@@ -434,8 +434,20 @@ export class ResponsesService extends BaseService {
         type: 'response.in_progress' as const,
       };
 
-      // 2. Create AgentRuntimeService with custom stream manager for event subscription
-      const streamEventManager = new InMemoryStreamEventManager();
+      // 2. Create AgentRuntimeService with the shared stream manager.
+      //
+      // Deliberately NOT a bare in-memory manager. `execAgent` above already
+      // registered this operation with the agent-gateway Durable Object
+      // (`publishAgentRuntimeInit`), and that DO only closes the session on an
+      // `agent_runtime_end`. Executing on a private manager nobody mirrors
+      // leaves the DO holding an operation that finished long ago as `running`,
+      // so its inactivity watchdog abandons the run ~10 minutes later and
+      // writes an `Operation abandoned: inactivity_watchdog` failure on top of a
+      // turn that already succeeded. The shared manager also carries every
+      // mid-run event to the DO, which is what keeps a long run off that
+      // watchdog in the first place. This is the same manager — and the same
+      // subscription call — the SSE route `/api/agent/stream` uses.
+      const streamEventManager = createStreamEventManager();
       const agentRuntimeService = new AgentRuntimeService(this.db, this.userId, {
         queueService: null,
         streamEventManager,
@@ -447,13 +459,22 @@ export class ResponsesService extends BaseService {
       let resolveWaiting: (() => void) | null = null;
       let executionDone = false;
 
-      const unsubscribe = streamEventManager.subscribe(operationId, (events) => {
-        eventQueue.push(...events);
-        if (resolveWaiting) {
-          resolveWaiting();
-          resolveWaiting = null;
-        }
-      });
+      const subscriptionAbort = new AbortController();
+      const subscription = streamEventManager.subscribeStreamEvents(
+        operationId,
+        '0',
+        (events) => {
+          eventQueue.push(...events);
+          if (resolveWaiting) {
+            resolveWaiting();
+            resolveWaiting = null;
+          }
+        },
+        subscriptionAbort.signal,
+      );
+      // The subscription resolves on the terminal event (or on abort) and must
+      // never surface as an unhandled rejection while we await the run itself.
+      void subscription.catch(() => {});
 
       // Helper to wait for next event batch
       const waitForEvents = (): Promise<void> =>
@@ -741,7 +762,15 @@ export class ResponsesService extends BaseService {
 
       // 6. Wait for execution to fully complete
       await executionPromise;
-      unsubscribe();
+      // Close the subscription. `subscribeStreamEvents` also resolves on the
+      // terminal event; aborting covers a run that never published one.
+      subscriptionAbort.abort();
+      await subscription.catch(() => {});
+      // Make sure the gateway pushes this invocation issued (including the
+      // terminal event that closes the DO session) land before the function can
+      // be frozen. Nothing else guarantees an unawaited push survives the end of
+      // the request.
+      await streamEventManager.drainPushes?.(operationId);
 
       // If no text came through streaming, extract from final state
       if (!accumulatedText && finalState) {
