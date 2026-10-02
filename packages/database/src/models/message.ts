@@ -4271,7 +4271,7 @@ export class MessageModel {
             .update(messages)
             .set({
               content: resolution.content,
-              metadata: sql`case when ${messages.metadata}->'toolResultControl' is not null then jsonb_set(${messages.metadata}, '{toolResultControl,status}', '"pending"'::jsonb) else ${messages.metadata} end`,
+              metadata: sql`case when coalesce(${messages.metadata}, '{}'::jsonb) ? 'toolResultControl' then jsonb_set(${messages.metadata}, '{toolResultControl,status}', '"pending"'::jsonb) else ${messages.metadata} end`,
             })
             .where(and(eq(messages.id, resolution.id), this.ownership()))
             .returning({ id: messages.id });
