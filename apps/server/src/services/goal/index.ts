@@ -40,7 +40,6 @@ import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
-import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
@@ -749,9 +748,10 @@ export class GoalService {
    * still have no idea whether it held up, which is the gap that made the page
    * feel unverifiable.
    *
-   * The current round's tally rides along so the page can show each level's
-   * standing without opening it. It is one extra batched read, never one per
-   * acceptance — this runs on every graph poll.
+   * Each level's tally rides along so the page can show its standing without
+   * opening it. That tally is counted from the same check union the level
+   * expands to (so a summary row can never contradict its own list), and it is
+   * one batched read, never one per acceptance — this runs on every graph poll.
    */
   private collectAcceptances = async (
     graph: GoalGraphSnapshot,
@@ -769,11 +769,9 @@ export class GoalService {
 
     // An acceptance with no round yet is absent from the tally map, not zero —
     // keep "no round" and "judged nothing" apart on the page.
-    const tallies = await new VerifyRunModel(
-      this.db,
-      this.userId,
-      this.workspaceId,
-    ).findCurrentTalliesByAcceptances(rows.map((row) => row.id));
+    const tallies = await this.acceptanceService.getCheckTalliesByAcceptances(
+      rows.map((row) => row.id),
+    );
 
     const result: Record<string, GoalNodeAcceptance> = {};
     for (const row of rows) {
