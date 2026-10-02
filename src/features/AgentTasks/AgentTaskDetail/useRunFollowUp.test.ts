@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   canUseResource: true,
   openTopicDrawer: vi.fn(),
   prefetchMessages: vi.fn().mockResolvedValue(undefined),
-  sendMessage: vi.fn().mockResolvedValue(undefined),
+  sendMessage: vi.fn(),
+  toastError: vi.fn(),
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -33,6 +34,12 @@ vi.mock('@/features/Conversation/hooks/useConversationResourceAccess', () => ({
   }),
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: mocks.toastError } }));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
 const run = {
   agentId: 'agt_1',
   author: { id: 'agt_1', name: 'Email Agent', type: 'agent' },
@@ -49,12 +56,30 @@ const context = {
   topicId: 'topic-1',
 };
 
+/** The happy path: the server takes ownership and reports acceptance. */
+const acceptSend = () => {
+  mocks.sendMessage.mockImplementation(async (params: any) => {
+    params?.onMessageAccepted?.();
+    return { assistantMessageId: 'msg_a', userMessageId: 'msg_u' };
+  });
+};
+
+/**
+ * A gateway/network refusal to start the run: `sendMessage` catches the failure
+ * and resolves `undefined` without ever accepting the message.
+ */
+const refuseSend = () => {
+  mocks.sendMessage.mockResolvedValue(undefined);
+};
+
 beforeEach(() => {
   mocks.canUseResource = true;
   mocks.prefetchMessages.mockClear();
-  mocks.sendMessage.mockClear();
+  mocks.sendMessage.mockReset();
   mocks.openTopicDrawer.mockClear();
   mocks.addComment.mockClear();
+  mocks.toastError.mockClear();
+  acceptSend();
 });
 
 describe('resolveRunAgentId', () => {
@@ -79,15 +104,19 @@ describe('useRunFollowUp', () => {
   it('sends the follow-up as a user message in the run topic', async () => {
     const { result } = renderHook(() => useRunFollowUp(run));
 
+    let sent: boolean | undefined;
     await act(async () => {
-      await result.current.submitFollowUp('再补一下 email 通道的联调');
+      sent = await result.current.submitFollowUp('再补一下 email 通道的联调');
     });
 
-    expect(mocks.sendMessage).toHaveBeenCalledWith({
-      context,
-      forceRuntime: 'gateway',
-      message: '再补一下 email 通道的联调',
-    });
+    expect(mocks.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context,
+        forceRuntime: 'gateway',
+        message: '再补一下 email 通道的联调',
+      }),
+    );
+    expect(sent).toBe(true);
   });
 
   it('hydrates the topic before sending so the message threads onto its history', async () => {
@@ -116,6 +145,19 @@ describe('useRunFollowUp', () => {
     });
   });
 
+  it('does not hand the send a composer editor to refill', async () => {
+    const { result } = renderHook(() => useRunFollowUp(run));
+
+    await act(async () => {
+      await result.current.submitFollowUp('hello');
+    });
+
+    // An inline reply has no composer editor of its own. Without `null` the send
+    // lifecycle falls back to ChatStore's global editor — a different surface —
+    // and writes this message into it on failure.
+    expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ inputEditor: null }));
+  });
+
   it('does not file the follow-up as a task comment', async () => {
     const { result } = renderHook(() => useRunFollowUp(run));
 
@@ -126,6 +168,39 @@ describe('useRunFollowUp', () => {
     // A comment is addressed to the task: it reaches the agent only on a later
     // task run and never enters the conversation it was written under.
     expect(mocks.addComment).not.toHaveBeenCalled();
+  });
+
+  it('reports failure and stays closed when the gateway refuses the send', async () => {
+    // Regression: a refused start resolves `undefined`, so awaiting the send
+    // looked like success — the drawer opened and both callers closed the reply
+    // editor, discarding the draft the user had just typed.
+    refuseSend();
+    const { result } = renderHook(() => useRunFollowUp(run));
+
+    let sent: boolean | undefined;
+    await act(async () => {
+      sent = await result.current.submitFollowUp('please follow up');
+    });
+
+    expect(sent).toBe(false);
+    expect(mocks.openTopicDrawer).not.toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalledWith('taskDetail.followUpFailed');
+  });
+
+  it('reports failure when the send throws', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.sendMessage.mockRejectedValue(new Error('network down'));
+    const { result } = renderHook(() => useRunFollowUp(run));
+
+    let sent: boolean | undefined;
+    await act(async () => {
+      sent = await result.current.submitFollowUp('please follow up');
+    });
+
+    expect(sent).toBe(false);
+    expect(mocks.openTopicDrawer).not.toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalledWith('taskDetail.followUpFailed');
+    consoleError.mockRestore();
   });
 
   it('refuses to send when the member may only view the shared topic', async () => {

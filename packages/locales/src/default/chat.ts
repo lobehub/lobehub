@@ -1714,6 +1714,7 @@ export default {
   'taskDetail.reportedByAgent': 'the agent',
   'taskDetail.runFollowUp': 'Ask a follow-up',
   'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',
+  'taskDetail.followUpFailed': 'Couldn’t send the follow-up. Your message is kept — try again.',
   'taskDetail.collapseReply': 'Collapse',
   'taskDetail.replyInThread': 'Reply in this thread',
   'taskDetail.replyPlaceholder': 'Reply in this thread...',

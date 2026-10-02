@@ -70,8 +70,9 @@ const TaskRunReport = memo<TaskRunReportProps>(({ activity }) => {
         <RunReplyEditor
           onCancel={() => setCommenting(false)}
           onSubmit={async (text) => {
-            await submitFollowUp(text);
-            setCommenting(false);
+            // Close the editor only once the message was accepted: a refused
+            // send keeps the draft so it can be retried.
+            if (await submitFollowUp(text)) setCommenting(false);
           }}
         />
       ) : (
