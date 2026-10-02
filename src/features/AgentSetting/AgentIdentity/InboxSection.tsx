@@ -1,12 +1,13 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, Skeleton, Text } from '@lobehub/ui/base-ui';
+import { Button, Skeleton, Text } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineError from './InlineError';
 import SectionHeader from './SectionHeader';
 import { identityStyles } from './styles';
 import { useAgentInbox } from './useAgentIdentity';
@@ -57,11 +58,10 @@ const InboxSection = memo<InboxSectionProps>(({ agentId }) => {
     return (
       <Flexbox gap={10}>
         {header}
-        <Alert
-          showIcon
-          description={t('identity.inbox.loadFailed.desc')}
-          message={t('identity.inbox.loadFailed.title')}
-          type={'error'}
+        <InlineError
+          detail={error instanceof Error ? error.message : String(error)}
+          summary={t('identity.inbox.loadFailed')}
+          onRetry={() => void mutate()}
         />
       </Flexbox>
     );
