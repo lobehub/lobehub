@@ -448,7 +448,22 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(executorExecute).toHaveBeenCalledWith(
       expect.objectContaining({ deliverable: 'final patch text', goal: '', operationId: 'op-1' }),
     );
-    expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+    // A recovered judge holds the deliverable and model config, so it must
+    // finalize with the same report context the inline lifecycle passes — the
+    // empty `{}` would drive the task but never create the report card.
+    expect(finalizeVerifyRun).toHaveBeenCalledWith(
+      db,
+      'u1',
+      'op-1',
+      {
+        report: {
+          deliverable: 'final patch text',
+          goal: '',
+          modelConfig: { model: 'gpt-4o', provider: 'openai' },
+        },
+      },
+      undefined,
+    );
     // The executor and the finalizer both address the round by operation, and both
     // return silently if it is deleted mid-judge — so the recovered verdict must
     // also land through the run id, or the run would stay leased in `verifying`
@@ -791,5 +806,28 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(outcome.abandoned).toEqual([]);
     // Still reported, so the tick surfaces the failure.
     expect(outcome.skipped).toBe(1);
+  });
+
+  it('retries the close without the operation link when the FK rejects it', async () => {
+    // The operation can be deleted between the claim and these writes. The FK then
+    // rejects the captured link, and without a retry the exception would leave the
+    // run leased in `verifying` with its link cleared — invisible to both scans.
+    singleEvidencePage([evidenceRun()]);
+    loadAgentState.mockResolvedValue(null);
+    upsertByCheckItem
+      .mockRejectedValueOnce(new Error('insert or update violates foreign key constraint'))
+      .mockResolvedValue(undefined);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(upsertByCheckItem).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ operationId: 'op-1' }),
+    );
+    expect(upsertByCheckItem).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ operationId: null, status: 'errored', verifyRunId: 'ev-run-1' }),
+    );
+    expect(outcome.abandoned).toEqual(['ev-run-1']);
   });
 });

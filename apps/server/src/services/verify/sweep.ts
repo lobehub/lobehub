@@ -415,28 +415,39 @@ const closeOutstandingAsErrored = async (
 
   // Bounded: the plan is one entry per acceptance criterion, so its length is
   // persisted runtime data, not a constant.
-  await pMap(
-    plan.filter((item) => item.required),
-    (item) =>
-      // Upsert, not update: an item with no row at all must still land as
-      // `errored`, and a pending row (evidence uploaded mid-run) is closed too.
-      // `operationId` is passed through as-is: it is null once the Agent Run was
-      // deleted, and writing the dangling id would violate the FK.
-      resultModel.upsertByCheckItem({
-        ...planItemToPendingResult(run.id, operationId, item),
-        // Re-asserted after the spread: the upsert key is required, and the
-        // snapshot's own fields are optional-nullable.
-        checkItemId: item.id,
-        verifyRunId: run.id,
-        completedAt: now,
-        status: 'errored',
-        suggestion: 'Rerun verification for this delivery.',
-        toulmin: {
-          limitation: 'Evidence collection was interrupted before this check was judged.',
-        },
-      }),
-    { concurrency: 5 },
-  );
+  const closeRows = (linkOperationId: string | null) =>
+    pMap(
+      plan.filter((item) => item.required),
+      (item) =>
+        // Upsert, not update: an item with no row at all must still land as
+        // `errored`, and a pending row (evidence uploaded mid-run) is closed too.
+        resultModel.upsertByCheckItem({
+          ...planItemToPendingResult(run.id, linkOperationId, item),
+          // Re-asserted after the spread: the upsert key is required, and the
+          // snapshot's own fields are optional-nullable.
+          checkItemId: item.id,
+          verifyRunId: run.id,
+          completedAt: now,
+          status: 'errored',
+          suggestion: 'Rerun verification for this delivery.',
+          toulmin: {
+            limitation: 'Evidence collection was interrupted before this check was judged.',
+          },
+        }),
+      { concurrency: 5 },
+    );
+
+  try {
+    await closeRows(operationId);
+  } catch (error) {
+    // The operation can be deleted between the claim above and this write: the FK
+    // then rejects the captured link (`onDelete: 'set null'` only rewrites the
+    // run's own column, not rows written afterwards). Retry without it — the rows
+    // still have to close, or the run would stay leased in `verifying` with its
+    // link cleared and no scan able to see it.
+    if (!operationId) throw error;
+    await closeRows(null);
+  }
 
   // Settle by run id, not by operation: when the Agent Run was deleted the FK
   // clears `verify_runs.operation_id`, and the operation-addressed rollup would
@@ -574,7 +585,22 @@ const enterJudging = async (
     // status from the plan and results, so a run already settled is left alone.
     await statusService.recomputeByRunId(run.id);
 
-    await finalizeVerifyRun(db, userId, operationId, {}, workspaceId);
+    await finalizeVerifyRun(
+      db,
+      userId,
+      operationId,
+      {
+        // The same report context the inline lifecycle passes: a recovered judge
+        // holds the frozen deliverable and the resolved model config, so a
+        // terminal settle must produce the same report card instead of skipping it.
+        report: {
+          deliverable: resolvedDeliverable,
+          goal: run.goal ?? '',
+          modelConfig,
+        },
+      },
+      workspaceId,
+    );
   } catch (error) {
     // The operation can also be deleted *after* the lookup above: the FK nulls
     // `verify_runs.operation_id`, so every operation-addressed step here (the
