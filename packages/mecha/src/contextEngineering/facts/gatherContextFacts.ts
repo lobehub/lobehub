@@ -454,6 +454,8 @@ export const gatherContextFacts = async (
       attempt('agentDocuments', () =>
         docsAgentId ? providers.listAgentDocuments?.(docsAgentId) : undefined,
       ),
+    () =>
+      attempt('agentAccountContext', () => providers.listAgentAccountContext?.(request.agentId)),
     () => gatherAgentBuilderContext(request, providers),
     () => gatherAgentManagementContext(request, providers),
     () => gatherComposioServices(request, providers),
@@ -478,6 +480,7 @@ export const gatherContextFacts = async (
 
   const [
     agentDocuments,
+    agentAccountContext,
     agentBuilderContext,
     agentManagementContext,
     composioServicesList,
@@ -495,6 +498,7 @@ export const gatherContextFacts = async (
   return {
     agentDocuments: agentDocuments?.length ? agentDocuments : undefined,
     step: {
+      agentAccountContext,
       agentBuilderContext,
       agentManagementContext,
       groupAgentBuilderContext,

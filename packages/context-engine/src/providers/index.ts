@@ -1,5 +1,9 @@
 // Context Provider exports
 export { ActiveTopicDocumentContextInjector } from './ActiveTopicDocumentContextInjector';
+export {
+  AgentAccountContextInjector,
+  type AgentAccountContextInjectorConfig,
+} from './AgentAccountContextInjector';
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
 export {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
@@ -12,11 +16,10 @@ export {
 export { AgentIdentityInjector } from './AgentIdentityInjector';
 export { AgentManagementContextInjector } from './AgentManagementContextInjector';
 export { BotPlatformContextInjector } from './BotPlatformContextInjector';
+export { ConnectorOwnershipInjector } from './ConnectorOwnershipInjector';
 export { ContextSelectionsInjector } from './ContextSelectionsInjector';
 export { DiscordContextProvider } from './DiscordContextProvider';
-export { ConnectorOwnershipInjector } from './ConnectorOwnershipInjector';
 export { EvalContextSystemInjector } from './EvalContextSystemInjector';
-export { ProjectInstructionsInjector } from './ProjectInstructionsInjector';
 export {
   buildExpertiseContextSnapshot,
   ExpertiseContextInjector,
@@ -36,6 +39,7 @@ export { OnboardingSyntheticStateInjector } from './OnboardingSyntheticStateInje
 export { PageEditorContextInjector } from './PageEditorContextInjector';
 export { PageSelectionsInjector } from './PageSelectionsInjector';
 export { PlanInjector } from './PlanInjector';
+export { ProjectInstructionsInjector } from './ProjectInstructionsInjector';
 export { RuntimeAdditionalContextProvider } from './RuntimeAdditionalContextProvider';
 export {
   formatSelectedSkills,
@@ -94,14 +98,10 @@ export type {
   BotPlatformContext,
   BotPlatformContextInjectorConfig,
 } from './BotPlatformContextInjector';
+export type { ConnectorOwnershipInjectorConfig } from './ConnectorOwnershipInjector';
 export type { ContextSelectionsInjectorConfig } from './ContextSelectionsInjector';
 export type { DiscordContext, DiscordContextProviderConfig } from './DiscordContextProvider';
-export type { ConnectorOwnershipInjectorConfig } from './ConnectorOwnershipInjector';
 export type { EvalContext, EvalContextSystemInjectorConfig } from './EvalContextSystemInjector';
-export type {
-  ProjectInstructionFile,
-  ProjectInstructionsInjectorConfig,
-} from './ProjectInstructionsInjector';
 export type {
   ExpertiseContextInjectorConfig,
   ExpertiseContextSource,
@@ -129,6 +129,10 @@ export type {
 export type { PageEditorContextInjectorConfig } from './PageEditorContextInjector';
 export type { PageSelectionsInjectorConfig } from './PageSelectionsInjector';
 export type { Plan, PlanInjectorConfig } from './PlanInjector';
+export type {
+  ProjectInstructionFile,
+  ProjectInstructionsInjectorConfig,
+} from './ProjectInstructionsInjector';
 export type { RuntimeAdditionalContextProviderConfig } from './RuntimeAdditionalContextProvider';
 export type { SelectedSkillInjectorConfig } from './SelectedSkillInjector';
 export type { SelectedToolInjectorConfig } from './SelectedToolInjector';

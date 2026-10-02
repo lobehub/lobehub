@@ -297,6 +297,27 @@ export class AgentAccountModel {
   };
 
   /**
+   * Resolve an account by id without a user scope.
+   *
+   * Used by the inbound path, which learns an account id from a verified
+   * (provider, identifier) match and then needs the row's `agentId` / owner to
+   * file the message. Authorization is the caller's job — exactly like
+   * {@link findByRoutingKey}.
+   */
+  static findByIdUnscoped = async (
+    db: LobeChatDatabase,
+    id: string,
+  ): Promise<AgentAccountView | undefined> => {
+    const [row] = await db
+      .select(viewColumns)
+      .from(agentAccounts)
+      .where(eq(agentAccounts.id, id))
+      .limit(1);
+
+    return row;
+  };
+
+  /**
    * Decrypt an account's credential while resolving an inbound webhook, so the
    * signature can be verified *before* the request is trusted. The trust model
    * is the same as the bot path: nothing else may call this.

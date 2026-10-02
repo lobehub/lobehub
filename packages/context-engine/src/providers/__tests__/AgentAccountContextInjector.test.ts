@@ -1,0 +1,95 @@
+import type { AgentAccountContext } from '@lobechat/types';
+import { describe, expect, it } from 'vitest';
+
+import type { PipelineContext } from '../../types';
+import { AgentAccountContextInjector } from '../AgentAccountContextInjector';
+
+const createContext = (): PipelineContext => ({
+  initialState: { messages: [], model: 'test-model', provider: 'test-provider' },
+  isAborted: false,
+  messages: [
+    { content: 'You are toby.', role: 'system' },
+    { content: 'hello', role: 'user' },
+  ],
+  metadata: { maxTokens: 4000, model: 'test-model' },
+});
+
+const context: AgentAccountContext = {
+  accounts: [
+    {
+      capabilities: { receive: true, send: true },
+      displayName: 'Toby mailbox',
+      identifier: 'toby-agent@lobe.id',
+      kind: 'mail',
+      provider: 'agent-mail',
+      status: 'active',
+    },
+    {
+      capabilities: { receive: true, send: false },
+      identifier: '+15550002222',
+      kind: 'phone',
+      provider: 'linq',
+      status: 'active',
+    },
+  ],
+  inbox: {
+    latest: [
+      {
+        accountId: 'acct-1',
+        agentId: 'agent-1',
+        codes: ['839201'],
+        createdAt: new Date('2026-10-02T12:00:00.000Z'),
+        from: 'login@service.com',
+        id: 'msg-1',
+        kind: 'mail',
+        readAt: null,
+        receivedAt: new Date('2026-10-02T12:00:00.000Z'),
+        subject: 'Your verification code',
+        text: 'Your verification code is 839201. It expires in 10 minutes.',
+        threadKey: null,
+        to: 'toby-agent@lobe.id',
+      },
+    ],
+    unreadCount: 1,
+  },
+};
+
+describe('AgentAccountContextInjector', () => {
+  it('appends the agent addresses and inbox to the system message', async () => {
+    const result = await new AgentAccountContextInjector({ context }).process(createContext());
+
+    const system = result.messages.find((m) => m.role === 'system');
+    const content = String(system?.content ?? '');
+
+    expect(content).toContain('You are toby.');
+    expect(content).toContain('<agent_identity>');
+    expect(content).toContain(
+      'mail toby-agent@lobe.id (Toby mailbox) — agent-mail, can receive/send',
+    );
+    expect(content).toContain('phone +15550002222 — linq, can receive');
+    expect(content).toContain('<inbox unread="1">');
+    expect(content).toContain('from login@service.com');
+    expect(content).toContain('codes 839201');
+    expect(content).toContain('</agent_identity>');
+  });
+
+  it('injects nothing when the agent has no accounts and no unread mail', async () => {
+    const result = await new AgentAccountContextInjector({
+      context: { accounts: [], inbox: { latest: [], unreadCount: 0 } },
+    }).process(createContext());
+
+    const content = String(result.messages.find((m) => m.role === 'system')?.content ?? '');
+    expect(content).toBe('You are toby.');
+    expect(content).not.toContain('<agent_identity>');
+  });
+
+  it('is disabled outright when enabled is false', async () => {
+    const result = await new AgentAccountContextInjector({ context, enabled: false }).process(
+      createContext(),
+    );
+
+    expect(String(result.messages.find((m) => m.role === 'system')?.content ?? '')).toBe(
+      'You are toby.',
+    );
+  });
+});

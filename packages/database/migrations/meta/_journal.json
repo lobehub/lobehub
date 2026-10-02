@@ -1218,6 +1218,13 @@
       "when": 1790854414712,
       "tag": "0173_agent_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 174,
+      "version": "7",
+      "when": 1790944118140,
+      "tag": "0174_agent_inbox_messages",
+      "breakpoints": true
     }
   ],
   "version": "6"

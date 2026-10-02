@@ -1,5 +1,6 @@
 import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
+import { AgentAccountManifest } from '@lobechat/builtin-tool-agent-account';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import {
   AgentDocumentsManifest,
@@ -177,6 +178,10 @@ export const groupSupervisorToolIds = [GroupManagementManifest.identifier];
  */
 export const runtimeManagedToolIds = [
   AttachmentsManifest.identifier,
+  // Enabled by a runtime rule (`hasIdentityAccount`) rather than by user
+  // selection: the identity/inbox state reaches the model as context, so this
+  // tool only exists for an agent that actually owns an account.
+  AgentAccountManifest.identifier,
   BrowserManifest.identifier,
   CloudSandboxManifest.identifier,
   KnowledgeBaseManifest.identifier,
@@ -429,6 +434,14 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: CredsManifest.identifier,
     manifest: CredsManifest,
+    type: 'builtin',
+  },
+  {
+    // Runtime-managed: enabled only when the agent owns an account, so it is
+    // not a user-facing row and not an always-on tool.
+    hidden: true,
+    identifier: AgentAccountManifest.identifier,
+    manifest: AgentAccountManifest,
     type: 'builtin',
   },
   {
