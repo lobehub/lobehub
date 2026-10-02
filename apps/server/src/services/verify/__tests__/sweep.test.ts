@@ -8,6 +8,7 @@ const {
   settleFailedRepair,
   claimVerifying,
   claimVerifyingByRunId,
+  restoreEvidenceCollection,
   createVerifierAgentRunner,
   executorExecute,
   findStuckVerifying,
@@ -28,6 +29,7 @@ const {
   settleFailedRepair: vi.fn(),
   claimVerifying: vi.fn(),
   claimVerifyingByRunId: vi.fn(),
+  restoreEvidenceCollection: vi.fn(),
   createVerifierAgentRunner: vi.fn(),
   executorExecute: vi.fn(),
   finalizeVerifyRun: vi.fn(),
@@ -66,7 +68,13 @@ vi.mock('@/database/models/agentOperation', () => ({
 }));
 vi.mock('../statusService', () => ({
   VerifyStatusService: vi.fn(function () {
-    return { claimVerifying, claimVerifyingByRunId, recompute, recomputeByRunId };
+    return {
+      claimVerifying,
+      claimVerifyingByRunId,
+      recompute,
+      recomputeByRunId,
+      restoreEvidenceCollection,
+    };
   }),
 }));
 vi.mock('../repairTerminal', () => ({ settleFailedRepair }));
@@ -114,6 +122,7 @@ beforeEach(() => {
     settleFailedRepair,
     claimVerifying,
     claimVerifyingByRunId,
+    restoreEvidenceCollection,
     createVerifierAgentRunner,
     executorExecute,
     finalizeVerifyRun,
@@ -758,19 +767,25 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     );
     expect(recomputeByRunId).toHaveBeenCalledWith('ev-run-1');
     expect(outcome.abandoned).toEqual(['ev-run-1']);
+    // The deletion path settles; it does not hand the run back for a retry.
+    expect(restoreEvidenceCollection).not.toHaveBeenCalled();
   });
 
-  it('rethrows a judging failure that is not the operation vanishing', async () => {
-    // A transient judge failure must NOT be swallowed into an `errored` close:
-    // the run keeps its operation, so a later tick can retry it.
+  it('hands a transiently failed recovery back to the evidence scan', async () => {
+    // Winning the claim moved the run out of `collecting_evidence`, and only the
+    // evidence scan can retry the judge. The failure must restore that state
+    // rather than leave the run in `verifying`, where the verifying half would
+    // eventually close its checks `errored` and lose the recovered evidence.
     singleEvidencePage([evidenceRun()]);
     recordHeterogeneousDeliverableEvidence.mockRejectedValueOnce(new Error('transient boom'));
 
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
-    expect(outcome.skipped).toBe(1);
+    expect(restoreEvidenceCollection).toHaveBeenCalledWith('ev-run-1');
     expect(upsertByCheckItem).not.toHaveBeenCalled();
     expect(recomputeByRunId).not.toHaveBeenCalled();
     expect(outcome.abandoned).toEqual([]);
+    // Still reported, so the tick surfaces the failure.
+    expect(outcome.skipped).toBe(1);
   });
 });

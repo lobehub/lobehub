@@ -151,6 +151,20 @@ export class VerifyStatusService {
     return claimed;
   }
 
+  /**
+   * Put a run back into `collecting_evidence` after a recovery attempt failed for
+   * a reason other than the operation disappearing.
+   *
+   * The evidence scan is the only one that can retry the inline judge — it is the
+   * half that re-reads the frozen deliverable from the hook. So a failed recovery
+   * has to rest in the state that scan selects; leaving it in `verifying` would
+   * drop it from the evidence scan, and the `verifying` half would eventually
+   * close its checks `errored`, losing the recovered evidence for good.
+   */
+  async restoreEvidenceCollection(runId: string): Promise<void> {
+    await this.runModel.updateStatus(runId, 'collecting_evidence');
+  }
+
   /** Explicit transitions that aren't derivable from results alone. */
   async markVerifying(operationId: string) {
     await this.setStatus(operationId, 'verifying');

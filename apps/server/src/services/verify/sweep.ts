@@ -559,11 +559,19 @@ const enterJudging = async (
     // backfill's run lookup, the executor) fails while the run we hold stays
     // leased in `verifying` — where the next sweep's operation-scoped scan can no
     // longer see it. Settle it by run id under the lease instead of stranding it.
-    // Any other failure is re-thrown, so the tick records it and a later one can
-    // retry the still-operation-bound run.
     if (!(await new AgentOperationModel(db, userId, workspaceId).findById(operationId))) {
       return closeOutstandingAsErrored(db, run, null, now, 'abandoned', { leaseHeld: true });
     }
+
+    // Not the operation vanishing — a transient failure (acceptance lookup,
+    // deliverable resolution, model config, the judge call). The claim moved the
+    // run out of `collecting_evidence`, and the evidence scan is the only half
+    // that can retry the judge, so hand the run back to it. Otherwise the run
+    // would rest in `verifying`: that scan no longer selects it, and the
+    // `verifying` half would eventually close its checks `errored`, losing the
+    // recovered evidence for good. Re-thrown afterwards so the tick records the
+    // failure; the backfill it redoes is idempotent.
+    await statusService.restoreEvidenceCollection(run.id);
     throw error;
   }
 
