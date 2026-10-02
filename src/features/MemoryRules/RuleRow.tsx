@@ -22,6 +22,8 @@ interface RuleRowProps {
   onEnforcement: (next: ExpertiseEnforcement) => void;
   onSelect: () => void;
   rule: RuleItem;
+  /** Whether the row sits in an agent's part, where what the reviewer wrote was taught to it. */
+  taughtToAgent?: boolean;
 }
 
 /**
@@ -37,6 +39,7 @@ const RuleRow = ({
   onEnforcement,
   onSelect,
   rule,
+  taughtToAgent,
 }: RuleRowProps) => {
   const { t } = useTranslation('memory');
   const archived = rule.status === 'retired';
@@ -65,7 +68,11 @@ const RuleRow = ({
         <div style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'baseline'} gap={6} wrap={'wrap'}>
             <span className={styles.title}>{rule.title}</span>
-            {authored && <Tag size={'small'}>{t('rules.tag.authored')}</Tag>}
+            {authored && (
+              <Tag size={'small'}>
+                {t(taughtToAgent ? 'rules.tag.taught' : 'rules.tag.authored')}
+              </Tag>
+            )}
             {rule.specificity === 'one-off' && !archived && (
               <Tooltip title={t('rules.origin.oneOff')}>
                 <Tag size={'small'}>{t('rules.tag.oneOff')}</Tag>

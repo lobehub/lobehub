@@ -117,6 +117,9 @@ export class ExpertiseRuleRepository {
       if (!from || !into) return null;
       // Folding into an archived rule would leave neither rule in force.
       if (from.status !== 'active' || into.status !== 'active') return null;
+      // Folding across reaches (the reviewer's rules vs an agent's lessons, or two agents) would
+      // change which runs receive it; only newer clients hide those targets, so refuse it here.
+      if (!(await model.sameReach(from.domainId, into.domainId))) return null;
 
       const revision = into.currentRevision + 1;
       // The evidence stays where it is; `generalizedFromIds` is how the target reads it.

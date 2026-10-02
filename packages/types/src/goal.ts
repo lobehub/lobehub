@@ -246,6 +246,13 @@ export interface GoalManagerState {
   dispatchNeverStarted?: boolean;
   operationId?: string;
   /**
+   * Management conversations this Goal planned in before a handoff moved it to
+   * another agent's topic. `topicId` always points at the current agent's
+   * conversation; the earlier ones are kept here so the turns already spent in
+   * them keep counting toward the Goal's management usage and budget.
+   */
+  previousTopicIds?: string[];
+  /**
    * The problem this turn was invited to take over, when the coordinator handed
    * one over instead of opening a human gate. Its presence is what separates a
    * takeover turn from ordinary planning: an `escalate` from a takeover turn puts

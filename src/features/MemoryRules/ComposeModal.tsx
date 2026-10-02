@@ -71,6 +71,11 @@ interface GroupChoice {
 }
 
 interface ComposeContentProps {
+  /**
+   * Whether a new group may be opened from here. A new group always mounts on the reviewer, so
+   * writing into an agent's part must stay within that agent's existing groups.
+   */
+  canOpenGroup?: boolean;
   defaultGroupId?: string;
   groups: RuleGroup[];
   onCreated: (id: string) => void;
@@ -82,6 +87,7 @@ interface ComposeContentProps {
  * myself" skips the draft and lands on the same review form.
  */
 const ComposeContent = ({
+  canOpenGroup = true,
   defaultGroupId,
   groups: initialGroups,
   onCreated,
@@ -142,7 +148,7 @@ const ComposeContent = ({
       if (drafted.groupId) {
         setGroupId(drafted.groupId);
         setNewGroup(null);
-      } else if (drafted.newGroup) {
+      } else if (drafted.newGroup && canOpenGroup) {
         setGroupId(undefined);
         setNewGroup(drafted.newGroup);
       }
@@ -318,7 +324,7 @@ const ComposeContent = ({
                       setNewGroup(null);
                     },
                   })),
-                  ...(newGroup
+                  ...(newGroup && canOpenGroup
                     ? [
                         {
                           key: 'proposed',
@@ -327,13 +333,17 @@ const ComposeContent = ({
                         },
                       ]
                     : []),
-                  { type: 'divider' as const },
-                  {
-                    icon: <Icon icon={FolderPlusIcon} />,
-                    key: 'new',
-                    label: t('rules.actions.newGroup'),
-                    onClick: addGroup,
-                  },
+                  ...(canOpenGroup
+                    ? [
+                        { type: 'divider' as const },
+                        {
+                          icon: <Icon icon={FolderPlusIcon} />,
+                          key: 'new',
+                          label: t('rules.actions.newGroup'),
+                          onClick: addGroup,
+                        },
+                      ]
+                    : []),
                 ]}
               >
                 <span className={styles.chip}>

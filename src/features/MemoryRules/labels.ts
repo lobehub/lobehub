@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import type { RuleItem, RuleRevision, RuleScope } from '@/services/expertise';
+import type { RuleGroup, RuleItem, RuleRevision, RuleScope } from '@/services/expertise';
 
 export type RuleSectionKey = 'rule' | 'why' | 'how' | 'limits';
 
@@ -45,6 +45,34 @@ export const ruleOrigin = (
   if (rejections > 0) return { key: 'distilled', params: { hits: rejections } } as const;
   if (conversations > 0) return { key: 'observed', params: { hits: conversations } } as const;
   return { key: 'learned' } as const;
+};
+
+/** One part of the page: the reviewer's own rules, or everything one agent learned. */
+export interface OwnerSection {
+  groups: RuleGroup[];
+  key: string;
+  owner: RuleGroup['owner'];
+}
+
+/**
+ * Splits the server's groups into the page's parts, keeping the server's order: the reviewer's
+ * rules always come first (and always appear, so writing a first rule has a place to land),
+ * then one part per agent.
+ */
+export const sectionsByOwner = (groups: RuleGroup[]): OwnerSection[] => {
+  const mine: OwnerSection = { groups: [], key: 'mine', owner: { kind: 'mine' } };
+  const agents = new Map<string, OwnerSection>();
+  for (const group of groups) {
+    if (group.owner.kind === 'mine') {
+      mine.groups.push(group);
+      continue;
+    }
+    const key = `agent:${group.owner.agent.id}`;
+    const section = agents.get(key) ?? { groups: [], key, owner: group.owner };
+    section.groups.push(group);
+    agents.set(key, section);
+  }
+  return [mine, ...agents.values()];
 };
 
 /** Where a rule went when it was archived by a merge, or null for a plain archive. */

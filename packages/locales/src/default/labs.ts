@@ -48,9 +48,6 @@ export default {
     'Show the Integrations settings page: connect the GitHub App so merged pull requests accept deliveries and failing checks or reviews reach the agent that opened them. Hidden by default.',
   'features.integrations.title': 'Integrations',
   'features.inputMarkdown.title': 'Input Markdown Rendering',
-  'features.memoryRules.desc':
-    'Adds "My rules" under Memory: the delivery rules distilled from the acceptance rounds you sent back, with ordering, grouping and block / remind controls.',
-  'features.memoryRules.title': 'My rules',
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
@@ -64,7 +61,7 @@ export default {
     'Add an Acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Acceptance',
   'features.selfLearning.desc':
-    'Show what each agent has learned from real practice — its rule base, which rules actually get used, and which layers are still blank.',
+    'Learn from practice: the rounds you send back become rules, and each agent picks up lessons from its own runs — both go with the agent into every run. See them all under Memory → Self-evolving.',
   'features.selfLearning.title': 'Self-evolving',
   'group.desktop': 'Desktop',
   'group.general': 'General',

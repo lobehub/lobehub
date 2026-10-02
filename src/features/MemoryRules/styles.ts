@@ -72,6 +72,11 @@ export const styles = createStaticStyles(({ css }) => ({
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
   `,
+  ownerCount: css`
+    font-size: 12px;
+    font-weight: 400;
+    color: ${cssVar.colorTextTertiary};
+  `,
   row: css`
     cursor: pointer;
 

@@ -112,7 +112,6 @@ export default {
   'rules.archived.byYou': 'archived by you',
   'rules.archived.group': 'Archived ({{count}})',
   'rules.archived.mergedInto': 'merged into "{{title}}"',
-  'rules.backlog': '{{count}} rejected rounds have not been read yet',
   'rules.columns.code': 'No.',
   'rules.columns.enforcement': 'Effect',
   'rules.columns.method': 'Check',
@@ -143,10 +142,6 @@ export default {
   'rules.compose.submit': 'Save',
   'rules.compose.titlePlaceholder': 'The rule in one sentence',
   'rules.compose.why': 'Why it matters (optional)',
-  'rules.empty.description':
-    'Rules grow out of the checks you send back — the reason you wrote, and the spot you circled.',
-  'rules.empty.title': 'No rules yet',
-  'rules.empty.write': 'Or write one first',
   'rules.enforcement.block': 'Block',
   'rules.enforcement.blockDesc':
     'Will hold the delivery until you let it through. Not in effect yet: for now it only reminds',
@@ -195,9 +190,9 @@ export default {
   'rules.group.submitCreate': 'Create',
   'rules.group.submitRename': 'Save',
   'rules.labOff.description':
-    'Turn it on under Settings → Labs to see the delivery rules distilled from the rounds you sent back.',
+    'Turn on Self-evolving under Settings → Labs to see your rules and what each agent has learned.',
   'rules.labOff.open': 'Open Labs',
-  'rules.labOff.title': 'My rules is still in the lab',
+  'rules.labOff.title': 'Self-evolving is still in the lab',
   'rules.merge.banner':
     'Click the rule to merge into — "{{title}}" will be archived and its sources and counts move over.',
   'rules.merge.cancel': 'Cancel',
@@ -210,6 +205,23 @@ export default {
   'rules.method.compilable': 'Program-assisted',
   'rules.method.compiled': 'By program',
   'rules.method.not-compilable': 'By judgement',
+  'rules.onboarding.agents.action': 'View',
+  'rules.onboarding.agents.description': '{{name}} has learned {{count}} on its own',
+  'rules.onboarding.agents.descriptionMany':
+    '{{agents}} agents have learned {{count}} on their own',
+  'rules.onboarding.agents.title': 'What agents learned',
+  'rules.onboarding.backlog': '{{count}} rounds not read yet',
+  'rules.onboarding.description':
+    'Say one thing you expect from a delivery, or paste a guideline you have; it becomes a checkable rule.',
+  'rules.onboarding.descriptionGrow':
+    'Reasons you write when sending an acceptance back grow into rules here too.',
+  'rules.onboarding.listTitle': 'Rules also come from',
+  'rules.onboarding.reject.action': 'Open',
+  'rules.onboarding.reject.description':
+    'Reject a check and say why; it is distilled when the next round lands',
+  'rules.onboarding.reject.title': 'Send back an acceptance',
+  'rules.onboarding.title': 'Write your first rule',
+  'rules.onboarding.write': 'Write a rule',
   'rules.origin.authored': 'You wrote it',
   'rules.origin.distilled': 'You sent {{hits}} rounds back over this',
   'rules.origin.distilledAndObserved':
@@ -221,6 +233,9 @@ export default {
   'rules.origin.oneOff':
     'Looks like a request about that one delivery; it becomes a standing rule once another delivery is sent back for it',
   'rules.origin.overSpecific': 'Looks tied to one page; may belong in a broader rule',
+  'rules.origin.taught': 'You taught it to this agent',
+  'rules.owner.mine': 'My rules',
+  'rules.owner.untitledAgent': 'Untitled agent',
   'rules.reason.inferred': 'inferred, you never said it',
   'rules.reason.mechanism': 'Has a reason',
   'rules.reason.reviewer': 'in your words',
@@ -256,18 +271,22 @@ export default {
   'rules.sources.rejected': 'you said it learned this wrong',
   'rules.sources.retry': 'Try again',
   'rules.sources.round': 'round {{index}}',
+  'rules.sources.taughtEmpty': 'You taught this to the agent; no feedback on record yet.',
   'rules.sources.title': 'Where it came from',
   'rules.subtitle':
-    '{{count}} in use · the agent checks every delivery against them · what you say when sending a round back lands here',
+    '{{rules}} rules of yours · {{lessons}} lessons your agents learned on their own · all of them go with the agent into every run',
+  'rules.subtitleAgentsOnly':
+    '{{lessons}} lessons your agents learned on their own · all of them go with the agent into every run',
   'rules.tag.authored': 'yours',
   'rules.tag.oneOff': 'one-off',
-  'rules.title': 'My rules',
+  'rules.tag.taught': 'taught',
+  'rules.title': 'Self-evolving',
   'tab.activities': 'Activities',
   'tab.contexts': 'Contexts',
   'tab.home': 'Home',
   'tab.identities': 'Identities',
   'tab.preferences': 'Preferences',
-  'tab.rules': 'Rules',
+  'tab.rules': 'Self-evolving',
   'tab.search': 'Search',
   'viewMode.masonry': 'Masonry',
   'viewMode.timeline': 'Timeline',

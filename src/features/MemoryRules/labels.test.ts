@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendException, findMove, revisionAuthorKey, ruleOrigin, sectionBody } from './labels';
+import type { RuleGroup } from '@/services/expertise';
+
+import {
+  appendException,
+  findMove,
+  revisionAuthorKey,
+  ruleOrigin,
+  sectionBody,
+  sectionsByOwner,
+} from './labels';
 
 describe('appendException', () => {
   it('keeps the exceptions already written and adds the new one below', () => {
@@ -84,5 +93,32 @@ describe('sectionBody', () => {
   it('reads the "no boundary given" sentence as no boundary', () => {
     const sections = [{ body: '边界未由评审者说明', key: 'limits' as const }];
     expect(sectionBody({ sections }, 'limits')).toBeUndefined();
+  });
+});
+
+describe('sectionsByOwner', () => {
+  const agent = (id: string) => ({
+    agent: { avatar: null, backgroundColor: null, id, title: id },
+    kind: 'agent' as const,
+  });
+  const group = (id: string, owner: RuleGroup['owner']) =>
+    ({ domain: { id }, owner, rules: [], scopes: [] }) as unknown as RuleGroup;
+
+  it("puts the reviewer's rules first and gathers each agent's groups together", () => {
+    const sections = sectionsByOwner([
+      group('mine-1', { kind: 'mine' }),
+      group('fox-1', agent('fox')),
+      group('owl-1', agent('owl')),
+      group('fox-2', agent('fox')),
+    ]);
+
+    expect(sections.map((s) => s.key)).toEqual(['mine', 'agent:fox', 'agent:owl']);
+    expect(sections[1].groups.map((g) => g.domain.id)).toEqual(['fox-1', 'fox-2']);
+  });
+
+  it("keeps the reviewer's part even when only agents have learned anything", () => {
+    const sections = sectionsByOwner([group('fox-1', agent('fox'))]);
+
+    expect(sections[0]).toMatchObject({ groups: [], key: 'mine' });
   });
 });
