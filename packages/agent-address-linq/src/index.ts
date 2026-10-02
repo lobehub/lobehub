@@ -13,6 +13,17 @@ export {
   LINQ_URL_MEDIA_MAX_BYTES,
   LinqApiClient,
 } from './api';
+export type { LinqDeepLink, LinqDeepLinkInput, LinqNumberOptions } from './deep-link';
+export {
+  buildLinqDeepLink,
+  createLinqLinkCode,
+  extractLinqLinkCode,
+  LINQ_LINK_CODE_ALPHABET,
+  LINQ_LINK_CODE_LENGTH,
+  LINQ_LINK_CODE_PATTERN,
+  LINQ_LINK_CODE_PREFIX,
+  normalizeLinqNumber,
+} from './deep-link';
 export { markdownToPlainText } from './format-converter';
 export type {
   LinqApiConfig,
