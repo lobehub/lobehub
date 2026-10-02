@@ -243,6 +243,7 @@ jobs:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          SPARKLE_ED_PUBLIC_KEY: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
           CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
           APP_URL: http://localhost:3015
@@ -430,6 +431,29 @@ jobs:
           channel: stable
           cloud-ref: ${{ needs.check-stable.outputs.cloud_ref }}
           version: ${{ needs.check-stable.outputs.version }}
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
+
+  publish-sparkle:
+    needs: [publish-s3, check-stable]
+    name: Publish Sparkle Appcast
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - uses: ./.github/actions/desktop-publish-sparkle
+        with:
+          channel: stable
+          version: ${{ needs.check-stable.outputs.version }}
+          server-url: ${{ secrets.UPDATE_SERVER_URL }}
+          ed-private-key: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          release-notes: ${{ needs.check-stable.outputs.release_notes }}
           aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
           s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}

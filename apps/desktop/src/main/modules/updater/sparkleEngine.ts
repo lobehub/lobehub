@@ -1,24 +1,22 @@
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
 
+import type { ProgressInfo, UpdateChannel, UpdateInfo } from '@lobechat/electron-client-ipc';
 import { app } from 'electron';
 import type { SparkleBridge, SparkleBridgeEvent } from 'electron-sparkle-updater';
 import { loadSparkleBridge } from 'electron-sparkle-updater';
-import type { ProgressInfo, UpdateInfo } from 'electron-updater';
 
 import { createLogger } from '@/utils/logger';
 
+import { getSparkleFeedUrl } from './configs';
 import type { UpdateEngine, UpdateEngineEvents } from './engine';
 
 const logger = createLogger('modules:updater:sparkle');
 
 const toUpdateInfo = (version: string, event: Partial<SparkleBridgeEvent> = {}): UpdateInfo => ({
-  files: [],
-  path: '',
+  kind: 'app',
   releaseDate: event.releaseDate ?? new Date().toISOString(),
-  releaseName: event.releaseName,
   releaseNotes: event.releaseNotes,
-  sha512: '',
   version,
 });
 
@@ -27,19 +25,25 @@ export class SparkleEngine extends EventEmitter<UpdateEngineEvents> implements U
   private available: UpdateInfo | null = null;
   private progressStartedAt = 0;
   private lastTransferred = 0;
+  private downloaded = false;
+  private feedUrl = '';
+  private finishCheck?: () => void;
 
   constructor(
     private readonly bridge: SparkleBridge,
     private readonly currentVersion: string,
+    private readonly baseUrl: string,
   ) {
     super();
     bridge.setEventHandler(this.handleEvent);
+    // Electron shutdown waits for native thread-safe callbacks to be released.
+    app.on('will-quit', () => bridge.setEventHandler(null));
   }
 
   static async create(options: {
     appcastUrl: string;
     currentVersion: string;
-  }): Promise<SparkleEngine | null> {
+  }): Promise<SparkleEngine> {
     const resourcesPath = process.resourcesPath ?? '';
     const bridge = loadSparkleBridge({
       addonPath:
@@ -50,19 +54,60 @@ export class SparkleEngine extends EventEmitter<UpdateEngineEvents> implements U
       log: (message) => logger.info(message),
       resourcesPath,
     });
-    if (!bridge) return null;
+    if (!bridge) throw new Error('Sparkle bridge unavailable');
 
     if (!bridge.init({ appcastUrl: options.appcastUrl })) {
-      logger.warn('Sparkle bridge failed to initialize, falling back to electron-updater');
-      return null;
+      throw new Error('Sparkle bridge failed to initialize');
     }
 
     bridge.setAutomaticChecks(false);
-    return new SparkleEngine(bridge, options.currentVersion);
+    const engine = new SparkleEngine(
+      bridge,
+      options.currentVersion,
+      options.appcastUrl.replace(/\/(stable|canary)\/appcast-[^/]+\.xml$/, ''),
+    );
+    engine.feedUrl = options.appcastUrl;
+    return engine;
   }
 
+  configure = (channel: UpdateChannel) => {
+    const feedUrl = getSparkleFeedUrl(this.baseUrl, channel);
+    if (feedUrl === this.feedUrl) return;
+    if (!this.bridge.init({ appcastUrl: feedUrl }))
+      throw new Error('Sparkle feed configuration failed');
+    this.feedUrl = feedUrl;
+    this.available = null;
+    this.downloaded = false;
+  };
+
   checkForUpdates = async () => {
-    this.bridge.checkForUpdates();
+    if (this.downloaded && this.available) {
+      this.emit('update-downloaded', this.available);
+      return;
+    }
+    // The bridge starts an asynchronous native cycle. Keep it in flight through download
+    // so a channel switch cannot reuse the old cycle's events for the new channel.
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => {
+          this.finishCheck = undefined;
+          reject(new Error('Sparkle update check timed out'));
+        },
+        15 * 60 * 1000,
+      );
+      this.finishCheck = () => {
+        clearTimeout(timer);
+        this.finishCheck = undefined;
+        resolve();
+      };
+      try {
+        this.bridge.checkForUpdates();
+      } catch (error) {
+        clearTimeout(timer);
+        this.finishCheck = undefined;
+        reject(error);
+      }
+    });
   };
 
   // Sparkle starts downloading as soon as the silent driver accepts the found update.
@@ -91,15 +136,20 @@ export class SparkleEngine extends EventEmitter<UpdateEngineEvents> implements U
       }
       case 'update-downloaded': {
         const info = this.available ?? toUpdateInfo(event.version ?? '');
-        this.emit('update-downloaded', event.version ? { ...info, version: event.version } : info);
+        this.available = event.version ? { ...info, version: event.version } : info;
+        this.downloaded = true;
+        this.emit('update-downloaded', this.available);
+        this.finishCheck?.();
         return;
       }
       case 'update-not-available': {
         this.emit('update-not-available', toUpdateInfo(this.currentVersion));
+        this.finishCheck?.();
         return;
       }
       case 'error': {
         this.emit('error', new Error(event.message ?? 'Sparkle update failed'));
+        this.finishCheck?.();
         return;
       }
       default: {
@@ -123,7 +173,6 @@ export class SparkleEngine extends EventEmitter<UpdateEngineEvents> implements U
 
     const progress: ProgressInfo = {
       bytesPerSecond: elapsedSeconds > 0 ? Math.round(transferred / elapsedSeconds) : 0,
-      delta: transferred - this.lastTransferred,
       percent: event.percent ?? 0,
       total: event.total ?? 0,
       transferred,

@@ -3,18 +3,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SparkleEngine } from '../sparkleEngine';
 
-const { mockLoadBridge } = vi.hoisted(() => ({ mockLoadBridge: vi.fn() }));
+const { mockLoadBridge, mockAppOn } = vi.hoisted(() => ({
+  mockAppOn: vi.fn(),
+  mockLoadBridge: vi.fn(),
+}));
 
 vi.mock('electron-sparkle-updater', () => ({ loadSparkleBridge: mockLoadBridge }));
 
-vi.mock('electron', () => ({ app: { isPackaged: true } }));
+vi.mock('electron', () => ({ app: { isPackaged: true, on: mockAppOn } }));
 
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
 }));
 
 const createBridge = () => {
-  let handler: ((event: SparkleBridgeEvent) => void) | undefined;
+  let handler: ((event: SparkleBridgeEvent) => void) | null | undefined;
   const bridge: SparkleBridge = {
     checkForUpdates: vi.fn(),
     init: vi.fn().mockReturnValue(true),
@@ -34,22 +37,22 @@ describe('SparkleEngine.create', () => {
     (process as any).resourcesPath = '/Applications/LobeHub.app/Contents/Resources';
   });
 
-  it('returns null when no bridge is available', async () => {
+  it('rejects when no bridge is available', async () => {
     mockLoadBridge.mockReturnValue(null);
 
     await expect(
       SparkleEngine.create({ appcastUrl: 'https://cdn/appcast.xml', currentVersion: '1.0.0' }),
-    ).resolves.toBeNull();
+    ).rejects.toThrow(/Sparkle bridge/);
   });
 
-  it('returns null when Sparkle fails to initialize', async () => {
+  it('rejects when Sparkle fails to initialize', async () => {
     const { bridge } = createBridge();
     vi.mocked(bridge.init).mockReturnValue(false);
     mockLoadBridge.mockReturnValue(bridge);
 
     await expect(
       SparkleEngine.create({ appcastUrl: 'https://cdn/appcast.xml', currentVersion: '1.0.0' }),
-    ).resolves.toBeNull();
+    ).rejects.toThrow(/Sparkle bridge/);
   });
 
   it('initializes with the feed url and disables Sparkle scheduled checks', async () => {
@@ -78,14 +81,23 @@ describe('SparkleEngine.create', () => {
 describe('SparkleEngine', () => {
   const setup = () => {
     const { bridge, emit } = createBridge();
-    const engine = new SparkleEngine(bridge, '1.0.0');
+    const engine = new SparkleEngine(bridge, '1.0.0', 'https://cdn');
     return { bridge, emit, engine };
   };
 
-  it('delegates commands to the bridge without a separate download step', async () => {
-    const { bridge, engine } = setup();
+  it('releases native callbacks on quit so deferred installation can finish', () => {
+    const { bridge } = setup();
+    const quit = mockAppOn.mock.calls.findLast(([event]) => event === 'will-quit')?.[1];
+    quit();
+    expect(bridge.setEventHandler).toHaveBeenLastCalledWith(null);
+  });
 
-    await engine.checkForUpdates();
+  it('delegates commands to the bridge without a separate download step', async () => {
+    const { bridge, emit, engine } = setup();
+
+    const check = engine.checkForUpdates();
+    emit({ type: 'update-not-available' });
+    await check;
     await engine.downloadUpdate();
     engine.installOnQuit();
     engine.quitAndInstall();
@@ -93,6 +105,19 @@ describe('SparkleEngine', () => {
     expect(bridge.checkForUpdates).toHaveBeenCalledTimes(1);
     expect(bridge.installUpdateOnQuit).toHaveBeenCalledTimes(1);
     expect(bridge.installUpdateNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a native check pending until the download completes', async () => {
+    const { emit, engine } = setup();
+    engine.on('error', () => {});
+    const complete = vi.fn();
+    const check = engine.checkForUpdates().then(complete);
+    emit({ type: 'update-available', version: '2.0.0' });
+    await Promise.resolve();
+    expect(complete).not.toHaveBeenCalled();
+    emit({ type: 'update-downloaded', version: '2.0.0' });
+    await check;
+    expect(complete).toHaveBeenCalledOnce();
   });
 
   it('maps the Sparkle lifecycle onto electron-updater events', () => {
@@ -168,12 +193,11 @@ describe('SparkleEngine', () => {
     expect(progress).toHaveLength(3);
     expect(progress[1]).toEqual({
       bytesPerSecond: 50,
-      delta: 100,
       percent: 50,
       total: 200,
       transferred: 100,
     });
-    expect(progress[2]).toMatchObject({ delta: 0, percent: 0, transferred: 0 });
+    expect(progress[2]).toMatchObject({ percent: 0, transferred: 0 });
     vi.useRealTimers();
   });
 });

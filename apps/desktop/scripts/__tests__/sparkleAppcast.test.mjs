@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ownZipName, previousArchives, s3KeyFromUrl } from '../sparkleAppcast.mjs';
+import { availableArches, ownZipName, previousArchives, s3KeyFromUrl } from '../sparkleAppcast.mjs';
 
 const files = [
   'LobeHub-2.2.19-canary.1-arm64-mac.zip',
@@ -67,5 +67,17 @@ describe('s3KeyFromUrl', () => {
     expect(() =>
       s3KeyFromUrl('https://evil.example.com/a.zip', 'https://cdn.example.com'),
     ).toThrow();
+  });
+});
+
+describe('partial macOS releases', () => {
+  it('publishes only the available Stable architecture', () => {
+    expect(availableArches(['LobeHub-2.2.19-arm64-mac.zip'], '2.2.19')).toEqual(['arm64']);
+    expect(availableArches(['LobeHub-2.2.19-mac.zip'], '2.2.19')).toEqual(['x64']);
+  });
+  it('ignores other versions and non-macOS archives', () => {
+    expect(
+      availableArches(['LobeHub-2.2.18-mac.zip', 'LobeHub-2.2.19-setup.exe'], '2.2.19'),
+    ).toEqual([]);
   });
 });

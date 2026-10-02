@@ -129,22 +129,19 @@ const getProtocolScheme = () => {
 
 const protocolScheme = getProtocolScheme();
 
-// Sparkle pilots on macOS canary builds only; stable keeps electron-updater.
+// Every macOS channel uses Sparkle; a release must never silently lose its updater.
 const sparklePublicKey = process.env.SPARKLE_ED_PUBLIC_KEY;
-const useSparkle =
-  process.platform === 'darwin' &&
-  isCanary &&
-  Boolean(updateServerUrl) &&
-  Boolean(sparklePublicKey);
-if (process.platform === 'darwin' && isCanary && !useSparkle) {
-  console.info('⏭️  Sparkle disabled: SPARKLE_ED_PUBLIC_KEY or UPDATE_SERVER_URL is not set');
+const useSparkle = process.platform === 'darwin';
+if (useSparkle && hasAppleCertificate && (!updateServerUrl || !sparklePublicKey)) {
+  throw new Error('macOS releases require UPDATE_SERVER_URL and SPARKLE_ED_PUBLIC_KEY');
 }
 const sparklePackageDir = useSparkle
   ? await fs.realpath(path.join(__dirname, 'node_modules/electron-sparkle-updater'))
   : null;
-const sparkleFeedUrl = useSparkle
-  ? `${stripChannelSuffix(updateServerUrl)}/canary/appcast-${arch}.xml`
-  : null;
+const sparkleFeedUrl =
+  useSparkle && updateServerUrl
+    ? `${stripChannelSuffix(updateServerUrl).replace(/\/$/, '')}/${isCanary || channel === 'beta' ? 'canary' : 'stable'}/appcast-${arch}.xml`
+    : undefined;
 
 // Determine icon file based on version type
 const getIconFileName = () => {
@@ -254,9 +251,7 @@ const config = {
   // Native modules must be unpacked from asar to work correctly
   asarUnpack: getAsarUnpackPatterns(),
 
-  ...(process.platform === 'darwin' && isCanary
-    ? { buildVersion: toSparkleBuildVersion(packageJSON.version) }
-    : {}),
+  ...(useSparkle ? { buildVersion: toSparkleBuildVersion(packageJSON.version) } : {}),
 
   detectUpdateChannel: true,
 
@@ -289,6 +284,7 @@ const config = {
   files: [
     'shell/**',
     '!shell/__tests__',
+    ...(useSparkle ? ['!shell/rescue/electron-updater.cjs'] : []),
     'package.json',
     // Exclude all node_modules first
     '!node_modules',

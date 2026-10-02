@@ -72,4 +72,6 @@ minimumReleaseAgeExclude:
   - '@auv-js/cli-win32-x64-msvc@0.0.22'
   - '@auv-js/cli@0.0.22'
   - '@auv-js/sdk@0.0.22'
-  - electron-sparkle-updater@0.5.0
+  - electron-sparkle-updater@0.5.2
+patchedDependencies:
+  electron-sparkle-updater@0.5.2: patches/electron-sparkle-updater@0.5.2.patch

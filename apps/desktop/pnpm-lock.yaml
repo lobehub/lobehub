@@ -11,6 +11,9 @@ overrides:
   vitest: 5.0.0
   zod@^4: 4.5.4
 
+patchedDependencies:
+  electron-sparkle-updater@0.5.2: 6f583444e425a99e21e374a9afab303612eb8255ee21194afdb77f347c6cc045
+
 importers:
 
   .:
@@ -31,8 +34,8 @@ importers:
         specifier: ^5.4.4
         version: 5.4.4
       electron-sparkle-updater:
-        specifier: ^0.5.0
-        version: 0.5.2(electron@43.2.0(supports-color@9.4.0))
+        specifier: 0.5.2
+        version: 0.5.2(patch_hash=6f583444e425a99e21e374a9afab303612eb8255ee21194afdb77f347c6cc045)(electron@43.2.0(supports-color@9.4.0))
       font-list:
         specifier: ^2.1.0
         version: 2.1.0
@@ -13628,7 +13631,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron-sparkle-updater@0.5.2(electron@43.2.0(supports-color@9.4.0)):
+  electron-sparkle-updater@0.5.2(patch_hash=6f583444e425a99e21e374a9afab303612eb8255ee21194afdb77f347c6cc045)(electron@43.2.0(supports-color@9.4.0)):
     dependencies:
       node-addon-api: 8.9.0
       node-gyp: 12.4.0

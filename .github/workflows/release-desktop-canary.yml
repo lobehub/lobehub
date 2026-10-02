@@ -530,7 +530,7 @@ jobs:
           s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
 
   # ============================================
-  # 发布 Sparkle appcast + delta（macOS canary 试点）
+  # 发布 Sparkle appcast + delta（macOS 整包升级）
   # 依赖 publish-s3：appcast 的 enclosure 指向 S3 上已经存在的 zip
   # ============================================
   publish-sparkle:

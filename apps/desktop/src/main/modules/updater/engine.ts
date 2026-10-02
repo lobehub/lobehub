@@ -1,18 +1,21 @@
-import type { ProgressInfo, UpdateInfo } from 'electron-updater';
+import type { ProgressInfo, UpdateChannel, UpdateInfo } from '@lobechat/electron-client-ipc';
+
+type AppUpdateInfo = Omit<UpdateInfo, 'kind'>;
 
 export interface UpdateEngineEvents {
   'checking-for-update': [];
   'download-progress': [ProgressInfo];
   'error': [Error];
-  'update-available': [UpdateInfo];
-  'update-downloaded': [UpdateInfo];
-  'update-not-available': [UpdateInfo];
+  'update-available': [AppUpdateInfo];
+  'update-downloaded': [AppUpdateInfo];
+  'update-not-available': [AppUpdateInfo];
 }
 
 export type UpdateEngineKind = 'electron-updater' | 'sparkle';
 
 export interface UpdateEngine {
   checkForUpdates: () => Promise<unknown>;
+  configure: (channel: UpdateChannel) => void;
   downloadUpdate: () => Promise<unknown>;
   installOnQuit: () => void;
   kind: UpdateEngineKind;
@@ -22,3 +25,6 @@ export interface UpdateEngine {
   ) => void;
   quitAndInstall: () => void;
 }
+
+export const createUpdateEngine = async (_channel: UpdateChannel): Promise<UpdateEngine> =>
+  (await import('./electronUpdaterEngine')).electronUpdaterEngine;

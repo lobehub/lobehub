@@ -1,5 +1,5 @@
 import { execSync, spawn } from 'node:child_process';
-import { generateKeyPairSync } from 'node:crypto';
+import { createPublicKey, generateKeyPairSync } from 'node:crypto';
 import {
   appendFileSync,
   cpSync,
@@ -17,10 +17,10 @@ import { fileURLToPath } from 'node:url';
 const DESKTOP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const WORK = path.join(DESKTOP_DIR, 'release/core-ota-e2e');
 const FEED = path.join(WORK, 'feed');
-const PORT = 8787;
-const CDP_PORT = 9333;
-const PRODUCT = 'lobehub-core-ota-e2e';
-const CHANNEL = 'stable';
+const PORT = Number(process.env.CORE_OTA_TEST_PORT || 8787);
+const CDP_PORT = Number(process.env.CORE_OTA_TEST_CDP_PORT || 9333);
+const PRODUCT = process.env.CORE_OTA_TEST_PRODUCT || 'lobehub-core-ota-e2e';
+const CHANNEL = process.env.CORE_OTA_TEST_CHANNEL || 'canary';
 const APP_VERSION = '1.0.0';
 const RELEASE = path.join(FEED, CHANNEL, APP_VERSION);
 const PLATFORM = 'darwin';
@@ -76,6 +76,10 @@ const steps = {
     const { publicKey } = keys();
     const env = {
       RENDERER_OTA_PUBLIC_KEY: publicKey,
+      SPARKLE_ED_PUBLIC_KEY: createPublicKey(publicKey)
+        .export({ format: 'der', type: 'spki' })
+        .subarray(-32)
+        .toString('base64'),
       UPDATE_CHANNEL: CHANNEL,
       UPDATE_SERVER_URL: `http://127.0.0.1:${PORT}/${CHANNEL}`,
       APP_URL: 'http://localhost:3015',
@@ -83,6 +87,10 @@ const steps = {
       KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE=',
     };
     // Electron derives userData from package.json name; productName alone would share the dev instance's data.
+    const pkg = JSON.parse(readFileSync(path.join(DESKTOP_DIR, 'package.json'), 'utf8'));
+    const backup = path.join(WORK, 'package-metadata.json');
+    if (!existsSync(backup))
+      writeFileSync(backup, JSON.stringify({ name: pkg.name, version: pkg.version }));
     sh(`npm pkg set name=${PRODUCT} version=${APP_VERSION}`);
     if (!existsSync(path.join(DESKTOP_DIR, 'dist/renderer/apps/desktop/index.html'))) {
       sh('npm run build:main', env);
@@ -235,7 +243,14 @@ const steps = {
   },
 
   restore() {
-    sh('git checkout -- package.json');
+    const file = path.join(DESKTOP_DIR, 'package.json');
+    const pkg = JSON.parse(readFileSync(file, 'utf8'));
+    if (pkg.name !== PRODUCT || pkg.version !== APP_VERSION)
+      throw new Error('Test package metadata changed; refusing to overwrite it');
+    const backup = path.join(WORK, 'package-metadata.json');
+    const original = JSON.parse(readFileSync(backup, 'utf8'));
+    writeFileSync(file, JSON.stringify({ ...pkg, ...original }, null, 2) + '\n');
+    rmSync(backup);
   },
 };
 

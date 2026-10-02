@@ -1,6 +1,8 @@
 import { autoUpdater } from 'electron-updater';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as EngineModule from '@/modules/updater/engine';
+
 import type { App as AppCore } from '../../App';
 import { UpdaterManager } from '../UpdaterManager';
 
@@ -14,6 +16,18 @@ const { mockGetAllWindows, mockLoadSparkleBridge, mockReleaseSingleInstanceLock 
 );
 
 vi.mock('electron-sparkle-updater', () => ({ loadSparkleBridge: mockLoadSparkleBridge }));
+
+// Production resolves engine.mac.ts through the existing Vite platform plugin.
+vi.mock('@/modules/updater/engine', async (importOriginal) => {
+  const original = await importOriginal<typeof EngineModule>();
+  return {
+    ...original,
+    createUpdateEngine: async (channel: 'stable' | 'canary') =>
+      process.platform === 'darwin'
+        ? (await import('@/modules/updater/engine.mac')).createUpdateEngine(channel)
+        : original.createUpdateEngine(channel),
+  };
+});
 
 // Mock electron-log
 vi.mock('electron-log', () => ({
@@ -64,6 +78,7 @@ vi.mock('electron', () => ({
   app: {
     getVersion: vi.fn().mockReturnValue('0.0.0'),
     isPackaged: true,
+    on: vi.fn(),
     releaseSingleInstanceLock: mockReleaseSingleInstanceLock,
   },
 }));
@@ -96,6 +111,8 @@ vi.mock('@/const/env', () => ({
   isWindows: false,
 }));
 
+const originalPlatform = process.platform;
+
 describe('UpdaterManager', () => {
   let updaterManager: UpdaterManager;
   let mockApp: AppCore;
@@ -104,6 +121,7 @@ describe('UpdaterManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(process, 'platform', { value: 'win32' });
     vi.useFakeTimers();
     mockLoadSparkleBridge.mockReturnValue(null);
 
@@ -150,11 +168,13 @@ describe('UpdaterManager', () => {
   });
 
   afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform });
     vi.useRealTimers();
   });
 
   describe('constructor', () => {
-    it('should set up electron-log for autoUpdater', () => {
+    it('should set up electron-log for autoUpdater', async () => {
+      await updaterManager.initialize();
       expect(autoUpdater.logger).not.toBeNull();
     });
   });
@@ -203,10 +223,16 @@ describe('UpdaterManager', () => {
     });
 
     let bridge: ReturnType<typeof createBridge>;
-    const originalPlatform = process.platform;
+    let sparkleEvents: ((event: any) => void) | undefined;
 
     beforeEach(() => {
       bridge = createBridge();
+      bridge.setEventHandler.mockImplementation((handler) => {
+        sparkleEvents = handler;
+      });
+      bridge.checkForUpdates.mockImplementation(() => {
+        sparkleEvents?.({ type: 'update-not-available' });
+      });
       mockLoadSparkleBridge.mockReturnValue(bridge);
       Object.defineProperty(process, 'platform', { value: 'darwin' });
     });
@@ -228,28 +254,64 @@ describe('UpdaterManager', () => {
       expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
     });
 
-    it('keeps stable on electron-updater even when Sparkle is available', async () => {
+    it('uses Sparkle for stable without loading electron-updater', async () => {
       await updaterManager.initialize();
-      vi.mocked(autoUpdater.checkForUpdates).mockResolvedValue({} as any);
-
       await updaterManager.checkForUpdates();
 
-      expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1);
-      expect(bridge.checkForUpdates).not.toHaveBeenCalled();
+      expect(bridge.init).toHaveBeenCalledWith({
+        appcastUrl: `https://mock.update.server/stable/appcast-${process.arch}.xml`,
+      });
+      expect(bridge.checkForUpdates).toHaveBeenCalledTimes(1);
+      expect(autoUpdater.setFeedURL).not.toHaveBeenCalled();
+      expect(autoUpdater.on).not.toHaveBeenCalled();
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
     });
 
-    it('switches engines together with the channel', async () => {
-      vi.mocked(autoUpdater.checkForUpdates).mockResolvedValue({} as any);
+    it('switches the Sparkle feed between stable and canary', async () => {
       await updaterManager.initialize();
-
       updaterManager.switchChannel('canary');
       await vi.advanceTimersByTimeAsync(0);
-      expect(bridge.checkForUpdates).toHaveBeenCalledTimes(1);
-
       updaterManager.switchChannel('stable');
       await vi.advanceTimersByTimeAsync(0);
-      expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1);
-      expect(bridge.checkForUpdates).toHaveBeenCalledTimes(1);
+
+      expect(bridge.init).toHaveBeenLastCalledWith({
+        appcastUrl: `https://mock.update.server/stable/appcast-${process.arch}.xml`,
+      });
+      expect(bridge.checkForUpdates).toHaveBeenCalledTimes(2);
+      expect(autoUpdater.setFeedURL).not.toHaveBeenCalled();
+    });
+
+    it('discards the old channel download and rechecks after its native cycle completes', async () => {
+      vi.mocked(mockApp.storeManager.get).mockReturnValue('canary');
+      bridge.checkForUpdates.mockImplementation(() => {});
+      await updaterManager.initialize();
+      const check = updaterManager.checkForUpdates();
+      sparkleEvents?.({ type: 'update-available', version: '9.9.9-canary.1' });
+      updaterManager.switchChannel('stable');
+      sparkleEvents?.({ type: 'download-progress', phase: 'download', percent: 50 });
+      sparkleEvents?.({ type: 'update-downloaded', version: '9.9.9-canary.1' });
+      await check;
+      expect(mockBroadcast).not.toHaveBeenCalledWith('updateReady', expect.anything());
+      expect(mockBroadcast).not.toHaveBeenCalledWith('updateDownloadProgress', expect.anything());
+      expect(bridge.init).toHaveBeenLastCalledWith({
+        appcastUrl: `https://mock.update.server/stable/appcast-${process.arch}.xml`,
+      });
+      expect(bridge.checkForUpdates).toHaveBeenCalledTimes(2);
+      sparkleEvents?.({ type: 'update-not-available' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(updaterManager.getUpdaterState().stage).toBe('latest');
+    });
+
+    it('reports a missing Sparkle bridge without falling back to electron-updater', async () => {
+      mockLoadSparkleBridge.mockReturnValue(null);
+      await updaterManager.initialize();
+      await updaterManager.checkForUpdates();
+      expect(updaterManager.getUpdaterState()).toEqual({
+        stage: 'error',
+        errorMessage: 'Sparkle bridge unavailable',
+      });
+      expect(autoUpdater.setFeedURL).not.toHaveBeenCalled();
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
     });
 
     it('defers install-later to Sparkle on canary', async () => {
@@ -272,7 +334,9 @@ describe('UpdaterManager', () => {
 
       sparkleEvents?.({ type: 'update-available', version: '9.9.9' });
       sparkleEvents?.({ message: 'download failed', type: 'error' });
-      await updaterManager.checkForUpdates();
+      const next = updaterManager.checkForUpdates();
+      sparkleEvents?.({ type: 'update-not-available' });
+      await next;
 
       expect(bridge.checkForUpdates).toHaveBeenCalledTimes(1);
       expect(mockBroadcast).toHaveBeenCalledWith('updateError', 'download failed');
@@ -289,7 +353,8 @@ describe('UpdaterManager', () => {
   });
 
   describe('switchChannel', () => {
-    it('should allow rollback whenever canary is the target channel', () => {
+    it('should allow rollback whenever canary is the target channel', async () => {
+      await updaterManager.initialize();
       updaterManager.switchChannel('canary');
 
       expect(autoUpdater.allowDowngrade).toBe(true);
@@ -304,7 +369,8 @@ describe('UpdaterManager', () => {
       expect(autoUpdater.allowDowngrade).toBe(true);
     });
 
-    it('should allow rollback when stable remains the target channel', () => {
+    it('should allow rollback when stable remains the target channel', async () => {
+      await updaterManager.initialize();
       updaterManager.switchChannel('stable');
 
       expect(autoUpdater.allowDowngrade).toBe(true);
@@ -560,6 +626,9 @@ describe('UpdaterManager', () => {
   });
 
   describe('installLater', () => {
+    beforeEach(async () => {
+      await updaterManager.initialize();
+    });
     it('should set autoInstallOnAppQuit to true', () => {
       updaterManager.installLater();
 

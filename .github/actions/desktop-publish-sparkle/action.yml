@@ -3,7 +3,7 @@ description: Generate, sign and upload the macOS Sparkle appcast and delta patch
 
 inputs:
   channel:
-    description: 'Update channel (canary)'
+    description: 'Update channel (stable or canary)'
     required: true
   version:
     description: 'Release version (e.g., 2.1.29-canary.1)'
@@ -12,8 +12,8 @@ inputs:
     description: 'Public update server base URL (UPDATE_SERVER_URL)'
     required: true
   ed-private-key:
-    description: 'Sparkle EdDSA private key value; empty skips publishing'
-    required: false
+    description: 'Sparkle EdDSA private key value'
+    required: true
     default: ''
   release-notes:
     description: 'Markdown release notes embedded into the appcast item'
@@ -56,27 +56,30 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Check Sparkle publishing is configured
-      id: gate
-      shell: bash
-      env:
-        ED_PRIVATE_KEY: ${{ inputs.ed-private-key }}
-        S3_BUCKET: ${{ inputs.s3-bucket }}
-        SERVER_URL: ${{ inputs.server-url }}
-      run: |
-        if [ -z "$ED_PRIVATE_KEY" ] || [ -z "$S3_BUCKET" ] || [ -z "$SERVER_URL" ]; then
-          echo "⏭️ Sparkle publishing skipped: SPARKLE_ED_PRIVATE_KEY, S3 bucket or UPDATE_SERVER_URL not configured"
-          echo "enabled=false" >> "$GITHUB_OUTPUT"
-        else
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-        fi
-
     - name: Download merged artifacts
-      if: steps.gate.outputs.enabled == 'true'
       uses: actions/download-artifact@v7
       with:
         name: merged-release
         path: release
+
+    - name: Check Sparkle publishing is configured
+      id: gate
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        ED_PRIVATE_KEY: ${{ inputs.ed-private-key }}
+        S3_BUCKET: ${{ inputs.s3-bucket }}
+        SERVER_URL: ${{ inputs.server-url }}
+      run: |
+        if ! find release -name "*-${VERSION}*-mac.zip" -print -quit | grep -q .; then
+          echo "No macOS artifacts in this release; skipping Sparkle appcasts"
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+        elif [ -z "$ED_PRIVATE_KEY" ] || [ -z "$S3_BUCKET" ] || [ -z "$SERVER_URL" ]; then
+          echo "::error::Sparkle publishing requires SPARKLE_ED_PRIVATE_KEY, S3 bucket and UPDATE_SERVER_URL"
+          exit 1
+        else
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Fetch Sparkle tools
       if: steps.gate.outputs.enabled == 'true'

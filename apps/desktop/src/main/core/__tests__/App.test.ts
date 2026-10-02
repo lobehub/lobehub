@@ -248,8 +248,14 @@ describe('App', () => {
       expect(destroy).not.toHaveBeenCalled();
       expect(managedProcess.shutdownManagedProcesses).toHaveBeenCalledOnce();
       finish();
-      await vi.waitFor(() => expect(destroy).toHaveBeenCalledOnce());
-      expect(electronApp.quit).toHaveBeenCalledOnce();
+      await Promise.resolve();
+      await Promise.resolve();
+      // Retrying inside the cancelled native quit's microtask checkpoint is ignored on macOS.
+      expect(electronApp.quit).not.toHaveBeenCalled();
+      await vi.waitFor(() => {
+        expect(destroy).toHaveBeenCalledOnce();
+        expect(electronApp.quit).toHaveBeenCalledOnce();
+      });
       event.preventDefault.mockClear();
       beforeQuitHandler(event);
       expect(event.preventDefault).not.toHaveBeenCalled();

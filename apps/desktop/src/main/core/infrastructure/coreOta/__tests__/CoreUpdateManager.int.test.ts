@@ -27,7 +27,8 @@ const PUBLIC_KEY_PEM = publicKey.export({ format: 'pem', type: 'spki' }).toStrin
 const ABI = 'a'.repeat(64);
 const SERVER = 'https://updates.test';
 const OBJECTS = 'https://cdn.test/cas';
-const PLATFORM = process.platform as CoreManifest['platform'];
+const ORIGINAL_PLATFORM = process.platform;
+const PLATFORM = 'linux' as CoreManifest['platform'];
 
 const BASE_FILES: Record<string, string> = {
   'dist/main/index.js': 'main-v1',
@@ -202,6 +203,7 @@ const flushGc = (manager: unknown) => (manager as { gcTask: Promise<void> }).gcT
 let builtinManifest: CoreManifest;
 
 beforeEach(() => {
+  Object.defineProperty(process, 'platform', { value: 'linux' });
   vi.clearAllMocks();
   served = new Map();
   userDataDir = mkdtempSync(path.join(tmpdir(), 'core-ota-user-'));
@@ -212,6 +214,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM });
   rmSync(userDataDir, { force: true, recursive: true });
   rmSync(builtinDir, { force: true, recursive: true });
 });
@@ -226,6 +229,33 @@ const mainChanged = (version: string, seq: number) =>
   buildManifest(version, seq, { ...BASE_FILES, 'dist/main/index.js': `main-${version}` });
 
 describe('CoreUpdateManager initialize', () => {
+  it('disables manual and scheduled OTA on macOS Stable', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+    const { manager } = await loadManager();
+    manager.startScheduledChecks();
+    await manager.checkForUpdates({ manual: true });
+    expect(manager.enabled).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('enables Canary OTA after leaving macOS Stable and clears it when switching back', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+    const { manager } = await loadManager();
+    manager.startScheduledChecks();
+    manager.switchChannel('canary');
+    expect(manager.enabled).toBe(true);
+    manager.switchChannel('stable');
+    expect(manager.enabled).toBe(false);
+    expect(readPointer(otaRoot(), ABI)).toMatchObject({
+      current: null,
+      previous: null,
+      staged: null,
+      channel: 'stable',
+    });
+    await manager.checkForUpdates({ manual: true });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('checks for updates in the background immediately after startup and hourly thereafter', async () => {
     vi.useFakeTimers();
     try {

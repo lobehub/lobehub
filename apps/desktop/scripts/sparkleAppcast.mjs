@@ -152,10 +152,16 @@ export const publishArch = (arch, options) => {
   console.info(`published ${feedKey} for ${version}`);
 };
 
+export const availableArches = (fileNames, version) =>
+  ARCHES.filter((arch) => {
+    const suffix = arch === 'arm64' ? `-${version}-arm64-mac.zip` : `-${version}-mac.zip`;
+    return fileNames.some((name) => name.endsWith(suffix));
+  });
+
 const main = () => {
   const { values } = parseArgs({
     options: {
-      'arches': { default: ARCHES.join(','), type: 'string' },
+      'arches': { type: 'string' },
       'bucket': { type: 'string' },
       'channel': { type: 'string' },
       'delta-bases': { default: '1', type: 'string' },
@@ -200,7 +206,15 @@ const main = () => {
     sparkleBin: values['sparkle-bin'],
     version: values.version,
   };
-  for (const arch of values.arches.split(',')) publishArch(arch, options);
+  const fileNames = readdirSync(values['release-dir']);
+  const arches = values.arches
+    ? values.arches.split(',')
+    : availableArches(fileNames, values.version);
+  if (!arches.length) throw new Error('No macOS archives to publish');
+  for (const arch of arches) {
+    if (!ARCHES.includes(arch)) throw new Error(`Unsupported architecture: ${arch}`);
+    publishArch(arch, options);
+  }
 };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url).pathname) {

@@ -6,28 +6,15 @@ import type {
   UpdaterState,
 } from '@lobechat/electron-client-ipc';
 import { app as electronApp } from 'electron';
-import log from 'electron-log';
-import { autoUpdater } from 'electron-updater';
 import semver from 'semver';
 
 import { isDev, isWindows } from '@/const/env';
-import { getDesktopEnv } from '@/env';
-import {
-  getSparkleFeedUrl,
-  isSparkleChannel,
-  UPDATE_CHANNEL,
-  UPDATE_SERVER_URL,
-  updaterConfig,
-} from '@/modules/updater/configs';
-import { electronUpdaterEngine } from '@/modules/updater/electronUpdaterEngine';
-import type { UpdateEngine } from '@/modules/updater/engine';
-import { SparkleEngine } from '@/modules/updater/sparkleEngine';
+import { UPDATE_CHANNEL, UPDATE_SERVER_URL, updaterConfig } from '@/modules/updater/configs';
+import { createUpdateEngine, type UpdateEngine } from '@/modules/updater/engine';
 import { extractRestoreRoute } from '@/modules/updater/utils';
 import { createLogger } from '@/utils/logger';
 
 import type { App as AppCore } from '../App';
-
-const FORCE_DEV_UPDATE_CONFIG = getDesktopEnv().FORCE_DEV_UPDATE_CONFIG;
 
 const logger = createLogger('core:UpdaterManager');
 
@@ -37,8 +24,7 @@ export class UpdaterManager {
   private downloading: boolean = false;
   private updateAvailable: boolean = false;
   private currentChannel: UpdateChannel = UPDATE_CHANNEL;
-  private sparkleEngine: SparkleEngine | null = null;
-  private engine: UpdateEngine = electronUpdaterEngine;
+  private engine?: UpdateEngine;
   /** Incremented on each channel switch to invalidate in-flight checks */
   private checkGeneration: number = 0;
   /** Generation at the start of the current active check */
@@ -61,11 +47,6 @@ export class UpdaterManager {
 
   constructor(app: AppCore) {
     this.app = app;
-
-    log.transports.file.level = 'info';
-    autoUpdater.logger = log;
-
-    logger.debug(`[Updater] Log file should be at: ${log.transports.file.getFile().path}`);
   }
 
   get mainWindow() {
@@ -121,40 +102,20 @@ export class UpdaterManager {
     // Read persisted channel from store (defaults to build-time UPDATE_CHANNEL)
     this.currentChannel = this.app.storeManager.get('updateChannel') ?? UPDATE_CHANNEL;
 
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = false;
-
-    const useDevConfig = isDev || FORCE_DEV_UPDATE_CONFIG;
-    if (useDevConfig) {
-      autoUpdater.forceDevUpdateConfig = true;
-      logger.info(
-        `Using dev update config (isDev=${isDev}, FORCE_DEV_UPDATE_CONFIG=${FORCE_DEV_UPDATE_CONFIG})`,
-      );
-      logger.info('Dev mode: Using dev-app-update.yml for update configuration');
-    } else {
-      autoUpdater.allowPrerelease = this.currentChannel !== 'stable';
-      logger.info(
-        `Production mode: channel=${this.currentChannel}, allowPrerelease=${this.currentChannel !== 'stable'}`,
-      );
-      this.configureUpdateProvider();
-      this.sparkleEngine = await this.createSparkleEngine();
+    try {
+      this.engine = await createUpdateEngine(this.currentChannel);
+      this.engine.configure(this.currentChannel);
+    } catch (error) {
+      logger.error('Failed to initialize updater:', error);
+      this.setStage('error', { error: error instanceof Error ? error.message : String(error) });
+      return;
     }
-
-    // Keep every release channel rollback-capable. Assign this after configuring the provider because
-    // electron-updater's channel setter mutates allowDowngrade as a side effect.
-    autoUpdater.allowDowngrade = true;
-
-    this.engine = this.resolveEngine(this.currentChannel);
     this.registerEvents();
 
     if (updaterConfig.app.autoCheckUpdate) {
       setTimeout(() => this.checkForUpdates(), 60 * 1000);
       setInterval(() => this.checkForUpdates(), updaterConfig.app.checkUpdateInterval);
     }
-
-    logger.debug(
-      `Initialized with channel: ${autoUpdater.channel}, allowPrerelease: ${autoUpdater.allowPrerelease}, engine: ${this.engine.kind}`,
-    );
 
     logger.info('UpdaterManager initialization completed');
   };
@@ -166,23 +127,15 @@ export class UpdaterManager {
     logger.info(`Switching update channel: ${this.currentChannel} -> ${channel}`);
 
     this.currentChannel = channel;
-    autoUpdater.allowPrerelease = channel !== 'stable';
-    this.configureUpdateProvider();
-
-    // Reapply after configureUpdateProvider for the same channel-setter side effect as initialize.
-    autoUpdater.allowDowngrade = true;
-    logger.info('allowDowngrade=true');
-
-    this.engine = this.resolveEngine(channel);
-    logger.info(`Update engine: ${this.engine.kind}`);
-
     this.installLaterVersion = null;
+    this.updateAvailable = false;
+    this.latestUpdateInfo = null;
 
     this.mainWindow.broadcast('updateChannelChanged', channel);
 
     // Invalidate any in-flight check and schedule a recheck
     this.checkGeneration++;
-    if (this.checking) {
+    if (this.checking || this.downloading) {
       this.pendingRecheck = true;
     } else {
       this.checkForUpdates();
@@ -194,31 +147,19 @@ export class UpdaterManager {
    */
   public checkForUpdates = async ({ manual = false }: { manual?: boolean } = {}) => {
     if (manual) void this.app.coreUpdateManager.checkForUpdates({ manual: true });
-    if (this.checking || this.downloading) return;
+    if (!this.engine || this.checking || this.downloading) return;
 
     this.checking = true;
     this.activeGeneration = this.checkGeneration;
-
-    autoUpdater.allowPrerelease = this.currentChannel !== 'stable';
 
     logger.info(
       `${manual ? 'Manually checking' : 'Auto checking'} for updates... (gen=${this.activeGeneration})`,
     );
 
-    logger.info('[Updater Config] Engine:', this.engine.kind);
-    logger.info('[Updater Config] Channel:', autoUpdater.channel);
-    logger.info('[Updater Config] currentChannel:', this.currentChannel);
-    logger.info('[Updater Config] allowPrerelease:', autoUpdater.allowPrerelease);
-    logger.info('[Updater Config] currentVersion:', autoUpdater.currentVersion?.version);
-    logger.info('[Updater Config] allowDowngrade:', autoUpdater.allowDowngrade);
-    logger.info('[Updater Config] autoDownload:', autoUpdater.autoDownload);
-    logger.info('[Updater Config] forceDevUpdateConfig:', autoUpdater.forceDevUpdateConfig);
-    logger.info('[Updater Config] Build channel from config:', UPDATE_CHANNEL);
-    logger.info('[Updater Config] UPDATE_SERVER_URL:', UPDATE_SERVER_URL || '(not set)');
-
     this.setStage('checking');
 
     try {
+      this.engine.configure(this.currentChannel);
       await this.engine.checkForUpdates();
     } catch (error) {
       if (this.isStaleCheck()) return;
@@ -268,7 +209,7 @@ export class UpdaterManager {
    * Download update
    */
   public downloadUpdate = async () => {
-    if (this.downloading || !this.updateAvailable) return;
+    if (!this.engine || this.downloading || !this.updateAvailable) return;
 
     this.downloading = true;
     logger.info('Downloading update...');
@@ -306,6 +247,7 @@ export class UpdaterManager {
    * Install update immediately
    */
   public installNow = () => {
+    if (!this.engine || !this.updateAvailable) return;
     logger.info('Installing update now...');
 
     this.captureRestoreRoute();
@@ -327,8 +269,8 @@ export class UpdaterManager {
     app.releaseSingleInstanceLock();
 
     setTimeout(() => {
-      logger.info(`Calling ${this.engine.kind} quitAndInstall...`);
-      this.engine.quitAndInstall();
+      logger.info(`Calling ${this.engine?.kind} quitAndInstall...`);
+      this.engine?.quitAndInstall();
     }, 100);
   };
 
@@ -338,6 +280,7 @@ export class UpdaterManager {
   public installLater = () => {
     logger.info('Update will be installed on next restart');
 
+    if (!this.engine) return;
     this.engine.installOnQuit();
     if (this.latestUpdateInfo?.version) {
       this.installLaterVersion = this.latestUpdateInfo.version;
@@ -433,86 +376,14 @@ export class UpdaterManager {
     }, 300);
   };
 
-  /**
-   * Strip trailing channel path from URL so we can re-append the correct channel.
-   * Handles both base URL (https://cdn.example.com) and legacy URLs with channel suffixes.
-   */
-  private getBaseUpdateUrl(): string | undefined {
-    if (!UPDATE_SERVER_URL) return undefined;
-    return UPDATE_SERVER_URL.replace(/\/(stable|nightly|canary|beta)\/?$/, '');
-  }
-
-  /**
-   * Configure update provider — all channels use generic HTTP provider (S3)
-   * URL format: {base}/{channel}/
-   * electron-updater looks for {channel}-mac.yml
-   */
-  private configureUpdateProvider() {
-    const baseUrl = this.getBaseUpdateUrl();
-    if (baseUrl) {
-      const feedUrl = `${baseUrl}/${this.currentChannel}`;
-      autoUpdater.channel = this.currentChannel;
-
-      logger.info(`Configuring generic provider for ${this.currentChannel} channel`);
-      logger.info(`Update server URL: ${feedUrl}`);
-      logger.info(
-        `Channel set to: ${this.currentChannel} (will look for ${this.currentChannel}-mac.yml)`,
-      );
-
-      autoUpdater.setFeedURL({
-        provider: 'generic',
-        url: feedUrl,
-      });
-    } else {
-      // Fallback to GitHub when no S3 URL configured (local dev)
-      logger.info(
-        `No UPDATE_SERVER_URL configured, falling back to GitHub provider for ${this.currentChannel} channel`,
-      );
-
-      autoUpdater.setFeedURL({
-        owner: 'lobehub',
-        provider: 'github',
-        repo: 'lobehub',
-      });
-
-      autoUpdater.allowPrerelease = this.currentChannel !== 'stable';
-    }
-  }
-
-  private async createSparkleEngine(): Promise<SparkleEngine | null> {
-    if (process.platform !== 'darwin') return null;
-
-    const baseUrl = this.getBaseUpdateUrl();
-    if (!baseUrl) return null;
-
-    const engine = await SparkleEngine.create({
-      appcastUrl: getSparkleFeedUrl(baseUrl, 'canary'),
-      currentVersion: electronApp.getVersion(),
-    });
-    logger.info(engine ? 'Sparkle engine ready' : 'Sparkle engine unavailable');
-    return engine;
-  }
-
-  private resolveEngine(channel: UpdateChannel): UpdateEngine {
-    return isSparkleChannel(channel) && this.sparkleEngine
-      ? this.sparkleEngine
-      : electronUpdaterEngine;
-  }
-
   private registerEvents() {
-    logger.debug('Registering updater events');
-
-    this.bindEngine(electronUpdaterEngine);
-    if (this.sparkleEngine) this.bindEngine(this.sparkleEngine);
-
-    logger.debug('Updater events registered');
+    if (this.engine) this.bindEngine(this.engine);
   }
 
   private bindEngine(engine: UpdateEngine) {
     engine.on('checking-for-update', () => {
       logger.info('[Updater] Checking for update...');
-      logger.info('[Updater] Current channel:', autoUpdater.channel);
-      logger.info('[Updater] Current allowPrerelease:', autoUpdater.allowPrerelease);
+      logger.info('[Updater] Current channel:', this.currentChannel);
     });
 
     engine.on('update-available', (info) => {
@@ -542,6 +413,7 @@ export class UpdaterManager {
     });
 
     engine.on('update-not-available', (info) => {
+      if (this.isStaleCheck()) return;
       logger.info(`Update not available. Current: ${info.version}`);
 
       this.setStage('latest');
@@ -552,6 +424,7 @@ export class UpdaterManager {
 
     engine.on('error', async (err) => {
       this.downloading = false;
+      if (this.isStaleCheck()) return;
       const message = err instanceof Error ? err.message : String(err);
 
       if (this.isMissingUpdateManifestError(err)) {
@@ -564,9 +437,7 @@ export class UpdaterManager {
       }
 
       logger.error('Error in auto-updater:', err);
-      logger.error('[Updater Error Context] Channel:', autoUpdater.channel);
       logger.error('[Updater Error Context] currentChannel:', this.currentChannel);
-      logger.error('[Updater Error Context] allowPrerelease:', autoUpdater.allowPrerelease);
       logger.error('[Updater Error Context] UPDATE_SERVER_URL:', UPDATE_SERVER_URL || '(not set)');
 
       this.mainWindow.broadcast('updateError', err.message);
@@ -577,6 +448,7 @@ export class UpdaterManager {
     });
 
     engine.on('download-progress', (progressObj) => {
+      if (this.isStaleCheck()) return;
       logger.debug(
         `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`,
       );
@@ -589,6 +461,7 @@ export class UpdaterManager {
     engine.on('update-downloaded', (info) => {
       logger.info(`Update downloaded: ${info.version}`);
       this.downloading = false;
+      if (this.isStaleCheck()) return;
 
       this.maybeClearInstallLaterGuard(info.version);
 
@@ -647,7 +520,7 @@ export class UpdaterManager {
   }
 
   private getCurrentUpdateInfo(): UpdateInfo {
-    const version = autoUpdater.currentVersion?.version || electronApp.getVersion();
+    const version = electronApp.getVersion();
     return {
       kind: 'app',
       releaseDate: new Date().toISOString(),

@@ -615,7 +615,8 @@ export class App {
       .then(() => {
         this.destroyOnQuit();
         this.quitReady = true;
-        app.quit();
+        // Let the cancelled native termination return before requesting another quit.
+        setImmediate(() => app.quit());
       });
   };
 

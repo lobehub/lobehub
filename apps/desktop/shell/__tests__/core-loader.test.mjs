@@ -34,7 +34,7 @@ const writeJson = (file, value) => {
   fs.writeFileSync(file, JSON.stringify(value));
 };
 
-const writeCore = (dir, version, { shellAbi = ABI, seq, channel, mutate } = {}) => {
+const writeCore = (dir, version, { shellAbi = ABI, seq, channel, schemaVersion, mutate } = {}) => {
   const files = {
     'cli/lobe-cli.js': 'cli',
     'dist/main/index.js': `module.exports = ${JSON.stringify(version)};`,
@@ -53,6 +53,7 @@ const writeCore = (dir, version, { shellAbi = ABI, seq, channel, mutate } = {}) 
     tree,
     version,
     ...(seq === undefined ? {} : { seq }),
+    ...(schemaVersion === undefined ? {} : { schemaVersion }),
     ...(channel === undefined ? {} : { channel }),
   });
   mutate?.(dir, manifest);
@@ -64,7 +65,8 @@ const writePointer = (pointer) => writeJson(pointerFile(), { abi: ABI, ...pointe
 const writeExternal = (version, opts) =>
   writeCore(path.join(otaRoot(), 'cores', version), version, opts);
 
-const resolve = () => resolveCore({ abi: ABI, builtinDir, publicKey: publicKeyPem, userData });
+const resolve = () =>
+  resolveCore({ abi: ABI, builtinDir, platform: 'linux', publicKey: publicKeyPem, userData });
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'core-loader-'));
@@ -79,6 +81,46 @@ afterEach(() => {
 });
 
 describe('resolveCore', () => {
+  it('drops an older shell namespace after a full update even when its OTA seq is higher', () => {
+    writeCore(builtinDir, '1.0.2-canary.1', { channel: 'canary', seq: 0, schemaVersion: 4 });
+    writeExternal('1.0.1-canary.1-core.101', { channel: 'canary', seq: 101, schemaVersion: 4 });
+    writePointer({ channel: 'canary', current: '1.0.1-canary.1-core.101' });
+    const core = resolve();
+    expect(core.source).toBe('builtin');
+    expect(core.log.join(' ')).toContain('does not belong to 1.0.2-canary.1');
+  });
+
+  it('ignores staged and current OTA cores on macOS Stable even with a Canary pointer', () => {
+    writeCore(builtinDir, '1.0.0', { channel: 'stable', seq: 0 });
+    writeExternal('1.0.1-core.1', { channel: 'canary', seq: 1 });
+    writePointer({ channel: 'canary', current: '1.0.1-core.1', staged: '1.0.1-core.1' });
+    writeJson(path.join(userData, 'lobehub-settings.json'), { updateChannel: 'stable' });
+    const core = resolveCore({
+      abi: ABI,
+      builtinDir,
+      platform: 'darwin',
+      publicKey: publicKeyPem,
+      userData,
+    });
+    expect(core.source).toBe('builtin');
+    expect(readPointer()).toMatchObject({ channel: 'stable', current: null, staged: null });
+  });
+
+  it('loads OTA when a macOS Stable build has opted into Canary', () => {
+    writeCore(builtinDir, '1.0.0', { channel: 'stable', seq: 0 });
+    writeExternal('1.0.1-core.1', { channel: 'canary', seq: 1 });
+    writePointer({ channel: 'canary', current: '1.0.1-core.1' });
+    writeJson(path.join(userData, 'lobehub-settings.json'), { updateChannel: 'canary' });
+    const core = resolveCore({
+      abi: ABI,
+      builtinDir,
+      platform: 'darwin',
+      publicKey: publicKeyPem,
+      userData,
+    });
+    expect(core.source).toBe('external');
+  });
+
   it('falls back to builtin when there is no pointer', () => {
     const core = resolve();
     expect(core.source).toBe('builtin');
