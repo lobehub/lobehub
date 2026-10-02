@@ -787,6 +787,7 @@ export default {
   'inputQueue.edit': 'Edit',
   'inputQueue.enqueueRejected': 'Queue is full. Try again after the current run finishes.',
   'inputQueue.queuedHint': 'Sends when the current step finishes',
+  'inputQueue.queuedMergeHint': 'Merged and sent when the current step finishes',
   'inputQueue.sendNow': 'Send now (interrupts current run)',
   'intentUnderstanding.title': 'Understanding your intent...',
   'inviteMembers': 'Invite members',

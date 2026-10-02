@@ -1,9 +1,9 @@
 'use client';
 
-import { Flexbox, Icon, Image } from '@lobehub/ui';
+import { Flexbox, Icon, Image, Tooltip } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { ArrowUp, ListEnd, Pencil, Trash2 } from 'lucide-react';
+import { ArrowUp, Info, ListEnd, Pencil, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,9 +28,12 @@ const PREVIEW_SIZE = 28;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
+    container-type: inline-size;
+
     border: 1px solid ${cssVar.colorFillSecondary};
     border-block-end: none;
     border-radius: 12px 12px 0 0;
+
     background: ${cssVar.colorBgElevated};
   `,
   fileChip: css`
@@ -53,10 +56,29 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
   `,
   hint: css`
+    display: inline-flex;
     flex: none;
+    gap: 4px;
+    align-items: center;
+
     font-size: 12px;
     color: ${cssVar.colorTextDescription};
+  `,
+  hintGlyph: css`
+    display: none;
+
+    /* Too narrow to spare a sentence on the send timing: keep the meaning on the
+       glyph's tooltip instead of squeezing the message text. */
+    @container (max-width: 480px) {
+      display: inline-flex;
+    }
+  `,
+  hintText: css`
     white-space: nowrap;
+
+    @container (max-width: 480px) {
+      display: none;
+    }
   `,
   icon: css`
     flex-shrink: 0;
@@ -247,6 +269,12 @@ const QueueTray = memo(() => {
   // "send now" then.
   if (!canUseResource) return null;
 
+  // The queue drains as one take-all and is merged into a single send, so a
+  // multi-item queue has to say "merges" instead of "sends".
+  const hintText = t(
+    queuedMessages.length > 1 ? 'inputQueue.queuedMergeHint' : 'inputQueue.queuedHint',
+  );
+
   return (
     <Flexbox className={styles.container} gap={0}>
       {queuedMessages.map((msg, index) => {
@@ -281,8 +309,15 @@ const QueueTray = memo(() => {
               )}
             </Flexbox>
             {/* The send timing is this message's own caption, so it rides the
-                message row right after the content instead of taking a line. */}
-            <span className={styles.hint}>{t('inputQueue.queuedHint')}</span>
+                message row right after the content instead of taking a line.
+                Several queued messages are merged into a single send on drain,
+                so the wording changes with the queue size. */}
+            <Tooltip title={hintText}>
+              <span className={styles.hint}>
+                <Icon className={styles.hintGlyph} icon={Info} size={13} />
+                <span className={styles.hintText}>{hintText}</span>
+              </span>
+            </Tooltip>
             <div style={{ flex: 1 }} />
             <ActionIcon
               aria-label={t('inputQueue.edit')}

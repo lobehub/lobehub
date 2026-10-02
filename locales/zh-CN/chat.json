@@ -1281,6 +1281,7 @@
   "inputQueue.edit": "编辑",
   "inputQueue.enqueueRejected": "队列已满。请在当前运行完成后再试。",
   "inputQueue.queuedHint": "当前步骤完成后发送",
+  "inputQueue.queuedMergeHint": "当前步骤完成后合并发送",
   "inputQueue.sendNow": "立即发送（中断当前运行）",
   "intentUnderstanding.title": "正在理解你的意图…",
   "internalLink.agent.open": "打开助理",
