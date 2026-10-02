@@ -21,9 +21,11 @@ const GoalSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'}>
     {chrome !== 'body' && <NavHeader />}
     <WideScreenContainer
+      fullWidth
       flex={1}
       gap={20}
       paddingBlock={16}
+      paddingInline={16}
       wrapperStyle={{ flex: 1, overflowY: 'auto' }}
     >
       <Flexbox horizontal align={'center'} justify={'space-between'} paddingBlock={'6px 18px'}>

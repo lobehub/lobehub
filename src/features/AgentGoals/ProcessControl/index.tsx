@@ -119,7 +119,7 @@ const ProcessControl = memo<ProcessControlProps>(
           defaultValue={['deliverables', 'findings', 'activity']}
           gap={0}
           indicatorPlacement="inline"
-          styles={{ header: { paddingBlock: 6, paddingInline: 0 } }}
+          styles={{ trigger: { paddingBlock: 6, paddingInline: 0 } }}
           items={
             [
               // The structured acceptance standard the terminal goal acceptance is
