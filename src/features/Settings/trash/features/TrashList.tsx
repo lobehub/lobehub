@@ -303,7 +303,12 @@ const TrashList = () => {
       />
       {nextCursor && (
         <Center style={{ paddingBlockStart: 12 }}>
-          <Button loading={isLoadingMore} size={'small'} type={'text'} onClick={() => loadMore()}>
+          <Button
+            loading={isLoadingMore}
+            size={'small'}
+            type={'text'}
+            onClick={() => loadMore().catch(reportFailure)}
+          >
             {t('trash.actions.loadMore')}
           </Button>
         </Center>
