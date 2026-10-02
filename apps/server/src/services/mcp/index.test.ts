@@ -1,3 +1,4 @@
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +8,7 @@ vi.mock('@/libs/mcp');
 describe('MCPService', () => {
   let mcpService: any;
   let mockClient: any;
+  let getClientSpy: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -18,11 +20,13 @@ describe('MCPService', () => {
     // 创建 mock 客户端
     mockClient = {
       callTool: vi.fn(),
+      listPrompts: vi.fn(),
+      listResources: vi.fn(),
       listTools: vi.fn(),
     };
 
     // Mock getClient 方法返回 mock 客户端
-    vi.spyOn(mcpService as any, 'getClient').mockResolvedValue(mockClient);
+    getClientSpy = vi.spyOn(mcpService as any, 'getClient').mockResolvedValue(mockClient);
   });
 
   describe('callTool', () => {
@@ -213,6 +217,77 @@ describe('MCPService', () => {
 
       expect(mockClient.callTool).toHaveBeenCalledWith('testTool', argsObject);
     });
+
+    it('should retry with a fresh session when NoValidSessionId error occurs', async () => {
+      // First call fails because the cached session is dead (server restarted)
+      mockClient.callTool.mockRejectedValueOnce(new Error('NoValidSessionId'));
+      // Second call (with skipCache=true) succeeds against a fresh session
+      mockClient.callTool.mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'ok' }],
+        isError: false,
+      });
+
+      const result = await mcpService.callTool({
+        clientParams: mockParams,
+        toolName: 'testTool',
+        argsStr: '{}',
+      });
+
+      expect(result.content).toBe('ok');
+      expect(result.success).toBe(true);
+      expect(mockClient.callTool).toHaveBeenCalledTimes(2);
+      // Retry must drop the cached client: first attempt skipCache=false, retry skipCache=true
+      expect(getClientSpy).toHaveBeenNthCalledWith(1, mockParams, false);
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true);
+    });
+
+    it('should retry up to 3 times for NoValidSessionId error', async () => {
+      mockClient.callTool.mockRejectedValue(new Error('NoValidSessionId'));
+
+      await expect(
+        mcpService.callTool({
+          clientParams: mockParams,
+          toolName: 'testTool',
+          argsStr: '{}',
+        }),
+      ).rejects.toThrow('NoValidSessionId');
+      // 1 initial + 3 retries = 4 attempts
+      expect(mockClient.callTool).toHaveBeenCalledTimes(4);
+    });
+
+    it('should NOT retry tool-level McpError and return it as a failed tool result', async () => {
+      const mcpError = new McpError(ErrorCode.InvalidParams, 'tool blew up');
+      mockClient.callTool.mockRejectedValue(mcpError);
+
+      const result = await mcpService.callTool({
+        clientParams: mockParams,
+        toolName: 'testTool',
+        argsStr: '{}',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe(mcpError);
+      expect(result.state.isError).toBe(true);
+      // McpError is a tool result, not a session error → must not retry
+      expect(mockClient.callTool).toHaveBeenCalledTimes(1);
+    });
+
+    it('should bail immediately on client initialization failure without retrying', async () => {
+      // getClient throws (e.g. bad URL/token, stdio spawn error) — not a stale session
+      const initError = new Error('Failed to initialize MCP client');
+      getClientSpy.mockRejectedValue(initError);
+
+      await expect(
+        mcpService.callTool({
+          clientParams: mockParams,
+          toolName: 'testTool',
+          argsStr: '{}',
+        }),
+      ).rejects.toThrow(TRPCError);
+      // Must NOT respawn/re-auth on init failure
+      expect(getClientSpy).toHaveBeenCalledTimes(1);
+      expect(mockClient.callTool).not.toHaveBeenCalled();
+    });
   });
 
   describe('listTools', () => {
@@ -349,6 +424,62 @@ describe('MCPService', () => {
         message: 'Error listing tools from MCP server: Custom error message',
         code: 'INTERNAL_SERVER_ERROR',
       });
+    });
+  });
+
+  describe('listResources', () => {
+    const mockParams = {
+      name: 'test-mcp',
+      type: 'stdio' as const,
+      command: 'test-command',
+      args: ['--test'],
+    };
+
+    it('should retry with a fresh session when NoValidSessionId error occurs', async () => {
+      const resources = [{ name: 'res1', uri: 'file:///res1' }];
+      mockClient.listResources.mockRejectedValueOnce(new Error('NoValidSessionId'));
+      mockClient.listResources.mockResolvedValueOnce(resources);
+
+      const result = await mcpService.listResources(mockParams);
+
+      expect(result).toEqual(resources);
+      expect(mockClient.listResources).toHaveBeenCalledTimes(2);
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true);
+    });
+
+    it('should throw TRPCError on other errors without retry', async () => {
+      mockClient.listResources.mockRejectedValue(new Error('boom'));
+
+      await expect(mcpService.listResources(mockParams)).rejects.toThrow(TRPCError);
+      expect(mockClient.listResources).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('listPrompts', () => {
+    const mockParams = {
+      name: 'test-mcp',
+      type: 'stdio' as const,
+      command: 'test-command',
+      args: ['--test'],
+    };
+
+    it('should retry with a fresh session when NoValidSessionId error occurs', async () => {
+      const prompts = [{ name: 'prompt1' }];
+      mockClient.listPrompts.mockRejectedValueOnce(new Error('NoValidSessionId'));
+      mockClient.listPrompts.mockResolvedValueOnce(prompts);
+
+      const result = await mcpService.listPrompts(mockParams);
+
+      expect(result).toEqual(prompts);
+      expect(mockClient.listPrompts).toHaveBeenCalledTimes(2);
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true);
+    });
+
+    it('should throw TRPCError on other errors without retry', async () => {
+      mockClient.listPrompts.mockRejectedValue(new Error('boom'));
+
+      await expect(mcpService.listPrompts(mockParams)).rejects.toThrow(TRPCError);
+      expect(mockClient.listPrompts).toHaveBeenCalledTimes(1);
     });
   });
 });
