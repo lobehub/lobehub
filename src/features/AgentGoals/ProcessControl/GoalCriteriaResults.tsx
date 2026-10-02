@@ -11,14 +11,14 @@ import {
   FileText,
   Paperclip,
 } from 'lucide-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { useEntityMarkdown } from '@/features/EntityLink';
 import { useChatStore } from '@/store/chat';
 
-import { SectionTitle } from './GoalResultFollowUps';
+import { GroupLabel, SectionTitle } from './GoalResultFollowUps';
 import type { CriterionOutcome, CriterionOutcomeState, EvidenceLike } from './goalResultState';
 
 /**
@@ -249,6 +249,8 @@ const CriterionRow = ({ index, outcome }: { index: number; outcome: CriterionOut
 };
 
 interface GoalCriteriaResultsProps {
+  /** The per-task acceptance group, rendered as this section's continuation. */
+  children?: ReactNode;
   /** The acceptance or criteria read failed: its outcomes are not a result. */
   error?: unknown;
   loading: boolean;
@@ -256,7 +258,13 @@ interface GoalCriteriaResultsProps {
   outcomes: CriterionOutcome[];
 }
 
-const GoalCriteriaResults = ({ error, loading, onRetry, outcomes }: GoalCriteriaResultsProps) => {
+const GoalCriteriaResults = ({
+  children,
+  error,
+  loading,
+  onRetry,
+  outcomes,
+}: GoalCriteriaResultsProps) => {
   const { t } = useTranslation('chat');
   const met = outcomes.filter((outcome) => outcome.state === 'passed').length;
 
@@ -274,6 +282,9 @@ const GoalCriteriaResults = ({ error, loading, onRetry, outcomes }: GoalCriteria
       >
         {t('goalProcess.result.criteria.title')}
       </SectionTitle>
+      {/* The goal-level acceptance IS this list, so it reads as the section's
+          first group rather than repeating as a tally row of its own. */}
+      <GroupLabel>{t('goalProcess.result.criteria.group')}</GroupLabel>
       {error ? (
         <AsyncError error={error} variant={'block'} onRetry={onRetry} />
       ) : loading ? (
@@ -293,6 +304,7 @@ const GoalCriteriaResults = ({ error, loading, onRetry, outcomes }: GoalCriteria
           ))}
         </Flexbox>
       )}
+      {children}
     </Flexbox>
   );
 };

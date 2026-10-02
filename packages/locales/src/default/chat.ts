@@ -2041,7 +2041,7 @@ export default {
   'goalProcess.acceptanceHierarchy.error':
     'Failed to load the acceptance levels, so no level’s standing can be read.',
   'goalProcess.acceptanceHierarchy.expandAll': 'Expand all',
-  'goalProcess.acceptanceHierarchy.goalLevel': 'Goal-level acceptance',
+  'goalProcess.acceptanceHierarchy.group': 'Per-task acceptance',
   'goalProcess.acceptanceHierarchy.level.awaitingSignOff': 'Awaiting your sign-off',
   'goalProcess.acceptanceHierarchy.level.closed': 'Closed',
   'goalProcess.acceptanceHierarchy.level.inProgress': 'In progress',
@@ -2053,11 +2053,8 @@ export default {
   'goalProcess.acceptanceHierarchy.tally.failed': '{{count}} failed',
   'goalProcess.acceptanceHierarchy.tally.passed': '{{count}} passed',
   'goalProcess.acceptanceHierarchy.tally.unjudged': '{{count}} undecided',
-  'goalProcess.acceptanceHierarchy.taskCaption':
-    'Task-level acceptances · each judged on its own, independent of the goal-level decision above',
   'goalProcess.acceptanceHierarchy.taskNotDispatched':
     'This task has not been dispatched, so it has no acceptance yet.',
-  'goalProcess.acceptanceHierarchy.title': 'Acceptance levels',
   'goalProcess.frontier.title': 'Current tasks',
   'goalProcess.northStar.emptyHint': 'No measurable target declared yet',
   'goalProcess.northStar.met': 'Met',
@@ -2172,6 +2169,7 @@ export default {
   'goalProcess.result.criteria.document': 'Evidence document',
   'goalProcess.result.criteria.empty': 'This Goal has no structured acceptance criteria.',
   'goalProcess.result.criteria.evidenceCount': '{{count}} evidence',
+  'goalProcess.result.criteria.group': 'Overall acceptance',
   'goalProcess.result.criteria.state.failed': 'Not met',
   'goalProcess.result.criteria.state.passed': 'Met',
   'goalProcess.result.criteria.state.unjudged': 'Not judged',
