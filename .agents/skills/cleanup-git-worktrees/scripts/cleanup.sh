@@ -17,8 +17,8 @@ Audit is read-only except for optional fetch/prune. Clean defaults to a dry run.
   --stale-days n   Treat a clean branch whose last commit is older than n days
                    and which has no unpushed commits as candidate-stale.
   --noise regex    Untracked paths matching this regex do not count as dirty
-                   (default: node_modules|\.goal-tracing/). They are removed
-                   together with the worktree.
+                   (default: complete node_modules or .goal-tracing components).
+                   Cleanup never uses --force; untracked noise must be removed first.
 
 Pass the same --gh / --stale-days / --noise flags to clean that you used for
 audit, otherwise the pre-deletion re-classification will refuse the target.
@@ -31,11 +31,7 @@ die() {
 }
 
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || die 'not inside a Git worktree'
-common_dir=$(git rev-parse --git-common-dir)
-if [[ "$common_dir" != /* ]]; then
-  common_dir="$repo_root/$common_dir"
-fi
-common_dir=$(cd "$common_dir" && pwd -P)
+repo_root=$(cd "$repo_root" && pwd -P)
 
 command_name=${1:-}
 [[ -n "$command_name" ]] || { usage; exit 2; }
@@ -45,7 +41,7 @@ base_ref=origin/canary
 fetch_remote=false
 use_gh=false
 stale_days=0
-noise_regex='node_modules|\.goal-tracing/'
+noise_regex='(^|/)(node_modules|\.goal-tracing)(/|$)'
 apply=false
 branches=()
 
@@ -95,8 +91,7 @@ while (($#)); do
 done
 
 git show-ref --verify --quiet "refs/remotes/$base_ref" \
-  || git show-ref --verify --quiet "refs/heads/$base_ref" \
-  || die "base ref does not exist: $base_ref"
+  || die "base must be an existing remote-tracking ref: $base_ref"
 
 remote=${base_ref%%/*}
 [[ "$remote" != "$base_ref" ]] || remote=origin
@@ -107,6 +102,19 @@ fi
 
 if $use_gh; then
   command -v gh >/dev/null 2>&1 || die '--gh requires the gh CLI'
+  remote_url=$(git remote get-url "$remote")
+  case "$remote_url" in
+    https://github.com/*) github_repo=${remote_url#https://github.com/} ;;
+    git@github.com:*) github_repo=${remote_url#git@github.com:} ;;
+    *) die '--gh requires a github.com remote URL' ;;
+  esac
+  github_repo=${github_repo%.git}
+fi
+
+if [[ '' =~ $noise_regex ]]; then
+  die 'noise regex must not match an empty path'
+else
+  [[ $? == 1 ]] || die 'invalid noise regex'
 fi
 
 now_epoch=$(date +%s)
@@ -140,15 +148,58 @@ worktree_is_usable() {
   [[ -d "$path" ]] && git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1
 }
 
-# Real dirt: any tracked change, plus untracked paths that do not match the
-# noise regex. Noise: untracked paths that match it (safe to drop with --force).
-dirty_count() {
-  # grep exits 1 when nothing survives the filter; that is "clean", not an error.
-  { git -C "$1" status --porcelain | grep -Ev "^\?\? .*(${noise_regex})" || true; } | wc -l | tr -d ' '
+# Rebase/bisect can own branches while HEAD is detached. update-ref has no
+# branch porcelain ownership checks, so conservatively block all cleanup.
+assert_no_operations() {
+  local snapshot entry path marker state
+  snapshot=$(mktemp)
+  if ! git worktree list --porcelain -z > "$snapshot"; then
+    rm -f "$snapshot"
+    die 'cannot enumerate worktrees'
+  fi
+  while IFS= read -r -d '' entry; do
+    [[ "$entry" == 'worktree '* ]] || continue
+    path=${entry#worktree }
+    if ! worktree_is_usable "$path"; then
+      rm -f "$snapshot"
+      die "cannot inspect operations in $path; resolve broken registration first"
+    fi
+    for marker in rebase-merge rebase-apply BISECT_START; do
+      state=$(git -C "$path" rev-parse --path-format=absolute --git-path "$marker") || {
+        rm -f "$snapshot"
+        die "cannot inspect operation state in $path"
+      }
+      if [[ -e "$state" ]]; then
+        rm -f "$snapshot"
+        die "operation in progress ($marker) in $path; finish or abort it before cleanup"
+      fi
+    done
+  done < "$snapshot"
+  rm -f "$snapshot"
 }
 
-noise_count() {
-  { git -C "$1" status --porcelain | grep -E "^\?\? .*(${noise_regex})" || true; } | wc -l | tr -d ' '
+# Use one NUL-delimited snapshot, including ignored files and submodule dirt.
+status_counts() {
+  local snapshot entry path code dirty=0 noise=0
+  snapshot=$(mktemp)
+  if ! git -C "$1" status --porcelain=v1 -z --untracked-files=all --ignored=matching --ignore-submodules=none > "$snapshot"; then
+    rm -f "$snapshot"
+    die "cannot inspect status: $1"
+  fi
+  while IFS= read -r -d '' entry; do
+    code=${entry:0:2}
+    path=${entry:3}
+    if [[ ( "$code" == '??' || "$code" == '!!' ) && "$path" =~ $noise_regex ]]; then
+      noise=$((noise + 1))
+    else
+      dirty=$((dirty + 1))
+    fi
+    if [[ "$code" == *R* || "$code" == *C* ]]; then
+      IFS= read -r -d '' entry || { rm -f "$snapshot"; die 'invalid rename status'; }
+    fi
+  done < "$snapshot"
+  rm -f "$snapshot"
+  printf '%s\t%s\n' "$dirty" "$noise"
 }
 
 upstream_track() {
@@ -169,8 +220,8 @@ age_days() {
   printf '%d' $(( (now_epoch - ct) / 86400 ))
 }
 
-# Commits on the branch that no ref on the remote can reach. Zero means every
-# local commit already lives on the remote, so deleting the branch loses nothing.
+# Commits not covered by locally fetched refs for this remote; not proof of
+# never-pushed work, nor proof that deletion is authorized when zero.
 unpushed_count() {
   git rev-list --count "$1" --not --remotes="$remote"
 }
@@ -182,15 +233,26 @@ pr_info() {
     printf -- '-\t-\t-\n'
     return
   fi
-  local raw number state head
-  raw=$(gh pr list --state all --head "$branch" --limit 1 \
-    --json number,state,headRefOid \
-    --jq '.[0] | "\(.number)\t\(.state)\t\(.headRefOid)"' 2>/dev/null || true)
-  if [[ -z "$raw" || "$raw" == $'null\tnull\tnull' ]]; then
+  local raw number state head base head_repo
+  raw=$(gh pr list --repo "$github_repo" --state all --head "$branch" --limit 100 \
+    --json number,state,headRefOid,baseRefName,headRepository,headRepositoryOwner \
+    --jq '.[] | [.number, .state, .headRefOid, .baseRefName, (.headRepositoryOwner.login + "/" + .headRepository.name)] | @tsv') \
+    || die "PR lookup failed for $branch"
+  if [[ -z "$raw" ]]; then
     printf -- '-\t-\t-\n'
     return
   fi
-  IFS=$'\t' read -r number state head <<<"$raw"
+  if [[ "$raw" == *$'\n'* ]]; then
+    printf -- '-\tAMBIGUOUS\t-\n'
+    return
+  fi
+  IFS=$'\t' read -r number state head base head_repo <<<"$raw"
+  [[ "$number" =~ ^[0-9]+$ && "$head" =~ ^[0-9a-f]{40,64}$ ]] || die "invalid PR response for $branch"
+  case "$state" in OPEN|CLOSED|MERGED) ;; *) die "invalid PR state for $branch" ;; esac
+  if [[ "$head_repo" != "$github_repo" || "$base" != "${base_ref#*/}" ]]; then
+    printf -- '-\tAMBIGUOUS\t-\n'
+    return
+  fi
   if [[ "$(git rev-parse "$branch")" == "$head" ]]; then
     printf '%s\t%s\teq\n' "$number" "$state"
   else
@@ -213,24 +275,25 @@ classify() {
 
   if is_protected_branch "$branch"; then
     printf 'protected-branch'
-  elif [[ -n "$worktree" && "$(cd "$worktree" && pwd -P)" == "$(pwd -P)" ]]; then
+  elif [[ -n "$worktree" && "$(cd "$worktree" && pwd -P)" == "$repo_root" ]]; then
     printf 'protect-current'
   elif ((dirty > 0)); then
     printf 'protect-dirty'
   elif is_merged "$branch"; then
     printf 'candidate-merged'
+  elif [[ "$pr_state" == AMBIGUOUS ]]; then
+    printf 'review-pr-ambiguous'
   elif [[ "$pr_state" == MERGED && "$tip_eq" == eq ]]; then
     printf 'candidate-pr-merged'
   elif [[ "$pr_state" == MERGED ]]; then
-    # Local tip moved past the PR head: check the extra commits by subject
-    # against the base log before deleting.
-    printf 'review-pr-merged-ahead'
+    # A different tip may be ahead, behind, or divergent; do not infer delivery.
+    printf 'review-pr-merged-different'
   elif [[ "$pr_state" == CLOSED && ( "$tip_eq" == eq || "$unpushed" == 0 ) ]]; then
     printf 'candidate-pr-closed'
   elif [[ "$track" == '[gone]' && "$unpushed" == 0 ]]; then
     printf 'candidate-gone'
   elif [[ "$track" == '[gone]' ]]; then
-    # Upstream pruned but local commits exist that no remote ref reaches.
+    # These commits lack remote-ref coverage; they may still have been squashed.
     printf 'review-gone-unpushed'
   elif ((stale_days > 0 && age > stale_days && unpushed == 0)); then
     printf 'candidate-stale'
@@ -247,20 +310,21 @@ print_header() {
 
 print_row() {
   local scope=$1 path=$2 branch=$3
-  local dirty noise age unpushed upstream track merged pr_number pr_state tip_eq classification
+  local dirty noise age unpushed upstream track merged pr_number pr_state tip_eq classification counts pr
   local worktree=''
   [[ "$scope" == worktree ]] && worktree=$path
   dirty=0; noise=0
   if [[ -n "$worktree" ]]; then
-    dirty=$(dirty_count "$worktree")
-    noise=$(noise_count "$worktree")
+    counts=$(status_counts "$worktree") || return 1
+    IFS=$'\t' read -r dirty noise <<< "$counts"
   fi
   age=$(age_days "$branch")
   unpushed=$(unpushed_count "$branch")
   upstream=$(upstream_name "$branch")
   track=$(upstream_track "$branch")
   if is_merged "$branch"; then merged=yes; else merged=no; fi
-  IFS=$'\t' read -r pr_number pr_state tip_eq < <(pr_info "$branch") || true
+  pr=$(pr_info "$branch") || return 1
+  IFS=$'\t' read -r pr_number pr_state tip_eq <<< "$pr"
   classification=$(classify "$branch" "$worktree" "$dirty" "$age" "$unpushed" "$pr_state" "$tip_eq")
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$scope" "$path" "$branch" "$dirty" "$noise" "$age" "$unpushed" \
@@ -291,11 +355,12 @@ audit() {
       continue
     fi
     if [[ -z "$branch" ]]; then
-      local head dirty
+      local head dirty noise counts
       head=$(git -C "$worktree" rev-parse --short HEAD)
-      dirty=$(dirty_count "$worktree")
+      counts=$(status_counts "$worktree") || return 1
+      IFS=$'\t' read -r dirty noise <<< "$counts"
       printf 'worktree\t%s\t(detached %s)\t%s\t%s\t-\t-\t-\t-\t-\t-\t-\t-\treview-detached\n' \
-        "$worktree" "$head" "$dirty" "$(noise_count "$worktree")"
+        "$worktree" "$head" "$dirty" "$noise"
       continue
     fi
     printf '%s\n' "$branch" >> "$bound_file"
@@ -310,20 +375,24 @@ audit() {
 
 clean() {
   ((${#branches[@]} > 0)) || die 'clean requires at least one --branch'
+  assert_no_operations
 
-  local branch worktree dirty noise age unpushed pr_number pr_state tip_eq classification
+  local branch worktree dirty noise age unpushed pr_number pr_state tip_eq classification counts pr tip base_tip config_error config_status
   for branch in "${branches[@]}"; do
     git show-ref --verify --quiet "refs/heads/$branch" || die "local branch not found: $branch"
+    tip=$(git rev-parse "refs/heads/$branch")
+    base_tip=$(git rev-parse "$base_ref")
     worktree=$(branch_worktree "$branch")
     dirty=0; noise=0
     if [[ -n "$worktree" ]]; then
       worktree_is_usable "$worktree" || die "$branch: worktree $worktree is a broken registration; run 'git worktree prune' and inspect the directory first"
-      dirty=$(dirty_count "$worktree")
-      noise=$(noise_count "$worktree")
+      counts=$(status_counts "$worktree") || return 1
+      IFS=$'\t' read -r dirty noise <<< "$counts"
     fi
     age=$(age_days "$branch")
     unpushed=$(unpushed_count "$branch")
-    IFS=$'\t' read -r pr_number pr_state tip_eq < <(pr_info "$branch") || true
+    pr=$(pr_info "$branch") || return 1
+    IFS=$'\t' read -r pr_number pr_state tip_eq <<< "$pr"
     classification=$(classify "$branch" "$worktree" "$dirty" "$age" "$unpushed" "$pr_state" "$tip_eq")
 
     case "$classification" in
@@ -336,16 +405,36 @@ clean() {
       continue
     fi
 
+    [[ "$(git rev-parse "refs/heads/$branch")" == "$tip" && "$(git rev-parse "$base_ref")" == "$base_tip" ]] \
+      || die "$branch: refs changed during inspection"
+    [[ "$(branch_worktree "$branch")" == "$worktree" ]] || die "$branch: worktree registration changed"
+    assert_no_operations
+    printf 'PLANNED-REMOVAL\t%s\t%s\n' "$branch" "$tip"
     if [[ -n "$worktree" ]]; then
-      if ((noise > 0)); then
-        git worktree remove --force "$worktree"
-      else
-        git worktree remove "$worktree"
-      fi
+      [[ "$(git -C "$worktree" symbolic-ref HEAD)" == "refs/heads/$branch" ]] || die 'worktree branch changed'
+      counts=$(status_counts "$worktree") || return 1
+      IFS=$'\t' read -r dirty noise <<< "$counts"
+      ((dirty == 0)) || die "$branch: worktree became dirty"
+      # Never force: Git must reject new tracked/untracked work, including noise.
+      git worktree remove "$worktree" || die "$branch: worktree removal failed; branch retained"
       printf 'REMOVED-WORKTREE\t%s\n' "$worktree"
     fi
-    printf 'REMOVED-BRANCH\t%s\t%s\t(was %s)\n' "$branch" "$classification" "$(git rev-parse --short "$branch")"
-    git branch -D "$branch" >/dev/null
+    [[ -z "$(branch_worktree "$branch")" ]] || die "$branch: branch is checked out again"
+    assert_no_operations
+    # Compare-and-delete refuses a branch advanced after the inspected snapshot.
+    git update-ref -d "refs/heads/$branch" "$tip" || die "$branch: branch removal failed; inspect partial cleanup"
+    if config_error=$(LC_ALL=C git config --remove-section "branch.$branch" 2>&1); then
+      :
+    else
+      config_status=$?
+      # Exit 128 alone also covers other fatal errors; match the absent-section
+      # diagnostic exactly in a fixed locale. Unknown errors fail closed.
+      if [[ "$config_status" != 128 || "$config_error" != "fatal: no such section: branch.$branch" ]]; then
+        printf '%s\n' "$config_error" >&2
+        die "$branch: configuration cleanup failed; branch ref already deleted (was $tip); partial cleanup"
+      fi
+    fi
+    printf 'REMOVED-BRANCH\t%s\t%s\t(was %s)\n' "$branch" "$classification" "$tip"
   done
 }
 
