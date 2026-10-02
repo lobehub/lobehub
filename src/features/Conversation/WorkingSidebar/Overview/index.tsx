@@ -27,7 +27,7 @@ import {
   getPullRequestState,
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
-import ThreadList from '@/features/AgentSidebar/Topic/TopicListContent/ThreadList';
+import ThreadListSection from '@/features/AgentSidebar/Topic/TopicListContent/ThreadList/ThreadListSection';
 import { TopicBackgroundActivity } from '@/features/BackgroundActivity/TopicSection';
 import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
@@ -469,7 +469,7 @@ const Overview = memo<OverviewProps>(
 
         {/* Thread rows open in the Portal; the list labels itself as subagents and
             sits in its own section so the resource rows below aren't grouped under it. */}
-        {topicId && <ThreadList topicId={topicId} />}
+        {topicId && <ThreadListSection topicId={topicId} />}
 
         <Flexbox className={sectionStyles.section}>
           {hasWorkspace && (

@@ -6,13 +6,13 @@ import {
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { MessageSquareDashed } from 'lucide-react';
 import type { CSSProperties, DragEvent, RefObject } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -38,6 +38,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useElectronStore } from '@/store/electron';
 
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
+import ThreadList from '../../TopicListContent/ThreadList';
 import Actions from './Actions';
 import TopicItemContextMenu from './ContextMenu';
 import {
@@ -110,6 +111,14 @@ const styles = createStaticStyles(({ css }) => ({
 // Per-item refs can't do that, which lets rapid clicks across items all
 // fire — each racing to write activeTopicId (see ).
 let pendingSingleClickTimer: ReturnType<typeof setTimeout> | null = null;
+
+// The mobile surface renders its topic list in a modal and never mounts the
+// working sidebar — the desktop host of a topic's thread list. Without nesting
+// the rows under the topic row, mobile users can't reach an existing subtopic
+// at all, so the nesting lives here on that surface only.
+const IS_MOBILE_SURFACE = typeof __MOBILE__ !== 'undefined' && __MOBILE__;
+// Nesting cue: keeps the rows visually under their topic row.
+const NESTED_THREAD_LIST_INDENT = 32;
 
 const cancelPendingSingleClick = () => {
   if (pendingSingleClickTimer) {
@@ -573,6 +582,20 @@ const TopicItemRow = memo<TopicItemRowProps>(
           </Popover>
         ) : (
           navItem
+        )}
+        {IS_MOBILE_SURFACE && id && (
+          <Suspense
+            fallback={
+              <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>
+                <Skeleton height={18} width={'100%'} />
+                <Skeleton height={18} width={'100%'} />
+              </Flexbox>
+            }
+          >
+            <Flexbox style={{ paddingInlineStart: NESTED_THREAD_LIST_INDENT }} width={'100%'}>
+              <ThreadList topicId={id} />
+            </Flexbox>
+          </Suspense>
         )}
       </Flexbox>
     );
