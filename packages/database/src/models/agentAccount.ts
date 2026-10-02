@@ -10,7 +10,13 @@ import { agentAccounts } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
-interface GateKeeper {
+/**
+ * The encryption contract the account model needs.
+ *
+ * Structural on purpose: `KeyVaultsGateKeeper` satisfies it, and tests pass a
+ * plain stub without depending on the class's private key material.
+ */
+export interface AgentAccountGateKeeper {
   decrypt: (ciphertext: string) => Promise<{ plaintext: string }>;
   encrypt: (plaintext: string) => Promise<string>;
 }
@@ -76,11 +82,16 @@ const viewColumns = {
  */
 export class AgentAccountModel {
   private db: LobeChatDatabase;
-  private gateKeeper?: GateKeeper;
+  private gateKeeper?: AgentAccountGateKeeper;
   private userId: string;
   private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, gateKeeper?: GateKeeper, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    gateKeeper?: AgentAccountGateKeeper,
+    workspaceId?: string,
+  ) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
@@ -285,7 +296,7 @@ export class AgentAccountModel {
     db: LobeChatDatabase,
     provider: string,
     identifier: string,
-    gateKeeper?: GateKeeper,
+    gateKeeper?: AgentAccountGateKeeper,
   ): Promise<{ credential: Record<string, string> | null; view: AgentAccountView } | undefined> => {
     const view = await AgentAccountModel.findByRoutingKey(db, provider, identifier);
     if (!view) return undefined;
