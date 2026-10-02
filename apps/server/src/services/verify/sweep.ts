@@ -4,6 +4,7 @@ import pMap from 'p-map';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
+import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { AgentOperationItem } from '@/database/schemas/agentOperations';
 import type { VerifyRunItem } from '@/database/schemas/verify';
@@ -253,6 +254,7 @@ const recoverEvidenceRun = async (
 
   const resultModel = new VerifyCheckResultModel(db, run.userId, workspaceId);
   const submitted = await resultModel.listByRun(run.id);
+  const evidenceRows = await new VerifyEvidenceModel(db, run.userId, workspaceId).listByRun(run.id);
 
   // The evidence hook's terminal callback follows the evidence continuation —
   // the child operation carrying the `acceptance-evidence-on-complete` hook in
@@ -292,12 +294,21 @@ const recoverEvidenceRun = async (
     // sub-agent) or `no-state` on a child that is already gone: not the collector.
   }
 
+  // What counts as "something was submitted" is *evidence*, not the existence of a
+  // result row. The native evidence tool upserts its result row first and inserts
+  // the evidence after (`acceptanceEvidence`), so a collector that died in between
+  // leaves a row with nothing behind it — reading that as a partial submission
+  // would skip the backfill and leave criteria that still need the deliverable
+  // marked `uncertain` instead of evidenced.
+  const hasSubmission =
+    evidenceRows.length > 0 || submitted.some((row) => !PENDING_RESULT_STATUSES.has(row.status));
+
   // Real evidence exists and the collector is gone — a judge pass is the honest
   // ending, judging what was submitted against the frozen deliverable (the
   // structural gate marks uncovered items `uncertain`). Judging without the
   // deliverable would pass the structural gate on uncovered criteria and render
   // verdicts from neither evidence nor the final output.
-  if (submitted.length > 0) {
+  if (hasSubmission) {
     if (collectorUnknown || (evidenceOp && LIVE_OPERATION_STATUSES.has(evidenceOp.status)))
       return 'skipped';
     if (!deliverable) return closeOutstandingAsErrored(db, run, operationId, now, 'abandoned');
@@ -668,7 +679,19 @@ const enterJudging = async (
   // the executor produced actually lands. Idempotent: `rollUp` derives the status
   // from the plan and the results, so a run already settled is left alone.
   await statusService.recomputeByRunId(run.id);
-  await finalizeVerifyRun(db, userId, operationId, { report }, workspaceId);
+  try {
+    await finalizeVerifyRun(db, userId, operationId, { report }, workspaceId);
+  } catch (error) {
+    // The verdicts stand, so the judge must not be re-entered — but what failed is
+    // the finalizer's own work (report, repair, task drive), and nothing else would
+    // retry it: every scan selects only `verifying`, `collecting_evidence`, or an
+    // eligible `planned` round, so a terminal run is never looked at again and its
+    // bound task could stay active forever. Park it back in `verifying`, where the
+    // verifying half re-derives the rollup and runs the finalizer again — without
+    // re-judging.
+    await statusService.reopenForFinalizeRetry(run.id);
+    throw error;
+  }
 
   log('recovered run %s (op %s) as %s', run.id, operationId, action);
   return action;

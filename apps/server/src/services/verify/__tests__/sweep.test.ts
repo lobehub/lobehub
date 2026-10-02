@@ -9,6 +9,7 @@ const {
   claimVerifying,
   claimVerifyingByRunId,
   restoreEvidenceCollection,
+  reopenForFinalizeRetry,
   createVerifierAgentRunner,
   executorExecute,
   findStuckVerifying,
@@ -22,6 +23,7 @@ const {
   resolveVerificationDeliverable,
   recompute,
   recomputeByRunId,
+  evidenceListByRun,
   resultListByRun,
   upsertByCheckItem,
   finalizeVerifyRun,
@@ -30,6 +32,7 @@ const {
   claimVerifying: vi.fn(),
   claimVerifyingByRunId: vi.fn(),
   restoreEvidenceCollection: vi.fn(),
+  reopenForFinalizeRetry: vi.fn(),
   createVerifierAgentRunner: vi.fn(),
   executorExecute: vi.fn(),
   finalizeVerifyRun: vi.fn(),
@@ -44,6 +47,7 @@ const {
   resolveVerificationDeliverable: vi.fn(),
   recompute: vi.fn(),
   recomputeByRunId: vi.fn(),
+  evidenceListByRun: vi.fn(),
   resultListByRun: vi.fn(),
   upsertByCheckItem: vi.fn(),
 }));
@@ -61,6 +65,11 @@ vi.mock('@/database/models/verifyCheckResult', () => ({
     return { listByRun: resultListByRun, upsertByCheckItem };
   }),
 }));
+vi.mock('@/database/models/verifyEvidence', () => ({
+  VerifyEvidenceModel: vi.fn(function () {
+    return { listByRun: evidenceListByRun };
+  }),
+}));
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn(function () {
     return { findById: operationFindById, listOperationTree };
@@ -74,6 +83,7 @@ vi.mock('../statusService', () => ({
       recompute,
       recomputeByRunId,
       restoreEvidenceCollection,
+      reopenForFinalizeRetry,
     };
   }),
 }));
@@ -123,6 +133,7 @@ beforeEach(() => {
     claimVerifying,
     claimVerifyingByRunId,
     restoreEvidenceCollection,
+    reopenForFinalizeRetry,
     createVerifierAgentRunner,
     executorExecute,
     finalizeVerifyRun,
@@ -137,12 +148,16 @@ beforeEach(() => {
     resolveVerificationDeliverable,
     recompute,
     recomputeByRunId,
+    evidenceListByRun,
     resultListByRun,
     upsertByCheckItem,
   ].forEach((m) => m.mockReset());
   findStuckVerifying.mockResolvedValue([]);
   findStuckCollectingEvidence.mockResolvedValue([]);
   resultListByRun.mockResolvedValue([]);
+  // No evidence rows by default: a run with result rows but nothing behind them is
+  // a collector that died before it submitted, not a partial submission.
+  evidenceListByRun.mockResolvedValue([]);
   claimVerifying.mockResolvedValue(true);
   claimVerifyingByRunId.mockResolvedValue(true);
   executorExecute.mockResolvedValue(undefined);
@@ -607,6 +622,7 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     // would pass the structural gate on uncovered criteria and invent verdicts.
     singleEvidencePage([evidenceRun()]);
     resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'pending', verdict: null }]);
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', evidence: [] }]);
 
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
@@ -622,12 +638,29 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
   it('judges instead of backfilling when evidence rows already exist', async () => {
     singleEvidencePage([evidenceRun()]);
     resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'pending', verdict: null }]);
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', evidence: [] }]);
 
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
     expect(executorExecute).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'op-1' }));
     expect(recordHeterogeneousDeliverableEvidence).not.toHaveBeenCalled();
     expect(outcome.settled).toEqual(['ev-run-1']);
+  });
+
+  it('backfills when the collector left a result row but no evidence', async () => {
+    // `acceptanceEvidence` upserts the result row first and inserts the evidence
+    // after, so a crash in between leaves a row with nothing behind it. That is not
+    // a partial submission: the criteria still need the frozen deliverable, and
+    // treating the row as evidence would leave them `uncertain`.
+    singleEvidencePage([evidenceRun()]);
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'pending', verdict: null }]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(recordHeterogeneousDeliverableEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({ deliverable: 'final patch text' }),
+    );
+    expect(outcome.evidenceRecovered).toEqual(['ev-run-1']);
   });
 
   it('backfills the evidence only after winning the recovery lease', async () => {
@@ -827,10 +860,12 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(outcome.skipped).toBe(1);
   });
 
-  it('keeps a settled run out of the evidence scan when the finalizer fails', async () => {
-    // The judge pass already persisted verdicts, so handing the run back would make
-    // the next sweep re-run terminal checks — overwriting verdicts, re-billing the
-    // model, and possibly spawning a second repair.
+  it('parks a settled run for a finalizer retry instead of re-judging it', async () => {
+    // The verdicts stand, so re-entering evidence collection would re-run terminal
+    // checks — overwriting verdicts, re-billing the model, and possibly spawning a
+    // second repair. But a terminal run is invisible to every scan, so the failed
+    // finalizer (report, repair, task drive) would never run again either. The run
+    // is parked in `verifying`, where the verifying half retries exactly that.
     singleEvidencePage([evidenceRun()]);
     finalizeVerifyRun.mockRejectedValueOnce(new Error('report write failed'));
 
@@ -838,6 +873,7 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
 
     expect(executorExecute).toHaveBeenCalled();
     expect(recomputeByRunId).toHaveBeenCalledWith('ev-run-1');
+    expect(reopenForFinalizeRetry).toHaveBeenCalledWith('ev-run-1');
     expect(restoreEvidenceCollection).not.toHaveBeenCalled();
     // The failure still surfaces to the tick.
     expect(outcome.skipped).toBe(1);

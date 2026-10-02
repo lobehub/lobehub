@@ -165,6 +165,22 @@ export class VerifyStatusService {
     await this.runModel.updateStatus(runId, 'collecting_evidence');
   }
 
+  /**
+   * Park a run the sweep could not finalize back in `verifying`, so the verifying
+   * half retries the rollup and the finalizer.
+   *
+   * Once `recomputeByRunId` has made a recovered run terminal, no scan will look at
+   * it again — they select only `verifying`, `collecting_evidence`, or an eligible
+   * `planned` round — so a finalizer failure (report write, repair setup, task
+   * drive) would leave the bound task active forever despite a settled verdict.
+   * `verifying` is the one state that retries exactly the missing work:
+   * `recoverRun` re-derives the rollup from the results and runs the finalizer
+   * again, and it never re-judges.
+   */
+  async reopenForFinalizeRetry(runId: string): Promise<void> {
+    await this.runModel.updateStatus(runId, 'verifying');
+  }
+
   /** Explicit transitions that aren't derivable from results alone. */
   async markVerifying(operationId: string) {
     await this.setStatus(operationId, 'verifying');
