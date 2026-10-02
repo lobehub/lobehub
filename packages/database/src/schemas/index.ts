@@ -44,6 +44,7 @@ export * from './project';
 export * from './projectEnvironment';
 export * from './projectWork';
 export * from './pushToken';
+export * from './quickNote';
 export * from './rag';
 export * from './ragEvals';
 export * from './rbac';

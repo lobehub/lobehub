@@ -1211,6 +1211,13 @@
       "when": 1790630241509,
       "tag": "0172_expertise_hits_source_message",
       "breakpoints": true
+    },
+    {
+      "idx": 173,
+      "version": "7",
+      "when": 1790659310337,
+      "tag": "0173_quick_note_persistence",
+      "breakpoints": true
     }
   ],
   "version": "6"

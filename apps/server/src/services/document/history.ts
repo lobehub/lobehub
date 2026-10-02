@@ -1,7 +1,15 @@
 import { buildWorkspaceWhere } from '@lobechat/database';
 import type { DocumentItem } from '@lobechat/database/schemas';
-import { documentHistories, documents } from '@lobechat/database/schemas';
-import { and, desc, eq, gte, inArray, lt, or } from 'drizzle-orm';
+import {
+  documentHistories,
+  documents,
+  quickNoteProposals,
+  quickNoteResources,
+  quickNoteRunInputs,
+  quickNoteRunResources,
+  quickNoteRuns,
+} from '@lobechat/database/schemas';
+import { and, desc, eq, gte, inArray, lt, notExists, or } from 'drizzle-orm';
 
 import {
   DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS,
@@ -46,6 +54,58 @@ export class DocumentHistoryService {
   private historiesOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documentHistories);
 
+  /**
+   * Selects revisions not pinned by Quick Note evidence.
+   *
+   * Use when:
+   * - Coalescing autosaves or pruning bounded document history.
+   *
+   * Expects:
+   * - A query whose current row is documentHistories.
+   *
+   * Returns:
+   * - A correlated predicate that preserves every referenced revision.
+   */
+  private unreferencedHistory = () =>
+    and(
+      notExists(
+        this.db
+          .select({ id: quickNoteRuns.id })
+          .from(quickNoteRuns)
+          .where(eq(quickNoteRuns.sourceHistoryId, documentHistories.id)),
+      ),
+      notExists(
+        this.db
+          .select({ id: quickNoteProposals.id })
+          .from(quickNoteProposals)
+          .where(
+            or(
+              eq(quickNoteProposals.sourceHistoryId, documentHistories.id),
+              eq(quickNoteProposals.currentHistoryId, documentHistories.id),
+              eq(quickNoteProposals.acceptedHistoryId, documentHistories.id),
+            ),
+          ),
+      ),
+      notExists(
+        this.db
+          .select({ id: quickNoteResources.id })
+          .from(quickNoteResources)
+          .where(eq(quickNoteResources.sourceHistoryId, documentHistories.id)),
+      ),
+      notExists(
+        this.db
+          .select({ id: quickNoteRunInputs.id })
+          .from(quickNoteRunInputs)
+          .where(eq(quickNoteRunInputs.documentHistoryId, documentHistories.id)),
+      ),
+      notExists(
+        this.db
+          .select({ id: quickNoteRunResources.id })
+          .from(quickNoteRunResources)
+          .where(eq(quickNoteRunResources.documentHistoryId, documentHistories.id)),
+      ),
+    );
+
   createHistory = async (params: {
     breakAutosaveWindow?: boolean;
     documentId: string;
@@ -80,12 +140,19 @@ export class DocumentHistoryService {
           Math.floor(params.savedAt.getTime() / DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS);
 
       if (withinWindow) {
-        await this.db
+        const [updated] = await this.db
           .update(documentHistories)
           .set({ editorData: params.editorData, savedAt: params.savedAt })
-          .where(and(eq(documentHistories.id, latest.id), this.historiesOwnership()));
+          .where(
+            and(
+              eq(documentHistories.id, latest.id),
+              this.historiesOwnership(),
+              this.unreferencedHistory(),
+            ),
+          )
+          .returning({ id: documentHistories.id });
 
-        return { id: latest.id, savedAt: params.savedAt };
+        if (updated) return { id: updated.id, savedAt: params.savedAt };
       }
     }
 
@@ -276,6 +343,7 @@ export class DocumentHistoryService {
           eq(documentHistories.documentId, documentId),
           this.historiesOwnership(),
           eq(documentHistories.saveSource, saveSource),
+          this.unreferencedHistory(),
         ),
       )
       .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id))
@@ -289,6 +357,7 @@ export class DocumentHistoryService {
         eq(documentHistories.documentId, documentId),
         this.historiesOwnership(),
         eq(documentHistories.saveSource, saveSource),
+        this.unreferencedHistory(),
         inArray(
           documentHistories.id,
           rowsToDelete.map((r) => r.id),
