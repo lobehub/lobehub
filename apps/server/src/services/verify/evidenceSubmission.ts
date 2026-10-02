@@ -45,40 +45,49 @@ export const recordHeterogeneousDeliverableEvidence = async (params: {
   workspaceId?: string;
 }) => {
   const { db, deliverable, operation, plan, userId, workspaceId } = params;
-  const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(operation.id);
-  if (!run) throw new Error('Verification run is missing for heterogeneous evidence');
 
-  const evidenced = new Set(
-    (await new VerifyEvidenceModel(db, userId, workspaceId).listByRun(run.id)).map(
-      (row) => row.checkItemId,
-    ),
-  );
+  // One transaction: a half-written backfill is indistinguishable from a builder
+  // that submitted only some evidence, so the caller's retry would take the
+  // partial-evidence branch and never hand the remaining criteria the frozen
+  // deliverable. All-or-nothing keeps "no evidence yet" meaning exactly that.
+  await db.transaction(async (tx) => {
+    const txDB = tx as unknown as LobeChatDatabase;
 
-  for (const item of plan) {
-    if (evidenced.has(item.id)) continue;
+    const run = await new VerifyRunModel(txDB, userId, workspaceId).findByOperation(operation.id);
+    if (!run) throw new Error('Verification run is missing for heterogeneous evidence');
 
-    const result = await new VerifyCheckResultModel(db, userId, workspaceId).upsertByCheckItem({
-      checkItemId: item.id,
-      checkItemIndex: item.index,
-      checkItemTitle: item.title,
-      operationId: operation.id,
-      required: item.required,
-      verifierType: item.verifierType,
-      verifyRunId: run.id,
-    });
-    await new VerifyEvidenceModel(db, userId, workspaceId).createMany([
-      {
-        capturedAt: new Date(),
-        capturedBy: 'agent',
-        checkResultId: result.id,
-        content: deliverable,
-        description: 'Final deliverable reported by the heterogeneous builder.',
-        documentId: null,
-        fileId: null,
-        type: 'text',
-      },
-    ]);
-  }
+    const evidenced = new Set(
+      (await new VerifyEvidenceModel(txDB, userId, workspaceId).listByRun(run.id)).map(
+        (row) => row.checkItemId,
+      ),
+    );
+
+    for (const item of plan) {
+      if (evidenced.has(item.id)) continue;
+
+      const result = await new VerifyCheckResultModel(txDB, userId, workspaceId).upsertByCheckItem({
+        checkItemId: item.id,
+        checkItemIndex: item.index,
+        checkItemTitle: item.title,
+        operationId: operation.id,
+        required: item.required,
+        verifierType: item.verifierType,
+        verifyRunId: run.id,
+      });
+      await new VerifyEvidenceModel(txDB, userId, workspaceId).createMany([
+        {
+          capturedAt: new Date(),
+          capturedBy: 'agent',
+          checkResultId: result.id,
+          content: deliverable,
+          description: 'Final deliverable reported by the heterogeneous builder.',
+          documentId: null,
+          fileId: null,
+          type: 'text',
+        },
+      ]);
+    }
+  });
 };
 
 export const startEvidenceSubmission = async (params: {

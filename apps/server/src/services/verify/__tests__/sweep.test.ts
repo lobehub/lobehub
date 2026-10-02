@@ -843,6 +843,22 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(outcome.skipped).toBe(1);
   });
 
+  it('does not hand a run back once the judge pass persisted a verdict', async () => {
+    // The executor only *creates* the rows a check is missing — it re-judges
+    // whatever already has one — so re-entering evidence collection would overwrite
+    // verdicts, bill the model a second time, and can spawn a duplicate verifier.
+    singleEvidencePage([evidenceRun()]);
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'passed', verdict: 'passed' }]);
+    executorExecute.mockRejectedValueOnce(new Error('judge blew up mid-pass'));
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(restoreEvidenceCollection).not.toHaveBeenCalled();
+    // The verdict that landed is preserved — nothing is re-closed over it.
+    expect(upsertByCheckItem).not.toHaveBeenCalled();
+    expect(outcome.abandoned).toEqual(['ev-run-1']);
+  });
+
   it('retries the close without the operation link when the FK rejects it', async () => {
     // The operation can be deleted between the claim and these writes. The FK then
     // rejects the captured link, and without a retry the exception would leave the

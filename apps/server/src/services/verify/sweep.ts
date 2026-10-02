@@ -428,11 +428,34 @@ const closeOutstandingAsErrored = async (
   const plan = (run.plan ?? []) as VerifyCheckItem[];
   const resultModel = new VerifyCheckResultModel(db, run.userId, workspaceId);
 
+  // Only the items that never reached a verdict are closed — the same gate
+  // `recoverRun` applies. Flattening an item that already landed would discard a
+  // real verdict, and `submitCheckEvidence` permits a terminal row to sit here.
+  const results = await resultModel.listByRun(run.id);
+  const byItem = new Map(results.map((result) => [result.checkItemId, result]));
+  const operationModel = new AgentOperationModel(db, run.userId, workspaceId);
+  const closeable: VerifyCheckItem[] = [];
+  for (const item of plan.filter((entry) => entry.required)) {
+    const result = byItem.get(item.id);
+    if (result && !PENDING_RESULT_STATUSES.has(result.status)) continue;
+
+    const verifierOperationId = result?.verifierOperationId;
+    if (verifierOperationId) {
+      const verifierOp = await operationModel.findById(verifierOperationId);
+      // Its verifier is still working — `settleVerifierCheckFromTerminal` owns that
+      // row's ending, and stamping it `errored` now would discard a verdict that is
+      // still coming (the same guard `recoverRun` applies).
+      if (verifierOp && LIVE_OPERATION_STATUSES.has(verifierOp.status)) continue;
+    }
+
+    closeable.push(item);
+  }
+
   // Bounded: the plan is one entry per acceptance criterion, so its length is
   // persisted runtime data, not a constant.
   const closeRows = (linkOperationId: string | null) =>
     pMap(
-      plan.filter((item) => item.required),
+      closeable,
       (item) =>
         // Upsert, not update: an item with no row at all must still land as
         // `errored`, and a pending row (evidence uploaded mid-run) is closed too.
@@ -531,13 +554,15 @@ const enterJudging = async (
     return closeOutstandingAsErrored(db, run, null, now, 'abandoned', { leaseHeld: true });
   }
 
+  // Carried out of the recovery `try` so the finalizer can run outside it: a
+  // finalizer failure must not send the run back through the recovery path.
+  let report:
+    | { deliverable: string; goal: string; modelConfig: { model: string; provider: string } }
+    | undefined;
+
   // The backfill write follows the lease, not the skip guards — an overlapping
   // worker that reaches the insert before its claim attempt must not duplicate
   // the evidence rows against the winner's insert.
-  //
-  // `settled` records whether the judge pass got far enough to persist verdicts:
-  // only a failure *before* that point may hand the run back for another attempt.
-  let settled = false;
   try {
     if (backfill) {
       await recordHeterogeneousDeliverableEvidence({
@@ -576,6 +601,11 @@ const enterJudging = async (
       workspaceId,
     );
 
+    // The same report context the inline lifecycle passes: a recovered judge holds
+    // the frozen deliverable and the resolved model config, so a terminal settle
+    // must produce the same report card instead of skipping it.
+    report = { deliverable: resolvedDeliverable, goal: run.goal ?? '', modelConfig };
+
     const executor = new VerifyExecutorService(db, userId, workspaceId);
     await executor.execute({
       deliverable: resolvedDeliverable,
@@ -594,63 +624,51 @@ const enterJudging = async (
         workspaceId,
       }),
     });
-
-    // The judge pass returned, so every verdict is persisted. Past this point a
-    // failure must not send the run back to the evidence scan: the next sweep
-    // would re-run terminal checks — overwriting verdicts, re-billing the model,
-    // and possibly spawning a second repair.
-    settled = true;
-
-    // `execute` ends by rolling the round up **by operation**, and the finalizer
-    // resolves the run the same way. Both return silently if the operation was
-    // deleted mid-judge, so there is no error for the catch below to react to and
-    // the run would stay leased in `verifying` — invisible to the next sweep's
-    // operation-scoped scan. Roll up by run id under the held lease so the verdict
-    // the executor just produced actually lands. Idempotent: `rollUp` derives the
-    // status from the plan and results, so a run already settled is left alone.
-    await statusService.recomputeByRunId(run.id);
-
-    await finalizeVerifyRun(
-      db,
-      userId,
-      operationId,
-      {
-        // The same report context the inline lifecycle passes: a recovered judge
-        // holds the frozen deliverable and the resolved model config, so a
-        // terminal settle must produce the same report card instead of skipping it.
-        report: {
-          deliverable: resolvedDeliverable,
-          goal: run.goal ?? '',
-          modelConfig,
-        },
-      },
-      workspaceId,
-    );
   } catch (error) {
-    // The operation can also be deleted *after* the lookup above: the FK nulls
-    // `verify_runs.operation_id`, so every operation-addressed step here (the
-    // backfill's run lookup, the executor) fails while the run we hold stays
-    // leased in `verifying` — where the next sweep's operation-scoped scan can no
-    // longer see it. Settle it by run id under the lease instead of stranding it.
-    if (!(await new AgentOperationModel(db, userId, workspaceId).findById(operationId))) {
-      return closeOutstandingAsErrored(db, run, null, now, 'abandoned', { leaseHeld: true });
+    const opGone = !(await new AgentOperationModel(db, userId, workspaceId).findById(operationId));
+
+    // Whether this attempt persisted verdict-level work decides how the run may
+    // recover. The executor only *creates* the rows a check is missing — it
+    // re-judges whatever already has one — so once a check reached a terminal
+    // status, or a verifier was dispatched for it, re-entering evidence collection
+    // would overwrite verdicts, bill the model a second time, and can spawn a
+    // duplicate verifier.
+    const judgePersisted = (
+      await new VerifyCheckResultModel(db, run.userId, run.workspaceId ?? undefined).listByRun(
+        run.id,
+      )
+    ).some((result) => !PENDING_RESULT_STATUSES.has(result.status) || result.verifierOperationId);
+
+    if (!opGone && !judgePersisted) {
+      // Nothing was persisted, so the run can be handed back for a clean retry.
+      // The evidence scan is the only half that can retry the judge: leaving the
+      // run in `verifying` would drop it from that scan, and the `verifying` half
+      // would eventually close its checks `errored`, losing the recovered evidence
+      // for good. The backfill this retry redoes is atomic, so it cannot leave the
+      // run half-evidenced.
+      await statusService.restoreEvidenceCollection(run.id);
+      throw error;
     }
 
-    // Not the operation vanishing — a transient failure. Before the judge pass
-    // finished no verdict is persisted, so the run goes back to the evidence scan,
-    // the only half that can retry the judge: leaving it in `verifying` would drop
-    // it from that scan, and the `verifying` half would eventually close its checks
-    // `errored`, losing the recovered evidence for good. The backfill that retry
-    // redoes is idempotent (`recordHeterogeneousDeliverableEvidence` skips criteria
-    // that already have evidence).
-    //
-    // After the judge pass the verdicts stand, so the run is left settled and the
-    // failure surfaces to the tick: re-entering evidence collection would re-run
-    // terminal checks, and re-running the finalizer here could repeat its side
-    // effects (report write, repair spawn, task drive).
-    if (!settled) await statusService.restoreEvidenceCollection(run.id);
-    throw error;
+    // Either the operation is gone — its FK clears the run's link, so nothing
+    // operation-addressed can settle the run any more — or verdicts already stand.
+    // Close what never landed, preserving what did, and settle by run id under the
+    // lease we hold.
+    return closeOutstandingAsErrored(db, run, opGone ? null : operationId, now, 'abandoned', {
+      leaseHeld: true,
+    });
   }
+
+  // Settlement, deliberately outside the recovery `try` so a failure here cannot
+  // re-enter the recovery path. `execute` ends by rolling the round up **by
+  // operation**, and the finalizer resolves the run the same way — both return
+  // silently if the operation was deleted mid-judge, so there is no error to react
+  // to and the run would stay leased in `verifying`, invisible to the next sweep's
+  // operation-scoped scan. Roll up by run id under the held lease so the verdict
+  // the executor produced actually lands. Idempotent: `rollUp` derives the status
+  // from the plan and the results, so a run already settled is left alone.
+  await statusService.recomputeByRunId(run.id);
+  await finalizeVerifyRun(db, userId, operationId, { report }, workspaceId);
 
   log('recovered run %s (op %s) as %s', run.id, operationId, action);
   return action;
