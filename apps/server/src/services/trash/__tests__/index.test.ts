@@ -439,6 +439,56 @@ describe('TrashService', () => {
       expect(await messageModel.findById(a1.id)).toBeTruthy();
     });
 
+    it('keeps a branch picked while an intermediate message was in the bin', async () => {
+      const agent = await agentModel.create({ title: 'Bot' });
+      const topic = await topicModel.create({ agentId: agent.id, title: 't' });
+      const at = (s: number) => new Date(Date.UTC(2026, 8, 1, 0, 0, s));
+      const base = { agentId: agent.id, topicId: topic.id, userId };
+      await serverDB.insert(messages).values([
+        { ...base, content: 'q', createdAt: at(1), id: 'br_u', role: 'user' },
+        {
+          ...base,
+          content: 'answer x',
+          createdAt: at(2),
+          id: 'br_x',
+          parentId: 'br_u',
+          role: 'assistant',
+        },
+        {
+          ...base,
+          content: 'answer s',
+          createdAt: at(3),
+          id: 'br_s',
+          parentId: 'br_u',
+          role: 'assistant',
+        },
+        {
+          ...base,
+          content: 'follow-up',
+          createdAt: at(4),
+          id: 'br_c',
+          parentId: 'br_x',
+          role: 'user',
+        },
+      ]);
+
+      // Trash the intermediate answer: its follow-up now sits beside the sibling…
+      const [root] = await service.trashMessages(['br_x']);
+      // …and the user switches to it there (branches of br_u: [br_s, br_c]).
+      await serverDB
+        .update(messages)
+        .set({ metadata: { activeBranchIndex: 1 } })
+        .where(eq(messages.id, 'br_u'));
+
+      await service.restore([root.id]);
+
+      // br_c is back under br_x; the selection follows it (branches: [br_x, br_s])
+      const [parent] = await serverDB.select().from(messages).where(eq(messages.id, 'br_u'));
+      expect((parent.metadata as { activeBranchIndex?: number }).activeBranchIndex).toBe(0);
+      const [child] = await serverDB.select().from(messages).where(eq(messages.id, 'br_c'));
+      expect(child.parentId).toBe('br_x');
+    });
+
     it('takes tool companions along as children of the assistant turn', async () => {
       const { agent, topic, u1 } = await seedChain();
       const assistant = await messageModel.create({

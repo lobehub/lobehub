@@ -5549,6 +5549,21 @@ export class MessageModel {
           .where(and(inArray(messages.id, entry.childIds), this.trashScope()));
       }
 
+      // While the row was in the bin its children hung off its parent, and the
+      // user may have picked one of them as the active branch there. They now
+      // move back under the restored row, so carry that choice up to it —
+      // otherwise reconciliation cannot find the child among the parent's
+      // branches, drops the selection and the view can jump to a sibling.
+      const restoredAncestorOf = new Map<string, string>();
+      for (const entry of entries) {
+        if (!restoredIds.has(entry.id)) continue;
+        for (const childId of entry.childIds ?? []) restoredAncestorOf.set(childId, entry.id);
+      }
+      for (const snapshot of activeBranchSnapshots) {
+        const ancestor = snapshot.activeBranchId && restoredAncestorOf.get(snapshot.activeBranchId);
+        if (ancestor) snapshot.activeBranchId = ancestor;
+      }
+
       await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
 
       const affectedTopicIds = [...new Set(rows.map((m) => m.topicId).filter(Boolean) as string[])];
