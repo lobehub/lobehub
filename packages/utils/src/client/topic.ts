@@ -118,10 +118,31 @@ export const groupTopicsByUpdatedTime = (topics: ChatTopic[]) =>
 const NO_PROJECT_GROUP_ID = 'no-project';
 const PROJECT_GROUP_PREFIX = 'project:';
 
-// Extract the final path segment as display name; supports POSIX and Windows separators
-const getProjectName = (dir: string): string => {
+/**
+ * Normalizes project display names to their shortest distinguishing path suffix.
+ *
+ * Before:
+ * - "/Users/me/Git/lobehub/lobehub", "/Users/me/work/lobehub/lobehub"
+ *
+ * After:
+ * - "Git/lobehub/lobehub", "work/lobehub/lobehub"
+ */
+// Extract the final path segment as display name; supports POSIX and Windows separators.
+// Expand only colliding names so unrelated private ancestors stay out of the sidebar.
+const getProjectName = (dir: string, projectPaths: string[]): string => {
   const segments = dir.split(/[/\\]+/).filter(Boolean);
-  return segments.at(-1) || dir;
+  const otherSegments = projectPaths
+    .filter((path) => path !== dir)
+    .map((path) => path.split(/[/\\]+/).filter(Boolean));
+
+  // The first unique suffix reveals only as much of the path as needed.
+  for (let depth = 1; depth <= segments.length; depth++) {
+    const name = segments.slice(-depth).join('/');
+    if (otherSegments.every((other) => other.slice(-depth).join('/') !== name)) return name;
+  }
+
+  // Preserve absolute/relative and separator distinctions when all segments match.
+  return dir;
 };
 
 const normalizeWorkingDirectory = (dir: string): string => dir.trim().replace(/[/\\]+$/, '');
@@ -158,6 +179,20 @@ export const getTopicWorkingDirectorySourcePath = (topic: ChatTopic): string | u
 export const getTopicWorkingDirectoryEffectivePath = (topic: ChatTopic): string | undefined =>
   getTopicMetadataWorkingDirectoryEffectivePath(topic.metadata);
 
+/**
+ * Groups topics by source directory with distinguishable project titles.
+ *
+ * Use when:
+ * - Rendering project groups in a topic sidebar or management view.
+ *
+ * Expects:
+ * - Topics with optional source or worktree directory metadata.
+ * - A timestamp field for descending activity order.
+ *
+ * Returns:
+ * - Stable path-based group IDs and sorted topics, with no-project topics last.
+ * - Basenames for unique projects and distinguishing path suffixes for collisions.
+ */
 export const groupTopicsByProject = (
   topics: ChatTopic[],
   field: 'createdAt' | 'updatedAt',
@@ -182,11 +217,12 @@ export const groupTopicsByProject = (
     group.children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
   }
 
+  const projectPaths = Array.from(groupsMap.values(), ({ path }) => path);
   const groups: GroupedTopic[] = Array.from(groupsMap.entries()).map(
     ([id, { children, path }]) => ({
       children,
       id,
-      title: id === NO_PROJECT_GROUP_ID ? undefined : getProjectName(path),
+      title: id === NO_PROJECT_GROUP_ID ? undefined : getProjectName(path, projectPaths),
     }),
   );
 
