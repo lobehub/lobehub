@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 
+import { agentAccountWebhook } from './handlers/agentAccountWebhook';
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { execAgent } from './handlers/execAgent';
@@ -96,6 +97,11 @@ app.post('/webhooks/group-member-callback', qstashAuth(), groupMemberCallback);
 
 // POST /api/agent/webhooks/:platform[/:appId] — Chat SDK bot platform webhooks
 app.post('/webhooks/:platform/:appId?', platformWebhook);
+
+// POST /api/agent/accounts/webhooks/:provider — inbound mail / phone deliveries
+// for the agent's own accounts. Auth is the provider signature, verified inside
+// the handler, so this route carries no middleware (mirrors the bot webhook).
+app.post('/accounts/webhooks/:provider', agentAccountWebhook);
 
 // GET /api/agent/messenger/:platform/install — start per-tenant OAuth install
 app.get('/messenger/:platform/install', messengerInstall);

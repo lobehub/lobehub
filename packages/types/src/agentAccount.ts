@@ -84,6 +84,69 @@ export interface AgentAccountInboundMessage {
   to: string;
 }
 
+/**
+ * A message the agent received on one of its accounts, persisted as the
+ * agent's **own first-class inbox** — not a channel message and not a tool
+ * result.
+ *
+ * This is what makes "the agent has an inbox" a state the runtime and the
+ * model can read without paying an always-on tool slot for it: each inbound
+ * delivery becomes one of these rows, and the runtime hands the unread ones to
+ * the model as context.
+ */
+export interface AgentInboxMessage {
+  /** The account that received it — the routing key resolved to an account id. */
+  accountId: string;
+  agentId: string;
+  /** Verification codes pulled out of the body (3–8 digits), for the `wait` primitive. */
+  codes: string[];
+  createdAt: Date;
+  /** Address the message came from. */
+  from: string;
+  id: string;
+  kind: AgentAccountKind;
+  /** When it was first read by the agent; `null` while unread. */
+  readAt: Date | null;
+  receivedAt: Date;
+  subject: string | null;
+  text: string;
+  /** Provider-normalized thread key, when the provider supplies one. */
+  threadKey: string | null;
+  /** The agent's own identifier the message was delivered to. */
+  to: string;
+}
+
+/**
+ * The inbox as one glance: how much is waiting and the newest few messages.
+ * Injected into the model's context so it knows it has mail without querying.
+ */
+export interface AgentInboxSummary {
+  latest: AgentInboxMessage[];
+  unreadCount: number;
+}
+
+/** One account as the runtime context shows it — credential-safe by construction. */
+export interface AgentAccountContextItem {
+  capabilities: AgentAccountCapabilities;
+  displayName?: string | null;
+  /** The handle the outside world reaches the agent at. */
+  identifier: string;
+  kind: AgentAccountKind;
+  provider: string;
+  status: AgentAccountStatus;
+}
+
+/**
+ * The agent's identity as first-class runtime state: which addresses it owns
+ * and what is waiting in its inbox. This is what replaces a resident
+ * `lobe-mailbox` tool slot — the model is *told* who it is instead of having
+ * to ask through a tool every turn.
+ */
+export interface AgentAccountContext {
+  accounts: AgentAccountContextItem[];
+  inbox: AgentInboxSummary;
+}
+
 /** A message the agent sends from one of its accounts. */
 export interface AgentAccountOutboundMessage {
   attachments?: AgentAccountAttachment[];

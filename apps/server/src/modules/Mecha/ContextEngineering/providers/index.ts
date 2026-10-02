@@ -12,6 +12,7 @@ import {
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import { composioEnv } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
+import { AgentAccountModel } from '@/database/models/agentAccount';
 import { AiModelModel } from '@/database/models/aiModel';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
@@ -27,9 +28,13 @@ import { loadConnectedComposioIds } from '@/server/modules/AgentRuntime/adapters
 import type { RuntimeExecutorContext } from '@/server/modules/AgentRuntime/context';
 import { buildPostProcessUrl, log } from '@/server/modules/AgentRuntime/executorHelpers';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { AgentInboxService } from '@/server/services/agentIdentity/inbox';
 import { MarketService } from '@/server/services/market';
 import { OnboardingService } from '@/server/services/onboarding';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
+
+/** How many newest inbox messages ride along in the model context. */
+const INBOX_CONTEXT_LIMIT = 3;
 
 export interface ServerContextFactSource {
   ctx: RuntimeExecutorContext;
@@ -185,6 +190,38 @@ export const createServerContextFactProviders = ({
       if (!workspace?.slug)
         log('Workspace %s has no slug; skipping workspace context', targetWorkspaceId);
       return { appUrl, slug: workspace?.slug ?? undefined };
+    },
+
+    /**
+     * The agent's own identity as first-class state: the addresses it owns and
+     * its inbox. Read on every step so a message that landed mid-conversation
+     * is visible on the next one — this is what the runtime relies on instead of
+     * carrying an always-on mailbox tool.
+     *
+     * A share visitor never gets the agent's identity: it is the creator's.
+     */
+    listAgentAccountContext: async (agentId) => {
+      const targetAgentId = agentId ?? state.origin?.agentId;
+      if (!targetAgentId || ctx.agentShareVisitor) return undefined;
+
+      const accounts = await new AgentAccountModel(db, userId, undefined, workspaceId).query({
+        agentId: targetAgentId,
+      });
+      if (accounts.length === 0) return undefined;
+
+      const summary = await AgentInboxService.summary(db, targetAgentId, INBOX_CONTEXT_LIMIT);
+
+      return {
+        accounts: accounts.map((account) => ({
+          capabilities: account.capabilities,
+          displayName: account.displayName,
+          identifier: account.identifier,
+          kind: account.kind,
+          provider: account.provider,
+          status: account.status,
+        })),
+        inbox: summary,
+      };
     },
 
     listAgentDocuments: async (agentId) => {

@@ -33,6 +33,7 @@ export default {
   'table.columns.trigger.enums.goal': 'Goal Planning',
   'table.columns.trigger.enums.history_summary': 'History Summary',
   'table.columns.trigger.enums.image': 'Image Generation',
+  'table.columns.trigger.enums.inbox': 'Agent Inbox',
   'table.columns.trigger.enums.input_completion': 'Input Completion',
   'table.columns.trigger.enums.memory': 'Memory Extraction',
   'table.columns.trigger.enums.multimodal_analysis': 'Multimodal Analysis',

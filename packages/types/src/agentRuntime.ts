@@ -41,6 +41,12 @@ export enum RequestTrigger {
   /** Rolling history summary stored on a topic. */
   HistorySummary = 'history_summary',
   Image = 'image',
+  /**
+   * A message arrived on one of the agent's own accounts (mail / phone) and
+   * woke it. Mirrors {@link RequestTrigger.Scm}: an external event delivered to
+   * an identity the agent owns, rather than a user turn.
+   */
+  Inbox = 'inbox',
   /** Chat input inline completion suggestions while the user is typing. */
   InputCompletion = 'input_completion',
   Memory = 'memory',

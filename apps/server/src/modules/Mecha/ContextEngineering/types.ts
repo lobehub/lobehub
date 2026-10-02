@@ -22,6 +22,7 @@ import type {
 } from '@lobechat/context-engine';
 import type { AgentIdentityContext, PageContentContext } from '@lobechat/prompts';
 import type {
+  AgentAccountContext,
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
@@ -180,6 +181,12 @@ export interface ServerMessagesEngineParams {
 
   /** The agent's identity (personal name + role title) for self-introduction */
   agentIdentity?: AgentIdentityContext;
+  /**
+   * The agent's own accounts and inbox, gathered fresh this step. Injected as
+   * first-class identity state so the model knows its addresses and what
+   * arrived without a resident mailbox tool.
+   */
+  agentAccountContext?: AgentAccountContext;
 
   // ========== Skills ==========
   /** Skills configuration for <available_skills> injection */
