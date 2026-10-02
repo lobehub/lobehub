@@ -138,7 +138,15 @@ export interface GoalExplorationConfig {
   maxExperiments: number;
 }
 
-/** Opt-in recovery supervision. It cannot grant new permissions or expand budgets. */
+/**
+ * Recovery supervision. It cannot grant new permissions or expand budgets.
+ *
+ * Every newly created Goal carries this with `enabled: true` — the server writes
+ * it at creation and rejecting the opposite is what makes "no Goal without a
+ * supervisor" hold. `enabled` is kept (rather than dropped) because Goals created
+ * before supervision became mandatory still read it to decide whether the
+ * supervisor runs.
+ */
 export interface GoalSupervisionPolicy {
   enabled: boolean;
   /** Bounded incident ledger and paid diagnostic runs per Goal (default 10, maximum 100). */

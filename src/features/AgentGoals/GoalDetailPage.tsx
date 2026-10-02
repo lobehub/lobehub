@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { EyeIcon, PauseIcon, PlayIcon } from 'lucide-react';
+import { PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
@@ -17,7 +17,6 @@ import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import RightPanel from '@/features/RightPanel';
-import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useWorkspaceSidePanel } from '@/features/RightPanel/WorkspaceSidePanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { usePermission } from '@/hooks/usePermission';
@@ -33,6 +32,7 @@ import GoalHeaderMetrics from './GoalHeaderMetrics';
 import { goalManagerConversation } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import { GoalSupervision } from './GoalSupervision';
+import GoalSupervisorToggle from './GoalSupervisorToggle';
 import NorthStarMetrics from './NorthStarMetrics';
 import ProcessControl from './ProcessControl';
 import { useGoalChatPanel } from './useGoalChatPanel';
@@ -145,10 +145,28 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const { goal, nodes } = snapshot;
   const managerConversation = goalManagerConversation(goal);
 
-  // The panel hosts the goal conversation only when the goal has a
-  // responsible agent; without one it is drill-down-only.
-  const panelExpandable = !!chat.agentId;
+  // Who supervises this page: the agent the route names, else the goal's own
+  // agent (the agent-less route still reaches the supervision record). The panel
+  // can only host a conversation for an agent it can resolve, so the entry's
+  // visibility follows the same rule.
+  const supervisingAgentId = chat.agentId ?? managerConversation?.agentId;
+  const panelExpandable = !!supervisingAgentId;
   const chatVisible = chat.open && panelExpandable;
+
+  /**
+   * One entry, one destination. A goal with a supervision conversation opens that
+   * record; one without opens the side conversation, rather than an empty panel.
+   * Re-targeting only when the record is not already the open conversation keeps
+   * a reopen from bumping the request and remounting the panel.
+   */
+  const openPanel = () => {
+    if (managerConversation && chat.topicId !== managerConversation.topicId) {
+      clearPortalStack();
+      chat.openSupervision(managerConversation);
+      return;
+    }
+    chat.setOpen(true);
+  };
 
   const paused = goal.status === 'paused';
   // Pace control exists only while the coordinator loop is actually moving (or
@@ -184,29 +202,19 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
             </Flexbox>
           }
           right={
-            graphFullscreen ? undefined : (
-              <Flexbox horizontal align={'center'} gap={8}>
-                {managerConversation && (
-                  <Button
-                    icon={EyeIcon}
-                    size={'small'}
-                    onClick={() => {
-                      clearPortalStack();
-                      chat.openSupervision(managerConversation);
-                    }}
-                  >
-                    {t('goalProcess.manager.viewTrace')}
-                  </Button>
-                )}
-                {panelExpandable && (
-                  <ToggleRightPanelButton
+            graphFullscreen
+              ? undefined
+              : supervisingAgentId && (
+                  <GoalSupervisorToggle
                     hideWhenExpanded
+                    agentId={supervisingAgentId}
                     expand={showPortal || chatVisible}
-                    onToggle={() => chat.setOpen(true)}
+                    label={
+                      managerConversation ? t('goalProcess.manager.viewTrace') : t('goalChat.title')
+                    }
+                    onToggle={openPanel}
                   />
-                )}
-              </Flexbox>
-            )
+                )
           }
         />
         <Flexbox flex={1} style={{ overflowY: 'auto' }}>
