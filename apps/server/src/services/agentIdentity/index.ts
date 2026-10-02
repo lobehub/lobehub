@@ -103,6 +103,14 @@ export class AgentAccountService {
 
   get = (id: string): Promise<AgentAccountView | undefined> => this.model.findById(id);
 
+  /**
+   * Whether this deployment has the named provider registered. The inbound
+   * edge asks before dispatching so an unknown provider is a 404 (a webhook
+   * URL nobody configured) rather than the registry's thrown error read as a
+   * 500.
+   */
+  hasProvider = (provider: string): boolean => this.options.registry.has(provider);
+
   // --------------- Writes ---------------
 
   /**

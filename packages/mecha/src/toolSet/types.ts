@@ -51,6 +51,13 @@ export interface ToolRuleRequest {
   executionTarget: DeviceExecutionTarget;
   hasEnabledKnowledgeBases?: boolean;
   /**
+   * The executing agent owns at least one identity account (a mail address, a
+   * phone number). Gates the agent-account tool so an agent with no identity
+   * never pays a schema for it — the addresses themselves reach the model as
+   * context, not through the tool.
+   */
+  hasIdentityAccount?: boolean;
+  /**
    * An attached or agent-assigned file is too long to inline and is sent as a preview; the
    * attachments tool is enabled so the model can read the rest with `readAttachment`.
    */

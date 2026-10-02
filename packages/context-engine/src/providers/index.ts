@@ -1,5 +1,9 @@
 // Context Provider exports
 export { ActiveTopicDocumentContextInjector } from './ActiveTopicDocumentContextInjector';
+export {
+  AgentAccountContextInjector,
+  type AgentAccountContextInjectorConfig,
+} from './AgentAccountContextInjector';
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
 export {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
