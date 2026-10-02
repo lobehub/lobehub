@@ -9,6 +9,7 @@ import { useScrollActiveThreadIntoView } from '@/hooks/useScrollActiveThreadInto
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 
+import { getThreadListHeadingKey } from './heading';
 import ThreadItem from './ThreadItem';
 
 // Cap the nested thread list so a topic with many threads doesn't push the rest
@@ -32,7 +33,7 @@ const ThreadList = memo(({ topicId }: { topicId: string }) => {
   return (
     <Flexbox className={sectionStyles.section}>
       <Flexbox className={sectionStyles.sectionHeader}>
-        <span className={sectionStyles.sectionTitle}>{t('workingPanel.overview.subagents')}</span>
+        <span className={sectionStyles.sectionTitle}>{t(getThreadListHeadingKey(threads))}</span>
       </Flexbox>
       <ScrollShadow
         gap={1}

@@ -9,6 +9,7 @@ import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors } from '@/store/chat/selectors';
 
 import Actions from './Actions';
+import { isThreadRowActive } from './active';
 import { useThreadItemDropdownMenu } from './useDropdownMenu';
 
 export interface ThreadItemProps {
@@ -21,9 +22,8 @@ export interface ThreadItemProps {
 
 const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent, sourceMessageId }) => {
   const activeThreadId = useChatStore((s) => s.activeThreadId);
-  // This row opens its thread in the Portal instead of switching the
-  // conversation, so the row is "current" when its thread is what the portal
-  // shows — with the active conversation as a fallback.
+  // This row opens its thread in the Portal, so its "current" state is the
+  // portal's thread — see `isThreadRowActive` for the conversation fallback.
   const portalThreadId = useChatStore((s) => portalThreadSelectors.portalCurrentThread(s)?.id);
   const openThreadInPortal = useChatStore((s) => s.openThreadInPortal);
 
@@ -44,7 +44,7 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent, sourceMessage
     title,
   });
 
-  const active = id === portalThreadId || id === activeThreadId;
+  const active = isThreadRowActive({ activeThreadId, portalThreadId, threadId: id });
 
   return (
     <NavItem
