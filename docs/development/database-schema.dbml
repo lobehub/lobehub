@@ -519,6 +519,37 @@ table agent_history_jobs {
   }
 }
 
+table agent_inbox_messages {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  agent_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  account_id uuid [not null]
+  provider text [not null]
+  kind text [not null]
+  provider_message_id text [not null]
+  from text [not null]
+  to text [not null]
+  subject text
+  text text [not null]
+  thread_key text
+  codes jsonb [default: `[]`]
+  metadata jsonb [default: `{}`]
+  received_at "timestamp with time zone" [not null]
+  read_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (account_id, provider_message_id) [name: 'agent_inbox_messages_account_provider_message_unique', unique]
+    agent_id [name: 'agent_inbox_messages_agent_id_idx']
+    account_id [name: 'agent_inbox_messages_account_id_idx']
+    received_at [name: 'agent_inbox_messages_received_at_idx']
+    user_id [name: 'agent_inbox_messages_user_id_idx']
+  }
+}
+
 table agent_intervention_resolutions {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   resolution_request_id uuid [not null]

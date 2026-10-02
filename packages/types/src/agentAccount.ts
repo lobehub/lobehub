@@ -181,6 +181,14 @@ export interface AgentAccountProvisionInput {
   agentId: string;
   /** Human label for the new account, when the provider can set one. */
   displayName?: string;
+  /**
+   * Preferred handle the caller asks for, when the provider can honour it —
+   * the local part of a `mail` address, for example. A provider that cannot
+   * honour a preference ignores it and mints its own identifier; a provider
+   * that can either returns the requested prefix or fails, never a silent
+   * substitute.
+   */
+  prefix?: string;
   userId: string;
   workspaceId?: string;
 }

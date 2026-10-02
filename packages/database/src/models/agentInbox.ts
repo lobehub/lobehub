@@ -163,6 +163,21 @@ export class AgentInboxModel {
       .limit(params?.limit ?? 20);
   };
 
+  /**
+   * One message by id, scoped to the caller. Ownership is part of the `where`,
+   * so an id from someone else's inbox resolves to `undefined` rather than
+   * leaking the row's existence.
+   */
+  findById = async (id: string): Promise<AgentInboxMessageItem | undefined> => {
+    const [row] = await this.db
+      .select()
+      .from(agentInboxMessages)
+      .where(and(eq(agentInboxMessages.id, id), this.ownership()))
+      .limit(1);
+
+    return row;
+  };
+
   unreadCount = async (agentId: string): Promise<number> => {
     const [row] = await this.db
       .select({ value: count() })

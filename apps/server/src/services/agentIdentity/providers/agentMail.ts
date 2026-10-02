@@ -91,6 +91,9 @@ export const createAgentMailProvider = (
       const inbox = await client.createInbox({
         displayName: input.displayName,
         endUserId: input.agentId,
+        // The caller's preferred local part. The provider either honours it or
+        // answers with the address it minted — never a silent substitute.
+        username: input.prefix,
       });
 
       let credential: Record<string, string> | undefined;
