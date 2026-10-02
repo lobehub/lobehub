@@ -1,8 +1,17 @@
 import type { GoalReportState } from '@lobechat/types';
+import { cssVar } from 'antd-style';
 import { describe, expect, it } from 'vitest';
 
 import type { GoalGraphView } from '../goalGraphViewModel';
-import { edgeEmphasis, isNodeDimmed, nodeEmphasis, resolveMainline } from './mainline';
+import {
+  edgeEmphasis,
+  edgeMarkerColor,
+  isNodeDimmed,
+  MUTED_EDGE_OPACITY,
+  MUTED_EDGE_OPACITY_DARK,
+  nodeEmphasis,
+  resolveMainline,
+} from './mainline';
 
 const graphWith = (
   mainline: { edgeIds: string[]; nodeIds: string[] } | undefined,
@@ -110,5 +119,28 @@ describe('isNodeDimmed', () => {
   it('keeps a highlighted detour readable even though it is off the mainline', () => {
     // A chapter's local map calls its detours out; the mainline mark must not fade them.
     expect(isNodeDimmed({ blocked: false, emphasis: 'muted', highlighted: true })).toBe(false);
+  });
+});
+
+describe('off-mainline legibility', () => {
+  /**
+   * Regression: the dark canvas turned the border token at a third opacity into
+   * background, so an off-mainline line and the arrow ending it were barely
+   * there. Only the off-mainline tone is lifted; the mainline keeps its own
+   * primary line, so the hierarchy is not flattened.
+   */
+  it('lifts only the off-mainline arrow on the dark canvas', () => {
+    expect(edgeMarkerColor('mainline', true)).toBe(cssVar.colorPrimary);
+    expect(edgeMarkerColor('detour', true)).toBe(cssVar.colorWarning);
+    // Light mode is unchanged — the same border token as before.
+    expect(edgeMarkerColor(undefined, false)).toBe(cssVar.colorBorder);
+    expect(edgeMarkerColor('muted', false)).toBe(cssVar.colorBorder);
+    expect(edgeMarkerColor(undefined, true)).toBe(cssVar.colorTextQuaternary);
+    expect(edgeMarkerColor('muted', true)).toBe(cssVar.colorTextQuaternary);
+  });
+
+  it('is more legible on the dark canvas while still stepping back', () => {
+    expect(MUTED_EDGE_OPACITY_DARK).toBeGreaterThan(MUTED_EDGE_OPACITY);
+    expect(MUTED_EDGE_OPACITY_DARK).toBeLessThan(1);
   });
 });

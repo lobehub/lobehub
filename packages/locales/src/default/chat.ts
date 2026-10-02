@@ -2192,9 +2192,11 @@ export default {
     'Check which criteria were not met below, then retry or end the Goal.',
   'goalProcess.result.gate.revising':
     'You chose to retry. The Agent is revising the result; it will be accepted again when done.',
+  'goalProcess.result.headline.pending': 'Organizing this result…',
   'goalProcess.result.nav.document': 'Final document',
   'goalProcess.result.nav.label': 'Jump to section',
   'goalProcess.result.nav.overview': 'Overview',
+  'goalProcess.result.requirement': 'Original requirement',
   'goalProcess.result.scale.cost': 'Spent {{cost}}',
   'goalProcess.result.scale.criteria': '{{met}}/{{total}} criteria met',
   'goalProcess.result.scale.duration': 'Took {{duration}}',

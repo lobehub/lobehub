@@ -498,6 +498,22 @@ export const resultTrailSource = (graph: Pick<GoalGraphView, 'report'>): ResultT
   return { kind: 'story', metadata: parsed.data, report: report.latest };
 };
 
+/** Whether the wrap-up agent is writing this result's storyline right now. */
+export const isGoalReportOrganizing = (graph: Pick<GoalGraphView, 'report'>): boolean =>
+  graph.report?.status === 'running';
+
+/**
+ * The one-line headline of the result.
+ *
+ * `report.latest` is the *previous* version until a new wrap-up lands, so while
+ * one is running (`report.status === 'running'`) there is no headline for this
+ * result yet. Returning the last version's here is what put the old result's
+ * title on top of a rework that had not produced its own; the caller shows the
+ * organizing state instead and the title swaps in when the run completes.
+ */
+export const goalResultHeadline = (graph: Pick<GoalGraphView, 'report'>): string | undefined =>
+  isGoalReportOrganizing(graph) ? undefined : graph.report?.latest?.metadata.headline;
+
 export interface StoryChapterView {
   artifacts: GoalArtifactView[];
   chapter: GoalReportChapter;

@@ -412,7 +412,7 @@ export const buildGoalReportInstruction = (
       .join('\n'),
     skeleton.deliverable
       ? `Final deliverable: Work ${skeleton.deliverable.workId} (${skeleton.deliverable.type}) "${skeleton.deliverable.title ?? ''}", version ${skeleton.deliverable.workVersionId}`
-      : 'Final deliverable: none linked to the graph.',
+      : 'Final deliverable: none linked to the graph — when reporting, omit deliverableWorkId entirely.',
     [
       'Candidate main path (traced back from the final deliverable along produces / depends_on / derived_from, oldest first):',
       ...skeleton.mainPath.map(
@@ -421,7 +421,9 @@ export const buildGoalReportInstruction = (
       ),
     ].join('\n'),
     [
-      'Candidate detours (rejected / retired / superseded), under the fork they left from:',
+      skeleton.detours.length
+        ? `Candidate detours (rejected / retired / superseded), under the fork they left from — at least ONE of these must be told as a detour:`
+        : 'Candidate detours (rejected / retired / superseded), under the fork they left from:',
       ...(skeleton.detours.length
         ? skeleton.detours.map(
             (node) => `- ${line(node)} · ${node.signal} · fork: ${node.forkNodeId ?? 'unknown'}`,
@@ -441,11 +443,13 @@ export const buildGoalReportInstruction = (
       submission.kind === 'cli'
         ? `1. Inspect the Goal, its findings and deliverables as needed (\`lh goal show ${graph.goal.id} --json\`). The skeleton is a starting point, not the answer.`
         : '1. Inspect the Goal, its findings and deliverables as needed. The skeleton is a starting point, not the answer.',
-      '2. Split the main path into a few chapters. Give each a title and a narrative of what was tried, what was learned and what it produced; reference its nodeIds (resolved main-path nodes only), findingIds and workVersionIds.',
-      '3. Decide which detours are worth telling. For each one attach it to the chapter it forked from, with kind (dead_end | superseded | retry), the reason it was abandoned and the lesson it taught. Leave out detours that teach nothing.',
+      '2. Split the main path into a few chapters. Give each a title and a narrative of what was tried, what was learned and what it produced; list in its nodeIds the mainline nodes it tells (resolved main-path nodes only), plus findingIds and workVersionIds. Every mainline task or experiment node, including the acceptance node when it is on the mainline, must be told by some chapter.',
+      skeleton.detours.length
+        ? `3. Tell the detours. The skeleton lists ${skeleton.detours.length} candidate detour(s), and at least one MUST appear in your report. Put each detour you tell in the \`detours\` array of the chapter it forked from — a detour entry has title, nodeIds, kind (dead_end | superseded | retry), the reason it was abandoned and the lesson it taught. Add the others that teach something and leave out only those that teach nothing. A report with no detour is incomplete and will be rejected.`
+        : '3. Decide which detours are worth telling. For each one attach it to the chapter it forked from, with kind (dead_end | superseded | retry), the reason it was abandoned and the lesson it taught. Leave out detours that teach nothing.',
       '4. Write nextSteps: what remains or should come next, each with a reason.',
-      '5. Write a one-sentence headline, and set deliverableWorkId when there is a final deliverable.',
-      '6. Mark the mainline: the path that actually led to the result. mainline.nodeIds are the resolved tasks on the correct path (plus, when useful, the resolved root problem and the findings that carried the answer forward); mainline.edgeIds are the edges of this Goal that connect two of those nodes. Detour nodes are never on the mainline. The chapters must tell exactly this path: every chapter nodeId is a mainline node, and every mainline task appears in a chapter.',
+      '5. Write a one-sentence headline. When the Goal produced a final deliverable, set deliverableWorkId to that Work\'s id; when there is no final deliverable, omit deliverableWorkId entirely — do not send an empty string or a placeholder such as "none".',
+      "6. Mark the mainline: the path that actually led to the result. mainline.nodeIds are the resolved tasks on the correct path (plus, when useful, the resolved root problem and the findings that carried the answer forward); mainline.edgeIds are the ids of this Goal's edges that connect two of those nodes — copy the ids from the Candidate mainline list, never the edge kind. Detour nodes are never on the mainline. The chapters must tell exactly this path: every chapter nodeId is a mainline node, and every mainline task or experiment node — including the acceptance node when it is listed — appears in some chapter.",
       '7. Do NOT restate acceptance verdicts or user decisions as data; the page reads those from their own records. Narrate around them.',
       submission.kind === 'cli'
         ? `8. Write the metadata (headline, deliverableWorkId, chapters, mainline, nextSteps, graphCursor) as JSON to a file, and the full written report in markdown, built from that same metadata, to another file. Submit both once with \`lh goal report ${graph.goal.id} --metadata-file <json> --content-file <md>\`. If it rejects a reference, fix the file and submit again.`
@@ -455,6 +459,121 @@ export const buildGoalReportInstruction = (
     .filter(Boolean)
     .join('\n\n');
 };
+
+/**
+ * The requirement promises the storyline explains the exploration, detours
+ * included, and the skeleton hands the wrap-up agent the dead ends it found.
+ * A weak default model can narrate the whole path and still submit an empty
+ * `detours` array; rejecting the whole report for that leaves the user with no
+ * storyline at all — worse than the bug. So the store fills a report that tells
+ * no detour from the candidates the skeleton already found — the graph's own
+ * record of each dead end — attaching each to the chapter that narrates the
+ * node it forked from.
+ *
+ * Authored detours are never touched: a report that tells any detour is
+ * returned unchanged, and the narrative stays exactly what the agent wrote.
+ */
+export const backfillGoalReportDetours = (
+  source: GoalGraphSnapshot,
+  metadata: GoalReportMetadata,
+): GoalReportMetadata => {
+  const candidates = buildGoalReportSkeleton(source).detours;
+  if (candidates.length === 0) return metadata;
+
+  const told = new Set(
+    metadata.chapters.flatMap((chapter) => chapter.detours.flatMap((detour) => detour.nodeIds)),
+  );
+  if (candidates.some((candidate) => told.has(candidate.id))) return metadata;
+
+  const nodes = new Map(withoutGoalReport(source).nodes.map((node) => [node.id, node]));
+  const chapterFor = (forkNodeId?: string) =>
+    metadata.chapters.find((chapter) => !!forkNodeId && chapter.nodeIds.includes(forkNodeId)) ??
+    metadata.chapters.find((chapter) => chapter.nodeIds.length > 0) ??
+    metadata.chapters[0];
+
+  const additions = new Map<number, GoalReportMetadata['chapters'][number]['detours']>();
+  for (const candidate of candidates) {
+    const chapter = chapterFor(candidate.forkNodeId);
+    if (!chapter) continue;
+    const index = metadata.chapters.indexOf(chapter);
+    // The graph only carries the node's own description; it holds both why the
+    // path was abandoned and what it taught, so it seeds both fields.
+    const detail = nodes.get(candidate.id)?.description?.trim() || candidate.signal;
+    additions.set(index, [
+      ...(additions.get(index) ?? []),
+      {
+        kind: candidate.signal.startsWith('superseded') ? 'superseded' : 'dead_end',
+        lesson: detail,
+        nodeIds: [candidate.id],
+        reason: detail,
+        title: candidate.title,
+      },
+    ]);
+  }
+  if (additions.size === 0) return metadata;
+
+  return {
+    ...metadata,
+    chapters: metadata.chapters.map((chapter, index) => {
+      const extra = additions.get(index);
+      return extra ? { ...chapter, detours: [...chapter.detours, ...extra] } : chapter;
+    }),
+  };
+};
+
+/**
+ * Keep a submitted storyline self-consistent, so a near-miss from the default
+ * model still yields the report the requirement promises instead of nothing:
+ *
+ * - A detour is never a main-path node: a candidate detour the agent listed in
+ *   a chapter's own `nodeIds` is pulled out (it belongs in that chapter's
+ *   `detours`).
+ * - The highlighted mainline must be the path the chapters tell: a mainline
+ *   task/experiment no chapter narrates is dropped, and edges left dangling are
+ *   pruned. Findings and the root problem may ride along without a chapter.
+ * - When the agent tells no detour at all but the skeleton found candidates, they
+ *   are attached from the graph's own record.
+ *
+ * A fully consistent report is returned unchanged.
+ */
+export const alignGoalReportStoryline = (
+  source: GoalGraphSnapshot,
+  metadata: GoalReportMetadata,
+): GoalReportMetadata => {
+  const graph = withoutGoalReport(source);
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const detourIds = new Set(buildGoalReportSkeleton(source).detours.map((detour) => detour.id));
+
+  const chapters = metadata.chapters.map((chapter) => {
+    const nodeIds = chapter.nodeIds.filter((id) => !detourIds.has(id));
+    return nodeIds.length === chapter.nodeIds.length ? chapter : { ...chapter, nodeIds };
+  });
+
+  // A missing mainline is the validator's to report, not ours to invent.
+  if (!metadata.mainline) return { ...metadata, chapters };
+
+  const chaptered = new Set(chapters.flatMap((chapter) => chapter.nodeIds));
+  const nodeIds = metadata.mainline.nodeIds.filter((id) => {
+    const node = byId.get(id);
+    if (!node || node.status !== 'resolved' || !CHAPTERED_KINDS.has(node.kind)) return true;
+    return chaptered.has(id);
+  });
+  const onMainline = new Set(nodeIds);
+  const edgeById = new Map(source.edges.map((edge) => [edge.id, edge]));
+  const edgeIds = metadata.mainline.edgeIds.filter((id) => {
+    const edge = edgeById.get(id);
+    return !edge || (onMainline.has(edge.sourceNodeId) && onMainline.has(edge.targetNodeId));
+  });
+
+  return { ...metadata, chapters, mainline: { ...metadata.mainline, edgeIds, nodeIds } };
+};
+
+/** Reconcile a submitted report with the graph before it is validated. */
+export const reconcileGoalReport = (
+  source: GoalGraphSnapshot,
+  metadata: GoalReportMetadata,
+): GoalReportMetadata =>
+  backfillGoalReportDetours(source, alignGoalReportStoryline(source, metadata));
 
 // ---------------------------------------------------------------------------
 // Validation of a submitted report
@@ -478,6 +597,7 @@ export const validateGoalReport = (
     graph.workVersions.flatMap((link) => (link.work ? [link.work.workId] : [])),
   );
   const superseded = supersededBy(graph);
+  const candidateDetours = buildGoalReportSkeleton(source).detours;
   const errors: string[] = [];
 
   metadata.chapters.forEach((chapter, index) => {
@@ -510,6 +630,22 @@ export const validateGoalReport = (
       }
     });
   });
+
+  // The requirement promises the storyline explains the exploration, detours
+  // included. A weak default model silently drops every detour the skeleton
+  // offered, which the user only notices as a missing chapter — so the contract
+  // makes them observable: when the skeleton found candidate detours, a report
+  // that tells none is incomplete and must be fixed, never stored.
+  const toldDetours = metadata.chapters.reduce(
+    (total, chapter) => total + chapter.detours.length,
+    0,
+  );
+  if (candidateDetours.length > 0 && toldDetours === 0)
+    errors.push(
+      `chapters: the skeleton offers ${candidateDetours.length} candidate detour(s) (${candidateDetours
+        .map((detour) => detour.id)
+        .join(', ')}); the report must tell at least one detour, with its reason and lesson`,
+    );
 
   metadata.nextSteps.forEach((step, index) => {
     for (const id of step.nodeIds ?? []) {

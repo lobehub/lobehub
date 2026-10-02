@@ -1,3 +1,4 @@
+import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
@@ -79,6 +80,35 @@ describe('GoalAction', () => {
       };
 
       expect(options.refreshInterval(undefined)).toBe(0);
+    });
+
+    /**
+     * Regression: a rework ends by putting the Goal back on `achieved`, but its
+     * own acceptance verdict is a later write. The poll stopped on that
+     * half-written snapshot, so an open result page stayed on the rework's
+     * starting state — sign-off strip still reading 修改中, criteria count
+     * frozen — until the page was reloaded.
+     */
+    it('keeps polling a terminal Goal whose own acceptance has not settled', () => {
+      useGoalStore.getState().useFetchGoalGraph('goal-1');
+      const options = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2] as {
+        refreshInterval: (graph: unknown) => number;
+      };
+      const withAcceptance = (status: string, title = GOAL_ACCEPTANCE_TASK_TITLE) => ({
+        acceptances: { 'node-a': { id: 'acc-1', status } },
+        goal: { status: 'achieved' },
+        nodes: [{ id: 'node-a', kind: 'task', status: 'active', taskId: 't-1', title }],
+      });
+
+      expect(options.refreshInterval(withAcceptance('rejected'))).toBeGreaterThan(0);
+      expect(options.refreshInterval(withAcceptance('repairing'))).toBeGreaterThan(0);
+
+      // Settled: the page can rest on this snapshot.
+      expect(options.refreshInterval(withAcceptance('delivered'))).toBe(0);
+      expect(options.refreshInterval(withAcceptance('accepted'))).toBe(0);
+
+      // Another task's rejection never keeps a terminal Goal polling.
+      expect(options.refreshInterval(withAcceptance('rejected', 'Ordinary work'))).toBe(0);
     });
   });
 

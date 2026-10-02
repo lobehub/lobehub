@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { GOAL_REPORT_TASK_TITLE } from '@lobechat/const/goal';
 import type { GoalReportMetadata } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -473,6 +474,48 @@ describe('GoalReportStore.submit', () => {
     expect(stored.version).toBe(1);
   });
 
+  /**
+   * Regression: the default model narrated the whole path and submitted every
+   * chapter with an empty detours array, so the report stored no detour the
+   * requirement promises. The store now fills the candidates the skeleton found
+   * from the graph instead of losing them.
+   */
+  it('fills a detour the skeleton found when the agent tells none, and stores it', async () => {
+    const { goalId, metadata, topicId } = await setup();
+    const detourNodeId = 'dddddddd-1111-4000-8000-0000000000aa';
+    await serverDB.insert(goalNodes).values({
+      description: 'Tried a long-lived connection and abandoned it.',
+      goalId,
+      id: detourNodeId,
+      kind: 'task',
+      status: 'rejected',
+      title: 'Abandoned branch',
+    });
+
+    const reports = new GoalReportStore(serverDB, userId);
+    const stored = await reports.submit(
+      goalId,
+      { content: '# Report', metadata },
+      { operationId: 'op_report_1', topicId },
+    );
+    expect(stored.version).toBe(1);
+
+    const [row] = await serverDB
+      .select()
+      .from(workVersions)
+      .where(eq(workVersions.workId, stored.workId));
+    const detours =
+      (row.metadata as any)?.goalReport?.chapters?.flatMap((c: any) => c.detours) ?? [];
+    expect(detours).toHaveLength(1);
+    expect(detours[0]).toMatchObject({
+      kind: 'dead_end',
+      lesson: 'Tried a long-lived connection and abandoned it.',
+      nodeIds: [detourNodeId],
+      reason: 'Tried a long-lived connection and abandoned it.',
+      title: 'Abandoned branch',
+    });
+  });
+
   it('stores metadata and content separately, appending a version per submission', async () => {
     const { goalId, metadata, reportNode, service, topicId } = await setup();
     const reports = new GoalReportStore(serverDB, userId);
@@ -526,5 +569,69 @@ describe('GoalReportStore.submit', () => {
     ).toMatchObject({
       items: expect.not.arrayContaining([expect.objectContaining({ type: 'goal_report' })]),
     });
+  });
+
+  /**
+   * Regression: a Goal whose graph has no deliverable Work could not store its
+   * wrap-up report. The agent copies the skeleton's "Final deliverable: none…"
+   * into `deliverableWorkId` as `""` or `"none"`, which the schema (`min(1)`) and
+   * the reference check rejected, so the whole wrap-up finished with no report.
+   * Both placeholders must read as "no deliverable".
+   */
+  it('accepts a report for a Goal with no deliverable, reading placeholders as absent', async () => {
+    const { goalId, metadata, service, topicId } = await setup();
+    const reports = new GoalReportStore(serverDB, userId);
+
+    const first = await reports.submit(
+      goalId,
+      {
+        content: '# Report\n\nNo deliverable was produced.',
+        metadata: { ...metadata, deliverableWorkId: '' },
+      },
+      { operationId: 'op_report_1', topicId },
+    );
+    const second = await reports.submit(
+      goalId,
+      { content: '# Report v2', metadata: { ...metadata, deliverableWorkId: 'none' } },
+      { operationId: 'op_report_1', topicId },
+    );
+
+    expect(first.version).toBe(1);
+    expect(second.version).toBe(2);
+
+    const rows = await serverDB
+      .select()
+      .from(workVersions)
+      .where(eq(workVersions.workId, first.workId))
+      .orderBy(workVersions.version);
+    expect(rows[0].metadata?.goalReport?.deliverableWorkId).toBeUndefined();
+    expect(rows[1].metadata?.goalReport?.deliverableWorkId).toBeUndefined();
+    expect((await service.graph(goalId)).report?.status).toBe('completed');
+  });
+
+  /**
+   * Regression: a submission with no `content` hit `input.content.trim()` on
+   * `undefined` and threw a raw TypeError, so the caller saw an unhandled crash
+   * instead of a validation error naming the missing field.
+   */
+  it('rejects a report whose content is missing with a structured validation error', async () => {
+    const { goalId, metadata, topicId } = await setup();
+    const reports = new GoalReportStore(serverDB, userId);
+
+    const missing = await reports
+      .submit(goalId, { content: undefined as unknown as string, metadata }, { topicId })
+      .catch((error: unknown) => error);
+    expect(missing).toBeInstanceOf(TRPCError);
+    expect(missing).toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('content'),
+    });
+    expect((missing as Error).message).not.toMatch(/Cannot read propert/);
+
+    await expect(
+      reports.submit(goalId, { content: null as unknown as string, metadata }, { topicId }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('content') });
+
+    expect(await new WorkModel(serverDB, userId).findLatestGoalReport(goalId)).toBeUndefined();
   });
 });
