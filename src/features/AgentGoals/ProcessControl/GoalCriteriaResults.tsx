@@ -23,10 +23,10 @@ import type { CriterionOutcome, CriterionOutcomeState, EvidenceLike } from './go
 
 /**
  * 验收标准 × 结果 — each criterion the Goal was accepted against, next to what
- * the latest acceptance round found: met or not, one line of what the evidence
- * showed, and why when it was not. A row opens into its evidence — screenshots,
- * written evidence, the documents it cites — in place, without framing the
- * content in another card.
+ * the latest acceptance round found: met or not, and why when it was not. A row
+ * opens into its evidence — screenshots, written evidence, the documents it
+ * cites — in place, without framing the content in another card. The round's own
+ * write-up for a met criterion belongs to the acceptance, not to this summary.
  */
 
 const styles = createStaticStyles(({ css }) => ({
@@ -179,7 +179,7 @@ const EvidenceItem = ({ item }: { item: EvidenceLike }) => {
 const CriterionRow = ({ index, outcome }: { index: number; outcome: CriterionOutcome }) => {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
-  const { criterion, evidence, reason, state, summary } = outcome;
+  const { criterion, evidence, reason, state } = outcome;
   const openable = evidence.length > 0;
   const color = STATE_COLOR[state];
 
@@ -208,11 +208,6 @@ const CriterionRow = ({ index, outcome }: { index: number; outcome: CriterionOut
               {t(`goalProcess.result.criteria.state.${state}`)}
             </Text>
           </Flexbox>
-          {summary && (
-            <Text fontSize={13} style={{ wordBreak: 'break-word' }} type={'secondary'}>
-              {summary}
-            </Text>
-          )}
           {state === 'failed' && reason && (
             <Text className={styles.reason} fontSize={13} style={{ wordBreak: 'break-word' }}>
               {reason}

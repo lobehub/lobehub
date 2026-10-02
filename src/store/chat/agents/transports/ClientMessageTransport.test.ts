@@ -38,6 +38,84 @@ describe('ClientMessageTransport', () => {
     vi.restoreAllMocks();
   });
 
+  describe('query', () => {
+    const projectedRow = {
+      content: '',
+      id: 'tool-1',
+      payloadOmitted: 'detail',
+      role: 'tool',
+    } as any;
+
+    const storeWith = (messages: any[]) => {
+      const store = createStore();
+      (store as any).dbMessagesMap['message-key'] = messages;
+      return store;
+    };
+
+    it('refills a projected tool payload before the list becomes a context', async () => {
+      const fetchPayloads = vi
+        .spyOn(messageService, 'getToolResultPayloads')
+        .mockResolvedValue({ 'tool-1': { content: 'REAL TOOL OUTPUT', pluginState: { a: 1 } } });
+      const transport = new ClientMessageTransport(
+        () => storeWith([projectedRow]),
+        'message-key',
+        'operation-1',
+      );
+
+      const [row] = await transport.query();
+
+      expect(fetchPayloads).toHaveBeenCalledWith(['tool-1']);
+      expect(row.content).toBe('REAL TOOL OUTPUT');
+      expect(row.pluginState).toEqual({ a: 1 });
+    });
+
+    it('fetches each stored payload once across the steps of a run', async () => {
+      const fetchPayloads = vi
+        .spyOn(messageService, 'getToolResultPayloads')
+        .mockResolvedValue({ 'tool-1': { content: 'REAL TOOL OUTPUT' } });
+      const store = storeWith([projectedRow]);
+      const transport = new ClientMessageTransport(() => store, 'message-key', 'operation-1');
+
+      await transport.query();
+      (store as any).dbMessagesMap['message-key'] = [
+        projectedRow,
+        { content: 'hi', id: 'user-1', role: 'user' },
+      ];
+      const second = await transport.query();
+
+      expect(fetchPayloads).toHaveBeenCalledTimes(1);
+      expect(second[0].content).toBe('REAL TOOL OUTPUT');
+    });
+
+    it('leaves an unprojected list alone without asking the server', async () => {
+      const fetchPayloads = vi.spyOn(messageService, 'getToolResultPayloads');
+      const rows = [{ content: 'FULL', id: 'tool-1', role: 'tool' }] as any[];
+      const transport = new ClientMessageTransport(
+        () => storeWith(rows),
+        'message-key',
+        'operation-1',
+      );
+
+      expect(await transport.query()).toEqual(rows);
+      expect(fetchPayloads).not.toHaveBeenCalled();
+    });
+
+    it('keeps the projected row when the refill fails, rather than failing the step', async () => {
+      vi.spyOn(messageService, 'getToolResultPayloads').mockRejectedValue(new Error('offline'));
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const transport = new ClientMessageTransport(
+        () => storeWith([projectedRow]),
+        'message-key',
+        'operation-1',
+      );
+
+      const [row] = await transport.query();
+
+      expect(row.content).toBe('');
+      error.mockRestore();
+    });
+  });
+
   it('creates an optimistic message with a stable id and persists it quietly', async () => {
     const store = createStore();
     const transport = new ClientMessageTransport(() => store, 'message-key', 'operation-1');

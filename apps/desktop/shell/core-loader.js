@@ -78,7 +78,7 @@ const verifyCandidate = (dir, { abi, builtinHashes, publicKey, storeDir }) => {
   return manifest;
 };
 
-function resolveCore({ userData, builtinDir, abi, publicKey }) {
+function resolveCore({ userData, builtinDir, abi, publicKey, platform = process.platform }) {
   const otaRoot = path.join(userData, 'core-ota');
   const bootFile = path.join(otaRoot, 'boot.json');
   const pointerFile = path.join(otaRoot, 'pointer.json');
@@ -106,6 +106,13 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
   };
 
   const builtinManifest = readJson(path.join(builtinDir, 'manifest.json')) ?? null;
+  const updateChannel =
+    readJson(path.join(userData, 'lobehub-settings.json'))?.updateChannel ??
+    builtinManifest?.channel;
+  if (platform === 'darwin' && updateChannel !== 'canary' && updateChannel !== 'beta') {
+    log.push('macOS Stable uses full updates only; ignoring external core');
+    savePointer({ channel: 'stable', current: null, previous: null, staged: null });
+  }
   const builtinSeq = typeof builtinManifest?.seq === 'number' ? builtinManifest.seq : null;
   const builtinHashes = new Set(
     Array.isArray(builtinManifest?.tree) ? builtinManifest.tree.map((file) => file.sha256) : [],
@@ -117,6 +124,15 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
   const rejectReason = (manifest) => {
     if (channel && manifest.channel && manifest.channel !== channel)
       return `channel ${manifest.channel} != ${channel}`;
+    // v4 seq counters restart for each shell version. A full update must not keep
+    // an older shell's core just because that namespace had a higher seq.
+    if (
+      manifest.schemaVersion === 4 &&
+      builtinManifest?.version &&
+      manifest.version !== builtinManifest.version &&
+      !manifest.version.startsWith(`${builtinManifest.version}-core.`)
+    )
+      return `app version ${manifest.version} does not belong to ${builtinManifest.version}`;
     if (
       builtinSeq !== null &&
       manifest.channel === builtinManifest.channel &&

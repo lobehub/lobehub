@@ -8,6 +8,7 @@ import TaskDetailAssignee from './TaskDetailAssignee';
 import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 import TaskDetailRunPauseAction from './TaskDetailRunPauseAction';
 import TaskDetailTitleInput from './TaskDetailTitleInput';
+import TaskExecutionConfig from './TaskExecutionConfig';
 import TaskInstruction from './TaskInstruction';
 import TaskModelConfig from './TaskModelConfig';
 import TaskParentBar from './TaskParentBar';
@@ -31,6 +32,7 @@ const TaskDetailSections = memo(() => {
             <TaskDetailRunPauseAction />
             <TaskDetailAssignee />
             <TaskModelConfig />
+            <TaskExecutionConfig />
           </Flexbox>
         </Flexbox>
         <div className={styles.side}>

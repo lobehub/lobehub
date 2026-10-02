@@ -1,4 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
+import { ScrollArea } from '@lobehub/ui/base-ui';
 import { type FC } from 'react';
 
 import HomePageTracker from '@/components/Analytics/HomePageTracker';
@@ -6,6 +6,9 @@ import HomeContent from '@/features/Home';
 import { useHomeMinimalLayout } from '@/features/Home/CustomizeModal/useHomeCustomization';
 import HomeNavHeader from '@/features/Home/HomeNavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
+
+// Keep in sync with NavHeader's height so the track starts at its bottom edge.
+const HOME_NAV_HEADER_HEIGHT = 44;
 
 const Home: FC = () => {
   // Auto margins are what center a flex item inside the scroll lane, and they
@@ -16,15 +19,22 @@ const Home: FC = () => {
     <>
       <HomePageTracker />
       <HomeNavHeader />
-      {/* The page scrolls here, at full pane width, rather than inside the
-          centered column: it puts the scrollbar against the app frame instead
-          of floating it in the margin beside the content, and a native
-          overflow container takes no tab stop — a scroll viewport would, and
-          its focus ring would trace a box around the entire dashboard. */}
-      <Flexbox
-        height={'100%'}
-        style={{ overflowY: 'auto', paddingBlock: '32px 24px', paddingInline: 24 }}
-        width={'100%'}
+      <ScrollArea
+        disableContentFit
+        scrollFade
+        scrollbarProps={{ style: { marginBlockStart: HOME_NAV_HEADER_HEIGHT } }}
+        style={{ height: '100%', overflow: 'hidden', width: '100%' }}
+        viewportProps={{ tabIndex: -1 }}
+        contentProps={{
+          style: {
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: '100%',
+            paddingBlock: '32px 24px',
+            paddingInline: 24,
+          },
+        }}
       >
         <WideScreenContainer
           fullWidth
@@ -33,7 +43,7 @@ const Home: FC = () => {
         >
           <HomeContent />
         </WideScreenContainer>
-      </Flexbox>
+      </ScrollArea>
     </>
   );
 };

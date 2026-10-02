@@ -120,6 +120,9 @@ const updateSchema = z.object({
   assigneeUserId: z.string().nullish(),
   automationMode: z.enum(['heartbeat', 'schedule']).nullish(),
   config: z.record(z.string(), z.unknown()).optional(),
+  // Deep-merged into `config` under the update's row lock rather than
+  // replacing it — for a client editing one config key alongside columns.
+  configPatch: z.record(z.string(), z.unknown()).optional(),
   context: z.record(z.string(), z.unknown()).optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
@@ -1375,7 +1378,7 @@ export const taskRouter = router({
   update: taskProcedureWrite
     .input(idInput.merge(updateSchema).extend({ actorAgentId: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
-      const { actorAgentId, id, parentTaskId, status, ...data } = input;
+      const { actorAgentId, configPatch, id, parentTaskId, status, ...data } = input;
       try {
         const model = ctx.taskModel;
         const actor = await resolveActivityActor(ctx, actorAgentId);
@@ -1404,6 +1407,7 @@ export const taskRouter = router({
                 resolved.id,
                 normalizedUpdateData,
                 actor,
+                { configPatch },
               );
               if (!updated) return null;
 
@@ -1414,6 +1418,7 @@ export const taskRouter = router({
               resolved.id,
               normalizedUpdateData,
               actor,
+              { configPatch },
             );
         if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
         // Only an actual assignee change notifies — re-saving the same assignee

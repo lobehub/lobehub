@@ -39,11 +39,59 @@ const titleOf = (nodeId: string) => titles[nodeId];
 
 describe('dedupeArtifacts', () => {
   it('keeps one row per version, under the node that produced it', () => {
-    const produced = artifact({ nodeId: 'n1', workVersionId: 'same' });
-    const input = artifact({ nodeId: 'n2', relation: 'input', workVersionId: 'same' });
+    const produced = artifact({ nodeId: 'n1', workId: 'w_same', workVersionId: 'same' });
+    const input = artifact({
+      nodeId: 'n2',
+      relation: 'input',
+      workId: 'w_same',
+      workVersionId: 'same',
+    });
 
     expect(dedupeArtifacts([input, produced])).toEqual([produced]);
     expect(dedupeArtifacts([produced, input])).toEqual([produced]);
+  });
+
+  it('keeps one row per deliverable, under the node that delivered it first', () => {
+    // A shared document revised by three tasks used to list three times: each
+    // task declared the version it wrote as its own delivery.
+    const first = artifact({
+      createdAt: new Date(2026, 8, 1, 0, 1),
+      nodeId: 'n1',
+      workId: 'w_shared',
+      workVersionId: 'v1',
+    });
+    const second = artifact({
+      createdAt: new Date(2026, 8, 1, 0, 2),
+      nodeId: 'n2',
+      workId: 'w_shared',
+      workVersionId: 'v2',
+    });
+    const third = artifact({
+      createdAt: new Date(2026, 8, 1, 0, 3),
+      nodeId: 'n3',
+      workId: 'w_shared',
+      workVersionId: 'v3',
+    });
+
+    expect(dedupeArtifacts([third, second, first])).toEqual([first]);
+  });
+
+  it('still names a deliverable another task only took as input', () => {
+    const produced = artifact({
+      createdAt: new Date(2026, 8, 1, 0, 5),
+      nodeId: 'n1',
+      workId: 'w_doc',
+      workVersionId: 'v9',
+    });
+    const laterInput = artifact({
+      createdAt: new Date(2026, 8, 1, 0, 1),
+      nodeId: 'n2',
+      relation: 'input',
+      workId: 'w_doc',
+      workVersionId: 'v10',
+    });
+
+    expect(dedupeArtifacts([laterInput, produced])).toEqual([produced]);
   });
 });
 

@@ -4,6 +4,7 @@ import debug from 'debug';
 import { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
+import { readConversationMessageListPage } from '@/helpers/conversationMessageRead';
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
 import {
@@ -391,7 +392,7 @@ export const dataSlice: StateCreator<
           ? topicSelectors.getTopicById(context.topicId)(getChatStoreState())
           : undefined;
         const wasPending = hasPendingInterventions(dbMessages);
-        let messages = await runMessageListQuery(context, messageService.getMessageListPage);
+        let messages = await runMessageListQuery(context, readConversationMessageListPage);
         if (!syncContinuation || !context.topicId) return messages;
         if (wasPending || hasPendingInterventions(messages)) sync.pending.add(syncKey);
         if (!sync.pending.has(syncKey) || hasPendingInterventions(messages)) return messages;
@@ -401,7 +402,7 @@ export const dataSlice: StateCreator<
         const topic = await topicService.getTopicDetail(context.topicId);
         if (!isInterventionRunActive(topic)) {
           // Read after completion without dropping loaded history or its cursor.
-          messages = await runMessageListQuery(context, messageService.getMessageListPage, {
+          messages = await runMessageListQuery(context, readConversationMessageListPage, {
             force: true,
           });
         }

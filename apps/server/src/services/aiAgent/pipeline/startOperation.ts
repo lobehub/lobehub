@@ -34,6 +34,8 @@ export interface StartOperationInput {
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
   clientIp?: string;
+  /** Wire protocol the calling client declared; `2` opts the run into message_patch delivery. */
+  clientProtocol?: 1 | 2;
   /** Tri-state disabled plugin identifiers, kept on the world slot for the context rules. */
   disabledPluginIds?: string[];
   discordContext?: any;
@@ -159,6 +161,7 @@ export const startOperation = async (
         : undefined);
     const result = await deps.agentRuntimeService.createOperation({
       acceptsMemberRuntimeEnd: memberRuntimeEndAccepted,
+      clientProtocol: input.clientProtocol,
       includeFinalState: input.includeFinalState,
       activeDeviceId: discovery.activeDeviceId,
       activeDeviceScope: discovery.activeDeviceScope,

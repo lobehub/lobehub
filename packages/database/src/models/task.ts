@@ -13,6 +13,12 @@ import type {
   WorkspaceTreeNode,
 } from '@lobechat/types';
 import {
+  clearTaskReposSelection,
+  readTaskExecutionConfig,
+  toTaskExecutionConfigPatch,
+  withoutTaskExecutionSelection,
+} from '@lobechat/types';
+import {
   and,
   desc,
   eq,
@@ -129,6 +135,49 @@ const normalizeTaskRefs = <
     }
   }
   return normalized;
+};
+
+/**
+ * The data to write when a task moves to another assignee, with the previous
+ * assignee's cloud-repo selection dropped in the same write.
+ *
+ * `repos` resolve against the assignee agent's provider env, so they belong to
+ * the agent they were picked for: carrying them to another agent leaves every
+ * later run pointing at a repository the new assignee cannot open. The
+ * machine-local axes (the device pin and a path on that machine) are the user's
+ * own and stay.
+ *
+ * Only a change of the AGENT counts, and only when the write does not state an
+ * execution of its own — a writer that moves the assignee AND names a directory
+ * is describing the new assignee's run on purpose. Returns `data` untouched when
+ * there is nothing to drop.
+ */
+const withStaleReposCleared = (
+  before: { assigneeAgentId: string | null; config: unknown },
+  data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
+): Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>> => {
+  // Nothing to drop for a task that had no assignee to begin with (the runner's
+  // "unassigned → inbox agent" fallback), nor for a write that keeps it.
+  if (!before.assigneeAgentId) return data;
+  if (data.assigneeAgentId === undefined || data.assigneeAgentId === before.assigneeAgentId) {
+    return data;
+  }
+
+  const statedExecution = (data.config as Record<string, unknown> | undefined)?.execution;
+  if (statedExecution !== undefined) return data;
+
+  const currentConfig = (before.config ?? {}) as Record<string, unknown>;
+  const cleared = clearTaskReposSelection(readTaskExecutionConfig(currentConfig));
+  if (cleared === readTaskExecutionConfig(currentConfig)) return data;
+
+  return {
+    ...data,
+    config: {
+      ...currentConfig,
+      ...(data.config as Record<string, unknown> | undefined),
+      execution: toTaskExecutionConfigPatch(cleared),
+    },
+  };
 };
 
 export const isTaskIdentifierUniqueViolation = (error: unknown): boolean => {
@@ -478,7 +527,37 @@ export class TaskModel {
   ): Promise<TaskItem | null> {
     if (Object.keys(data).length === 0) return this.findById(id);
 
-    const updated = await this.db
+    // A reassignment is not a plain column write: the row being moved away from
+    // decides whether the previous assignee's cloud-repo selection has to go,
+    // so read it under a lock — a config write landing between the read and the
+    // merge below would be lost. Every writer of the assignee column comes
+    // through here (`updateWithLog`, the update procedure, the coordinator's
+    // handoff/restart, the runner's inbox fallback), so this is the one place
+    // the invariant has to hold; `updateWithLog` locks its own read for the
+    // activity log and then delegates.
+    if (data.assigneeAgentId === undefined) return this.writeRow(this.db, id, data);
+
+    return this.db.transaction(async (tx) => {
+      const runner = tx as LobeChatDatabase;
+      const [before] = await runner
+        .select({ assigneeAgentId: tasks.assigneeAgentId, config: tasks.config })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), this.ownership()))
+        .for('update')
+        .limit(1);
+      if (!before) return null;
+
+      return this.writeRow(runner, id, withStaleReposCleared(before, data));
+    });
+  }
+
+  /** The column write itself — the assignee rule lives in `update`. */
+  private async writeRow(
+    db: LobeChatDatabase,
+    id: string,
+    data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
+  ): Promise<TaskItem | null> {
+    const updated = await db
       .update(tasks)
       .set({ ...normalizeTaskRefs(data), updatedAt: new Date() })
       .where(and(eq(tasks.id, id), this.ownership()))
@@ -1382,15 +1461,40 @@ export class TaskModel {
 
   /**
    * Safely merge-update the task's config object.
-   * Reads the current config, shallow-merges the incoming partial, and writes back.
+   * Reads the current config, deep-merges the incoming partial, and writes back.
+   *
+   * The read is taken under a row lock: several independent writers merge into
+   * this one column (model, run location, checkpoint, review, verify), and two
+   * of them reading the same snapshot would let the later whole-column write
+   * silently drop the other's key.
    */
   async updateTaskConfig(id: string, partial: Record<string, unknown>): Promise<TaskItem | null> {
-    const task = await this.findById(id);
-    if (!task) return null;
+    return this.rewriteConfig(id, (current) => merge(current, partial));
+  }
 
-    const current = (task.config as Record<string, unknown>) || {};
-    const config = merge(current, partial);
-    return this.update(id, { config });
+  /**
+   * Read-modify-write of the `config` column under a row lock. Every writer that
+   * derives the next config from the current one must come through here, so two
+   * of them cannot read the same snapshot and drop each other's key.
+   */
+  private async rewriteConfig(
+    id: string,
+    next: (current: Record<string, any>) => Record<string, unknown>,
+  ): Promise<TaskItem | null> {
+    return this.db.transaction(async (tx) => {
+      const runner = tx as LobeChatDatabase;
+      const [task] = await runner
+        .select({ config: tasks.config })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), this.ownership()))
+        .for('update')
+        .limit(1);
+      if (!task) return null;
+
+      return this.writeRow(runner, id, {
+        config: next((task.config as Record<string, any>) || {}),
+      });
+    });
   }
 
   // ========== Context (runtime state) ==========
@@ -1487,18 +1591,16 @@ export class TaskModel {
     id: string,
     patch: { [K in keyof TaskVerifyConfig]?: TaskVerifyConfig[K] | null },
   ): Promise<TaskItem | null> {
-    const task = await this.findById(id);
-    if (!task) return null;
+    return this.rewriteConfig(id, (config) => {
+      const next: Record<string, any> = { ...(config.verify as TaskVerifyConfig | undefined) };
 
-    const config = (task.config as Record<string, any>) || {};
-    const next: Record<string, any> = { ...(config.verify as TaskVerifyConfig | undefined) };
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) delete next[key];
+        else if (value !== undefined) next[key] = value;
+      }
 
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === null) delete next[key];
-      else if (value !== undefined) next[key] = value;
-    }
-
-    return this.update(id, { config: { ...config, verify: next } });
+      return { ...config, verify: next };
+    });
   }
 
   // Check if a task should pause after a topic completes
@@ -2092,8 +2194,18 @@ export class TaskModel {
     id: string,
     data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
     actor: { agentId?: string | null; userId?: string | null },
+    options: {
+      /**
+       * Deep-merged into the `config` column under this update's row lock,
+       * instead of replacing it. A client that edits one key (the schedule
+       * cap) must not send back a whole-config snapshot that can predate
+       * another tab's or member's write of a different key.
+       */
+      configPatch?: Record<string, unknown>;
+    } = {},
   ): Promise<TaskItem | null> {
-    const touched = TRACKED_TASK_COLUMNS.some((col) => data[col] !== undefined);
+    const { configPatch } = options;
+    const touched = !!configPatch || TRACKED_TASK_COLUMNS.some((col) => data[col] !== undefined);
     // Nothing to diff against: an ordinary rename should not pay for a lock.
     if (!touched) return this.update(id, data);
 
@@ -2118,7 +2230,21 @@ export class TaskModel {
       if (!before) return null;
 
       const scoped = new TaskModel(runner, this.userId, this.workspaceId);
-      const updated = await scoped.update(id, data);
+
+      // The reassignment rule — dropping the previous assignee's cloud-repo
+      // selection — lives in `update`, which is the only writer of the assignee
+      // column, so this locked read is kept for the activity-log diff only and
+      // the write below re-checks the rule in the same transaction.
+      const writeData = configPatch
+        ? {
+            ...data,
+            config: merge(
+              ((data.config ?? before.config) as Record<string, unknown> | null) ?? {},
+              configPatch,
+            ),
+          }
+        : data;
+      const updated = await scoped.update(id, writeData);
       if (!updated) return null;
 
       const events: { payload: TaskActivityLogPayload; type: TaskActivityLogType }[] = [];
@@ -2379,7 +2505,14 @@ export class TaskModel {
             assigneeAgentId: null,
             assigneeUserId: null,
             automationMode: original.automationMode,
-            config: original.config ?? {},
+            // The run location is dropped the way the other cross-scope refs
+            // are: a pinned machine, a path on it and a repo set all name
+            // something in the scope this task came from, and the clone's first
+            // assignment cannot clean them up later (it has no previous assignee
+            // to diff against — see `updateWithLog`).
+            config: withoutTaskExecutionSelection(
+              original.config as null | Record<string, unknown>,
+            ),
             context: {
               ...(original.context as Record<string, unknown>),
               duplicatedFrom: original.id,

@@ -14,12 +14,18 @@ vi.mock('@/services/task', () => ({
     updateCheckpoint: vi.fn(),
     updateConfig: vi.fn(),
     updateReview: vi.fn(),
+    updateVerifyConfig: vi.fn(),
   },
 }));
 
 vi.mock('@/libs/swr', () => ({
   mutate: vi.fn(),
   useClientDataSWR: vi.fn(),
+}));
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 const mockDetail = {
@@ -49,13 +55,52 @@ describe('TaskConfigSliceAction', () => {
       expect(taskService.updateCheckpoint).toHaveBeenCalledWith('T-1', checkpoint);
     });
 
-    it('should refresh on error', async () => {
+    it('keeps config.checkpoint in sync so a later schedule edit does not restore the old one', async () => {
+      vi.mocked(taskService.updateCheckpoint).mockResolvedValue({ success: true } as any);
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...mockDetail,
+            config: { checkpoint: { onAgentRequest: false }, schedule: { maxExecutions: null } },
+            schedule: { pattern: '0 9 * * *', timezone: 'UTC' },
+          },
+        },
+      });
+
+      await useTaskStore.getState().updateCheckpoint('T-1', { onAgentRequest: true });
+      await useTaskStore.getState().updateSchedule('T-1', {
+        maxExecutions: null,
+        pattern: '0 18 * * *',
+        timezone: 'UTC',
+      });
+
+      expect(useTaskStore.getState().taskDetailMap['T-1'].config?.checkpoint).toEqual({
+        onAgentRequest: true,
+      });
+      // The schedule save sends only its own key, never a config snapshot that
+      // could carry a stale checkpoint back to the server.
+      expect(vi.mocked(taskService.update).mock.calls[0][1]).not.toHaveProperty('config');
+    });
+
+    it('rolls back and marks the save failed when the PUT rejects', async () => {
       const { mutate } = await import('@/libs/swr');
+      const { toast } = await import('@lobehub/ui/base-ui');
       vi.mocked(taskService.updateCheckpoint).mockRejectedValue(new Error('fail'));
 
       await useTaskStore.getState().updateCheckpoint('T-1', { onAgentRequest: true });
 
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      // The optimistic patch is replayed back; a failure must never leave the
+      // toggle looking saved, and it must not depend on a refetch to say so.
+      expect(useTaskStore.getState().taskDetailMap['T-1'].checkpoint).toEqual({
+        onAgentRequest: false,
+      });
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
+      expect(toast.error).toHaveBeenCalled();
+      const refreshes = vi
+        .mocked(mutate)
+        .mock.calls.filter((call) => Array.isArray(call[0]) && call[0][0] === 'task:detail');
+      expect(refreshes).toHaveLength(0);
     });
   });
 
@@ -69,6 +114,92 @@ describe('TaskConfigSliceAction', () => {
 
       expect(taskService.updateReview).toHaveBeenCalledWith({ id: 'T-1', review });
       expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+    });
+  });
+
+  describe('review / verify writes', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    it.each([
+      [
+        'updateReview',
+        () => useTaskStore.getState().updateReview('T-1', { enabled: true } as any),
+        () => taskService.updateReview,
+      ],
+      [
+        'updateVerifyConfig',
+        () => useTaskStore.getState().updateVerifyConfig('T-1', { enabled: true }),
+        () => taskService.updateVerifyConfig,
+      ],
+    ] as const)(
+      '%s queues behind an in-flight run-location write on the same config column',
+      async (_name, write, service) => {
+        // The server merges `tasks.config` read-modify-write, and this writer's
+        // follow-up refetch would otherwise land on top of the run-location
+        // chip's optimistic state while its PUT is still in flight.
+        let settleExecution!: () => void;
+        vi.mocked(taskService.updateConfig).mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              settleExecution = () => resolve({ success: true } as any);
+            }),
+        );
+        vi.mocked(service()).mockResolvedValue({ success: true } as any);
+
+        const store = useTaskStore.getState();
+        const p1 = store.updateTaskExecution('T-1', { boundDeviceId: 'device-a' });
+        const p2 = write();
+
+        await flush();
+        expect(taskService.updateConfig).toHaveBeenCalledTimes(1);
+        expect(service()).not.toHaveBeenCalled();
+
+        settleExecution();
+        await Promise.all([p1, p2]);
+        expect(service()).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it('keeps an edit queued behind a review write when the review refetch lands', async () => {
+      const { mutate } = await import('@/libs/swr');
+      let settleReview!: () => void;
+      vi.mocked(taskService.updateReview).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settleReview = () => resolve({ success: true } as any);
+          }),
+      );
+      vi.mocked(taskService.updateCheckpoint).mockResolvedValue({ success: true } as any);
+      // The refetch returns server data that predates the queued checkpoint edit.
+      vi.mocked(mutate).mockImplementation(async () => {
+        useTaskStore.setState({
+          taskDetailMap: {
+            'T-1': { ...mockDetail, checkpoint: { onAgentRequest: false } },
+          },
+        });
+      });
+
+      const store = useTaskStore.getState();
+      const review = store.updateReview('T-1', { enabled: true } as any);
+      await flush();
+      const checkpoint = store.updateCheckpoint('T-1', { onAgentRequest: true });
+      settleReview();
+      await Promise.all([review, checkpoint]);
+
+      expect(taskService.updateCheckpoint).toHaveBeenCalledOnce();
+      expect(useTaskStore.getState().taskDetailMap['T-1'].checkpoint).toEqual({
+        onAgentRequest: true,
+      });
+      vi.mocked(mutate).mockReset();
+    });
+
+    it('updateVerifyConfig still rejects so multi-step callers can abort', async () => {
+      vi.mocked(taskService.updateVerifyConfig).mockRejectedValue(new Error('fail'));
+
+      await expect(
+        useTaskStore.getState().updateVerifyConfig('T-1', { enabled: true }),
+      ).rejects.toThrow('fail');
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
     });
   });
 
@@ -98,7 +229,7 @@ describe('TaskConfigSliceAction', () => {
   });
 
   describe('updateTaskModelConfig', () => {
-    it('should call updateConfig with model/provider and refresh detail', async () => {
+    it('should call updateConfig with model/provider and never refetch', async () => {
       const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.updateConfig).mockResolvedValue({ success: true } as any);
 
@@ -110,7 +241,179 @@ describe('TaskConfigSliceAction', () => {
         model: 'claude-sonnet-4-6',
         provider: 'anthropic',
       });
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(useTaskStore.getState().taskDetailMap['T-1'].config).toMatchObject({
+        model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
+      });
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
+      // A refresh here is an async write that could land after the user's next
+      // run-location pick and replace it.
+      const refreshes = vi
+        .mocked(mutate)
+        .mock.calls.filter((call) => Array.isArray(call[0]) && call[0][0] === 'task:detail');
+      expect(refreshes).toHaveLength(0);
+    });
+
+    it('serializes with the run-location writes they share a config column with', async () => {
+      const flush = () => new Promise((r) => setTimeout(r, 0));
+      const settlers: Array<() => void> = [];
+      vi.mocked(taskService.updateConfig).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settlers.push(() => resolve({ success: true } as any));
+          }),
+      );
+
+      // Both writes merge into `tasks.config` server-side with a
+      // read-modify-write, so two in flight let the later one erase the other.
+      const store = useTaskStore.getState();
+      const p1 = store.updateTaskModelConfig('T-1', { model: 'claude-sonnet-4-6' });
+      const p2 = store.updateTaskExecution('T-1', { boundDeviceId: 'device-a' });
+
+      // Both are already visible, and only the first PUT is on the wire.
+      expect(useTaskStore.getState().taskDetailMap['T-1'].config).toMatchObject({
+        execution: { boundDeviceId: 'device-a' },
+        model: 'claude-sonnet-4-6',
+      });
+
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(1);
+
+      settlers[0]();
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(2);
+
+      settlers[1]();
+      await Promise.all([p1, p2]);
+
+      expect(vi.mocked(taskService.updateConfig).mock.calls.map((call) => call[1])).toEqual([
+        { model: 'claude-sonnet-4-6' },
+        {
+          execution: {
+            boundDeviceId: 'device-a',
+            repos: null,
+            workingDirectory: null,
+            workingDirectoryConfig: null,
+          },
+        },
+      ]);
+    });
+  });
+
+  describe('updateTaskExecution', () => {
+    // Macrotask flush — enough for OptimisticEngine to resolve the previous PUT,
+    // run its post-await steps, and kick off the next mutation's PUT.
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    const executionOf = (id = 'T-1') =>
+      useTaskStore.getState().taskDetailMap[id].config?.execution as Record<string, unknown>;
+
+    it('serializes rapid device + directory edits, keeps the last one, and never refetches', async () => {
+      const { mutate } = await import('@/libs/swr');
+      const settlers: Array<() => void> = [];
+      vi.mocked(taskService.updateConfig).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settlers.push(() => resolve({ success: true } as any));
+          }),
+      );
+
+      // Every call writes a COMPLETE four-axis patch, so the older PUT landing
+      // last would put the previous selection back — silently moving the run.
+      const store = useTaskStore.getState();
+      const p1 = store.updateTaskExecution('T-1', { boundDeviceId: 'device-a' });
+      const p2 = store.updateTaskExecution('T-1', {
+        boundDeviceId: 'device-a',
+        workingDirectory: '/srv/app',
+      });
+      const p3 = store.updateTaskExecution('T-1', {
+        boundDeviceId: 'device-b',
+        workingDirectory: '/srv/app',
+      });
+
+      // The last click is already on screen while the first PUT is in flight.
+      expect(executionOf()).toEqual({
+        boundDeviceId: 'device-b',
+        repos: null,
+        workingDirectory: '/srv/app',
+        workingDirectoryConfig: null,
+      });
+
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(1);
+
+      settlers[0]();
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(2);
+
+      settlers[1]();
+      await flush();
+      expect(taskService.updateConfig).toHaveBeenCalledTimes(3);
+
+      settlers[2]();
+      await Promise.all([p1, p2, p3]);
+
+      expect(
+        vi
+          .mocked(taskService.updateConfig)
+          .mock.calls.map((call) => (call[1] as any).execution.boundDeviceId),
+      ).toEqual(['device-a', 'device-a', 'device-b']);
+      expect(executionOf()).toEqual({
+        boundDeviceId: 'device-b',
+        repos: null,
+        workingDirectory: '/srv/app',
+        workingDirectoryConfig: null,
+      });
+
+      const refreshes = vi
+        .mocked(mutate)
+        .mock.calls.filter((call) => Array.isArray(call[0]) && call[0][0] === 'task:detail');
+      expect(refreshes).toHaveLength(0);
+    });
+
+    it('rolls the optimistic patch back, marks the save failed, and offers a retry', async () => {
+      const { toast } = await import('@lobehub/ui/base-ui');
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...mockDetail,
+            config: { execution: { boundDeviceId: 'device-a' }, model: 'x' },
+          },
+        },
+      });
+      vi.mocked(taskService.updateConfig).mockRejectedValue(new Error('boom'));
+
+      await useTaskStore.getState().updateTaskExecution('T-1', { boundDeviceId: 'device-b' });
+
+      // Engine replayed the inverse patch: the stored selection is back, and the
+      // other config pockets were never touched.
+      expect(useTaskStore.getState().taskDetailMap['T-1'].config).toEqual({
+        execution: { boundDeviceId: 'device-a' },
+        model: 'x',
+      });
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
+
+      const toastOptions = vi.mocked(toast.error).mock.calls.at(-1)?.[0];
+      if (!toastOptions || typeof toastOptions === 'string') {
+        throw new Error('Expected the failed save toast to expose a Retry action.');
+      }
+      expect(toastOptions.actions?.[0]).toBeDefined();
+    });
+
+    it('marks the save saved when the write lands', async () => {
+      vi.mocked(taskService.updateConfig).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().updateTaskExecution('T-1', { boundDeviceId: 'device-a' });
+
+      expect(taskService.updateConfig).toHaveBeenCalledWith('T-1', {
+        execution: {
+          boundDeviceId: 'device-a',
+          repos: null,
+          workingDirectory: null,
+          workingDirectoryConfig: null,
+        },
+      });
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
     });
   });
 
@@ -486,7 +789,7 @@ describe('TaskConfigSliceAction', () => {
       });
       expect((detail.config as any).schedule.maxExecutions).toBe(5);
       expect(taskService.update).toHaveBeenCalledWith('T-1', {
-        config: { schedule: { maxExecutions: 5 } },
+        configPatch: { schedule: { maxExecutions: 5 } },
         schedulePattern: '0 9 * * 1-5',
         scheduleTimezone: 'Asia/Shanghai',
       });

@@ -4,9 +4,9 @@ import debug from 'debug';
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
+import { readConversationMessageListPage } from '@/helpers/conversationMessageRead';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { isMessageListKey } from '@/libs/swr/keys';
-import { messageService } from '@/services/message';
 import {
   getMessageListCacheIdentity,
   getMessageListFetchPolicy,
@@ -97,7 +97,7 @@ export class MessageQueryActionImpl {
 
     prefetchingMessageKeys.add(messagesKey);
 
-    const request = runMessageListQuery(context, messageService.getMessageListPage).then(
+    const request = runMessageListQuery(context, readConversationMessageListPage).then(
       (messages) => {
         // Re-check at DELIVERY time, not just at start: the user can open this
         // topic and submit a follow-up while the request is in flight. Applying
@@ -358,7 +358,7 @@ export class MessageQueryActionImpl {
 
     return useClientDataSWRWithSync<UIChatMessage[]>(
       shouldFetch ? messageListKey(context) : null,
-      () => runMessageListQuery(context, messageService.getMessageListPage),
+      () => runMessageListQuery(context, readConversationMessageListPage),
       {
         ...getMessageListFetchPolicy(context),
         onData: (data) => {

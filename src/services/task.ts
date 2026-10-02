@@ -133,6 +133,8 @@ class TaskService {
       // Automation mode; null = no automation
       automationMode?: TaskAutomationMode | null;
       config?: Record<string, unknown>;
+      /** Deep-merged into `config` server-side under the row lock (vs. `config`, which replaces). */
+      configPatch?: Record<string, unknown>;
       context?: Record<string, unknown>;
       description?: string;
       editorData?: unknown;

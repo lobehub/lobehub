@@ -1759,16 +1759,14 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
     expect(queryMock).not.toHaveBeenCalled();
   });
 
-  it('sends only the expected revision for a Gateway mux native run', async () => {
-    const service = new AgentRuntimeService({} as any, 'user-1', {
-      gatewayMuxEnabledResolver: async () => true,
-      queueService: null,
-    });
+  it('sends only the expected revision when the client declared protocol 2', async () => {
+    const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
     const coordinator = (service as any).coordinator;
     const streamManager = (service as any).streamManager;
 
     coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
     coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      host: { clientProtocol: 2 },
       lastModified: new Date().toISOString(),
       origin: { agentId: 'agt_1', topicId: 'tpc_1' },
       status: 'done',
@@ -1789,6 +1787,40 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
       ([, evt]: any) => evt?.type === 'step_start',
     );
     expect(stepStartCall[1].data).toEqual({ messageRevision: 5 });
+  });
+
+  it('still pushes the whole snapshot to a client that declared nothing', async () => {
+    const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      // An older desktop bundle: it only learns the settled list from what the
+      // server pushes, so a revision alone would leave it rendering stale rows.
+      host: {},
+      lastModified: new Date().toISOString(),
+      origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+      status: 'done',
+      stepCount: 3,
+    });
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+    (service as any).messageServiceInstance = {
+      prepareUiMessages: vi.fn().mockResolvedValue([{ id: 'large-history', role: 'user' }]),
+    };
+
+    await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-legacy',
+      stepIndex: 5,
+    });
+
+    const stepStartCall = streamManager.publishStreamEvent.mock.calls.find(
+      ([, evt]: any) => evt?.type === 'step_start',
+    );
+    expect(stepStartCall[1].data).toEqual({
+      uiMessages: [{ id: 'large-history', role: 'user' }],
+    });
   });
 });
 

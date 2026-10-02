@@ -9,6 +9,7 @@ const ABI_FILE = 'apps/desktop/shell/abi.json';
 
 const TRACKED_INPUTS = [
   'apps/desktop/shell',
+  'apps/desktop/patches',
   'apps/desktop/build',
   'apps/desktop/electron-builder.mjs',
   'apps/desktop/scripts/packBuiltinCore.mjs',

@@ -225,6 +225,12 @@ export interface ExecAgentParams {
    * input — derived from the request context.
    */
   clientIp?: string;
+  /**
+   * Wire protocol this client speaks; `2` declares that it reconciles its
+   * message list from `message_patch` revisions, so the server may stop
+   * pushing whole `uiMessages` snapshots to it. Absent ⇒ 1.
+   */
+  clientProtocol?: 1 | 2;
   /** Explicit device ID to bind to the topic and activate for this run */
   deviceId?: string;
   /** Optional existing message IDs to include in context */

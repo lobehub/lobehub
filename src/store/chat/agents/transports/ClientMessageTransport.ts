@@ -15,10 +15,18 @@ import { ChatErrorType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
 import { type MessageBatchOperation, messageService } from '@/services/message';
+import {
+  mergeStoredToolPayloads,
+  selectProjectedToolIds,
+  type StoredToolPayload,
+} from '@/services/message/hydrateProjectedTools';
 import type { ChatStore } from '@/store/chat/store';
 
 /** Client message adapter backed by the optimistic chat store. */
 export class ClientMessageTransport implements MessageTransport {
+  /** Stored tool payloads refilled for this run — see `withStoredToolPayloads`. */
+  private readonly storedToolPayloads = new Map<string, StoredToolPayload>();
+
   constructor(
     private readonly get: () => ChatStore,
     private readonly messageKey: string,
@@ -78,7 +86,7 @@ export class ClientMessageTransport implements MessageTransport {
     _params?: QueryMessagesInput,
     _options?: QueryMessagesOptions,
   ): Promise<UIChatMessage[]> {
-    return this.getMessages();
+    return this.withStoredToolPayloads(this.getMessages());
   }
 
   async update(id: string, params: Partial<UpdateMessageParams>): Promise<void> {
@@ -207,5 +215,40 @@ export class ClientMessageTransport implements MessageTransport {
 
   private getMessages(): UIChatMessage[] {
     return this.get().dbMessagesMap[this.messageKey] ?? [];
+  }
+
+  /**
+   * Put the stored tool payloads back before this list becomes an LLM context.
+   *
+   * A browser-executed run reads its history from the same store the UI
+   * renders, and that store can be holding a list fetched while the read path
+   * was projecting tool payloads to view models (`payloadOmitted`) — Gateway
+   * mode was on for this agent when the list was cached and has since been
+   * turned off, or another surface seeded the bucket. Rendering is happy with
+   * the view model; the model is not, and would silently lose the tool output
+   * it is supposed to reason about.
+   *
+   * The fetched payloads are cached per operation: a run queries once per step,
+   * the map is keyed by row id and so stays valid as the conversation grows. A
+   * failed refill leaves the row projected — a degraded context still beats a
+   * step that cannot run at all.
+   */
+  private async withStoredToolPayloads(messages: UIChatMessage[]): Promise<UIChatMessage[]> {
+    const missing = selectProjectedToolIds(messages).filter(
+      (id) => !this.storedToolPayloads.has(id),
+    );
+
+    if (missing.length > 0) {
+      try {
+        const fetched = await messageService.getToolResultPayloads(missing);
+        for (const [id, payload] of Object.entries(fetched)) {
+          this.storedToolPayloads.set(id, payload);
+        }
+      } catch (error) {
+        console.error('[ClientMessageTransport] failed to restore tool payloads:', error);
+      }
+    }
+
+    return mergeStoredToolPayloads(messages, Object.fromEntries(this.storedToolPayloads)).messages;
   }
 }

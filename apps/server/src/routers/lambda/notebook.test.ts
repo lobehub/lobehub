@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   findDocumentById: vi.fn(),
   findOwnOperationById: vi.fn(),
   findTopicById: vi.fn(),
+  findVerbatimTwin: vi.fn(),
   registerDocument: vi.fn(),
 }));
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn().mockResolvedValue({}) }));
@@ -22,7 +23,7 @@ vi.mock('@/database/models/document', () => ({
 }));
 vi.mock('@/database/models/topicDocument', () => ({
   TopicDocumentModel: vi.fn().mockImplementation(function () {
-    return { associate: mocks.associate };
+    return { associate: mocks.associate, findVerbatimTwin: mocks.findVerbatimTwin };
   }),
 }));
 vi.mock('@/database/models/topic', () => ({
@@ -98,6 +99,39 @@ describe('notebook document work provenance', () => {
     expect(mocks.create).toHaveBeenCalled();
     expect(mocks.findOwnOperationById).not.toHaveBeenCalled();
     expect(mocks.registerDocument).not.toHaveBeenCalled();
+  });
+
+  it('reuses a document this topic already holds verbatim instead of forking it', async () => {
+    // One report written through the agent documents tool and again through
+    // this one used to leave two documents behind: two entries in the topic's
+    // list and two deliverable cards on the goal graph, for one report.
+    mocks.findVerbatimTwin.mockResolvedValue({ id: 'doc-existing' });
+
+    const result = await (await caller()).createDocument(input);
+
+    expect(mocks.findVerbatimTwin).toHaveBeenCalledWith({
+      content: input.content,
+      fileType: 'markdown',
+      title: input.title,
+      topicId: input.topicId,
+    });
+    expect(result).toEqual({ id: 'doc-existing' });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.associate).not.toHaveBeenCalled();
+    expect(mocks.registerDocument).not.toHaveBeenCalled();
+  });
+
+  it('carries the requested kind into the twin search', async () => {
+    // A plan is found by its type, so the search has to know it is looking for
+    // one and not reuse a markdown note that holds the same text.
+    await (await caller()).createDocument({ ...input, type: 'agent/plan' });
+
+    expect(mocks.findVerbatimTwin).toHaveBeenCalledWith({
+      content: input.content,
+      fileType: 'agent/plan',
+      title: input.title,
+      topicId: input.topicId,
+    });
   });
 
   it('rejects inaccessible ancestry before writing', async () => {

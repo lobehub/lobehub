@@ -1,3 +1,4 @@
+import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
   CreateNewMessageParamsSchema,
   UpdateMessageParamsSchema,
@@ -453,6 +454,12 @@ export const messageRouter = router({
         // a `file` summary that would crash their works UI. New clients set it.
         includeFileWorks: z.boolean().optional(),
         pageSize: z.number().optional(),
+        /**
+         * Hand back render-facing tool view models instead of the stored
+         * payloads (`@lobechat/tool-view-model`). Opt-in per read: see the
+         * note where it is applied.
+         */
+        projectToolPayloads: z.boolean().optional(),
         sessionId: z.string().nullish(),
         // Mid-stream refetches skip the Work-summary assembly — see
         // `QueryMessageParams.skipWorks`.
@@ -525,10 +532,12 @@ export const messageRouter = router({
         postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
       });
 
-      // This branch reads through its own `MessageModel` (different query
-      // options than `MessageService.queryMessages`), so it applies the tool
-      // view-model step explicitly rather than inheriting it.
-      return new MessageService(ctx.serverDB, ctx.userId, wsId).projectToolPayloads(messages);
+      // Only the caller knows whether this list is going to be rendered or fed
+      // to a model: a run that executes in the browser assembles its context
+      // from the very list this read returns, and a projected tool result would
+      // silently disappear from it. Absent ⇒ whole payloads, which is never the
+      // answer that loses data.
+      return input.projectToolPayloads ? projectToolViewModels(messages) : messages;
     }),
 
   /**
@@ -555,6 +564,8 @@ export const messageRouter = router({
         // Same opt-in as `getMessages`: only clients that ship the `file` work
         // descriptor ask for `file` work summaries.
         includeFileWorks: z.boolean().optional(),
+        /** Same opt-in as `getMessages`: render-facing tool view models. */
+        projectToolPayloads: z.boolean().optional(),
         roundLimit: z.number().int().positive().max(MAX_CURSOR_ROUND_LIMIT).optional(),
         sessionId: z.string().nullish(),
         skipWorks: z.boolean().optional(),
@@ -565,7 +576,7 @@ export const messageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { topicShareId, topicId, ...queryParams } = input;
+      const { projectToolPayloads, topicShareId, topicId, ...queryParams } = input;
 
       // Public access via topicShareId
       if (topicShareId) {
@@ -620,14 +631,11 @@ export const messageRouter = router({
         },
       );
 
-      // Reads through its own `MessageModel`, so apply the tool view-model step
-      // explicitly — same as `getMessages`.
-      return {
-        ...page,
-        messages: await new MessageService(ctx.serverDB, ctx.userId, wsId).projectToolPayloads(
-          page.messages,
-        ),
-      };
+      // Same rule as `getMessages`: only the caller knows whether this page is
+      // rendered or fed to a model, so projection is opt-in per read.
+      return projectToolPayloads
+        ? { ...page, messages: projectToolViewModels(page.messages) }
+        : page;
     }),
 
   rankModels: messageProcedure.query(async ({ ctx }) => {

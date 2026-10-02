@@ -2,6 +2,8 @@
 
 import { Flexbox, Markdown } from '@lobehub/ui';
 import { Divider, Skeleton } from '@lobehub/ui/base-ui';
+import { useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useEntityMarkdown } from '@/features/EntityLink';
 import { useClientDataSWR } from '@/libs/swr';
@@ -14,6 +16,8 @@ import type { GoalGraphView } from './goalGraphViewModel';
 import { GoalDecisionsMade, GoalUnfinished, useContinueFromResult } from './GoalResultFollowUps';
 import GoalResultHeader from './GoalResultHeader';
 import { findFinalAcceptanceView } from './goalResultState';
+import ResultAnchorRail from './ResultAnchorRail';
+import { anchorProps } from './resultAnchors';
 import ResultDeliverables from './ResultDeliverables';
 import ResultTrail from './ResultTrail';
 import { useGoalResultData } from './useGoalResultData';
@@ -21,14 +25,16 @@ import { useGoalResultData } from './useGoalResultData';
 /**
  * 结果交付 — what a finished Goal hands over, on its own tab.
  *
- * Layered for a reviewer who reads top-down: the first screen says where the
- * result stands, what was asked, how big the run was, and carries the sign-off.
- * Every deliverable follows in one place, with a reader to page through them.
- * Then each acceptance criterion against what the latest acceptance round
- * found, the decisions the owner made along the way, and what is still open.
- * The document the work wrote follows, read like a page rather than a card,
- * and under it the trail of how that result was reached. How the Goal ran
- * (tasks, map, activity) lives on the 执行过程 tab.
+ * Layered for a reviewer who reads top-down: the first screen is the Goal's own
+ * headline, the document the work wrote leads the page as the delivery itself,
+ * and the deliverables plus each acceptance criterion (against what the latest
+ * acceptance round found) follow as the evidence behind it. Under them the trail
+ * of how that result was reached. What the owner shaped along the way and what is
+ * still open closes the page — history reads after the delivery, not before it.
+ * How the Goal ran (tasks, map, activity) lives on the 执行过程 tab.
+ *
+ * A rail of ticks beside the scrollbar names those sections on hover and jumps
+ * to them on click — see `ResultAnchorRail`.
  */
 
 const FinalDocument = ({ documentId }: { documentId: string }) => {
@@ -62,39 +68,66 @@ interface GoalResultProps {
 }
 
 const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
+  const { t } = useTranslation('chat');
+  const rootRef = useRef<HTMLDivElement>(null);
   const acceptanceNodeId = findFinalAcceptanceView(graph)?.node.id ?? '';
   const deliverable = pickFinalDeliverable(graph.artifacts, acceptanceNodeId);
   const data = useGoalResultData(graph);
   const continueFromResult = useContinueFromResult(graph, data.outcomes);
 
   return (
-    <Flexbox gap={8}>
-      <Flexbox gap={32}>
-        <GoalResultHeader data={data} graph={graph} onContinue={continueFromResult} />
-        <ResultDeliverables
-          graph={graph}
-          loading={data.isLoading}
-          outcomes={data.outcomes}
-          primaryResourceId={deliverable?.documentId}
-        />
-        <GoalCriteriaResults
-          error={data.error}
-          loading={data.isLoading}
-          outcomes={data.outcomes}
-          onRetry={data.retry}
-        />
-        <GoalDecisionsMade graph={graph} />
-        <GoalUnfinished graph={graph} outcomes={data.outcomes} onContinue={continueFromResult} />
+    <div ref={rootRef}>
+      <ResultAnchorRail rootRef={rootRef} />
+      <Flexbox gap={8}>
+        <div {...anchorProps('overview', t('goalProcess.result.nav.overview'))}>
+          <GoalResultHeader data={data} graph={graph} />
+        </div>
+        {deliverable && (
+          <div
+            {...anchorProps('document', t('goalProcess.result.nav.document'))}
+            style={{ paddingBlockStart: 16 }}
+          >
+            <FinalDocument documentId={deliverable.documentId} />
+          </div>
+        )}
+        <Divider style={{ marginBlock: 24 }} />
+        <Flexbox gap={32}>
+          <div {...anchorProps('deliverables', t('goalProcess.deliverables.title'))}>
+            <ResultDeliverables
+              graph={graph}
+              loading={data.isLoading}
+              outcomes={data.outcomes}
+              primaryResourceId={deliverable?.documentId}
+            />
+          </div>
+          <div {...anchorProps('criteria', t('goalProcess.result.criteria.title'))}>
+            <GoalCriteriaResults
+              error={data.error}
+              loading={data.isLoading}
+              outcomes={data.outcomes}
+              onRetry={data.retry}
+            />
+          </div>
+        </Flexbox>
+        <Divider style={{ marginBlock: 24 }} />
+        <div {...anchorProps('trail', t('goalProcess.result.trail.title'))}>
+          <ResultTrail documentId={deliverable?.documentId} graph={graph} onSelect={onSelect} />
+        </div>
+        <Divider style={{ marginBlock: 24 }} />
+        <Flexbox gap={32}>
+          <div {...anchorProps('decisions', t('goalProcess.result.decisions.title'))}>
+            <GoalDecisionsMade graph={graph} />
+          </div>
+          <div {...anchorProps('unfinished', t('goalProcess.result.unfinished.title'))}>
+            <GoalUnfinished
+              graph={graph}
+              outcomes={data.outcomes}
+              onContinue={continueFromResult}
+            />
+          </div>
+        </Flexbox>
       </Flexbox>
-      <Divider style={{ marginBlock: 24 }} />
-      {deliverable && (
-        <>
-          <FinalDocument documentId={deliverable.documentId} />
-          <Divider style={{ marginBlock: 24 }} />
-        </>
-      )}
-      <ResultTrail documentId={deliverable?.documentId} graph={graph} onSelect={onSelect} />
-    </Flexbox>
+    </div>
   );
 };
 

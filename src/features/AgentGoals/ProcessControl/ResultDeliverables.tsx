@@ -1,18 +1,15 @@
 'use client';
 
-import { Center, Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Button, Input, Segmented, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ArrowRight, PackageOpen, SearchIcon, SearchX, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useEntityMarkdown } from '@/features/EntityLink';
 import { useActivityTime } from '@/hooks/useActivityTime';
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
 
+import { coordinatorNodeTitleKey } from './coordinatorCopy';
 import {
   buildDeliverables,
   type DeliverableItem,
@@ -23,67 +20,36 @@ import {
   MANY_DELIVERABLES,
 } from './deliverableList';
 import DeliverableReader from './DeliverableReader';
+import { openTargetOf, useOpenGoalArtifact } from './Deliverables';
 import { CitationMark, deliverableIconOf, deliverableTitleOf } from './deliverableVisuals';
 import type { GoalGraphView } from './goalGraphViewModel';
 import { SectionTitle } from './GoalResultFollowUps';
 import type { CriterionOutcome } from './goalResultState';
+import { anchorProps } from './resultAnchors';
 
 /**
  * 交付物 on the 结果交付 tab — everything the Goal persisted, in one place.
  *
- * The main deliverable (the document the work wrote) leads as a card with the
- * start of its text; every other artifact is a row naming the task that
- * produced it, when, and whether acceptance evidence cites it. A long list
+ * One row per artifact, naming the task that produced it, when, and whether
+ * acceptance evidence cites it; the main deliverable leads, tagged, and every
+ * other one follows. The main deliverable's own text is not previewed here:
+ * it is the document 交付文档 reads in full further down the page. A long list
  * grows the tools a long list needs — grouping by task, a type filter and
- * search — and a short one stays a plain list. Any row, or 逐一查看, opens the
- * full-screen reader to page through them in order.
+ * search — and a short one stays a plain list. A row opens where the artifact
+ * lives: a document in the side panel, a file or link at its own target.
  */
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
     overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
-  `,
-  excerpt: css`
-    pointer-events: none;
-    overflow: hidden;
-    max-height: 148px;
-
-    mask-image: linear-gradient(to bottom, #000 55%, transparent);
   `,
   groupTitle: css`
     padding-block: 12px 4px;
     padding-inline: 12px;
   `,
-  primary: css`
-    cursor: pointer;
-
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-
-    width: 100%;
-    padding: 16px;
-    border: none;
-
-    text-align: start;
-
-    background: none;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
   row: css`
-    cursor: pointer;
-
     display: flex;
     gap: 12px;
     align-items: center;
@@ -96,6 +62,9 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: start;
 
     background: none;
+  `,
+  rowOpenable: css`
+    cursor: pointer;
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
@@ -126,95 +95,36 @@ const ProducerAndTime = ({ item }: { item: DeliverableItem }) => {
 
 const DeliverableRow = ({ item, onOpen }: { item: DeliverableItem; onOpen: () => void }) => {
   const { t } = useTranslation('chat');
+  // A row that goes nowhere stays inert rather than faking an affordance it
+  // cannot honour — see `openTargetOf`.
+  const openable = !!openTargetOf(item.artifact);
+
   return (
-    <button
-      className={styles.row}
+    <Flexbox
+      horizontal
+      align={'center'}
+      as={openable ? 'button' : 'div'}
+      className={cx(styles.row, openable && styles.rowOpenable)}
       data-testid={'goal-deliverable-row'}
-      type={'button'}
-      onClick={onOpen}
+      gap={12}
+      {...(openable ? { onClick: onOpen, type: 'button' as const } : {})}
     >
       <Icon color={cssVar.colorTextSecondary} icon={deliverableIconOf(item.artifact)} size={18} />
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-        <Text ellipsis weight={500}>
-          {deliverableTitleOf(item.artifact, t('goalProcess.deliverables.untitled'))}
-        </Text>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Text ellipsis weight={500}>
+            {deliverableTitleOf(item.artifact, t('goalProcess.deliverables.untitled'))}
+          </Text>
+          {item.primary && (
+            <Tag color={'blue'} size={'small'}>
+              {t('goalProcess.result.deliverables.primary')}
+            </Tag>
+          )}
+        </Flexbox>
         <ProducerAndTime item={item} />
       </Flexbox>
       <CitationMark item={item} />
-    </button>
-  );
-};
-
-const PrimaryExcerpt = ({ documentId }: { documentId: string }) => {
-  // The card is a preview, not a reader: `aria-hidden` rows keep the inline
-  // entity chips (no raw URLs) but take no click of their own.
-  const markdownProps = useEntityMarkdown();
-  const { data: document, isLoading } = useClientDataSWR(
-    portalKeys.documentHeader(documentId),
-    () => documentService.getDocumentById(documentId),
-  );
-  if (isLoading)
-    return (
-      <Flexbox gap={8}>
-        <Skeleton height={14} radius={4} />
-        <Skeleton height={14} radius={4} width={'80%'} />
-        <Skeleton height={14} radius={4} width={'60%'} />
-      </Flexbox>
-    );
-  // The card already names the document; its own leading H1 would repeat it.
-  const excerpt = document?.content?.replace(/^\s*#\s[^\n]*\n+/, '');
-  if (!excerpt) return null;
-  return (
-    <div aria-hidden className={styles.excerpt}>
-      <Markdown fontSize={13} variant={'chat'} {...markdownProps}>
-        {excerpt}
-      </Markdown>
-    </div>
-  );
-};
-
-const PrimaryCard = ({
-  item,
-  loading,
-  onOpen,
-}: {
-  item: DeliverableItem;
-  loading: boolean;
-  onOpen: () => void;
-}) => {
-  const { t } = useTranslation('chat');
-  const { text, title } = useActivityTime(item.artifact.createdAt);
-  return (
-    <div className={styles.card}>
-      <button
-        className={styles.primary}
-        data-testid={'goal-deliverable-primary'}
-        type={'button'}
-        onClick={onOpen}
-      >
-        <Flexbox horizontal align={'center'} gap={8}>
-          <Tag color={'blue'}>{t('goalProcess.result.deliverables.primary')}</Tag>
-          <Text ellipsis fontSize={15} weight={600}>
-            {deliverableTitleOf(item.artifact, t('goalProcess.deliverables.untitled'))}
-          </Text>
-        </Flexbox>
-        {item.artifact.resourceId && <PrimaryExcerpt documentId={item.artifact.resourceId} />}
-        <Text fontSize={12} title={title} type={'secondary'}>
-          {[
-            item.producerTitle &&
-              t('goalProcess.result.deliverables.producedBy', { title: item.producerTitle }),
-            text,
-            loading
-              ? undefined
-              : item.citedBy.length > 0
-                ? t('goalProcess.result.deliverables.citedCount', { count: item.citedBy.length })
-                : t('goalProcess.result.deliverables.uncited'),
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </Text>
-      </button>
-    </div>
+    </Flexbox>
   );
 };
 
@@ -265,6 +175,7 @@ const ResultDeliverables = ({
   const [readerIndex, setReaderIndex] = useState<number>();
   const [type, setType] = useState<DeliverableType | 'all'>('all');
   const [query, setQuery] = useState('');
+  const open = useOpenGoalArtifact();
 
   const items = useMemo(
     () =>
@@ -272,24 +183,29 @@ const ResultDeliverables = ({
         artifacts: graph.artifacts,
         outcomes,
         primaryResourceId,
-        titleOf: (nodeId) => graph.byId[nodeId]?.node.title,
+        // The coordinator's own nodes carry fixed English titles (the terminal
+        // acceptance Task among them); name them as the rest of the goal view
+        // does, since these titles also label the rail's group ticks.
+        titleOf: (nodeId) => {
+          const view = graph.byId[nodeId];
+          if (!view) return undefined;
+          const key = coordinatorNodeTitleKey(view);
+          return key ? t(key as any) : view.node.title;
+        },
       }),
-    [graph.artifacts, graph.byId, outcomes, primaryResourceId],
+    [graph.artifacts, graph.byId, outcomes, primaryResourceId, t],
   );
 
-  const primary = items[0]?.primary ? items[0] : undefined;
-  const rest = primary ? items.slice(1) : items;
-  const many = rest.length >= MANY_DELIVERABLES;
-  const visible = many ? filterDeliverables(rest, { query, type }) : rest;
+  const many = items.length >= MANY_DELIVERABLES;
+  const visible = many ? filterDeliverables(items, { query, type }) : items;
   const groups = many ? groupDeliverables(visible) : [{ items: visible }];
-  const counts = deliverableTypeCounts(rest);
-  const open = (item: DeliverableItem) => setReaderIndex(items.indexOf(item));
+  const counts = deliverableTypeCounts(items);
 
   const title = (
     <SectionTitle
       extra={
         items.length > 0 && (
-          <Button icon={ArrowRight} size={'small'} onClick={() => setReaderIndex(0)}>
+          <Button icon={ArrowRight} size={'small'} type={'text'} onClick={() => setReaderIndex(0)}>
             {t('goalProcess.result.deliverables.viewAll', { count: items.length })}
           </Button>
         )
@@ -312,7 +228,6 @@ const ResultDeliverables = ({
   return (
     <Flexbox data-testid={'goal-result-deliverables'} gap={12}>
       {title}
-      {primary && <PrimaryCard item={primary} loading={loading} onOpen={() => open(primary)} />}
       {many && (
         <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
           <Segmented
@@ -320,7 +235,7 @@ const ResultDeliverables = ({
             value={type}
             options={[
               {
-                label: `${t('goalProcess.result.deliverables.filter.all')} ${rest.length}`,
+                label: `${t('goalProcess.result.deliverables.filter.all')} ${items.length}`,
                 value: 'all',
               },
               ...TYPE_ORDER.filter((key) => counts.has(key)).map((key) => ({
@@ -355,57 +270,61 @@ const ResultDeliverables = ({
       {loading ? (
         <LoadingRows />
       ) : visible.length === 0 ? (
-        rest.length > 0 && (
-          <Center
-            className={styles.card}
-            data-testid={'goal-deliverables-no-match'}
-            gap={8}
-            padding={24}
+        <Center
+          className={styles.card}
+          data-testid={'goal-deliverables-no-match'}
+          gap={8}
+          padding={24}
+        >
+          <Icon color={cssVar.colorTextQuaternary} icon={SearchX} size={24} />
+          <Text weight={500}>
+            {query.trim()
+              ? t('goalProcess.result.deliverables.noMatch', { query: query.trim() })
+              : t('goalProcess.result.deliverables.noMatchType')}
+          </Text>
+          <Button
+            size={'small'}
+            type={'text'}
+            onClick={() => {
+              setQuery('');
+              setType('all');
+            }}
           >
-            <Icon color={cssVar.colorTextQuaternary} icon={SearchX} size={24} />
-            <Text weight={500}>
-              {query.trim()
-                ? t('goalProcess.result.deliverables.noMatch', { query: query.trim() })
-                : t('goalProcess.result.deliverables.noMatchType')}
-            </Text>
-            <Button
-              size={'small'}
-              type={'text'}
-              onClick={() => {
-                setQuery('');
-                setType('all');
-              }}
-            >
-              {t('goalProcess.result.deliverables.clearFilter')}
-            </Button>
-          </Center>
-        )
+            {t('goalProcess.result.deliverables.clearFilter')}
+          </Button>
+        </Center>
       ) : (
-        rest.length > 0 && (
-          <Flexbox className={styles.card} paddingBlock={4}>
-            {groups.map((group) => (
-              <Flexbox key={group.nodeId ?? 'rest'}>
-                {groups.length > 1 && (
-                  <Text
-                    className={styles.groupTitle}
-                    data-testid={'goal-deliverables-group'}
-                    fontSize={12}
-                    type={'secondary'}
-                  >
-                    {`${group.title ?? t('goalProcess.result.deliverables.otherTasks')} · ${group.items.length}`}
-                  </Text>
-                )}
-                {group.items.map((item) => (
-                  <DeliverableRow
-                    item={item}
-                    key={item.artifact.workVersionId}
-                    onOpen={() => open(item)}
-                  />
+        <Flexbox className={styles.card} paddingBlock={4}>
+          {groups.map((group) => (
+            <Flexbox
+              key={group.nodeId ?? 'rest'}
+              {...(groups.length > 1 &&
+                anchorProps(
+                  `deliverables:${group.nodeId ?? 'rest'}`,
+                  group.title ?? t('goalProcess.result.deliverables.otherTasks'),
+                  1,
                 ))}
-              </Flexbox>
-            ))}
-          </Flexbox>
-        )
+            >
+              {groups.length > 1 && (
+                <Text
+                  className={styles.groupTitle}
+                  data-testid={'goal-deliverables-group'}
+                  fontSize={12}
+                  type={'secondary'}
+                >
+                  {`${group.title ?? t('goalProcess.result.deliverables.otherTasks')} · ${group.items.length}`}
+                </Text>
+              )}
+              {group.items.map((item) => (
+                <DeliverableRow
+                  item={item}
+                  key={item.artifact.workVersionId}
+                  onOpen={() => open(item.artifact)}
+                />
+              ))}
+            </Flexbox>
+          ))}
+        </Flexbox>
       )}
       {readerIndex !== undefined && (
         <DeliverableReader

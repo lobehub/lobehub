@@ -243,6 +243,37 @@ class MutationQueue {
     });
   }
 
+  /**
+   * Re-apply the optimistic patches of every mutation still waiting to run.
+   * A server refresh replaces the state those patches were applied to, and a
+   * queued mutation never refetches after it lands — so without this its edit
+   * would vanish from the UI until some later refresh.
+   */
+  reapplyPending() {
+    const pending = this.queue
+      .filter((mutation) => mutation.status === 'pending' && !this.inflightIds.has(mutation.id))
+      .sort((a, b) => a.timestamp - b.timestamp);
+    const stores = new Set<AnyStore>();
+    for (const mutation of pending) {
+      for (const store of mutation.storePatches.keys()) stores.add(store);
+    }
+
+    for (const store of stores) {
+      let nextState = store.getState();
+      for (const mutation of pending) {
+        const entry = mutation.storePatches.get(store);
+        if (!entry) continue;
+        try {
+          nextState = applyPatches(nextState, entry.patches);
+        } catch {
+          // The refreshed state no longer has the patched path (e.g. the entry
+          // is gone); nothing left to re-apply this edit to.
+        }
+      }
+      store.setState(nextState);
+    }
+  }
+
   async flush(): Promise<void> {
     this.processNext();
 
@@ -493,5 +524,10 @@ export class OptimisticEngine<S extends StoreState = Record<string, never>> {
 
   async flush(): Promise<void> {
     await this.queue.flush();
+  }
+
+  /** See {@link MutationQueue.reapplyPending}: call right after a refresh lands. */
+  reapplyPending(): void {
+    this.queue.reapplyPending();
   }
 }

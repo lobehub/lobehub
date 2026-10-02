@@ -43,12 +43,8 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import {
-  type LifecycleNote,
-  type LifecyclePresentation,
-  nodeTwinKey,
-  presentLifecycleEvent,
-} from './lifecycleEvent';
+import type { LifecycleNote } from './lifecycleEvent';
+import { buildLifecycleDays, type LifecycleGroup, type LifecycleRow } from './lifecycleRows';
 
 /**
  * The goal's history as a timeline, newest first and grouped by day. Each event
@@ -57,6 +53,10 @@ import {
  * for a quick scan — never coded in color. Only the leading glyph carries tone:
  * a resolve reads green, a reject red, everything else stays neutral, so the eye
  * can skim the outcomes.
+ *
+ * Which events share a line is decided in `lifecycleRows`: one line per
+ * deliverable and one line per moment, so a settle that attached five artifacts
+ * reads as one event with five cards instead of five identical sentences.
  */
 
 const BADGE = 20;
@@ -172,8 +172,8 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
-    white-space: pre-line;
     overflow-wrap: anywhere;
+    white-space: pre-line;
 
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -442,22 +442,24 @@ Actor.displayName = 'GoalMetricLifecycleActor';
 
 const noteText = (note: LifecycleNote, t: (key: any, options?: any) => string) => {
   if (!('key' in note)) return note.text;
-  if (note.key === 'mainAgent') return t('goalProcess.lifecycle.note.mainAgent', { text: note.text });
+  if (note.key === 'mainAgent')
+    return t('goalProcess.lifecycle.note.mainAgent', { text: note.text });
   return t(`goalProcess.lifecycle.note.${note.key}` as const);
 };
 
 const EventItem = memo<{
-  event: GoalGraphEvent;
   graph: GoalGraphView;
+  group: LifecycleGroup;
   onSelect: (nodeId: string) => void;
-  presentation: Exclude<LifecyclePresentation, { hidden: true }>;
-}>(({ event, graph, onSelect, presentation }) => {
+}>(({ graph, group, onSelect }) => {
   const { t } = useTranslation('chat');
+  const { event, presentation } = group.rows[0] as LifecycleRow;
   const visual = EVENT_VISUAL[event.eventType] ?? { icon: History, tone: NEUTRAL };
   const tone = visual.tone;
   // A recognised event names what happened more precisely than its raw type:
   // a canceled task or a delivered Work is not an "edit".
-  const icon = (presentation.action && ACTION_ICON[presentation.action.split('.')[0]]) || visual.icon;
+  const icon =
+    (presentation.action && ACTION_ICON[presentation.action.split('.')[0]]) || visual.icon;
   const subjects = subjectNodes(event, graph);
   const kind = eventKind(event, subjects);
   const phrase = `${event.eventType}.${kind}`;
@@ -468,9 +470,15 @@ const EventItem = memo<{
       : t(`goalProcess.lifecycle.action.${event.eventType}` as const, {
           kind: kind ? t(`goalProcess.lifecycle.kind.${kind}` as const) : '',
         }).trim();
-  const artifact = presentation.workVersion
-    ? graph.artifacts.find((item) => item.workVersionId === presentation.workVersion!.id)
-    : undefined;
+  // One row can carry several deliverables: a settle attaches each of them, and
+  // the fold in `buildLifecycleDays` merged them back into the moment they were
+  // attached in. The row names the task, each card is one thing it delivered.
+  const artifacts = group.rows.flatMap((row) => {
+    const version = row.presentation.workVersion;
+    if (!version) return [];
+    const artifact = graph.artifacts.find((item) => item.workVersionId === version.id);
+    return artifact ? [artifact] : [];
+  });
   const note = presentation.note ? noteText(presentation.note, t) : undefined;
 
   return (
@@ -510,7 +518,9 @@ const EventItem = memo<{
             {dayjs(event.createdAt).format('HH:mm')}
           </Text>
         </Flexbox>
-        {artifact && <ArtifactCard artifact={artifact} />}
+        {artifacts.map((artifact) => (
+          <ArtifactCard artifact={artifact} key={artifact.workVersionId} />
+        ))}
         {note && (
           <div className={styles.reason} title={note}>
             {note}
@@ -544,31 +554,16 @@ const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, grap
   const onSelect = useGoalNodeSelect(goalId, graph);
 
   const days = useMemo(() => {
-    const events = snapshot?.events ?? [];
     const workTypes = new Map(
       (snapshot?.workVersions ?? []).map((link) => [link.workVersionId, link.work?.type]),
     );
-    const nodeTwins = new Set(
-      events.filter((event) => event.entityType === 'node' && event.reason).map(nodeTwinKey),
+    const workIds = new Map(
+      (snapshot?.workVersions ?? []).map((link) => [link.workVersionId, link.work?.workId]),
     );
-    const sorted = [...events].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    type Row = { event: GoalGraphEvent; presentation: Exclude<LifecyclePresentation, { hidden: true }> };
-    const groups: { day: dayjs.Dayjs; rows: Row[] }[] = [];
-    for (const event of sorted) {
-      const presentation = presentLifecycleEvent(event, {
-        hasNodeTwin: event.entityType === 'goal' && nodeTwins.has(nodeTwinKey(event)),
-        workTypeOf: (id) => workTypes.get(id),
-      });
-      // Bookkeeping rows are dropped before grouping so a day holding nothing
-      // else does not leave an empty header behind.
-      if (presentation.hidden) continue;
-      const row = { event, presentation };
-      const day = dayjs(event.createdAt).startOf('day');
-      const last = groups.at(-1);
-      if (last?.day.isSame(day)) last.rows.push(row);
-      else groups.push({ day, rows: [row] });
-    }
-    return groups;
+    return buildLifecycleDays(snapshot?.events ?? [], {
+      workIdOf: (id) => workIds.get(id),
+      workTypeOf: (id) => workTypes.get(id),
+    });
   }, [snapshot]);
 
   if (days.length === 0)
@@ -576,16 +571,15 @@ const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, grap
 
   return (
     <Flexbox gap={0}>
-      {days.map(({ day, rows }) => (
+      {days.map(({ day, groups }) => (
         <Flexbox gap={2} key={day.valueOf()}>
           <div className={styles.day}>{dayLabel(day)}</div>
           <Flexbox gap={0}>
-            {rows.map(({ event, presentation }) => (
+            {groups.map((group) => (
               <EventItem
-                event={event}
                 graph={graph}
-                key={event.id}
-                presentation={presentation}
+                group={group}
+                key={group.rows[0].event.id}
                 onSelect={onSelect}
               />
             ))}

@@ -1,4 +1,5 @@
 import type { AgentStreamClientFeature } from '@lobechat/agent-gateway-client';
+import { CLIENT_PROTOCOL_VERSION } from '@lobechat/agent-gateway-client';
 import type {
   ExecAgentAppContext,
   ExecAgentResult,
@@ -8,6 +9,7 @@ import type {
   UserInterventionConfig,
 } from '@lobechat/types';
 
+import { canUseGatewayProtocolV2 } from '@/helpers/gatewayProtocol';
 import { lambdaClient } from '@/libs/trpc/client';
 
 export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
@@ -273,8 +275,15 @@ class AiAgentService {
     params: ExecAgentTaskParams,
     options?: { signal?: AbortSignal },
   ): Promise<ExecAgentResult> {
+    // Ask for protocol-v2 delivery — message revisions instead of whole message
+    // snapshots — when this client both understands it and is inside the
+    // rollout. Anything else stays on the pushed snapshots, which is what an
+    // older bundle needs to render the run at all. A caller may still pin it
+    // (a replay harness asserting v1 delivery).
+    const clientProtocol = canUseGatewayProtocolV2() ? CLIENT_PROTOCOL_VERSION : undefined;
+
     return await lambdaClient.aiAgent.execAgent.mutate(
-      { ...params, streamFeatures: STREAM_FEATURES },
+      { clientProtocol, ...params, streamFeatures: STREAM_FEATURES },
       options,
     );
   }
