@@ -116,6 +116,11 @@ let pendingSingleClickTimer: ReturnType<typeof setTimeout> | null = null;
 // working sidebar — the desktop host of a topic's thread list. Without nesting
 // the rows under the topic row, mobile users can't reach an existing subtopic
 // at all, so the nesting lives here on that surface only.
+//
+// Scoped to the route's topic (`showThreadList`): opening a thread under an
+// inactive topic would call `openThreadInPortal` while `activeTopicId` still
+// points at another topic, so the thread would resolve against the wrong topic's
+// context — and every mounted list would fetch its own threads.
 const IS_MOBILE_SURFACE = typeof __MOBILE__ !== 'undefined' && __MOBILE__;
 // Nesting cue: keeps the rows visually under their topic row.
 const NESTED_THREAD_LIST_INDENT = 32;
@@ -226,6 +231,8 @@ interface TopicItemRowProps extends TopicItemProps {
   defaultTopicActive: boolean;
   isTopicActive: boolean;
   navRef: RefObject<TopicNavigationActions>;
+  /** Route's topic — only its row may carry its thread list (see the mobile mount). */
+  showThreadList: boolean;
 }
 
 const TopicItemRow = memo<TopicItemRowProps>(
@@ -241,6 +248,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     defaultTopicActive,
     isTopicActive,
     navRef,
+    showThreadList,
   }) => {
     const { t } = useTranslation('topic');
     const { isDarkMode } = useTheme();
@@ -583,7 +591,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
         ) : (
           navItem
         )}
-        {IS_MOBILE_SURFACE && id && (
+        {IS_MOBILE_SURFACE && showThreadList && id && (
           <Suspense
             fallback={
               <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>
@@ -622,6 +630,7 @@ const TopicItem = memo<TopicItemProps>((props) => {
     isInAgentSubRoute,
     isInTopicContextRoute,
     routeTopicId,
+    urlTopicId,
   } = useTopicNavigation();
 
   // Active/thread state is subscribed here instead of arriving as props:
@@ -642,6 +651,7 @@ const TopicItem = memo<TopicItemProps>((props) => {
       {...props}
       defaultTopicActive={Boolean(active && !isInAgentSubRoute && !isInTopicContextRoute)}
       navRef={navRef}
+      showThreadList={Boolean(id && id === urlTopicId)}
       isTopicActive={Boolean(
         (active || isRouteTopicActive) &&
         !hasActiveThread &&
