@@ -3,7 +3,7 @@
 import { Icon } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { BotIcon, ClipboardCheckIcon, PlusIcon, ScaleIcon } from 'lucide-react';
+import { BotIcon, ClipboardCheckIcon, FileSearchIcon, PlusIcon, ScaleIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -171,6 +171,8 @@ interface RulesOnboardingProps {
   backlogRounds?: number;
   /** Inside the page under the part switcher, rather than as the whole page. */
   inline?: boolean;
+  /** Read rules out of a material the reviewer already has. */
+  onDistill: () => void;
   onWrite: () => void;
 }
 
@@ -179,7 +181,13 @@ interface RulesOnboardingProps {
  * the one thing that can be done right here (write a rule — a sentence or a pasted guideline),
  * then the other places rules come from, each with the single action that gets there.
  */
-const RulesOnboarding = ({ agents, backlogRounds, inline, onWrite }: RulesOnboardingProps) => {
+const RulesOnboarding = ({
+  agents,
+  backlogRounds,
+  inline,
+  onDistill,
+  onWrite,
+}: RulesOnboardingProps) => {
   const { t } = useTranslation('memory');
   const navigate = useWorkspaceAwareNavigate();
 
@@ -205,6 +213,12 @@ const RulesOnboarding = ({ agents, backlogRounds, inline, onWrite }: RulesOnboar
 
       <div className={styles.listTitle}>{t('rules.onboarding.listTitle')}</div>
       <div className={styles.list}>
+        <Row
+          action={<Button onClick={onDistill}>{t('rules.onboarding.distill.action')}</Button>}
+          description={t('rules.onboarding.distill.description')}
+          icon={FileSearchIcon}
+          title={t('rules.onboarding.distill.title')}
+        />
         <Row
           description={t('rules.onboarding.reject.description')}
           icon={ClipboardCheckIcon}
