@@ -33,7 +33,7 @@
     "officeparser": "5.1.1",
     "pdfjs-dist": "5.4.530",
     "word-extractor": "^1.0.4",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "xlsx": "^0.18.5",
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
