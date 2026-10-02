@@ -1,8 +1,11 @@
 import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { SessionModel } from '@/database/models/session';
 import { TopicModel } from '@/database/models/topic';
+import { TrashModel } from '@/database/models/trash';
 import type { AgentItem } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
 import { MESSAGE_TITLE_LENGTH } from './message';
@@ -78,19 +81,34 @@ export const softDeleteAgent = async (
 };
 
 export const agentHandler: TrashHandler = {
+  /**
+   * One transaction across the agent, its legacy session shells, stale
+   * descendant roots and its sharing grants: a failure leaves the whole unit
+   * in place for the next retry, and a restore that won the race (nothing
+   * left stamped) keeps all of it.
+   */
   purge: async (ctx, root) => {
-    // FK cascades take topics / messages / threads with the agent + session rows.
-    const purged = await new AgentModel(ctx.db, ctx.userId, ctx.workspaceId).purge([
-      root.resourceId,
-    ]);
-    // Restored in the meantime: keep its sharing grants too.
-    if (purged.length === 0) return;
-    if (ctx.workspaceId) {
-      await new ResourcePermissionModel(ctx.db, ctx.workspaceId).removeAll(
-        'agent',
-        root.resourceId,
-      );
-    }
+    await ctx.db.transaction(async (tx) => {
+      const db = tx as unknown as LobeChatDatabase;
+      const agentModel = new AgentModel(db, ctx.userId, ctx.workspaceId);
+
+      const agentIds = await agentModel.lockTrashedForPurge([root.resourceId]);
+      if (agentIds.length === 0) return;
+      const sessionIds = await agentModel.findSessionIdsByAgentIds(agentIds);
+
+      // Topics / messages trashed on their own before this agent keep separate
+      // roots; the cascade below deletes them, so drop those rows first.
+      await new TrashModel(db, ctx.userId, ctx.workspaceId).removeRootsUnderAgents({
+        agentIds,
+        sessionIds,
+      });
+      // FK cascades take topics / messages / threads with the agent + session rows.
+      await agentModel.purge(agentIds);
+      await new SessionModel(db, ctx.userId, ctx.workspaceId).deleteShellsByIds(sessionIds);
+      if (ctx.workspaceId) {
+        await new ResourcePermissionModel(db, ctx.workspaceId).removeAll('agent', root.resourceId);
+      }
+    });
   },
   restore: async (ctx, root, children) => {
     const agentModel = new AgentModel(ctx.db, ctx.userId, ctx.workspaceId);

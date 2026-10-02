@@ -46,6 +46,31 @@ vi.mock('@/database/models/agent', async (importOriginal) => {
   return { ...mod, AgentModel: PatchedAgentModel };
 });
 
+// Lets a test make the sharing-grant cleanup of an agent purge fail once.
+const permissionCleanup = vi.hoisted(() => ({
+  calls: [] as unknown[][],
+  failNext: false,
+}));
+
+vi.mock('@/database/models/resourcePermission', async (importOriginal) => {
+  const mod = await importOriginal<{ ResourcePermissionModel: any }>();
+  class PatchedResourcePermissionModel extends mod.ResourcePermissionModel {
+    constructor(...args: any[]) {
+      super(...args);
+      const removeAll = this.removeAll;
+      this.removeAll = async (...callArgs: any[]) => {
+        permissionCleanup.calls.push(callArgs);
+        if (permissionCleanup.failNext) {
+          permissionCleanup.failNext = false;
+          throw new Error('transient');
+        }
+        return removeAll(...callArgs);
+      };
+    }
+  }
+  return { ...mod, ResourcePermissionModel: PatchedResourcePermissionModel };
+});
+
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(() => ({ deleteFile: vi.fn(), deleteFiles: vi.fn() })),
 }));
@@ -240,6 +265,53 @@ describe('TrashService', () => {
       const outcome = await service.restore([messageRoot.id]);
       expect(outcome.failed).toEqual([{ code: 'parentTrashed', id: messageRoot.id }]);
       expect(await messageModel.findById(message.id)).toBeUndefined();
+    });
+
+    it('purging an agent also drops the roots of descendants trashed before it', async () => {
+      const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
+      const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
+      const viaAgent = await topicModel.create({ agentId: agent.id, title: 'via agent' });
+      const viaSession = await topicModel.create({ sessionId: session.id, title: 'via session' });
+      const loose = await messageModel.create({
+        agentId: agent.id,
+        content: 'loose',
+        role: 'user',
+      });
+      // each trashed on its own first, so each keeps a separate root
+      await service.trashTopics([viaAgent.id, viaSession.id]);
+      await service.trashMessages([loose.id]);
+      const root = await service.trashAgent(agent.id);
+      expect((await service.list()).items).toHaveLength(4);
+
+      await service.purge([root!.id]);
+
+      // the cascade deleted all three resources, so none of their rows may linger
+      expect((await service.list()).items).toEqual([]);
+      expect(await service.countByType()).toEqual({});
+      expect(await serverDB.select().from(trashItems)).toHaveLength(0);
+    });
+
+    it('rolls the whole agent purge back when grant cleanup fails, so a retry still cleans up', async () => {
+      const workspaceId = 'trash-purge-ws';
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+      const wsService = new TrashService(serverDB, userId, workspaceId);
+      const wsAgents = new AgentModel(serverDB, userId, workspaceId);
+      const agent = await wsAgents.create({ title: 'Shared bot' });
+      const root = await wsService.trashAgent(agent.id);
+
+      permissionCleanup.failNext = true;
+      await expect(wsService.purge([root!.id])).rejects.toThrow('transient');
+
+      // nothing committed: the agent is still in the bin and still listed
+      expect(await wsAgents.findTrashedByIds([agent.id])).toHaveLength(1);
+      expect((await wsService.list()).items.map((i) => i.id)).toEqual([root!.id]);
+
+      await wsService.purge([root!.id]);
+      expect(permissionCleanup.calls.at(-1)).toEqual(['agent', agent.id]);
+      expect(await serverDB.select().from(agents).where(eq(agents.id, agent.id))).toHaveLength(0);
+      expect((await wsService.list()).items).toEqual([]);
     });
 
     it('purges the agent with its cascade', async () => {
