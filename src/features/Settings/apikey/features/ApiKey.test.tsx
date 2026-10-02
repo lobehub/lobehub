@@ -177,6 +177,30 @@ describe('ApiKey', () => {
     expect(onSelectedChange).toHaveBeenCalledWith(['mcp:write', 'mcp:read']);
   });
 
+  it('offers the account-credential scope without inventing a read twin', () => {
+    const onSelectedChange = vi.fn();
+    render(
+      <ScopeSelector
+        fullAccess={false}
+        selected={[]}
+        onFullAccessChange={vi.fn()}
+        onSelectedChange={onSelectedChange}
+      />,
+    );
+
+    const agentGroup = screen.getByText('apikey.scopes.groups.agent').parentElement!;
+    // read + write + the separate high-risk credential tier
+    expect(within(agentGroup).getAllByRole('checkbox')).toHaveLength(3);
+
+    fireEvent.click(
+      within(agentGroup).getByRole('checkbox', { name: 'apikey.scopes.agentCredential' }),
+    );
+
+    // `agent:credential:write` stands alone: it must NOT derive the
+    // non-existent `agent:credential:read`, which the API would reject.
+    expect(onSelectedChange).toHaveBeenCalledWith(['agent:credential:write']);
+  });
+
   it('shows loading, then empty state when the first fetch returns no keys', async () => {
     let resolveList!: (items: ApiKeyItem[]) => void;
     hoisted.trpc.getApiKeys.mockImplementation(
