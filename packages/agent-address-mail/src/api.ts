@@ -78,7 +78,14 @@ export const verifyAgentMailSignature = (params: {
   return timingSafeEqual(expected, provided);
 };
 
-const stripTrailingSlashes = (url: string) => url.replace(/\/+$/, '');
+// Scanned rather than matched with `/\/+$/`: a regex anchored at the end
+// backtracks polynomially on a slash-heavy string, and this runs on a
+// caller-supplied base URL.
+const stripTrailingSlashes = (url: string) => {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === '/') end -= 1;
+  return url.slice(0, end);
+};
 
 /**
  * Agent Mail REST client. Stateless and cheap to construct — every method

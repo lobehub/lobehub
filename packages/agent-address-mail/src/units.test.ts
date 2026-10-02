@@ -101,6 +101,25 @@ describe('LobeMailApiClient', () => {
     expect(seen).toContain('timeout=30');
     expect(result.timedOut).toBe(false);
   });
+
+  it('normalizes a slash-heavy base URL without a regex backtrack', async () => {
+    let seen = '';
+    const fetchImpl = vi.fn(async (input: any) => {
+      seen = String(input);
+      return Response.json({ address: 'abc@lobe.id', id: 'inb_1' });
+    }) as unknown as typeof fetch;
+
+    const client = new LobeMailApiClient({
+      apiKey: 'am_x',
+      baseUrl: `https://api.lobe.id${'/'.repeat(50_000)}`,
+      fetchImpl,
+    });
+
+    // Every trailing slash is dropped, exactly once, and the request still runs.
+    expect(client.baseUrl).toBe('https://api.lobe.id');
+    await client.getInbox('inb_1');
+    expect(seen).toBe('https://api.lobe.id/v1/inboxes/inb_1');
+  });
 });
 
 describe('markdown rendering', () => {
@@ -151,6 +170,34 @@ describe('quoted reply stripping', () => {
 
   it('drops only `>`-quoted lines when there is no attribution line', () => {
     expect(stripQuotedReply('New answer\n> old\n>> older')).toBe('New answer');
+  });
+
+  it('collapses blank runs and trailing whitespace without a regex backtrack', () => {
+    expect(stripQuotedReply('line one   \n\n\n\n\nline two\t\n')).toBe('line one\n\nline two');
+  });
+
+  it('handles a hostile body without pathological backtracking', () => {
+    const repeats = 100_000;
+    // Shapes that made the previous forms backtrack polynomially:
+    //  - a line repeating an attribution keyword, with no closing `:` for the
+    //    unbounded `[^\n]*?` wildcards to settle on;
+    //  - a long run of tabs *not* followed by a newline, for `[ \t]+\n`;
+    //  - a long run of newlines, for `\n{3,}`.
+    const hostile = [
+      `Am ${'schrieb '.repeat(repeats)}`,
+      '在 '.repeat(repeats),
+      `${'\t'.repeat(repeats)}x`,
+      '\n'.repeat(repeats),
+    ].join('\n');
+
+    const started = performance.now();
+    const result = stripQuotedReply(hostile);
+    const elapsed = performance.now() - started;
+
+    expect(typeof result).toBe('string');
+    // Linear work finishes in milliseconds; the quadratic forms took seconds
+    // on input an order of magnitude smaller.
+    expect(elapsed).toBeLessThan(2000);
   });
 });
 

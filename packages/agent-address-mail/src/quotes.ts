@@ -13,6 +13,15 @@
  * original body.
  */
 
+/**
+ * Attribution markers, one per client idiom.
+ *
+ * The wildcards between the fixed parts are bounded on purpose. An unbounded
+ * `[^\n]*?` on either side of a literal makes the engine backtrack
+ * polynomially on a hostile body (one long line repeating the literal), and
+ * this runs on attacker-supplied mail. Real attribution lines are a date plus
+ * a name plus a verb, comfortably inside the bound.
+ */
 const ATTRIBUTION_PATTERNS: RegExp[] = [
   // English clients: "On Mon, 1 Jan 2026 at 10:00, Jane <jane@x.com> wrote:"
   /^\s*On\b[^\n]{1,300}wrote:\s*$/im,
@@ -21,14 +30,14 @@ const ATTRIBUTION_PATTERNS: RegExp[] = [
   /^\s*_{10,}\s*$/m,
   /^\s*From:\s*(?:\S.*|[\t\v\f \xA0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF])$/im,
   // Chinese clients
-  /^\s*在[^\n]*?写道[：:]\s*$/m,
-  /^\s*在[^\n]*?wrote:\s*$/im,
+  /^\s*在[^\n]{0,300}?写道[：:]\s*$/m,
+  /^\s*在[^\n]{0,300}?wrote:\s*$/im,
   /^\s*(?:发件人|寄件者|发信人)[：:]/m,
   /^\s*-{2,}[ \t]*(?:原始邮件|转发邮件|回复邮件)[ \t]*-{2,}\s*$/m,
   // Apple Mail
   /^\s*Begin forwarded message:\s*$/im,
-  /^\s*Am [^\n]*?schrieb [^\n]*?:\s*$/im,
-  /^\s*El [^\n]*?escribió:\s*$/im,
+  /^\s*Am [^\n]{0,300}?schrieb [^\n]{0,300}?:\s*$/im,
+  /^\s*El [^\n]{0,300}?escribió:\s*$/im,
 ];
 
 /**
@@ -74,11 +83,31 @@ const dropQuotedAndSignature = (text: string): string => {
   return kept.join('\n');
 };
 
-const collapseBlankLines = (text: string) =>
-  text
-    .replaceAll(/[ \t]+\n/g, '\n')
-    .replaceAll(/\n{3,}/g, '\n\n')
-    .trim();
+// A linear string pass rather than `/[ \t]+\n/` + `/\n{3,}/`: both regexes
+// backtrack polynomially on a body full of tabs or newlines, and the body is
+// attacker-supplied. The result is unchanged — trailing spaces/tabs are
+// dropped per line and a run of blank lines collapses to a single one.
+const collapseBlankLines = (text: string) => {
+  const kept: string[] = [];
+  let blankRun = 0;
+
+  for (const rawLine of text.split('\n')) {
+    let end = rawLine.length;
+    while (end > 0 && (rawLine[end - 1] === ' ' || rawLine[end - 1] === '\t')) end -= 1;
+    const line = rawLine.slice(0, end);
+
+    if (line === '') {
+      blankRun += 1;
+      if (blankRun > 1) continue;
+    } else {
+      blankRun = 0;
+    }
+
+    kept.push(line);
+  }
+
+  return kept.join('\n').trim();
+};
 
 /** A line that only announces the quoted block, carrying no content itself. */
 const isAttributionLine = (line: string) => {
