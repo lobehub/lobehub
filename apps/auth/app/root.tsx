@@ -15,7 +15,7 @@ import { serializeAuthResources } from './shell/authResources';
 import { AUTH_I18N_SCRIPT_ID } from './shell/i18nScript';
 
 const bodyBackground = `
-html body { background: #f8f8f8; }
+html body { background: #F5F0FA; }
 html[data-theme='dark'] body { background-color: #000; }
 `;
 
