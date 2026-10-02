@@ -1789,6 +1789,124 @@ describe('Generation Actions', () => {
         .mockResolvedValue(undefined) as any;
     });
 
+    /** @example Editing U2 replays U1/A1, sends the replacement, and excludes old U2/A2/U3. */
+    it('resends an edited historical Codex prompt in a fresh session with its context', async () => {
+      // ROOT CAUSE:
+      //
+      // Opening Edit alone leaves historical prompts on the save-only path. Reusing
+      // the normal heterogeneous retry also resumes the native session AFTER the old
+      // prompt and its descendants. An edit must send the replacement on a fresh
+      // session seeded only with the selected message's ancestors.
+      await setupHeteroChatStore({
+        operationsByContext: {},
+        topicDataMap: {
+          test: {
+            items: [
+              {
+                id: 'topic-1',
+                model: 'gpt-5.4',
+                provider: 'codex',
+                metadata: { heteroSessionId: 'old-native-session', workingDirectory: '/work/repo' },
+              },
+            ],
+          },
+        },
+      });
+      const { getAgentStoreState } = await import('@/store/agent');
+      const config = agentSelectors.getAgentConfigById('session-1')(getAgentStoreState());
+      vi.mocked(agentSelectors.getAgentConfigById).mockReturnValue(() => ({
+        ...config,
+        agencyConfig: {
+          heterogeneousProvider: { type: 'codex', systemContext: 'Keep project rules' },
+        },
+      }));
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+      };
+      const messages = [
+        { id: 'u1', content: 'Remember PRIOR_TOKEN', role: 'user' as const },
+        { id: 'a1', content: 'PRIOR_REPLY', role: 'assistant' as const, parentId: 'u1' },
+        {
+          id: 'u2',
+          content: 'OLD_PROMPT',
+          role: 'user' as const,
+          parentId: 'a1',
+          imageList: [{ id: 'image-1', url: 'https://example.com/image.png', alt: 'attachment' }],
+        },
+        { id: 'a2', content: 'OLD_RESPONSE', role: 'assistant' as const, parentId: 'u2' },
+        { id: 'u3', content: 'LATER_PROMPT', role: 'user' as const, parentId: 'a2' },
+      ].map((message, index) => ({ ...message, createdAt: index + 1, updatedAt: index + 1 }));
+      const store = createStore({ context });
+      store.setState({ dbMessages: messages, displayMessages: messages });
+      const update = vi
+        .spyOn(messageService, 'updateMessage')
+        .mockResolvedValue({ messages, success: true });
+      const editorData = { attachment: 'image-1' };
+
+      await store.getState().regenerateUserMessage('u2', { content: 'EDITED_PROMPT', editorData });
+
+      /** @example The persisted prompt and editor attachments belong to the original context. */
+      expect(update).toHaveBeenCalledWith('u2', { content: 'EDITED_PROMPT', editorData }, context);
+      /** @example Native execution preserves the image, cwd and topic-pinned model without resuming old history. */
+      expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          context,
+          message: 'EDITED_PROMPT',
+          imageList: messages[2].imageList,
+          resumeSessionId: undefined,
+          workingDirectory: '/work/repo',
+          heterogeneousProvider: expect.objectContaining({ type: 'codex', model: 'gpt-5.4' }),
+        }),
+      );
+      const runtimeContext =
+        executeHeterogeneousAgentSpy.mock.calls[0][1].heterogeneousProvider.systemContext;
+      /** @example Prior instructions and the selected ancestry survive. */
+      expect(runtimeContext).toContain('Keep project rules');
+      /** @example The preceding user message survives the edit. */
+      expect(runtimeContext).toContain('PRIOR_TOKEN');
+      /** @example The preceding assistant response survives the edit. */
+      expect(runtimeContext).toContain('PRIOR_REPLY');
+      /** @example Superseded prompts and replies cannot contaminate the restarted session. */
+      expect(runtimeContext).not.toMatch(/OLD_PROMPT|OLD_RESPONSE|LATER_PROMPT/);
+    });
+
+    /** @example A rejected edit must not launch Codex with an unsaved replacement. */
+    it('does not run Codex when the edit is not persisted', async () => {
+      // ROOT CAUSE:
+      //
+      // updateMessage can resolve successfully at the transport layer while returning
+      // success: false. Awaiting it alone would still run the replacement prompt.
+      await setupHeteroChatStore({ operationsByContext: {} });
+      const { getAgentStoreState } = await import('@/store/agent');
+      const config = agentSelectors.getAgentConfigById('session-1')(getAgentStoreState());
+      vi.mocked(agentSelectors.getAgentConfigById).mockReturnValue(() => ({
+        ...config,
+        agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+      }));
+      const store = createStore({
+        context: { agentId: 'session-1', topicId: 'topic-1', threadId: null },
+        initialMessages: [
+          { id: 'user', role: 'user', content: 'original', createdAt: 1, updatedAt: 1 },
+        ],
+      });
+      vi.spyOn(messageService, 'updateMessage').mockResolvedValue({ messages: [], success: false });
+
+      /** @example Persistence rejection reaches the caller with a useful error. */
+      await expect(
+        store.getState().regenerateUserMessage('user', { content: 'replacement' }),
+      ).rejects.toThrow('could not be saved');
+
+      /** @example An unsuccessful save cannot change the displayed response branch. */
+      expect(mockSwitchMessageBranch).not.toHaveBeenCalled();
+      /** @example The native session remains untouched when persistence fails. */
+      expect(executeHeterogeneousAgentSpy).not.toHaveBeenCalled();
+      /** @example The operation exposes its failure rather than leaving input loading. */
+      expect(mockFailOperation).toHaveBeenCalled();
+    });
+
     it('routes regenerateUserMessage through executeHeterogeneousAgent with imageList + parentOperationId', async () => {
       const { mockRefreshMessages } = await setupHeteroChatStore();
 
