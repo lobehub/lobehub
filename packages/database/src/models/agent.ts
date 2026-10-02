@@ -1173,40 +1173,37 @@ export class AgentModel {
   };
 
   /**
-   * Hard delete for the purge sweep. Same shape as {@link delete} (links →
-   * sessions → agent) but keyed on `trashScope()` so trashed rows are reachable.
+   * Lock the given agents for a purge and return the ones still in the bin.
+   * Run inside the caller's transaction: the row lock holds until the purge
+   * commits, so a restore racing it waits and then finds nothing to restore,
+   * while a restore that already committed makes this return no ids.
+   */
+  lockTrashedForPurge = async (agentIds: string[]): Promise<string[]> => {
+    if (agentIds.length === 0) return [];
+    const stamped = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(inArray(agents.id, agentIds), this.trashScope(), isTrashed(agents.isDeleted)))
+      .for('update');
+    return stamped.map((row) => row.id);
+  };
+
+  /**
+   * Hard delete for the purge sweep: the agent rows and their session links,
+   * still-stamped rows only. FK cascades take topics / messages / threads.
+   * The legacy session shells are another aggregate — the trash handler
+   * drops them through `SessionModel` in the same transaction.
    */
   purge = async (agentIds: string[]): Promise<string[]> => {
     if (agentIds.length === 0) return [];
-    return this.db.transaction(async (trx) => {
-      // Only agents still stamped, locked for the rest of the purge: a restore
-      // that commits between the purge's registry read and this point must
-      // win — its sessions and links included — not be hard-deleted as stale.
-      const stamped = await trx
-        .select({ id: agents.id })
-        .from(agents)
-        .where(and(inArray(agents.id, agentIds), this.trashScope(), isTrashed(agents.isDeleted)))
-        .for('update');
-      agentIds = stamped.map((row) => row.id);
-      if (agentIds.length === 0) return [];
-
-      const links = await trx
-        .select({ sessionId: agentsToSessions.sessionId })
-        .from(agentsToSessions)
-        .where(and(inArray(agentsToSessions.agentId, agentIds), this.agentsToSessionsOwnership()));
-      const sessionIds = [...new Set(links.map((link) => link.sessionId))];
-
-      await trx
-        .delete(agentsToSessions)
-        .where(and(inArray(agentsToSessions.agentId, agentIds), this.agentsToSessionsOwnership()));
-      if (sessionIds.length > 0) {
-        await trx
-          .delete(sessions)
-          .where(and(inArray(sessions.id, sessionIds), this.sessionsOwnership()));
-      }
-      await trx.delete(agents).where(and(inArray(agents.id, agentIds), this.trashScope()));
-      return agentIds;
-    });
+    await this.db
+      .delete(agentsToSessions)
+      .where(and(inArray(agentsToSessions.agentId, agentIds), this.agentsToSessionsOwnership()));
+    const rows = await this.db
+      .delete(agents)
+      .where(and(inArray(agents.id, agentIds), this.trashScope(), isTrashed(agents.isDeleted)))
+      .returning({ id: agents.id });
+    return rows.map((row) => row.id);
   };
 
   /**

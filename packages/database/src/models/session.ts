@@ -589,6 +589,16 @@ export class SessionModel {
     return orphanedAgentIds;
   };
 
+  /**
+   * Drop the legacy session shells of an agent being purged from the recycle
+   * bin. Their links are already gone by then, so the trashed-agent gate no
+   * longer applies; the trash handler composes this with the agent purge.
+   */
+  deleteShellsByIds = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    await this.db.delete(sessions).where(and(inArray(sessions.id, ids), this.scope()));
+  };
+
   // **************** Update *************** //
 
   update = async (id: string, data: Partial<SessionItem>) => {
