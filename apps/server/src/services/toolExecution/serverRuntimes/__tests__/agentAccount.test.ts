@@ -125,6 +125,44 @@ describe('agent-account server runtime', () => {
     expect(elapsed).toBeGreaterThanOrEqual(1_000);
   });
 
+  it('waitForMessage accepts the account address the model sees in context', async () => {
+    // The model refers to an account by the address it was shown, not by uuid.
+    // Binding that string to the uuid `account_id` column used to surface a raw
+    // Postgres 22P02 cast error; it must instead resolve to the owned account
+    // and simply time out (a normal, retryable answer).
+    const result = await runtime().waitForMessage({
+      accountId: 'toby-agent@lobe.id',
+      timeoutMs: 1_200,
+    });
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(result.content)).toEqual({ matched: false, reason: 'timed-out' });
+  });
+
+  it('sendMessage accepts the account address the model sees in context', async () => {
+    // Same reference style as waitForMessage: the model names the account by
+    // its address. Before the fix this was refused as "not owned"; now it must
+    // resolve the account and reach the (unconfigured) provider instead.
+    const result = await runtime().sendMessage({
+      accountId: 'toby-agent@lobe.id',
+      text: '839201',
+      to: 'login@service.com',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Failed to send from toby-agent@lobe.id');
+  });
+
+  it('waitForMessage refuses an account the agent does not own without a DB error', async () => {
+    const result = await runtime().waitForMessage({
+      accountId: 'someone-else@lobe.id',
+      timeoutMs: 1_200,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('is owned by this agent');
+  });
+
   it('refuses to send from an account the agent does not own', async () => {
     const result = await runtime().sendMessage({
       accountId: '00000000-0000-0000-0000-000000000000',

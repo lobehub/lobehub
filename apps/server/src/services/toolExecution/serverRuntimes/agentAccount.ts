@@ -82,8 +82,13 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         }
 
         const list = await accounts();
+        // Accept either the account id or the address the model sees in
+        // context — the model refers to accounts by address, so matching only
+        // on the uuid would refuse a perfectly valid `sendMessage`.
         const target = args.accountId
-          ? list.find((account) => account.id === args.accountId)
+          ? list.find(
+              (account) => account.id === args.accountId || account.identifier === args.accountId,
+            )
           : list.find((account) => account.capabilities.send);
 
         if (!target) {
@@ -127,6 +132,28 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         const since = args?.since ? new Date(args.since) : new Date();
         const deadline = Date.now() + waitMs;
 
+        // Resolve the requested account against the accounts this agent actually
+        // owns *before* it reaches the query. The model routinely refers to an
+        // account by the address it sees in context (e.g. `aria@lobe.id`), not
+        // by its uuid, and `agent_inbox_messages.account_id` is a uuid column —
+        // binding a non-uuid there surfaces a raw Postgres cast error (22P02)
+        // instead of a usable answer. Accept either form, and turn anything the
+        // agent does not own into the same authored refusal `sendMessage` gives.
+        let accountId: string | undefined;
+        if (args?.accountId) {
+          const owned = await accounts();
+          const target = owned.find(
+            (account) => account.id === args.accountId || account.identifier === args.accountId,
+          );
+          if (!target) {
+            return {
+              content: `No account ${args.accountId} is owned by this agent.`,
+              success: false,
+            };
+          }
+          accountId = target.id;
+        }
+
         const matches = (row: { from: string; subject: string | null }): boolean => {
           if (args?.from && row.from !== args.from) return false;
           if (
@@ -143,7 +170,7 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         // with no coupling between the two paths.
         for (;;) {
           const candidates = await inbox.listSince({
-            accountId: args?.accountId,
+            accountId,
             agentId: requireAgentId(),
             limit: 20,
             since,
