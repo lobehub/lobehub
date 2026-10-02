@@ -16,6 +16,7 @@ import {
 } from './native-deps.config.mjs';
 import { packBuiltinCore } from './scripts/packBuiltinCore.mjs';
 import { toSparkleBuildVersion } from './scripts/sparkleBuildVersion.mjs';
+import { resolveSparklePackaging } from './scripts/sparklePackaging.mjs';
 import { verifyFontListSignature } from './scripts/verifyFontListSigning.mjs';
 
 dotenv.config();
@@ -129,12 +130,14 @@ const getProtocolScheme = () => {
 
 const protocolScheme = getProtocolScheme();
 
-// Every macOS channel uses Sparkle; a release must never silently lose its updater.
 const sparklePublicKey = process.env.SPARKLE_ED_PUBLIC_KEY;
-const useSparkle = process.platform === 'darwin';
-if (useSparkle && hasAppleCertificate && (!updateServerUrl || !sparklePublicKey)) {
-  throw new Error('macOS releases require UPDATE_SERVER_URL and SPARKLE_ED_PUBLIC_KEY');
-}
+const { useSparkle } = resolveSparklePackaging({
+  channel,
+  hasAppleCertificate,
+  platform: process.platform,
+  sparklePublicKey,
+  updateServerUrl,
+});
 const sparklePackageDir = useSparkle
   ? await fs.realpath(path.join(__dirname, 'node_modules/electron-sparkle-updater'))
   : null;
