@@ -10,6 +10,10 @@ import { ExpertiseRuleRepository } from '@/database/repositories/expertiseRules'
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
+  DistillRulesInputSchema,
+  ExpertiseRuleDistillService,
+} from '@/server/services/expertise/distill';
+import {
   DomainDraftSchema,
   EditableDomainDraftSchema,
   ExpertiseDomainService,
@@ -39,6 +43,11 @@ const expertiseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
         ctx.workspaceId ?? undefined,
       ),
       expertiseRuleRepository: new ExpertiseRuleRepository(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ),
+      expertiseRuleDistillService: new ExpertiseRuleDistillService(
         ctx.serverDB,
         ctx.userId,
         ctx.workspaceId ?? undefined,
@@ -270,6 +279,58 @@ export const expertiseRouter = router({
   draftRuleGroup: expertiseWriteProcedure
     .input(z.object({ brief: z.string().min(1).max(20_000) }))
     .mutation(async ({ ctx, input }) => ctx.expertiseRuleDraftService.draftRuleGroup(input)),
+
+  /**
+   * Reads a material the reviewer brought — pasted text, a file, a document or a conversation —
+   * and proposes every rule it states. Nothing is written: the reviewer ticks what to keep.
+   */
+  distillRules: expertiseWriteProcedure
+    .input(DistillRulesInputSchema)
+    .mutation(async ({ ctx, input }) => ctx.expertiseRuleDistillService.distillRules(input)),
+
+  /** Files the candidates the reviewer kept from one material, each pinned to its passage. */
+  commitDistilledRules: expertiseWriteProcedure
+    .input(
+      z.object({
+        items: z
+          .array(
+            z.discriminatedUnion('kind', [
+              z.object({
+                domainId: z.string().optional(),
+                kind: z.literal('create'),
+                newGroup: z
+                  .object({ gate: z.string().min(1).max(1000), title: z.string().min(1).max(200) })
+                  .optional(),
+                quote: z.string().max(2000),
+                rule: z.object({
+                  // `compiled` is only true once the compiler links a criterion.
+                  compilability: z.enum(['compilable', 'not-compilable']).optional(),
+                  enforcement: z.enum(EXPERTISE_ENFORCEMENTS).optional(),
+                  how: z.string().max(8000).optional(),
+                  limits: z.string().max(4000).optional(),
+                  title: z.string().min(1).max(500),
+                  why: z.string().max(4000).optional(),
+                }),
+              }),
+              z.object({
+                intoId: z.string(),
+                kind: z.literal('merge'),
+                quote: z.string().max(2000),
+              }),
+            ]),
+          )
+          .max(50),
+        material: z.object({
+          subjectId: z.string().nullable(),
+          subjectType: z.enum(['document', 'standalone', 'topic']),
+          title: z.string().max(500),
+          type: z.enum(['document', 'file', 'text', 'topic']),
+        }),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      ctx.expertiseRuleRepository.commitDistilled(input.material, input.items),
+    ),
 
   /** A rule the reviewer writes down by hand. */
   createRule: expertiseWriteProcedure

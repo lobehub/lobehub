@@ -26,6 +26,12 @@ export type RuleRevision = Awaited<
   ReturnType<typeof lambdaClient.expertise.ruleRevisions.query>
 >[number];
 export type RuleDraft = Awaited<ReturnType<typeof lambdaClient.expertise.draftRule.mutate>>;
+export type DistillResult = Awaited<ReturnType<typeof lambdaClient.expertise.distillRules.mutate>>;
+export type DistillCandidate = DistillResult['candidates'][number];
+export type DistillInput = Parameters<typeof lambdaClient.expertise.distillRules.mutate>[0];
+export type CommitDistilledInput = Parameters<
+  typeof lambdaClient.expertise.commitDistilledRules.mutate
+>[0];
 export type RuleGroupDraft = Awaited<
   ReturnType<typeof lambdaClient.expertise.draftRuleGroup.mutate>
 >;
@@ -51,6 +57,11 @@ class ExpertiseService {
   }) => lambdaClient.expertise.draftRule.mutate(input);
 
   draftRuleGroup = async (brief: string) => lambdaClient.expertise.draftRuleGroup.mutate({ brief });
+
+  distillRules = async (input: DistillInput) => lambdaClient.expertise.distillRules.mutate(input);
+
+  commitDistilledRules = async (input: CommitDistilledInput) =>
+    lambdaClient.expertise.commitDistilledRules.mutate(input);
 
   createRule = async (input: CreateRuleInput) => lambdaClient.expertise.createRule.mutate(input);
 

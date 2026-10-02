@@ -6,6 +6,7 @@ import { getTestDB } from '../../core/getTestDB';
 import { ExpertiseRuleRepository } from '../../repositories/expertiseRules';
 import {
   agents,
+  documents,
   expertiseBindings,
   expertiseDomains,
   expertiseHits,
@@ -862,6 +863,58 @@ describe('ExpertiseModel', () => {
       .from(expertiseLessons)
       .where(inArray(expertiseLessons.id, [first, agentLesson]));
     expect(rows.every((row) => row.status === 'active')).toBe(true);
+  });
+
+  it('files rules distilled from a document and records a restatement on the rule it repeats', async () => {
+    const { first } = await seedRuleGroup();
+    await serverDB.insert(documents).values({
+      content: '交付前必须 rebase 到 canary。',
+      fileType: 'markdown',
+      id: 'distill-doc',
+      source: 'document',
+      sourceType: 'api',
+      title: '工程规范',
+      totalCharCount: 20,
+      totalLineCount: 1,
+      userId,
+    });
+    const repository = new ExpertiseRuleRepository(serverDB, userId);
+
+    const results = await repository.commitDistilled(
+      { subjectId: 'distill-doc', subjectType: 'document', title: '工程规范', type: 'document' },
+      [
+        {
+          domainId: 'rules-domain',
+          kind: 'create',
+          quote: '交付前必须 rebase 到 canary。',
+          rule: { enforcement: 'block', title: '交付前先 rebase 到 canary' },
+        },
+        { intoId: first, kind: 'merge', quote: '证据只拍成功路径' },
+      ],
+    );
+
+    expect(results.map(({ kind }) => kind)).toEqual(['create', 'merge']);
+    const created = results[0].id;
+    const model = new ExpertiseModel(serverDB, userId);
+    const rules = (await model.listRules()).flatMap((group) => group.rules);
+    // Read from a material: counted apart from rejections and conversations, and not "yours".
+    expect(rules.find(({ id }) => id === created)).toMatchObject({
+      authored: false,
+      conversationHitCount: 0,
+      enforcement: 'block',
+      materialHitCount: 1,
+      rejectionHitCount: 0,
+    });
+    expect(rules.find(({ id }) => id === first)).toMatchObject({ materialHitCount: 1 });
+
+    const [source] = await model.listLessonSources(created);
+    expect(source).toMatchObject({
+      documentId: 'distill-doc',
+      example: '交付前必须 rebase 到 canary。',
+      fromAcceptance: false,
+      materialType: 'document',
+      where: '工程规范',
+    });
   });
 
   it('moves an unencumbered rule in place with a fresh code', async () => {

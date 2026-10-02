@@ -9,6 +9,33 @@ import type { LobeChatDatabase } from '../../type';
 
 export type RuleSectionPatch = Partial<Record<'rule' | 'why' | 'how' | 'limits', string | null>>;
 
+/** Where a distilled rule was read from, as the distill step resolved it. */
+export interface DistilledMaterial {
+  subjectId: string | null;
+  subjectType: 'document' | 'standalone' | 'topic';
+  title: string;
+  type: 'document' | 'file' | 'text' | 'topic';
+}
+
+/** One candidate the reviewer kept: filed as a new rule, or recorded on a rule that says it. */
+export type DistilledItem =
+  | {
+      domainId?: string;
+      kind: 'create';
+      /** Opened only when no existing group was chosen. */
+      newGroup?: { gate: string; title: string };
+      quote: string;
+      rule: {
+        compilability?: 'compilable' | 'not-compilable';
+        enforcement?: ExpertiseEnforcement;
+        how?: string;
+        limits?: string;
+        title: string;
+        why?: string;
+      };
+    }
+  | { intoId: string; kind: 'merge'; quote: string };
+
 export interface UpdateRulePatch {
   compilability?: 'compilable' | 'not-compilable';
   enforcement?: ExpertiseEnforcement;
@@ -98,6 +125,78 @@ export class ExpertiseRuleRepository {
       });
       return { id: lessonId, revision };
     });
+
+  /**
+   * Files what the reviewer kept from one material, in one transaction. Each group touched gets
+   * one run for this material (so the sources list can say "read from <material>"), every kept
+   * rule gets the passage it was read from, and a candidate that restated an existing rule is
+   * recorded on that rule instead of being filed twice. Returns the rules now carrying it.
+   */
+  commitDistilled = async (material: DistilledMaterial, items: DistilledItem[]) => {
+    if (items.length === 0) return [];
+    const commitId = crypto.randomUUID();
+    const reflectionKey = `material:${material.type}:${commitId}`;
+    return this.inTransaction(async (model) => {
+      const runs = new Map<string, string>();
+      const runFor = async (domainId: string) => {
+        const existing = runs.get(domainId);
+        if (existing) return existing;
+        const runId = await model.insertMaterialRun({
+          domainId,
+          reflectionKey,
+          subjectId: material.subjectId ?? commitId,
+          subjectType: material.subjectType,
+        });
+        runs.set(domainId, runId);
+        return runId;
+      };
+      // Several candidates may propose the same new group; open it once.
+      const openedGroups = new Map<string, string>();
+      const results: { id: string; kind: DistilledItem['kind'] }[] = [];
+
+      for (const item of items) {
+        if (item.kind === 'merge') {
+          const target = await model.lockLesson(item.intoId);
+          if (!target || target.status !== 'active') continue;
+          const runId = await runFor(target.domainId);
+          await model.insertMaterialHit({
+            domainId: target.domainId,
+            lessonId: target.id,
+            quote: item.quote,
+            runId,
+            where: material.title,
+          });
+          await model.updateLessonFields(target.id, { exampleCount: target.exampleCount + 1 });
+          results.push({ id: target.id, kind: 'merge' });
+          continue;
+        }
+
+        let domainId = item.domainId;
+        if (!domainId && item.newGroup) {
+          const key = item.newGroup.title.trim().toLowerCase();
+          domainId =
+            openedGroups.get(key) ??
+            (await model.createRuleGroup({ gate: item.newGroup.gate, title: item.newGroup.title }));
+          if (domainId) openedGroups.set(key, domainId);
+        }
+        if (!domainId) continue;
+
+        const runId = await runFor(domainId);
+        const created = await model.createRule({ ...item.rule, domainId, originRunId: runId });
+        if (!created) continue;
+        const hitId = await model.insertMaterialHit({
+          domainId,
+          lessonId: created.id,
+          quote: item.quote,
+          runId,
+          where: material.title,
+        });
+        await model.updateLessonFields(created.id, { exampleCount: 1, originHitId: hitId });
+        results.push({ id: created.id, kind: 'create' });
+      }
+      return results;
+    });
+  };
 
   /**
    * Folds one rule into another: the counts move to the target, the target gets a `generalize`

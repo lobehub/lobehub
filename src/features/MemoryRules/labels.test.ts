@@ -66,10 +66,25 @@ describe('revisionAuthorKey', () => {
 });
 
 describe('ruleOrigin', () => {
-  const rule = (rejectionHitCount: number, conversationHitCount: number, authored = false) => ({
+  const rule = (
+    rejectionHitCount: number,
+    conversationHitCount: number,
+    authored = false,
+    materialHitCount = 0,
+  ) => ({
     authored,
     conversationHitCount,
+    materialHitCount,
     rejectionHitCount,
+  });
+
+  it('says a rule was read from material until practice confirms it', () => {
+    expect(ruleOrigin(rule(0, 0, false, 2))).toEqual({
+      key: 'fromMaterial',
+      params: { count: 2 },
+    });
+    // Once it is also rejected for, the rejection is what the reviewer cares about.
+    expect(ruleOrigin(rule(1, 0, false, 2))).toEqual({ key: 'distilled', params: { hits: 1 } });
   });
 
   it('does not say the reviewer rejected anything for a rule learned in conversation', () => {

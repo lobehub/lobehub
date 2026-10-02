@@ -195,6 +195,111 @@ export const chainExpertiseRuleDraft = ({
   ],
 });
 
+export const EXPERTISE_RULE_DISTILL_PROMPT_VERSION = 'v1';
+
+/**
+ * Every rule a piece of material states — a pasted guideline, an uploaded file, a document, or a
+ * conversation — as reviewable candidates. Each carries the editable fields of a lesson row, the
+ * passage it was read from, and which existing rule (if any) already says the same thing, so the
+ * review step can default duplicates off instead of filing them twice.
+ */
+export const EXPERTISE_RULE_DISTILL_JSON_SCHEMA = {
+  name: 'expertise_rule_distill',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      rules: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            compilability: { enum: ['compilable', 'not-compilable'], type: 'string' },
+            duplicateOf: { type: ['string', 'null'] },
+            enforcement: { enum: ['block', 'remind'], type: 'string' },
+            groupId: { type: ['string', 'null'] },
+            how: { type: ['string', 'null'] },
+            limits: { type: ['string', 'null'] },
+            newGroup: {
+              additionalProperties: false,
+              properties: {
+                gate: { type: 'string' },
+                title: { maxLength: 40, type: 'string' },
+              },
+              required: ['gate', 'title'],
+              type: ['object', 'null'],
+            },
+            quote: { maxLength: 400, type: 'string' },
+            title: { maxLength: 120, type: 'string' },
+            why: { type: ['string', 'null'] },
+          },
+          required: [
+            'compilability',
+            'duplicateOf',
+            'enforcement',
+            'groupId',
+            'how',
+            'limits',
+            'newGroup',
+            'quote',
+            'title',
+            'why',
+          ],
+          type: 'object',
+        },
+        maxItems: 20,
+        type: 'array',
+      },
+    },
+    required: ['rules'],
+    type: 'object',
+  },
+} as const satisfies ExpertiseGenerateObjectSchema;
+
+const EXPERTISE_RULE_DISTILL_SYSTEM_PROMPT = `You read a piece of material a reviewer brought — a guideline, a spec, a style guide, meeting notes, or a conversation in which they reviewed work — and extract the delivery rules it states, so they can hold every future delivery to them.
+
+Return up to 20 rules, most important first. For each:
+- title: the rule as one imperative sentence, general enough to apply to any future delivery (strip page names, component names and the name of this particular task), specific enough that a delivery can be judged against it;
+- why: one or two sentences on what goes wrong when it is broken, or null when the material gives no reason and none is obvious;
+- how: what counts as breaking it, as a concrete example a checker could look for, or null;
+- limits: when it does NOT apply, or null when the material sets no boundary;
+- enforcement: "block" only when the material clearly demands deliveries be held until fixed (must, never, required, 必须, 不许, 禁止); otherwise "remind";
+- compilability: "compilable" when a program could check it or gather the evidence for it from the delivery (a diff, a file, a count), "not-compilable" when only a person or a model can judge it;
+- groupId: the id of the existing group whose gate question this rule passes, or null when none fits;
+- newGroup: when groupId is null, a proposed group — a short title and the gate question a rule must pass to be filed there; otherwise null. Propose as few new groups as possible and reuse the same proposal for related rules;
+- quote: the shortest passage of the material, copied verbatim, that states this rule;
+- duplicateOf: the id of an existing rule that already says the same thing, or null.
+
+Only extract requirements the material actually states or the reviewer clearly demanded; never invent rules, and skip background, history and one-off requests about a single delivery. In a conversation, rules come from what the reviewer asked for or criticised, not from what the assistant proposed. Merge restatements of the same requirement into one rule. Write every human-facing field in the language the material uses.`;
+
+interface ExpertiseRuleDistillChainInput {
+  groups: { gate: string; id: string; title: string }[];
+  material: { kind: string; text: string; title: string };
+  rules: { id: string; title: string }[];
+}
+
+export const chainExpertiseRuleDistill = ({
+  groups,
+  material,
+  rules,
+}: ExpertiseRuleDistillChainInput): { messages: OpenAIChatMessage[] } => ({
+  messages: [
+    { content: EXPERTISE_RULE_DISTILL_SYSTEM_PROMPT, role: 'system' },
+    {
+      content: [
+        groups.length > 0
+          ? `Existing groups (id · title · gate question):\n${groups
+              .map((group) => `- ${group.id} · ${group.title} · ${group.gate}`)
+              .join('\n')}`
+          : 'There are no groups yet; propose one in newGroup.',
+        rules.length > 0
+          ? `Existing rules (id · rule):\n${rules.map((rule) => `- ${rule.id} · ${rule.title}`).join('\n')}`
+          : 'There are no existing rules yet.',
+        `Material (${material.kind}) · ${material.title}:\n${material.text.trim()}`,
+      ].join('\n\n'),
+      role: 'user',
+    },
+  ],
+});
+
 export const EXPERTISE_RULE_GROUP_DRAFT_PROMPT_VERSION = 'v1';
 
 /** A group is a name and the gate question a rule must pass to be filed under it. */

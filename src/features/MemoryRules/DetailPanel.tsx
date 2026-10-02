@@ -18,6 +18,7 @@ import {
   ActivityIcon,
   BellIcon,
   ClipboardCheckIcon,
+  FileTextIcon,
   HistoryIcon,
   type LucideIcon,
   MessageSquareTextIcon,
@@ -521,7 +522,9 @@ const RuleDocument = ({
                     {t(
                       source.fromAcceptance
                         ? 'rules.sources.acceptance'
-                        : 'rules.sources.conversation',
+                        : source.materialType
+                          ? `rules.sources.material.${source.materialType as 'document' | 'file' | 'text' | 'topic'}`
+                          : 'rules.sources.conversation',
                     )}
                   </Tag>
                   <span style={{ fontSize: 13, fontWeight: 500 }}>
@@ -544,6 +547,25 @@ const RuleDocument = ({
                   >
                     <Icon icon={MessageSquareTextIcon} size={12} />
                     {t(source.messageId ? 'rules.sources.openMessage' : 'rules.sources.openTopic')}
+                  </a>
+                )}
+                {/* A document or file it was read from opens where the reviewer keeps it. */}
+                {source.documentId && (
+                  <a
+                    className={styles.link}
+                    href={buildWorkspaceAwarePath(
+                      source.documentFileId
+                        ? `/resource?file=${source.documentFileId}`
+                        : `/page/${source.documentId}`,
+                      workspaceSlug,
+                    )}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate(e.currentTarget.getAttribute('href')!);
+                    }}
+                  >
+                    <Icon icon={FileTextIcon} size={12} />
+                    {t('rules.sources.openMaterial')}
                   </a>
                 )}
                 {source.acceptanceId && (
