@@ -24,6 +24,9 @@ import type { LocalFirstAction, LocalFirstEffect, LocalFirstViewWrite } from './
 import { localFirstReducer } from './reducer';
 import type { LocalFirstResource, LocalFirstState } from './types';
 
+/** Reserved storage key of the per-scope index of persisted rows. */
+export const LOCAL_FIRST_INDEX_KEY = '__localFirst:index';
+
 type Setter<TStore> = (partial: Partial<TStore>, replace?: false, action?: any) => void;
 
 /**
@@ -140,6 +143,36 @@ export const createLocalFirstSlice = <TStore, TParams, TData, TFetched = TData>(
     return options.toPersisted ? options.toPersisted(paged) : paged;
   };
 
+  // ---- persisted-row index ---------------------------------------------
+  // Storage has no key listing, so each scope keeps an index row of the
+  // storage keys this resource persisted. Entity changes use it to patch rows
+  // whose entry is not loaded in memory (e.g. a status update for a list the
+  // user navigated away from), so a later visit never hydrates a stale value.
+  const indexKey = (scope: string) => ({ queryKey: LOCAL_FIRST_INDEX_KEY, scope });
+  /** Keys known to be in the index row, per scope (skips redundant index writes). */
+  const indexed = new Map<string, Set<string>>();
+
+  const trackStorageKey = (scope: string, queryKey: string, present: boolean) => {
+    if (!writeQueue) return;
+    const known = indexed.get(scope) ?? new Set<string>();
+    indexed.set(scope, known);
+    if (known.has(queryKey) === present) return;
+    if (present) known.add(queryKey);
+    else known.delete(queryKey);
+    writeQueue.update(indexKey(scope), (current) => {
+      const keys = new Set((current?.data as unknown as string[] | undefined) ?? []);
+      if (keys.has(queryKey) === present) return undefined;
+      if (present) keys.add(queryKey);
+      else keys.delete(queryKey);
+      return { data: [...keys] as unknown as TData, updatedAt: Date.now() };
+    });
+  };
+
+  const readIndex = async (scope: string): Promise<string[]> => {
+    const row = await resource.storage?.get(indexKey(scope));
+    return (row?.data as unknown as string[] | undefined) ?? [];
+  };
+
   const runEffects = (effects: LocalFirstEffect<TData>[]) => {
     if (!writeQueue || effects.length === 0) return;
     // Until identity resolves the scope is a guess; never write into it.
@@ -148,10 +181,13 @@ export const createLocalFirstSlice = <TStore, TParams, TData, TFetched = TData>(
       const key = { ...storageKey(effect.key, effect.query), scope: effect.scope };
       if (effect.type === 'remove') {
         writeQueue.remove(key);
+        trackStorageKey(effect.scope, key.queryKey, false);
         continue;
       }
       const data = toPersisted(effect.data);
-      if (data !== undefined) writeQueue.set(key, { data, updatedAt: Date.now() });
+      if (data === undefined) continue;
+      writeQueue.set(key, { data, updatedAt: Date.now() });
+      trackStorageKey(effect.scope, key.queryKey, true);
     }
   };
 
@@ -436,11 +472,49 @@ export const createLocalFirstSlice = <TStore, TParams, TData, TFetched = TData>(
     return entity.apply ? entity.apply(data, next) : (next as unknown as TData);
   };
 
+  /**
+   * Apply an entity change to persisted rows that memory does not hold (the
+   * memory path already persists loaded entries). Read-modify-write runs in
+   * the per-key write queue, so it sees every earlier write; a missing row is
+   * never recreated. Resolves once the index has been read and the patches
+   * are queued.
+   */
+  const patchStoredEntity = async <TItem>(
+    id: string,
+    fn: (item: TItem) => TItem | undefined,
+  ): Promise<void> => {
+    if (!writeQueue || !resource.scope.canPersist()) return;
+    const scope = resource.scope.get();
+    const slot = getSlot();
+    const loaded = new Set(
+      slot.scope === scope
+        ? Object.entries(slot.entries).map(([key, entry]) => storageKey(key, entry.query).queryKey)
+        : [],
+    );
+    const keys = await readIndex(scope);
+    // Identity changed while reading the index: those rows are not ours to touch.
+    if (resource.scope.get() !== scope) return;
+    for (const queryKey of keys) {
+      if (loaded.has(queryKey)) continue;
+      writeQueue.update({ queryKey, scope }, (current) => {
+        if (!current) return undefined;
+        const next = mapEntity(current.data, id, fn);
+        if (next === current.data) return undefined;
+        if (next === undefined) {
+          trackStorageKey(scope, queryKey, false);
+          return null;
+        }
+        return { data: next, updatedAt: Date.now() };
+      });
+    }
+  };
+
   const updateEntity = <TItem>(
     id: string,
     fn: (item: TItem) => TItem | undefined,
     { persist = true }: { persist?: boolean } = {},
   ) => {
+    if (persist) void patchStoredEntity(id, fn);
     for (const key of entityKeys(id)) {
       const current = view.get(get(), key);
       if (current === undefined) continue;
@@ -527,6 +601,7 @@ export const createLocalFirstSlice = <TStore, TParams, TData, TFetched = TData>(
 
   return {
     beginEntityOptimistic,
+    patchStoredEntity,
     beginOptimistic,
     collapse,
     dispatch,

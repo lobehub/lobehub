@@ -10,7 +10,7 @@ import { createStore } from 'zustand/vanilla';
 
 import type { QueryProjection, QueryProjectionStorage } from '@/libs/queryProjectionStorage';
 
-import { createLocalFirstSlice, recordLens } from './createSlice';
+import { createLocalFirstSlice, LOCAL_FIRST_INDEX_KEY, recordLens } from './createSlice';
 import { defineLocalFirstResource } from './defineResource';
 import { createLocalFirstState } from './reducer';
 import type { LocalFirstScope, LocalFirstState } from './types';
@@ -32,12 +32,18 @@ const scope: LocalFirstScope = {
 const createMemoryStorage = (delays: Record<string, number> = {}) => {
   const rows = new Map<string, QueryProjection<string[]>>();
   const writes: string[] = [];
+  const indexRows = new Map<string, QueryProjection<string[]>>();
   const storage: QueryProjectionStorage<string[]> = {
-    get: async ({ queryKey, scope }) => rows.get(`${scope}|${queryKey}`),
+    get: async ({ queryKey, scope }) =>
+      queryKey === LOCAL_FIRST_INDEX_KEY
+        ? (indexRows.get(scope) as QueryProjection<string[]> | undefined)
+        : rows.get(`${scope}|${queryKey}`),
     remove: async ({ queryKey, scope }) => {
       rows.delete(`${scope}|${queryKey}`);
     },
     set: async ({ queryKey, scope }, projection) => {
+      // The per-scope index of persisted rows is bookkeeping, not a data write.
+      if (queryKey === LOCAL_FIRST_INDEX_KEY) return void indexRows.set(scope, projection);
       const delay = delays[projection.data.join(',')] ?? 0;
       if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
       writes.push(projection.data.join(','));
@@ -151,7 +157,9 @@ describe('createLocalFirstSlice', () => {
       act(() => {
         v1.slice.replace({ id: 'a' }, ['v1-shape']);
       });
-      await waitFor(() => expect(localStorage.length).toBe(1));
+      const dataKeys = () =>
+        Object.keys(localStorage).filter((key) => !key.includes(LOCAL_FIRST_INDEX_KEY));
+      await waitFor(() => expect(dataKeys()).toHaveLength(1));
 
       const v1Reload = bind(1);
       await act(async () => {

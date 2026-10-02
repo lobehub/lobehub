@@ -74,9 +74,14 @@ const pageOf = (params: Params, cursor = 0): LocalFirstPageResult<Row, number> =
 
 const setup = (
   fetchPage = vi.fn(async (params: Params, cursor?: number) => pageOf(params, cursor)),
+  {
+    detailStorage = createMemoryStorage<Row>(),
+    listStorage = createMemoryStorage<Paged>(),
+  }: {
+    detailStorage?: ReturnType<typeof createMemoryStorage<Row>>;
+    listStorage?: ReturnType<typeof createMemoryStorage<Paged>>;
+  } = {},
 ) => {
-  const listStorage = createMemoryStorage<Paged>();
-  const detailStorage = createMemoryStorage<Row>();
   const listResource = defineLocalFirstPagedResource<Params, Row, number, Paged>({
     fetchPage,
     key: ({ owner }) => owner,
@@ -292,5 +297,69 @@ describe('linkLocalFirstEntity', () => {
     await removal;
     expect(store.getState().details.a).toBeUndefined();
     expect(ids(store.getState().lists.o2)).toEqual(['x']);
+  });
+});
+
+describe('entity changes for entries that are not loaded', () => {
+  /** Session 1 persists `o1` (list) and `a` (detail); session 2 starts with empty memory. */
+  const persistedThenReloaded = async () => {
+    const first = setup();
+    first.list.replace(params, pageOf(params));
+    first.detail.replace('a', row('a'));
+    const listKey = `user-1|${first.listResource.storageKey(params)}`;
+    await vi.waitFor(() => {
+      expect(first.listStorage.rows.get(listKey)).toBeDefined();
+      expect(first.detailStorage.rows.get('user-1|a')).toBeDefined();
+    });
+    const second = setup(undefined, {
+      detailStorage: first.detailStorage,
+      listStorage: first.listStorage,
+    });
+    const topic = linkLocalFirstEntity<Row>([second.list, second.detail]);
+    return { ...second, listKey, topic };
+  };
+
+  it('patches persisted rows of unloaded entries', async () => {
+    const { detailStorage, listKey, listStorage, store, topic } = await persistedThenReloaded();
+    topic.update('a', (r) => ({ ...r, title: 'done' }));
+    expect(store.getState().lists).toEqual({});
+    await vi.waitFor(() => {
+      expect(listStorage.rows.get(listKey)?.data.items[0].title).toBe('done');
+      expect(detailStorage.rows.get('user-1|a')?.data.title).toBe('done');
+    });
+    expect(listStorage.rows.get(listKey)?.data.items[1].title).toBe('b');
+  });
+
+  it('removes the entity from unloaded persisted rows and never resurrects them', async () => {
+    const { detailStorage, listKey, listStorage, topic } = await persistedThenReloaded();
+    topic.remove('a');
+    await vi.waitFor(() => {
+      expect(ids(listStorage.rows.get(listKey)?.data)).toEqual(['b']);
+      expect(detailStorage.rows.has('user-1|a')).toBe(false);
+    });
+    expect(listStorage.rows.get(listKey)?.data.total).toBe(4);
+
+    // A later patch of the removed entity must not recreate its detail row.
+    topic.update('a', (r) => ({ ...r, title: 'ghost' }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(detailStorage.rows.has('user-1|a')).toBe(false);
+  });
+
+  it('a committed optimistic write also reaches unloaded rows', async () => {
+    const { listKey, listStorage, topic } = await persistedThenReloaded();
+    await topic.optimistic(
+      'a',
+      (r) => ({ ...r, title: 'opt' }),
+      async () => 'ok',
+    );
+    await vi.waitFor(() => expect(listStorage.rows.get(listKey)?.data.items[0].title).toBe('opt'));
+  });
+
+  it('never touches rows of another scope', async () => {
+    const { listKey, listStorage, topic } = await persistedThenReloaded();
+    scopeState.current = 'user-2';
+    topic.update('a', (r) => ({ ...r, title: 'other-user' }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(listStorage.rows.get(listKey)?.data.items[0].title).toBe('a');
   });
 });

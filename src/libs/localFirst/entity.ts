@@ -6,6 +6,8 @@ export interface LocalFirstEntityTarget {
     id: string,
     fn: (item: TItem) => TItem | undefined,
   ) => LocalFirstOptimisticToken<any>[];
+  /** Patch persisted rows whose entry is not loaded in memory. */
+  patchStoredEntity: <TItem>(id: string, fn: (item: TItem) => TItem | undefined) => Promise<void>;
   revalidate: (key?: string) => Promise<unknown>;
   updateEntity: <TItem>(
     id: string,
@@ -24,7 +26,10 @@ export interface LocalFirstEntityTarget {
  * resources that currently hold it — no global event bus, no shared owner.
  */
 export const linkLocalFirstEntity = <TItem>(targets: LocalFirstEntityTarget[]) => {
-  /** Confirmed patch everywhere the entity is loaded (persisted by default). */
+  /**
+   * Confirmed patch everywhere the entity is loaded, and (when persisted, the
+   * default) in persisted rows of entries that are not loaded.
+   */
   const update = (
     id: string,
     fn: (item: TItem) => TItem,
@@ -53,7 +58,9 @@ export const linkLocalFirstEntity = <TItem>(targets: LocalFirstEntityTarget[]) =
     try {
       const result = await serverCall();
       for (const token of tokens) token.commit();
+      // `remove` / `update` also patch persisted rows that are not loaded.
       if (fn === 'remove') remove(id);
+      else for (const target of targets) void target.patchStoredEntity<TItem>(id, fn);
       return result;
     } catch (error) {
       for (const token of tokens) token.rollback();

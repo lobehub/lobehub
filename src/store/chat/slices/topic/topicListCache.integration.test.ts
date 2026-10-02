@@ -68,9 +68,12 @@ const runningTopic = { id: 'tpc-lobe-14032', status: 'running', title: '抚州�
 // Default sidebar params (no filters) — rows are stored per query.
 const SIDEBAR_STORAGE_KEY = topicListResource.storageKey({ agentId: AGENT_ID, pageSize: 20 });
 
-const persistedTopicStatus = async (scope: string): Promise<string | undefined> => {
+const persistedTopicStatus = async (
+  scope: string,
+  topicId = runningTopic.id,
+): Promise<string | undefined> => {
   const projection = await topicListResource.storage!.get({ queryKey: SIDEBAR_STORAGE_KEY, scope });
-  return projection?.data.items.find((item) => item.id === runningTopic.id)?.status ?? undefined;
+  return projection?.data.items.find((item) => item.id === topicId)?.status ?? undefined;
 };
 
 /** A reload: memory is gone, only the persisted projection survives. */
@@ -300,6 +303,45 @@ describe('persisted topic list across a reload', () => {
 
     replayedAgentView.unmount();
     sidebar.unmount();
+  });
+
+  it('patches the persisted list of a container that is not loaded (Codex P1)', async () => {
+    const scope = createScope();
+    // Own id: other tests leave pending status pins on `runningTopic`.
+    const topic = { ...runningTopic, id: 'tpc-unloaded-container' };
+    vi.mocked(topicService.getTopics).mockResolvedValue({ items: [topic], total: 1 } as any);
+    const session1 = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
+      wrapper: wrapper(makeProvider(scope)),
+    });
+    await waitFor(async () => expect(await persistedTopicStatus(scope, topic.id)).toBe('running'));
+    session1.unmount();
+
+    // The user navigated elsewhere: the owning bucket is no longer in memory.
+    reloadStore();
+    act(() => useChatStore.setState({ activeAgentId: 'another-agent' }));
+
+    // The run finishes for the unloaded container.
+    act(() => {
+      useChatStore.getState().internal_dispatchTopic({
+        agentId: AGENT_ID,
+        id: topic.id,
+        type: 'updateTopic',
+        value: { status: 'unread' },
+      });
+    });
+    expect(useChatStore.getState().topicDataMap[CONTAINER_KEY]).toBeUndefined();
+    await waitFor(async () => expect(await persistedTopicStatus(scope, topic.id)).toBe('unread'));
+
+    // The next visit hydrates the terminal status, not the stale spinner.
+    act(() => useChatStore.setState({ activeAgentId: AGENT_ID }));
+    vi.mocked(topicService.getTopics).mockReturnValue(new Promise<never>(() => {}) as any);
+    const visit = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
+      wrapper: wrapper(makeProvider(scope)),
+    });
+    await waitFor(() =>
+      expect(useChatStore.getState().topicDataMap[CONTAINER_KEY]?.items[0]?.status).toBe('unread'),
+    );
+    visit.unmount();
   });
 
   it('does not repaint another identity’s persisted list after a scope switch', async () => {

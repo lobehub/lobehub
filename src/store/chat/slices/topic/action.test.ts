@@ -8,7 +8,7 @@ import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
-import { cacheScope } from '@/libs/localFirst';
+import { cacheScope, LOCAL_FIRST_INDEX_KEY } from '@/libs/localFirst';
 import { mutate } from '@/libs/swr';
 import { localFirstKeys } from '@/libs/swr/keys';
 import { aiChatService } from '@/services/aiChat';
@@ -2245,13 +2245,16 @@ describe('topic action', () => {
         });
       });
       vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
-      const persist = vi.spyOn(topicListResource.storage!, 'set').mockResolvedValue();
+      const set = vi.spyOn(topicListResource.storage!, 'set').mockResolvedValue();
+      // Data rows only: the per-scope index of persisted rows is bookkeeping.
+      const persisted = () =>
+        set.mock.calls.filter(([key]) => key.queryKey !== LOCAL_FIRST_INDEX_KEY);
 
-      return { containerKey, persist, result };
+      return { containerKey, persisted, result };
     };
 
     it('persists a run-end status patch so a reload does not repaint the spinner', async () => {
-      const { containerKey, persist, result } = setupBucket('agent-write-through');
+      const { containerKey, persisted, result } = setupBucket('agent-write-through');
 
       act(() => {
         result.current.internal_dispatchTopic({
@@ -2261,8 +2264,8 @@ describe('topic action', () => {
         });
       });
 
-      await waitFor(() => expect(persist).toHaveBeenCalledTimes(1));
-      const [key, projection] = persist.mock.calls[0];
+      await waitFor(() => expect(persisted()).toHaveLength(1));
+      const [key, projection] = persisted()[0];
       expect(key.queryKey).toBe(containerKey);
       expect(projection.data.items).toMatchObject([{ id: 'topic-1', status: 'unread' }]);
       // Transient paging flags never reach storage.
@@ -2270,7 +2273,7 @@ describe('topic action', () => {
     });
 
     it('does not persist client-only optimistic rows', async () => {
-      const { persist, result } = setupBucket('agent-write-through-add');
+      const { persisted, result } = setupBucket('agent-write-through-add');
 
       act(() => {
         result.current.internal_dispatchTopic({
@@ -2279,7 +2282,7 @@ describe('topic action', () => {
           value: { id: 'topic-optimistic', title: 'New' },
         });
       });
-      expect(persist).not.toHaveBeenCalled();
+      expect(persisted()).toHaveLength(0);
 
       // A later confirmed patch persists the bucket without the placeholder.
       act(() => {
@@ -2289,10 +2292,8 @@ describe('topic action', () => {
           value: { status: 'unread' },
         });
       });
-      await waitFor(() => expect(persist).toHaveBeenCalledTimes(1));
-      expect(persist.mock.calls[0][1].data.items.map((item: ChatTopic) => item.id)).toEqual([
-        'topic-1',
-      ]);
+      await waitFor(() => expect(persisted()).toHaveLength(1));
+      expect(persisted()[0][1].data.items.map((item: ChatTopic) => item.id)).toEqual(['topic-1']);
     });
 
     it('does not create a bucket when patching an unloaded container', () => {
