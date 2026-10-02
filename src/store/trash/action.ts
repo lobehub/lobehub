@@ -30,6 +30,8 @@ const RESTORE_AFFECTED_KEY_PREFIXES = [
   'knowledgeBase:',
   // Replicas (topic list, …) sync through `replica:sync` keys (`@lobechat/replica`).
   'replica:',
+  // conversation transcripts — a restored message must reappear in its thread
+  'message:',
   'page',
   'project',
   'recent:',
