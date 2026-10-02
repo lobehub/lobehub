@@ -8,7 +8,15 @@
  * so new subject kinds are a type-only change. Goals are the first consumer;
  * the metrics layer itself never special-cases any of these.
  */
-export type MetricSubjectType = 'goal' | 'task' | 'agent' | 'project' | 'workspace';
+export const METRIC_SUBJECT_TYPES = [
+  'goal',
+  'task',
+  'agent',
+  'project',
+  'workspace',
+  'dashboardWidget',
+] as const;
+export type MetricSubjectType = (typeof METRIC_SUBJECT_TYPES)[number];
 
 /**
  * Decimal places `metric_points.value` keeps — the column is `numeric(20, 6)`.

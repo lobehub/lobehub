@@ -1,10 +1,12 @@
 import type { MetricSubjectType } from '@lobechat/types';
+import { METRIC_SUBJECT_TYPES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
+import { DashboardWidgetModel } from '@/database/models/dashboardWidget';
 import { GoalModel } from '@/database/models/goal';
 import { MetricModel } from '@/database/models/metric';
 import { ProjectModel } from '@/database/models/project';
@@ -31,7 +33,7 @@ const metricWriteProcedure = metricProcedure.use(withScopedPermission('agent:upd
 const idInput = z.object({ id: z.string() });
 const subjectInput = z.object({
   subjectId: z.string(),
-  subjectType: z.enum(['goal', 'task', 'agent', 'project', 'workspace']),
+  subjectType: z.enum(METRIC_SUBJECT_TYPES),
 });
 const configSchema = z.object({
   direction: z.enum(['higher_is_better', 'lower_is_better']).optional(),
@@ -93,6 +95,9 @@ const assertSubjectVisible = async (
     switch (subjectType) {
       case 'agent': {
         return new AgentModel(db, ctx.userId, workspaceId).existsById(subjectId);
+      }
+      case 'dashboardWidget': {
+        return new DashboardWidgetModel(db, ctx.userId, workspaceId).findById(subjectId);
       }
       case 'goal': {
         return new GoalModel(db, ctx.userId, workspaceId).findById(subjectId);

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { topics, trashItems, users, workspaces } from '../../schemas';
+import { dashboards, topics, trashItems, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TrashModel } from '../trash';
 
@@ -233,6 +233,27 @@ describe('TrashModel', () => {
       expect(pruned).toBe(2);
       const left = await serverDB.select().from(trashItems).where(eq(trashItems.userId, userId));
       expect(left.map((r) => r.resourceId)).toEqual(['tpc_stamped']);
+    });
+
+    it('pruneOrphans matches uuid-keyed dashboard roots against their text registry ids', async () => {
+      const deletedAt = at('2026-08-01T00:00:00Z');
+      const [stamped, live] = await serverDB
+        .insert(dashboards)
+        .values([
+          { deletedAt, isDeleted: true, title: 'still trashed', userId },
+          { title: 'restored elsewhere', userId },
+        ])
+        .returning();
+      await model.register({
+        deletedAt,
+        root: { resourceId: stamped.id, resourceType: 'dashboard' },
+      });
+      await model.register({ deletedAt, root: { resourceId: live.id, resourceType: 'dashboard' } });
+
+      const pruned = await TrashModel.pruneOrphans(serverDB);
+      expect(pruned).toBe(1);
+      const left = await serverDB.select().from(trashItems).where(eq(trashItems.userId, userId));
+      expect(left.map((r) => r.resourceId)).toEqual([stamped.id]);
     });
   });
 });

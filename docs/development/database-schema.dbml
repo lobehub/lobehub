@@ -1229,6 +1229,159 @@ table user_installed_plugins {
   }
 }
 
+table dashboard_items {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  dashboard_id uuid [not null]
+  widget_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  layout jsonb
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (dashboard_id, widget_id) [name: 'dashboard_items_dashboard_id_widget_id_unique', unique]
+    (dashboard_id, sort_order) [name: 'dashboard_items_dashboard_id_sort_order_idx']
+    widget_id [name: 'dashboard_items_widget_id_idx']
+    user_id [name: 'dashboard_items_user_id_idx']
+    workspace_id [name: 'dashboard_items_workspace_id_idx']
+  }
+}
+
+table dashboard_widget_runs {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  widget_id uuid [not null]
+  version_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  trigger text [not null]
+  status text [not null, default: 'running']
+  started_at "timestamp with time zone" [not null, default: `now()`]
+  finished_at "timestamp with time zone"
+  duration_ms integer
+  exit_code integer
+  output jsonb
+  stdout text
+  stderr text
+  error jsonb
+  sandbox_id text
+  operation_id text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (widget_id, created_at) [name: 'dashboard_widget_runs_widget_id_created_at_idx']
+    version_id [name: 'dashboard_widget_runs_version_id_idx']
+    user_id [name: 'dashboard_widget_runs_user_id_idx']
+    workspace_id [name: 'dashboard_widget_runs_workspace_id_idx']
+  }
+}
+
+table dashboard_widget_versions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  widget_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  version integer [not null]
+  runtime text [not null]
+  script text [not null]
+  content_hash text [not null]
+  manifest jsonb
+  output_type text [not null]
+  view jsonb
+  status text [not null, default: 'draft']
+  change_note text
+  published_at "timestamp with time zone"
+  published_by_user_id text
+  source_type text [not null]
+  source_agent_id text
+  source_topic_id text
+  source_message_id text
+  source_operation_id text
+  parent_version_id uuid
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (widget_id, version) [name: 'dashboard_widget_versions_widget_id_version_unique', unique]
+    user_id [name: 'dashboard_widget_versions_user_id_idx']
+    workspace_id [name: 'dashboard_widget_versions_workspace_id_idx']
+    source_agent_id [name: 'dashboard_widget_versions_source_agent_id_idx']
+    source_topic_id [name: 'dashboard_widget_versions_source_topic_id_idx']
+    parent_version_id [name: 'dashboard_widget_versions_parent_version_id_idx']
+  }
+}
+
+table dashboard_widgets {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  project_id text
+  agent_id text
+  title text [not null]
+  description text
+  published_version_id uuid
+  draft_version_id uuid
+  schedule_pattern text
+  schedule_timezone text
+  next_run_at "timestamp with time zone"
+  last_run_id uuid
+  last_run_at "timestamp with time zone"
+  last_run_status text
+  last_run_error jsonb
+  consecutive_failures integer [not null, default: 0]
+  latest_output jsonb
+  latest_output_at "timestamp with time zone"
+  metric_id text
+  visibility text [not null, default: 'public']
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, updated_at) [name: 'dashboard_widgets_personal_idx']
+    (workspace_id, updated_at) [name: 'dashboard_widgets_workspace_idx']
+    (project_id, updated_at) [name: 'dashboard_widgets_project_idx']
+    (agent_id, updated_at) [name: 'dashboard_widgets_agent_idx']
+    next_run_at [name: 'dashboard_widgets_due_idx']
+    user_id [name: 'dashboard_widgets_user_id_idx']
+    workspace_id [name: 'dashboard_widgets_workspace_id_idx']
+    published_version_id [name: 'dashboard_widgets_published_version_id_idx']
+    draft_version_id [name: 'dashboard_widgets_draft_version_id_idx']
+    metric_id [name: 'dashboard_widgets_metric_id_idx']
+  }
+}
+
+table dashboards {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  project_id text
+  agent_id text
+  title text [not null]
+  description text
+  icon text
+  sort_order integer [not null, default: 0]
+  visibility text [not null, default: 'public']
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, sort_order) [name: 'dashboards_personal_idx']
+    (workspace_id, sort_order) [name: 'dashboards_workspace_idx']
+    (project_id, sort_order) [name: 'dashboards_project_idx']
+    (agent_id, sort_order) [name: 'dashboards_agent_idx']
+    user_id [name: 'dashboards_user_id_idx']
+    workspace_id [name: 'dashboards_workspace_id_idx']
+  }
+}
+
 table devices {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]

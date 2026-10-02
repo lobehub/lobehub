@@ -1780,6 +1780,8 @@
   "trash.restore.success": "已恢复",
   "trash.title": "回收站",
   "trash.type.agent": "助手",
+  "trash.type.dashboard": "看板",
+  "trash.type.dashboardWidget": "看板组件",
   "trash.type.message": "消息",
   "trash.type.topic": "话题",
   "trash.untitled": "未命名",

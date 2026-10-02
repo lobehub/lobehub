@@ -14,6 +14,7 @@ export * from './brief';
 export * from './chunk';
 export * from './conversation';
 export * from './creds';
+export * from './dashboard';
 export * from './dbMigration';
 export * from './device';
 export * from './deviceMetric';

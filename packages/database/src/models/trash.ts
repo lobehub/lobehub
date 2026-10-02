@@ -10,7 +10,7 @@ import type {
 import { and, asc, count, desc, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 
 import type { NewTrashItemRow, TrashItemRow } from '../schemas';
-import { agents, messages, topics, trashItems } from '../schemas';
+import { agents, dashboards, dashboardWidgets, messages, topics, trashItems } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
@@ -41,6 +41,12 @@ export interface TrashRegisterParams {
  */
 const ROOT_TABLES: Record<TrashResourceType, { id: any; isDeleted: any; table: any }> = {
   agent: { id: agents.id, isDeleted: agents.isDeleted, table: agents },
+  dashboard: { id: dashboards.id, isDeleted: dashboards.isDeleted, table: dashboards },
+  dashboardWidget: {
+    id: dashboardWidgets.id,
+    isDeleted: dashboardWidgets.isDeleted,
+    table: dashboardWidgets,
+  },
   message: { id: messages.id, isDeleted: messages.isDeleted, table: messages },
   topic: { id: topics.id, isDeleted: topics.isDeleted, table: topics },
 };
@@ -363,7 +369,8 @@ export class TrashModel {
           and(
             eq(trashItems.resourceType, resourceType),
             isNull(trashItems.rootId),
-            sql`NOT EXISTS (SELECT 1 FROM ${source.table} WHERE ${source.id} = ${trashItems.resourceId} AND ${source.isDeleted} = true)`,
+            // `::text` because dashboard tables key on uuid while the registry stores text ids
+            sql`NOT EXISTS (SELECT 1 FROM ${source.table} WHERE ${source.id}::text = ${trashItems.resourceId} AND ${source.isDeleted} = true)`,
           ),
         )
         .returning({ id: trashItems.id });
