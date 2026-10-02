@@ -2936,6 +2936,7 @@ export default {
   'workingPanel.overview.ports.revoked': 'Sharing stopped',
   'workingPanel.overview.ports.title': 'Ports',
   'workingPanel.overview.ports.unavailable': "Can't read this device's ports right now",
+  'workingPanel.overview.subagents': 'Subagents',
   'workingPanel.overview.sync.ahead_one': '{{count}} commit ahead',
   'workingPanel.overview.sync.ahead_other': '{{count}} commits ahead',
   'workingPanel.overview.sync.behind_one': '{{count}} commit behind',

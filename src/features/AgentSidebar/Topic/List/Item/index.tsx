@@ -6,13 +6,13 @@ import {
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { MessageSquareDashed } from 'lucide-react';
 import type { CSSProperties, DragEvent, RefObject } from 'react';
-import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -38,7 +38,6 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useElectronStore } from '@/store/electron';
 
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
-import ThreadList from '../../TopicListContent/ThreadList';
 import Actions from './Actions';
 import TopicItemContextMenu from './ContextMenu';
 import {
@@ -218,7 +217,6 @@ interface TopicItemRowProps extends TopicItemProps {
   defaultTopicActive: boolean;
   isTopicActive: boolean;
   navRef: RefObject<TopicNavigationActions>;
-  showThreadList: boolean;
 }
 
 const TopicItemRow = memo<TopicItemRowProps>(
@@ -234,7 +232,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
     defaultTopicActive,
     isTopicActive,
     navRef,
-    showThreadList,
   }) => {
     const { t } = useTranslation('topic');
     const { isDarkMode } = useTheme();
@@ -577,18 +574,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
         ) : (
           navItem
         )}
-        {showThreadList && (
-          <Suspense
-            fallback={
-              <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>
-                <Skeleton height={18} width={'100%'} />
-                <Skeleton height={18} width={'100%'} />
-              </Flexbox>
-            }
-          >
-            <ThreadList topicId={id} />
-          </Suspense>
-        )}
       </Flexbox>
     );
   },
@@ -614,7 +599,6 @@ const TopicItem = memo<TopicItemProps>((props) => {
     isInAgentSubRoute,
     isInTopicContextRoute,
     routeTopicId,
-    urlTopicId,
   } = useTopicNavigation();
 
   // Active/thread state is subscribed here instead of arriving as props:
@@ -635,7 +619,6 @@ const TopicItem = memo<TopicItemProps>((props) => {
       {...props}
       defaultTopicActive={Boolean(active && !isInAgentSubRoute && !isInTopicContextRoute)}
       navRef={navRef}
-      showThreadList={Boolean(id && id === urlTopicId)}
       isTopicActive={Boolean(
         (active || isRouteTopicActive) &&
         !hasActiveThread &&

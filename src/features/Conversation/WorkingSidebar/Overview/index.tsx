@@ -27,6 +27,7 @@ import {
   getPullRequestState,
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
+import ThreadList from '@/features/AgentSidebar/Topic/TopicListContent/ThreadList';
 import { TopicBackgroundActivity } from '@/features/BackgroundActivity/TopicSection';
 import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
@@ -390,14 +391,7 @@ const Overview = memo<OverviewProps>(
       ) : (
         gitRows
       )
-    ) : (
-      <OverviewRow
-        icon={FilesIcon}
-        trailing={<ChevronRight />}
-        value={t('workingPanel.overview.files')}
-        onClick={() => onOpenTab('files')}
-      />
-    );
+    ) : null;
 
     return (
       <Flexbox className={styles.body}>
@@ -473,7 +467,21 @@ const Overview = memo<OverviewProps>(
           />
         )}
 
+        {/* Thread rows open in the Portal; the list labels itself as subagents and
+            sits in its own section so the resource rows below aren't grouped under it. */}
+        {topicId && <ThreadList topicId={topicId} />}
+
         <Flexbox className={sectionStyles.section}>
+          {hasWorkspace && (
+            <OverviewRow
+              weak
+              icon={FilesIcon}
+              iconSize={15}
+              trailing={<ChevronRight />}
+              value={t('workingPanel.overview.files')}
+              onClick={() => onOpenTab('files')}
+            />
+          )}
           <OverviewRow
             weak
             icon={SkillsIcon}

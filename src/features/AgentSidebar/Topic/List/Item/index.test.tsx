@@ -139,11 +139,6 @@ vi.mock('./Actions', () => ({
 vi.mock('./useDropdownMenu', () => ({
   useTopicItemDropdownMenu: () => ({ dropdownMenu: [] }),
 }));
-vi.mock('../../TopicListContent/ThreadList', () => ({
-  default: ({ topicId }: { topicId: string }) => (
-    <div data-testid="topic-thread-list" data-topic-id={topicId} />
-  ),
-}));
 
 describe('TopicItem active state', () => {
   afterEach(() => {
@@ -168,7 +163,6 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'true');
-    expect(screen.getByTestId('topic-thread-list')).toHaveAttribute('data-topic-id', 'tpc_test');
   });
 
   it('does not highlight a stale topic while visiting non-topic agent sub-routes', () => {
@@ -183,7 +177,6 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'false');
-    expect(screen.queryByTestId('topic-thread-list')).not.toBeInTheDocument();
   });
 
   it('prefixes the cmd-click href with the active workspace slug', () => {
