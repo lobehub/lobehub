@@ -407,7 +407,17 @@ const startCurrentGenerationQuery = (
 export const runMessageListQuery = (
   context: MessageListQueryContext,
   query: MessageListQuery,
-): Promise<UIChatMessage[]> => startCurrentGenerationQuery(getOrCreateState(context), query);
+  options?: { force?: boolean },
+): Promise<UIChatMessage[]> => {
+  const state = getOrCreateState(context);
+  if (options?.force) {
+    // A read after a completion barrier must not join an earlier request.
+    // Unlike mutation invalidation, this read keeps client-held history pages.
+    state.generation += 1;
+    state.verifiedAt = undefined;
+  }
+  return startCurrentGenerationQuery(state, query);
+};
 
 /**
  * Synchronously invalidate verification and advance the request generation for

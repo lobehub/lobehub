@@ -172,6 +172,12 @@ export interface OperationMetadata {
   streamRetry?: StreamRetryMetadata;
 
   /**
+   * Start of the turn a steered run continues. Elapsed timers count from here so
+   * a queued follow-up reads as one continuous turn; inherited by child operations.
+   */
+  turnStartTime?: number;
+
+  /**
    * The model text stream has finished and there is no visible follow-up phase
    * to wait for, but the runtime operation still needs its terminal lifecycle
    * (`agent_runtime_end`) for cache, queue, unread, and notification effects.
@@ -432,6 +438,8 @@ export interface OperationFilter {
  * - execHeterogeneousAgent: Heterogeneous agent execution (Claude Code CLI, etc.)
  * - execServerAgentRuntime: Server-side agent execution (Group Chat)
  */
+export const SEND_NOW_CANCEL_REASON = 'send_now';
+
 export const AI_RUNTIME_OPERATION_TYPES: OperationType[] = [
   'execAgentRuntime',
   'execHeterogeneousAgent',

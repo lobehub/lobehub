@@ -1283,7 +1283,7 @@
   "inputQueue.delete": "Delete",
   "inputQueue.edit": "Edit",
   "inputQueue.enqueueRejected": "Queue is full. Try again after the current run finishes.",
-  "inputQueue.queuedHint": "Queued — will steer the next turn",
+  "inputQueue.queuedHint": "Sends when the current step finishes",
   "inputQueue.sendNow": "Send now (interrupts current run)",
   "intentUnderstanding.title": "Understanding your intent...",
   "internalLink.agent.open": "Open agent",

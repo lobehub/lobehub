@@ -15,6 +15,7 @@ import {
   type QueuedFile,
   type QueuedMessage,
   reconstructUploadFilesFromQueue,
+  SEND_NOW_CANCEL_REASON,
 } from '@/store/chat/slices/operation/types';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFileStore } from '@/store/file';
@@ -50,6 +51,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   fileChipName: css`
     overflow: hidden;
     text-overflow: ellipsis;
+  `,
+  hint: css`
+    padding-block: 0 6px;
+    padding-inline: 34px 12px;
+    font-size: 12px;
+    color: ${cssVar.colorTextDescription};
   `,
   icon: css`
     flex-shrink: 0;
@@ -205,7 +212,7 @@ const QueueTray = memo(() => {
           const runningOpIds =
             operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
           const cancellationConfirmed = await Promise.all(
-            runningOpIds.map((id) => chat.cancelOperation(id, 'send_now')),
+            runningOpIds.map((id) => chat.cancelOperation(id, SEND_NOW_CANCEL_REASON)),
           );
           if (cancellationConfirmed.some((confirmed) => !confirmed)) {
             throw new Error('Running agent cancellation was not confirmed');
@@ -266,18 +273,21 @@ const QueueTray = memo(() => {
               )}
             </Flexbox>
             <ActionIcon
+              aria-label={t('inputQueue.edit')}
               icon={Pencil}
               size="small"
               title={t('inputQueue.edit')}
               onClick={() => handleEdit(msg)}
             />
             <ActionIcon
+              aria-label={t('inputQueue.sendNow')}
               icon={ArrowUp}
               size="small"
               title={t('inputQueue.sendNow')}
               onClick={() => handleSendNow(msg)}
             />
             <ActionIcon
+              aria-label={t('inputQueue.delete')}
               icon={Trash2}
               size="small"
               title={t('inputQueue.delete')}
@@ -286,6 +296,7 @@ const QueueTray = memo(() => {
           </Flexbox>
         );
       })}
+      <div className={styles.hint}>{t('inputQueue.queuedHint')}</div>
     </Flexbox>
   );
 });

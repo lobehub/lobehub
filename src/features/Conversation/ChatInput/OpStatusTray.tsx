@@ -265,15 +265,17 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
         activity = mapped;
       }
 
-      if (!AI_RUNTIME_OPERATION_TYPES.includes(op.type)) {
+      const isSteeredSend = op.type === 'sendMessage' && op.metadata.turnStartTime !== undefined;
+      if (!AI_RUNTIME_OPERATION_TYPES.includes(op.type) && !isSteeredSend) {
         continue;
       }
 
       runtimeOperationIds.push(op.id);
       stepCount = Math.max(stepCount, normalizeStepCount(op.metadata.stepCount));
 
-      if (earliestStart === undefined || op.metadata.startTime < earliestStart) {
-        earliestStart = op.metadata.startTime;
+      const turnStartTime = op.metadata.turnStartTime ?? op.metadata.startTime;
+      if (earliestStart === undefined || turnStartTime < earliestStart) {
+        earliestStart = turnStartTime;
         statusSeed = op.id;
       }
     }
@@ -286,14 +288,20 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
     };
   });
   const operationsByMessage = useChatStore((s) => s.operationsByMessage);
+  const handoffStartTime = useChatStore((s) =>
+    operationSelectors.isSteerHandoffPending(context)(s)
+      ? operationSelectors.getLatestAgentRuntimeTurnStartTime(context)(s)
+      : undefined,
+  );
+  const startTime = operationState.startTime ?? handoffStartTime;
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!operationState.startTime) return;
+    if (!startTime) return;
     setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [operationState.startTime]);
+  }, [startTime]);
 
   const operationIds = useMemo(
     () => new Set(operationState.operationIdsKey.split('|').filter(Boolean)),
@@ -307,10 +315,10 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
     return calculateOperationUsageMetrics(dbMessages, operationIds, operationsByMessage);
   }, [dbMessages, operationIds, operationsByMessage]);
 
-  if (!operationState.startTime) return null;
+  if (!startTime) return null;
 
   const { totalCost, totalTokens } = usageMetrics;
-  const elapsed = now - operationState.startTime;
+  const elapsed = now - startTime;
   const costLabel = t('chat:opStatusTray.cost');
   const stepLabel = t('chat:opStatusTray.steps');
   const tokenLabel = t('chat:opStatusTray.tokens', { defaultValue: 'tokens' });
@@ -324,7 +332,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
   const randomGeneratingStatus =
     pickRotatingStatusPhrase(
       generatingPhrases,
-      operationState.statusSeed ?? String(operationState.startTime),
+      operationState.statusSeed ?? String(startTime),
       rotationStep,
     ) ?? t('chat:opStatusTray.status.generating');
   const statusText =

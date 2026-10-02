@@ -95,6 +95,23 @@ export const getFirstBlockCreatedAt = (
   return earliest;
 };
 
+export const getChainDurationsMs = (
+  dbMessages: DbMessageLike[] | undefined,
+  chains: GroupChainInput[],
+): number[] =>
+  chains.map((chain, index) => {
+    const steerUserId = chains[index + 1]?.steerUserId;
+    const steerCreatedAt = steerUserId
+      ? toEpochMs(dbMessages?.find((message) => message.id === steerUserId)?.createdAt)
+      : undefined;
+    const startedAt = getFirstBlockCreatedAt(dbMessages, chain.blocks);
+
+    if (steerCreatedAt !== undefined && startedAt !== undefined && steerCreatedAt > startedAt)
+      return steerCreatedAt - startedAt;
+
+    return getTurnDurationMs(dbMessages, chain.blocks);
+  });
+
 /**
  * When a set of steps finished, normalized to epoch ms.
  *

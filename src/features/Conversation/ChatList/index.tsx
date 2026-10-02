@@ -12,6 +12,10 @@ import { getMessageListCacheIdentity } from '@/services/message/cache';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import {
+  hasPendingInterventions,
+  INTERVENTION_REFRESH_INTERVAL,
+} from '@/store/chat/utils/interventionSync';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors, settingsSelectors } from '@/store/user/selectors';
@@ -123,12 +127,10 @@ const ChatList = memo<ChatListProps>(
       s.useFetchMessages,
     ]);
     const activeAgentId = useChatStore((s) => s.activeAgentId);
-    // Suppress SWR focus revalidate while the current topic is streaming —
-    // the server-pushed UIChatMessage[] snapshot at step boundaries is the
-    // source of truth during that window. A focus refetch could hit DB
-    // mid-fan-out and clobber the in-memory streamed state with a stale
-    // assistant placeholder.
+    // Pending cards still refresh during streaming; the data slice merges only
+    // intervention changes so lagging DB snapshots cannot replace live text.
     const isStreaming = useChatStore(operationSelectors.isAgentRuntimeRunningByContext(context));
+    const hasPendingApproval = useConversationStore((s) => hasPendingInterventions(s.dbMessages));
     // A client-minted topic whose server row does not exist yet (first-send
     // window) must not be fetched: the query would legitimately return an empty
     // list and `onData` would wipe the optimistic messages already on screen.
@@ -139,8 +141,10 @@ const ChatList = memo<ChatListProps>(
     );
     const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
     const messagesSWR = useFetchMessages(context, {
-      revalidateOnFocus: !isStreaming,
+      refreshInterval: hasPendingApproval ? INTERVENTION_REFRESH_INTERVAL : 0,
+      revalidateOnFocus: hasPendingApproval || !isStreaming,
       skipFetch: skipFetch || isCreatingTopic,
+      syncInterventions: true,
     });
     const refreshError = useMessageRefreshError({
       error: messagesSWR.error,

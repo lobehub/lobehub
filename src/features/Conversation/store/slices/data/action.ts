@@ -1,5 +1,5 @@
 import { parse } from '@lobechat/conversation-flow';
-import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
+import { type ChatTopic, type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 import { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
@@ -8,13 +8,22 @@ import { useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
 import {
   getEarlierHistoryStatus,
+  getMessageListCacheIdentity,
   getMessageListFetchPolicy,
   loadEarlierMessagePage,
   messageListKey,
   runMessageListQuery,
 } from '@/services/message/cache';
-import { getChatStoreState } from '@/store/chat';
-import { operationSelectors } from '@/store/chat/selectors';
+import { topicService } from '@/services/topic';
+import { getChatStoreState, useChatStore } from '@/store/chat';
+import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
+import {
+  hasPendingInterventions,
+  INTERVENTION_REFRESH_INTERVAL,
+  isInterventionRunActive,
+  reconcileIntervention,
+  reconcileStreamingInterventions,
+} from '@/store/chat/utils/interventionSync';
 import {
   isLocalOnlyMessage,
   mergeLocalMessagesByCreatedAt,
@@ -29,6 +38,26 @@ import { dataSelectors } from './selectors';
 import { stabilizeReferences } from './stabilizeReferences';
 
 const log = debug('lobe-render:features:Conversation');
+
+interface InterventionSnapshot {
+  dbMessages: UIChatMessage[];
+  topic: ChatTopic | null;
+  topicAtRequest?: ChatTopic;
+}
+
+const interventionSync = new WeakMap<
+  () => ConversationStore,
+  { pending: Set<string>; snapshots: WeakMap<UIChatMessage[], InterventionSnapshot> }
+>();
+
+const getInterventionSync = (get: () => ConversationStore) => {
+  let sync = interventionSync.get(get);
+  if (!sync) {
+    sync = { pending: new Set(), snapshots: new WeakMap() };
+    interventionSync.set(get, sync);
+  }
+  return sync;
+};
 
 const mergeFetchedMessagesWithLocalState = (
   fetchedMessages: UIChatMessage[],
@@ -45,6 +74,8 @@ const mergeFetchedMessagesWithLocalState = (
     const localMessage = localById.get(message.id);
 
     if (!localMessage) return message;
+    const resolved = reconcileIntervention(localMessage, message);
+    if (resolved) return resolved;
     // Once the server returns this id, its persisted row replaces the local-only preview.
     if (isLocalOnlyMessage(localMessage)) return message;
     if (localMessage.updatedAt <= message.updatedAt) return message;
@@ -129,7 +160,12 @@ export interface DataAction {
    */
   useFetchMessages: (
     context: ConversationContext,
-    options?: { revalidateOnFocus?: boolean; skipFetch?: boolean },
+    options?: {
+      refreshInterval?: number;
+      revalidateOnFocus?: boolean;
+      skipFetch?: boolean;
+      syncInterventions?: boolean;
+    },
   ) => SWRResponse<UIChatMessage[]>;
 }
 
@@ -318,13 +354,22 @@ export const dataSlice: StateCreator<
   },
 
   useFetchMessages: (context, options) => {
-    const { skipFetch, revalidateOnFocus } = options ?? {};
+    const { skipFetch, revalidateOnFocus, refreshInterval = 0 } = options ?? {};
     // When skipFetch is true, SWR key is null - no fetch occurs
     // This is used when external messages are provided (e.g., creating new thread)
     // Also skip fetch when topicId is null (new conversation state) - there's no server data,
     // only local optimistic updates. Fetching would return empty array and overwrite local data.
     const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
     const contextKey = messageMapKey(context);
+    const sync = getInterventionSync(get);
+    const syncKey = getMessageListCacheIdentity(context);
+    // Shared views use share-authorized services; thread runs do not own the
+    // topic's main runningOperation marker. Keep their existing refresh path.
+    const syncContinuation =
+      options?.syncInterventions &&
+      !context.agentShareId &&
+      !context.topicShareId &&
+      !context.threadId;
     const storeContextKeyAtRequest = messageMapKey(get().context);
     const onMessagesChange = get().onMessagesChange;
 
@@ -340,9 +385,40 @@ export const dataSlice: StateCreator<
     return useClientDataSWRWithSync<UIChatMessage[]>(
       shouldFetch ? messageListKey(context) : null,
 
-      () => runMessageListQuery(context, messageService.getMessageListPage),
+      async () => {
+        const dbMessages = get().dbMessages;
+        const topicAtRequest = context.topicId
+          ? topicSelectors.getTopicById(context.topicId)(getChatStoreState())
+          : undefined;
+        const wasPending = hasPendingInterventions(dbMessages);
+        let messages = await runMessageListQuery(context, messageService.getMessageListPage);
+        if (!syncContinuation || !context.topicId) return messages;
+        if (wasPending || hasPendingInterventions(messages)) sync.pending.add(syncKey);
+        if (!sync.pending.has(syncKey) || hasPendingInterventions(messages)) return messages;
+
+        // The decision must precede the liveness read. A startup reservation is
+        // still live even before runningOperation is published.
+        const topic = await topicService.getTopicDetail(context.topicId);
+        if (!isInterventionRunActive(topic)) {
+          // Read after completion without dropping loaded history or its cursor.
+          messages = await runMessageListQuery(context, messageService.getMessageListPage, {
+            force: true,
+          });
+        }
+        const result = [...messages];
+        sync.snapshots.set(result, { dbMessages, topic, topicAtRequest });
+        return result;
+      },
       {
         ...getMessageListFetchPolicy(context),
+        // Pending cards must observe answers from another device before the
+        // normal message cache's 30-second verification window expires.
+        ...((refreshInterval > 0 || sync.pending.has(syncKey)) && { dedupingInterval: 1000 }),
+        refreshInterval: syncContinuation
+          ? () => (sync.pending.has(syncKey) ? INTERVENTION_REFRESH_INTERVAL : refreshInterval)
+          : refreshInterval,
+        refreshWhenHidden: false,
+        refreshWhenOffline: false,
         ...(revalidateOnFocus !== undefined && { revalidateOnFocus }),
         // Fresh in-memory or prefetched data can render without an immediate
         // switch-time revalidation. Missing cache data still fetches because
@@ -361,45 +437,53 @@ export const dataSlice: StateCreator<
             return;
           }
 
-          // Defense-in-depth gate: drop any SWR onData while the
-          // topic is streaming. DB fan-out for chunk writes is async and lags
-          // the WS push by anywhere from 100ms to several seconds; an SWR
-          // refetch that lands inside that window returns the assistant row
-          // as the LOADING_FLAT placeholder (cLen=3) and would collapse the
-          // in-memory streamed content. SWR's own cache still receives the
-          // value, so once streaming ends a normal revalidate writes through.
-          //
-          // This is the catch-all backstop sitting BELOW the SoT consumption
-          // in gatewayEventHandler — `mergeFetchedMessagesWithLocalState`'s
-          // updatedAt tie-breaker handles most cases on its own, but the
-          // updatedAt comparison degenerates when server's pushed snapshot
-          // carries a DB updatedAt equal to a later stale fetch's row.
-          //
-          // Only rows the store already holds are protected. The first load, and
-          // rows the store has never seen, still land: a run can stay `running`
-          // for a long time (a group supervisor parked on a member's approval),
-          // and dropping them left a reloaded list on its skeleton, or on a stale
-          // cached snapshot missing the parked member's rows, for good.
+          // DB chunk writes can lag behind pushed content, even at an equal
+          // updatedAt. Keep streamed rows, but allow answers and unseen rows in.
+          // A parked run must not block the first load of the conversation.
           const prevDbMessages = get().dbMessages;
-          let fetchedMessages = data;
-          if (
+          const snapshot = sync.snapshots.get(data);
+          sync.snapshots.delete(data);
+          const chat = getChatStoreState();
+          const currentTopic = topicSelectors.getTopicById(context.topicId)(chat);
+          const ownsTopic = snapshot && currentTopic === snapshot.topicAtRequest;
+          const completed = ownsTopic && !isInterventionRunActive(snapshot.topic);
+          const isStreaming =
             get().messagesInit &&
-            operationSelectors.isAgentRuntimeRunningByContext(context)(getChatStoreState())
-          ) {
-            const knownIds = new Set(prevDbMessages.map((m) => m.id));
-            const unseen = data.filter((m) => !knownIds.has(m.id));
-            if (unseen.length === 0) return;
-            fetchedMessages = [...prevDbMessages, ...unseen];
-          }
-
+            operationSelectors.isAgentRuntimeRunningByContext(context)(chat) &&
+            !(completed && snapshot.dbMessages === prevDbMessages);
           const activeVoiceMessageIds = new Set(
             Object.keys(getChatStoreState().voiceMessageUploadMap),
           );
-          const mergedMessages = mergeFetchedMessagesWithLocalState(
-            fetchedMessages,
-            prevDbMessages,
-            activeVoiceMessageIds,
-          );
+          const mergedMessages = isStreaming
+            ? reconcileStreamingInterventions(prevDbMessages, data)
+            : mergeFetchedMessagesWithLocalState(data, prevDbMessages, activeVoiceMessageIds);
+          // Do not replace a topic marker claimed by a local send or newer push.
+          if (snapshot && !hasPendingInterventions(mergedMessages) && ownsTopic) {
+            if (completed && !isStreaming) sync.pending.delete(syncKey);
+            const runningOperation = snapshot.topic?.metadata?.runningOperation;
+            if (
+              runningOperation &&
+              currentTopic?.metadata?.runningOperation?.operationId !== runningOperation.operationId
+            ) {
+              // Publish the marker for useGatewayReconnect; it owns connection
+              // deduplication and retry. Do not open a second socket here.
+              if (currentTopic) {
+                chat.internal_dispatchTopic({
+                  id: context.topicId,
+                  type: 'updateTopic',
+                  containerKey: topicSelectors.getTopicContainerKeyById(context.topicId)(chat),
+                  agentId: context.agentId,
+                  groupId: context.groupId,
+                  value: { metadata: { ...currentTopic.metadata, runningOperation } },
+                });
+              } else if (snapshot.topic) {
+                useChatStore.setState({
+                  topicDetailMap: { ...chat.topicDetailMap, [context.topicId]: snapshot.topic },
+                });
+              }
+            }
+          }
+          if (isStreaming && mergedMessages === prevDbMessages) return;
 
           // Parse messages using conversation-flow
           const { flatList } = parse(mergedMessages, undefined, { threadId: context.threadId });

@@ -211,6 +211,16 @@ const toAssistantContentBlock = (message: UIChatMessage): AssistantContentBlock 
   usage: message.usage,
 });
 
+const getRowLatestMessageWithoutTools = (id: string) => (s: State) => {
+  const tailId = rowMemberIds(id)(s).at(-1) ?? id;
+  const tail = getDisplayMessageById(tailId)(s);
+
+  if (tail?.role !== 'assistant') return getGroupLatestMessageWithoutTools(tailId)(s);
+  if (tail.tools?.length || !tail.content) return;
+
+  return toAssistantContentBlock(tail);
+};
+
 /**
  * Walk displayMessages (including compressed groups and agentCouncil members)
  * to find an assistant content block by its id. Used to let tool subtrees
@@ -318,6 +328,7 @@ export const dataSelectors = {
   getBlockHasTools,
   getDisplayMessageById,
   getGroupLatestMessageWithoutTools,
+  getRowLatestMessageWithoutTools,
   getToolInBlock,
   getToolMessageCreatedAt,
   getToolsInBlock,

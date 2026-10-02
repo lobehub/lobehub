@@ -262,6 +262,34 @@ describe('earlier history (round-cursor pages)', () => {
   /** A page from a read path that reports no round cursor (older history unknown). */
   const asPage = (messages: UIChatMessage[]): MessageListPage => ({ messages });
 
+  it('starts a fresh generation without losing loaded history or joining an older request', async () => {
+    const window = [message('u2', 10, 'user')];
+    const older = message('u1', 1, 'user');
+    const cursor = { createdAt: new Date(10).toISOString(), id: 'u2' };
+    await runMessageListQuery(context, async () => ({ messages: window, olderCursor: cursor }));
+    await loadEarlierMessagePage(
+      context,
+      () => window,
+      async () => ({
+        messages: [older],
+        olderCursor: null,
+      }),
+    );
+
+    const pending = deferred<MessageListPage>();
+    const staleRequest = runMessageListQuery(context, () => pending.promise);
+    const reply = message('reply', 20);
+    const freshQuery = vi.fn(async () => ({ messages: [...window, reply], olderCursor: cursor }));
+    const freshRequest = runMessageListQuery(context, freshQuery, { force: true });
+    await Promise.resolve();
+    expect(freshQuery).toHaveBeenCalledTimes(1);
+    pending.resolve({ messages: window, olderCursor: cursor });
+
+    await expect(freshRequest).resolves.toEqual([older, ...window, reply]);
+    await expect(staleRequest).resolves.toEqual([older, ...window, reply]);
+    expect(getEarlierHistoryStatus(context).exhausted).toBe(true);
+  });
+
   it('fetches a page older than the oldest mainline row and returns the merged transcript', async () => {
     const window = [message('u2', 10, 'user'), message('a2', 11)];
     const fetcher = vi.fn().mockResolvedValue(asPage([message('u1', 1, 'user'), message('a1', 2)]));

@@ -12,6 +12,7 @@ import Group from './Group';
 
 let mockIsCollapsed = false;
 let mockIsGenerating = false;
+let mockCreatingIds = new Set<string>();
 let mockDbMessages: {
   createdAt?: Date | number | string | null;
   id: string;
@@ -40,6 +41,7 @@ vi.mock('../../../store', () => ({
   messageStateSelectors: {
     isAssistantGroupItemGenerating: () => () => mockIsGenerating,
     isMessageCollapsed: () => () => mockIsCollapsed,
+    isMessageCreating: (id: string) => () => mockCreatingIds.has(id),
     isMessageGenerating: () => () => mockIsGenerating,
   },
   useConversationStore: (selector: (state: unknown) => unknown) =>
@@ -177,6 +179,7 @@ describe('Group', () => {
     cleanup();
     mockIsCollapsed = false;
     mockIsGenerating = false;
+    mockCreatingIds = new Set();
     mockDbMessages = [];
     mockOperations = [];
   });
@@ -971,6 +974,33 @@ describe('Group', () => {
         .filter((node) => !folds.some((fold) => fold.contains(node)))
         .map((node) => JSON.parse(node.getAttribute('data-block') || '{}').id);
       expect(outside).toEqual(['b2']);
+    });
+
+    it('keeps the loading placeholder of a continuation that is still being created', () => {
+      mockCreatingIds = new Set(['pending-assistant']);
+
+      const { container } = render(
+        <Group
+          enableProcessFold
+          isLatestItem
+          blocks={chain1}
+          id="group-1"
+          messageIndex={0}
+          continuations={[
+            {
+              blocks: [blk({ content: LOADING_FLAT, id: 'pending-assistant' })],
+              id: 'pending-assistant',
+              steerUserId: 'steer-1',
+            },
+          ]}
+        />,
+      );
+
+      const ids = Array.from(container.querySelectorAll('[data-testid="answer-segment"]')).map(
+        (node) => JSON.parse(node.getAttribute('data-block') || '{}').id,
+      );
+      expect(ids).toContain('pending-assistant');
+      expect(screen.queryByTestId('process-fold')).not.toBeInTheDocument();
     });
 
     it('skips the fold for a continuation whose whole output is the final answer', () => {
