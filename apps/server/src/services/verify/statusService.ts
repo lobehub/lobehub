@@ -166,19 +166,23 @@ export class VerifyStatusService {
   }
 
   /**
-   * Park a run the sweep could not finalize back in `verifying`, so the verifying
-   * half retries the rollup and the finalizer.
+   * Park a run the sweep could not finalize back in `collecting_evidence`, so the
+   * evidence half retries the rollup and the finalizer.
    *
-   * Once `recomputeByRunId` has made a recovered run terminal, no scan will look at
-   * it again — they select only `verifying`, `collecting_evidence`, or an eligible
+   * Once `recomputeByRunId` has made a recovered run terminal, no scan looks at it
+   * again — they select only `verifying`, `collecting_evidence`, or an eligible
    * `planned` round — so a finalizer failure (report write, repair setup, task
    * drive) would leave the bound task active forever despite a settled verdict.
-   * `verifying` is the one state that retries exactly the missing work:
-   * `recoverRun` re-derives the rollup from the results and runs the finalizer
-   * again, and it never re-judges.
+   *
+   * The evidence half is the one to re-enter, not `recoverRun`: it still reads the
+   * frozen deliverable out of the evidence hook — which is what the report needs —
+   * and `enterJudging` skips the judge entirely once every required check already
+   * holds a verdict. `recoverRun` would re-drive the finalizer with no deliverable,
+   * silently dropping the report. Parking re-stamps `updated_at`, so the retry
+   * waits out the evidence half's abandoned bound.
    */
   async reopenForFinalizeRetry(runId: string): Promise<void> {
-    await this.runModel.updateStatus(runId, 'verifying');
+    await this.runModel.updateStatus(runId, 'collecting_evidence');
   }
 
   /** Explicit transitions that aren't derivable from results alone. */

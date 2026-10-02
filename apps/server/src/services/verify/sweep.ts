@@ -617,24 +617,43 @@ const enterJudging = async (
     // must produce the same report card instead of skipping it.
     report = { deliverable: resolvedDeliverable, goal: run.goal ?? '', modelConfig };
 
-    const executor = new VerifyExecutorService(db, userId, workspaceId);
-    await executor.execute({
-      deliverable: resolvedDeliverable,
-      goal: run.goal ?? '',
-      modelConfig,
-      operationId,
-      runVerifierAgent: createVerifierAgentRunner({
-        db,
+    // What a parked finalizer retry re-enters with: every required check already
+    // holds a verdict, so the only missing work is the rollup and the finalizer —
+    // which is exactly what the report context above is for. Running the executor
+    // again would re-judge terminal checks: overwriting verdicts and billing the
+    // model a second time.
+    const existing = await new VerifyCheckResultModel(db, run.userId, workspaceId).listByRun(
+      run.id,
+    );
+    const byItem = new Map(existing.map((row) => [row.checkItemId, row]));
+    const required = ((run.plan ?? []) as VerifyCheckItem[]).filter((item) => item.required);
+    const alreadyJudged =
+      required.length > 0 &&
+      required.every((item) => {
+        const row = byItem.get(item.id);
+        return row !== undefined && !PENDING_RESULT_STATUSES.has(row.status);
+      });
+
+    if (!alreadyJudged) {
+      const executor = new VerifyExecutorService(db, userId, workspaceId);
+      await executor.execute({
         deliverable: resolvedDeliverable,
-        model: modelConfig.model,
-        provider: modelConfig.provider,
-        taskId: op.taskId,
-        topicId: op.topicId,
-        userId,
-        verifierAgentId,
-        workspaceId,
-      }),
-    });
+        goal: run.goal ?? '',
+        modelConfig,
+        operationId,
+        runVerifierAgent: createVerifierAgentRunner({
+          db,
+          deliverable: resolvedDeliverable,
+          model: modelConfig.model,
+          provider: modelConfig.provider,
+          taskId: op.taskId,
+          topicId: op.topicId,
+          userId,
+          verifierAgentId,
+          workspaceId,
+        }),
+      });
+    }
   } catch (error) {
     const opGone = !(await new AgentOperationModel(db, userId, workspaceId).findById(operationId));
 

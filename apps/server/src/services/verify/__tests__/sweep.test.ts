@@ -885,7 +885,7 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     // verdicts, bill the model a second time, and can spawn a duplicate verifier.
     singleEvidencePage([evidenceRun()]);
     resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'passed', verdict: 'passed' }]);
-    executorExecute.mockRejectedValueOnce(new Error('judge blew up mid-pass'));
+    resolveVerificationDeliverable.mockRejectedValueOnce(new Error('resolution blew up'));
 
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
@@ -893,6 +893,27 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     // The verdict that landed is preserved — nothing is re-closed over it.
     expect(upsertByCheckItem).not.toHaveBeenCalled();
     expect(outcome.abandoned).toEqual(['ev-run-1']);
+  });
+
+  it('finalizes an already-judged recovery with the report context instead of re-judging', async () => {
+    // The state a parked finalizer retry re-enters: every required check already
+    // holds a verdict, so the only missing work is the rollup and the finalizer —
+    // and the frozen deliverable is what lets the report card be written at all.
+    singleEvidencePage([evidenceRun()]);
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'passed', verdict: 'passed' }]);
+    evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', evidence: [] }]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(executorExecute).not.toHaveBeenCalled();
+    expect(finalizeVerifyRun).toHaveBeenCalledWith(
+      db,
+      'u1',
+      'op-1',
+      { report: expect.objectContaining({ deliverable: 'final patch text' }) },
+      undefined,
+    );
+    expect(outcome.settled).toEqual(['ev-run-1']);
   });
 
   it('retries the close without the operation link when the FK rejects it', async () => {
