@@ -1,4 +1,6 @@
-import { ThreadType } from '@lobechat/types';
+import { type ThreadMetadata } from '@lobechat/types';
+
+import { isSubagentThread } from './subagent';
 
 export type ThreadListHeadingKey =
   'workingPanel.overview.subagents' | 'workingPanel.overview.subtopics';
@@ -11,13 +13,15 @@ export const THREAD_LIST_HEADING: ThreadListHeadingKey = 'workingPanel.overview.
 /**
  * Heading key for the right-panel thread list.
  *
- * `getThreadsByTopic` returns subagent (isolation) threads alongside user forks
- * (continuation / standalone), so the list may only be called "Subagents" when
- * every row is one — otherwise the ordinary threads would be mislabelled.
+ * A topic's list mixes tool-spawned subagents with ordinary threads (a direct
+ * `@Agent` isolation thread, a user fork), so the list may only be called
+ * "Subagents" when every row is one — otherwise those threads would be
+ * mislabelled. Subagent-ness comes from `metadata.sourceToolCallId`, the same
+ * marker the thread portal uses.
  */
 export const getThreadListHeadingKey = (
-  threads: readonly { type: string }[],
+  threads: readonly { metadata?: null | ThreadMetadata }[],
 ): ThreadListHeadingKey =>
-  threads.every((thread) => thread.type === ThreadType.Isolation)
+  threads.length > 0 && threads.every(isSubagentThread)
     ? SUBAGENT_LIST_HEADING
     : THREAD_LIST_HEADING;

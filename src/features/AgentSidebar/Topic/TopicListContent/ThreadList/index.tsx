@@ -1,4 +1,3 @@
-import { ThreadType } from '@lobechat/types';
 import { ScrollShadow } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -7,6 +6,7 @@ import { useScrollActiveThreadIntoView } from '@/hooks/useScrollActiveThreadInto
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 
+import { isSubagentThread } from './subagent';
 import ThreadItem from './ThreadItem';
 
 // Cap the thread list so a topic with many threads doesn't push the rest of the
@@ -43,7 +43,7 @@ const ThreadList = memo(({ topicId }: { topicId: string }) => {
         <ThreadItem
           id={item.id}
           index={index}
-          isSubagent={item.type === ThreadType.Isolation}
+          isSubagent={isSubagentThread(item)}
           key={item.id}
           sourceMessageId={item.sourceMessageId ?? undefined}
           title={item.title}
