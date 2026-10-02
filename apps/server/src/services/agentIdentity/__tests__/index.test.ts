@@ -137,6 +137,8 @@ describe('AgentAccountService — provisioning', () => {
       identifier: 'agent-7@lobe.id',
       kind: 'mail',
       provider: 'agent-mail',
+      // Opened synchronously, so the persisted row is live — the settings page
+      // must not show a usable address as still "opening".
       status: 'active',
     });
     expect(created).not.toHaveProperty('credentials');
