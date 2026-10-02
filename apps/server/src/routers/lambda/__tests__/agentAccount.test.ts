@@ -55,6 +55,19 @@ vi.mock('@/server/services/agentIdentity', () => ({
   }),
 }));
 
+const inbox = vi.hoisted(() => ({
+  findById: vi.fn(async (_id: string): Promise<unknown> => undefined),
+  list: vi.fn(async (_params?: unknown): Promise<unknown[]> => []),
+  markAllRead: vi.fn(async (_agentId: string) => 0),
+  markRead: vi.fn(async (_ids: string[]) => 0),
+  unreadCount: vi.fn(async (_agentId: string) => 0),
+}));
+vi.mock('@/database/models/agentInbox', () => ({
+  AgentInboxModel: vi.fn(function () {
+    return inbox;
+  }),
+}));
+
 const { agentAccountRouter } = await import('../agentAccount');
 
 const ctx: any = { serverDB: {}, userId: 'user-1', workspaceId: undefined };
@@ -68,6 +81,11 @@ beforeEach(() => {
   service.revoke.mockResolvedValue('acc_1');
   service.setCredential.mockResolvedValue('acc_1');
   service.update.mockResolvedValue('acc_1');
+  inbox.findById.mockResolvedValue(undefined);
+  inbox.list.mockResolvedValue([]);
+  inbox.markAllRead.mockResolvedValue(0);
+  inbox.markRead.mockResolvedValue(0);
+  inbox.unreadCount.mockResolvedValue(0);
 });
 
 describe('agentAccountRouter', () => {
@@ -173,5 +191,67 @@ describe('agentAccountRouter', () => {
 
     expect(service.update).toHaveBeenCalledWith('acc_1', { displayName: 'Renamed' });
     expect(service.revoke).not.toHaveBeenCalled();
+  });
+
+  it('passes the requested prefix through to provisioning', async () => {
+    const caller = agentAccountRouter.createCaller(ctx);
+
+    await caller.provision({ agentId: 'agt_1', prefix: 'research', provider: 'agent-mail' });
+
+    expect(service.provision).toHaveBeenCalledWith({
+      agentId: 'agt_1',
+      displayName: undefined,
+      prefix: 'research',
+      provider: 'agent-mail',
+    });
+  });
+
+  it('refuses a prefix an address cannot carry, before calling the provider', async () => {
+    const caller = agentAccountRouter.createCaller(ctx);
+
+    await expect(
+      caller.provision({ agentId: 'agt_1', prefix: 'not a prefix!', provider: 'agent-mail' }),
+    ).rejects.toThrow();
+    expect(service.provision).not.toHaveBeenCalled();
+  });
+
+  describe('inbox', () => {
+    it('reads the inbox only after proving the caller may use the agent', async () => {
+      inbox.list.mockResolvedValueOnce([{ agentId: 'agt_1', id: 'msg_1' }]);
+      const caller = agentAccountRouter.createCaller(ctx);
+
+      const rows = await caller.inbox.list({ agentId: 'agt_1', unreadOnly: true });
+
+      expect(assertAgentUsableBy).toHaveBeenCalledWith({}, 'agt_1', expect.anything());
+      expect(inbox.list).toHaveBeenCalledWith({ agentId: 'agt_1', unreadOnly: true });
+      expect(rows).toEqual([{ agentId: 'agt_1', id: 'msg_1' }]);
+    });
+
+    it('reports an unknown message as NOT_FOUND', async () => {
+      const caller = agentAccountRouter.createCaller(ctx);
+
+      await expect(caller.inbox.get({ id: 'missing' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+    });
+
+    it('marks exactly the ids it was given and reports how many landed', async () => {
+      inbox.markRead.mockResolvedValueOnce(2);
+      const caller = agentAccountRouter.createCaller(ctx);
+
+      await expect(caller.inbox.markRead({ ids: ['msg_1', 'msg_2'] })).resolves.toEqual({
+        count: 2,
+      });
+      expect(inbox.markRead).toHaveBeenCalledWith(['msg_1', 'msg_2']);
+    });
+
+    it('checks the agent before marking the whole inbox read', async () => {
+      const caller = agentAccountRouter.createCaller(ctx);
+
+      await caller.inbox.markAllRead({ agentId: 'agt_1' });
+
+      expect(assertAgentUsableBy).toHaveBeenCalledWith({}, 'agt_1', expect.anything());
+      expect(inbox.markAllRead).toHaveBeenCalledWith('agt_1');
+    });
   });
 });
