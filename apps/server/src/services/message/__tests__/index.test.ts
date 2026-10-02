@@ -214,6 +214,15 @@ describe('MessageService', () => {
       expect(mockMessageModel.query).toHaveBeenCalled();
       expect(result).toEqual({ messages: mockMessages, success: true });
     });
+
+    it('hard-deletes instead of trashing when the removal is permanent', async () => {
+      const messageIds = ['msg-1', 'msg-2'];
+
+      await messageService.removeMessages(messageIds, undefined, { permanent: true });
+
+      expect(mockMessageModel.deleteMessages).toHaveBeenCalledWith(messageIds);
+      expect(mockTrashMessages).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateMessageRAG', () => {

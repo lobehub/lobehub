@@ -354,10 +354,14 @@ export class MessageService {
    * Remove messages with optional message list return.
    * Recycle bin: the rows are stamped (children re-parented, usage recomputed)
    * and registered so they can be restored; the hard delete runs at purge.
+   * `permanent` skips the bin for internal cleanup whose rows must never come
+   * back (e.g. the partial rows a restart recovery replaces with the
+   * authoritative transcript — restoring them would revive a stale branch).
    * Pattern: trash + conditional query
    */
-  async removeMessages(ids: string[], options?: QueryOptions) {
-    await this.trashService.trashMessages(ids);
+  async removeMessages(ids: string[], options?: QueryOptions, removal?: { permanent?: boolean }) {
+    if (removal?.permanent) await this.messageModel.deleteMessages(ids);
+    else await this.trashService.trashMessages(ids);
     return this.queryWithSuccess(options);
   }
 
