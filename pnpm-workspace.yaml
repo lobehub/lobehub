@@ -51,6 +51,7 @@ allowBuilds:
   '@sentry/cli': true
   '@vercel/speed-insights': true
   core-js: false
+  electron-sparkle-updater: false
   es5-ext: false
   esbuild: false
   ffmpeg-static: true
