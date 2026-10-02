@@ -579,6 +579,9 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(executorExecute).toHaveBeenCalledWith(
       expect.objectContaining({ deliverable: 'final patch text', operationId: 'op-1' }),
     );
+    // No backfill: the criteria the dead collector never reached must stay
+    // structurally uncovered, or the deliverable would make them look evidenced.
+    expect(recordHeterogeneousDeliverableEvidence).not.toHaveBeenCalled();
     expect(outcome.settled).toEqual(['ev-run-1']);
   });
 
@@ -589,6 +592,7 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
     expect(executorExecute).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'op-1' }));
+    expect(recordHeterogeneousDeliverableEvidence).not.toHaveBeenCalled();
     expect(outcome.settled).toEqual(['ev-run-1']);
   });
 

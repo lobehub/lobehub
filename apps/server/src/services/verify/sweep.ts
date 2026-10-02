@@ -291,7 +291,13 @@ const recoverEvidenceRun = async (
       return 'skipped';
     if (!deliverable) return closeOutstandingAsErrored(db, run, operationId, now, 'abandoned');
     if (!takeJudgingSlot(judging)) return 'skipped';
-    return enterJudging(db, run, operationId, run.userId, workspaceId, now, deliverable, 'settled');
+    return enterJudging(db, run, operationId, run.userId, workspaceId, now, deliverable, {
+      action: 'settled',
+      // Judging what was submitted, and only that: the criteria the dead collector
+      // never reached stay structurally uncovered so the gate marks them
+      // `uncertain` instead of inheriting the deliverable as evidence.
+      backfill: false,
+    });
   }
 
   // No evidence yet: a live evidence turn may still submit, so only proceed
@@ -317,7 +323,9 @@ const recoverEvidenceRun = async (
     workspaceId,
     now,
     deliverable,
-    'evidenceRecovered',
+    // Nothing was submitted at all, so the criteria get the frozen deliverable as
+    // their evidence before judging.
+    { action: 'evidenceRecovered', backfill: true },
   );
 };
 
@@ -453,9 +461,10 @@ const closeOutstandingAsErrored = async (
  *
  * `deliverable` is the hook's frozen final output, recovered by the caller —
  * both call sites pass it non-empty, and the executor requires it for judging.
- * The evidence backfill runs here, after the claim: an overlapping sweep that
- * loses the lease must not double-insert the evidence rows (`createMany` is an
- * unconstrained insert).
+ * `options.backfill` selects whether uncovered criteria get that output as
+ * synthesized evidence, and the write runs here, after the claim: an overlapping
+ * sweep that loses the lease must not double-insert the evidence rows
+ * (`createMany` is an unconstrained insert).
  */
 const enterJudging = async (
   db: LobeChatDatabase,
@@ -465,8 +474,19 @@ const enterJudging = async (
   workspaceId: string | undefined,
   now: Date,
   deliverable: string,
-  action: 'abandoned' | 'settled' | 'evidenceRecovered',
+  options: {
+    action: 'abandoned' | 'settled' | 'evidenceRecovered';
+    /**
+     * Synthesize evidence from the deliverable for criteria the builder left
+     * uncovered. Only the zero-evidence recovery may do this. On the
+     * partial-evidence path those criteria have to stay structurally uncovered so
+     * the gate marks them `uncertain` — backfilling the generic deliverable would
+     * make them look evidenced, and they could pass.
+     */
+    backfill: boolean;
+  },
 ): Promise<'abandoned' | 'settled' | 'evidenceRecovered' | 'skipped'> => {
+  const { action, backfill } = options;
   const statusService = new VerifyStatusService(db, userId, workspaceId);
   if (
     !(await statusService.claimVerifying(
@@ -489,14 +509,16 @@ const enterJudging = async (
   // worker that reaches the insert before its claim attempt must not duplicate
   // the evidence rows against the winner's insert.
   try {
-    await recordHeterogeneousDeliverableEvidence({
-      db,
-      deliverable,
-      operation: op,
-      plan: (run.plan ?? []) as VerifyCheckItem[],
-      userId,
-      workspaceId,
-    });
+    if (backfill) {
+      await recordHeterogeneousDeliverableEvidence({
+        db,
+        deliverable,
+        operation: op,
+        plan: (run.plan ?? []) as VerifyCheckItem[],
+        userId,
+        workspaceId,
+      });
+    }
 
     const resolvedAcceptance = op.taskId
       ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId)
