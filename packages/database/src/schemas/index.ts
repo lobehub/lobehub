@@ -1,6 +1,7 @@
 export * from './acceptanceComment';
 export * from './acceptanceFlow';
 export * from './agent';
+export * from './agentAccount';
 export * from './agentBotProvider';
 export * from './agentCronJob';
 export * from './agentDocuments';

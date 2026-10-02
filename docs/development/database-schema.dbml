@@ -171,6 +171,34 @@ table agents_knowledge_bases {
   }
 }
 
+table agent_accounts {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  agent_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  kind text [not null]
+  identifier text [not null]
+  display_name text
+  provider text [not null]
+  status text [not null, default: 'provisioning']
+  capabilities jsonb [not null]
+  credentials text
+  credential_hint jsonb
+  metadata jsonb [default: `{}`]
+  revoked_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (agent_id, kind, provider, identifier) [name: 'agent_accounts_agent_kind_provider_identifier_unique', unique]
+    (provider, identifier) [name: 'agent_accounts_provider_identifier_unique', unique]
+    agent_id [name: 'agent_accounts_agent_id_idx']
+    user_id [name: 'agent_accounts_user_id_idx']
+    workspace_id [name: 'agent_accounts_workspace_id_idx']
+  }
+}
+
 table agent_bot_providers {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   agent_id text [not null]

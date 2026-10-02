@@ -11,7 +11,7 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 | `pmap-over-promise-all`            | error    | `apps/server/src`, `packages/database`                        | fan-out over a runtime-sized list needs `pMap`                          |
 | `no-transactions-in-models`        | error    | `packages/database/src/models`                                | cross-aggregate write transactions use repositories                     |
 | `no-effect-fetching`               | error    | `src/**/*.tsx`                                                | `data-fetching-architecture` skill                                      |
-| `no-dynamic-import-in-server`      | warn     | `apps/server/src`, `packages/database`                        | backend code uses static top-level imports                              |
+| `no-dynamic-import-in-server`      | error    | `apps/server/src`, `packages/database`                        | backend code uses static top-level imports                              |
 | `no-mode-flags`                    | warn     | `src/**/*.tsx`                                                | `compose-atoms` skill                                                   |
 | `no-node-in-browser`               | error    | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | no Node-only npm package where the SPA runs it (paths: ESLint)          |
 | `no-unsafe-user-url-fetch`         | warn     | `apps/server/src`                                             | user-controlled URLs must use SSRF-safe transport (#16601)              |
@@ -51,7 +51,7 @@ Rules come in two layers, and each layer is registered as its own plugin in `ali
 
 A per-file rule cannot see an import graph. When a package's boundary matters, pair its package-level rule with a deterministic test of the graph: `heterogeneous-agents` lists its browser entries in `browser-entries.json`; `src/runtimeBoundary.test.ts` walks everything those entries reach and fails on Node built-ins, Node globals such as `Buffer`, or files owned by a Node-only entry, and the root ESLint config reads the same list to reject value imports of any other entry from `src/`.
 
-To add a package-level rule: register the directory as a plugin in the rule's `[[config.group]]`, add a fixture group for it, and add its fixtures directory with the plugin prefix to `FIXTURE_ROOTS` in `fixtures.test.ts`. CI already keys the cache on `packages/*/alint/rules/**` and runs calibration when `packages/*/alint/**` changes.
+To add a package-level rule: register the directory as a plugin in the rule's `[[config.group]]`, add a fixture group for it, and add its fixtures directory with the plugin prefix to `FIXTURE_ROOTS` in `fixtures.test.ts`. CI runs calibration when `packages/*/alint/**` changes.
 
 ## Security rules
 
@@ -129,6 +129,15 @@ Defaults are DeepSeek `deepseek-flash` at `https://api.deepseek.com/v1`; overrid
 
 Treat findings like a reviewer's comment: fix them, or explain in the PR why the rule's carve-out applies. Locally, `bun run check --alint` fails on `error` findings like any other lint error.
 
+## Promotions, 2026-10-01
+
+Read from every ALint check run on the 126 pull requests active 2026-09-29 → 10-01 (298 runs, 34 distinct warnings), each finding checked against the code:
+
+- `no-dynamic-import-in-server` → `error`: 3 of 3 findings true, and all 3 were left in place, 2 of them merged. A warning nobody acted on is the case for a red check.
+- `ui-button-hierarchy` → `error`: 7 true, 1 false (a mapped option row where only the recommended option is primary, now a carve-out with a fixture), 1 borderline.
+
+Every summary now ends with the run's cost — model calls, cache hits, input and output tokens — so spend can be read back from the check runs instead of estimated.
+
 ## CI
 
 The `alint ·` steps at the end of the "ALint & Test Desktop App" job in `.github/workflows/test.yml` run on every push and pull request, on the change's diff only (they reuse that job's root install instead of paying for a runner of their own). The desktop job itself never fails because of alint:
@@ -139,7 +148,7 @@ The `alint ·` steps at the end of the "ALint & Test Desktop App" job in `.githu
 - Findings on the calibration fixtures are dropped from the check and the comment; the fixture suite covers them.
 - The provider key comes from the `DEEPSEEK_API_KEY` repository secret. Fork PRs cannot read it, so the steps are skipped.
 - When `alint.config.toml` or anything under `packages/alint` changed, the fixture suite runs too, so a rule edit is calibrated before it lands.
-- `.alintcache` is restored from the last run with the same rule set, keyed by the rule and config files.
+- `.alintcache` is restored from the latest run whatever the rule set. Since alint 0.7.2 each cached result is keyed by its rule's own text, include/exclude lists and severity, so editing, adding or re-levelling one rule re-runs only that rule; everything else stays cached.
 
 ## Cost and behaviour, measured 2026-09-20
 
@@ -157,10 +166,10 @@ The `ui-*` rules encode the product owner's recurring acceptance rejections. The
 
 | Rule                      | Where            | Sample precision | Whole repo | What it holds                                                                         |
 | ------------------------- | ---------------- | ---------------- | ---------- | ------------------------------------------------------------------------------------- |
-| `ui-button-hierarchy`     | PR check         | narrowed         | 62         | only two primaries in one group, a primary on every list row, a small empty-state CTA |
+| `ui-button-hierarchy`     | PR check (error) | narrowed         | 62         | only two primaries in one group, a primary on every list row, a small empty-state CTA |
 | `ui-lightweight-errors`   | PR check         | \~70%            | 73         | one readable error line, raw details folded                                           |
 | `ui-content-width`        | PR check (pages) | \~100%           | 7          | page bodies sit in `SettingContainer` or a max-width column                           |
-| `ui-edit-in-modal`        | PR check         | ~57%             | 36         | edit / rename / add opens a modal, not an inline input or a popover input             |
+| `ui-edit-in-modal`        | PR check         | \~57%            | 36         | edit / rename / add opens a modal, not an inline input or a popover input             |
 | `ui-view-switch-tabs`     | PR check         | \~50%            | 20         | whole views switch with `Tabs`, the active tab in the URL                             |
 | `ui-no-decorative-chrome` | audit            | \~56%            | 1441       | no wrapper borders, fills, restating titles, bold labels, extra dividers              |
 | `ui-restrained-color`     | audit            | \~53%            | 830        | color for state only; gray metadata and types; tokens, not literals                   |
@@ -180,7 +189,7 @@ Every rule was run cold over all of canary (apps/server, packages, src: 14.7k mo
 | `no-mode-flags`               | 98     | 17    | only flags that name a host (`inShare`, `embedded`, `mobile` page compositions) and gate fetching or editing                                                        |
 | `no-effect-fetching`          | 48     | 43    | writes then refresh, prefetch, auth / QR handshakes, locale chunks and repeat call sites dropped; store actions fetching on mount added                             |
 | `pmap-over-promise-all`       | 211    | 216   | high precision; code-level registries (adapter maps) no longer reported                                                                                             |
-| `no-dynamic-import-in-server` | 51     | 51    | matches the rule as written; left as `warn`                                                                                                                         |
+| `no-dynamic-import-in-server` | 51     | 51    | matches the rule as written; promoted to `error` on 2026-10-01                                                                                                      |
 | `hetero/*`                    | 0      | 0     |                                                                                                                                                                     |
 
 Known remaining false positives: `no-transactions-in-models` still reports a subtype row deleted with its `user_memories` base row and a topic usage rollup recomputed after a message write (six findings) — one file at a time the model sees another table with its own Model.
@@ -190,5 +199,5 @@ Known remaining false positives: `no-transactions-in-models` still reports a sub
 1. Create `rules/<name>/rule.alint.toml` with `name`, `builtInAgent = "basic-structured"`, and an `instruction`. Write the rule as the reviewer would: what to report, which line to anchor on, what the message and suggestion must contain, and an explicit "do not report" list. The carve-outs are where the false positives live.
 2. Add a `[[config.group]]` for its scope in `alint.config.toml`, and a fixture group `packages/alint/fixtures/<name>/**`.
 3. Add fixtures under `fixtures/<name>/`: at least one `bad-*` file with a standalone `// alint-expect` comment (`{/* alint-expect */}` inside JSX) on the line above the one the finding must anchor to, and one `good-*` file per carve-out. Keep them short and realistic.
-4. Run `bun run alint plugin install`, then `cd packages/alint && bunx vitest run fixtures.test.ts` with a provider set up. The suite skips itself when there is no setup. Delete `.alintcache` after every rule edit while calibrating: the local cache is keyed by file content, so an edited rule otherwise replays the previous rule's findings.
+4. Run `bun run alint plugin install`, then `cd packages/alint && bunx vitest run fixtures.test.ts` with a provider set up. The suite skips itself when there is no setup. The cache is keyed by the rule's text, so an edited rule re-runs on its own; no need to delete `.alintcache`.
 5. Before enabling the rule on a scope, run it over a few dozen real files and read every finding.

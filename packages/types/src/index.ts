@@ -1,4 +1,5 @@
 export * from './agent';
+export * from './agentAccount';
 export * from './agentExecution';
 export * from './agentGroup';
 export * from './agentHook';

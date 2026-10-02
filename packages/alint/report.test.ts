@@ -7,6 +7,7 @@ import {
   toFindings,
   toMarkdown,
   toTitle,
+  toUsageLine,
 } from './report';
 
 const diagnostic = (overrides: Record<string, unknown> = {}) => ({
@@ -134,5 +135,23 @@ describe('toMarkdown', () => {
     expect(toMarkdown([], { repo: 'lobehub/lobehub', sha: 'abcdef1234567' })).toContain(
       '### ✅ ALint · No findings on the changed lines',
     );
+  });
+});
+
+describe('toUsageLine', () => {
+  it('reports calls, cache hits and tokens so spend can be read back from the check run', () => {
+    const usage = toUsageLine({
+      diagnostics: [],
+      execution: { cached: 3, completed: 12, planned: 15 },
+      usage: { inputTokens: 23_456, outputTokens: 789 },
+    });
+    expect(usage).toBe('12 model calls, 3 cached · 23,456 input / 789 output tokens');
+    expect(toMarkdown([], { repo: 'lobehub/lobehub', sha: 'abcdef1234567', usage })).toContain(
+      `· ${usage}</sub>`,
+    );
+  });
+
+  it('stays silent when alint reported no execution or usage', () => {
+    expect(toUsageLine({ diagnostics: [] })).toBeUndefined();
   });
 });

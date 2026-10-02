@@ -10,6 +10,7 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq, sql } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { TopicTrigger } from '@/const/topic';
@@ -74,6 +75,17 @@ const TIMEOUT_MS = 20 * 60_000;
 /** Source message id prefix of a dispatched planning turn; the suffix is its token. */
 const MANAGER_SOURCE_MESSAGE_PREFIX = 'msg_goal_manager_';
 
+/**
+ * The token a planning turn is keyed by, carrying the Goal it belongs to.
+ *
+ * The source message `msg_goal_manager_<token>` is the only durable link from a
+ * manager operation back to its Goal, so the Goal id has to sit inside it for
+ * management spend to be attributable. Without it, a conversation this Goal was
+ * moved out of — which can be a normal conversation that later supervised
+ * another Goal — would charge that other Goal's turns to this one's budget.
+ */
+const managerTurnToken = (goalId: string) => `${goalId}_${randomUUID()}`;
+
 /** Excludes only the manager's own receipt. Concurrent policy/graph changes invalidate its plan. */
 export const managerSnapshot = (graph: GoalGraphSnapshot) => {
   const { managerState: _state, ...config } = graph.goal.config ?? {};
@@ -126,7 +138,7 @@ export class GoalManagerService {
     private readonly workspaceId?: string,
   ) {}
 
-  usage = async (state?: GoalManagerState) => {
+  usage = async (goalId: string, state?: GoalManagerState) => {
     // The planning topic can be the user's own conversation (`/goal`), so only
     // manager turns count as management spend: the dispatched ones by their
     // server-minted source message, the adopted one by its operation id. The
@@ -136,13 +148,35 @@ export class GoalManagerService {
     // Later receipts replace `adopted` / `operationId`, so the adopted run is
     // read from the id every receipt carries forward.
     const adoptedId = state.adoptedOperationId ?? (state.adopted ? state.operationId : undefined);
-    const operations = (await model.listByTopic(state.topicId, 100)).filter(
-      (op) =>
-        op.appContext?.sourceMessageId?.startsWith(MANAGER_SOURCE_MESSAGE_PREFIX) ||
-        op.id === adoptedId,
+    // A handoff moves later turns to the new agent's topic; the turns already
+    // spent in the conversations it left behind still belong to the Goal, so
+    // they are summed too instead of dropping out of its budget.
+    const goalTokenPrefix = `${MANAGER_SOURCE_MESSAGE_PREFIX}${goalId}_`;
+    // One read per conversation the Goal planned in. The list grows with every
+    // handoff, so the fan-out is capped rather than left to the history length.
+    const reads = await pMap(
+      [state.topicId, ...(state.previousTopicIds ?? [])],
+      async (topicId, index) => ({
+        current: index === 0,
+        operations: await model.listByTopic(topicId, 100),
+      }),
+      { concurrency: 5 },
     );
-    // A handoff moves later turns to the new agent's topic; the adopted run
-    // stays on the original conversation and still counts.
+    const operations = reads.flatMap(({ current, operations: topicOperations }) =>
+      topicOperations.filter((op) => {
+        if (op.id === adoptedId) return true;
+        const source = op.appContext?.sourceMessageId;
+        // The Goal's own conversation keeps the historical prefix match: a turn
+        // dispatched before the token carried the Goal id has no marker to match.
+        if (current) return source?.startsWith(MANAGER_SOURCE_MESSAGE_PREFIX);
+        // A conversation the Goal moved out of is matched on the Goal's own
+        // marker only. It can be shared with another Goal created in the same
+        // conversation, whose turns are not this Goal's spend.
+        return source?.startsWith(goalTokenPrefix);
+      }),
+    );
+    // The adopted run lives on the conversation that created the Goal; keep it
+    // counted even when it is not among the topics read above.
     if (adoptedId && !operations.some((op) => op.id === adoptedId)) {
       const adoptedRun = await model.findById(adoptedId);
       if (adoptedRun) operations.push(adoptedRun);
@@ -210,6 +244,53 @@ export class GoalManagerService {
       return state;
     });
 
+  /**
+   * Move the management conversation onto the agent that now supervises the Goal.
+   *
+   * The management conversation lives in the goal agent's own history, so
+   * handing the Goal to another agent leaves `managerState.topicId` pointing at a
+   * conversation the new agent does not own: the supervision panel keeps showing
+   * the previous agent's planning thread, and its "open conversation" link opens
+   * that agent's chat. Creating the new agent's conversation here, at the
+   * handoff, keeps the panel and its link honest immediately instead of only
+   * after the next planning claim.
+   *
+   * Declines while a turn is unclaimed in flight: `settleInFlight` finds that
+   * turn's run through `state.topicId`, so re-pointing early would strand it as
+   * unconfirmed and pause the Goal. `startTurn` migrates on the next claim in
+   * that case. It also declines when the Goal no longer belongs to the target: an
+   * overlapping handoff that landed later owns the answer, and migrating to this
+   * call's stale target would leave the conversation owned by an agent the Goal
+   * is not assigned to. The Goal row is locked, like every other receipt write.
+   */
+  moveConversationTo = async (
+    goalId: string,
+    agentId: string,
+  ): Promise<GoalManagerState | undefined> =>
+    this.db.transaction(async (db) => {
+      const model = new GoalModel(db, this.userId, this.workspaceId);
+      const goal = await model.lockById(goalId);
+      const state = goal?.config?.managerState;
+      if (!goal || !state || !state.consumed || goal.agentId !== agentId) return;
+      const topicModel = new TopicModel(db, this.userId, this.workspaceId);
+      const current = await topicModel.findById(state.topicId);
+      if (current?.agentId === agentId) return;
+      const topic = await topicModel.create({
+        agentId,
+        title: `Goal management: ${goal.title}`,
+        // Read from the goal page's supervision panel; keeps the planning
+        // conversation out of the agent's chat sidebar and Recent.
+        trigger: TopicTrigger.GoalSupervision,
+      });
+      const next: GoalManagerState = {
+        ...state,
+        topicId: topic.id,
+        previousTopicIds: [...new Set([...(state.previousTopicIds ?? []), state.topicId])],
+      };
+      await this.save(db, goalId, next);
+      return next;
+    });
+
   private save = async (db: LobeChatDatabase, id: string, state: GoalManagerState) => {
     // Caller holds the owned Goal row lock. Do not overwrite concurrent policy namespaces.
     await db
@@ -258,6 +339,7 @@ export class GoalManagerService {
       graph.nodes.flatMap((n) => (n.taskId ? [n.taskId] : [])),
     );
     const management = await new GoalManagerService(db, this.userId, this.workspaceId).usage(
+      graph.goal.id,
       graph.goal.config?.managerState,
     );
     const goal = graph.goal;
@@ -541,8 +623,14 @@ export class GoalManagerService {
         return;
       // The management conversation lives in the goal agent's own history. After
       // a handoff the previous agent's topic is not this agent's to continue.
+      // Read it from the LOCKED row, not the caller's graph: `moveConversationTo`
+      // can have migrated the conversation between the graph read and this claim,
+      // and going by the stale topic would mint a second one for the same agent.
+      const freshState = fresh.config?.managerState;
       const topicModel = new TopicModel(db, this.userId, this.workspaceId);
-      const previousTopic = state?.topicId ? await topicModel.findById(state.topicId) : undefined;
+      const previousTopic = freshState?.topicId
+        ? await topicModel.findById(freshState.topicId)
+        : undefined;
       const topicId =
         previousTopic?.agentId === agentId
           ? previousTopic.id
@@ -555,6 +643,16 @@ export class GoalManagerService {
                 trigger: TopicTrigger.GoalSupervision,
               })
             ).id;
+      // This claim is the other place the management topic changes (besides
+      // `moveConversationTo`, which only runs between turns): a handoff that
+      // landed mid-turn migrates here. The conversation being left keeps
+      // counting, so it joins the history the receipt carries forward.
+      const previousTopicIds = [
+        ...new Set([
+          ...(freshState?.previousTopicIds ?? []),
+          ...(freshState?.topicId && freshState.topicId !== topicId ? [freshState.topicId] : []),
+        ]),
+      ];
       const reviews = await this.reviews(current, db);
       const next: GoalManagerState = {
         ...(problem
@@ -564,10 +662,11 @@ export class GoalManagerService {
             }
           : {}),
         ...(state?.adoptedOperationId && { adoptedOperationId: state.adoptedOperationId }),
+        ...(previousTopicIds.length > 0 && { previousTopicIds }),
         reviewSnapshot: reviews.hash,
         topicId,
         turns: (state?.turns ?? 0) + 1,
-        token: randomUUID(),
+        token: managerTurnToken(goal.id),
         snapshot: managerSnapshot(current),
         startedAt: new Date().toISOString(),
       };

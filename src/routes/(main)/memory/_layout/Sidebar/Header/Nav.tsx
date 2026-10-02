@@ -51,7 +51,7 @@ const Nav = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('memory');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const enableRules = useUserStore(labPreferSelectors.enableMemoryRules);
+  const enableSelfLearning = useUserStore(labPreferSelectors.enableSelfLearning);
 
   /**
    * Four groups, separated by space rather than rules: what the whole section is (home), what it
@@ -79,9 +79,9 @@ const Nav = memo(() => {
           url: '/memory',
         },
       ],
-      // Rules are still an alpha lab: the group disappears with the flag rather than sitting
-      // there disabled, so the sidebar of everyone else reads exactly as before.
-      ...(enableRules
+      // Self-evolving is still an alpha lab: the group disappears with the flag rather than
+      // sitting there disabled, so the sidebar of everyone else reads exactly as before.
+      ...(enableSelfLearning
         ? [
             [
               {
@@ -122,7 +122,7 @@ const Nav = memo(() => {
         },
       ],
     ],
-    [t, toggleCommandMenu, enableRules],
+    [t, toggleCommandMenu, enableSelfLearning],
   );
 
   return (

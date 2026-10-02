@@ -24,7 +24,6 @@ type LabFeatureI18nKey =
   | 'imessage'
   | 'inputMarkdown'
   | 'integrations'
-  | 'memoryRules'
   | 'messageTextSelectionActions'
   | 'oauthApps'
   | 'projects'
@@ -68,15 +67,17 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    flag: 'enableMemoryRules',
-    i18nKey: 'memoryRules',
-    searchKeywords: ['rules', 'memory rules', 'delivery rules', 'verifier'],
-    stage: 'alpha',
-  },
-  {
     flag: 'enableSelfLearning',
     i18nKey: 'selfLearning',
-    searchKeywords: ['self-evolving', 'self learning', 'rule base'],
+    searchKeywords: [
+      'self-evolving',
+      'self learning',
+      'rule base',
+      'rules',
+      'memory rules',
+      'delivery rules',
+      'verifier',
+    ],
     stage: 'alpha',
   },
   {

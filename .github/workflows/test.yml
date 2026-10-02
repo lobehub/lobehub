@@ -330,9 +330,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .alintcache
-          key: alint-${{ hashFiles('alint.config.toml', 'packages/alint/rules/**', 'packages/*/alint/rules/**') }}-${{ github.sha }}
+          # alint keys each cached result by the rule's own text (>= 0.7.2), so a
+          # rule edit re-runs only that rule; restore the latest cache whatever
+          # the rule set, instead of starting cold on every rule change.
+          key: alint-${{ github.sha }}
           restore-keys: |
-            alint-${{ hashFiles('alint.config.toml', 'packages/alint/rules/**', 'packages/*/alint/rules/**') }}-
+            alint-
 
       - name: alint · lint changed files
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
