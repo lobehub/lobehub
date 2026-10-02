@@ -45,9 +45,11 @@ import { analyzeShellCommand, collectFlagLettersAndNames } from './shellCommand'
  * "rm" and contains a slash.
  */
 const DANGEROUS_TARGET_TESTS = [
-  // Root: bare '/', or a path that reduces to it ('//', '/.', '/./', trailing
-  // slashes) — every component is dots/slashes.
-  (word: string) => /^\/[.:/]*$/.test(word),
+  // Root: bare '/', a path that reduces to it ('//', '/.', '/./', trailing
+  // slashes), or a root glob whose expansion is the whole root ('/*', '/**').
+  // Every component is dots, slashes, colons or glob stars — anything with a
+  // real path segment (`/tmp`, `/*.log`) does not match.
+  (word: string) => /^\/[.:/*]*$/.test(word),
   (word: string) => word === './' || word === '.',
   (word: string) => ['~', '~/', '$HOME', '$HOME/'].includes(word),
   (word: string) => /^\/(?:Users|home)\/[^/]+\/?$/.test(word),
@@ -227,6 +229,19 @@ export const SEMANTIC_SHELL_PREDICATE_RESOLVERS: Record<
 };
 
 /**
+ * Known-predicate guard.
+ *
+ * `matchSemanticShellPredicate` keeps a `string` parameter on purpose: a config
+ * carrying a predicate name newer than this runtime must fail open rather than
+ * flag unrelated commands. That deliberate looseness is exactly why the record
+ * cannot be indexed directly — this guard narrows the type after the runtime
+ * lookup, so the fail-open behaviour and the `Record<SemanticShellPredicate, …>`
+ * index type are both satisfied.
+ */
+const isKnownPredicate = (predicate: string): predicate is SemanticShellPredicate =>
+  Object.prototype.hasOwnProperty.call(SEMANTIC_SHELL_PREDICATE_RESOLVERS, predicate);
+
+/**
  * Check whether any segment of the command satisfies the named predicate.
  * Unknown predicate names never match (fail-open for forward compatibility —
  * new predicates shipped to a client whose runtime predates them must not
@@ -237,8 +252,8 @@ export const SEMANTIC_SHELL_PREDICATE_RESOLVERS: Record<
  * `bash -c rm -rf /`, `flock /tmp/l rm -rf /`) stay blocked.
  */
 export const matchSemanticShellPredicate = (predicate: string, value: string): boolean => {
+  if (!isKnownPredicate(predicate)) return false;
   const resolver = SEMANTIC_SHELL_PREDICATE_RESOLVERS[predicate];
-  if (!resolver) return false;
 
   const segments = analyzeShellCommand(value);
   return segments.some((segment) => resolver(segment, segments) || hasAmbiguousRmShape(segment));

@@ -20,6 +20,9 @@ describe('matchSemanticShellPredicate', () => {
       'rm -rf / ; echo done',
       'echo start && rm -rf /',
       'cd /tmp && sudo rm -rf /',
+      // Root glob: `/*` expands to the whole root subtree.
+      'rm -rf /*',
+      'rm -rf /**',
     ])('blocks: %s', (command) => {
       expect(matchSemanticShellPredicate('rmRecursiveRootTarget', command)).toBe(true);
     });
@@ -44,6 +47,9 @@ describe('matchSemanticShellPredicate', () => {
       'du -sh /Users/arvinxx/',
       'find /Users/arvinxx -name "*.log"',
       'ls -la /usr/local/bin/',
+      // A root glob that names a real segment is a subset delete, not the root.
+      'rm -rf /*.log',
+      'rm -rf /tmp/*',
       // Unknown predicate must never match (forward compatibility).
     ])('allows: %s', (command) => {
       expect(matchSemanticShellPredicate('rmRecursiveRootTarget', command)).toBe(false);
@@ -101,6 +107,28 @@ describe('matchSemanticShellPredicate', () => {
     it.each(['rm -r .', 'rm -f .', 'rm -rf ./dist', 'rm file'])('allows: %s', (command) => {
       expect(matchSemanticShellPredicate('rmForceDotTarget', command)).toBe(false);
     });
+  });
+
+  // Third review round (codex, PR #19386): `chroot NEWROOT COMMAND` runs
+  // COMMAND with NEWROOT as `/`. Both removed regex rules matched this shape
+  // incidentally (`rm … -r … /` appeared in the raw string), so chroot must be
+  // unwrapped like every other exec prefix or coverage narrows.
+  describe('chroot exec-prefix (third review round)', () => {
+    it.each([
+      'chroot /mnt rm -rf /',
+      'chroot /mnt /bin/rm -rf /',
+      'chroot --skip-chdir /mnt rm -rf /',
+      'sudo chroot /mnt rm -rf /',
+    ])('blocks root delete behind chroot: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', command)).toBe(true);
+    });
+
+    it.each(['chroot /mnt rm -rf /tmp/build-cache', 'chroot /mnt ls /tmp'])(
+      'keeps a harmless target behind chroot allowed: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveRootTarget', command)).toBe(false);
+      },
+    );
   });
 
   describe('codex review regressions (bypass hardening)', () => {

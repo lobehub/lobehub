@@ -428,6 +428,7 @@ const EXEC_PREFIX_WRAPPERS = new Set([
   'flock', // runs the command holding a lock (first arg = lockfile value)
   'strace', // traces execution by running the command
   'ltrace', // traces execution by running the command
+  'chroot', // runs the command with NEWROOT as '/': `chroot /mnt rm -rf /`
 ]);
 
 /**
@@ -439,6 +440,7 @@ const EXEC_PREFIX_WRAPPERS = new Set([
 const WRAPPER_POSITIONAL_VALUES: Record<string, number> = {
   timeout: 1, // DURATION
   flock: 1, // LOCKFILE (when not -n form with command only)
+  chroot: 1, // NEWROOT (GNU chroot has no short value-free flags; its options are long-only)
   nice: 0, // nice -N cmd handled by flag model; bare `nice cmd` has none
   time: 0,
 };

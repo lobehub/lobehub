@@ -322,6 +322,17 @@ describe('InterventionChecker', () => {
         expect(result.blocked).toBe(false);
       });
 
+      // Regression (reported in prod): a dev-server restart compound command.
+      // The old `rm.*-r.*/\s*$` regex matched it because "dev-|r|8.log" supplied
+      // `-r` and the trailing `/` of the curl URL supplied the root target.
+      it('should allow a dev-server restart compound command (reported false positive)', () => {
+        const result = InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+          command:
+            'cd /Users/arvinxx/CodeProjects/LobeHub/lobehub-wt-goal-acceptance-tree && rm -f /tmp/dev-r8.log && DB_PORT=5434 REDIS_PORT=6381 setsid nohup .agents/acceptance/scripts/init-dev-env.sh dev > /tmp/dev-r8.log 2>&1 < /dev/null & echo "launched pid $!"; sleep 30; tail -6 /tmp/dev-r8.log; curl -s -o /dev/null -w \'server %{http_code}\\n\' http://localhost:23816/',
+        });
+        expect(result.blocked).toBe(false);
+      });
+
       it('should allow recursive deletes inside the home tree', () => {
         const result = InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
           command: 'rm -rf ~/.cache/some-tool',
@@ -355,6 +366,16 @@ describe('InterventionChecker', () => {
           command: 'echo start && rm -rf /',
         });
         expect(result.blocked).toBe(true);
+      });
+
+      it('should block a root glob and a chroot-hidden root delete', () => {
+        for (const command of ['rm -rf /*', 'chroot /mnt rm -rf /']) {
+          const result = InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            command,
+          });
+          expect(result.blocked).toBe(true);
+          expect(result.reason).toBe('securityBlacklist.rmRootDir');
+        }
       });
 
       it('should block fork bomb', () => {
