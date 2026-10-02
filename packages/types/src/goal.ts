@@ -1,6 +1,6 @@
 import type { GoalReportDispatch, GoalReportState } from './goalReport';
 import type { InitialGoalOverviewContext } from './stepContext';
-import type { AcceptanceStatus } from './verify';
+import type { AcceptanceStatus, VerifyCheckTally } from './verify';
 import type { WorkType } from './work';
 
 // ============================================
@@ -548,6 +548,13 @@ export interface GoalGraphWorkVersionDisplay {
 
 /** Where a task node's own verification stands, for a reader scanning the goal. */
 export interface GoalNodeAcceptance {
+  /**
+   * The acceptance's current round, counted. Read in the same batched pass as
+   * the rows themselves so a surface can show each level's standing without
+   * opening it; absent when the acceptance has no round yet, which is not the
+   * same as a round that judged nothing.
+   */
+  checks?: VerifyCheckTally;
   id: string;
   status: AcceptanceStatus;
 }
