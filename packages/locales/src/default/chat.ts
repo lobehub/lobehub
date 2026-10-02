@@ -2041,7 +2041,7 @@ export default {
   'goalProcess.acceptanceHierarchy.error':
     'Failed to load the acceptance levels, so no level’s standing can be read.',
   'goalProcess.acceptanceHierarchy.expandAll': 'Expand all',
-  'goalProcess.acceptanceHierarchy.group': 'Per-task acceptance',
+  'goalProcess.acceptanceHierarchy.group': 'Related acceptances',
   'goalProcess.acceptanceHierarchy.level.awaitingSignOff': 'Awaiting your sign-off',
   'goalProcess.acceptanceHierarchy.level.closed': 'Closed',
   'goalProcess.acceptanceHierarchy.level.inProgress': 'In progress',
@@ -2169,7 +2169,6 @@ export default {
   'goalProcess.result.criteria.document': 'Evidence document',
   'goalProcess.result.criteria.empty': 'This Goal has no structured acceptance criteria.',
   'goalProcess.result.criteria.evidenceCount': '{{count}} evidence',
-  'goalProcess.result.criteria.group': 'Overall acceptance',
   'goalProcess.result.criteria.state.failed': 'Not met',
   'goalProcess.result.criteria.state.passed': 'Met',
   'goalProcess.result.criteria.state.unjudged': 'Not judged',
