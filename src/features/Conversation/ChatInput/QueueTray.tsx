@@ -53,10 +53,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
   `,
   hint: css`
-    padding-block: 0 6px;
-    padding-inline: 34px 12px;
+    flex: none;
     font-size: 12px;
     color: ${cssVar.colorTextDescription};
+    white-space: nowrap;
   `,
   icon: css`
     flex-shrink: 0;
@@ -80,7 +80,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   item: css`
-    padding-block: 6px 4px;
+    padding-block: 6px;
     padding-inline: 12px 8px;
   `,
   itemDivider: css`
@@ -88,6 +88,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   text: css`
     overflow: hidden;
+
+    min-width: 0;
 
     font-size: 13px;
     line-height: 1.4;
@@ -258,7 +260,13 @@ const QueueTray = memo(() => {
             key={msg.id}
           >
             <Icon className={styles.icon} icon={ListEnd} size={14} />
-            <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ overflow: 'hidden' }}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              flex={'0 1 auto'}
+              gap={8}
+              style={{ minWidth: 0, overflow: 'hidden' }}
+            >
               {previews.length > 0 && (
                 <Flexbox horizontal flex={'none'} gap={4}>
                   {previews.map((file) => (
@@ -267,11 +275,15 @@ const QueueTray = memo(() => {
                 </Flexbox>
               )}
               {msg.content && (
-                <Flexbox className={styles.text} flex={1}>
+                <Flexbox className={styles.text} flex={'0 1 auto'}>
                   {msg.content}
                 </Flexbox>
               )}
             </Flexbox>
+            {/* The send timing is this message's own caption, so it rides the
+                message row right after the content instead of taking a line. */}
+            <span className={styles.hint}>{t('inputQueue.queuedHint')}</span>
+            <div style={{ flex: 1 }} />
             <ActionIcon
               aria-label={t('inputQueue.edit')}
               icon={Pencil}
@@ -296,7 +308,6 @@ const QueueTray = memo(() => {
           </Flexbox>
         );
       })}
-      <div className={styles.hint}>{t('inputQueue.queuedHint')}</div>
     </Flexbox>
   );
 });
