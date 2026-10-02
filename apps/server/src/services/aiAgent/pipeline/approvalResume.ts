@@ -62,6 +62,8 @@ export interface ClaimedApprovalResume {
    * tool row you happened to pick and on the order they were written in.
    */
   batchApprovalAnchorId?: string;
+  /** Sanitized input for any deferred continuation initialization. */
+  resolvedToolResult?: InternalExecAgentParams['resumeToolResult'];
   /** Plugin row of the op-level anchor message (single-decision 16b context). */
   resumeApprovalPlugin?: MessagePluginItem;
 }
@@ -89,7 +91,10 @@ export interface ClaimedApprovalResume {
  * the plugin row and must be fetched separately.
  */
 export const claimApprovalResume = async (
-  deps: { messageModel: MessageModel },
+  deps: {
+    controlToolResult?: AgentRuntimeService['controlCompletedToolResult'];
+    messageModel: MessageModel;
+  },
   input: ClaimApprovalResumeInput,
 ): Promise<ClaimedApprovalResume> => {
   const {
@@ -104,6 +109,7 @@ export const claimApprovalResume = async (
     resumeToolResult,
   } = input;
 
+  let resolvedToolResult = resumeToolResult;
   let resumeApprovalPlugin: MessagePluginItem | undefined;
   const approvedToolEntries: {
     createdAt: Date;
@@ -343,9 +349,8 @@ export const claimApprovalResume = async (
       : [
           {
             claimedResolutionRequestId: approvalResolutionRequestId,
-            ...(typeof resumeParentMessage.content === 'string'
-              ? { content: resumeParentMessage.content }
-              : {}),
+            content:
+              typeof resumeParentMessage.content === 'string' ? resumeParentMessage.content : '',
             id: resumeToolResult.parentMessageId,
             intervention: (resumeToolResultPlugin.intervention ?? {
               status: 'pending',
@@ -354,10 +359,26 @@ export const claimApprovalResume = async (
             replacePluginState: true,
           },
         ];
+    const result = await deps.controlToolResult?.({
+      operationId: approvalSourceOperationId,
+      toolMessageId: resumeToolResult.parentMessageId,
+      result: {
+        content: resumeToolResult.content,
+        state: resumeToolResult.pluginState,
+        success: !skipped,
+      },
+    });
+    const withheld = result?.state?.phase === 'afterToolCall';
+    if (result)
+      resolvedToolResult = {
+        ...resumeToolResult,
+        content: result.content,
+        pluginState: result.state,
+      };
     if (!alreadyClaimed) {
       const claimState = await deps.messageModel.resolveHumanApproval([
         {
-          content: resumeToolResult.content,
+          content: result?.content ?? resumeToolResult.content,
           id: resumeToolResult.parentMessageId,
           intervention: skipped
             ? {
@@ -367,12 +388,29 @@ export const claimApprovalResume = async (
                 status: 'rejected',
               }
             : { resolutionRequestId: approvalResolutionRequestId, status: 'approved' },
-          pluginState: resumeToolResult.pluginState,
+          pluginState: result?.state ?? resumeToolResult.pluginState,
+          ...(withheld && { replacePluginState: true }),
         },
       ]);
       if (claimState === 'applied') {
         approvalClaim.rollbackSnapshot = approvalRollbackSnapshot;
       }
+    }
+    // Source-based resolutions can arrive already claimed, with the raw
+    // answer written by the source API. Gate that row before history loads.
+    if (result) {
+      const persisted = await deps.messageModel.updateToolMessage(
+        resumeToolResult.parentMessageId,
+        {
+          content: result.content,
+          pluginError: result.error,
+          pluginState: result.state,
+          preserveBlockedResult: true,
+          releaseToolResultReview: true,
+          ...(withheld && { replacePluginState: true }),
+        },
+      );
+      if (!persisted.success) throw new Error('Failed to persist reviewed tool result');
     }
     if (providedApprovalResolutionRequestId) {
       approvalClaim.continuationPrepared = true;
@@ -393,6 +431,7 @@ export const claimApprovalResume = async (
     approvedToolEntries,
     batchApprovalAnchorId,
     resumeApprovalPlugin,
+    resolvedToolResult,
   };
 };
 

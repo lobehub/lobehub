@@ -56,7 +56,15 @@ describe('server hook environment', () => {
     expect(String(error)).not.toContain('synthetic-env-secret');
   });
 
-  it('requires beforeToolCall for control', () => {
+  it('accepts afterToolCall-only result controls', () => {
+    enable();
+    vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
+    vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+    vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
+    expect(getAgentHookConfig().AGENT_HOOK_WEBHOOK_EVENTS).toEqual(['afterToolCall']);
+  });
+
+  it('keeps toolCall before-only for existing deployment configurations', () => {
     enable();
     vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
     vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');

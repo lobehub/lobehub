@@ -24,6 +24,7 @@ export class ServerMessageTransport implements MessageTransport {
   constructor(
     private readonly messageModel: MessageModel,
     private readonly options: {
+      prepareToolMessage?: (params: CreateMessageParams) => Promise<CreateMessageParams>;
       postProcessUrl?: (
         path: string | null,
         file: { fileType: string; id?: string | null },
@@ -72,7 +73,9 @@ export class ServerMessageTransport implements MessageTransport {
 
   async createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
     try {
-      return await this.messageModel.create(params);
+      return await this.messageModel.create(
+        (await this.options.prepareToolMessage?.(params)) ?? params,
+      );
     } catch (error) {
       if (typeof params.parentId === 'string' && isMidOperationReferenceMissingError(error)) {
         throw createConversationParentMissingError(params.parentId, error);
@@ -148,6 +151,12 @@ export class ServerMessageTransport implements MessageTransport {
   }
 
   async updateToolMessage(id: string, params: UpdateToolMessageInput): Promise<void> {
-    await this.messageModel.updateToolMessage(id, params);
+    const result = await this.messageModel.updateToolMessage(id, {
+      ...params,
+      releaseToolResultReview: true,
+    });
+    if (!result.success) {
+      throw new Error('Failed to persist withheld tool result');
+    }
   }
 }

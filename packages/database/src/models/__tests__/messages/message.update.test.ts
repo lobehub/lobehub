@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MAX_TOOL_IDENTIFIER_LENGTH } from '@/utils/clampToolIdentifier';
 import { uuid } from '@/utils/uuid';
@@ -915,6 +915,322 @@ describe('MessageModel Update Tests', () => {
         existingState: 'value1',
         newState: 'value2',
       });
+    });
+
+    it('quarantines an already-claimed answer across concurrent history reads, failures and replay', async () => {
+      const secret = 'synthetic-answer-awaiting-review';
+      const marker = {
+        operationId: 'review-op',
+        callIndex: 2,
+        stepIndex: 3,
+        status: 'pending' as const,
+      };
+      await serverDB.insert(topics).values({ id: 'review-topic', userId });
+      await serverDB.insert(messages).values({
+        id: 'review-tool',
+        userId,
+        role: 'tool',
+        content: '',
+        topicId: 'review-topic',
+        metadata: { toolResultControl: marker },
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'review-tool',
+        userId,
+        toolCallId: 'review-call',
+        identifier: 'tool',
+        intervention: { operationId: 'review-op', status: 'pending' },
+      });
+      // The independent source API claims and writes the human answer first.
+      await messageModel.resolveHumanApproval([
+        {
+          id: 'review-tool',
+          content: secret,
+          pluginState: { answer: secret, images: [{ url: secret }] },
+          intervention: { status: 'approved', resolutionRequestId: 'source-resolution' },
+        },
+      ]);
+      let deny!: () => void;
+      const decision = new Promise<void>((resolve) => {
+        deny = resolve;
+      });
+      const pendingReview = decision.then(() =>
+        messageModel.updateToolMessage('review-tool', {
+          content: 'Tool result withheld by afterToolCall hook.',
+          pluginError: 'hook_denied',
+          pluginState: {
+            phase: 'afterToolCall',
+            type: 'blocked',
+            totalCost: 0.25,
+            totalTokens: 42,
+            totalToolCalls: 2,
+          },
+          preserveBlockedResult: true,
+          replacePluginState: true,
+          releaseToolResultReview: true,
+        }),
+      );
+      const readAll = async () =>
+        Promise.all([
+          messageModel.query({ topicId: 'review-topic' }),
+          messageModel.queryByIds(['review-tool']),
+          messageModel.queryTopicTranscript({ topicId: 'review-topic', limit: 10, offset: 0 }),
+          messageModel.queryAll(),
+          messageModel.queryBySessionId(),
+        ]);
+      expect(JSON.stringify(await readAll())).not.toContain(secret);
+      const direct = await messageModel.findById('review-tool');
+      expect(direct?.content).toBe(secret); // The policy evaluator can still inspect the full result.
+      const failed = await new MessageModel(serverDB, otherUserId).updateToolMessage(
+        'review-tool',
+        {
+          content: 'withheld',
+          releaseToolResultReview: true,
+        },
+      );
+      expect(failed.success).toBe(false);
+      expect(JSON.stringify(await readAll())).not.toContain(secret);
+      deny();
+      expect(await pendingReview).toMatchObject({ success: true });
+      const [projected] = await messageModel.queryByIds(['review-tool']);
+      expect(projected.content).toBe('Tool result withheld by afterToolCall hook.');
+      expect(projected.tool_call_id).toBe('review-call');
+      expect(projected.pluginState).toMatchObject({
+        totalCost: 0.25,
+        totalTokens: 42,
+        totalToolCalls: 2,
+      });
+      expect(projected.metadata).not.toHaveProperty('toolResultControl');
+      // Source retries are idempotent and completion retries cannot restore raw output.
+      expect(
+        await messageModel.resolveHumanApproval([
+          {
+            id: 'review-tool',
+            content: secret,
+            intervention: { status: 'approved', resolutionRequestId: 'source-resolution' },
+          },
+        ]),
+      ).toBe('idempotent');
+      expect(
+        await messageModel.updateToolMessage('review-tool', {
+          content: secret,
+          pluginState: { answer: secret },
+          preserveBlockedResult: true,
+          releaseToolResultReview: true,
+        }),
+      ).toMatchObject({ success: true, applied: false });
+      expect(JSON.stringify(await readAll())).not.toContain(secret);
+    });
+
+    it('releases allowed answers atomically and quarantines them again on approval rollback', async () => {
+      await serverDB.insert(messages).values({
+        id: 'review-allow',
+        userId,
+        role: 'tool',
+        content: '',
+        metadata: {
+          toolResultControl: {
+            operationId: 'review-op',
+            callIndex: 1,
+            stepIndex: 2,
+            status: 'pending',
+          },
+        },
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'review-allow',
+        userId,
+        toolCallId: 'allow-call',
+        identifier: 'tool',
+        intervention: { status: 'pending' },
+      });
+      await messageModel.resolveHumanApproval([
+        {
+          id: 'review-allow',
+          content: 'allowed answer',
+          intervention: { status: 'approved', resolutionRequestId: 'allow-resolution' },
+        },
+      ]);
+      await messageModel.updateToolMessage('review-allow', {
+        content: 'allowed answer',
+        pluginState: { answer: 'allowed answer' },
+        releaseToolResultReview: true,
+      });
+      expect((await messageModel.queryByIds(['review-allow']))[0].content).toBe('allowed answer');
+      await messageModel.restoreHumanApproval([
+        {
+          id: 'review-allow',
+          content: '',
+          intervention: { status: 'pending' },
+          claimedResolutionRequestId: 'allow-resolution',
+        },
+      ]);
+      expect(
+        (await messageModel.findById('review-allow'))?.metadata?.toolResultControl?.status,
+      ).toBe('pending');
+      await messageModel.resolveHumanApproval([
+        {
+          id: 'review-allow',
+          content: 'new unreviewed answer',
+          intervention: { status: 'approved', resolutionRequestId: 'next-resolution' },
+        },
+      ]);
+      expect(JSON.stringify(await messageModel.queryByIds(['review-allow']))).not.toContain(
+        'new unreviewed answer',
+      );
+    });
+
+    it('does not let a stale UI metadata write undo quarantine after approval rollback', async () => {
+      const marker = {
+        operationId: 'review-op',
+        callIndex: 1,
+        stepIndex: 2,
+        status: 'allowed' as const,
+      };
+      await serverDB.insert(messages).values({
+        id: 'review-race',
+        userId,
+        role: 'tool',
+        content: 'allowed',
+        metadata: { toolResultControl: marker },
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'review-race',
+        userId,
+        identifier: 'tool',
+        intervention: { status: 'approved', resolutionRequestId: 'old' },
+      });
+      let captured!: () => void;
+      const readCaptured = new Promise<void>((resolve) => {
+        captured = resolve;
+      });
+      let resumePatch!: () => void;
+      const resume = new Promise<void>((resolve) => {
+        resumePatch = resolve;
+      });
+      const findFirst = serverDB.query.messages.findFirst.bind(serverDB.query.messages);
+      const spy = vi
+        .spyOn(serverDB.query.messages, 'findFirst')
+        .mockImplementationOnce(async (...args) => {
+          const stale = await findFirst(...args);
+          captured();
+          await resume;
+          return stale;
+        });
+      try {
+        const patch = messageModel.updateMetadata('review-race', { collapsed: true });
+        await readCaptured;
+        await messageModel.restoreHumanApproval([
+          {
+            id: 'review-race',
+            content: '',
+            claimedResolutionRequestId: 'old',
+            intervention: { status: 'pending' },
+          },
+        ]);
+        resumePatch();
+        await patch;
+        await messageModel.resolveHumanApproval([
+          {
+            id: 'review-race',
+            content: 'synthetic-unreviewed-race-answer',
+            intervention: { status: 'approved', resolutionRequestId: 'new' },
+          },
+        ]);
+        expect(
+          (await messageModel.findById('review-race'))?.metadata?.toolResultControl?.status,
+        ).toBe('pending');
+        expect(JSON.stringify(await messageModel.queryByIds(['review-race']))).not.toContain(
+          'synthetic-unreviewed-race-answer',
+        );
+        // Other generic update/snapshot entry points preserve the DB marker too.
+        await messageModel.update('review-race', {
+          metadata: { toolResultControl: marker, collapsed: false },
+        });
+        await messageModel.updateToolMessage('review-race', {
+          metadata: { toolResultControl: marker },
+          pluginState: { replacement: true },
+        });
+        expect(
+          (await messageModel.findById('review-race'))?.metadata?.toolResultControl?.status,
+        ).toBe('pending');
+        expect(JSON.stringify(await messageModel.queryByIds(['review-race']))).not.toContain(
+          'synthetic-unreviewed-race-answer',
+        );
+      } finally {
+        resumePatch();
+        spy.mockRestore();
+      }
+    });
+
+    it('replaces denied result state and prevents a later completion replay from restoring it', async () => {
+      await serverDB
+        .insert(messages)
+        .values({ id: 'tool-withheld', userId, role: 'tool', content: 'private output' });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-withheld',
+        toolCallId: 'withheld-call',
+        identifier: 'tool',
+        state: { private: 'private output' },
+        error: { message: 'private output' },
+        userId,
+      });
+      const blocked = { phase: 'afterToolCall', type: 'blocked', reason: 'Tool result withheld.' };
+      expect(
+        await messageModel.updateToolMessage('tool-withheld', {
+          content: 'Tool result withheld.',
+          pluginError: 'hook_denied',
+          pluginState: blocked,
+          replacePluginState: true,
+          preserveBlockedResult: true,
+        }),
+      ).toMatchObject({ success: true, applied: true });
+      expect(
+        await messageModel.updateToolMessage('tool-withheld', {
+          content: 'private output',
+          pluginError: null,
+          pluginState: { private: 'private output' },
+          preserveBlockedResult: true,
+        }),
+      ).toMatchObject({ success: true, applied: false });
+      const [message] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'tool-withheld'));
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'tool-withheld'));
+      expect(message.content).toBe('Tool result withheld.');
+      expect(plugin.state).toEqual(blocked);
+      expect(plugin.error).toBe('hook_denied');
+    });
+
+    it('does not let result replacement modify another user’s tool message', async () => {
+      await serverDB.insert(messages).values({
+        id: 'foreign-withheld',
+        userId: otherUserId,
+        role: 'tool',
+        content: 'foreign output',
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'foreign-withheld',
+        identifier: 'tool',
+        state: { private: 'foreign output' },
+        userId: otherUserId,
+      });
+      const result = await messageModel.updateToolMessage('foreign-withheld', {
+        content: 'withheld',
+        pluginState: { phase: 'afterToolCall', type: 'blocked' },
+        replacePluginState: true,
+        preserveBlockedResult: true,
+      });
+      expect(result.success).toBe(false);
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'foreign-withheld'));
+      expect(plugin.state).toEqual({ private: 'foreign output' });
     });
 
     it('preserves independent pluginState patches across concurrent tool-message updates', async () => {

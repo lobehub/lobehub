@@ -89,6 +89,10 @@ const requireToolTransport = (host: AgentRuntimeHost) => {
 
 const toolNameOf = (tool: ChatToolPayload) => `${tool.identifier}/${tool.apiName}`;
 
+// Execution-entry denial is free; withholding an already executed result is not.
+const isBlockedBeforeExecution = (result: ToolRunResult) =>
+  result.state?.type === 'blocked' && result.state.phase !== 'afterToolCall';
+
 const resolveToolSource = (state: AgentState, tool: ChatToolPayload): string | undefined =>
   selectToolSourceMap(state)[tool.identifier];
 
@@ -519,6 +523,7 @@ const updateExistingToolMessage = async ({
       metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
       pluginError: result.error,
       pluginState: result.state,
+      ...(result.state?.phase === 'afterToolCall' && { replacePluginState: true }),
     });
     if (result.state?.type === 'blocked') {
       await host.transports.messages.updateToolIntervention(toolMessageId, {
@@ -665,10 +670,9 @@ export const callTool =
           executionTime,
           isSuccess,
           attempts: execution.attempts,
-          maxAttempts:
-            executionResult.state?.type === 'blocked'
-              ? 0
-              : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
+          maxAttempts: isBlockedBeforeExecution(executionResult)
+            ? 0
+            : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
           payload,
           phase: TOOL_EXECUTION_PHASE,
           result: redactResultForEvents(executionResult),
@@ -729,8 +733,9 @@ export const callTool =
         type: 'tool_result',
       });
 
-      const toolCost =
-        executionResult.state?.type === 'blocked' ? 0 : (tools.getCost?.(runContext.toolName) ?? 0);
+      const toolCost = isBlockedBeforeExecution(executionResult)
+        ? 0
+        : (tools.getCost?.(runContext.toolName) ?? 0);
       const { usage, cost } = UsageCounter.accumulateTool({
         cost: newState.cost,
         executionTime,
@@ -982,10 +987,9 @@ export const callToolsBatch =
             executionTime,
             isSuccess,
             attempts: execution.attempts,
-            maxAttempts:
-              executionResult.state?.type === 'blocked'
-                ? 0
-                : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
+            maxAttempts: isBlockedBeforeExecution(executionResult)
+              ? 0
+              : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
             payload: { parentMessageId, toolCalling: tool },
             phase: TOOL_EXECUTION_PHASE,
             result: redactResultForEvents(executionResult),
@@ -1036,10 +1040,9 @@ export const callToolsBatch =
           type: 'tool_result',
         });
 
-        const toolCost =
-          executionResult.state?.type === 'blocked'
-            ? 0
-            : (tools.getCost?.(runContext.toolName) ?? 0);
+        const toolCost = isBlockedBeforeExecution(executionResult)
+          ? 0
+          : (tools.getCost?.(runContext.toolName) ?? 0);
         resultEntry.usageParams = {
           executionTime,
           success: isSuccess,
