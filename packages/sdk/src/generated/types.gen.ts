@@ -10,6 +10,34 @@ export type ApiError = {
     timestamp: string;
 };
 
+export type AgentAccount = {
+    agentId: string;
+    capabilities: {
+        login?: boolean | null;
+        receive: boolean;
+        send: boolean;
+        sign?: boolean | null;
+    };
+    createdAt: string;
+    credentialHint?: {
+        [key: string]: unknown;
+    } | null;
+    displayName?: string | null;
+    hasCredential: boolean;
+    id: string;
+    identifier: string;
+    kind: 'mail' | 'phone' | 'wallet' | 'service';
+    metadata?: {
+        [key: string]: unknown;
+    } | null;
+    provider: string;
+    revokedAt?: string | null;
+    status: 'provisioning' | 'active' | 'suspended' | 'revoked';
+    updatedAt: string;
+    userId?: string;
+    workspaceId?: string | null;
+};
+
 export type ApiKey = {
     createdAt: string;
     enabled?: boolean | null;
@@ -17,7 +45,7 @@ export type ApiKey = {
     id: string;
     lastUsedAt?: string | null;
     name: string;
-    scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+    scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
     updatedAt: string;
 };
 
@@ -1207,6 +1235,416 @@ export type PostApiV1AgentsByIdDuplicateResponses = {
 
 export type PostApiV1AgentsByIdDuplicateResponse = PostApiV1AgentsByIdDuplicateResponses[keyof PostApiV1AgentsByIdDuplicateResponses];
 
+export type GetApiV1AgentsByIdAccountsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        kind?: 'mail' | 'phone' | 'wallet' | 'service';
+        provider?: string;
+    };
+    url: '/api/v1/agents/{id}/accounts';
+};
+
+export type GetApiV1AgentsByIdAccountsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1AgentsByIdAccountsError = GetApiV1AgentsByIdAccountsErrors[keyof GetApiV1AgentsByIdAccountsErrors];
+
+export type GetApiV1AgentsByIdAccountsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            accounts: Array<AgentAccount>;
+            total: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1AgentsByIdAccountsResponse = GetApiV1AgentsByIdAccountsResponses[keyof GetApiV1AgentsByIdAccountsResponses];
+
+export type PostApiV1AgentsByIdAccountsData = {
+    body: {
+        capabilities?: {
+            login?: boolean;
+            receive: boolean;
+            send: boolean;
+            sign?: boolean;
+        };
+        displayName?: string;
+        identifier: string;
+        kind: 'mail' | 'phone' | 'wallet' | 'service';
+        metadata?: {
+            [key: string]: unknown;
+        };
+        provider: string;
+    } | {
+        displayName?: string;
+        provider: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/accounts';
+};
+
+export type PostApiV1AgentsByIdAccountsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1AgentsByIdAccountsError = PostApiV1AgentsByIdAccountsErrors[keyof PostApiV1AgentsByIdAccountsErrors];
+
+export type PostApiV1AgentsByIdAccountsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data?: AgentAccount;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1AgentsByIdAccountsResponse = PostApiV1AgentsByIdAccountsResponses[keyof PostApiV1AgentsByIdAccountsResponses];
+
+export type DeleteApiV1AgentsByIdAccountsByAccountIdData = {
+    body?: never;
+    path: {
+        accountId: string;
+        id: string;
+    };
+    query?: {
+        purgeCredential?: 'true' | 'false';
+        release?: 'true' | 'false';
+    };
+    url: '/api/v1/agents/{id}/accounts/{accountId}';
+};
+
+export type DeleteApiV1AgentsByIdAccountsByAccountIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1AgentsByIdAccountsByAccountIdError = DeleteApiV1AgentsByIdAccountsByAccountIdErrors[keyof DeleteApiV1AgentsByIdAccountsByAccountIdErrors];
+
+export type DeleteApiV1AgentsByIdAccountsByAccountIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: AgentAccount;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1AgentsByIdAccountsByAccountIdResponse = DeleteApiV1AgentsByIdAccountsByAccountIdResponses[keyof DeleteApiV1AgentsByIdAccountsByAccountIdResponses];
+
+export type GetApiV1AgentsByIdAccountsByAccountIdData = {
+    body?: never;
+    path: {
+        accountId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/accounts/{accountId}';
+};
+
+export type GetApiV1AgentsByIdAccountsByAccountIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1AgentsByIdAccountsByAccountIdError = GetApiV1AgentsByIdAccountsByAccountIdErrors[keyof GetApiV1AgentsByIdAccountsByAccountIdErrors];
+
+export type GetApiV1AgentsByIdAccountsByAccountIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: AgentAccount;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1AgentsByIdAccountsByAccountIdResponse = GetApiV1AgentsByIdAccountsByAccountIdResponses[keyof GetApiV1AgentsByIdAccountsByAccountIdResponses];
+
+export type PatchApiV1AgentsByIdAccountsByAccountIdData = {
+    body: {
+        capabilities?: {
+            login?: boolean;
+            receive: boolean;
+            send: boolean;
+            sign?: boolean;
+        };
+        displayName?: string | null;
+        metadata?: {
+            [key: string]: unknown;
+        };
+    };
+    path: {
+        accountId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/accounts/{accountId}';
+};
+
+export type PatchApiV1AgentsByIdAccountsByAccountIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1AgentsByIdAccountsByAccountIdError = PatchApiV1AgentsByIdAccountsByAccountIdErrors[keyof PatchApiV1AgentsByIdAccountsByAccountIdErrors];
+
+export type PatchApiV1AgentsByIdAccountsByAccountIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: AgentAccount;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1AgentsByIdAccountsByAccountIdResponse = PatchApiV1AgentsByIdAccountsByAccountIdResponses[keyof PatchApiV1AgentsByIdAccountsByAccountIdResponses];
+
+export type PutApiV1AgentsByIdAccountsByAccountIdCredentialData = {
+    body: {
+        credential: {
+            [key: string]: string;
+        };
+        hint?: {
+            expiresAt?: string;
+            masked?: string;
+            username?: string;
+        };
+    };
+    path: {
+        accountId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/accounts/{accountId}/credential';
+};
+
+export type PutApiV1AgentsByIdAccountsByAccountIdCredentialErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PutApiV1AgentsByIdAccountsByAccountIdCredentialError = PutApiV1AgentsByIdAccountsByAccountIdCredentialErrors[keyof PutApiV1AgentsByIdAccountsByAccountIdCredentialErrors];
+
+export type PutApiV1AgentsByIdAccountsByAccountIdCredentialResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: AgentAccount;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PutApiV1AgentsByIdAccountsByAccountIdCredentialResponse = PutApiV1AgentsByIdAccountsByAccountIdCredentialResponses[keyof PutApiV1AgentsByIdAccountsByAccountIdCredentialResponses];
+
 export type GetApiV1ApiKeysData = {
     body?: never;
     path?: never;
@@ -1265,7 +1703,7 @@ export type PostApiV1ApiKeysData = {
     body: {
         expiresAt?: string | null;
         name: string;
-        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
     };
     path?: never;
     query?: never;
@@ -1321,7 +1759,7 @@ export type PostApiV1ApiKeysResponses = {
             id: string;
             lastUsedAt?: string | null;
             name: string;
-            scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+            scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
             updatedAt: string;
             key: string;
         };

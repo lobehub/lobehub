@@ -1,3 +1,4 @@
+import { AGENT_ACCOUNT_KINDS, AGENT_ACCOUNT_STATUSES } from '@lobechat/types';
 import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { generateSpecs } from 'hono-openapi';
 
@@ -24,6 +25,51 @@ const nullableNumber = { type: ['number', 'null'] } as const;
 const nullableObject = { additionalProperties: true, type: ['object', 'null'] } as const;
 
 const resourceSchemas: Record<string, SchemaObject> = {
+  AgentAccount: {
+    additionalProperties: false,
+    properties: {
+      agentId: { type: 'string' },
+      capabilities: {
+        additionalProperties: false,
+        properties: {
+          login: nullableBoolean,
+          receive: { type: 'boolean' },
+          send: { type: 'boolean' },
+          sign: nullableBoolean,
+        },
+        required: ['receive', 'send'],
+        type: 'object',
+      },
+      createdAt: dateTime,
+      credentialHint: nullableObject,
+      displayName: nullableString,
+      /** Whether a secret is installed. Never the secret itself. */
+      hasCredential: { type: 'boolean' },
+      id: { type: 'string' },
+      identifier: { type: 'string' },
+      kind: { enum: AGENT_ACCOUNT_KINDS, type: 'string' },
+      metadata: nullableObject,
+      provider: { type: 'string' },
+      revokedAt: { ...dateTime, type: ['string', 'null'] },
+      status: { enum: AGENT_ACCOUNT_STATUSES, type: 'string' },
+      updatedAt: dateTime,
+      userId: { type: 'string' },
+      workspaceId: nullableString,
+    },
+    required: [
+      'id',
+      'agentId',
+      'kind',
+      'identifier',
+      'provider',
+      'status',
+      'capabilities',
+      'hasCredential',
+      'createdAt',
+      'updatedAt',
+    ],
+    type: 'object',
+  },
   ApiKey: {
     additionalProperties: false,
     properties: {
@@ -513,6 +559,7 @@ const PERSONAL_AGENT_GROUPS = new Set(['goals', 'memories', 'notifications', 'si
 const CREATED_OPERATIONS = new Set([
   'POST agent-groups',
   'POST agents/{id}/duplicate',
+  'POST agents/{id}/accounts',
   'POST api-keys',
   'POST eval/benchmarks',
   'POST eval/datasets',
@@ -661,6 +708,34 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
       required: ['deviceId', 'platform'],
       type: 'object',
     });
+  }
+
+  /**
+   * Agent identity assets: `/agents/{id}/accounts`. Every route answers with an
+   * `AgentAccount` (the collection GET wraps them), and none of them can carry
+   * a credential — the write-only sub-resource answers with the hint plus
+   * `hasCredential`, never the secret.
+   */
+  if (group === 'agents') {
+    if (rest === '{id}/accounts') {
+      if (method === 'get') {
+        return successEnvelope({
+          additionalProperties: false,
+          properties: {
+            accounts: { items: ref('AgentAccount'), type: 'array' },
+            total: { minimum: 0, type: 'integer' },
+          },
+          required: ['accounts', 'total'],
+          type: 'object',
+        });
+      }
+
+      return successEnvelope(ref('AgentAccount'));
+    }
+
+    if (rest === '{id}/accounts/{accountId}' || rest === '{id}/accounts/{accountId}/credential') {
+      return successEnvelope(ref('AgentAccount'));
+    }
   }
 
   const resource = groupResources[group];

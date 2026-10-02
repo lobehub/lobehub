@@ -29,6 +29,14 @@ const METHOD_NAME_OVERRIDES: Record<string, string> = {
   // `createAdvance` / `createPause`, and the two memory DELETEs both reduce to
   // `delete` (colliding into `delete2`), so each needs an explicit name.
   'DELETE /api/v1/memories': 'deleteAll',
+  // Agent identity assets under `/agents/{id}/accounts`: the mechanical rule
+  // pluralizes the collection noun (`createAccounts`, `getAccounts`,
+  // `updateAccountsCredential`), but each call acts on exactly one account.
+  'POST /api/v1/agents/{id}/accounts': 'createAccount',
+  'GET /api/v1/agents/{id}/accounts/{accountId}': 'getAccount',
+  'PATCH /api/v1/agents/{id}/accounts/{accountId}': 'updateAccount',
+  'PUT /api/v1/agents/{id}/accounts/{accountId}/credential': 'updateAccountCredential',
+  'DELETE /api/v1/agents/{id}/accounts/{accountId}': 'deleteAccount',
   'DELETE /api/v1/memories/{category}/{id}': 'deleteEntry',
   'GET /api/v1/memories/{category}': 'listCategory',
   'GET /api/v1/notifications/counts': 'getCounts',
