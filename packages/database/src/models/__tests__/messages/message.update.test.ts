@@ -1108,15 +1108,20 @@ describe('MessageModel Update Tests', () => {
       const resume = new Promise<void>((resolve) => {
         resumePatch = resolve;
       });
-      const findFirst = serverDB.query.messages.findFirst.bind(serverDB.query.messages);
-      const spy = vi
-        .spyOn(serverDB.query.messages, 'findFirst')
-        .mockImplementationOnce(async (...args) => {
-          const stale = await findFirst(...args);
-          captured();
-          await resume;
-          return stale;
-        });
+      // The production reader awaits Drizzle's thenable; this race fixture only
+      // needs that contract, not its query-builder methods.
+      const query: {
+        findFirst: (
+          ...args: Parameters<typeof serverDB.query.messages.findFirst>
+        ) => PromiseLike<Awaited<ReturnType<typeof serverDB.query.messages.findFirst>>>;
+      } = serverDB.query.messages;
+      const findFirst = query.findFirst.bind(query);
+      const spy = vi.spyOn(query, 'findFirst').mockImplementationOnce(async (...args) => {
+        const stale = await findFirst(...args);
+        captured();
+        await resume;
+        return stale;
+      });
       try {
         const patch = messageModel.updateMetadata('review-race', { collapsed: true });
         await readCaptured;

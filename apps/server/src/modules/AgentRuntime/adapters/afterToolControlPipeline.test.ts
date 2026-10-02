@@ -50,11 +50,12 @@ const call = (id = 'native-1'): ChatToolPayload => ({
   arguments: '{"path":"a"}',
   type: 'builtin',
 });
-const control = (id = 'control', onError: 'continue' | 'block' = 'continue'): AgentHook => ({
-  id,
-  type: 'afterToolCall',
-  webhook: { url: `https://hooks.example/${id}`, responseHandling: 'toolCall', onError },
-});
+const control = (id = 'control', onError: 'continue' | 'block' = 'continue') =>
+  ({
+    id,
+    type: 'afterToolCall',
+    webhook: { url: `https://hooks.example/${id}`, responseHandling: 'toolCall', onError },
+  }) satisfies AgentHook;
 const response = (decision: 'allow' | 'deny', reason?: string) =>
   new Response(JSON.stringify(decision === 'deny' ? { decision, reason } : { decision }));
 

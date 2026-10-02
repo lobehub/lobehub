@@ -235,7 +235,12 @@ export class MessageService {
 
     if (!message) return undefined;
 
-    const projected = projectToolResultControl({ ...message, pluginState: plugin?.state });
+    const projected = projectToolResultControl({
+      content: message.content,
+      metadata: message.metadata,
+      pluginState: plugin?.state,
+      role: message.role,
+    });
     return { content: projected.content ?? '', pluginState: projected.pluginState };
   }
 

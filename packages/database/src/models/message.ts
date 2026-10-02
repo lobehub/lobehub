@@ -4684,7 +4684,8 @@ export class MessageModel {
             .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
             .for('update');
           if (
-            plugin?.state?.type === 'blocked' &&
+            isPlainRecord(plugin?.state) &&
+            plugin.state.type === 'blocked' &&
             plugin.state.phase === 'afterToolCall' &&
             !(pluginState?.type === 'blocked' && pluginState.phase === 'afterToolCall')
           ) {
