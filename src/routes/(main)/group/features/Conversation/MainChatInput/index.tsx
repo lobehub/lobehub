@@ -18,7 +18,7 @@ const leftActions: ActionKeys[] = [
   ['typo', 'params', 'clear'],
 ];
 
-const rightActions: ActionKeys[] = ['model', 'voiceMessage', 'contextWindow'];
+const rightActions: ActionKeys[] = ['model', 'promptTransform', 'voiceMessage', 'contextWindow'];
 
 /**
  * MainChatInput
