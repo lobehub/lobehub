@@ -96,10 +96,14 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   /* Check rows keep the acceptance page's own list grammar, so opening a level
-     and opening the acceptance read as the same list. */
+     and opening the acceptance read as the same list.
+
+     The offset is exactly the level row's icon column — its 16px mark plus the
+     10px gap — so a check's mark lines up under the level's `#N`. The nesting
+     reads from the sequence and the mark, not from a second indent. */
   nestedList: css`
     margin-block-end: 4px;
-    margin-inline-start: 42px;
+    margin-inline-start: 26px;
   `,
   empty: css`
     padding-block: 10px;
