@@ -269,16 +269,27 @@ const recoverEvidenceRun = async (
   for (const child of children) {
     if (child.id === operationId || child.parentOperationId !== operationId) continue;
     const probe = await probeEvidenceHook(child.id, run.userId);
-    if (probe.kind === 'no-hook') continue;
-    if (probe.kind === 'unknown') {
-      // Redis down: this child might be the collector, so the run is hands-off
-      // entirely — a claim here could steal the ending of a live collector.
+    if (probe.kind === 'hook') {
+      evidenceOp = child;
+      deliverable = probe.deliverable;
+      break;
+    }
+    // Either way the child cannot be *proven* harmless, so the run is hands-off
+    // entirely — a claim here could steal the ending of a live collector:
+    //   `unknown` — the state read failed (Redis down).
+    //   `no-state` on a live child — nothing is persisted for it, yet it is still
+    //   running. A step that outlives the state TTL refreshes its operation lease
+    //   (the heartbeat) but not the state blob, and its worker keeps the hook in
+    //   memory, so it may still report valid evidence.
+    if (
+      probe.kind === 'unknown' ||
+      (probe.kind === 'no-state' && LIVE_OPERATION_STATUSES.has(child.status))
+    ) {
       collectorUnknown = true;
       break;
     }
-    evidenceOp = child;
-    deliverable = probe.deliverable;
-    break;
+    // `no-hook` (a readable state without the evidence hook — an unrelated
+    // sub-agent) or `no-state` on a child that is already gone: not the collector.
   }
 
   // Real evidence exists and the collector is gone — a judge pass is the honest
@@ -330,20 +341,22 @@ const recoverEvidenceRun = async (
 };
 
 /**
- * Read the deliverable frozen into the evidence hook's webhook body, from the
- * persisted agent state (`host.hooks[].webhook.body.deliverable`). Returns
- * null when no state survives (Redis TTL elapsed) or no evidence hook exists.
- */
-/**
  * What the persisted agent state of a child operation says about the evidence
  * hook: `hook` — the child is the evidence continuation (`deliverable` is the
- * frozen output, null when the body lacks one), `no-hook` — the state loaded
- * and carries no evidence hook (an unrelated sub-agent, or TTL-elapsed state),
- * `unknown` — the state could not be read (Redis down); the child might still
- * be the collector.
+ * frozen output, null when the body lacks one); `no-hook` — the state loaded and
+ * carries no evidence hook, so the child is an unrelated sub-agent; `no-state` —
+ * nothing is persisted for the child at all (never written, or the Redis blob
+ * expired); `unknown` — the read itself failed (Redis down).
+ *
+ * `no-state` and `no-hook` are not the same answer: a readable state without the
+ * hook rules the child out entirely, while a *live* child with no state is
+ * ambiguous — its worker may still be holding the hook in memory.
  */
 type EvidenceHookProbe =
-  { deliverable: string | null; kind: 'hook' } | { kind: 'no-hook' } | { kind: 'unknown' };
+  | { deliverable: string | null; kind: 'hook' }
+  | { kind: 'no-hook' }
+  | { kind: 'no-state' }
+  | { kind: 'unknown' };
 
 const probeEvidenceHook = async (
   childOperationId: string,
@@ -352,6 +365,8 @@ const probeEvidenceHook = async (
   try {
     const stateManager = createAgentStateManager();
     const state = await stateManager.loadAgentState(childOperationId);
+    if (!state) return { kind: 'no-state' };
+
     const hooks = state?.host?.hooks ?? [];
 
     for (const hook of hooks) {
@@ -519,6 +534,10 @@ const enterJudging = async (
   // The backfill write follows the lease, not the skip guards — an overlapping
   // worker that reaches the insert before its claim attempt must not duplicate
   // the evidence rows against the winner's insert.
+  //
+  // `settled` records whether the judge pass got far enough to persist verdicts:
+  // only a failure *before* that point may hand the run back for another attempt.
+  let settled = false;
   try {
     if (backfill) {
       await recordHeterogeneousDeliverableEvidence({
@@ -576,6 +595,12 @@ const enterJudging = async (
       }),
     });
 
+    // The judge pass returned, so every verdict is persisted. Past this point a
+    // failure must not send the run back to the evidence scan: the next sweep
+    // would re-run terminal checks — overwriting verdicts, re-billing the model,
+    // and possibly spawning a second repair.
+    settled = true;
+
     // `execute` ends by rolling the round up **by operation**, and the finalizer
     // resolves the run the same way. Both return silently if the operation was
     // deleted mid-judge, so there is no error for the catch below to react to and
@@ -611,15 +636,19 @@ const enterJudging = async (
       return closeOutstandingAsErrored(db, run, null, now, 'abandoned', { leaseHeld: true });
     }
 
-    // Not the operation vanishing — a transient failure (acceptance lookup,
-    // deliverable resolution, model config, the judge call). The claim moved the
-    // run out of `collecting_evidence`, and the evidence scan is the only half
-    // that can retry the judge, so hand the run back to it. Otherwise the run
-    // would rest in `verifying`: that scan no longer selects it, and the
-    // `verifying` half would eventually close its checks `errored`, losing the
-    // recovered evidence for good. Re-thrown afterwards so the tick records the
-    // failure; the backfill it redoes is idempotent.
-    await statusService.restoreEvidenceCollection(run.id);
+    // Not the operation vanishing — a transient failure. Before the judge pass
+    // finished no verdict is persisted, so the run goes back to the evidence scan,
+    // the only half that can retry the judge: leaving it in `verifying` would drop
+    // it from that scan, and the `verifying` half would eventually close its checks
+    // `errored`, losing the recovered evidence for good. The backfill that retry
+    // redoes is idempotent (`recordHeterogeneousDeliverableEvidence` skips criteria
+    // that already have evidence).
+    //
+    // After the judge pass the verdicts stand, so the run is left settled and the
+    // failure surfaces to the tick: re-entering evidence collection would re-run
+    // terminal checks, and re-running the finalizer here could repeat its side
+    // effects (report write, repair spawn, task drive).
+    if (!settled) await statusService.restoreEvidenceCollection(run.id);
     throw error;
   }
 

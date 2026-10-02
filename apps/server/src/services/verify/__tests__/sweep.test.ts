@@ -528,6 +528,25 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(upsertByCheckItem).not.toHaveBeenCalled();
   });
 
+  it('skips a live child whose state has expired instead of claiming its run', async () => {
+    // A step that outlives the state TTL refreshes its operation lease (its
+    // heartbeat) but not the state blob, so the child reads as state-less while it
+    // is still running. Its worker keeps the hook in memory and may still report
+    // valid evidence, so the run must stay hands-off rather than be judged away.
+    singleEvidencePage([evidenceRun()]);
+    listOperationTree.mockResolvedValue([
+      { id: 'op-1', parentOperationId: null, status: 'done' },
+      { id: 'op-1-evidence', parentOperationId: 'op-1', status: 'running' },
+    ]);
+    loadAgentState.mockResolvedValue(null);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.skipped).toBe(1);
+    expect(claimVerifying).not.toHaveBeenCalled();
+    expect(upsertByCheckItem).not.toHaveBeenCalled();
+  });
+
   it('reads the evidence hook state from the evidence child operation', async () => {
     // `execAgent` persists the evidence hooks onto the continuation run's own
     // runtime state — the builder's state key holds none.
@@ -805,6 +824,22 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(recomputeByRunId).not.toHaveBeenCalled();
     expect(outcome.abandoned).toEqual([]);
     // Still reported, so the tick surfaces the failure.
+    expect(outcome.skipped).toBe(1);
+  });
+
+  it('keeps a settled run out of the evidence scan when the finalizer fails', async () => {
+    // The judge pass already persisted verdicts, so handing the run back would make
+    // the next sweep re-run terminal checks — overwriting verdicts, re-billing the
+    // model, and possibly spawning a second repair.
+    singleEvidencePage([evidenceRun()]);
+    finalizeVerifyRun.mockRejectedValueOnce(new Error('report write failed'));
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(executorExecute).toHaveBeenCalled();
+    expect(recomputeByRunId).toHaveBeenCalledWith('ev-run-1');
+    expect(restoreEvidenceCollection).not.toHaveBeenCalled();
+    // The failure still surfaces to the tick.
     expect(outcome.skipped).toBe(1);
   });
 
