@@ -369,6 +369,28 @@ export class GoalService {
         manager: { instruction: managerOptions?.instruction, maxTurns: managerOptions?.maxTurns },
       };
     }
+    // Supervision is a creation invariant, not a creation option: every Goal
+    // recovers its own dropped dispatches, so a caller may tune the incident cap
+    // but never opt out. This is the single choke point — the CLI, the `/goal`
+    // tool, tRPC and REST all land here — so no client can create an
+    // unsupervised Goal. A legacy `enabled: false` is rejected rather than
+    // silently rewritten: the caller asked for the opposite of what it would
+    // get, and hiding that would make the surprise surface later, mid-run.
+    const requestedSupervision = config?.supervision;
+    if (requestedSupervision?.enabled === false)
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Supervision is required for every goal and cannot be disabled',
+      });
+    config = {
+      ...config,
+      supervision: {
+        enabled: true,
+        ...(requestedSupervision?.maxIncidents === undefined
+          ? {}
+          : { maxIncidents: requestedSupervision.maxIncidents }),
+      },
+    };
     // A supplied requirement is the user-reviewed goal document. Criteria live
     // separately; only synthesize a document when the caller omitted one.
     const requirement =
