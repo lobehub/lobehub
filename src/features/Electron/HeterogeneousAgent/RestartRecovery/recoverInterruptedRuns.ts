@@ -335,7 +335,10 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     // row are somebody's history, not this run's leftovers.
     const branchRootId = ownRoot?.id ?? newestRoot?.id;
     const staleIds = branchRootId ? collectBranch(mainChain, branchRootId) : [];
-    if (staleIds.length > 0) await messageService.removeMessages(staleIds, context);
+    // Hard delete, not the recycle bin: these partial rows are superseded by
+    // the replay, and restoring them would bring back a stale branch.
+    if (staleIds.length > 0)
+      await messageService.removeMessages(staleIds, context, { permanent: true });
 
     // Seed the in-memory list ourselves: while the recovery op is running, the
     // topic's own fetch is gated off (a mid-run snapshot would clobber streamed
