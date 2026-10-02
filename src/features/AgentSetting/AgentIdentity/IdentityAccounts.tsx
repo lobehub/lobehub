@@ -1,12 +1,13 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Alert, Skeleton } from '@lobehub/ui/base-ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AccountCard from './AccountCard';
 import { IDENTITY_CHANNELS } from './const';
+import InlineError from './InlineError';
 import ProvisionCard from './ProvisionCard';
 import SectionHeader from './SectionHeader';
 import { useAgentAccounts } from './useAgentIdentity';
@@ -33,11 +34,10 @@ const IdentityAccounts = memo<IdentityAccountsProps>(({ agentId, disabled }) => 
     return (
       <Flexbox gap={10}>
         {header}
-        <Alert
-          showIcon
-          description={t('identity.loadFailed.desc')}
-          message={t('identity.loadFailed.title')}
-          type={'error'}
+        <InlineError
+          detail={error instanceof Error ? error.message : String(error)}
+          summary={t('identity.loadFailed')}
+          onRetry={() => void mutate()}
         />
       </Flexbox>
     );
