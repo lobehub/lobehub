@@ -9,6 +9,7 @@ import type {
 } from '@lobechat/types';
 import { type PartialDeep } from 'type-fest';
 
+import { updateUser } from '@/libs/better-auth/auth-client';
 import { lambdaClient } from '@/libs/trpc/client';
 import {
   type SaveUserQuestionInput,
@@ -116,7 +117,12 @@ export class UserService {
   };
 
   updateFullName = async (fullName: string) => {
-    return lambdaClient.user.updateFullName.mutate(fullName);
+    // Route the name change through Better Auth instead of a raw DB write:
+    // Better Auth invalidates its session cookie cache on user updates, while
+    // a direct write leaves the cached session stale (up to 2 minutes) and
+    // UserUpdater would then flip the displayed name back on session refetch.
+    const { error } = await updateUser({ name: fullName });
+    if (error) throw new Error(error.message || 'UPDATE_FULLNAME_FAILED');
   };
 
   updateUsername = async (username: string) => {

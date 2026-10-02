@@ -15,7 +15,6 @@ const mockLambdaClient = vi.hoisted(() => ({
     reviseOnboardingUnderstanding: { mutate: vi.fn() },
     startOnboardingUnderstanding: { mutate: vi.fn() },
     updateAvatar: { mutate: vi.fn() },
-    updateFullName: { mutate: vi.fn() },
     updatePreference: { mutate: vi.fn() },
     updateGuide: { mutate: vi.fn() },
     updateSettings: { mutate: vi.fn() },
@@ -23,9 +22,15 @@ const mockLambdaClient = vi.hoisted(() => ({
   },
 }));
 
+const mockAuthClient = vi.hoisted(() => ({
+  updateUser: vi.fn(),
+}));
+
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: mockLambdaClient,
 }));
+
+vi.mock('@/libs/better-auth/auth-client', () => mockAuthClient);
 
 describe('UserService', () => {
   testService(UserService);
@@ -143,12 +148,18 @@ describe('UserService', () => {
   });
 
   describe('updateFullName', () => {
-    it('should call lambdaClient.user.updateFullName.mutate with fullName string', async () => {
-      mockLambdaClient.user.updateFullName.mutate.mockResolvedValueOnce({ success: true });
+    it('should call Better Auth updateUser with the new name', async () => {
+      mockAuthClient.updateUser.mockResolvedValueOnce({ data: { status: true }, error: null });
 
       await userService.updateFullName('John Doe');
 
-      expect(mockLambdaClient.user.updateFullName.mutate).toHaveBeenCalledWith('John Doe');
+      expect(mockAuthClient.updateUser).toHaveBeenCalledWith({ name: 'John Doe' });
+    });
+
+    it('should throw when Better Auth updateUser fails', async () => {
+      mockAuthClient.updateUser.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
+
+      await expect(userService.updateFullName('John Doe')).rejects.toThrow('boom');
     });
   });
 
