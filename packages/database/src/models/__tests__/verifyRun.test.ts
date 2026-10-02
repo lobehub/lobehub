@@ -1,12 +1,11 @@
 // @vitest-environment node
 import { randomUUID } from 'node:crypto';
 
-import type { VerifyCheckResultStatus, VerifyVerdict } from '@lobechat/const/verify';
 import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { acceptances, agentOperations, users, verifyCheckResults, verifyRuns } from '../../schemas';
+import { acceptances, agentOperations, users, verifyRuns } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 import { VerifyRunModel } from '../verifyRun';
@@ -387,7 +386,7 @@ describe('VerifyRunModel.foldIntoRound', () => {
   });
 });
 
-describe('VerifyRunModel.findCurrentTalliesByAcceptances', () => {
+describe('VerifyRunModel.listByAcceptances', () => {
   const item = (id: string) => ({
     id,
     index: 0,
@@ -406,124 +405,40 @@ describe('VerifyRunModel.findCurrentTalliesByAcceptances', () => {
     return row.id;
   };
 
-  const addResult = async (
-    runId: string,
-    checkItemId: string,
-    {
-      status = 'passed',
-      verdict,
-    }: { status?: VerifyCheckResultStatus; verdict?: VerifyVerdict | null } = {},
-  ) =>
-    serverDB.insert(verifyCheckResults).values({
-      checkItemId,
-      status,
-      userId,
-      verdict: verdict === undefined ? 'passed' : verdict,
-      verifierType: 'llm',
-      verifyRunId: runId,
-    });
-
-  it('tallies the current round by verdict, falling back to status', async () => {
-    const acceptanceId = await buildAcceptance();
-    const run = await new VerifyRunModel(serverDB, userId).create({
-      acceptanceId,
-      plan: [item('c1'), item('c2'), item('c3'), item('c4')],
-      roundIndex: 1,
-      title: 'round 1',
-    });
-
-    await addResult(run.id, 'c1', { verdict: 'passed' });
-    await addResult(run.id, 'c2', { verdict: 'failed' });
-    // No verdict landed, so the check's own status decides — same precedence the
-    // acceptance's criteria list resolves a state by.
-    await addResult(run.id, 'c3', { status: 'passed', verdict: null });
-    await addResult(run.id, 'c4', { status: 'pending', verdict: null });
-
-    const tallies = await new VerifyRunModel(serverDB, userId).findCurrentTalliesByAcceptances([
-      acceptanceId,
-    ]);
-
-    expect(tallies.get(acceptanceId)).toEqual({ failed: 1, passed: 2, total: 4, unjudged: 1 });
-  });
-
-  it('counts the latest round only, never an earlier one', async () => {
-    const acceptanceId = await buildAcceptance();
+  it('returns the rounds of several acceptances in one read', async () => {
+    const first = await buildAcceptance();
+    const second = await buildAcceptance();
     const model = new VerifyRunModel(serverDB, userId);
-    const first = await model.create({
-      acceptanceId,
-      plan: [item('c1'), item('c2')],
-      roundIndex: 1,
-      title: 'round 1',
-    });
-    await addResult(first.id, 'c1', { verdict: 'failed' });
-    await addResult(first.id, 'c2', { verdict: 'failed' });
+    await model.create({ acceptanceId: first, plan: [item('c1')], roundIndex: 1, title: 'a1' });
+    await model.create({ acceptanceId: first, plan: [item('c1')], roundIndex: 2, title: 'a2' });
+    await model.create({ acceptanceId: second, plan: [item('c1')], roundIndex: 1, title: 'b1' });
 
-    const second = await model.create({
-      acceptanceId,
-      plan: [item('c1'), item('c2')],
-      roundIndex: 2,
-      title: 'round 2',
-    });
-    await addResult(second.id, 'c1', { verdict: 'passed' });
-    await addResult(second.id, 'c2', { verdict: 'passed' });
+    const runs = await model.listByAcceptances([first, second]);
 
-    const tallies = await model.findCurrentTalliesByAcceptances([acceptanceId]);
-
-    expect(tallies.get(acceptanceId)).toEqual({ failed: 0, passed: 2, total: 2, unjudged: 0 });
+    expect(runs.map((run) => `${run.acceptanceId}#${run.roundIndex}`).sort()).toEqual(
+      [`${first}#1`, `${first}#2`, `${second}#1`].sort(),
+    );
   });
 
-  it('leaves an acceptance with no round out of the map — absent is not zero', async () => {
-    const withRun = await buildAcceptance();
-    const withoutRun = await buildAcceptance();
-    const run = await new VerifyRunModel(serverDB, userId).create({
-      acceptanceId: withRun,
-      plan: [item('c1')],
-      roundIndex: 1,
-      title: 'round 1',
-    });
-    await addResult(run.id, 'c1', { verdict: 'passed' });
+  it('returns nothing for an empty id list', async () => {
+    const model = new VerifyRunModel(serverDB, userId);
 
-    const tallies = await new VerifyRunModel(serverDB, userId).findCurrentTalliesByAcceptances([
-      withRun,
-      withoutRun,
-    ]);
-
-    expect(tallies.has(withoutRun)).toBe(false);
-    expect(tallies.get(withRun)?.total).toBe(1);
+    expect(await model.listByAcceptances([])).toEqual([]);
   });
 
-  it('reports a round that ran but judged nothing as an all-zero tally', async () => {
-    const acceptanceId = await buildAcceptance();
-    await new VerifyRunModel(serverDB, userId).create({
-      acceptanceId,
-      plan: [item('c1')],
-      roundIndex: 1,
-      title: 'round 1',
-    });
-
-    const tallies = await new VerifyRunModel(serverDB, userId).findCurrentTalliesByAcceptances([
-      acceptanceId,
-    ]);
-
-    expect(tallies.get(acceptanceId)).toEqual({ failed: 0, passed: 0, total: 0, unjudged: 0 });
-  });
-
-  it('never reads another user’s acceptances', async () => {
+  it('never reads another user’s rounds', async () => {
     const mine = await buildAcceptance();
     const theirs = await buildAcceptance(otherUserId);
-    const theirRun = await new VerifyRunModel(serverDB, otherUserId).create({
+    const theirsRun = await new VerifyRunModel(serverDB, otherUserId).create({
       acceptanceId: theirs,
       plan: [item('c1')],
       roundIndex: 1,
       title: 'theirs',
     });
-    await addResult(theirRun.id, 'c1', { verdict: 'passed' });
 
-    const tallies = await new VerifyRunModel(serverDB, userId).findCurrentTalliesByAcceptances([
-      mine,
-      theirs,
-    ]);
+    const runs = await new VerifyRunModel(serverDB, userId).listByAcceptances([mine, theirs]);
 
-    expect(tallies.size).toBe(0);
+    expect(runs.some((run) => run.id === theirsRun.id)).toBe(false);
+    expect(runs.every((run) => run.acceptanceId === mine)).toBe(true);
   });
 });

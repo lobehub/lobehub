@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { isDraftVerifyRun, type VerifyVisibility } from '@lobechat/const/verify';
 import type {
   VerifyCheckItem,
-  VerifyCheckTally,
   VerifyRunDecisionDetail,
   VerifyRunGroupFeedbackEntry,
   VerifyRunSource,
@@ -290,68 +289,22 @@ export class VerifyRunModel {
   };
 
   /**
-   * The current round of each of several acceptances, with its checks counted.
-   * Feeds the Goal result page's acceptance hierarchy, where every level shows
-   * its standing at a glance — every dispatched task owns an acceptance, and
-   * the graph read behind that page polls every few seconds.
+   * Every round of several acceptances at once, in round order — the batched
+   * form of `listByAcceptance`.
    *
-   * Two batched statements, never one per acceptance. A round that judged
-   * nothing still returns a tally of zeroes; an acceptance with no round at all
-   * is simply ABSENT from the map, and a caller must not read "absent" as
-   * "nothing passed".
+   * Feeds a surface that summarises many acceptances on a poll: one statement
+   * regardless of how many it covers. A caller wanting each acceptance's
+   * standing counts it from the check union (`AcceptanceService`), so the
+   * summary and the list it expands to read the same rows.
    */
-  findCurrentTalliesByAcceptances = async (
-    acceptanceIds: string[],
-  ): Promise<Map<string, VerifyCheckTally>> => {
+  listByAcceptances = async (acceptanceIds: string[]): Promise<VerifyRunItem[]> => {
     const ids = [...new Set(acceptanceIds.filter(Boolean))];
-    if (ids.length === 0) return new Map();
+    if (ids.length === 0) return [];
 
-    // Which round is current: the chain's max index — the same rule the
-    // acceptance's own criteria list reads its latest round by.
-    const rounds = await this.db
-      .select({
-        acceptanceId: verifyRuns.acceptanceId,
-        id: verifyRuns.id,
-        roundIndex: verifyRuns.roundIndex,
-      })
-      .from(verifyRuns)
-      .where(and(inArray(verifyRuns.acceptanceId, ids), this.ownership()));
-
-    const currentByAcceptance = new Map<string, { id: string; roundIndex: number }>();
-    for (const round of rounds) {
-      if (!round.acceptanceId) continue;
-      const roundIndex = round.roundIndex ?? 0;
-      const seen = currentByAcceptance.get(round.acceptanceId);
-      if (!seen || roundIndex >= seen.roundIndex)
-        currentByAcceptance.set(round.acceptanceId, { id: round.id, roundIndex });
-    }
-    if (currentByAcceptance.size === 0) return new Map();
-
-    const runIds = [...currentByAcceptance.values()].map((round) => round.id);
-    // Verdict first, status as the fallback — the precedence the union view
-    // resolves a state by, so a round cannot tally one way here and read
-    // another way on the acceptance page.
-    const rows = await this.db
-      .select({
-        failed: sql<number>`count(*) filter (where ${verifyCheckResults.verdict} = 'failed' or (${verifyCheckResults.verdict} is null and ${verifyCheckResults.status} = 'failed'))`,
-        passed: sql<number>`count(*) filter (where ${verifyCheckResults.verdict} = 'passed' or (${verifyCheckResults.verdict} is null and ${verifyCheckResults.status} = 'passed'))`,
-        runId: verifyCheckResults.verifyRunId,
-        total: sql<number>`count(${verifyCheckResults.id})`,
-      })
-      .from(verifyCheckResults)
-      .where(inArray(verifyCheckResults.verifyRunId, runIds))
-      .groupBy(verifyCheckResults.verifyRunId);
-
-    const rowByRunId = new Map(rows.map((row) => [row.runId, row]));
-    const tallies = new Map<string, VerifyCheckTally>();
-    for (const [acceptanceId, round] of currentByAcceptance) {
-      const row = rowByRunId.get(round.id);
-      const total = Number(row?.total ?? 0);
-      const passed = Number(row?.passed ?? 0);
-      const failed = Number(row?.failed ?? 0);
-      tallies.set(acceptanceId, { failed, passed, total, unjudged: total - passed - failed });
-    }
-    return tallies;
+    return this.db.query.verifyRuns.findMany({
+      orderBy: [asc(verifyRuns.roundIndex)],
+      where: and(inArray(verifyRuns.acceptanceId, ids), this.ownership()),
+    });
   };
 
   /** Every round chained onto an acceptance aggregate, in round order. */

@@ -8,6 +8,7 @@ import {
   AcceptanceService,
   buildAcceptanceCheckUnion,
   buildCheckReviewOverlay,
+  tallyCheckUnion,
 } from '../acceptanceService';
 
 // Union/grouping checks never execute tasks; keep that external runtime out of this suite.
@@ -406,5 +407,43 @@ describe('buildAcceptanceCheckUnion', () => {
     ]);
 
     expect(rows[0].category).toBe('未读区');
+  });
+});
+
+describe('tallyCheckUnion', () => {
+  it('splits a union into passed / failed / unjudged', () => {
+    const union = buildAcceptanceCheckUnion([
+      {
+        results: [result('c1', 'passed'), result('c2', 'failed'), result('c3', 'uncertain')],
+        run: run('r1', 1, [planItem('c1'), planItem('c2'), planItem('c3'), planItem('c4')]),
+      },
+    ]);
+
+    // c4 was planned and never ran: it is still a row of the union, so it counts.
+    expect(tallyCheckUnion(union)).toEqual({ failed: 1, passed: 1, total: 4, unjudged: 2 });
+  });
+
+  it('counts a repaired acceptance by its union, not by the repair round alone', () => {
+    // Round 1 judged both checks; round 2 was asked to fix c2, re-ran only that
+    // one and carried c1 forward. Counting round 2's own result rows would put
+    // "1 passed" on a row that expands to c1 AND c2.
+    const union = buildAcceptanceCheckUnion([
+      {
+        results: [result('c1', 'passed'), result('c2', 'failed')],
+        run: run('r1', 1, [planItem('c1'), planItem('c2')]),
+      },
+      { results: [result('c2', 'passed')], run: run('r2', 2, [planItem('c1'), planItem('c2')]) },
+    ]);
+
+    expect(tallyCheckUnion(union)).toEqual({ failed: 0, passed: 2, total: 2, unjudged: 0 });
+  });
+
+  it('counts a check re-run across rounds once', () => {
+    const union = buildAcceptanceCheckUnion([
+      { results: [result('c1', 'failed')], run: run('r1', 1, [planItem('c1')]) },
+      { results: [result('c1', 'passed')], run: run('r2', 2, [planItem('c1')]) },
+    ]);
+
+    expect(tallyCheckUnion(union)).toEqual({ failed: 0, passed: 1, total: 1, unjudged: 0 });
   });
 });

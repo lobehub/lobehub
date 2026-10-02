@@ -207,11 +207,16 @@ LevelRow.displayName = 'AcceptanceLevelRow';
  * Loaded on demand on purpose: the hierarchy's counts come from the graph
  * snapshot, so opening one level costs one bundle instead of the page fetching
  * every task's checks up front.
+ *
+ * No live poll here. This is a detail view inside a summary, and "expand all"
+ * mounts one of these per task — the acceptance page's 5s poll would become one
+ * interval per opened row. The tallies stay current because they ride the graph
+ * poll, and the surface still revalidates on focus/reconnect.
  */
 const TaskChecks = memo<{ acceptanceId: string; onOpenCheck: (checkId: string) => void }>(
   ({ acceptanceId, onOpenCheck }) => {
     const { t } = useTranslation(['chat', 'verify']);
-    const { data, error, isLoading, mutate } = useAcceptanceBundle(acceptanceId);
+    const { data, error, isLoading, mutate } = useAcceptanceBundle(acceptanceId, { poll: false });
     const checks = data?.checks ?? [];
 
     if (isLoading && !data)
