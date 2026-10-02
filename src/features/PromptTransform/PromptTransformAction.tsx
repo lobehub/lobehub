@@ -15,10 +15,13 @@ interface PromptTransformActionProps {
   mode: 'image' | 'video' | 'text';
   onPromptChange: (prompt: string) => void;
   prompt?: string | null;
+  /** Override the system-agent model — e.g. the current conversation model. */
+  model?: string;
+  provider?: string;
 }
 
 const PromptTransformAction = memo<PromptTransformActionProps>(
-  ({ ActionComponent = Action, mode, onPromptChange, prompt }) => {
+  ({ ActionComponent = Action, mode, onPromptChange, prompt, model, provider }) => {
     const { t } = useTranslation('common');
 
     const {
@@ -30,8 +33,10 @@ const PromptTransformAction = memo<PromptTransformActionProps>(
       translatePrompt,
     } = usePromptTransform({
       mode,
+      model,
       onPromptChange,
       prompt,
+      provider,
     });
 
     const menuItems = useMemo(

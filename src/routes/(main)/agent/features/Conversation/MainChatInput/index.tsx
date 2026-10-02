@@ -5,7 +5,6 @@ import { memo, useMemo } from 'react';
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
-import { useModelSupportImageOutput } from '@/hooks/useModelSupportImageOutput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -15,8 +14,7 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import AgentConfigError from './AgentConfigError';
 import { useSendMenuItems } from './useSendMenuItems';
 
-const contextWindowRightActions: ActionKeys[] = ['model', 'voiceMessage', 'contextWindow'];
-const promptTransformRightActions: ActionKeys[] = [
+const rightActions: ActionKeys[] = [
   'model',
   'promptTransform',
   'voiceMessage',
@@ -36,13 +34,7 @@ const MainChatInput = memo(() => {
   const sendMenuItems = useSendMenuItems();
 
   const agentId = useConversationStore(contextSelectors.agentId);
-  const model = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
-  const provider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
   const isAgentConfigLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
-  const supportsImageOutput = useModelSupportImageOutput(model, provider);
-  const rightActions = supportsImageOutput
-    ? promptTransformRightActions
-    : contextWindowRightActions;
 
   // The model chip lives on the right, next to Send (see rightActions); the
   // left bar keeps the "+" menu, dictation and the expand toggle.

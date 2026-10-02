@@ -44,7 +44,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) =>
   });
 
 const bodyBackground = `
-html body { background: #f8f8f8; }
+html body { background: #F5F0FA; }
 html[data-theme='dark'] body { background-color: #000; }
 `;
 

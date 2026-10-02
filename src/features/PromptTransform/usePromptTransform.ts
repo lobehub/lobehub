@@ -11,26 +11,43 @@ interface UsePromptTransformParams {
   mode: 'image' | 'video' | 'text';
   onPromptChange: (prompt: string) => void;
   prompt?: string | null;
+  /**
+   * When supplied, the transform runs against this model/provider instead of
+   * the system-agent "prompt rewrite"/"translation" configuration — so chat
+   * composers can always reuse the conversation's current model.
+   */
+  model?: string;
+  provider?: string;
 }
 
 type PromptTransformAction = 'rewrite' | 'translate';
 
-export const usePromptTransform = ({ mode, prompt, onPromptChange }: UsePromptTransformParams) => {
+export const usePromptTransform = ({
+  mode,
+  prompt,
+  onPromptChange,
+  model,
+  provider,
+}: UsePromptTransformParams) => {
   const [isTransforming, setIsTransforming] = useState(false);
   const [transformAction, setTransformAction] = useState<PromptTransformAction>('rewrite');
 
   const rewriteConfig = useUserStore(systemAgentSelectors.promptRewrite);
   const translateConfig = useUserStore(systemAgentSelectors.translation);
-  const isRewriteActionEnabled = rewriteConfig?.enabled ?? false;
+  // An explicitly supplied model is always usable; otherwise the rewrite must
+  // be enabled in the system-agent settings.
+  const useOverrideModel = !!model;
+  const isRewriteActionEnabled = useOverrideModel || (rewriteConfig?.enabled ?? false);
 
   const getConfigByAction = useCallback(
     (action: PromptTransformAction) => {
+      if (useOverrideModel) return { model, provider };
       // Strip config-only fields (enabled, customPrompt); strict upstreams reject unknown OpenAI params.
       const config = action === 'rewrite' ? rewriteConfig : translateConfig;
       if (!config) return {};
       return { model: config.model, provider: config.provider };
     },
-    [rewriteConfig, translateConfig],
+    [useOverrideModel, model, provider, rewriteConfig, translateConfig],
   );
 
   const runTransform = useCallback(

@@ -41,7 +41,7 @@ const AuthErrorBoundary = () => {
     <div
       style={{
         alignItems: 'center',
-        background: isDark ? '#000' : '#f8f8f8',
+        background: isDark ? '#000' : '#F5F0FA',
         color: isDark ? '#e6e6e6' : '#1a1a1a',
         display: 'flex',
         flexDirection: 'column',

@@ -17,7 +17,7 @@ import { HOME_INPUT_BODY_HEIGHT } from './constants';
 import ModeSelect from './ModeSelect';
 
 const leftActions: ActionKeys[] = ['plus'];
-const rightActions: ActionKeys[] = ['model'];
+const rightActions: ActionKeys[] = ['model', 'promptTransform'];
 
 const CONTAINER_RADIUS = 20;
 /** Clearance from the container edge to the round controls sitting in its corners. */

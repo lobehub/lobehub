@@ -40,6 +40,10 @@ const AuthThemeLite = memo<AuthThemeLiteProps>(({ children, globalCDN }) => {
         style={{ height: '100%' }}
         theme={{
           cssVar: { key: 'lobe-vars' },
+          token: {
+            colorBgLayout: isDark ? undefined : '#F5F0FA',
+            colorBgContainer: isDark ? undefined : '#FAF6FD',
+          },
         }}
       >
         <App style={{ height: '100%' }}>

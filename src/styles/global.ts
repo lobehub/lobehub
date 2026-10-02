@@ -29,6 +29,8 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
        body horizontally — focusing it scrolls the whole page sideways. */
     will-change: opacity;
     isolation: isolate;
+
+    background-color: ${token.colorBgLayout};
   }
 
   * {
