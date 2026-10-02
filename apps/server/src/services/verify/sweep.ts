@@ -504,7 +504,18 @@ const closeOutstandingAsErrored = async (
   await statusService.recomputeByRunId(run.id);
   // With the operation gone there is nothing left to drive; the finalizer
   // resolves by operation and would no-op anyway.
-  if (operationId) await finalizeVerifyRun(db, run.userId, operationId, {}, workspaceId);
+  if (operationId) {
+    try {
+      await finalizeVerifyRun(db, run.userId, operationId, {}, workspaceId);
+    } catch (error) {
+      // The run is terminal from here on, so no scan would look at it again and the
+      // finalizer — which may still owe the bound task a drive, or a repair — would
+      // never be retried. Park the run where the evidence half re-enters and drives
+      // the finalizer again.
+      await statusService.reopenForFinalizeRetry(run.id);
+      throw error;
+    }
+  }
 
   log('recovered run %s (op %s) as %s', run.id, operationId, action);
   return action;
@@ -570,6 +581,10 @@ const enterJudging = async (
   let report:
     | { deliverable: string; goal: string; modelConfig: { model: string; provider: string } }
     | undefined;
+  // Set just before the judge pass: the point past which *this* attempt may have
+  // written verdicts. A predicate read afterwards cannot tell those apart from
+  // verdicts that were already on the run before we claimed it.
+  let judgeStarted = false;
 
   // The backfill write follows the lease, not the skip guards — an overlapping
   // worker that reaches the insert before its claim attempt must not duplicate
@@ -635,6 +650,7 @@ const enterJudging = async (
       });
 
     if (!alreadyJudged) {
+      judgeStarted = true;
       const executor = new VerifyExecutorService(db, userId, workspaceId);
       await executor.execute({
         deliverable: resolvedDeliverable,
@@ -657,33 +673,25 @@ const enterJudging = async (
   } catch (error) {
     const opGone = !(await new AgentOperationModel(db, userId, workspaceId).findById(operationId));
 
-    // Whether this attempt persisted verdict-level work decides how the run may
-    // recover. The executor only *creates* the rows a check is missing — it
-    // re-judges whatever already has one — so once a check reached a terminal
-    // status, or a verifier was dispatched for it, re-entering evidence collection
-    // would overwrite verdicts, bill the model a second time, and can spawn a
-    // duplicate verifier.
-    const judgePersisted = (
-      await new VerifyCheckResultModel(db, run.userId, run.workspaceId ?? undefined).listByRun(
-        run.id,
-      )
-    ).some((result) => !PENDING_RESULT_STATUSES.has(result.status) || result.verifierOperationId);
-
-    if (!opGone && !judgePersisted) {
-      // Nothing was persisted, so the run can be handed back for a clean retry.
-      // The evidence scan is the only half that can retry the judge: leaving the
-      // run in `verifying` would drop it from that scan, and the `verifying` half
-      // would eventually close its checks `errored`, losing the recovered evidence
-      // for good. The backfill this retry redoes is atomic, so it cannot leave the
-      // run half-evidenced.
+    if (!opGone && !judgeStarted) {
+      // The judge never ran, so this attempt persisted nothing of its own — even a
+      // verdict that was already on the run before we claimed it belongs to an
+      // earlier attempt. Hand the run back for a clean retry: the evidence scan is
+      // the only half that can retry the judge, and leaving the run in `verifying`
+      // would drop it from that scan while the `verifying` half eventually closed
+      // its checks `errored`. The backfill this retry redoes is atomic, so it cannot
+      // leave the run half-evidenced.
       await statusService.restoreEvidenceCollection(run.id);
       throw error;
     }
 
     // Either the operation is gone — its FK clears the run's link, so nothing
-    // operation-addressed can settle the run any more — or verdicts already stand.
-    // Close what never landed, preserving what did, and settle by run id under the
-    // lease we hold.
+    // operation-addressed can settle the run any more — or the judge had started, so
+    // it may already have written verdicts. The executor only *creates* the rows a
+    // check is missing and re-judges whatever already has one, so re-entering
+    // evidence collection would overwrite verdicts, bill the model a second time,
+    // and can spawn a duplicate verifier. Close what never landed, preserving what
+    // did, and settle by run id under the lease we hold.
     return closeOutstandingAsErrored(db, run, opGone ? null : operationId, now, 'abandoned', {
       leaseHeld: true,
     });

@@ -879,20 +879,53 @@ describe('sweepStuckVerifyRuns — collecting_evidence', () => {
     expect(outcome.skipped).toBe(1);
   });
 
-  it('does not hand a run back once the judge pass persisted a verdict', async () => {
-    // The executor only *creates* the rows a check is missing — it re-judges
-    // whatever already has one — so re-entering evidence collection would overwrite
-    // verdicts, bill the model a second time, and can spawn a duplicate verifier.
+  it('parks a run when the finalizer fails on the errored-close path too', async () => {
+    // The run is terminal by then, so the close path owes the same retry: no scan
+    // looks at a terminal run, and the task drive or the repair it still owes would
+    // be lost.
+    singleEvidencePage([evidenceRun()]);
+    loadAgentState.mockResolvedValue(null);
+    finalizeVerifyRun.mockRejectedValueOnce(new Error('ancestor recompute failed'));
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(upsertByCheckItem).toHaveBeenCalledWith(
+      expect.objectContaining({ checkItemId: 'c1', status: 'errored' }),
+    );
+    expect(reopenForFinalizeRetry).toHaveBeenCalledWith('ev-run-1');
+    expect(outcome.skipped).toBe(1);
+  });
+
+  it('does not hand a run back once the judge pass has started', async () => {
+    // Once the executor has run it may already hold verdicts of its own, so
+    // re-entering evidence collection would re-judge terminal checks — overwriting
+    // verdicts, re-billing the model, and possibly spawning a duplicate verifier.
+    singleEvidencePage([evidenceRun()]);
+    executorExecute.mockRejectedValueOnce(new Error('judge blew up mid-pass'));
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(restoreEvidenceCollection).not.toHaveBeenCalled();
+    // The run is settled by closing what never landed.
+    expect(upsertByCheckItem).toHaveBeenCalledWith(
+      expect.objectContaining({ checkItemId: 'c1', status: 'errored' }),
+    );
+    expect(outcome.abandoned).toEqual(['ev-run-1']);
+  });
+
+  it('retries a pre-judge failure even when the run already held a verdict', async () => {
+    // A verdict that was on the run before this attempt was written by an earlier
+    // one. The judge here never ran, so nothing of ours is at risk and the run goes
+    // back for the retry instead of being settled on a transient failure.
     singleEvidencePage([evidenceRun()]);
     resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'passed', verdict: 'passed' }]);
     resolveVerificationDeliverable.mockRejectedValueOnce(new Error('resolution blew up'));
 
     const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
 
-    expect(restoreEvidenceCollection).not.toHaveBeenCalled();
-    // The verdict that landed is preserved — nothing is re-closed over it.
+    expect(restoreEvidenceCollection).toHaveBeenCalledWith('ev-run-1');
     expect(upsertByCheckItem).not.toHaveBeenCalled();
-    expect(outcome.abandoned).toEqual(['ev-run-1']);
+    expect(outcome.skipped).toBe(1);
   });
 
   it('finalizes an already-judged recovery with the report context instead of re-judging', async () => {
