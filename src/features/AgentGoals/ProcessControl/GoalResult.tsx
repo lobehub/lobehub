@@ -110,8 +110,8 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
               outcomes={data.outcomes}
               onRetry={data.retry}
             >
-              {/* Every acceptance the Goal owns, under the criteria it was judged
-                  against: the standard first, then which task held up to its own. */}
+              {/* The goal's own acceptance IS the criteria list above; every task's
+                  acceptance follows it as the second group of the same section. */}
               <GoalAcceptanceHierarchy
                 canReview={data.canReview}
                 goalId={graph.goal.id}
