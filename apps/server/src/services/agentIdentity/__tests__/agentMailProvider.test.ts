@@ -242,7 +242,7 @@ describe('agent-mail provider — inbound', () => {
 
 describe('agent-mail provider — outbound', () => {
   it('sends through the inbox and returns the provider message id', async () => {
-    const { fetchImpl } = createMailFetch();
+    const { calls, fetchImpl } = createMailFetch();
     const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
 
     const result = await provider.send(ref(), {
@@ -252,5 +252,32 @@ describe('agent-mail provider — outbound', () => {
     });
 
     expect(result).toEqual({ providerMessageId: 'msg_out_1' });
+    const send = calls.find((c) => c.method === 'POST' && c.path === '/v1/inboxes/inb_1/messages');
+    expect(send?.body).toMatchObject({
+      html: '<p>hi back</p>',
+      subject: 'Re: Hello',
+      text: 'hi back',
+      to: 'human@example.com',
+    });
+  });
+
+  it('renders the agent Markdown into an HTML part plus a plain-text alternative', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+
+    await provider.send(ref(), {
+      subject: 'Brief',
+      text: '**Done.** See [the docs](https://lobehub.com/docs)\n\n1. one\n2. two',
+      to: 'human@example.com',
+    });
+
+    const send = calls.find((c) => c.method === 'POST' && c.path === '/v1/inboxes/inb_1/messages');
+    const body = send?.body as undefined | { html?: string; text?: string };
+    expect(body?.html).toContain('<strong>Done.</strong>');
+    expect(body?.html).toContain('<a href="https://lobehub.com/docs"');
+    expect(body?.html).toContain('<ol><li>one</li><li>two</li></ol>');
+    expect(body?.html).not.toContain('**');
+    expect(body?.text).toBe('Done. See the docs (https://lobehub.com/docs)\n\n- one\n- two');
+    expect(body?.text).not.toContain('**');
   });
 });
