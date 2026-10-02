@@ -89,7 +89,13 @@ import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { readOriginalCharCount } from '../utils/parsedDocument';
 import { sanitizeAgentApiConfig } from '../utils/sanitizeAgentApiConfig';
 import { notShareVisitorTopic } from '../utils/shareVisitor';
-import { notTrashed } from '../utils/softDelete';
+import {
+  isTrashed,
+  notTrashed,
+  restoreStamp,
+  type SoftDeleteOptions,
+  trashStamp,
+} from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import {
@@ -324,6 +330,21 @@ export class AgentModel {
   private ownership = () =>
     buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        isDeleted: agents.isDeleted,
+        userId: agents.userId,
+        workspaceId: agents.workspaceId,
+        visibility: agents.visibility,
+      },
+    );
+
+  /**
+   * {@link ownership} without the recycle-bin filter — restore / purge / the
+   * trash pre-flight lock only.
+   */
+  private trashScope = () =>
+    buildWorkspaceWhere(
+      { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
       {
         isDeleted: agents.isDeleted,
         userId: agents.userId,
@@ -1044,6 +1065,145 @@ export class AgentModel {
       // 4. Delete the agent itself
       return trx.delete(agents).where(and(eq(agents.id, agentId), this.ownership()));
     });
+  };
+
+  // **************** Recycle bin *************** //
+
+  /**
+   * Same pre-flight as {@link delete}: an agent whose history is mid-copy or
+   * mid-transfer must not disappear from under the job. Runs the guards under
+   * the same row lock so the check cannot race an enqueue. Throws
+   * `AGENT_TRANSFER_IN_PROGRESS` / `AGENT_COPY_IN_PROGRESS`.
+   */
+  assertDeletable = async (agentIds: string[], trx?: Transaction) => {
+    if (agentIds.length === 0) return;
+    const run = async (tx: Transaction | LobeChatDatabase) => {
+      await tx
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(inArray(agents.id, agentIds), this.trashScope()))
+        .for('update');
+      if (await AgentTransferJobModel.hasPendingJobForAgents(tx, agentIds)) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+      if (await AgentTransferJobModel.hasPendingRemapForSourceAgents(tx, agentIds)) {
+        throw new Error(AGENT_TRANSFER_IN_PROGRESS);
+      }
+      if (await AgentCopyJobModel.hasPendingCopyJobForSourceAgents(tx, agentIds)) {
+        throw new Error(AGENT_COPY_IN_PROGRESS);
+      }
+    };
+    return trx ? run(trx) : run(this.db);
+  };
+
+  /** Legacy session shells linked to the given agents (used to stamp `topics.session_id` rows). */
+  findSessionIdsByAgentIds = async (agentIds: string[]): Promise<string[]> => {
+    if (agentIds.length === 0) return [];
+    const links = await this.db
+      .select({ sessionId: agentsToSessions.sessionId })
+      .from(agentsToSessions)
+      .where(and(inArray(agentsToSessions.agentId, agentIds), this.agentsToSessionsOwnership()));
+    return [...new Set(links.map((link) => link.sessionId))];
+  };
+
+  /** Agents linked to the given legacy session shells — the reverse of {@link findSessionIdsByAgentIds}. */
+  findAgentIdsBySessionIds = async (sessionIds: string[]): Promise<string[]> => {
+    if (sessionIds.length === 0) return [];
+    const links = await this.db
+      .select({ agentId: agentsToSessions.agentId })
+      .from(agentsToSessions)
+      .where(
+        and(inArray(agentsToSessions.sessionId, sessionIds), this.agentsToSessionsOwnership()),
+      );
+    return [...new Set(links.map((link) => link.agentId))];
+  };
+
+  /**
+   * Whether the agent that owns a row is sitting in the bin — reached either
+   * directly (`agent_id`) or, for legacy rows that only carry `session_id`,
+   * through the session shell's agent link. Restoring such a row first would
+   * bring it back under an invisible container.
+   */
+  hasTrashedOwner = async (owner: {
+    agentId?: string | null;
+    sessionId?: string | null;
+  }): Promise<boolean> => {
+    const agentIds = [
+      ...(owner.agentId ? [owner.agentId] : []),
+      ...(owner.sessionId ? await this.findAgentIdsBySessionIds([owner.sessionId]) : []),
+    ];
+    return (await this.findTrashedByIds([...new Set(agentIds)])).length > 0;
+  };
+
+  /**
+   * Move agents to the recycle bin. Only the `agents` rows are stamped here —
+   * the server-side trash handler cascades to sessions / topics through their
+   * own models so the registry can record each child.
+   */
+  softDelete = async (agentIds: string[], options: SoftDeleteOptions): Promise<AgentItem[]> => {
+    if (agentIds.length === 0) return [];
+    return this.db
+      .update(agents)
+      .set(trashStamp(options.deletedAt))
+      .where(
+        and(
+          inArray(agents.id, agentIds),
+          this.ownership(),
+          options.restrictToCreator ? eq(agents.userId, this.userId) : undefined,
+        ),
+      )
+      .returning();
+  };
+
+  restore = async (agentIds: string[]): Promise<AgentItem[]> => {
+    if (agentIds.length === 0) return [];
+    return this.db
+      .update(agents)
+      .set(restoreStamp())
+      .where(and(inArray(agents.id, agentIds), this.trashScope(), isTrashed(agents.isDeleted)))
+      .returning();
+  };
+
+  findTrashedByIds = async (agentIds: string[]): Promise<AgentItem[]> => {
+    if (agentIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(agents)
+      .where(and(inArray(agents.id, agentIds), this.trashScope(), isTrashed(agents.isDeleted)));
+  };
+
+  /**
+   * Lock the given agents for a purge and return the ones still in the bin.
+   * Run inside the caller's transaction: the row lock holds until the purge
+   * commits, so a restore racing it waits and then finds nothing to restore,
+   * while a restore that already committed makes this return no ids.
+   */
+  lockTrashedForPurge = async (agentIds: string[]): Promise<string[]> => {
+    if (agentIds.length === 0) return [];
+    const stamped = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(inArray(agents.id, agentIds), this.trashScope(), isTrashed(agents.isDeleted)))
+      .for('update');
+    return stamped.map((row) => row.id);
+  };
+
+  /**
+   * Hard delete for the purge sweep: the agent rows and their session links,
+   * still-stamped rows only. FK cascades take topics / messages / threads.
+   * The legacy session shells are another aggregate — the trash handler
+   * drops them through `SessionModel` in the same transaction.
+   */
+  purge = async (agentIds: string[]): Promise<string[]> => {
+    if (agentIds.length === 0) return [];
+    await this.db
+      .delete(agentsToSessions)
+      .where(and(inArray(agentsToSessions.agentId, agentIds), this.agentsToSessionsOwnership()));
+    const rows = await this.db
+      .delete(agents)
+      .where(and(inArray(agents.id, agentIds), this.trashScope(), isTrashed(agents.isDeleted)))
+      .returning({ id: agents.id });
+    return rows.map((row) => row.id);
   };
 
   /**

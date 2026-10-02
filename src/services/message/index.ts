@@ -439,11 +439,20 @@ export class MessageService {
     return lambdaClient.message.removeMessage.mutate({ ...ctx, id });
   };
 
+  /**
+   * Moves the messages to the recycle bin. `permanent` hard-deletes instead —
+   * only for internal cleanup whose rows must never be restorable.
+   */
   removeMessages = async (
     ids: string[],
     ctx?: MessageQueryContext,
+    options?: { permanent?: boolean },
   ): Promise<UpdateMessageResult> => {
-    return lambdaClient.message.removeMessages.mutate({ ...ctx, ids });
+    return lambdaClient.message.removeMessages.mutate({
+      ...ctx,
+      ids,
+      ...(options?.permanent ? { permanent: true } : {}),
+    });
   };
 
   removeMessagesByAssistant = async (sessionId: string, topicId?: string) => {

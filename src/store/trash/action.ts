@@ -26,6 +26,8 @@ const RESTORE_AFFECTED_KEY_PREFIXES = [
   'home:',
   'image:',
   'knowledgeBase:',
+  // conversation transcripts — a restored message must reappear in its thread
+  'message:',
   'page',
   'project',
   'recent:',

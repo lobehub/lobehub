@@ -1,4 +1,5 @@
 import { serverDBEnv } from '@/config/db';
+import { AgentModel } from '@/database/models/agent';
 import { FileModel } from '@/database/models/file';
 import { TopicModel } from '@/database/models/topic';
 import type { TrashRegisterEntry } from '@/database/models/trash';
@@ -56,11 +57,17 @@ export const topicHandler: TrashHandler = {
     const [topic] = await topicModel.findTrashedByIds([root.resourceId]);
     if (!topic) throw new TrashRestoreError('notFound');
 
-    // No parent-in-bin check yet: a topic's containers (agent, chat group) are
-    // not trashable in this phase, so they can never be sitting in the bin.
-    // The check goes in with the agent handler — see `TrashRestoreError`'s
-    // `parentTrashed` code, which the client already renders.
-    await topicModel.restore([root.resourceId]);
+    // A topic that hangs off an agent sitting in the bin — directly, or only
+    // through a legacy session shell — would come back into an invisible
+    // container: restore the agent first.
+    const agentModel = new AgentModel(ctx.db, ctx.userId, ctx.workspaceId);
+    if (await agentModel.hasTrashedOwner(topic)) throw new TrashRestoreError('parentTrashed');
+
+    // The row can be purged between the read above and this write (an expiry
+    // sweep or another request). Only a row this update actually brought back
+    // counts; otherwise the registry entry must not be dropped as "restored".
+    const restored = await topicModel.restore([root.resourceId]);
+    if (restored.length === 0) throw new TrashRestoreError('notFound');
   },
   type: 'topic',
 };

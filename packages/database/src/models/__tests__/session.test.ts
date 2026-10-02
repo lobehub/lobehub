@@ -663,6 +663,47 @@ describe('SessionModel', () => {
     });
   });
 
+  describe('isSoleShellOfAgent', () => {
+    beforeEach(async () => {
+      await serverDB.insert(sessions).values([
+        { id: 's1', userId },
+        { id: 's2', userId },
+      ]);
+      await serverDB.insert(agents).values([
+        { id: 'a1', userId },
+        { id: 'a2', userId },
+      ]);
+    });
+
+    it("is true for the agent's one and only shell", async () => {
+      await serverDB.insert(agentsToSessions).values([{ agentId: 'a1', sessionId: 's1', userId }]);
+
+      expect(await sessionModel.isSoleShellOfAgent('s1', 'a1')).toBe(true);
+    });
+
+    it('is false when the agent is linked to another session too', async () => {
+      await serverDB.insert(agentsToSessions).values([
+        { agentId: 'a1', sessionId: 's1', userId },
+        { agentId: 'a1', sessionId: 's2', userId },
+      ]);
+
+      expect(await sessionModel.isSoleShellOfAgent('s1', 'a1')).toBe(false);
+    });
+
+    it('is false when the session also holds another agent', async () => {
+      await serverDB.insert(agentsToSessions).values([
+        { agentId: 'a1', sessionId: 's1', userId },
+        { agentId: 'a2', sessionId: 's1', userId },
+      ]);
+
+      expect(await sessionModel.isSoleShellOfAgent('s1', 'a1')).toBe(false);
+    });
+
+    it('is false when the session is not linked to the agent at all', async () => {
+      expect(await sessionModel.isSoleShellOfAgent('s1', 'a1')).toBe(false);
+    });
+  });
+
   describe('delete', () => {
     it('should handle deleting a session with no associated messages or topics', async () => {
       // Create test data

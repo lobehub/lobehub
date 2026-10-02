@@ -16,6 +16,7 @@ import { MessageModel } from '@/database/models/message';
 import { UserModel } from '@/database/models/user';
 
 import { FileService } from '../file';
+import { TrashService } from '../trash';
 import { resolveMessageFileUrls } from './resolveMessageFileUrls';
 
 /** Apply the same error contract to single and batched message writes. */
@@ -110,12 +111,14 @@ export class MessageService {
   private compressionRepository: CompressionRepository;
   private userModel: UserModel;
   private toolProjectionEnabled?: Promise<boolean>;
+  private trashService: TrashService;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
     this.compressionRepository = new CompressionRepository(db, userId, workspaceId);
     this.userModel = new UserModel(db, userId);
+    this.trashService = new TrashService(db, userId, workspaceId);
   }
 
   /**
@@ -399,20 +402,26 @@ export class MessageService {
   }
 
   /**
-   * Remove messages with optional message list return
-   * Pattern: delete + conditional query
+   * Remove messages with optional message list return.
+   * Recycle bin: the rows are stamped (children re-parented, usage recomputed)
+   * and registered so they can be restored; the hard delete runs at purge.
+   * `permanent` skips the bin for internal cleanup whose rows must never come
+   * back (e.g. the partial rows a restart recovery replaces with the
+   * authoritative transcript — restoring them would revive a stale branch).
+   * Pattern: trash + conditional query
    */
-  async removeMessages(ids: string[], options?: QueryOptions) {
-    await this.messageModel.deleteMessages(ids);
+  async removeMessages(ids: string[], options?: QueryOptions, removal?: { permanent?: boolean }) {
+    if (removal?.permanent) await this.messageModel.deleteMessages(ids);
+    else await this.trashService.trashMessages(ids);
     return this.queryWithSuccess(options);
   }
 
   /**
    * Remove single message with optional message list return
-   * Pattern: delete + conditional query
+   * Pattern: trash + conditional query
    */
   async removeMessage(id: string, options?: QueryOptions) {
-    await this.messageModel.deleteMessage(id);
+    await this.trashService.trashMessages([id]);
     return this.queryWithSuccess(options);
   }
 
