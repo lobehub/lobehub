@@ -1,10 +1,29 @@
 import { BRANDING_LOGO_URL } from '@lobechat/business-const';
+import { type MetadataRoute } from 'next';
 import qs from 'query-string';
 
 import { getCanonicalUrl } from '@/server/utils/url';
 
 const MAX_AGE = 31_536_000;
 const COLOR = '#000000';
+
+/**
+ * The generated manifest extends Next.js's `MetadataRoute.Manifest` with
+ * LobeHub-specific fields (side panel, tab strip, cache hints) that the
+ * desktop and mobile clients read. All extras are emitted by `generate()`;
+ * they are optional here so `MetadataRoute.Manifest` stays assignable to it.
+ */
+export type ExtendedManifest = Omit<MetadataRoute.Manifest, 'display_override' | 'orientation'> & {
+  cache_busting_mode?: string;
+  display_override?: string[];
+  edge_side_panel?: { preferred_width: number };
+  handle_links?: string;
+  immutable?: string;
+  max_age?: number;
+  orientation?: string;
+  splash_pages?: null;
+  tab_strip?: { new_tab_button: { url: string } };
+};
 
 interface IconItem {
   purpose: 'any' | 'maskable';
@@ -35,7 +54,7 @@ export class Manifest {
     id: string;
     name: string;
     screenshots: ScreenshotItem[];
-  }) {
+  }): ExtendedManifest {
     return {
       background_color: color,
       cache_busting_mode: 'all',

@@ -42,8 +42,9 @@ export const htmlToMarkdown = (
 
     let parsedContent: ReturnType<Readability<string>['parse']> = null;
     try {
-      // @ts-expect-error reason: Readability expects a Document type
-      parsedContent = new Readability(document).parse();
+      // happy-dom's document is structurally close to but not identical to the
+      // DOM `Document` type that @mozilla/readability declares.
+      parsedContent = new Readability(document as unknown as Document).parse();
     } catch {
       // happy-dom may throw on pages with invalid CSS selectors — fall back to raw HTML
     }

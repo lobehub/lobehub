@@ -14,7 +14,10 @@ const BackButton = memo<ActionIconProps & { to?: string }>(({ to = '/', onClick,
   const resolvedTo = buildWorkspaceAwarePath(to, activeSlug);
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    onClick?.(event as never);
+    // ActionIconProps declares onClick for the icon's div, but BackButton hosts
+    // the handler on the wrapping <a>; forward the real event under the
+    // declared element type.
+    onClick?.(event as unknown as MouseEvent<HTMLDivElement>);
     if (event.defaultPrevented) return;
     // Let the browser handle modifier/middle clicks (open-in-new) — matches the
     // previous <Link> behavior; a plain click stays in-app via the facade.
