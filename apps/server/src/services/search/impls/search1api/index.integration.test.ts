@@ -34,7 +34,7 @@ describeIfKey('Search1APIImpl integration', { timeout: 30_000 }, () => {
     expect(Array.isArray(result.results)).toBe(true);
   });
 
-  it('should keep using auto mode when searchEngines are provided', async () => {
+  it('should handle legacy multiple searchEngines', async () => {
     const result = await impl.query('TypeScript', {
       searchEngines: ['google', 'bing'],
     });
@@ -57,7 +57,7 @@ describeIfKey('Search1APIImpl integration', { timeout: 30_000 }, () => {
     }
   });
 
-  it('should handle legacy single search engine param with auto mode', async () => {
+  it('should handle a legacy single search engine param', async () => {
     const result = await impl.query('OpenAI', {
       searchEngines: ['google'],
     });
