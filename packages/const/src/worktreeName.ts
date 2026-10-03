@@ -137,20 +137,54 @@ export const formatWorktreeTimestamp = (date: Date = new Date()): string =>
 const pick = <T>(pool: readonly T[], random: () => number): T =>
   pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
 
+/**
+ * Whether a ref already occupies the candidate's path. Git stores refs as paths,
+ * so `refs/heads/wt` and `refs/heads/wt/x` cannot coexist — creating the second
+ * fails with `cannot lock ref … 'refs/heads/wt' exists`. Matching names exactly
+ * cannot see that, and the reverse (the candidate becoming an ancestor of an
+ * existing ref) is refused the same way, so every path segment is checked.
+ */
+const refPathConflict = (candidate: string, taken: ReadonlySet<string>): boolean => {
+  if (taken.has(candidate)) return true;
+
+  for (let end = candidate.indexOf('/'); end !== -1; end = candidate.indexOf('/', end + 1)) {
+    if (taken.has(candidate.slice(0, end))) return true;
+  }
+
+  for (const ref of taken) {
+    if (ref.startsWith(`${candidate}/`)) return true;
+  }
+
+  return false;
+};
+
 export interface GenerateWorktreeBranchNameOptions {
   /**
-   * Branch names the caller already has in view. The draw retries a bounded
-   * number of times against them, and a repeat beats no name (mirrors
-   * `randomAgentName`).
+   * Refs the caller already has in view. Branch names count, including one that
+   * names a path SEGMENT rather than a leaf (a branch literally called `wt`
+   * blocks the whole `wt/` namespace). The draw retries a bounded number of
+   * times against them, and a repeat beats no name (mirrors `randomAgentName`).
    */
   exclude?: Iterable<string>;
   now?: Date;
   random?: () => number;
 }
 
+const drawWith = (shape: () => string, taken: ReadonlySet<string>): string => {
+  let candidate = shape();
+  for (let i = 0; i < 20 && refPathConflict(candidate, taken); i++) candidate = shape();
+  return candidate;
+};
+
 /**
  * Draw a branch name for a new worktree, with the timestamp taken from `now`
  * and the word pair from `random`. Both are injectable so callers stay testable.
+ *
+ * Names are namespaced (`wt/<timestamp>-…`) so app-created worktrees group
+ * together in the branch list. Every namespaced draw shares the `wt` segment, so
+ * a ref living there can never be drawn around — that namespace is unusable, and
+ * the flat `wt-<timestamp>-…` form takes over rather than handing the user a
+ * name git is guaranteed to refuse.
  */
 export const generateWorktreeBranchName = ({
   exclude,
@@ -161,14 +195,12 @@ export const generateWorktreeBranchName = ({
     [...(exclude ?? [])].map((name) => name.trim().toLowerCase()).filter(Boolean),
   );
   const timestamp = formatWorktreeTimestamp(now);
-  const draw = () =>
-    `${WORKTREE_BRANCH_PREFIX}/${timestamp}-${pick(WORKTREE_ADJECTIVES, random)}-${pick(
-      WORKTREE_NOUNS,
-      random,
-    )}`;
+  const tail = () =>
+    `${timestamp}-${pick(WORKTREE_ADJECTIVES, random)}-${pick(WORKTREE_NOUNS, random)}`;
 
-  let candidate = draw();
-  for (let i = 0; i < 20 && taken.has(candidate.toLowerCase()); i++) candidate = draw();
+  if (taken.has(WORKTREE_BRANCH_PREFIX)) {
+    return drawWith(() => `${WORKTREE_BRANCH_PREFIX}-${tail()}`, taken);
+  }
 
-  return candidate;
+  return drawWith(() => `${WORKTREE_BRANCH_PREFIX}/${tail()}`, taken);
 };

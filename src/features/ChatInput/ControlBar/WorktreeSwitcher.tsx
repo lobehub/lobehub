@@ -33,7 +33,9 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 
+import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
 
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
@@ -464,6 +466,17 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     const currentRowRef = useRef<HTMLDivElement>(null);
     const switchWorktree = useSwitchWorktree({ agentId, isGithub, sourcePath });
 
+    // The repo's whole branch list, for the create-worktree default. Shares the
+    // branch switcher's SWR key, so an already-open branch dropdown has it
+    // cached. `worktrees` cannot stand in for this: it only holds branches
+    // currently checked out, and a ref sitting on the `wt` namespace path is
+    // exactly the one a name generator has to avoid.
+    const { data: branches = [] } = useSWR(
+      open ? deviceKeys.gitBranches(deviceId ?? 'local', path) : null,
+      () => gitService.listGitBranches({ deviceId, path }),
+      { keepPreviousData: true, revalidateOnFocus: false, shouldRetryOnError: false },
+    );
+
     // Clear the query each time the dropdown closes so it reopens unfiltered.
     useEffect(() => {
       if (!open) setSearch('');
@@ -595,16 +608,19 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     const openCreateWorktree = useCallback(() => {
       setOpen(false);
       openCreateWorktreeModal({
-        // The worktree list is the branch data this surface already holds; the
-        // generated default skips any branch it shows so a name is not handed
-        // out twice (see `generateWorktreeBranchName`).
-        excludeBranches: worktrees
-          .map((worktree) => worktree.branch)
-          .filter((branch): branch is string => !!branch),
+        // Branch names the generated default must avoid, so a name is not handed
+        // out twice and does not collide with a ref on the `wt` namespace path
+        // (see `generateWorktreeBranchName`).
+        excludeBranches: [
+          ...branches.map((branch) => branch.name),
+          ...worktrees
+            .map((worktree) => worktree.branch)
+            .filter((branch): branch is string => !!branch),
+        ],
         onSubmit: handleCreateWorktree,
         resolvePath: (branch) => deriveWorktreePath(sourcePath, branch),
       });
-    }, [handleCreateWorktree, sourcePath, worktrees]);
+    }, [branches, handleCreateWorktree, sourcePath, worktrees]);
 
     // Scroll the current worktree into view each time the dropdown opens — the
     // list mounts at scrollTop=0, so a current worktree below the fold would
