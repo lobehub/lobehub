@@ -80,6 +80,7 @@ import {
   convertOpenAITranscriptionUsage,
   convertOpenAIUsage,
 } from '../usageConverters/openai';
+import { type ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
 import { OpenAICompatibleClient } from './client';
 import { createOpenAICompatibleImage } from './createImage';
 import { createOpenAICompatibleVideo, pollOpenAICompatibleVideoStatus } from './createVideo';
@@ -223,6 +224,17 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     excludeUsage?: boolean;
     forceImageBase64?: boolean;
     forceVideoBase64?: boolean;
+    /**
+     * Resolve pricing lookup options (e.g. ttl, thinkingMode) consumed by the
+     * usage cost computation for lookup-priced units. Receives the LobeHub
+     * payload and the transformed provider request (chat-completions params or
+     * Responses params). Mirrors anthropicCompatibleFactory's hook of the
+     * same name.
+     */
+    getPricingOptions?: (
+      payload: ChatStreamPayload,
+      requestPayload: unknown,
+    ) => Promise<ComputeChatCostOptions | undefined> | ComputeChatCostOptions | undefined;
     handleError?: (
       error: any,
       options: ConstructorOptions<T>,
@@ -756,17 +768,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           | Stream<OpenAI.Chat.Completions.ChatCompletionChunk>;
         let providerResponseDiagnostics;
 
+        const streamPayload: ChatPayloadForTransformStream = {
+          apiMode: 'chat_completions',
+          includeUsageRequested,
+          model: payload.model,
+          pricing: await getModelPricing(payload.model, this.id, options?.pricingContext),
+          provider: this.id,
+          thoughtSignatureScope,
+        };
         const streamOptions: OpenAIStreamOptions = {
           bizErrorTypeTransformer: chatCompletion?.handleStreamBizErrorType,
           callbacks: options?.callback,
-          payload: {
-            apiMode: 'chat_completions',
-            includeUsageRequested,
-            model: payload.model,
-            pricing: await getModelPricing(payload.model, this.id, options?.pricingContext),
-            provider: this.id,
-            thoughtSignatureScope,
-          },
+          payload: streamPayload,
         };
 
         if (customClient?.createChatCompletionStream) {
@@ -788,6 +801,10 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             }),
           };
           const requestPayload = this.withMappedRequestModel(customRequestPayload, payload.model);
+          streamPayload.pricingOptions = await chatCompletion?.getPricingOptions?.(
+            payload,
+            requestPayload,
+          );
           providerResponseDiagnostics = initializeOpenAIDiagnostics({
             apiMode: 'chat_completions',
             diagnostics: options?.diagnostics,
@@ -819,6 +836,10 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             stream_options: includeUsageRequested ? { include_usage: true } : undefined,
           };
           const requestPayload = this.withMappedRequestModel(finalPayload, payload.model);
+          streamPayload.pricingOptions = await chatCompletion?.getPricingOptions?.(
+            payload,
+            requestPayload,
+          );
 
           log('sending chat completion request with %d messages', messages.length);
 
@@ -1689,6 +1710,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         response: responseWithMetadata.response,
       });
 
+      const pricingOptions = await chatCompletion?.getPricingOptions?.(payload, requestPayload);
       const streamOptions: OpenAIStreamOptions = {
         bizErrorTypeTransformer: chatCompletion?.handleStreamBizErrorType,
         callbacks: options?.callback,
@@ -1696,6 +1718,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           apiMode: 'responses',
           model: usageModel,
           pricing: await getModelPricing(usageModel, this.id, options?.pricingContext),
+          pricingOptions,
           provider: this.id,
           reasoningSignatureScope,
         },
