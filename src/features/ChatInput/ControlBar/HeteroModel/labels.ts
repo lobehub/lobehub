@@ -9,6 +9,8 @@ const EFFORT_LABEL_KEYS = {
   low: 'heteroAgent.modelSelector.reasoning.low',
   max: 'heteroAgent.modelSelector.reasoning.max',
   medium: 'heteroAgent.modelSelector.reasoning.medium',
+  minimal: 'heteroAgent.modelSelector.reasoning.minimal',
+  off: 'heteroAgent.modelSelector.reasoning.off',
   ultra: 'heteroAgent.modelSelector.reasoning.ultra',
   xhigh: 'heteroAgent.modelSelector.reasoning.xhigh',
 } as const satisfies Record<HeterogeneousReasoningEffort, string>;
