@@ -1,3 +1,14 @@
+export type {
+  ShellBackend,
+  ShellBackendCapabilities,
+  ShellHandle,
+  ShellLaunchCommand,
+  ShellOutputChunk,
+  ShellOutputFile,
+  ShellOutputFiles,
+  ShellSpawnOptions,
+} from './backend';
+export { ChildProcessBackend } from './child-process-backend';
 export { decodeClixml } from './clixml';
 export type { ShellProcess } from './process-manager';
 export { ShellProcessManager } from './process-manager';
