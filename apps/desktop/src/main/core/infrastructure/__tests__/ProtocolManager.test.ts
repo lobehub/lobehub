@@ -7,7 +7,7 @@ import type { App as AppCore } from '../../App';
 import { ProtocolManager } from '../ProtocolManager';
 
 // Use vi.hoisted to define mocks before hoisting
-const { mockApp, mockGetProtocolScheme, mockParseProtocolUrl } = vi.hoisted(() => ({
+const { mockApp, mockGetProtocolScheme, mockLogger, mockParseProtocolUrl } = vi.hoisted(() => ({
   mockApp: {
     getPath: vi.fn().mockReturnValue('/mock/exe/path'),
     isDefaultProtocolClient: vi.fn().mockReturnValue(true),
@@ -17,12 +17,23 @@ const { mockApp, mockGetProtocolScheme, mockParseProtocolUrl } = vi.hoisted(() =
     setAsDefaultProtocolClient: vi.fn().mockReturnValue(true),
   },
   mockGetProtocolScheme: vi.fn().mockReturnValue('lobehub'),
+  mockLogger: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
   mockParseProtocolUrl: vi.fn(),
 }));
 
 // Mock electron app
 vi.mock('electron', () => ({
   app: mockApp,
+}));
+
+// Mock logger
+vi.mock('@/utils/logger', () => ({
+  createLogger: () => mockLogger,
 }));
 
 // Mock protocol utils
@@ -168,6 +179,14 @@ describe('ProtocolManager', () => {
       ]);
 
       expect(result).toBe('lobehub://first/action');
+    });
+
+    it('does not write protocol URL credentials to logs', () => {
+      const secret = 'super-secret-api-key';
+      const url = `lobehub://plugin/install?schema=${secret}`;
+
+      expect(manager['getProtocolUrlFromArgs'](['/path/to/app', url])).toBe(url);
+      expect(JSON.stringify(mockLogger.debug.mock.calls)).not.toContain(secret);
     });
   });
 

@@ -523,6 +523,7 @@ describe('AiProviderModel', () => {
       const provider = await aiProviderModel.getAiProviderById(providerId, mockDecryptor);
 
       expect(provider).toBeDefined();
+      expect(provider?.identity).toEqual(expect.any(String));
       expect(provider?.keyVaults).toEqual({ decryptedKey: 'value' });
     });
 
