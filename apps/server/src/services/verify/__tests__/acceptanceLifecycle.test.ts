@@ -18,7 +18,9 @@ const mocks = vi.hoisted(() => ({
   confirmPlan: vi.fn(),
   ensureForOperation: vi.fn(),
   generateDraftPlan: vi.fn(),
+  mergeMetadata: vi.fn(),
   operationFindById: vi.fn(),
+  proposeAiCriteria: vi.fn(),
   resolveModelConfig: vi.fn(),
   runFindByOperation: vi.fn(),
   setMetadata: vi.fn(),
@@ -50,6 +52,7 @@ vi.mock('../planGenerator', () => ({
   VerifyPlanGeneratorService: vi.fn(function () {
     return {
       generateDraftPlan: mocks.generateDraftPlan,
+      proposeAiCriteria: mocks.proposeAiCriteria,
     };
   }),
 }));
@@ -85,7 +88,7 @@ vi.mock('@/database/models/verifyRun', () => ({
 
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn(function () {
-    return { findById: mocks.operationFindById };
+    return { findById: mocks.operationFindById, mergeMetadata: mocks.mergeMetadata };
   }),
 }));
 
@@ -126,6 +129,10 @@ describe('Verify acceptance lifecycle', () => {
 
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
+    // The floor write returns the items it persisted; the refinement proposes
+    // nothing unless a test says otherwise.
+    mocks.generateDraftPlan.mockResolvedValue(plan);
+    mocks.proposeAiCriteria.mockResolvedValue([]);
   });
 
   it('attaches the verify run to the task acceptance that owns its policy', async () => {
@@ -246,7 +253,7 @@ describe('Verify acceptance lifecycle', () => {
     expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
   });
 
-  it('AI-decomposes an undecomposed requirement into named criteria, holistic as fallback', async () => {
+  it('AI-decomposes an undecomposed requirement into named criteria over the floor plan', async () => {
     mocks.taskAcceptanceResolve.mockResolvedValue({
       acceptance: { id: 'acceptance-1' },
       config: { enabled: true, verifierAgentId: 'verifier-1' },
@@ -254,6 +261,8 @@ describe('Verify acceptance lifecycle', () => {
     });
     mocks.taskFindById.mockResolvedValue({ instruction: 'Build the repro', name: 'Repro' });
     mocks.resolveModelConfig.mockResolvedValue({ model: 'model-1', provider: 'provider-1' });
+    const proposed = [{ id: 'generated-1', index: 0, required: true, title: 'Repro runs' }];
+    mocks.proposeAiCriteria.mockResolvedValue(proposed);
     mocks.runFindByOperation
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'run-1', plan });
@@ -263,20 +272,109 @@ describe('Verify acceptance lifecycle', () => {
       taskId: 'task-1',
     });
 
+    // The floor is written first and WITHOUT the model — that is what keeps a
+    // provider failure from leaving the run with no plan at all.
+    expect(mocks.generateDraftPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'Deliver a runnable repro under ~/WikiSkill-Repro',
+        enableAiGeneration: false,
+        holisticFallback: true,
+      }),
+    );
     expect(mocks.resolveModelConfig).toHaveBeenCalledWith(
       db,
       'user-1',
       { verifierAgentId: 'verifier-1' },
       undefined,
     );
-    expect(mocks.generateDraftPlan).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: 'Deliver a runnable repro under ~/WikiSkill-Repro',
-        enableAiGeneration: true,
-        holisticFallback: true,
-        modelConfig: { model: 'model-1', provider: 'provider-1' },
-      }),
+    expect(mocks.proposeAiCriteria).toHaveBeenCalledWith(
+      expect.objectContaining({ modelConfig: { model: 'model-1', provider: 'provider-1' } }),
     );
+    // …and the generated criteria replace the floor on the same unconfirmed run.
+    expect(mocks.setPlan).toHaveBeenCalledWith('run-1', proposed);
+    expect(mocks.confirmPlan).toHaveBeenCalledWith('run-1');
+    expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
+  });
+
+  /**
+   * Regression: the plan used to be generated BEFORE it was persisted, so one
+   * throw from the model config / generation call left the run with no plan, no
+   * criteria for the builder to read, no way to submit evidence and no round on
+   * the Task's Acceptance — all of it swallowed.
+   */
+  it('still confirms and binds the floor plan when the AI refinement throws', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+      requirement: 'Deliver a runnable repro',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Repro' });
+    mocks.resolveModelConfig.mockRejectedValue(new Error('provider unreachable'));
+    mocks.runFindByOperation
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'run-1', plan });
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    expect(mocks.generateDraftPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ enableAiGeneration: false, holisticFallback: true }),
+    );
+    expect(mocks.confirmPlan).toHaveBeenCalledWith('run-1');
+    expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
+    expect(mocks.mergeMetadata).not.toHaveBeenCalled();
+  });
+
+  it('leaves the checklist a builder authored while the generation call was in flight', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+      requirement: 'Deliver a runnable repro',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Repro' });
+    mocks.resolveModelConfig.mockResolvedValue({ model: 'model-1', provider: 'provider-1' });
+    const authored = [{ id: 'authored-1', index: 0, required: true, title: 'Their standard' }];
+    mocks.proposeAiCriteria.mockResolvedValue([{ id: 'generated-1', index: 0 }]);
+    mocks.runFindByOperation
+      .mockResolvedValueOnce(null)
+      // Read back after the floor write: the run now carries the builder's set.
+      .mockResolvedValueOnce({ id: 'run-1', plan: authored });
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    expect(mocks.proposeAiCriteria).not.toHaveBeenCalled();
+    expect(mocks.setPlan).not.toHaveBeenCalled();
+    expect(mocks.confirmPlan).toHaveBeenCalledWith('run-1');
+  });
+
+  /**
+   * The failure is non-fatal for the run, but a run that ends up with no plan
+   * must not read as "this Task has no Acceptance" with nothing behind it: the
+   * reason is recorded on the operation, and `listCriteria` reports it.
+   */
+  it('records the reason on the operation when the plan cannot be written', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+      requirement: 'Deliver a runnable repro',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Repro' });
+    mocks.generateDraftPlan.mockRejectedValue(new Error('plan write failed'));
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    expect(mocks.mergeMetadata).toHaveBeenCalledWith('operation-1', {
+      verifyPlanError: 'plan write failed',
+    });
+    expect(mocks.confirmPlan).not.toHaveBeenCalled();
   });
 
   it('does not spend an AI call when the task already picked its criteria', async () => {

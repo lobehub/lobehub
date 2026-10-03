@@ -485,6 +485,9 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('Run the Acceptance inside this Task, not after it');
     expect(result).toContain('Criterion ids are minted when this run starts');
     expect(result).toContain('lh verify plan state');
+    // The run-start plan can be missing entirely, so the instruction must name
+    // the author path instead of assuming the ids exist.
+    expect(result).toContain('authorCriteria');
   });
 
   it('should omit the verify section when verify is disabled', () => {
