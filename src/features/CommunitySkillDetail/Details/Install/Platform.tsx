@@ -15,6 +15,7 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import { useDetailActionContext } from '../../DetailProvider';
+import { getSkillInstructionsUrl } from './getSkillInstructionsUrl';
 import VsCodeIcon from './VsCodeIcon';
 
 const Title = ({ children }: { children?: React.ReactNode }) => (
@@ -189,7 +190,7 @@ const Platform = memo<PlatformProps>(
 
     const command = genInstallCommand(identifier, active);
 
-    const agentPrompt = `Curl https://lobehub.com/skills/${identifier}/skill.md, then follow the instructions to set up LobeHub Skills Marketplace and install the skill. Once installed, read the SKILL.md file in the installed directory and follow its instructions to complete the task.`;
+    const agentPrompt = `Curl ${getSkillInstructionsUrl(identifier || '<skill-identifier>')}, then follow the instructions to set up LobeHub Skills Marketplace and install the skill. Once installed, read the SKILL.md file in the installed directory and follow its instructions to complete the task.`;
 
     const handleUseOnLobeAI = useCallback(() => {
       if (!inboxAgentId) return;
