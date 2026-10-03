@@ -80,7 +80,7 @@ overrides:
   stylelint-config-clean-order: 7.0.0
   typescript: 6.0.3
   vitest: 5.0.0
-  'zod@^4': 4.5.4
+  'zod@^4': 4.6.5
 
 patchedDependencies:
   '@upstash/qstash': patches/@upstash__qstash.patch
