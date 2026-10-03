@@ -5,6 +5,7 @@ import {
   ordinaryFileAccessScope,
   SortType,
 } from '@lobechat/types';
+import type { SQL } from 'drizzle-orm';
 import {
   and,
   asc,
@@ -15,6 +16,7 @@ import {
   inArray,
   isNull,
   like,
+  max,
   ne,
   notExists,
   or,
@@ -356,15 +358,34 @@ export class FileModel {
   };
 
   countUsage = async (trx?: Transaction) => {
-    const db = trx ?? this.db;
-    const result = await db
-      .select({
-        totalSize: sum(files.size),
-      })
-      .from(files)
-      .where(this.ownership());
+    return FileModel.sumDedupedSize(trx ?? this.db, this.ownership());
+  };
 
-    return parseInt(result[0].totalSize!) || 0;
+  static countUsageForWorkspace = async (
+    db: LobeChatDatabase | Transaction,
+    workspaceId: string,
+  ) => {
+    return FileModel.sumDedupedSize(db, eq(files.workspaceId, workspaceId));
+  };
+
+  /**
+   * Storage is deduplicated by content hash (one object per `global_files` row),
+   * so several `files` rows pointing at the same bytes must only be charged once.
+   */
+  private static sumDedupedSize = async (
+    db: LobeChatDatabase | Transaction,
+    where: SQL | undefined,
+  ) => {
+    const perObject = db
+      .select({ size: max(files.size).as('size') })
+      .from(files)
+      .where(where)
+      .groupBy(sql`coalesce(${files.fileHash}, ${files.id})`)
+      .as('per_object');
+
+    const [row] = await db.select({ totalSize: sum(perObject.size) }).from(perObject);
+
+    return parseInt(row?.totalSize ?? '0') || 0;
   };
 
   /**
