@@ -291,6 +291,8 @@ export const composioRouter = router({
       let rawTools: any[] = [];
       try {
         const toolsResp = await (ctx.composioClient.tools as any).getRawComposioTools({
+          // The SDK defaults to 20 tools per toolkit, which truncates larger ones (#18675).
+          limit: 200,
           toolkits: [appSlug],
         });
         rawTools = toolsResp?.items || toolsResp || [];
