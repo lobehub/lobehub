@@ -334,6 +334,7 @@ export default {
   'identity.hideDetail': 'Hide details',
   'identity.inbox.desc': 'Messages delivered to the addresses above.',
   'identity.inbox.detail.from': 'From',
+  'identity.inbox.detail.loadFailed': 'Could not open this message',
   'identity.inbox.detail.receivedAt': 'Received',
   'identity.inbox.detail.to': 'To',
   'identity.inbox.empty': 'Nothing here yet. Mail sent to the addresses above lands here.',

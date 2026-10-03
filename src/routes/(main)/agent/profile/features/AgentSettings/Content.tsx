@@ -12,6 +12,7 @@ import {
   SettingsModalLayout,
   type SettingsModalTabItem,
 } from '@/features/AgentSetting';
+import { useShowAgentIdentity } from '@/features/AgentSetting/AgentIdentity/useShowAgentIdentity';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -44,16 +45,17 @@ const Content = memo(() => {
   const enableAgentGraphConfigLab = useUserStore(labPreferSelectors.enableAgentGraphConfig);
   const [tab, setTab] = useState(ChatSettingsTabs.Opening);
   const showGraphTab = enableAgentGraphConfigLab && !isInbox && !isHeterogeneous;
+  const showIdentityTab = useShowAgentIdentity();
 
   const availableTabs = useMemo(
     () =>
       [
         ChatSettingsTabs.Opening,
-        ChatSettingsTabs.Identity,
+        showIdentityTab ? ChatSettingsTabs.Identity : null,
         enableAgentSelfIteration ? ChatSettingsTabs.SelfIteration : null,
         showGraphTab ? ChatSettingsTabs.Graph : null,
       ].filter(Boolean) as ChatSettingsTabs[],
-    [enableAgentSelfIteration, showGraphTab],
+    [enableAgentSelfIteration, showGraphTab, showIdentityTab],
   );
 
   const activeTab = availableTabs.includes(tab) ? tab : availableTabs[0];

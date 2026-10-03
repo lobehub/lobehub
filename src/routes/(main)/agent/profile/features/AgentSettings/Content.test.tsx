@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatSettingsTabs } from '@/store/global/initialState';
+import { useUserStore } from '@/store/user';
 
 import Content from './Content';
 
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
     featureFlags: {
       enableAgentSelfIteration: true,
     },
+    serverConfig: { agentIdentityProviders: [] as string[] },
   },
 }));
 
@@ -72,20 +74,25 @@ vi.mock('@/store/serverConfig', () => ({
     selector(mocks.serverState),
 }));
 
+const setIdentityLab = (enabled: boolean) =>
+  useUserStore.setState({ preference: { lab: { enableAgentIdentity: enabled } } } as any);
+
 describe('AgentSettings Content', () => {
   beforeEach(() => {
     mocks.agentState.isInbox = true;
     mocks.serverState.featureFlags.enableAgentSelfIteration = true;
+    mocks.serverState.serverConfig.agentIdentityProviders = [];
+    setIdentityLab(false);
   });
 
-  it('exposes opening and identity for inbox when feature is on', () => {
+  it('exposes both tabs for inbox when feature is on', () => {
     render(<Content />);
 
     const layout = screen.getByTestId('layout');
     expect(layout).toHaveAttribute('data-active', ChatSettingsTabs.Opening);
     expect(layout).toHaveAttribute(
       'data-tabs',
-      `${ChatSettingsTabs.Opening},${ChatSettingsTabs.Identity},${ChatSettingsTabs.SelfIteration}`,
+      `${ChatSettingsTabs.Opening},${ChatSettingsTabs.SelfIteration}`,
     );
     expect(screen.getByTestId('agent-settings-content')).toHaveAttribute(
       'data-tab',
@@ -93,7 +100,7 @@ describe('AgentSettings Content', () => {
     );
   });
 
-  it('exposes the same tabs when not inbox and feature is on', () => {
+  it('exposes both tabs when not inbox and feature is on', () => {
     mocks.agentState.isInbox = false;
 
     render(<Content />);
@@ -102,7 +109,7 @@ describe('AgentSettings Content', () => {
     expect(layout).toHaveAttribute('data-active', ChatSettingsTabs.Opening);
     expect(layout).toHaveAttribute(
       'data-tabs',
-      `${ChatSettingsTabs.Opening},${ChatSettingsTabs.Identity},${ChatSettingsTabs.SelfIteration}`,
+      `${ChatSettingsTabs.Opening},${ChatSettingsTabs.SelfIteration}`,
     );
   });
 
@@ -113,22 +120,42 @@ describe('AgentSettings Content', () => {
 
     const layout = screen.getByTestId('layout');
     expect(layout).toHaveAttribute('data-active', ChatSettingsTabs.Opening);
-    expect(layout).toHaveAttribute(
-      'data-tabs',
-      `${ChatSettingsTabs.Opening},${ChatSettingsTabs.Identity}`,
-    );
+    expect(layout).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
   });
 
-  it('keeps identity available when feature flag is off', () => {
+  it('exposes only opening when feature flag is off', () => {
     mocks.agentState.isInbox = false;
     mocks.serverState.featureFlags.enableAgentSelfIteration = false;
 
     render(<Content />);
 
     const layout = screen.getByTestId('layout');
-    expect(layout).toHaveAttribute(
+    expect(layout).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
+  });
+
+  it('shows identity only with the Labs toggle on and a provider configured', () => {
+    mocks.serverState.featureFlags.enableAgentSelfIteration = false;
+    mocks.serverState.serverConfig.agentIdentityProviders = ['agent-mail'];
+
+    const { unmount } = render(<Content />);
+    // A configured provider alone does not surface the experiment.
+    expect(screen.getByTestId('layout')).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
+    unmount();
+
+    setIdentityLab(true);
+    render(<Content />);
+    expect(screen.getByTestId('layout')).toHaveAttribute(
       'data-tabs',
       `${ChatSettingsTabs.Opening},${ChatSettingsTabs.Identity}`,
     );
+  });
+
+  it('hides identity when the deployment has no identity provider, even in Labs', () => {
+    mocks.serverState.featureFlags.enableAgentSelfIteration = false;
+    setIdentityLab(true);
+
+    render(<Content />);
+
+    expect(screen.getByTestId('layout')).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
   });
 });

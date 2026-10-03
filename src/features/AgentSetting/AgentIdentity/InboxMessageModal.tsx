@@ -10,6 +10,8 @@ import useSWR from 'swr';
 
 import { agentAccountService } from '@/services/agentAccount';
 
+import InlineError from './InlineError';
+
 dayjs.extend(relativeTime);
 
 export interface InboxMessageModalProps {
@@ -37,9 +39,23 @@ MetaRow.displayName = 'InboxMessageMetaRow';
  */
 const InboxMessageModal = memo<InboxMessageModalProps>(({ id }) => {
   const { t } = useTranslation('setting');
-  const { data, isLoading } = useSWR(['agent-inbox-message', id], ([, messageId]) =>
+  const { data, error, isLoading, mutate } = useSWR(['agent-inbox-message', id], ([, messageId]) =>
     agentAccountService.getInboxMessage(messageId),
   );
+
+  // A failed read must say so: a skeleton that never resolves reads as "still
+  // loading" forever.
+  if (error && !data) {
+    return (
+      <Flexbox padding={4}>
+        <InlineError
+          detail={error instanceof Error ? error.message : String(error)}
+          summary={t('identity.inbox.detail.loadFailed')}
+          onRetry={() => void mutate()}
+        />
+      </Flexbox>
+    );
+  }
 
   if (isLoading || !data) {
     return (

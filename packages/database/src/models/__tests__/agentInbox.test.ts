@@ -75,6 +75,7 @@ describe('AgentInboxModel workspace isolation by agent visibility', () => {
     const member = new AgentInboxModel(serverDB, memberId, workspaceId);
 
     expect(await member.list({ agentId: privateAgentId })).toEqual([]);
+    expect(await member.findById(privateMessage.id)).toBeUndefined();
     expect(await member.unreadCount(privateAgentId)).toBe(0);
 
     // Writes are scoped the same way: the member cannot clear the owner's unread mark.

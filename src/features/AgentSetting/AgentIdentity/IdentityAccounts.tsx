@@ -5,6 +5,9 @@ import { Skeleton } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
+
 import AccountCard from './AccountCard';
 import { IDENTITY_CHANNELS } from './const';
 import InlineError from './InlineError';
@@ -27,6 +30,7 @@ interface IdentityAccountsProps {
 const IdentityAccounts = memo<IdentityAccountsProps>(({ agentId, disabled }) => {
   const { t } = useTranslation('setting');
   const { data, error, isLoading, mutate } = useAgentAccounts(agentId);
+  const providers = useServerConfigStore(serverConfigSelectors.agentIdentityProviders);
 
   const header = <SectionHeader desc={t('identity.desc')} title={t('identity.title')} />;
 
@@ -62,6 +66,9 @@ const IdentityAccounts = memo<IdentityAccountsProps>(({ agentId, disabled }) => 
         const owned = accounts.filter((account) => account.kind === channel.kind);
 
         if (owned.length === 0) {
+          // An offer this deployment cannot fulfil would only fail on click.
+          if (!providers.includes(channel.provider)) return null;
+
           return (
             <ProvisionCard
               agentId={agentId}
@@ -78,6 +85,7 @@ const IdentityAccounts = memo<IdentityAccountsProps>(({ agentId, disabled }) => 
             account={account}
             agentId={agentId}
             channel={channel}
+            disabled={disabled}
             key={account.id}
             onChanged={mutate}
           />

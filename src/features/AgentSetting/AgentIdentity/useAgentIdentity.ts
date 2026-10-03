@@ -15,3 +15,12 @@ export const useAgentAccounts = (agentId: string) =>
 /** What has arrived at those addresses, newest first. */
 export const useAgentInbox = (agentId: string) =>
   useSWR(inboxKey(agentId), ([, id]) => agentAccountService.listInbox({ agentId: id, limit: 50 }));
+
+/**
+ * The server's unread count. The list above stops at 50 rows, so counting its
+ * unread dots would under-report a busy inbox.
+ */
+export const useAgentInboxUnreadCount = (agentId: string) =>
+  useSWR(agentId ? ['agent-inbox-unread', agentId] : null, ([, id]) =>
+    agentAccountService.getInboxUnreadCount(id),
+  );

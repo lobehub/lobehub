@@ -814,6 +814,7 @@
   "identity.hideDetail": "收起详情",
   "identity.inbox.desc": "投递到上述地址的消息。",
   "identity.inbox.detail.from": "发件人",
+  "identity.inbox.detail.loadFailed": "无法打开这封消息",
   "identity.inbox.detail.receivedAt": "接收时间",
   "identity.inbox.detail.to": "收件人",
   "identity.inbox.empty": "暂无消息。发往上列地址的邮件会出现在这里。",

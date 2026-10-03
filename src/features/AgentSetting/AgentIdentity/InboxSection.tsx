@@ -4,13 +4,13 @@ import { Flexbox } from '@lobehub/ui';
 import { Button, Skeleton, Text } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineError from './InlineError';
 import SectionHeader from './SectionHeader';
 import { identityStyles } from './styles';
-import { useAgentInbox } from './useAgentIdentity';
+import { useAgentInbox, useAgentInboxUnreadCount } from './useAgentIdentity';
 import { useInboxActions } from './useIdentityActions';
 
 dayjs.extend(relativeTime);
@@ -29,10 +29,14 @@ interface InboxSectionProps {
 const InboxSection = memo<InboxSectionProps>(({ agentId }) => {
   const { t } = useTranslation('setting');
   const { data, error, isLoading, mutate } = useAgentInbox(agentId);
-  const { markAllRead, openMessage } = useInboxActions({ agentId, onChanged: mutate });
+  const { data: unreadCount = 0, mutate: mutateUnread } = useAgentInboxUnreadCount(agentId);
+  const refresh = useCallback(
+    () => Promise.all([mutate(), mutateUnread()]),
+    [mutate, mutateUnread],
+  );
+  const { markAllRead, openMessage } = useInboxActions({ agentId, onChanged: refresh });
 
   const messages = data ?? [];
-  const unreadCount = messages.filter((message) => !message.readAt).length;
 
   const extra =
     unreadCount > 0 ? (
@@ -97,10 +101,18 @@ const InboxSection = memo<InboxSectionProps>(({ agentId }) => {
             <Flexbox
               horizontal
               align={'center'}
+              aria-label={`${message.from} — ${message.subject || t('identity.inbox.noSubject')}`}
               className={identityStyles.inboxRow}
               gap={10}
               key={message.id}
+              role={'button'}
+              tabIndex={0}
               onClick={() => {
+                void openMessage(message);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
                 void openMessage(message);
               }}
             >

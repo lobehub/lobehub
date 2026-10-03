@@ -28,6 +28,8 @@ interface AccountCardProps {
   account: AgentAccountView;
   agentId: string;
   channel: IdentityChannel;
+  /** Read-only viewer: the address stays copyable, but cannot be released. */
+  disabled?: boolean;
   onChanged: () => Promise<unknown> | void;
 }
 
@@ -35,7 +37,7 @@ interface AccountCardProps {
  * One owned address: what it is, whether it is live, and the two things a
  * person does with it — copy it out, or give it back.
  */
-const AccountCard = memo<AccountCardProps>(({ account, channel, agentId, onChanged }) => {
+const AccountCard = memo<AccountCardProps>(({ account, channel, agentId, disabled, onChanged }) => {
   const { t } = useTranslation('setting');
   const { release } = useAccountActions({ agentId, onChanged });
 
@@ -55,9 +57,11 @@ const AccountCard = memo<AccountCardProps>(({ account, channel, agentId, onChang
       </Flexbox>
       <CopyButton content={account.identifier} title={t('identity.copy')} />
       <ActionIcon
+        disabled={disabled}
         icon={Trash2}
         title={t('identity.release')}
         onClick={() => {
+          if (disabled) return;
           void release(account);
         }}
       />
