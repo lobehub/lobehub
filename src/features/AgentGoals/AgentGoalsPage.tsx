@@ -257,6 +257,10 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                         label: t('goalPage.filter.running'),
                         value: 'running',
                       },
+                      {
+                        label: t('goalPage.filter.achieved'),
+                        value: 'achieved',
+                      },
                     ]}
                     onChange={(value) => setFilter(value as GoalListFilter)}
                   />

@@ -2398,6 +2398,7 @@ export default {
   'goalPage.create': 'Create goal',
   'goalPage.filteredEmptyDescription': 'Switch to All to see every goal.',
   'goalPage.filteredEmptyTitle': 'No goals in this view',
+  'goalPage.filter.achieved': 'Completed',
   'goalPage.filter.all': 'All',
   'goalPage.filter.review': 'Needs review',
   'goalPage.filter.running': 'In progress',

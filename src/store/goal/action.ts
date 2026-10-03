@@ -11,7 +11,7 @@ import { goalStatusesForFilter } from './goalListFilter';
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
 
 /** The list page's tabs, in render order. `refreshGoals` revalidates every one. */
-const GOAL_LIST_FILTERS: GoalListFilter[] = ['all', 'review', 'running'];
+const GOAL_LIST_FILTERS: GoalListFilter[] = ['all', 'review', 'running', 'achieved'];
 
 /**
  * Cache scope of one tab's list. `all` keeps the scope's own entry — it is the

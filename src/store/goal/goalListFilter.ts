@@ -11,6 +11,7 @@ import type { GoalListFilter } from './initialState';
  * by default.
  */
 const goalListFilterStatuses: Record<GoalListFilter, GoalStatus[] | null> = {
+  achieved: ['achieved'],
   all: null,
   review: ['review'],
   running: ['running'],

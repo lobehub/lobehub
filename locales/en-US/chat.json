@@ -562,6 +562,7 @@
   "goalPage.allGoals": "All goals",
   "goalPage.create": "Create goal",
   "goalPage.description": "Track what this agent is pursuing and how close each goal is to acceptance.",
+  "goalPage.filter.achieved": "Completed",
   "goalPage.filter.all": "All",
   "goalPage.filter.review": "Needs review",
   "goalPage.filter.running": "In progress",

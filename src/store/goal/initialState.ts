@@ -7,9 +7,12 @@ export type { GoalListItem };
 /**
  * List tab. Each option names the lifecycle states it keeps: `all` is the
  * default (nothing hidden), `review` the goals at the human acceptance gate,
- * `running` the goal whose loop is executing right now.
+ * `running` the goal whose loop is executing right now, `achieved` the goals
+ * that reached their terminal outcome. The other terminal states (`failed`,
+ * `canceled`) stay reachable through `all` only — "completed" would misname
+ * them.
  */
-export type GoalListFilter = 'all' | 'review' | 'running';
+export type GoalListFilter = 'all' | 'review' | 'running' | 'achieved';
 export type GoalViewMode = 'card' | 'list';
 
 export interface GoalState {

@@ -562,6 +562,7 @@
   "goalPage.allGoals": "全部目标",
   "goalPage.create": "创建目标",
   "goalPage.description": "掌握 Agent 正在追逐什么，以及每个目标距离验收还有多远。",
+  "goalPage.filter.achieved": "已完成",
   "goalPage.filter.all": "全部",
   "goalPage.filter.review": "待审阅",
   "goalPage.filter.running": "进行中",
