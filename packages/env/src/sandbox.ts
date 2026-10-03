@@ -6,6 +6,8 @@ const emptyStringToUndefined = (value: unknown) => (value === '' ? undefined : v
 export const getSandboxConfig = () => {
   return createEnv({
     runtimeEnv: {
+      HETERO_SANDBOX_AGENT_TYPES: process.env.HETERO_SANDBOX_AGENT_TYPES,
+      HETERO_SANDBOX_FORWARD_ENV: process.env.HETERO_SANDBOX_FORWARD_ENV,
       ONLYBOXES_BASE_URL: process.env.ONLYBOXES_BASE_URL,
       ONLYBOXES_JIT_ISSUER: process.env.ONLYBOXES_JIT_ISSUER,
       ONLYBOXES_JIT_SIGNING_KEY: process.env.ONLYBOXES_JIT_SIGNING_KEY,
@@ -14,6 +16,20 @@ export const getSandboxConfig = () => {
       SANDBOX_PROVIDER: process.env.SANDBOX_PROVIDER,
     },
     server: {
+      /**
+       * Coding-agent CLIs that may run in the cloud sandbox, comma-separated
+       * (e.g. `claude-code,codex,opencode`). Names are agent type ids; an
+       * unrecognised one simply never matches. Defaults to the types the
+       * official runtime image ships — widen it only alongside an image that
+       * actually carries the extra binaries.
+       */
+      HETERO_SANDBOX_AGENT_TYPES: z.preprocess(emptyStringToUndefined, z.string().optional()),
+      /**
+       * Names of environment variables the server may forward into a sandbox
+       * run, comma-separated. An allowlist, not a passthrough: nothing the
+       * server holds crosses into the box unless it is asked for by name.
+       */
+      HETERO_SANDBOX_FORWARD_ENV: z.preprocess(emptyStringToUndefined, z.string().optional()),
       ONLYBOXES_BASE_URL: z.preprocess(emptyStringToUndefined, z.string().url().optional()),
       ONLYBOXES_JIT_ISSUER: z.preprocess(emptyStringToUndefined, z.string().optional()),
       ONLYBOXES_JIT_SIGNING_KEY: z.preprocess(emptyStringToUndefined, z.string().optional()),

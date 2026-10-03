@@ -1,7 +1,21 @@
 import { ChatErrorType } from '@lobechat/types';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { humanizeHeteroDispatchError, resolveHeteroDispatchErrorType } from './heteroErrors';
+import { resolveCloudSandboxAgentTypes } from '@/server/services/heterogeneousAgent/cloudSandboxAgentTypes';
+
+import {
+  humanizeHeteroDispatchError,
+  resolveHeteroDispatchErrorType,
+  supportsCloudHeterogeneousSandbox,
+} from './heteroErrors';
+
+vi.mock('@/server/services/heterogeneousAgent/cloudSandboxAgentTypes', () => ({
+  resolveCloudSandboxAgentTypes: vi.fn(() => ['claude-code', 'codex']),
+}));
+
+const configureAgentTypes = (types: string[]) => {
+  vi.mocked(resolveCloudSandboxAgentTypes).mockReturnValue(types as never);
+};
 
 describe('humanizeHeteroDispatchError', () => {
   it('replaces a bare gateway code with a sentence the user can act on', () => {
@@ -76,5 +90,28 @@ describe('JSON device-gateway dispatch errors', () => {
   ])('preserves unrecognized or malformed responses: %s', (raw) => {
     expect(humanizeHeteroDispatchError(raw)).toBe(raw);
     expect(resolveHeteroDispatchErrorType(raw)).toBe(ChatErrorType.ServerAgentRuntimeError);
+  });
+});
+
+describe('supportsCloudHeterogeneousSandbox', () => {
+  beforeEach(() => configureAgentTypes(['claude-code', 'codex']));
+
+  it('admits what the resolved set names, and nothing else', () => {
+    expect(supportsCloudHeterogeneousSandbox('claude-code')).toBe(true);
+    expect(supportsCloudHeterogeneousSandbox('codex')).toBe(true);
+    expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(false);
+  });
+
+  it('follows a deployment that widened the set', () => {
+    configureAgentTypes(['claude-code', 'codex', 'opencode']);
+
+    expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(true);
+  });
+
+  it('follows a deployment that narrowed it', () => {
+    configureAgentTypes(['opencode']);
+
+    expect(supportsCloudHeterogeneousSandbox('opencode')).toBe(true);
+    expect(supportsCloudHeterogeneousSandbox('claude-code')).toBe(false);
   });
 });
