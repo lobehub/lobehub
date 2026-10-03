@@ -348,7 +348,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
 
     async run(runOptions: any) {
-      codexAppServerRunMock(runOptions);
+      await codexAppServerRunMock(runOptions);
       if (codexAppServerShouldFailResume.value && this.options.initialThreadId) {
         this.canFallbackToExec = false;
         const error = new Error('Thread not found');
@@ -3403,7 +3403,12 @@ describe('HeterogeneousAgentCtr', () => {
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
 
+    /** @example Distinct topic and agent runs overlap on one compatible native process. */
     it('reuses one native app-server client for sessions owned by different topics and agents', async () => {
+      let releaseFirstRun!: () => void;
+      const firstRun = new Promise<void>((resolve) => {
+        releaseFirstRun = resolve;
+      });
       const registry = new managedProcess.ManagedProcessRegistry();
       const environment = vi
         .spyOn(managedProcess, 'managedProcessEnvironment')
@@ -3416,22 +3421,35 @@ describe('HeterogeneousAgentCtr', () => {
         const first = await ctr.startSession({
           agentType: 'codex',
           command: 'codex',
+          env: {
+            LOBEHUB_AGENT_ID: 'agent-1',
+            LOBEHUB_TOPIC_ID: 'topic-1',
+            LOBEHUB_OPERATION_ID: 'op-1',
+          },
           useCodexAppServer: true,
         });
         const second = await ctr.startSession({
           agentType: 'codex',
           command: 'codex',
+          env: {
+            LOBEHUB_AGENT_ID: 'agent-2',
+            LOBEHUB_TOPIC_ID: 'topic-2',
+            LOBEHUB_OPERATION_ID: 'op-2',
+          },
           useCodexAppServer: true,
         });
 
-        await ctr.sendPrompt({
+        codexAppServerRunMock.mockImplementationOnce(() => firstRun);
+        const firstPrompt = ctr.sendPrompt({
           agentId: 'agent-1',
           topicId: 'topic-1',
           operationId: 'op-1',
           prompt: 'first',
           sessionId: first.sessionId,
         });
-        await ctr.sendPrompt({
+        /** @example Hold the first turn active before sending the second. */
+        await vi.waitFor(() => expect(codexAppServerRunMock).toHaveBeenCalledTimes(1));
+        const secondPrompt = ctr.sendPrompt({
           agentId: 'agent-2',
           topicId: 'topic-2',
           operationId: 'op-2',
@@ -3439,12 +3457,21 @@ describe('HeterogeneousAgentCtr', () => {
           sessionId: second.sessionId,
         });
 
+        /** @example The second turn starts while the first still owns its consumer. */
+        await vi.waitFor(() => expect(codexAppServerRunMock).toHaveBeenCalledTimes(2));
+        releaseFirstRun();
+        await Promise.all([firstPrompt, secondPrompt]);
+        /** @example Each overlapping turn receives its own provenance, using the real compatibility check. */
+        expect(
+          codexAppServerRunMock.mock.calls.map(([options]) => options.env.LOBEHUB_OPERATION_ID),
+        ).toEqual(['op-1', 'op-2']);
         expect(codexAppServerClientConstructMock).toHaveBeenCalledTimes(1);
         expect(codexAppServerConstructMock).toHaveBeenCalledTimes(2);
         const { env } = codexAppServerClientConstructMock.mock.calls[0][0];
         expect(env.LOBEHUB_PROCESS_TOPIC).toBeUndefined();
         expect(env.AGENT_BROWSER_NAMESPACE).toBeUndefined();
       } finally {
+        releaseFirstRun();
         environment.mockRestore();
       }
     });

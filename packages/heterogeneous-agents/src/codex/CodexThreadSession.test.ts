@@ -32,6 +32,7 @@ interface ClientHarness {
 
 const createClientHarness = (
   options: {
+    activeResume?: boolean;
     autoComplete?: boolean;
     delayThreadStart?: boolean;
     delayTurnStart?: boolean;
@@ -72,6 +73,7 @@ const createClientHarness = (
 
   const client = {
     acquireConsumer: vi.fn(() => releaseConsumer),
+    acquireThread: vi.fn(() => vi.fn()),
     connect: options.connectError
       ? vi.fn().mockRejectedValue(options.connectError)
       : vi.fn().mockResolvedValue({ userAgent: 'codex-test' }),
@@ -84,7 +86,9 @@ const createClientHarness = (
     registerThread: vi.fn((_threadId: string, params: unknown, value: typeof registration) => {
       resumeParams = params;
       registration = value;
-      return vi.fn();
+      return vi.fn(() => {
+        if (registration === value) registration = undefined;
+      });
     }),
     request: vi.fn(async (method: string, params: unknown) => {
       requests.push({ method, params });
@@ -97,7 +101,10 @@ const createClientHarness = (
         if (options.failResume) throw new Error('Thread not found');
         return {
           model: 'gpt-5.5-codex',
-          thread: { id: options.initialThreadId ?? 'thread-1' },
+          thread: {
+            id: options.initialThreadId ?? 'thread-1',
+            status: { type: options.activeResume ? 'active' : 'idle' },
+          },
         };
       }
       if (method === 'thread/name/set') {
@@ -195,6 +202,149 @@ const createSession = (
 };
 
 describe('CodexThreadSession', () => {
+  /** @example Changing operation after disconnect must invalidate queued old resume parameters. */
+  it('replaces detached reconnect context before starting the next operation', async () => {
+    // ROOT CAUSE:
+    // Disconnect marks the thread detached while keeping its automatic-resume registration.
+    // Checking attached before unregistering allowed reconnect to restore the previous env.
+    // Context changes now invalidate that registration before awaiting connect.
+    const harness = createClientHarness();
+    const { session } = createSession(harness);
+    const run = (operationId: string) =>
+      session.run({
+        env: { LOBEHUB_OPERATION_ID: operationId },
+        input: [],
+        onRawMessage: () => {},
+        operationId,
+      });
+    try {
+      await run('old');
+      harness.disconnect();
+      harness.client.connect.mockImplementationOnce(async () => {
+        await harness.resume();
+      });
+      await run('new');
+      const resume = harness.requests.filter(({ method }) => method === 'thread/resume');
+      /** @example A new cold resume sends the current operation after recovery completes. */
+      expect(resume.at(-1)?.params).toMatchObject({
+        config: { 'shell_environment_policy.set.LOBEHUB_OPERATION_ID': 'new' },
+      });
+      /** @example A later process restart also uses the current operation. */
+      expect(harness.registeredResumeParams()).toMatchObject({
+        config: { 'shell_environment_policy.set.LOBEHUB_OPERATION_ID': 'new' },
+      });
+    } finally {
+      session.close();
+    }
+  });
+
+  /** @example Closing during unsubscribe must not reload a native thread now owned by another session. */
+  it('does not resume after closing during an unsubscribe request', async () => {
+    // ROOT CAUSE:
+    // close releases the native-thread claim while an unsubscribe RPC may still be pending.
+    // Continuing to resume could replace a new owner's shell context with the old run's IDs.
+    // Recheck closed state immediately after unsubscribe before sending another RPC.
+    const harness = createClientHarness({ initialThreadId: 'existing' });
+    const { session } = createSession(harness, { initialThreadId: 'existing' });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const request = harness.client.request.getMockImplementation();
+    harness.client.request.mockImplementation(async (method: string, params: unknown) => {
+      if (method === 'thread/unsubscribe') await gate;
+      return request(method, params);
+    });
+    const run = session.run({
+      env: { LOBEHUB_OPERATION_ID: 'old' },
+      input: [],
+      onRawMessage: () => {},
+      operationId: 'old',
+    });
+    try {
+      /** @example Close precisely while the native unsubscribe is pending. */
+      await vi.waitFor(() =>
+        expect(harness.client.request).toHaveBeenCalledWith('thread/unsubscribe', {
+          threadId: 'existing',
+        }),
+      );
+      session.close();
+      release();
+      await run;
+      /** @example The closed owner cannot send resume or start a turn. */
+      expect(harness.requests.map(({ method }) => method)).toEqual(['thread/unsubscribe']);
+    } finally {
+      release();
+      session.close();
+      await run;
+    }
+  });
+
+  /** @example A previous turn still shutting down cannot silently retain its old shell context. */
+  it('fails safely instead of starting a turn when resume is still active', async () => {
+    const harness = createClientHarness({ activeResume: true, initialThreadId: 'thread-existing' });
+    const { session } = createSession(harness, { initialThreadId: 'thread-existing' });
+    try {
+      /** @example The run reports a retryable boundary instead of executing under stale context. */
+      await expect(
+        session.run({
+          env: { LOBEHUB_OPERATION_ID: 'new' },
+          input: [],
+          onRawMessage: () => {},
+          operationId: 'new',
+        }),
+      ).rejects.toThrow('previous turn is still active');
+      /** @example Native-thread failures must not replay the prompt through exec. */
+      expect(session.canFallbackToExec).toBe(false);
+      /** @example No model turn starts after the unsafe resume. */
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(false);
+    } finally {
+      session.close();
+    }
+  });
+
+  /** @example Later operations reload the native thread with their own shell provenance. */
+  it('updates shell provenance on resume while preserving other thread config', async () => {
+    // ROOT CAUSE:
+    // The process env belongs to the first run, and loaded-thread resume ignores config overrides.
+    // Send provenance in thread config and unsubscribe the idle thread before changing it.
+    const harness = createClientHarness();
+    const { session } = createSession(harness);
+    const run = (operationId: string) =>
+      session.run({
+        input: [{ type: 'text', text: 'hello', text_elements: [] }],
+        onRawMessage: () => {},
+        operationId,
+        env: {
+          LOBEHUB_AGENT_ID: 'agent',
+          LOBEHUB_TOPIC_ID: 'topic',
+          LOBEHUB_OPERATION_ID: operationId,
+        },
+      });
+    try {
+      await run('op-a');
+      await run('op-b');
+      const requests = harness.requests.filter(({ method }) =>
+        ['thread/start', 'thread/unsubscribe', 'thread/resume'].includes(method),
+      );
+      /** @example The second run releases the server subscription before applying new config. */
+      expect(requests.map(({ method }) => method)).toEqual([
+        'thread/start',
+        'thread/unsubscribe',
+        'thread/resume',
+      ]);
+      /** @example A resumed shell receives op-b, never op-a. */
+      expect(requests.at(-1)?.params).toMatchObject({
+        config: {
+          'shell_environment_policy.set.LOBEHUB_OPERATION_ID': 'op-b',
+          'shell_environment_policy.set.LOBEHUB_TOPIC_ID': 'topic',
+        },
+      });
+    } finally {
+      session.close();
+    }
+  });
+
   it('sets the original prompt as the name of a new persisted thread', async () => {
     const harness = createClientHarness();
     const { run, session } = createSession(harness, { threadName: 'Original prompt title' });
