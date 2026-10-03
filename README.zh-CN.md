@@ -10,7 +10,7 @@ LobeHub 帮你把专属 Agent 组织成 7×24 不打烊的高效队伍：
 
 你始终掌控全局，从此不用再时刻在线盯守，真正解放自己的时间。
 
-[English](./README.md) · **简体中文** · [官网][official-site] · [更新日志][changelog] · [文档][docs] · [博客][blog] · [反馈问题][github-issues-link]
+[English](./README.md) · **简体中文** · [日本語](./README.ja-JP.md) · [官网][official-site] · [更新日志][changelog] · [文档][docs] · [博客][blog] · [反馈问题][github-issues-link]
 
 <!-- SHIELD GROUP -->
 
