@@ -1,5 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 
+import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { InMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
 import type {
   StreamChunkData,
@@ -371,6 +372,9 @@ export class ResponsesService extends BaseService {
   ): AsyncGenerator<ResponseStreamEvent> {
     const createdAt = Math.floor(Date.now() / 1000);
     let sequenceNumber = 0;
+    // Set once the run has a subscription to release; the `finally` below runs
+    // even when the consumer closes this generator early (client disconnect).
+    let releaseStream: (() => Promise<void>) | undefined;
 
     try {
       const model = params.model;
@@ -434,8 +438,26 @@ export class ResponsesService extends BaseService {
         type: 'response.in_progress' as const,
       };
 
-      // 2. Create AgentRuntimeService with custom stream manager for event subscription
-      const streamEventManager = new InMemoryStreamEventManager();
+      // 2. Run the operation on the gateway-aware stream pipeline, with this
+      // generator's own subscription on a private in-memory manager.
+      //
+      // `execAgent` above already registered this operation with the
+      // agent-gateway Durable Object (`publishAgentRuntimeInit`), and that DO
+      // only closes the session on an `agent_runtime_end`. Executing on a
+      // manager nothing mirrors leaves the DO holding a run that finished long
+      // ago as `running`, so its inactivity watchdog abandons the operation
+      // ~10 minutes later — writing an `Operation abandoned: inactivity_watchdog`
+      // failure on top of a turn that already succeeded, and handing the API
+      // caller an error after the response it already received. Going through
+      // `createStreamEventManager` puts every event, terminal included, on the
+      // gateway.
+      //
+      // The events this generator consumes stay push-style from the process that
+      // produces them: the subscription hangs off a private in-memory manager
+      // rather than taking a second Redis subscriber's connection per streamed
+      // request.
+      const localStreamManager = new InMemoryStreamEventManager();
+      const streamEventManager = createStreamEventManager({ inner: localStreamManager });
       const agentRuntimeService = new AgentRuntimeService(this.db, this.userId, {
         queueService: null,
         streamEventManager,
@@ -447,13 +469,24 @@ export class ResponsesService extends BaseService {
       let resolveWaiting: (() => void) | null = null;
       let executionDone = false;
 
-      const unsubscribe = streamEventManager.subscribe(operationId, (events) => {
+      const unsubscribe = localStreamManager.subscribe(operationId, (events) => {
         eventQueue.push(...events);
         if (resolveWaiting) {
           resolveWaiting();
           resolveWaiting = null;
         }
       });
+
+      // Released in the `finally` below, which also covers this generator being
+      // closed early when the API client disconnects mid-stream.
+      releaseStream = async () => {
+        unsubscribe();
+        // Make sure the gateway pushes this invocation issued — including the
+        // terminal event that closes the DO session — land before the function
+        // can be frozen. Nothing else guarantees an unawaited push survives the
+        // end of the request.
+        await streamEventManager.drainPushes?.(operationId);
+      };
 
       // Helper to wait for next event batch
       const waitForEvents = (): Promise<void> =>
@@ -741,7 +774,6 @@ export class ResponsesService extends BaseService {
 
       // 6. Wait for execution to fully complete
       await executionPromise;
-      unsubscribe();
 
       // If no text came through streaming, extract from final state
       if (!accumulatedText && finalState) {
@@ -824,6 +856,11 @@ export class ResponsesService extends BaseService {
         sequence_number: sequenceNumber,
         type: 'response.failed' as const,
       };
+    } finally {
+      // Runs on the normal path and when the consumer closes this generator
+      // early, so a client that disconnects mid-stream still releases the
+      // subscription and flushes the gateway pushes it triggered.
+      await releaseStream?.();
     }
   }
 
