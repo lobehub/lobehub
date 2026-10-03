@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import type { GoalListFilter } from '@/store/goal';
+
 import {
+  filterGoalsByStatus,
   formatSpan,
   formatUsd,
   goalManagerConversation,
@@ -106,5 +109,33 @@ describe('goalManagerConversation', () => {
         config: { manager: {}, managerState: consumedTurn },
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('filterGoalsByStatus', () => {
+  const goals = [
+    { goal: { id: 'planning', status: 'planning' } },
+    { goal: { id: 'running', status: 'running' } },
+    { goal: { id: 'review', status: 'review' } },
+    { goal: { id: 'achieved', status: 'achieved' } },
+  ] as const;
+  const ids = (filter: GoalListFilter) =>
+    filterGoalsByStatus([...goals], filter).map(({ goal }) => goal.id);
+
+  it('keeps every goal under All, which is the default tab', () => {
+    expect(ids('all')).toEqual(['planning', 'running', 'review', 'achieved']);
+  });
+
+  it('keeps only the goals sitting at the human acceptance gate under Needs review', () => {
+    expect(ids('review')).toEqual(['review']);
+  });
+
+  it('keeps only the executing goal under In progress', () => {
+    expect(ids('running')).toEqual(['running']);
+  });
+
+  it('leaves terminal goals to All — they are in neither of the two narrow tabs', () => {
+    expect(ids('review')).not.toContain('achieved');
+    expect(ids('running')).not.toContain('achieved');
   });
 });
