@@ -2,6 +2,7 @@ import type { AgentAccountInboundMessage, AgentAccountInboundRequest } from '@lo
 
 import type { AgentAccountView } from '@/database/models/agentAccount';
 import { AgentAccountModel } from '@/database/models/agentAccount';
+import { AgentInboxModel } from '@/database/models/agentInbox';
 import type { AgentInboxMessageItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -58,6 +59,21 @@ export interface AgentInboundServiceOptions {
   waker?: AgentInboundWaker;
 }
 
+/**
+ * Wake budget. Every delivery is still recorded — the limit only decides
+ * whether it may start a run. Without it, anyone who knows the address can
+ * start unbounded runs on the owner's account (and spend) just by mailing it.
+ * Counted from the inbox itself, so the limit holds across instances with no
+ * extra store.
+ */
+export const INBOUND_WAKE_LIMITS = {
+  /** Deliveries per account in {@link windowMs} that may wake the agent. */
+  perAccount: 30,
+  /** Deliveries per (account, sender) in {@link windowMs} that may wake the agent. */
+  perSender: 5,
+  windowMs: 60 * 60 * 1000,
+} as const;
+
 const NOOP_WAKER: AgentInboundWaker = {
   wake: async () => ({ reason: 'waker-not-configured', started: false }),
 };
@@ -76,7 +92,8 @@ const NOOP_WAKER: AgentInboundWaker = {
  *    returns the same message with `created: false` instead of duplicating it
  *    or waking the agent twice.
  * 3. **Wake** — a genuinely new delivery wakes the agent through the injected
- *    waker. A duplicate never reaches this step.
+ *    waker, within {@link INBOUND_WAKE_LIMITS}. A duplicate never reaches this
+ *    step.
  */
 export class AgentInboundService {
   private readonly db: LobeChatDatabase;
@@ -160,7 +177,9 @@ export class AgentInboundService {
       };
     }
 
-    const wake = await this.wake(account, row);
+    const wake = (await this.overWakeBudget(accountId, row.from))
+      ? { reason: 'rate-limited', started: false }
+      : await this.wake(account, row);
 
     return {
       accountId,
@@ -170,6 +189,21 @@ export class AgentInboundService {
       status: 200,
       wake,
     };
+  };
+
+  /**
+   * Whether this account (or this sender on it) already used up its wake
+   * budget. The just-recorded row counts, so the limit is the number of
+   * deliveries that may wake per window.
+   */
+  private overWakeBudget = async (accountId: string, from: string): Promise<boolean> => {
+    const since = new Date(Date.now() - INBOUND_WAKE_LIMITS.windowMs);
+    const [fromSender, total] = await Promise.all([
+      AgentInboxModel.countRecent(this.db, { accountId, from, since }),
+      AgentInboxModel.countRecent(this.db, { accountId, since }),
+    ]);
+
+    return fromSender > INBOUND_WAKE_LIMITS.perSender || total > INBOUND_WAKE_LIMITS.perAccount;
   };
 
   /**

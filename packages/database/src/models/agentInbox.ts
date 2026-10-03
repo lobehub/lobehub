@@ -1,8 +1,9 @@
-import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { AgentInboxMessageItem, NewAgentInboxMessage } from '../schemas';
 import { agentInboxMessages } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { agentUsableBy } from '../utils/agent-access';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /** What a caller may supply when a delivery lands in the inbox. */
@@ -49,8 +50,19 @@ export class AgentInboxModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentInboxMessages);
+  /**
+   * Workspace scope AND the owning agent's visibility: the inbox holds whatever
+   * outsiders sent the agent — verification codes included — so a workspace
+   * member must not read a colleague's private agent's mail.
+   */
+  private ownership = () => {
+    const ctx = { userId: this.userId, workspaceId: this.workspaceId };
+
+    return and(
+      buildWorkspaceWhere(ctx, agentInboxMessages),
+      agentUsableBy(this.db, agentInboxMessages.agentId, ctx),
+    )!;
+  };
 
   // --------------- Writes (inbound ingest, unscoped by user) ---------------
 
@@ -148,11 +160,17 @@ export class AgentInboxModel {
     accountId?: string;
     agentId?: string;
     limit?: number;
+    /** Only messages received at or after this instant. */
+    receivedAfter?: Date;
+    threadKey?: string;
     unreadOnly?: boolean;
   }): Promise<AgentInboxMessageItem[]> => {
     const conditions = [this.ownership()];
     if (params?.agentId) conditions.push(eq(agentInboxMessages.agentId, params.agentId));
     if (params?.accountId) conditions.push(eq(agentInboxMessages.accountId, params.accountId));
+    if (params?.threadKey) conditions.push(eq(agentInboxMessages.threadKey, params.threadKey));
+    if (params?.receivedAfter)
+      conditions.push(gte(agentInboxMessages.receivedAt, params.receivedAfter));
     if (params?.unreadOnly) conditions.push(isNull(agentInboxMessages.readAt));
 
     return this.db
@@ -204,27 +222,34 @@ export class AgentInboxModel {
       .limit(params.limit ?? 10);
   };
 
-  /** Newest N messages for one agent, oldest-last — the context injection read. */
-  static latestForAgent = async (
-    db: LobeChatDatabase,
-    agentId: string,
-    limit: number,
-  ): Promise<AgentInboxMessageItem[]> => {
-    const rows = await db
-      .select()
-      .from(agentInboxMessages)
-      .where(eq(agentInboxMessages.agentId, agentId))
-      .orderBy(desc(agentInboxMessages.receivedAt))
-      .limit(limit);
-
-    return rows;
-  };
-
   static unreadCountForAgent = async (db: LobeChatDatabase, agentId: string): Promise<number> => {
     const [row] = await db
       .select({ value: count() })
       .from(agentInboxMessages)
       .where(and(eq(agentInboxMessages.agentId, agentId), isNull(agentInboxMessages.readAt)));
+
+    return row?.value ?? 0;
+  };
+
+  /**
+   * How many deliveries an account received at or after `since`, optionally
+   * from one sender. Unscoped like {@link record}: the inbound edge uses it to
+   * rate-limit wakes before any user is known.
+   */
+  static countRecent = async (
+    db: LobeChatDatabase,
+    params: { accountId: string; from?: string; since: Date },
+  ): Promise<number> => {
+    const conditions = [
+      eq(agentInboxMessages.accountId, params.accountId),
+      gte(agentInboxMessages.createdAt, params.since),
+    ];
+    if (params.from) conditions.push(eq(agentInboxMessages.from, params.from));
+
+    const [row] = await db
+      .select({ value: count() })
+      .from(agentInboxMessages)
+      .where(and(...conditions));
 
     return row?.value ?? 0;
   };

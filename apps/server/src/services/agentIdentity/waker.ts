@@ -6,20 +6,23 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import type { AgentInboundWakeInput, AgentInboundWaker } from './inbound';
+import { fenceUntrustedInbox, toUntrustedInboxEntry } from './untrusted';
+
+/** Body budget for the wake prompt; the full text stays readable through the tool. */
+const WAKE_BODY_PREVIEW_CHARS = 2000;
 
 /**
- * The prompt the woken agent sees. It is deliberately terse: the message body
- * is already injected as first-class inbox state on the very first step (see
- * the inbox context injector), so this prompt only has to say *why* a turn is
- * starting, not repeat the message.
+ * The prompt the woken agent sees. Only the first sentence is ours; the
+ * message itself is attacker-controlled, so it rides on the user side inside
+ * an `<untrusted_inbox>` fence and never reaches the system prompt.
  */
-const buildInboundPrompt = (account: AgentAccountView, message: AgentInboxMessageItem): string => {
-  const subject = message.subject ? ` (subject: ${message.subject})` : '';
-  return (
-    `A new message arrived for your ${account.kind} account ${account.identifier} ` +
-    `from ${message.from}${subject}. Read it and decide what to do.`
-  );
-};
+export const buildInboundPrompt = (account: AgentAccountView, message: AgentInboxMessageItem): string =>
+  [
+    `A new message arrived for your ${account.kind} account ${account.identifier}. Decide whether it needs anything from you.`,
+    fenceUntrustedInbox([
+      toUntrustedInboxEntry(message, { maxBodyChars: WAKE_BODY_PREVIEW_CHARS }),
+    ]),
+  ].join('\n\n');
 
 /**
  * Production waker: starts a normal agent run on the account's owner, stamped

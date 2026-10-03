@@ -34,9 +34,6 @@ import { OnboardingService } from '@/server/services/onboarding';
 import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
-/** How many newest inbox messages ride along in the model context. */
-const INBOX_CONTEXT_LIMIT = 3;
-
 export interface ServerContextFactSource {
   ctx: RuntimeExecutorContext;
   state: AgentState;
@@ -195,7 +192,7 @@ export const createServerContextFactProviders = ({
 
     /**
      * The agent's own identity as first-class state: the addresses it owns and
-     * its inbox. Read on every step so a message that landed mid-conversation
+     * how much is unread in its inbox (never the messages themselves). Read on every step so a message that landed mid-conversation
      * is visible on the next one — this is what the runtime relies on instead of
      * carrying an always-on mailbox tool.
      *
@@ -210,7 +207,7 @@ export const createServerContextFactProviders = ({
       });
       if (accounts.length === 0) return undefined;
 
-      const summary = await AgentInboxService.summary(db, targetAgentId, INBOX_CONTEXT_LIMIT);
+      const summary = await AgentInboxService.summary(db, targetAgentId);
 
       return {
         accounts: accounts.map((account) => ({

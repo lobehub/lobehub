@@ -117,11 +117,15 @@ export interface AgentInboxMessage {
 }
 
 /**
- * The inbox as one glance: how much is waiting and the newest few messages.
- * Injected into the model's context so it knows it has mail without querying.
+ * The inbox as one glance: how much is waiting. Injected into the model's
+ * context so it knows it has mail without querying.
+ *
+ * Deliberately carries no message content. Sender, subject and body are
+ * written by whoever emails or texts the agent, so they must never reach the
+ * system prompt — the model reads them on demand through the account tool,
+ * fenced as untrusted input.
  */
 export interface AgentInboxSummary {
-  latest: AgentInboxMessage[];
   unreadCount: number;
 }
 

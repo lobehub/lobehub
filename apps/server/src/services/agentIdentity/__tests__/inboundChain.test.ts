@@ -96,7 +96,7 @@ const inboundBody = (overrides: { address?: string; messageId?: string; eventId?
     type: 'message.received',
   });
 
-const mailDetail = (text: string) => ({
+const mailDetail = (text: string, id = 'msg_in_chain') => ({
   attachments: [],
   bcc: [],
   cc: [],
@@ -106,7 +106,7 @@ const mailDetail = (text: string) => ({
   error: null,
   from: { address: 'login@service.com', name: 'Service' },
   html: null,
-  id: 'msg_in_chain',
+  id,
   inboxId: 'inb_chain',
   inReplyTo: null,
   links: [],
@@ -144,9 +144,13 @@ beforeAll(async () => {
         return json(200, { address: 'toby-agent@lobe.id', clientId: 'cli_chain', id: 'inb_chain' });
       if (method === 'POST' && pathname === '/v1/webhooks')
         return json(200, { id: 'wh_chain', secret: WEBHOOK_SECRET, url: 'http://127.0.0.1/hook' });
-      if (method === 'GET' && pathname === '/v1/messages/msg_in_chain')
-        return json(200, mailDetail('Your verification code is 839201. It expires in 10 minutes.'));
-      if (method === 'GET' && pathname === '/v1/messages/msg_in_chain/raw') {
+      const messageMatch = /^\/v1\/messages\/([^/]+)$/.exec(pathname);
+      if (method === 'GET' && messageMatch)
+        return json(
+          200,
+          mailDetail('Your verification code is 839201. It expires in 10 minutes.', messageMatch[1]),
+        );
+      if (method === 'GET' && /^\/v1\/messages\/[^/]+\/raw$/.test(pathname)) {
         res.writeHead(200, { 'content-type': 'message/rfc822' });
         return res.end('From: login@service.com\r\nSubject: Your verification code\r\n\r\nx');
       }
@@ -256,6 +260,16 @@ describe('Agent inbound webhook — end to end over the real route', () => {
     expect(agentCalls[0].userId).toBe(userId);
     expect(agentCalls[0].execAgent).toMatchObject({ agentId, trigger: 'inbox' });
 
+    // The sender's words reach the run only inside the untrusted fence on the
+    // user side: the sentence we write ourselves carries no sender content.
+    const prompt: string = agentCalls[0].execAgent.prompt;
+    const [ownSentence, fenced] = prompt.split('\n\n');
+    expect(ownSentence).not.toContain('login@service.com');
+    expect(ownSentence).not.toContain('839201');
+    expect(fenced.startsWith('<untrusted_inbox>')).toBe(true);
+    expect(fenced).toContain('"839201"');
+    expect(fenced.trimEnd().endsWith('</untrusted_inbox>')).toBe(true);
+
     // 4. The provider retries the SAME delivery: idempotent, no second wake.
     const retry = await post('agent-mail', body, signedHeaders(body));
     const retryJson = await retry.json();
@@ -299,15 +313,33 @@ describe('Agent inbound webhook — end to end over the real route', () => {
     console.log(`\n[agent-inbound-chain]\n${transcript.join('\n')}\n[/agent-inbound-chain]\n`);
   });
 
-  it('records the newest delivery and reports an unread inbox summary', async () => {
+  it('summarizes the inbox as an unread count and nothing a sender wrote', async () => {
     const body = inboundBody();
     await post('agent-mail', body, signedHeaders(body));
 
     const { AgentInboxService } = await import('../inbox');
-    const summary = await AgentInboxService.summary(serverDB, agentId, 3);
+    const summary = await AgentInboxService.summary(serverDB, agentId);
 
-    expect(summary.unreadCount).toBe(1);
-    expect(summary.latest).toHaveLength(1);
-    expect(summary.latest[0]).toMatchObject({ codes: ['839201'], from: 'login@service.com' });
+    expect(summary).toEqual({ unreadCount: 1 });
+  });
+
+  it('keeps recording but stops waking once one sender exceeds the wake budget', async () => {
+    const { INBOUND_WAKE_LIMITS } = await import('../inbound');
+    const deliveries = INBOUND_WAKE_LIMITS.perSender + 2;
+    const reasons: string[] = [];
+
+    for (let i = 0; i < deliveries; i++) {
+      const body = inboundBody({ eventId: `evt_flood_${i}`, messageId: `msg_flood_${i}` });
+      const response = await post('agent-mail', body, signedHeaders(body));
+      reasons.push((await response.json()).wake?.reason);
+    }
+
+    const rows = await serverDB
+      .select()
+      .from(agentInboxMessages)
+      .where(eq(agentInboxMessages.accountId, accountId));
+    expect(rows).toHaveLength(deliveries);
+    expect(agentCalls).toHaveLength(INBOUND_WAKE_LIMITS.perSender);
+    expect(reasons.slice(INBOUND_WAKE_LIMITS.perSender)).toEqual(['rate-limited', 'rate-limited']);
   });
 });

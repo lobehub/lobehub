@@ -58,7 +58,7 @@ const providers = () =>
   });
 
 describe('Agent identity as first-class runtime state', () => {
-  it('injects the agent addresses and inbox into the messages the model receives', async () => {
+  it('injects the agent addresses and unread count, never the message content', async () => {
     const account = await new AgentAccountService(serverDB, userId, {
       registry: new AgentAccountProviderRegistry(),
     }).create({
@@ -107,9 +107,12 @@ describe('Agent identity as first-class runtime state', () => {
     console.log(`\n[identity-context-block]\n${system}\n[/identity-context-block]\n`);
     expect(system).toContain('<agent_identity>');
     expect(system).toContain('mail toby-agent@lobe.id — user, can receive/send');
-    expect(system).toContain('<inbox unread="1">');
-    expect(system).toContain('from login@service.com');
-    expect(system).toContain('codes 839201');
+    expect(system).toContain('<inbox unread="1" />');
+    // Nothing a sender wrote may carry system authority: no sender, subject,
+    // body or code reaches the system message.
+    expect(system).not.toContain('login@service.com');
+    expect(system).not.toContain('Your verification code');
+    expect(system).not.toContain('839201');
   });
 
   it('adds no identity block for an agent that owns nothing', async () => {

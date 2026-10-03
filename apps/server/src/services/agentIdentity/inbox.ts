@@ -1,4 +1,4 @@
-import type { AgentInboxMessage, AgentInboxSummary } from '@lobechat/types';
+import type { AgentInboxSummary } from '@lobechat/types';
 
 import type {
   RecordInboxMessageParams,
@@ -46,12 +46,7 @@ export class AgentInboxService {
     this.model = new AgentInboxModel(db, userId, workspaceId);
   }
 
-  list = (params?: {
-    accountId?: string;
-    agentId?: string;
-    limit?: number;
-    unreadOnly?: boolean;
-  }) => this.model.list(params);
+  list = (params?: Parameters<AgentInboxModel['list']>[0]) => this.model.list(params);
 
   unreadCount = (agentId: string) => this.model.unreadCount(agentId);
 
@@ -76,37 +71,11 @@ export class AgentInboxService {
     );
 
   /**
-   * The first-class view the model gets: how much is unread and the newest few
-   * messages, newest first. `limit` is small on purpose — this is context, not
-   * an inbox browser.
+   * The first-class view the model gets: how much is unread — and nothing
+   * else. Message content is attacker-controlled, so it reaches the model only
+   * through the account tool's `readInbox`, fenced as untrusted input.
    */
-  static async summary(
-    db: LobeChatDatabase,
-    agentId: string,
-    limit = 3,
-  ): Promise<AgentInboxSummary & { latest: AgentInboxMessage[] }> {
-    const [rows, unreadCount] = await Promise.all([
-      AgentInboxModel.latestForAgent(db, agentId, limit),
-      AgentInboxModel.unreadCountForAgent(db, agentId),
-    ]);
-
-    return {
-      latest: rows.map((row) => ({
-        accountId: row.accountId,
-        agentId: row.agentId,
-        codes: row.codes ?? [],
-        createdAt: row.createdAt,
-        from: row.from,
-        id: row.id,
-        kind: row.kind,
-        readAt: row.readAt,
-        receivedAt: row.receivedAt,
-        subject: row.subject,
-        text: row.text,
-        threadKey: row.threadKey,
-        to: row.to,
-      })),
-      unreadCount,
-    };
+  static async summary(db: LobeChatDatabase, agentId: string): Promise<AgentInboxSummary> {
+    return { unreadCount: await AgentInboxModel.unreadCountForAgent(db, agentId) };
   }
 }

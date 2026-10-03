@@ -1,5 +1,6 @@
 import type {
   ListAccountsArgs,
+  ReadInboxArgs,
   SendMessageArgs,
   WaitForMessageArgs,
 } from '@lobechat/builtin-tool-agent-account';
@@ -10,6 +11,10 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentAccountService } from '@/server/services/agentIdentity';
 import { AgentInboxService } from '@/server/services/agentIdentity/inbox';
 import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdentity/providers';
+import {
+  fenceUntrustedInbox,
+  toUntrustedInboxEntry,
+} from '@/server/services/agentIdentity/untrusted';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -23,6 +28,14 @@ const DEFAULT_WAIT_MS = 60_000;
 const MAX_WAIT_MS = 120_000;
 const POLL_INTERVAL_MS = 1_000;
 
+const DEFAULT_READ_LIMIT = 10;
+const MAX_READ_LIMIT = 20;
+
+/** How far back a reply is checked for codes relayed from another sender. */
+const CODE_RELAY_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
+
+const normalizeAddress = (value: string) => value.trim().toLowerCase();
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const asJson = (value: unknown) => JSON.stringify(value, null, 2);
@@ -30,10 +43,16 @@ const asJson = (value: unknown) => JSON.stringify(value, null, 2);
 /**
  * Server runtime for the agent-account tool.
  *
- * The account *state* (addresses + inbox) reaches the model as context, not
- * through here. These three APIs are the actions: list, send, and wait. All
- * three are scoped to the run's agent — an account id that belongs to someone
- * else is refused, so the tool cannot be used as a confused deputy.
+ * The account *state* (addresses + unread count) reaches the model as context.
+ * Message content does not: it is attacker-controlled, so it is read here and
+ * handed back inside an `<untrusted_inbox>` fence. Every API is scoped to the
+ * run's agent — an account id that belongs to someone else is refused, so the
+ * tool cannot be used as a confused deputy.
+ *
+ * `sendMessage` is the exfiltration edge. Its manifest holds any send without a
+ * thread for the user's approval; a send that names a thread is checked here:
+ * the thread must exist in this account's inbox, `to` must be its sender, and
+ * the text must not relay a code this agent received from someone else.
  */
 export const agentAccountRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
@@ -58,7 +77,81 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
 
     const inbox = new AgentInboxService(db, userId, workspaceId);
 
+    /** Accept either the account id or the address the model sees in context. */
+    const findOwned = (list: Awaited<ReturnType<typeof accounts>>, ref: string) =>
+      list.find((account) => account.id === ref || account.identifier === ref);
+
+    /**
+     * Why an unattended reply may not go out, or `undefined` when it may. Only
+     * reached when the call named a thread — without one the send was already
+     * held for the user's approval by the manifest's outbound audit.
+     */
+    const refuseThreadReply = async (
+      accountId: string,
+      args: SendMessageArgs & { threadKey: string },
+    ): Promise<string | undefined> => {
+      const recipient = normalizeAddress(args.to);
+      const thread = await inbox.list({
+        accountId,
+        agentId: requireAgentId(),
+        limit: 50,
+        threadKey: args.threadKey,
+      });
+
+      if (!thread.some((message) => normalizeAddress(message.from) === recipient)) {
+        return `Thread ${args.threadKey} has no message from ${args.to} in this inbox, so this is not a reply. Send it without \`threadKey\` to ask the user to approve it.`;
+      }
+
+      const recent = await inbox.list({
+        agentId: requireAgentId(),
+        limit: 200,
+        receivedAfter: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
+      });
+      const relayed = recent.find(
+        (message) =>
+          normalizeAddress(message.from) !== recipient &&
+          (message.codes ?? []).some((code) => args.text.includes(code)),
+      );
+      if (relayed) {
+        return `This reply contains a verification code that ${relayed.from} sent you. Codes are never relayed to another sender without the user's approval — send it without \`threadKey\` to ask the user.`;
+      }
+
+      return undefined;
+    };
+
     return {
+      readInbox: async (args: ReadInboxArgs) => {
+        let accountId: string | undefined;
+        if (args?.accountId) {
+          const target = findOwned(await accounts(), args.accountId);
+          if (!target) {
+            return { content: `No account ${args.accountId} is owned by this agent.`, success: false };
+          }
+          accountId = target.id;
+        }
+
+        const limit = Math.min(Math.max(args?.limit ?? DEFAULT_READ_LIMIT, 1), MAX_READ_LIMIT);
+        const rows = await inbox.list({
+          accountId,
+          agentId: requireAgentId(),
+          limit,
+          unreadOnly: args?.unreadOnly ?? true,
+        });
+
+        if (rows.length === 0) {
+          return { content: 'No messages.', success: true };
+        }
+
+        // Reading is what "read" means: the unread count in context drops.
+        await inbox.markRead(rows.filter((row) => !row.readAt).map((row) => row.id));
+
+        return {
+          content: fenceUntrustedInbox(rows.map((row) => toUntrustedInboxEntry(row))),
+          state: { inboxMessageIds: rows.map((row) => row.id) },
+          success: true,
+        };
+      },
+
       listAccounts: async (_args: ListAccountsArgs) => {
         const list = await accounts();
         return {
@@ -98,6 +191,14 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
               : 'This agent has no send-capable account yet.',
             success: false,
           };
+        }
+
+        if (args.threadKey) {
+          const refusal = await refuseThreadReply(target.id, {
+            ...args,
+            threadKey: args.threadKey,
+          });
+          if (refusal) return { content: refusal, success: false };
         }
 
         try {
@@ -179,16 +280,7 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
 
           if (hit) {
             return {
-              content: asJson({
-                matched: true,
-                message: {
-                  codes: hit.codes ?? [],
-                  from: hit.from,
-                  receivedAt: hit.receivedAt.toISOString(),
-                  subject: hit.subject ?? undefined,
-                  text: hit.text,
-                },
-              }),
+              content: `matched: true\n${fenceUntrustedInbox([toUntrustedInboxEntry(hit)])}`,
               state: { inboxMessageId: hit.id },
               success: true,
             };
