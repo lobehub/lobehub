@@ -71,7 +71,7 @@
   "macOS.services": "Hizmetler",
   "macOS.unhide": "Hepsini Göster",
   "tray.open": "{{appName}}'i Aç",
-  "tray.openMiniToolbar": "Quick Composer",
+  "tray.openMiniToolbar": "Hızlı Oluşturucu",
   "tray.quit": "Çık",
   "tray.show": "{{appName}}'i Göster",
   "view.forceReload": "Zorla Yenile",
@@ -87,5 +87,13 @@
   "window.minimize": "Küçült",
   "window.title": "Pencere",
   "window.toggleFullscreen": "Tam Ekrana Geç",
-  "window.zoom": "Yakınlaştır"
+  "window.zoom": "Yakınlaştır",
+  "tray.more": "Diğer",
+  "tray.moreAgents": "Diğer Ajanlar",
+  "tray.newChat": "Yeni Sohbet",
+  "tray.pinned": "Sabitlenmiş",
+  "tray.quickChat": "Hızlı Sohbet",
+  "tray.recent": "Son Kullanılanlar",
+  "tray.recentAgents": "Son Ajanlar",
+  "tray.settings": "Ayarlar"
 }
