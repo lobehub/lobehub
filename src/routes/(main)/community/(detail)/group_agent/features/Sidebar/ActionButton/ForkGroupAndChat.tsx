@@ -264,7 +264,7 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
 
       // Step 8: Navigate to chat
       navigate(urlJoin('/group', result.groupId));
-    } catch (error: any) {
+    } catch (error) {
       console.error('Fork group failed:', error);
       toast.error(t('fork.failed'));
     } finally {
