@@ -60,6 +60,12 @@ vi.mock('@/utils/rbac', () => ({
 }));
 
 class TestService extends BaseService {
+  protected readonly serviceName = 'TestService';
+
+  writeLog(message: string) {
+    this.log('info', message);
+  }
+
   workspaceWhere(cols: Parameters<BaseService['buildWorkspaceWhere']>[0]) {
     return this.buildWorkspaceWhere(cols);
   }
@@ -314,5 +320,19 @@ describe('BaseService.resolveOperationPermission ownership resolution', () => {
         targetModelId: 'their-model',
       }),
     ).resolves.toMatchObject({ condition: { userId: 'user-2' }, isPermitted: true });
+  });
+});
+
+describe('BaseService log', () => {
+  it('prefixes logs with the explicit service name even when the class name is mangled', () => {
+    class MangledService extends TestService {}
+    // Simulate a minified production bundle renaming the class
+    Object.defineProperty(MangledService, 'name', { value: 'x' });
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+    new MangledService({} as LobeChatDatabase, 'user-1').writeLog('hello');
+
+    expect(infoSpy).toHaveBeenCalledWith('[TestService] hello', '');
+    infoSpy.mockRestore();
   });
 });

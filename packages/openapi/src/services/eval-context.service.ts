@@ -7,6 +7,8 @@ import type { EvalPagination } from '../types/eval-resource.type';
 import { evalPagination } from '../types/eval-resource.type';
 
 export class EvalContextService extends BaseService {
+  protected readonly serviceName = 'EvalContextService';
+
   async listThreads(topicId: string, query: EvalPagination) {
     const [topic] = await this.db
       .select({ id: topics.id })

@@ -26,6 +26,8 @@ import type {
  * Handles CRUD operations for knowledge bases
  */
 export class KnowledgeBaseService extends BaseService {
+  protected readonly serviceName = 'KnowledgeBaseService';
+
   private knowledgeBaseModel: KnowledgeBaseModel;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
