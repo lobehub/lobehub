@@ -1,9 +1,10 @@
 ---
 title: 配置云端沙箱
-description: 配置内置云端沙箱能力，包括 Market 和自托管 Onlyboxes。
+description: 配置内置云端沙箱能力，包括 Market、自托管 Onlyboxes 和腾讯云 EdgeOne。
 tags:
   - 云端沙箱
   - Onlyboxes
+  - 腾讯云
   - 自托管
 ---
 
@@ -24,6 +25,7 @@ tags:
 
 - `market`：使用现有 Market 沙箱。
 - `onlyboxes`：使用兼容 Onlyboxes 的自托管沙箱 Console。
+- `tencent`：使用腾讯云 EdgeOne Agent Runtime 沙箱。
 
 ### `MARKET_BASE_URL`
 
@@ -81,6 +83,46 @@ tags:
 - 默认值：`900`
 - 示例：`3600`
 
+### `TENCENT_SANDBOX_API_TOKEN`
+
+- 类型：`SANDBOX_PROVIDER=tencent` 时必填
+- 描述：用于申请沙箱实例的 EdgeOne Pages API Token，在 EdgeOne Pages 控制台的设置页创建。
+- 示例：`your-edgeone-pages-api-token`
+
+### `TENCENT_SANDBOX_PROJECT_ID`
+
+- 类型：`SANDBOX_PROVIDER=tencent` 时必填
+- 描述：沙箱实例所计费的 EdgeOne Makers 项目。
+- 示例：`makers-xxxxxxxx`
+
+### `TENCENT_SANDBOX_MODE`
+
+- 类型：可选
+- 描述：控制实例的生命周期。`persistent` 为每个话题保留一个容器并在到期前续期，只要话题持续活跃，变量和文件等状态就一直保留；`on-demand` 不续期，容器会在控制面确认的到期时间自然失效。尚未到期的按需容器只有在剩余寿命足以覆盖下一项操作时才会复用，否则该操作会被拒绝；容器到期后，下次调用会重新申请。两种模式都会向腾讯控制面发送不含用户 / 话题原始 ID 的稳定会话标识，因此跨服务副本、冷启动以及构成同一次工具调用的多个请求，都能重新连接同一个尚未过期的容器。
+- 默认值：`persistent`
+- 示例：`on-demand`
+
+### `TENCENT_SANDBOX_TIMEOUT_SEC`
+
+- 类型：可选
+- 描述：每个沙箱实例申请的基础存活时长（秒），有效范围为 300–3600。较长操作会把申请时长提高到 “操作超时加安全余量”，最高 3600 秒。`persistent` 模式下会在到期前自动续期。
+- 默认值：`300`
+- 示例：`900`
+
+### `TENCENT_SANDBOX_REGION`
+
+- 类型：可选
+- 描述：分配沙箱实例所使用的地域。
+- 默认值：`ap-beijing`
+- 示例：`ap-singapore`
+
+### `TENCENT_SANDBOX_API_BASE`
+
+- 类型：可选
+- 描述：覆盖沙箱控制面端点。需要使用国际站而非中国站时设置。
+- 默认值：`https://pages-api.cloud.tencent.com/v1/sandbox`
+- 示例：`https://pages-api.edgeone.ai/v1/sandbox`
+
 ## Market 配置
 
 默认情况下，LobeHub 使用官方 Market 沙箱，不需要额外配置：
@@ -133,4 +175,36 @@ CONSOLE_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
 <Callout type={'info'}>
   文件导出仍会把沙箱内产物写入 LobeHub 配置的 S3 存储。如果用户需要下载沙箱生成的文件，请同时配置 S3
   相关环境变量。
+</Callout>
+
+## 腾讯云配置
+
+腾讯云 EdgeOne Agent Runtime 提供托管沙箱，使用 E2B 协议。最小配置：
+
+```bash
+SANDBOX_PROVIDER=tencent
+TENCENT_SANDBOX_API_TOKEN=your-edgeone-pages-api-token
+TENCENT_SANDBOX_PROJECT_ID=makers-xxxxxxxx
+```
+
+沙箱镜像预装了 Python 与 Node.js，代码执行、Shell 命令和文件操作无需额外准备镜像。
+
+通过 `TENCENT_SANDBOX_MODE` 选择实例的生命周期：
+
+```bash
+# 只要话题还活跃就持续续期同一个容器（默认），变量和文件跨调用保留。
+TENCENT_SANDBOX_MODE=persistent
+
+# 不续期，容器在控制面确认的到期时间失效；较长操作可以提高配置的基础时长。
+TENCENT_SANDBOX_MODE=on-demand
+```
+
+<Callout type={'warn'}>
+  该提供方尚未实现技能脚本（`execScript`），因此 `capabilities.skillScripts` 报告为
+  `false`。代码执行、Shell 命令、文件操作与文件导出均已支持。
+</Callout>
+
+<Callout type={'info'}>
+  使用这些沙箱**不需要**把 LobeHub 部署到 EdgeOne 上。实例通过公开的控制面 API 申请，
+  部署在任意服务器上的自托管 LobeHub 都可以使用。
 </Callout>
