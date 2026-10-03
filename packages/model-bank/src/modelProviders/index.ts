@@ -29,6 +29,7 @@ import GithubCopilotProvider from './githubCopilot';
 import GLMCodingPlanProvider from './glmCodingPlan';
 import GoogleProvider from './google';
 import GroqProvider from './groq';
+import HeFuProvider from './hefu';
 import HigressProvider from './higress';
 import HuggingFaceProvider from './huggingface';
 import HunyuanProvider from './hunyuan';
@@ -222,6 +223,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   ReplicateProvider,
   NebiusProvider,
   CometAPIProvider,
+  HeFuProvider,
   VercelAIGatewayProvider,
   CerebrasProvider,
   ZenMuxProvider,
@@ -285,6 +287,7 @@ export { default as GithubCopilotProviderCard } from './githubCopilot';
 export { default as GLMCodingPlanProviderCard } from './glmCodingPlan';
 export { default as GoogleProviderCard } from './google';
 export { default as GroqProviderCard } from './groq';
+export { default as HeFuProviderCard } from './hefu';
 export { default as HigressProviderCard } from './higress';
 export { default as HuggingFaceProviderCard } from './huggingface';
 export { default as HunyuanProviderCard } from './hunyuan';
