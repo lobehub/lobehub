@@ -31,6 +31,7 @@ import { TopicStartReservationError } from '@/server/services/aiAgent/topicStart
 import { GoalService } from './index';
 import { GoalManagerService } from './manager';
 import * as scheduler from './scheduler';
+import { GoalWaitService } from './wait';
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: () => db }));
 vi.mock('@/libs/oidc-provider/access-control', () => ({ assertOIDCUserActive: async () => {} }));
@@ -1627,5 +1628,221 @@ describe('takeover and dependent work', () => {
       (await service().graph(graph.goal.id)).nodes.find((node) => node.id === blockedNode.id)!
         .status,
     ).not.toBe('retired');
+  });
+});
+
+describe('durable manager continuation', () => {
+  const waits = () => new GoalWaitService(db, userId);
+  const event = { type: 'external.result', key: 'experiment-1', eventId: 'delivery-1' };
+  const finish = async (id: string, operationId: string) => {
+    await ops().recordCompletion(operationId, { status: 'done' });
+    await service().tick(id);
+  };
+  const begin = async () => {
+    const run = await start();
+    await manager().submit(run.id, run.state.token, run.op.id, {
+      action: 'wait',
+      reason: 'Await external evidence',
+      until: new Date(Date.now() + 60_000).toISOString(),
+      event: { type: event.type, key: event.key },
+    });
+    return run;
+  };
+
+  it('persists a bounded wait without paying for another planning turn', async () => {
+    const { id, op } = await begin();
+    await finish(id, op.id);
+    expect((await service().tick(id)).outcome).toBe('waiting_external');
+    const goal = await model().findById(id);
+    expect(goal?.status).toBe('running');
+    expect(goal?.config?.managerState).toMatchObject({
+      consumed: true,
+      turns: 1,
+      submitted: { action: 'wait' },
+    });
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
+    expect(
+      (await GoalModel.listStalled(db, { staleBefore: new Date() })).map((g) => g.id),
+    ).not.toContain(id);
+  });
+
+  it('retains an early event, rejects duplicates and fences later waits', async () => {
+    const { id, state, op } = await begin();
+    expect(await waits().deliver(id, { ...event, waitToken: 'stale' })).toMatchObject({
+      accepted: false,
+    });
+    expect(
+      await waits().deliver(id, { ...event, waitToken: state.token, key: 'wrong' }),
+    ).toMatchObject({ accepted: false });
+    expect(
+      await waits().deliver(id, { ...event, waitToken: state.token, reference: 'experiment:1' }),
+    ).toMatchObject({ accepted: true });
+    expect(await waits().deliver(id, { ...event, waitToken: state.token })).toMatchObject({
+      accepted: false,
+      reason: 'already_woken',
+    });
+    await service().tick(id);
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
+    await finish(id, op.id);
+    await service().tick(id);
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(AiAgentService.prototype.execAgent).mock.calls[1][0].prompt).toContain(
+      'experiment:1',
+    );
+    const next = (await model().findById(id))!.config!.managerState!;
+    await manager().submit(id, next.token, next.operationId!, {
+      action: 'wait',
+      reason: 'Next observation',
+      until: new Date(Date.now() + 60_000).toISOString(),
+      event: { type: event.type, key: event.key },
+    });
+    expect(await waits().deliver(id, { ...event, waitToken: state.token })).toMatchObject({
+      accepted: false,
+      reason: 'unmatched',
+    });
+    expect((await model().findById(id))!.config!.managerState!.wait?.wake).toBeUndefined();
+  });
+
+  it('does not expose a personal Goal to another user', async () => {
+    const { id, state } = await begin();
+    await expect(
+      new GoalWaitService(db, 'another-user').deliver(id, { ...event, waitToken: state.token }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('keeps a user pause through an event and elapsed timer until explicit resume', async () => {
+    const { id, state, op } = await begin();
+    await finish(id, op.id);
+    await service().pause(id);
+    expect(await waits().deliver(id, { ...event, waitToken: state.token })).toMatchObject({
+      accepted: false,
+      reason: 'stopped',
+    });
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 120_000);
+    await service().tick(id);
+    expect((await model().findById(id))?.status).toBe('paused');
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
+    await service().resume(id);
+    await service().tick(id);
+    await service().tick(id);
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers an elapsed persisted wait after service recreation via the sweep', async () => {
+    const { id, op } = await begin();
+    await finish(id, op.id);
+    const goal = (await model().findById(id))!;
+    const state = goal.config!.managerState!;
+    // Let database time observe an elapsed deadline without a real minute-long test.
+    await db
+      .update(goals)
+      .set({
+        config: {
+          ...goal.config,
+          managerState: {
+            ...state,
+            wait: { ...state.wait!, until: new Date(Date.now() - 1000).toISOString() },
+          },
+        },
+      })
+      .where(eq(goals.id, id));
+    expect(
+      (await GoalModel.listStalled(db, { staleBefore: new Date() })).map((g) => g.id),
+    ).toContain(id);
+    await new GoalService(db, userId).tick(id);
+    await new GoalService(db, userId).tick(id);
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores historical measurements but wakes on a fresh below-target observation', async () => {
+    const { id, state, op } = await start();
+    await manager().submit(id, state.token, op.id, {
+      action: 'wait',
+      reason: 'Observe progress',
+      until: new Date(Date.now() + 60_000).toISOString(),
+      event: { type: 'metric.observed', key: 'score' },
+    });
+    await finish(id, op.id);
+    await service().setMetricCriteria(id, [{ key: 'score', target: 100 }]);
+    await service().recordObservation(id, {
+      key: 'score',
+      value: 1,
+      observedAt: new Date(Date.now() - 86400_000),
+    });
+    expect((await model().findById(id))!.config!.managerState!.wait?.wake).toBeUndefined();
+    await service().recordObservation(id, { key: 'score', value: 2 });
+    await service().tick(id);
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+    expect((await model().findById(id))!.config!.acceptance?.metrics).toEqual([
+      { key: 'score', target: 100 },
+    ]);
+  });
+
+  it('returns an unmet measured contract to planning and accepts another experiment', async () => {
+    const { id, state, op } = await start();
+    await manager().submit(id, state.token, op.id, taskPlan);
+    const node = (await service().graph(id)).nodes.find((n) => n.kind === 'task')!;
+    await new GoalGraphModel(db, userId).updateNodeStatus(id, node.id, 'resolved');
+    await finish(id, op.id);
+    await service().setMetricCriteria(id, [{ key: 'score', target: 100 }]);
+    await service().tick(id);
+    const next = (await model().findById(id))!.config!.managerState!;
+    await manager().submit(id, next.token, next.operationId!, {
+      action: 'verify',
+      reason: 'Evaluate evidence',
+    });
+    await finish(id, next.operationId!);
+    expect((await service().tick(id)).outcome).toBe('advanced');
+    expect((await model().findById(id))?.status).toBe('running');
+    await service().tick(id);
+    expect(vi.mocked(AiAgentService.prototype.execAgent).mock.calls[2][0].prompt).toContain(
+      'Measured acceptance not met',
+    );
+    const third = (await model().findById(id))!.config!.managerState!;
+    await manager().submit(id, third.token, third.operationId!, taskPlan);
+    expect((await service().graph(id)).nodes.filter((n) => n.kind === 'task')).toHaveLength(2);
+  });
+
+  it('invites the first manager turn after exploration reaches unmet acceptance', async () => {
+    const graph = await service().create({
+      title: 'Measured exploration',
+      agentId,
+      config: {
+        manager: { maxTurns: 3 },
+        exploration: { instruction: 'Explore', maxExperiments: 2 },
+      },
+    });
+    for (const node of graph.nodes.filter((n) => n.kind !== 'problem'))
+      await db.update(goalNodes).set({ status: 'resolved' }).where(eq(goalNodes.id, node.id));
+    expect(
+      (
+        await manager().reconsiderAcceptance(
+          await service().graph(graph.goal.id),
+          'Measured acceptance not met: score',
+        )
+      )?.outcome,
+    ).toBe('waiting_external');
+    expect(vi.mocked(AiAgentService.prototype.execAgent).mock.calls[0][0].prompt).toContain(
+      'Measured acceptance not met: score',
+    );
+  });
+
+  it('rejects elapsed waits and unfinished work', async () => {
+    const { id, state, op } = await start();
+    await expect(
+      manager().submit(id, state.token, op.id, {
+        action: 'wait',
+        reason: 'Elapsed',
+        until: new Date(Date.now() - 1000).toISOString(),
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await new GoalGraphModel(db, userId).createNode(id, { kind: 'task', title: 'Pending work' });
+    await expect(
+      manager().submit(id, state.token, op.id, {
+        action: 'wait',
+        reason: 'Pending',
+        until: new Date(Date.now() + 60_000).toISOString(),
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 });

@@ -185,11 +185,53 @@ const hasOperationToken = () => {
 export function registerGoalCommand(program: Command) {
   const goal = program.command('goal').description('Run long-horizon Goal Graphs');
   goal
+    .command('wake <id>')
+    .description('Deliver an external result to a specific Goal wait')
+    .requiredOption('--token <token>', 'managerState.token from the waiting Goal')
+    .requiredOption('--event <id>', 'Stable delivery ID')
+    .requiredOption('--type <type>', 'Event type declared by the wait')
+    .requiredOption('--key <key>', 'Event correlation key declared by the wait')
+    .option('--summary <text>', 'Short observation')
+    .option('--reference <reference>', 'Evidence reference, not an inline dataset')
+    .option('--json', 'Output JSON')
+    .action(
+      async (
+        id: string,
+        options: {
+          token: string;
+          event: string;
+          type: string;
+          key: string;
+          summary?: string;
+          reference?: string;
+          json?: boolean;
+        },
+      ) => {
+        const client = await getTrpcClient();
+        const result = await client.goal.wake.mutate({
+          id,
+          waitToken: options.token,
+          eventId: options.event,
+          type: options.type,
+          key: options.key,
+          summary: options.summary,
+          reference: options.reference,
+        });
+        if (options.json) outputJson(result.data);
+        else
+          console.log(
+            result.data.accepted
+              ? 'Event recorded; Goal continuation queued.'
+              : `Event not applied: ${result.data.reason}`,
+          );
+      },
+    );
+  goal
     .command('plan <id>')
     .description('Atomically submit the current main Agent plan')
     .requiredOption(
       '--file <path>',
-      'JSON plan: action tasks/verify/retry/escalate, reason and action fields',
+      'JSON plan: action tasks/wait/verify/retry/escalate, reason and action fields',
     )
     .requiredOption('--token <token>', 'Current server-issued planning turn token')
     .option('--operation <id>', 'Defaults to LOBEHUB_OPERATION_ID')

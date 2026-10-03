@@ -98,6 +98,7 @@ import {
   normalizeUnderstanding,
   UNDERSTANDING_CONFIDENCE,
 } from './understanding';
+import { GoalWaitService } from './wait';
 
 const TASK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
 /**
@@ -547,6 +548,21 @@ export class GoalService {
       value: input.value,
     });
 
+    const manager = goal.config?.managerState;
+    if (
+      manager?.wait &&
+      point &&
+      new Date(point.observedAt).getTime() >= Date.parse(manager.startedAt)
+    ) {
+      await new GoalWaitService(this.db, this.userId, this.workspaceId).deliver(goalId, {
+        waitToken: manager.token,
+        eventId: point.id,
+        type: 'metric.observed',
+        key: input.key,
+        reference: series.id,
+        summary: `${input.key} = ${input.value} at ${point.observedAt}`,
+      });
+    }
     return { point, series, shouldAdvance: await this.reopenIfMeasurementCleared(goalId) };
   };
 
@@ -1930,17 +1946,16 @@ export class GoalService {
         });
       }
 
-      // The measured half of acceptance stopped the goal short of its delivery
-      // contract. Nothing to create and nothing to settle — the next
-      // observation is what moves it, which can be days away.
-      //
-      // Park it for the same reason `no_frontier` does: a `running` goal that
-      // always reports `no_progress` is picked by every sweep forever, and a
-      // long-horizon goal waiting on a measurement would sit in that state for
-      // its whole life — enough of them crowd genuinely stranded goals out of
-      // the newest-first scan limit. `recordObservation` resumes it when a
-      // measurement actually clears the gate.
+      // Managed Goals reconsider the same contract after a shortfall. Unmanaged
+      // Goals park until an observation clears the gate, keeping them out of
+      // the sweep while they have no action to take.
       case 'measured_acceptance': {
+        const replanning = await new GoalManagerService(
+          this.db,
+          this.userId,
+          this.workspaceId,
+        ).reconsiderAcceptance(graph, move.message);
+        if (replanning) return observe(replanning);
         await this.setPauseReason(goalId, 'measured_acceptance');
         await this.transitionStatus(graph.goal, 'paused', move.message);
         effects.push({ type: 'goal_status', detail: 'paused' });
