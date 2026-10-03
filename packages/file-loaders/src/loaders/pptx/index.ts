@@ -30,7 +30,7 @@ export class PptxLoader implements FileLoaderInterface {
 
     try {
       // --- File Extraction Step ---
-      const slidesRegex = /ppt\/slides\/slide\d+\.xml/g;
+      const slidesRegex = /ppt\/slides\/slide\d+\.xml/;
       const slideNumberRegex = /slide(\d+)\.xml/;
 
       log('Extracting slide XML files from PPTX');
