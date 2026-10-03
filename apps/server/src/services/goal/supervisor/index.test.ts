@@ -93,12 +93,24 @@ afterEach(async () => {
   await db.delete(users);
 });
 
+/**
+ * A Goal whose Task failed with a transport error.
+ *
+ * `enabled: false` stands for the legacy Goal the creation invariant deliberately
+ * does not backfill. The server now rejects that flag on create, so the row is
+ * cleared directly — which is precisely the config shape a pre-invariant Goal has.
+ */
 const failedGoal = async (enabled = true, error = 'fetch failed: ECONNRESET') => {
   const graph = await service().create({
-    config: { supervision: { enabled } },
+    config: { supervision: { enabled: true } },
     tasks: ['Finish existing report'],
     title: 'Interrupted delivery',
   });
+  if (!enabled)
+    await db
+      .update(goals)
+      .set({ config: { supervision: { enabled: false } } })
+      .where(eq(goals.id, graph.goal.id));
   const created = await service().tick(graph.goal.id);
   const taskId = created.taskId!;
   const topicId = `topic-failed-${++sequence}`;
@@ -566,7 +578,7 @@ describe('Goal Supervisor integration', () => {
     expect(move.outcome).not.toBe('waiting_external');
   });
 
-  it('without supervision the same transport failure opens a human Gate', async () => {
+  it('a Goal created before supervision was mandatory opens a human Gate instead', async () => {
     const { goalId } = await failedGoal(false);
     expect((await service().tick(goalId)).outcome).toBe('waiting_human');
     expect((await service().graph(goalId)).decisions[0].authority).toBe('user');
