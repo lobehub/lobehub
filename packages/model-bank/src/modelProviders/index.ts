@@ -21,6 +21,7 @@ import CohereProvider from './cohere';
 import CometAPIProvider from './cometapi';
 import ComfyUIProvider from './comfyui';
 import DeepSeekProvider from './deepseek';
+import EmpirioLabsProvider from './empiriolabs';
 import FalProvider from './fal';
 import FireworksAIProvider from './fireworksai';
 import GiteeAIProvider from './giteeai';
@@ -109,6 +110,7 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   XinferenceProvider.chatModels,
   OpenRouterProvider.chatModels,
   TogetherAIProvider.chatModels,
+  EmpirioLabsProvider.chatModels,
   FireworksAIProvider.chatModels,
   PerplexityProvider.chatModels,
   AnthropicProvider.chatModels,
@@ -169,6 +171,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   XiaomiMiMoProvider,
   AiHubMixProvider,
   OpenRouterProvider,
+  EmpirioLabsProvider,
   FalProvider,
   OllamaProvider,
   OllamaCloudProvider,
@@ -277,6 +280,7 @@ export { default as CohereProviderCard } from './cohere';
 export { default as CometAPIProviderCard } from './cometapi';
 export { default as ComfyUIProviderCard } from './comfyui';
 export { default as DeepSeekProviderCard } from './deepseek';
+export { default as EmpirioLabsProviderCard } from './empiriolabs';
 export { default as FalProviderCard } from './fal';
 export { default as FireworksAIProviderCard } from './fireworksai';
 export { default as GiteeAIProviderCard } from './giteeai';
