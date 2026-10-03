@@ -405,6 +405,25 @@ Choose the layout by comparison intent, not by the source image dimensions:
 A comparison pair means the same view in two states — sequential steps of a
 flow are ordinary ordered evidence with captions, not a pair.
 
+### Video chapters
+
+A `video` evidence entry takes `chapters`: `step` (an action, with `label`),
+`check` (a claim true of that frame, with `note`) and `flag` (an anomaly you
+noticed and disclose, with `note`), each at `t` seconds. The page puts them on
+the player's timeline and captions each claim over its frame:
+
+```json
+{ "path": "assets/scroll-top.mp4",
+  "description": "Five scrolls at the top of a short topic.",
+  "chapters": [
+    { "kind": "step", "t": 6, "label": "Scroll #3" },
+    { "kind": "check", "t": 7.9, "note": "Scroll #3: no skeleton, first question still in place" }
+  ] }
+```
+
+Derive `t` from logged marks, never from memory, and disclose every anomaly as a
+`flag` — [video-chapters.md](./video-chapters.md).
+
 ## Rules
 
 - **No evidence, no claim** — every `pass`/`fail` in `cases[]` links at least
