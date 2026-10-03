@@ -813,6 +813,15 @@ const TERMINAL_RUN_STATUSES = new Set([
   'aborted',
 ]);
 
+const FAILURE_STATUSES = new Set([
+  'failed',
+  'error',
+  'cancelled',
+  'canceled',
+  'aborted',
+  'interrupted',
+]);
+
 /**
  * Fallback when the live stream (gateway WebSocket / SSE) drops before the run
  * finishes: the run is still executing server-side, so poll its status every 10s
@@ -837,8 +846,8 @@ async function pollAgentRunStatus(
     }
 
     if (!r) {
-      log.info('Run is no longer tracked — finished (or expired).');
-      return;
+      log.warn('Run status unavailable — operation not found or expired.');
+      process.exit(1);
     }
 
     const status = r.status || r.state || 'unknown';
@@ -850,6 +859,9 @@ async function pollAgentRunStatus(
 
     if (TERMINAL_RUN_STATUSES.has(status)) {
       if (r.error) log.error(`Run error: ${r.error}`);
+      if (FAILURE_STATUSES.has(status)) {
+        process.exit(1);
+      }
       return;
     }
   }
