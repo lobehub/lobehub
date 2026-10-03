@@ -394,6 +394,22 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：`-`
 - 示例：`-all,+meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo,+meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo`
 
+## Token Market
+
+### `TOKENMARKET_API_KEY`
+
+- 类型：必选
+- 描述：在 Token Market 控制台创建的 API 密钥。
+- 默认值：`-`
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `TOKENMARKET_MODEL_LIST`
+
+- 类型：可选
+- 描述：用于指定自定义的 Token Market 模型列表。模型定义语法规则详见 [模型列表][model-list]
+- 默认值：`-`
+- 示例：`-all,+gpt-5.4-mini,+claude-sonnet-5`
+
 ## Fireworks AI
 
 ### `FIREWORKSAI_API_KEY`
