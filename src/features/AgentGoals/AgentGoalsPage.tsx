@@ -7,20 +7,19 @@ import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon } from 'lucide-react'
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import GoalSkeleton from '@/components/Skeleton/Goal';
+import GoalSkeleton, { GoalListRowsSkeleton } from '@/components/Skeleton/Goal';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { GoalListFilter } from '@/store/goal';
-import { useGoalStore } from '@/store/goal';
+import { filterGoalsByStatus, useGoalStore } from '@/store/goal';
 
 import { createGoalModal } from './CreateGoalModal';
 import { GoalCardItem } from './GoalCardItem';
 import GoalEmptyState from './GoalEmptyState';
 import type { GoalExampleSeed } from './goalExamples';
 import { GoalListItem } from './GoalListItem';
-import { filterGoalsByStatus } from './goalPresentation';
 
 const styles = createStaticStyles(({ css }) => ({
   countBadge: css`
@@ -87,12 +86,29 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   // between. `data?.goals` keeps the settled-empty and hydrated shapes aligned.
   const { data, error, isLoading } = useFetchGoals(agentId, projectId);
   const goals = useMemo(() => data?.goals ?? [], [data]);
+  // The active tab reads its own statuses from the server. `all` shares the
+  // window read's cache entry, so the page only pays for an extra request once
+  // the user opens a narrow tab.
+  const tabSWR = useFetchGoals(agentId, projectId, filter);
+  // `delivered` is a whole-set count, not a count of the page the list happens
+  // to hold: read the review set's own total so the header can never disagree
+  // with what the Needs-review tab shows once a goal sits past the list's page.
+  const reviewSWR = useFetchGoals(agentId, projectId, 'review');
   const summary = useMemo(() => {
-    const delivered = goals.filter(({ goal }) => goal.status === 'review').length;
+    const total = data?.total ?? goals.length;
+    const delivered =
+      reviewSWR.data?.total ?? goals.filter(({ goal }) => goal.status === 'review').length;
 
-    return { delivered, pursuing: goals.length - delivered, total: goals.length };
-  }, [goals]);
-  const filteredGoals = useMemo(() => filterGoalsByStatus(goals, filter), [filter, goals]);
+    return { delivered, pursuing: total - delivered, total };
+  }, [data, goals, reviewSWR.data]);
+  // A page of the newest goals cannot prove a tab empty, so until the tab's own
+  // read answers the list holds its shape instead of claiming an outcome.
+  const isTabPending = filter !== 'all' && tabSWR.data === undefined;
+  const filteredGoals = useMemo(
+    () => (filter === 'all' ? goals : (tabSWR.data?.goals ?? filterGoalsByStatus(goals, filter))),
+    [filter, goals, tabSWR.data],
+  );
+  const isFilterEmpty = !isTabPending && filteredGoals.length === 0;
   const visibleGoalCount = filteredGoals.length;
   const GoalItem = viewMode === 'list' ? GoalListItem : GoalCardItem;
   const openCreateGoal = (seed?: GoalExampleSeed) => {
@@ -236,7 +252,9 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                 </Flexbox>
               </Flexbox>
               <div className={viewMode === 'card' ? styles.list : styles.listRows}>
-                {filteredGoals.length === 0 ? (
+                {isTabPending ? (
+                  <GoalListRowsSkeleton />
+                ) : isFilterEmpty ? (
                   <Block padding={32} variant={'outlined'}>
                     <Empty
                       description={t('goalPage.filteredEmptyDescription')}

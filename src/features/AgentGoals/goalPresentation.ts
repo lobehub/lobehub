@@ -2,8 +2,6 @@ import type { GoalStatus } from '@lobechat/const/goal';
 import type { GoalConfig, GoalSpend, TaskStatus } from '@lobechat/types';
 import { formatDuration } from '@lobechat/utils';
 
-import type { GoalListFilter } from '@/store/goal';
-
 /** Goal lifecycle state → i18n status key (goal list vocabulary). */
 const goalStatusKeyMap = {
   achieved: 'goalList.status.achieved',
@@ -51,28 +49,6 @@ export const goalStatusToTaskStatus = (goalStatus: GoalStatus): TaskStatus => {
 
 /** `$6.4` — a budget read as money, at the precision a budget is set in. */
 export const formatUsd = (amount: number): string => `$${Math.round(amount * 100) / 100}`;
-
-/**
- * Lifecycle states each list tab keeps, as an explicit partition rather than a
- * predicate per tab: the tab's count and the rows under it can then never
- * disagree, and a new status has one place to be placed in. `null` means the tab
- * keeps everything — `all` is the default, so a goal is never hidden by default.
- */
-const goalListFilterStatuses: Record<GoalListFilter, GoalStatus[] | null> = {
-  all: null,
-  review: ['review'],
-  running: ['running'],
-};
-
-/** Goal list rows kept by the active tab. */
-export const filterGoalsByStatus = <T extends { goal: { status: GoalStatus } }>(
-  goals: T[],
-  filter: GoalListFilter,
-): T[] => {
-  const keptStatuses = goalListFilterStatuses[filter];
-
-  return keptStatuses ? goals.filter(({ goal }) => keptStatuses.includes(goal.status)) : goals;
-};
 
 /**
  * Spend and budget as ONE metric — they are a fraction, and two neighbouring
