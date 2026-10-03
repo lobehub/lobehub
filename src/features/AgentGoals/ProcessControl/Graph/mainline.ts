@@ -1,4 +1,5 @@
 import type { GoalGraphNode } from '@lobechat/types';
+import { experimentMembers } from '@lobechat/utils/goalGraph';
 import { cssVar } from 'antd-style';
 
 import type { GoalGraphView } from '../goalGraphViewModel';
@@ -17,14 +18,18 @@ export interface Mainline {
 export type MainlineEmphasis = 'mainline' | 'muted' | undefined;
 
 export const resolveMainline = (
-  graph: Pick<GoalGraphView, 'byId' | 'report'>,
+  graph: Pick<GoalGraphView, 'byId' | 'edges' | 'nodes' | 'report'>,
 ): Mainline | undefined => {
   const mark = graph.report?.latest?.metadata.mainline;
   if (!mark) return undefined;
   // A node deleted since the report was written must not leave the whole map muted.
   const nodeIds = new Set(mark.nodeIds.filter((id) => graph.byId[id]));
   if (nodeIds.size === 0) return undefined;
-  return { edgeIds: new Set(mark.edgeIds), nodeIds };
+  const mainline: Mainline = { edgeIds: new Set(mark.edgeIds), nodeIds };
+  // A mark that reaches every card rings the whole map and says nothing. The
+  // wrap-up model does exactly that when it cannot tell the path apart, so the
+  // host draws the plain map instead of a mainline nothing stands against.
+  return mainlineContrasts(mainline, graph) ? mainline : undefined;
 };
 
 /**
@@ -42,6 +47,24 @@ export const nodeEmphasis = (
   for (const member of members) if (mainline.nodeIds.has(member)) return 'mainline';
   if (node.kind === 'problem') return undefined;
   return 'muted';
+};
+
+/**
+ * Whether any card the map draws stands off the mark. A collapsed experiment
+ * stands in for its members, so it counts as on the mainline when they are —
+ * the rule {@link nodeEmphasis} applies when the card is painted.
+ */
+const mainlineContrasts = (
+  mainline: Mainline,
+  graph: Pick<GoalGraphView, 'edges' | 'nodes'>,
+): boolean => {
+  const snapshot = { edges: graph.edges, nodes: graph.nodes.map((view) => view.node) };
+  for (const view of graph.nodes) {
+    const members =
+      view.node.kind === 'experiment' ? experimentMembers(snapshot, view.node.id, false) : [];
+    if (nodeEmphasis(mainline, view.node, members) === 'muted') return true;
+  }
+  return false;
 };
 
 /**
