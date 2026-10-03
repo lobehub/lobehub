@@ -203,6 +203,7 @@ describe('AgentShareModel', () => {
         ownerId: userId,
         shareId: share.id,
         workspaceId,
+        workspaceSlug: 'agent-share-test-workspace',
       });
       await expect(
         AgentShareModel.readCurrentVisitorCaps(serverDB, workspaceAgentId),

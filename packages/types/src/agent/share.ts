@@ -105,6 +105,12 @@ export interface SharedAgentData {
    * "edit share" link) instead of the plain visitor UI.
    */
   isOwner: boolean;
+  /**
+   * Slug of the Workspace that owns a Workspace share, returned only to its
+   * owner so the "settings" link can open the share inside that Workspace
+   * rather than the active one. Always `null` for visitors and personal shares.
+   */
+  ownerWorkspaceSlug: string | null;
   shareId: string;
   /** The share's custom URL slug, if the creator has set one. `null` otherwise. */
   slug: string | null;

@@ -403,20 +403,25 @@ export default {
   'share.entry': 'Share this Agent',
   'share.settings.limits.desc':
     'Every visitor run is billed to your account, so these caps are what keep a shared link from running up your bill. They always apply — you can change the numbers, but not turn them off.',
-  'share.settings.limits.maxFileStorage': 'File storage limit (MB)',
   'share.settings.limits.maxFileStorageHint':
     'Files visitors attach are stored on your account. Uploads stop once they reach this total; set 0 to turn attachments off.',
+  // Renamed from `maxFileStorage` when the MB unit moved into an input suffix: a new key lets
+  // auto-i18n translate it, which it never does for a changed value under an existing key.
+  'share.settings.limits.maxFileStorageLabel': 'File storage limit',
   'share.settings.limits.maxFileStorageWorkspaceHint':
     'Files visitors attach are stored in the Workspace. Uploads stop once they reach this total; set 0 to turn attachments off.',
   'share.settings.limits.maxTopicsPerVisitor': 'Topics per visitor',
   'share.settings.limits.maxTopicsPerVisitorHint':
     'How many separate topics each signed-in visitor can start.',
+  'share.settings.limits.maxTopicsPerVisitorUnit': 'topics',
   'share.settings.limits.maxTurnsPerTopic': 'Turns per topic',
   'share.settings.limits.maxTurnsPerTopicHint':
     'How many messages a visitor can send inside one topic.',
-  'share.settings.limits.monthlySpendLimit': 'Monthly spend cap (M credits)',
+  'share.settings.limits.maxTurnsPerTopicUnit': 'turns',
+  'share.settings.limits.monthlySpendLimit': 'Monthly spend cap',
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap. Resets on the 1st of each month (UTC).',
+  'share.settings.limits.monthlySpendLimitUnit': 'M credits',
   'share.settings.limits.title': 'Limits',
   'share.settings.limits.workspaceDesc':
     'Every visitor run is billed to the Workspace budget, not to the visitor or any member quota. These per-Agent caps always apply — you can change the numbers, but not turn them off.',
@@ -481,6 +486,11 @@ export default {
   'share.settings.usage.conversations': 'Topics',
   'share.settings.usage.conversationsHint': 'Topics created by visitors through this share.',
   'share.settings.usage.desc': 'What this share has attracted, and what it has cost you.',
+  'share.settings.usage.detail.desc':
+    'Every model call made by visitors of this share, billed to your account.',
+  'share.settings.usage.detail.title': 'Details',
+  'share.settings.usage.detail.workspaceDesc':
+    'Every model call made by visitors of this share, billed to the workspace.',
   'share.settings.usage.fileStorage': 'File storage',
   'share.settings.usage.fileStorageOfLimit': '{{used}} of {{limit}}',
   'share.settings.usage.fileStorageOff': '{{used}} · attachments off',
@@ -504,10 +514,14 @@ export default {
     'Could not load this Agent’s skills. Close and reopen the share settings to try again.',
   'share.settings.skills.loading': 'Loading skills…',
   'share.settings.skills.title': 'Skills visitors can use',
+  'share.settings.tools.apiNeedsApproval':
+    'This action needs your approval before it runs, and nobody can approve it during a shared run, so it stays off.',
+  'share.settings.tools.apiWritesOwnerDocuments':
+    'Visitors can never delete or copy your documents or change their load rules — this action stays off in shared runs.',
   'share.settings.tools.desc':
     'Only the tools you tick here can be called during a visitor run. Tools that could reach your device or local files are never offered.',
   'share.settings.tools.apiNotAvailableToVisitors':
-    'This action can never be used in a shared run — it either needs your approval or is otherwise off-limits to visitors.',
+    'This action is never available to visitors in a shared run.',
   'share.settings.tools.apiWritesOwnerData':
     'Visitors can never write to your memory — this action stays off in shared runs.',
   'share.settings.tools.availableGroup': 'Not granted · {{count}}',
@@ -749,4 +763,7 @@ export default {
   'share.settings.profile.featuredWorks.reload': 'Retry',
   'share.settings.profile.featuredWorks.loadMore': 'Load more works',
   'share.settings.profile.featuredWorks.unavailable': 'Unavailable work',
+  'share.settings.profile.unsaved':
+    'You have unsaved changes. Visitors will only see them after you save.',
+  'share.settings.profile.upToDate': 'Visitors see the saved content.',
 } as const;
