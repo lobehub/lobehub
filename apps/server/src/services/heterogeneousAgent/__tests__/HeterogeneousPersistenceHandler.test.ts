@@ -771,6 +771,41 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(finalAsst.content).toBe('looking ');
     });
 
+    it('sanitizes tool result content before persistence', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const tool = {
+        apiName: 'Bash',
+        arguments: '{"cmd":"run"}',
+        id: 'tc-1',
+        identifier: 'bash',
+        type: 'default' as const,
+      };
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, { chunkType: 'tools_calling', toolsCalling: [tool] }),
+          buildEvent('tool_result', 1, {
+            content: 'before\u0000after',
+            isError: true,
+            pluginState: { status: 'done' },
+            toolCallId: 'tc-1',
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const toolMessage = [...h.messages.values()].find((message) => message.role === 'tool');
+      expect(toolMessage?.content).toBe('beforeafter');
+      expect(toolMessage?.pluginError).toEqual({ message: 'beforeafter' });
+      expect(toolMessage?.pluginState).toEqual({ status: 'done' });
+    });
+
     it('skips tool_use that have already been persisted in the same turn', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',

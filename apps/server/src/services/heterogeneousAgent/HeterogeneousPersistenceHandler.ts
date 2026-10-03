@@ -25,6 +25,7 @@ import { isEchoedErrorText } from '@lobechat/heterogeneous-agents/errors';
 import { isHeteroStatusGuideErrorData } from '@lobechat/heterogeneous-agents/processFailure';
 import { type ChatToolPayload, ThreadStatus, ThreadType } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
+import { sanitizeUTF8 } from '@lobechat/utils/sanitizeUTF8';
 import debug from 'debug';
 
 import {
@@ -1324,9 +1325,10 @@ export class HeterogeneousPersistenceHandler {
       return;
     }
 
+    const content = sanitizeUTF8(intent.content);
     const result = await this.deps.messageModel.updateToolMessage(toolMsgId, {
-      content: intent.content,
-      pluginError: intent.isError ? { message: intent.content } : undefined,
+      content,
+      pluginError: intent.isError ? { message: content } : undefined,
       pluginState: intent.pluginState,
     });
     if (!result.success) {
