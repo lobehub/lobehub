@@ -31,13 +31,15 @@ export const mergeAllowBuilds = ({ rootText, extraTexts }) => {
     .filter((key) => !(key in rootMap))
     .sort();
   if (missing.length === 0) return rootText;
-  const header = rootText.match(/^allowBuilds:[ \t]*\r?\n/m);
+  const header = /^allowBuilds:[ \t]*\r?\n/m.exec(rootText);
   if (!header) {
     throw new Error('overlay pnpm-workspace.yaml is missing an allowBuilds block');
   }
   const nl = header[0].includes('\r') ? '\r\n' : '\n';
   const insert = missing.map((key) => `  ${quoteKey(key)}: ${extras[key]}${nl}`).join('');
-  return rootText.replace(header[0], `allowBuilds:${nl}${insert}`);
+  const start = header.index;
+  const end = start + header[0].length;
+  return `${rootText.slice(0, start)}allowBuilds:${nl}${insert}${rootText.slice(end)}`;
 };
 
 export const mergeAllowBuildsFiles = ({ rootFile, extraFiles }) => {

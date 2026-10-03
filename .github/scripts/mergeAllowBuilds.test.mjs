@@ -72,6 +72,27 @@ test('mergeAllowBuilds throws when the overlay has no allowBuilds block', () => 
   );
 });
 
+test('mergeAllowBuilds inserts at the real header after a comment that mentions allowBuilds', () => {
+  const overlayWithComment = `# allowBuilds:\n${overlayWorkspace}`;
+  const merged = mergeAllowBuilds({
+    extraTexts: [innerWorkspace],
+    rootText: overlayWithComment,
+  });
+
+  assert.ok(merged.startsWith('# allowBuilds:\npackages:'));
+  assert.match(
+    merged,
+    /\nallowBuilds:\n {2}'@google\/genai': true\n {2}'@mongodb-js\/zstd': false\n/,
+  );
+  assert.deepEqual(parseAllowBuilds(merged), {
+    '@google/genai': true,
+    '@mongodb-js/zstd': false,
+    'esbuild': false,
+    'node-liblzma': false,
+    'sharp': false,
+  });
+});
+
 test('mergeAllowBuilds copies inner decisions into a CRLF overlay file', () => {
   const crlfOverlay = overlayWorkspace.replaceAll('\n', '\r\n');
   const merged = mergeAllowBuilds({
