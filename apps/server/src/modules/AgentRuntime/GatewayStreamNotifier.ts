@@ -521,12 +521,16 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     if (!this.llmRelayRoutesMissing) {
       const res = await this.httpPostResponse('/api/operations/llm-execute', { data, operationId });
       if (res.ok) {
-        const { delivered } = (await res.json().catch(() => ({}))) as { delivered?: number };
+        let delivered: number | undefined;
+        try {
+          delivered = (JSON.parse(res.body) as { delivered?: number }).delivered;
+        } catch {
+          // An older body shape; delivery is only diagnostics.
+        }
         return { delivered, routed: true };
       }
       if (res.status !== 404) {
-        const text = await res.text().catch(() => '');
-        throw new Error(`Gateway /api/operations/llm-execute returned ${res.status}: ${text}`);
+        throw new Error(`Gateway /api/operations/llm-execute returned ${res.status}: ${res.body}`);
       }
       this.llmRelayRoutesMissing = true;
     }
@@ -840,18 +844,25 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   private async httpPostAwait(path: string, body: Record<string, unknown>): Promise<void> {
     const res = await this.httpPostResponse(path, body);
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`Gateway ${path} returned ${res.status}: ${text}`);
+      throw new Error(`Gateway ${path} returned ${res.status}: ${res.body}`);
     }
   }
 
-  /** POST and hand the response back, whatever its status; rejects on network / timeout. */
-  private async httpPostResponse(path: string, body: Record<string, unknown>): Promise<Response> {
+  /**
+   * POST and hand back the status and body, whatever the status. The body is
+   * read under the same timeout as the request, so a gateway that sends
+   * headers and then stalls cannot hang the caller. Rejects on network errors
+   * and timeout.
+   */
+  private async httpPostResponse(
+    path: string,
+    body: Record<string, unknown>,
+  ): Promise<{ body: string; ok: boolean; status: number }> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), POST_TIMEOUT);
 
     try {
-      return await fetch(urlJoin(this.gatewayUrl, path), {
+      const res = await fetch(urlJoin(this.gatewayUrl, path), {
         body: JSON.stringify(body),
         headers: {
           'Authorization': `Bearer ${this.serviceToken}`,
@@ -860,6 +871,11 @@ export class GatewayStreamNotifier implements IStreamEventManager {
         method: 'POST',
         signal: controller.signal,
       });
+      const text = await res.text().catch((error) => {
+        if (controller.signal.aborted) throw error;
+        return '';
+      });
+      return { body: text, ok: res.ok, status: res.status };
     } finally {
       clearTimeout(timer);
     }

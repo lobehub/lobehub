@@ -1056,10 +1056,9 @@ describe('GatewayStreamNotifier', () => {
     beforeEach(() => {
       mockFetch.mockReset();
       mockFetch.mockResolvedValue({
-        json: () => Promise.resolve({ delivered: 1, success: true }),
         ok: true,
         status: 200,
-        text: () => Promise.resolve(''),
+        text: () => Promise.resolve('{"delivered":1,"success":true}'),
       });
     });
 
@@ -1116,6 +1115,40 @@ describe('GatewayStreamNotifier', () => {
       expect(callsTo('/api/operations/llm-execute')).toHaveLength(1);
       expect(callsTo('/api/operations/llm-cancel')).toHaveLength(0);
       expect(callsTo('/api/operations/llm-close')).toHaveLength(0);
+    });
+
+    it('times out a gateway that sends headers and then stalls the body', async () => {
+      vi.useFakeTimers();
+      try {
+        // Headers arrive; the body never does until the request is aborted.
+        mockFetch.mockImplementation((_url: string, init: RequestInit) =>
+          Promise.resolve({
+            ok: true,
+            status: 200,
+            text: () =>
+              new Promise((_resolve, reject) => {
+                init.signal!.addEventListener('abort', () => reject(new Error('aborted')));
+              }),
+          }),
+        );
+
+        const execute = notifier.sendLlmExecute('op-1', executeData);
+        const tool = notifier.sendToolExecute('op-1', {
+          apiName: 'readFile',
+          arguments: '{}',
+          executionTimeoutMs: 30_000,
+          identifier: 'local-system',
+          toolCallId: 'call-1',
+        });
+        const settled = Promise.allSettled([execute, tool]);
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        const [executeResult, toolResult] = await settled;
+        expect(executeResult).toMatchObject({ reason: expect.any(Error), status: 'rejected' });
+        expect(toolResult).toMatchObject({ reason: expect.any(Error), status: 'rejected' });
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('rejects when the gateway refuses the dispatch for another reason', async () => {
