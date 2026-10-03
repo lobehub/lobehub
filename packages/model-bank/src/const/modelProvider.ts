@@ -58,6 +58,7 @@ export enum ModelProvider {
   Qiniu = 'qiniu',
   Qwen = 'qwen',
   Replicate = 'replicate',
+  Sagg = 'sagg',
   SambaNova = 'sambanova',
   Search1API = 'search1api',
   SenseNova = 'sensenova',
