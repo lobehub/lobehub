@@ -4,7 +4,12 @@ import type { GoalListItem } from '@/services/goal';
 import type { MetricSeriesWithPoints } from '@/services/metric';
 
 export type { GoalListItem };
-export type GoalListFilter = 'active' | 'all';
+/**
+ * List tab. Each option names the lifecycle states it keeps: `all` is the
+ * default (nothing hidden), `review` the goals at the human acceptance gate,
+ * `running` the goal whose loop is executing right now.
+ */
+export type GoalListFilter = 'all' | 'review' | 'running';
 export type GoalViewMode = 'card' | 'list';
 
 export interface GoalState {
@@ -35,7 +40,7 @@ export const initialState: GoalState = {
   goalMetricSeriesById: {},
   goalGraphById: {},
   goalListByAgentId: {},
-  goalListFilter: 'active',
+  goalListFilter: 'all',
   goalListInitializedAgentIds: [],
   goalListVisibleLimit: 10,
   goalViewMode: 'list',
