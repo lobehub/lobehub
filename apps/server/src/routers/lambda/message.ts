@@ -20,6 +20,7 @@ import { CompressionRepository } from '@/database/repositories/compression';
 import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { ContextCompactionService } from '@/server/services/contextCompaction';
 import { FileService } from '@/server/services/file';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
@@ -294,6 +295,33 @@ export const messageRouter = router({
     )
     .query(async ({ ctx, input }) => {
       return ctx.messageModel.countWords(input);
+    }),
+
+  /**
+   * Compact the conversation context on the server (`/compact`): summarizes
+   * every live message into one compression group with the agent's model and
+   * returns the settled message list.
+   */
+  compactContext: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(
+      z.object({
+        agentId: z.string(),
+        groupId: z.string().nullish(),
+        threadId: z.string().nullish(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx, signal }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.topicId]);
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.topicId]);
+
+      const service = new ContextCompactionService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      return service.compact(input, { signal });
     }),
 
   /**

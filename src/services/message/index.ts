@@ -476,6 +476,29 @@ export class MessageService {
   // =============== Compression ===============
 
   /**
+   * Compact the conversation context on the server (`/compact`). The summary is
+   * generated server-side; the settled message list is returned.
+   */
+  compactContext = async (
+    params: {
+      agentId: string;
+      groupId?: string | null;
+      threadId?: string | null;
+      topicId: string;
+    },
+    options?: { signal?: AbortSignal },
+  ): Promise<{ messageGroupId?: string; messages: UIChatMessage[]; skipped: boolean }> => {
+    const result = await lambdaClient.message.compactContext.mutate(params, {
+      signal: options?.signal,
+    });
+    return {
+      messageGroupId: result.messageGroupId,
+      messages: (result.messages || []) as unknown as UIChatMessage[],
+      skipped: result.skipped,
+    };
+  };
+
+  /**
    * Create a compression group for old messages
    * Returns placeholder group and messages to summarize
    */

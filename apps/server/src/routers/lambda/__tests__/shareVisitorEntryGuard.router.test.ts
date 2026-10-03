@@ -78,6 +78,13 @@ vi.mock('@/server/services/message', () => ({
   }),
 }));
 
+const mockCompactContext = vi.fn();
+vi.mock('@/server/services/contextCompaction', () => ({
+  ContextCompactionService: vi.fn(function () {
+    return { compact: mockCompactContext };
+  }),
+}));
+
 const mockFindDeletableFilesByTopicId = vi.fn();
 const mockFileDeleteMany = vi.fn();
 vi.mock('@/database/models/file', () => ({
@@ -331,6 +338,14 @@ describe('agent-share visitor guards on creator-facing RPCs', () => {
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
       expect(mockServiceCancelCompression).not.toHaveBeenCalled();
+    });
+
+    it('message.compactContext rejects a visitor topic with NOT_FOUND', async () => {
+      await expect(
+        messageCaller().compactContext({ agentId: 'agent-1', topicId: visitorTopicId }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockCompactContext).not.toHaveBeenCalled();
     });
 
     it('message.createCompressionGroup rejects a visitor topic with NOT_FOUND', async () => {

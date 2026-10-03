@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { messageGroups, messages } from '../../schemas/message';
-import { topics } from '../../schemas/topic';
+import { threads, topics } from '../../schemas/topic';
 import { users } from '../../schemas/user';
 import type { LobeChatDatabase } from '../../type';
 import { CompressionRepository } from './index';
@@ -20,6 +20,7 @@ beforeEach(async () => {
   // Clean up
   await serverDB.delete(messageGroups);
   await serverDB.delete(messages);
+  await serverDB.delete(threads);
   await serverDB.delete(topics);
   await serverDB.delete(users);
 
@@ -254,6 +255,76 @@ describe('CompressionRepository', () => {
 
       expect(await compressionRepo.getCompressionGroups('other-topic')).toHaveLength(1);
       expect(await compressionRepo.getCompressedMessages(otherGroupId)).toHaveLength(1);
+    });
+  });
+
+  describe('filterGroupIdsByThread', () => {
+    it('keeps only groups whose members belong to the requested thread scope', async () => {
+      await serverDB
+        .insert(threads)
+        .values({ id: 'thread-1', topicId, type: 'standalone', userId });
+      await serverDB.insert(messages).values([
+        { content: 'Main', id: 'msg-main', role: 'user', topicId, userId },
+        {
+          content: 'Thread',
+          id: 'msg-thread',
+          role: 'user',
+          threadId: 'thread-1',
+          topicId,
+          userId,
+        },
+      ]);
+      const mainGroupId = await compressionRepo.createCompressionGroup({
+        content: 'Main summary',
+        messageIds: ['msg-main'],
+        metadata: { originalMessageCount: 1 },
+        topicId,
+      });
+      const threadGroupId = await compressionRepo.createCompressionGroup({
+        content: 'Thread summary',
+        messageIds: ['msg-thread'],
+        metadata: { originalMessageCount: 1 },
+        topicId,
+      });
+      const groupIds = [mainGroupId, threadGroupId];
+
+      expect(await compressionRepo.filterGroupIdsByThread(groupIds, { topicId })).toEqual([
+        mainGroupId,
+      ]);
+      expect(
+        await compressionRepo.filterGroupIdsByThread(groupIds, { threadId: 'thread-1', topicId }),
+      ).toEqual([threadGroupId]);
+    });
+
+    it('assigns a thread group that also holds main-line parents to the thread only', async () => {
+      await serverDB
+        .insert(threads)
+        .values({ id: 'thread-1', topicId, type: 'standalone', userId });
+      await serverDB.insert(messages).values([
+        { content: 'Parent', id: 'msg-parent', role: 'user', topicId, userId },
+        {
+          content: 'Reply',
+          id: 'msg-reply',
+          role: 'assistant',
+          threadId: 'thread-1',
+          topicId,
+          userId,
+        },
+      ]);
+      const mixedGroupId = await compressionRepo.createCompressionGroup({
+        content: 'Thread summary',
+        messageIds: ['msg-parent', 'msg-reply'],
+        metadata: { originalMessageCount: 2 },
+        topicId,
+      });
+
+      expect(await compressionRepo.filterGroupIdsByThread([mixedGroupId], { topicId })).toEqual([]);
+      expect(
+        await compressionRepo.filterGroupIdsByThread([mixedGroupId], {
+          threadId: 'thread-1',
+          topicId,
+        }),
+      ).toEqual([mixedGroupId]);
     });
   });
 
