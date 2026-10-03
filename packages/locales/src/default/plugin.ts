@@ -418,7 +418,6 @@ export default {
   'builtins.lobe-notebook.apiName.getDocument': 'Get document',
   'builtins.lobe-notebook.apiName.updateDocument': 'Update document',
   'builtins.lobe-notebook.title': 'Notebook',
-  'builtins.lobe-page-agent.apiName.bash': 'Work on page',
   'builtins.lobe-page-agent.apiName.batchUpdate': 'Batch update nodes',
   'builtins.lobe-page-agent.apiName.compareSnapshots': 'Compare snapshots',
   'builtins.lobe-page-agent.apiName.convertToList': 'Convert to list',

@@ -101,6 +101,10 @@ describe('normalizeEditorDataDiffNodes', () => {
                 children: [{ text: 'removed item', type: 'text' }],
                 type: 'listitem',
               },
+              {
+                children: [],
+                type: 'listitem',
+              },
             ],
             type: 'list',
           },

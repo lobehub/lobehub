@@ -48,7 +48,6 @@ childConcurrency: 1
 allowBuilds:
   '@google/genai': true
   '@lobehub/editor': true
-  '@mongodb-js/zstd': false
   '@sentry/cli': true
   '@vercel/speed-insights': true
   core-js: false
@@ -56,7 +55,6 @@ allowBuilds:
   es5-ext: false
   esbuild: false
   ffmpeg-static: true
-  node-liblzma: false
   protobufjs: false
   sharp: false
   unrs-resolver: false

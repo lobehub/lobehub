@@ -693,6 +693,27 @@ describe('serverMessagesEngine', () => {
 
       expect(result).toBeDefined();
     });
+
+    it('should inject Page Editor context when provided', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        pageContentContext: {
+          markdown: '# Test Document\n\nPage content',
+          metadata: {
+            charCount: 30,
+            lineCount: 3,
+            title: 'Test Document',
+          },
+          xml: '<doc><h1 id="1">Test Document</h1><p id="2">Page content</p></doc>',
+        },
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+    });
   });
 
   describe('input template', () => {
@@ -903,6 +924,11 @@ describe('serverMessagesEngine', () => {
         },
         messages,
         model: 'gpt-4',
+        pageContentContext: {
+          markdown: '# Doc',
+          metadata: { charCount: 5, lineCount: 1, title: 'Doc' },
+          xml: '<doc><h1 id="1">Doc</h1></doc>',
+        },
         provider: 'openai',
       });
 

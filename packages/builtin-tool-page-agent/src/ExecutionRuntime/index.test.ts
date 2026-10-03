@@ -8,78 +8,104 @@ const DOC_ID = 'doc_test_1';
 const ctxWithDoc: PageAgentInvocationContext = { documentId: DOC_ID, userId: 'u1' };
 const ctxNoDoc: PageAgentInvocationContext = { userId: 'u1' };
 
-const state = (changed: boolean) => ({ changed, exitCode: 0, output: '', success: true });
-
-const buildService = (bash?: PageAgentRuntimeService['bash']): PageAgentRuntimeService => ({
-  bash: vi.fn(bash ?? (async () => ({ content: 'ok', state: state(false) }))),
-  initPage: vi.fn(async () => ({
-    content: 'initialized',
-    state: { changed: true, nodeCount: 1, rootId: 'root' },
-  })),
-});
+const buildService = (
+  overrides: Partial<PageAgentRuntimeService> = {},
+): PageAgentRuntimeService => {
+  const ok = async (apiName: string) => ({
+    content: `ok:${apiName}`,
+    state: { ran: apiName },
+  });
+  return {
+    editTitle: vi.fn(() => ok('editTitle')),
+    getPageContent: vi.fn(() => ok('getPageContent')),
+    initPage: vi.fn(() => ok('initPage')),
+    modifyNodes: vi.fn(() => ok('modifyNodes')),
+    replaceText: vi.fn(() => ok('replaceText')),
+    ...overrides,
+  };
+};
 
 describe('PageAgentExecutionRuntime', () => {
-  it('rejects a call without documentId and never reaches the service', async () => {
-    const service = buildService();
-    const runtime = new PageAgentExecutionRuntime(service);
+  describe('documentId guard', () => {
+    it('rejects every API call when documentId is missing', async () => {
+      const service = buildService();
+      const runtime = new PageAgentExecutionRuntime(service);
 
-    const result = await runtime.bash({ command: 'cat /doc.md' }, ctxNoDoc);
+      const results = await Promise.all([
+        runtime.initPage({ markdown: '# Hi' }, ctxNoDoc),
+        runtime.editTitle({ title: 'x' }, ctxNoDoc),
+        runtime.getPageContent({}, ctxNoDoc),
+        runtime.modifyNodes({ operations: [{ action: 'remove', id: 'a' }] }, ctxNoDoc),
+        runtime.replaceText({ newText: 'a', searchText: 'b' }, ctxNoDoc),
+      ]);
 
-    expect(result.success).toBe(false);
-    expect((result.error as { type?: string }).type).toBe('PageAgentMissingDocumentId');
-    expect(service.bash).not.toHaveBeenCalled();
+      for (const result of results) {
+        expect(result.success).toBe(false);
+        expect((result.error as { type?: string }).type).toBe('PageAgentMissingDocumentId');
+      }
+
+      // Service callbacks never invoked.
+      expect(service.initPage).not.toHaveBeenCalled();
+      expect(service.editTitle).not.toHaveBeenCalled();
+      expect(service.getPageContent).not.toHaveBeenCalled();
+      expect(service.modifyNodes).not.toHaveBeenCalled();
+      expect(service.replaceText).not.toHaveBeenCalled();
+    });
   });
 
-  it('forwards the command with context and envelopes the output with documentId', async () => {
-    const service = buildService(async () => ({ content: 'changed', state: state(true) }));
-    const runtime = new PageAgentExecutionRuntime(service);
+  describe('forwarding', () => {
+    it('forwards each API call to the service with args + context', async () => {
+      const service = buildService();
+      const runtime = new PageAgentExecutionRuntime(service);
 
-    const result = await runtime.bash({ command: 'sed -i s/a/b/ /doc.xml' }, ctxWithDoc);
+      await runtime.modifyNodes({ operations: [{ action: 'remove', id: 'a' }] }, ctxWithDoc);
 
-    expect(service.bash).toHaveBeenCalledWith({ command: 'sed -i s/a/b/ /doc.xml' }, ctxWithDoc);
-    expect(result.success).toBe(true);
-    expect(result.content).toBe('changed');
-    expect(result.state).toMatchObject({ changed: true, documentId: DOC_ID });
+      expect(service.modifyNodes).toHaveBeenCalledWith(
+        { operations: [{ action: 'remove', id: 'a' }] },
+        ctxWithDoc,
+      );
+    });
+
+    it('envelopes the service output with success + documentId', async () => {
+      const service = buildService({
+        modifyNodes: async () => ({
+          content: 'changed',
+          state: { successCount: 3 },
+        }),
+      });
+      const runtime = new PageAgentExecutionRuntime(service);
+
+      const result = await runtime.modifyNodes(
+        { operations: [{ action: 'remove', id: 'a' }] },
+        ctxWithDoc,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('changed');
+      expect(result.state).toMatchObject({
+        documentId: DOC_ID,
+        successCount: 3,
+      });
+    });
   });
 
-  it('wraps thrown service errors as PageAgentRuntimeError', async () => {
-    const runtime = new PageAgentExecutionRuntime(
-      buildService(async () => {
-        throw new Error('boom');
-      }),
-    );
+  describe('error envelope', () => {
+    it('wraps thrown service errors as PageAgentRuntimeError', async () => {
+      const service = buildService({
+        modifyNodes: async () => {
+          throw new Error('boom');
+        },
+      });
+      const runtime = new PageAgentExecutionRuntime(service);
 
-    const result = await runtime.bash({ command: 'true' }, ctxWithDoc);
+      const result = await runtime.modifyNodes(
+        { operations: [{ action: 'remove', id: 'a' }] },
+        ctxWithDoc,
+      );
 
-    expect(result.success).toBe(false);
-    expect(result.content).toBe('boom');
-    expect((result.error as { type?: string }).type).toBe('PageAgentRuntimeError');
-  });
-
-  it('explains a document lock conflict in words the model can act on', async () => {
-    const runtime = new PageAgentExecutionRuntime(
-      buildService(async () => {
-        throw Object.assign(new Error('Document is being edited by another user'), {
-          code: 'CONFLICT',
-        });
-      }),
-    );
-
-    const result = await runtime.bash({ command: 'true' }, ctxWithDoc);
-
-    expect(result.success).toBe(false);
-    expect((result.error as { type?: string }).type).toBe('PageAgentDocumentLocked');
-    expect(result.content).toMatch(/another member/);
-    expect(result.content).toMatch(/nothing was written/i);
-  });
-
-  it('forwards initPage to the service', async () => {
-    const service = buildService();
-    const runtime = new PageAgentExecutionRuntime(service);
-
-    const result = await runtime.initPage({ markdown: '# Hi' }, ctxWithDoc);
-
-    expect(service.initPage).toHaveBeenCalledWith({ markdown: '# Hi' }, ctxWithDoc);
-    expect(result).toMatchObject({ content: 'initialized', success: true });
+      expect(result.success).toBe(false);
+      expect(result.content).toBe('boom');
+      expect((result.error as { type?: string }).type).toBe('PageAgentRuntimeError');
+    });
   });
 });

@@ -1,27 +1,11 @@
 import { formatContextSelections } from '@lobechat/prompts';
-import type { ContextSelection, PageSelection } from '@lobechat/types';
+import type { ContextSelection } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseEveryUserContentProvider } from '../base/BaseEveryUserContentProvider';
 import type { Message, ProcessorOptions } from '../types';
 
 const log = debug('context-engine:provider:ContextSelectionsInjector');
-
-const fromLegacyPageSelections = (
-  selections: PageSelection[] | undefined,
-): ContextSelection[] | undefined =>
-  selections?.map((selection) => ({
-    content: selection.content,
-    id: selection.id,
-    lineRange:
-      selection.startLine === undefined
-        ? undefined
-        : { endLine: selection.endLine ?? selection.startLine, startLine: selection.startLine },
-    pageId: selection.pageId,
-    source: 'page',
-    title: selection.title,
-    xml: selection.xml,
-  }));
 
 export interface ContextSelectionsInjectorConfig {
   /** Whether generic contextSelections injection is enabled */
@@ -53,9 +37,7 @@ export class ContextSelectionsInjector extends BaseEveryUserContentProvider {
       return null;
     }
 
-    const contextSelections =
-      (message.metadata?.contextSelections as ContextSelection[] | undefined) ??
-      fromLegacyPageSelections(message.metadata?.pageSelections as PageSelection[] | undefined);
+    const contextSelections = message.metadata?.contextSelections as ContextSelection[] | undefined;
 
     if (!contextSelections || contextSelections.length === 0) {
       return null;

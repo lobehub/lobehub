@@ -4,16 +4,13 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./bash": "./src/bash/index.ts",
     "./client": "./src/client/index.ts",
     "./client/executor": "./src/client/executor/index.ts",
     "./executionRuntime": "./src/ExecutionRuntime/index.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/editor-runtime": "workspace:*",
-    "@lobechat/shared-tool-ui": "workspace:*",
-    "just-bash": "^3.4.2"
+    "@lobechat/editor-runtime": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

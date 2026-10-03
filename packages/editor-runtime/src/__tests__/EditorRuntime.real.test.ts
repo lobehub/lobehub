@@ -11,7 +11,6 @@ import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorRuntime } from '../EditorRuntime';
-import { parseLiteXMLBlocks } from '../liteXMLBlockDiff';
 import editAllFixture from './fixtures/edit-all.json';
 import removeFixture from './fixtures/remove.json';
 import removeThenAddFixture from './fixtures/remove-then-add.json';
@@ -239,7 +238,7 @@ describe('EditorRuntime - Real Cases', () => {
       expect(xml.indexOf('P2')).toBeLessThan(xml.indexOf('P3'));
     });
 
-    it('preserves pending inserts when a later replacement of the enclosing list is rejected', async () => {
+    it('does not report inserts erased by a later replacement of the enclosing list as applied', async () => {
       const anchor = idOf('li', 'a');
       const list = liteXML().match(/<ul id="\w+">[\s\S]*?<\/ul>/)![0];
       const result = await runtime.modifyNodes({
@@ -250,14 +249,12 @@ describe('EditorRuntime - Real Cases', () => {
         ],
       });
 
-      // Wrapping an existing pending edit in another diff is rejected. Keep
-      // both pending inserts instead of silently discarding the first one.
-      expect(result.results.map((r) => r.success)).toEqual([true, false, true]);
-      expect(result.results[1].error).toContain('did not change');
-      const markdown = editor.getDocument('markdown') as unknown as string;
-      expect(markdown).toContain('- A');
-      expect(markdown).toContain('- B');
-      expect(markdown).not.toContain('- b2');
+      // Applied in caller order: the list replacement drops A and re-keys the
+      // list, so the later insert is reported as failed instead of vanishing
+      // behind a success.
+      expect(result.results.map((r) => r.success)).toEqual([true, true, false]);
+      expect(result.results[2].error).toContain('not found');
+      expect(editor.getDocument('markdown') as unknown as string).toContain('- b2');
     });
 
     it('rejects a multi-fragment modify that replaces a list and an item inside it', async () => {
@@ -397,14 +394,9 @@ describe('EditorRuntime - Real Cases', () => {
       expect(insertResult.results.every((r) => r.success)).toBe(true);
       expect(insertResult.results.every((r) => r.action === 'insert')).toBe(true);
 
+      // Verify full output
       const xmlAfter = editor.getDocument('litexml') as unknown as string;
-      const blocks = parseLiteXMLBlocks(xmlAfter);
-      if (typeof blocks === 'string') throw new Error(blocks);
-      expect(blocks.map(({ tag }) => tag)).toEqual(['p', 'h2', 'ul', 'h2']);
-      expect(blocks[2].text).toBe(
-        '西湖风景区：杭州的灵魂，世界文化遗产 灵隐寺：杭州最著名的佛教寺庙 西溪国家湿地公园：中国第一个国家湿地公园 宋城：以宋代文化为主题的大型主题公园',
-      );
-      expect(JSON.stringify(editor.getDocument('json'))).toContain('"diffType":"add"');
+      expect(xmlAfter).toMatchSnapshot('insert new');
     });
   });
 });

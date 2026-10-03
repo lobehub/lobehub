@@ -9,7 +9,7 @@ const toPageSelection = (context: ChatContextContent): PageSelection | undefined
   if (!context.pageId) return;
 
   return {
-    content: context.xml ? context.content : context.preview || context.content,
+    content: context.preview || context.content,
     format: context.format,
     id: context.id,
     pageId: context.pageId,
@@ -38,7 +38,7 @@ const toContextSelection = (context: ChatContextContent): ContextSelection => {
 
   if (context.pageId) {
     return {
-      content: context.xml ? context.content : context.preview || context.content,
+      content: context.preview || context.content,
       format: context.format,
       id: context.id,
       lineRange: context.lineRange,

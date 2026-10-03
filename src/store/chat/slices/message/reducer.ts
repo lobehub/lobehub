@@ -194,7 +194,6 @@ export const messagesReducer = (
         if (!message || message.role !== 'tool') return;
 
         message.plugin = merge(message.plugin, value);
-        if (value.error !== undefined) message.pluginError = value.error;
         message.updatedAt = Date.now();
       });
     }

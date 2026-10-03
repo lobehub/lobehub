@@ -92,6 +92,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
       agentManagementContext: step?.agentManagementContext,
       groupAgentBuilderContext: step?.groupAgentBuilderContext,
       onboardingContext: step?.onboardingContext,
+      pageContentContext: step?.pageContentContext,
       planTodo: step?.planTodo,
       workspaceContext: step?.workspaceContext,
     }),
