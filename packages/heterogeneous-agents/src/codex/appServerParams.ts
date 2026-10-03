@@ -1,7 +1,19 @@
 import path from 'node:path';
 
+import type { CodexPermissionMode, CodexPermissionProfile } from '@lobechat/types';
+import { getCodexPermissionProfile, stripCodexPermissionArgs } from '@lobechat/types';
+
 import type { AgentInputPlan } from '../spawn/input';
-import type { JsonValue, SandboxMode, ThreadStartParams, UserInput } from './protocol';
+import type {
+  AskForApproval,
+  JsonValue,
+  SandboxMode,
+  ThreadStartParams,
+  UserInput,
+} from './protocol';
+
+export type { CodexPermissionProfile };
+export { getCodexPermissionProfile };
 
 const CODEX_DANGEROUS_BYPASS_FLAG = '--dangerously-bypass-approvals-and-sandbox';
 const CODEX_FULL_AUTO_FLAG = '--full-auto';
@@ -52,6 +64,10 @@ const parseConfigOverride = (raw: string) => {
   return { key, value: parseConfigValue(raw.slice(separator + 1)) };
 };
 
+/** Recognizes the named Codex CLI approval policies without silently relaxing unknown values. */
+const isApprovalPolicy = (value: unknown): value is Extract<AskForApproval, string> =>
+  value === 'never' || value === 'on-request' || value === 'untrusted' || value === 'on-failure';
+
 const isSandboxMode = (value: string): value is SandboxMode =>
   value === 'danger-full-access' || value === 'read-only' || value === 'workspace-write';
 
@@ -61,17 +77,18 @@ export const buildCodexAppServerArgs = (_args: string[] = []): string[] => ['app
 /** Keep CLI semantics on exec when they cannot be represented by the app-server thread contract. */
 export const getCodexAppServerUnsupportedArgs = (
   args: string[],
-  options: { resume?: boolean } = {},
+  options: { permissionMode?: CodexPermissionMode; resume?: boolean } = {},
 ): string[] => {
+  const effectiveArgs = options.permissionMode ? (stripCodexPermissionArgs(args) ?? []) : args;
   const unsupported: string[] = [];
-  const hasSandboxFlag = args.some(
+  const hasSandboxFlag = effectiveArgs.some(
     (arg) =>
       CODEX_SANDBOX_FLAGS.includes(arg as (typeof CODEX_SANDBOX_FLAGS)[number]) ||
       getFlagValue(arg, CODEX_SANDBOX_FLAGS) !== undefined,
   );
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
+  for (let index = 0; index < effectiveArgs.length; index += 1) {
+    const arg = effectiveArgs[index];
     if (arg === CODEX_DANGEROUS_BYPASS_FLAG) {
       if (hasSandboxFlag) unsupported.push(arg);
       continue;
@@ -80,7 +97,8 @@ export const getCodexAppServerUnsupportedArgs = (
       if (options.resume) unsupported.push(arg);
       continue;
     }
-    if (arg === CODEX_FULL_AUTO_FLAG || arg === CODEX_IGNORE_USER_CONFIG_FLAG) {
+    if (arg === CODEX_FULL_AUTO_FLAG) continue;
+    if (arg === CODEX_IGNORE_USER_CONFIG_FLAG) {
       unsupported.push(arg);
       continue;
     }
@@ -95,7 +113,7 @@ export const getCodexAppServerUnsupportedArgs = (
     const exactFlag = valueFlags.find((flag) => arg === flag);
     const inlineFlag = valueFlags.find((flag) => arg.startsWith(`${flag}=`));
     if (exactFlag || inlineFlag) {
-      const value = inlineFlag ? arg.slice(inlineFlag.length + 1) : args[index + 1];
+      const value = inlineFlag ? arg.slice(inlineFlag.length + 1) : effectiveArgs[index + 1];
       if (!value || (!inlineFlag && value.startsWith('-'))) {
         unsupported.push(arg);
         continue;
@@ -106,7 +124,7 @@ export const getCodexAppServerUnsupportedArgs = (
         CODEX_APPROVAL_FLAGS.includes(
           (exactFlag ?? inlineFlag) as (typeof CODEX_APPROVAL_FLAGS)[number],
         ) &&
-        value !== 'never'
+        !isApprovalPolicy(value)
       ) {
         unsupported.push(arg);
       }
@@ -124,9 +142,19 @@ export const getCodexAppServerUnsupportedArgs = (
         )
       ) {
         const override = parseConfigOverride(value);
-        if (override?.key === 'approval_policy' && override.value !== 'never') {
+        if (override?.key === 'approval_policy' && !isApprovalPolicy(override.value))
           unsupported.push(arg);
-        }
+        if (
+          override?.key === 'sandbox_mode' &&
+          (typeof override.value !== 'string' || !isSandboxMode(override.value))
+        )
+          unsupported.push(arg);
+        if (
+          override?.key === 'approvals_reviewer' &&
+          override.value !== 'user' &&
+          override.value !== 'auto_review'
+        )
+          unsupported.push(arg);
       }
       continue;
     }
@@ -146,27 +174,45 @@ export const getCodexAppServerUnsupportedArgs = (
   return unsupported;
 };
 
+/**
+ * Builds the native policy used for both new and resumed Codex threads.
+ *
+ * Use when:
+ * - Starting or resuming an app-server session after unsupported-argument validation.
+ *
+ * Expects:
+ * - Ordered CLI arguments and the selected working directory.
+ * - An optional saved preset that owns the complete permission scope.
+ *
+ * Returns:
+ * - Native thread parameters with matching approval, reviewer, and sandbox fields.
+ */
 export const buildCodexAppServerThreadParams = (
   args: string[],
   cwd: string,
   initialModel?: string,
+  permissionMode?: CodexPermissionMode,
 ): ThreadStartParams => {
+  const effectiveArgs = permissionMode ? (stripCodexPermissionArgs(args) ?? []) : args;
   const config: Record<string, JsonValue> = {};
   let effectiveCwd = cwd;
   let ephemeral = false;
   let model = initialModel;
   let modelProvider: string | undefined;
   let sandbox: SandboxMode = 'danger-full-access';
+  let approvalPolicy: AskForApproval = 'never';
   let serviceTier: string | undefined;
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
+  for (let index = 0; index < effectiveArgs.length; index += 1) {
+    const arg = effectiveArgs[index];
     if (arg === CODEX_DANGEROUS_BYPASS_FLAG) {
       sandbox = 'danger-full-access';
+      approvalPolicy = 'never';
       continue;
     }
     if (arg === CODEX_FULL_AUTO_FLAG) {
       sandbox = 'workspace-write';
+      approvalPolicy = 'on-request';
       continue;
     }
     if (arg === CODEX_EPHEMERAL_FLAG) {
@@ -174,7 +220,7 @@ export const buildCodexAppServerThreadParams = (
       continue;
     }
 
-    const next = args[index + 1];
+    const next = effectiveArgs[index + 1];
     const modelValue = getFlagValue(arg, CODEX_MODEL_FLAGS);
     if (modelValue !== undefined) {
       if (modelValue) model = modelValue;
@@ -187,8 +233,12 @@ export const buildCodexAppServerThreadParams = (
     }
 
     const approvalValue = getFlagValue(arg, CODEX_APPROVAL_FLAGS);
-    if (approvalValue !== undefined) continue;
+    if (approvalValue !== undefined) {
+      if (isApprovalPolicy(approvalValue)) approvalPolicy = approvalValue;
+      continue;
+    }
     if (CODEX_APPROVAL_FLAGS.includes(arg as (typeof CODEX_APPROVAL_FLAGS)[number]) && next) {
+      if (isApprovalPolicy(next)) approvalPolicy = next;
       index += 1;
       continue;
     }
@@ -222,6 +272,9 @@ export const buildCodexAppServerThreadParams = (
     const configOverride = parseConfigOverride(configValue ?? next ?? '');
     if (!configOverride) continue;
     config[configOverride.key] = configOverride.value;
+    if (configOverride.key === 'approval_policy' && isApprovalPolicy(configOverride.value)) {
+      approvalPolicy = configOverride.value;
+    }
     if (configOverride.key === 'model' && typeof configOverride.value === 'string') {
       model = configOverride.value;
     }
@@ -240,14 +293,30 @@ export const buildCodexAppServerThreadParams = (
     }
   }
 
+  const permissionProfile = permissionMode ? getCodexPermissionProfile(permissionMode) : undefined;
+  // Presets own their complete scope, including inherited user-config expansions.
+  if (permissionProfile && permissionProfile.sandbox !== 'danger-full-access') {
+    for (const key of Object.keys(config)) {
+      if (key === 'sandbox_workspace_write' || key.startsWith('sandbox_workspace_write.'))
+        delete config[key];
+    }
+    config['sandbox_workspace_write.network_access'] = false;
+    config['sandbox_workspace_write.writable_roots'] = [];
+    config['sandbox_workspace_write.exclude_tmpdir_env_var'] = true;
+    config['sandbox_workspace_write.exclude_slash_tmp'] = true;
+  }
+
   return {
-    approvalPolicy: 'never',
+    approvalPolicy: permissionProfile?.approvalPolicy ?? approvalPolicy,
+    approvalsReviewer:
+      permissionProfile?.approvalsReviewer ??
+      (config.approvals_reviewer === 'auto_review' ? 'auto_review' : 'user'),
     ...(Object.keys(config).length > 0 ? { config } : {}),
     cwd: effectiveCwd,
     ...(ephemeral ? { ephemeral } : {}),
     ...(model ? { model } : {}),
     ...(modelProvider ? { modelProvider } : {}),
-    sandbox,
+    sandbox: permissionProfile?.sandbox ?? sandbox,
     ...(serviceTier ? { serviceTier } : {}),
   };
 };

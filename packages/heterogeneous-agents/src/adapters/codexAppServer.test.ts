@@ -29,6 +29,20 @@ const loadParityFixture = async () => {
 };
 
 describe('CodexAppServerAdapter', () => {
+  it('carries the native turn boundary across tool-separated steps', async () => {
+    const adapter = new CodexAppServerAdapter({ sessionId: 'native-thread' });
+    const events = (await loadFixture()).flatMap(({ method, params }) =>
+      adapter.adapt(method, params),
+    );
+    const starts = events.filter(({ type }) => type === 'stream_start');
+    expect(starts.length).toBeGreaterThan(1);
+    for (const start of starts) {
+      expect(start.data).toMatchObject({
+        codexTurnId: 'turn-1',
+        sessionId: 'native-thread',
+      });
+    }
+  });
   it('maps a native v2 turn directly into the existing stream contract', async () => {
     const adapter = new CodexAppServerAdapter({ initialModel: 'gpt-5.5-codex' });
     const raw = await loadFixture();

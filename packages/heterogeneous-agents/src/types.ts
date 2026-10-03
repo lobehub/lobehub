@@ -56,6 +56,8 @@ export interface HeterogeneousAgentEvent {
 /** Data shape for stream_start events */
 export interface StreamStartData {
   assistantMessage?: { id: string };
+  /** Native Codex turn boundary, stable across tool-separated assistant steps. */
+  codexTurnId?: string;
   /**
    * External-trigger context for the step opened by this stream_start.
    * Set when the new step was opened in response to a repeated tool

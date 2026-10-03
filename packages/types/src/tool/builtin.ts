@@ -546,7 +546,12 @@ export interface BuiltinServerRuntimeOutput {
   success: boolean;
 }
 
-export interface BuiltinInterventionProps<Arguments = any> {
+/**
+ * Inputs and actions for a builtin approval or custom interaction.
+ * @param Arguments - Native intervention context displayed by the form.
+ * @param ToolArguments - Original tool input, retained separately from approval context.
+ */
+export interface BuiltinInterventionProps<Arguments = any, ToolArguments = Arguments> {
   /**
    * When present, a custom intervention should portal its action footer
    * (submit / skip + status) into this node so it stays pinned below the
@@ -583,6 +588,8 @@ export interface BuiltinInterventionProps<Arguments = any> {
    * @returns Cleanup function to unregister the callback
    */
   registerBeforeApprove?: (id: string, callback: () => void | Promise<void>) => () => void;
+  /** Original tool input used to show the proposed action or file changes. */
+  toolArgs?: ToolArguments;
 }
 
 export type BuiltinIntervention = (props: BuiltinInterventionProps) => ReactNode;

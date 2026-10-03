@@ -1,3 +1,4 @@
+import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -102,7 +103,7 @@ vi.mock('@/database/models/message', () => ({
 }));
 
 const heteroAgentConfig = {
-  agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+  agencyConfig: { heterogeneousProvider: { type: 'claude-code' } } as LobeAgentAgencyConfig,
   chatConfig: {},
   files: [],
   id: 'agent-1',
@@ -1013,6 +1014,27 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         { content: 'The pod is electron-gpu-shell', role: 'assistant' },
       ],
     });
+  });
+
+  it('fails closed instead of dispatching a configured Codex mode through exec', async () => {
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { permissionMode: 'ask', type: 'codex' },
+    };
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Do not drop the approval policy',
+    });
+
+    expect(result).toMatchObject({
+      error: expect.stringContaining('requires the local desktop app'),
+      status: 'error',
+      success: false,
+    });
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
   it('dispatches OpenCode to a bound device with its model args', async () => {

@@ -3472,6 +3472,91 @@ describe('ConversationControl actions', () => {
       });
     });
 
+    /**
+     * @example A expires during persistence; B must remain pending after A's IPC response.
+     */
+    it.each(['failed', 'accepted'] as const)(
+      'keeps the next Codex callback visible when a previous submit is %s',
+      async (outcome) => {
+        // ROOT CAUSE:
+        //
+        // A's optimistic write can finish after its deadline and after B is published.
+        // Unconditional rollback or a running topic status then overwrote B's waiting state.
+        // Callback identity must still match before applying either follow-up write.
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'codex-race-agent';
+        const topicId = 'codex-race-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const assistant = createMockMessage({ id: 'codex-assistant', role: 'assistant' });
+        const tool = createMockMessage({
+          id: 'codex-tool',
+          parentId: assistant.id,
+          plugin: {
+            apiName: 'command_execution',
+            arguments: '{}',
+            identifier: 'codex',
+            type: 'default',
+          },
+          pluginIntervention: { interventionId: 'callback-a', status: 'pending' },
+          role: 'tool',
+          tool_call_id: 'native-item',
+        });
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [assistant, tool] },
+            messagesMap: { [chatKey]: [assistant, tool] },
+          });
+          const { operationId } = result.current.startOperation({
+            context: { agentId, topicId, threadId: null },
+            type: 'execHeterogeneousAgent',
+          });
+          useChatStore.setState({ messageOperationMap: { [assistant.id]: operationId } });
+        });
+        let releaseWrite!: () => void;
+        const write = new Promise<void>((resolve) => {
+          releaseWrite = resolve;
+        });
+        const plugin = vi
+          .spyOn(result.current, 'optimisticUpdateMessagePlugin')
+          .mockResolvedValue(undefined)
+          .mockImplementationOnce(() => write);
+        const content = vi
+          .spyOn(result.current, 'optimisticUpdateMessageContent')
+          .mockResolvedValue(undefined);
+        const topic = vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined);
+        const expired = new Error('Codex approval is expired');
+        vi.spyOn(heterogeneousAgentService, 'submitIntervention').mockImplementation(async () => {
+          if (outcome === 'failed') throw expired;
+        });
+        const error = await captureActError(async () => {
+          const submitting = result.current.submitHeteroIntervention(tool.id, 'submit', {
+            decision: 'accept',
+          });
+          await vi.waitFor(() => expect(plugin).toHaveBeenCalledOnce());
+          const next = {
+            ...tool,
+            pluginIntervention: { interventionId: 'callback-b', status: 'pending' as const },
+          };
+          useChatStore.setState({
+            dbMessagesMap: { [chatKey]: [assistant, next] },
+            messagesMap: { [chatKey]: [assistant, next] },
+          });
+          releaseWrite();
+          await submitting;
+        });
+        expect(error).toBe(outcome === 'failed' ? expired : undefined);
+        expect(plugin).toHaveBeenCalledOnce();
+        expect(content).not.toHaveBeenCalled();
+        expect(topic).not.toHaveBeenCalled();
+        expect(result.current.dbMessagesMap[chatKey][1].pluginIntervention).toMatchObject({
+          interventionId: 'callback-b',
+          status: 'pending',
+        });
+      },
+    );
+
     it('submits via IPC, persists optimistic intervention, and flips topic status to running (submit)', async () => {
       const { result } = renderHook(() => useChatStore());
 

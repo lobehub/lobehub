@@ -48,8 +48,10 @@ describe('useActionsBarConfig', () => {
 
     /** @example The user menu still supports restoring the original prompt. */
     expect(result.current.user?.menu).toContain('restoreToInput');
-    /** @example The user quick action remains copy. */
-    expect(result.current.user?.bar).toEqual(['copy']);
+    /** @example Edit and copy remain available together. */
+    expect(result.current.user?.bar).toEqual(['edit', 'copy']);
+    /** @example Editing and branching are also available through overflow. */
+    expect(result.current.user?.menu).toEqual(expect.arrayContaining(['edit', 'branching']));
   });
 
   /** @example Switching from Codex to Claude Code removes the Codex-only action. */
@@ -67,9 +69,7 @@ describe('useActionsBarConfig', () => {
     /** @example Claude Code keeps its current quick actions. */
     expect(result.current.assistant?.bar).toEqual(['copy']);
     /** @example Claude Code keeps its current overflow menu. */
-    expect(result.current.assistant?.menu).toEqual([
-      'copy', 'divider', 'select', 'divider', 'del',
-    ]);
+    expect(result.current.assistant?.menu).toEqual(['copy', 'divider', 'select', 'divider', 'del']);
   });
 
   /** @example A native agent keeps the default actions provided by the message components. */

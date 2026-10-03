@@ -113,9 +113,11 @@ const Intervention = memo<InterventionProps>(
       [canUseResource, toolCallId, updatePluginArguments, usesDurableServerClaim],
     );
 
+    const toolArgs = useMemo(() => safeParseJSON(requestArgs ?? '') ?? {}, [requestArgs]);
+    const approvalArgs = message?.pluginIntervention?.arguments;
     const parsedArgs = useMemo(
-      () => pendingEditedArguments ?? safeParseJSON(requestArgs || '') ?? {},
-      [pendingEditedArguments, requestArgs],
+      () => pendingEditedArguments ?? safeParseJSON(approvalArgs ?? requestArgs ?? '') ?? {},
+      [approvalArgs, pendingEditedArguments, requestArgs],
     );
 
     const isCustomInteraction = isCustomInteractionIdentifier(identifier, apiName);
@@ -283,6 +285,7 @@ const Intervention = memo<InterventionProps>(
               interactionMode="custom"
               messageId={id}
               registerBeforeApprove={registerBeforeApprove}
+              toolArgs={toolArgs}
               onArgsChange={handleArgsChange}
               onInteractionAction={handleInteractionAction}
             />

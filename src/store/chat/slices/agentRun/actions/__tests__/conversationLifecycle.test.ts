@@ -4657,6 +4657,21 @@ describe('ConversationLifecycle actions', () => {
 
         const { result } = renderHook(() => useChatStore());
 
+        await act(async () => {
+          useChatStore.setState({
+            dbMessagesMap: {
+              [messageMapKey(createTestContext())]: [
+                createMockMessage({
+                  id: 'source-message-id',
+                  metadata: { codexTurnId: 'native-turn-1', heteroSessionId: 'native-thread-1' },
+                  role: 'assistant',
+                  topicId: TEST_IDS.TOPIC_ID,
+                }),
+              ],
+            },
+          });
+        });
+
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           messages: [

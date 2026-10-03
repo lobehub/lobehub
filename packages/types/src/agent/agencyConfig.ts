@@ -1,7 +1,13 @@
 import type { WorkingDirConfigValue } from '../device';
 import type { LobeAgentChatConfig } from './chatConfig';
 import type { AgentGraph } from './graph';
-import { hasAnyCliFlag, hasCliConfigKey, hasCliFlag } from './heteroCliArgs';
+import {
+  hasAnyCliFlag,
+  hasCliConfigKey,
+  hasCliFlag,
+  stripCliConfigKey,
+  stripCliFlags,
+} from './heteroCliArgs';
 import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
 import {
   HETEROGENEOUS_AGENT_CONFIGS,
@@ -38,6 +44,32 @@ import {
 
 export type HeterogeneousAgentModelCatalogErrorCode =
   'cli_not_found' | 'command_failed' | 'device_unavailable' | 'timeout' | 'unsupported_client';
+
+/** Selectable permission profiles for the native Codex app-server transport. */
+export const CODEX_PERMISSION_MODES = ['full-access', 'ask', 'auto-review', 'read-only'] as const;
+
+/** Persisted user-selected Codex permission preset. */
+export type CodexPermissionMode = (typeof CODEX_PERMISSION_MODES)[number];
+/** Preset label, or custom when raw arguments describe another configuration. */
+export type EffectiveCodexPermissionMode = CodexPermissionMode | 'custom';
+
+/** Complete top-level permission configuration for a named preset. */
+export interface CodexPermissionProfile {
+  /** Controls which native actions require permission. */
+  approvalPolicy: 'never' | 'on-request';
+  /** Selects a person or the native automatic reviewer. */
+  approvalsReviewer: 'auto_review' | 'user';
+  /** Filesystem isolation applied when starting or resuming a thread. */
+  sandbox: 'danger-full-access' | 'read-only' | 'workspace-write';
+}
+
+/** Display label and provenance for the permission selection. */
+export interface ResolvedCodexPermissionMode {
+  /** Effective preset or an explicitly custom CLI configuration. */
+  mode: EffectiveCodexPermissionMode;
+  /** Whether the selection came from the persisted field or raw CLI arguments. */
+  source: 'agent' | 'legacy';
+}
 
 /** One model reported by a heterogeneous CLI's device-local model catalog. */
 export interface HeterogeneousAgentModel {
@@ -228,6 +260,11 @@ export interface HeterogeneousProviderConfig {
    * so the CLI can keep its own settings, env vars, and account defaults.
    */
   model?: string;
+  /**
+   * Codex sandbox and approval preset. Omitted on legacy agents so their
+   * existing CLI arguments and full-access fallback behavior remain intact.
+   */
+  permissionMode?: CodexPermissionMode;
   /**
    * Platform-side agent identifier used by remote device runtimes.
    * - openclaw: selects the named agent (defaults to `'main'`)
@@ -450,6 +487,257 @@ interface QoderSelectionSource {
 
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
 
+const CODEX_APPROVAL_FLAGS = ['-a', '--ask-for-approval'] as const;
+const CODEX_CONFIG_FLAGS = ['-c', '--config'] as const;
+const CODEX_DANGEROUS_BYPASS_FLAG = '--dangerously-bypass-approvals-and-sandbox';
+const CODEX_FULL_AUTO_FLAG = '--full-auto';
+const CODEX_PERMISSION_CONFIG_KEYS = [
+  'approval_policy',
+  'approvals_reviewer',
+  'sandbox_mode',
+] as const;
+const CODEX_SANDBOX_FLAGS = ['-s', '--sandbox'] as const;
+
+const unquoteCodexConfigValue = (value: string): string => {
+  const trimmed = value.trim();
+  const quote = trimmed[0];
+  return (quote === '"' || quote === "'") && trimmed.at(-1) === quote
+    ? trimmed.slice(1, -1)
+    : trimmed;
+};
+
+const parseCodexPermissionConfig = (
+  assignment: string,
+): { key: (typeof CODEX_PERMISSION_CONFIG_KEYS)[number]; value: string } | undefined => {
+  const separator = assignment.indexOf('=');
+  if (separator <= 0) return;
+  const key = assignment.slice(0, separator).trim();
+  if (!CODEX_PERMISSION_CONFIG_KEYS.includes(key as (typeof CODEX_PERMISSION_CONFIG_KEYS)[number]))
+    return;
+
+  return {
+    key: key as (typeof CODEX_PERMISSION_CONFIG_KEYS)[number],
+    value: unquoteCodexConfigValue(assignment.slice(separator + 1)),
+  };
+};
+
+/** Remove every raw Codex permission override before applying a typed preset. */
+export const stripCodexPermissionArgs = (args: string[] | undefined): string[] | undefined => {
+  let stripped = stripCliFlags(args, [...CODEX_APPROVAL_FLAGS, ...CODEX_SANDBOX_FLAGS])?.filter(
+    (arg) => arg !== CODEX_DANGEROUS_BYPASS_FLAG && arg !== CODEX_FULL_AUTO_FLAG,
+  );
+  for (const key of CODEX_PERMISSION_CONFIG_KEYS) stripped = stripCliConfigKey(stripped, key);
+  return stripped;
+};
+
+/** Maps a saved preset to native approval, reviewer and sandbox fields.
+ *
+ * Use when: constructing a native thread or displaying a selected preset.
+ * Expects: a supported permission preset.
+ * Returns: all three permission fields with no implicit overrides.
+ */
+export const getCodexPermissionProfile = (mode: CodexPermissionMode): CodexPermissionProfile => {
+  switch (mode) {
+    case 'full-access': {
+      return {
+        approvalPolicy: 'never',
+        approvalsReviewer: 'user',
+        sandbox: 'danger-full-access',
+      };
+    }
+    case 'auto-review': {
+      return {
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'auto_review',
+        sandbox: 'workspace-write',
+      };
+    }
+    case 'ask': {
+      return {
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        sandbox: 'workspace-write',
+      };
+    }
+    case 'read-only': {
+      return {
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        sandbox: 'read-only',
+      };
+    }
+    default: {
+      throw new Error('Unsupported Codex permission mode');
+    }
+  }
+};
+
+/** Encodes a preset as native CLI arguments.
+ *
+ * Use when: building the persisted spawn configuration.
+ * Expects: a supported preset; conflicting raw flags are stripped by the caller.
+ * Returns: the equivalent sandbox and approval arguments.
+ */
+export const getCodexPermissionModeArgs = (mode: CodexPermissionMode): string[] => {
+  if (mode === 'full-access') return [CODEX_DANGEROUS_BYPASS_FLAG];
+
+  const profile = getCodexPermissionProfile(mode);
+  return [
+    '--sandbox',
+    profile.sandbox,
+    '--ask-for-approval',
+    profile.approvalPolicy,
+    '-c',
+    `approvals_reviewer="${profile.approvalsReviewer}"`,
+  ];
+};
+
+/**
+ * Parses the requested native permission fields and a conservative display label.
+ *
+ * Use when: displaying custom CLI policies and resolving legacy presets.
+ * Expects: CLI arguments in their original order.
+ * Returns: last-assigned fields; ambiguous or expanded configurations remain custom.
+ */
+export const getCodexPermissionConfig = (
+  args: string[] | undefined,
+): {
+  approvalPolicy: string;
+  approvalsReviewer: string;
+  mode: EffectiveCodexPermissionMode;
+  sandbox: string;
+} => {
+  args ??= [];
+
+  let approvalPolicy: string | undefined;
+  let approvalsReviewer: string | undefined;
+  let invalid = false;
+  let sandbox: string | undefined;
+  let touched = false;
+
+  const assign = (field: 'approval' | 'reviewer' | 'sandbox', value: string | undefined) => {
+    touched = true;
+    if (!value) {
+      invalid = true;
+      return;
+    }
+    const current =
+      field === 'approval' ? approvalPolicy : field === 'reviewer' ? approvalsReviewer : sandbox;
+    if (current && current !== value) {
+      invalid = true;
+    }
+    if (field === 'approval') approvalPolicy = value;
+    else if (field === 'reviewer') approvalsReviewer = value;
+    else sandbox = value;
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === CODEX_DANGEROUS_BYPASS_FLAG) {
+      assign('sandbox', 'danger-full-access');
+      assign('approval', 'never');
+      continue;
+    }
+    if (arg === CODEX_FULL_AUTO_FLAG) {
+      assign('sandbox', 'workspace-write');
+      assign('approval', 'on-request');
+      continue;
+    }
+
+    const valueFlag = [...CODEX_APPROVAL_FLAGS, ...CODEX_SANDBOX_FLAGS].find(
+      (flag) => arg === flag || arg.startsWith(`${flag}=`),
+    );
+    if (valueFlag) {
+      const inline = arg.startsWith(`${valueFlag}=`);
+      const value = inline ? arg.slice(valueFlag.length + 1) : args[index + 1];
+      if (!inline && value) index += 1;
+      assign(
+        CODEX_APPROVAL_FLAGS.includes(valueFlag as (typeof CODEX_APPROVAL_FLAGS)[number])
+          ? 'approval'
+          : 'sandbox',
+        value,
+      );
+      continue;
+    }
+
+    const configFlag = CODEX_CONFIG_FLAGS.find(
+      (flag) => arg === flag || arg.startsWith(`${flag}=`),
+    );
+    if (!configFlag) continue;
+    const inline = arg.startsWith(`${configFlag}=`);
+    const assignment = inline ? arg.slice(configFlag.length + 1) : args[index + 1];
+    if (!inline && assignment) index += 1;
+    if (!assignment) {
+      invalid = true;
+      continue;
+    }
+    if (/^\s*(?:sandbox_workspace_write(?:\.|\s*=)|permissions(?:\.|\s*=))/.test(assignment))
+      invalid = true;
+    const config = parseCodexPermissionConfig(assignment);
+    if (!config) continue;
+    assign(
+      config.key === 'approval_policy'
+        ? 'approval'
+        : config.key === 'approvals_reviewer'
+          ? 'reviewer'
+          : 'sandbox',
+      config.value,
+    );
+  }
+
+  approvalPolicy ??= 'never';
+  sandbox ??= 'danger-full-access';
+  const reviewer = approvalsReviewer ?? 'user';
+  let mode: EffectiveCodexPermissionMode = 'custom';
+  if (!invalid) {
+    if (
+      (!touched || sandbox === 'danger-full-access') &&
+      approvalPolicy === 'never' &&
+      reviewer === 'user'
+    )
+      mode = 'full-access';
+    if (sandbox === 'workspace-write' && approvalPolicy === 'on-request')
+      mode = reviewer === 'auto_review' ? 'auto-review' : reviewer === 'user' ? 'ask' : 'custom';
+    if (sandbox === 'read-only' && approvalPolicy === 'on-request' && reviewer === 'user')
+      mode = 'read-only';
+  }
+  return { approvalPolicy, approvalsReviewer: reviewer, mode, sandbox };
+};
+
+/** Resolves a legacy preset label while retaining custom policy combinations. */
+export const resolveLegacyCodexPermissionMode = (
+  args: string[] | undefined,
+): EffectiveCodexPermissionMode => getCodexPermissionConfig(args).mode;
+
+/** Resolves the selected preset and its provenance.
+ *
+ * Use when: rendering permissions or selecting the native transport.
+ * Expects: the saved preset and optional legacy CLI arguments.
+ * Returns: the saved mode, otherwise a conservative legacy label.
+ */
+export const resolveCodexPermissionMode = ({
+  args,
+  permissionMode,
+}: {
+  args?: string[];
+  permissionMode?: CodexPermissionMode;
+}): ResolvedCodexPermissionMode => {
+  if (permissionMode) return { mode: permissionMode, source: 'agent' };
+  return { mode: resolveLegacyCodexPermissionMode(args), source: 'legacy' };
+};
+
+/**
+ * Return the typed profile that must run through Codex app-server. Legacy
+ * full-access and unrecognized custom args retain the historical exec path.
+ */
+export const getCodexAppServerPermissionMode = (
+  resolved: ResolvedCodexPermissionMode,
+): CodexPermissionMode | undefined => {
+  if (resolved.mode === 'custom') return;
+  if (resolved.source === 'legacy' && resolved.mode === 'full-access') return;
+  return resolved.mode;
+};
+
 const modelFlagsOf = (
   type: 'codex' | 'grok-build' | 'kimi-code' | 'opencode' | 'pi' | 'qoder',
 ): readonly string[] =>
@@ -560,7 +848,10 @@ export const buildHeteroSpawnArgs = (
     return provider.args;
   }
 
-  const baseArgs = provider.args ?? [];
+  const baseArgs =
+    provider.type === 'codex' && provider.permissionMode
+      ? (stripCodexPermissionArgs(provider.args) ?? [])
+      : (provider.args ?? []);
   const extraArgs: string[] = [];
 
   if (provider.type === 'amp') {
@@ -576,6 +867,8 @@ export const buildHeteroSpawnArgs = (
   }
 
   if (provider.type === 'codex') {
+    if (provider.permissionMode)
+      extraArgs.push(...getCodexPermissionModeArgs(provider.permissionMode));
     const model = getExplicitCodexModel(provider);
     if (
       model &&
@@ -690,6 +983,9 @@ export const buildHeteroExecArgs = (
   provider: HeterogeneousProviderConfig | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
+  if (provider.type === 'codex' && provider.permissionMode) {
+    throw new Error('Configured Codex permission modes require the app-server transport');
+  }
   if (
     provider.type !== 'amp' &&
     provider.type !== 'claude-code' &&

@@ -266,6 +266,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // NOT strip them from writes going through UpdateMessageParamsSchema /
   // CreateMessageParamsSchema (the renderer executor's `messageService` path).
   heteroMessageId: z.string().optional(),
+  codexTurnId: z.string().optional(),
   heteroSessionId: z.string().optional(),
   // Durable watermark for replace-only heterogeneous tool-state snapshots.
   // The pair is scoped by operation so a later run may restart seq at 1.
@@ -363,6 +364,8 @@ export interface MessageMetadata {
    * Real platform author of a bot-channel user message; see `BotSenderMetadata`.
    */
   botSender?: BotSenderMetadata;
+  /** Native Codex turn, distinct from an assistant item inside that turn. */
+  codexTurnId?: string;
   /**
    * Message collapse state
    * true: collapsed, false/undefined: expanded

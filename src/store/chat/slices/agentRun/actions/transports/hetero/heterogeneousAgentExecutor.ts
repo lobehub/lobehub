@@ -32,20 +32,24 @@ import type {
   ChatToolPayload,
   ChatTopicMetadata,
   ChatTopicStatus,
+  CodexForkTarget,
   ContextSelection,
   ConversationContext,
   HeterogeneousProviderConfig,
   MessageMapScope,
   ModelUsage,
   PageSelection,
+  ThreadMetadata,
   UIChatMessage,
   WorkingDirConfig,
 } from '@lobechat/types';
 import {
   AgentRuntimeErrorType,
   buildHeteroSpawnArgs,
+  getCodexAppServerPermissionMode,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   normalizeHeterogeneousProviderConfig,
+  resolveCodexPermissionMode,
   ThreadStatus,
   ThreadType,
   unwrapServerDefaultHeterogeneousModel,
@@ -225,6 +229,8 @@ const isRecoverableResumeError = (
 
 export interface HeterogeneousAgentExecutorParams {
   assistantMessageId: string;
+  /** Fork a resumed Codex thread at an exact native turn boundary. */
+  codexForkTarget?: CodexForkTarget;
   context: ConversationContext;
   contextSelections?: ContextSelection[];
   heterogeneousProvider: HeterogeneousProviderConfig;
@@ -245,6 +251,8 @@ export interface HeterogeneousAgentExecutorParams {
   /** CC session ID from previous execution in this topic (for --resume) */
   resumeBindingKey?: string;
   resumeSessionId?: string;
+  /** User row that owns a native Codex turn. */
+  userMessageId?: string;
   workingDirectory?: string;
   workingDirectoryConfig?: WorkingDirConfig;
 }
@@ -494,6 +502,7 @@ export const executeHeterogeneousAgent = async (
     heterogeneousProvider: persistedHeterogeneousProvider,
     contextSelections,
     assistantMessageId,
+    codexForkTarget,
     context,
     imageList,
     message,
@@ -689,10 +698,12 @@ export const executeHeterogeneousAgent = async (
    * spread it without minting empty metadata. Mirrors the server handler's
    * `heteroProvenance`.
    */
+  let codexTurnId: string | undefined;
   const heteroProvenance = (
     heteroMessageId?: string,
-  ): { heteroMessageId?: string; heteroSessionId?: string } => {
-    const out: { heteroMessageId?: string; heteroSessionId?: string } = {};
+  ): { codexTurnId?: string; heteroMessageId?: string; heteroSessionId?: string } => {
+    const out: { codexTurnId?: string; heteroMessageId?: string; heteroSessionId?: string } = {};
+    if (codexTurnId) out.codexTurnId = codexTurnId;
     if (heteroSessionId) out.heteroSessionId = heteroSessionId;
     if (heteroMessageId) out.heteroMessageId = heteroMessageId;
     return out;
@@ -750,7 +761,8 @@ export const executeHeterogeneousAgent = async (
   /**
    * Renderer-local retry for main assistant durable flushes. Main `streamContent`
    * is live-UI only, so a transient `persistAssistant` failure would otherwise
-   * be lost once the reducer clears `accContent` on terminal.
+   * be lost once the reducer clears `accContent` on terminal. Native turn
+   * provenance for user and assistant messages also uses this retry ledger.
    */
   const pendingMainFlush = new Map<string, Record<string, any>>();
   /** Retry ledger for the latest non-superseded tool write. */
@@ -879,24 +891,54 @@ export const executeHeterogeneousAgent = async (
     mainState.toolState.payloads.length > 0 ||
     toolMsgIdByCallId.size > 0 ||
     mainState.subagents.runs.size > 0;
+  /**
+   * Persist native resume metadata on the owning branch and its cached topic.
+   *
+   * Use when:
+   * - Establishing a child session or clearing its stale resume state.
+   * Expects:
+   * - The captured run context identifies the branch, including background runs.
+   * Returns:
+   * - A settled write with the same metadata available to queued follow-ups.
+   */
+  const persistThreadResumeMetadata = async (metadata: ThreadMetadata): Promise<void> => {
+    const { threadId, topicId } = context;
+    if (!threadId || !topicId) return;
+    await threadService.updateThread(threadId, { metadata });
+    // A run can finish after navigation. Update its owner, never the active topic.
+    get().internal_dispatchThread(
+      { id: threadId, type: 'updateThread', value: { metadata } },
+      'persistHeteroThreadSession',
+      topicId,
+    );
+  };
   const clearStaleResumeMetadata = async () => {
-    if (!context.topicId || !updateTopicMetadata) return;
+    if (!context.topicId) return;
 
     const topicMetadata = getTopicMetadataById(get(), context.topicId);
-    await updateTopicMetadata(context.topicId, {
+    const thread = context.threadId
+      ? get().threadMaps[context.topicId]?.find((item) => item.id === context.threadId)
+      : undefined;
+    const currentMetadata = context.threadId ? thread?.metadata : topicMetadata;
+    const clearedMetadata = {
       heteroSessionBindingKey: undefined,
       heteroSessionBindingKeyByWorkingDirectory: removeHeteroSessionBindingKeyForWorkingDirectory(
-        topicMetadata,
+        currentMetadata,
         workingDirectory,
       ),
       heteroSessionId: undefined,
       heteroSessionIdByWorkingDirectory: removeHeteroSessionIdForWorkingDirectory(
-        topicMetadata,
+        currentMetadata,
         workingDirectory,
       ),
       workingDirectory: workingDirectory ?? '',
-      workingDirectoryConfig: getPersistedWorkingDirectoryConfig(topicMetadata),
-    });
+      workingDirectoryConfig: getPersistedWorkingDirectoryConfig(currentMetadata),
+    };
+    if (context.threadId) {
+      await persistThreadResumeMetadata({ ...thread?.metadata, ...clearedMetadata });
+      return;
+    }
+    await updateTopicMetadata?.(context.topicId, clearedMetadata);
   };
   let persistedResumeSessionId: string | undefined;
   let activeSessionBindingKey = getNativeHeteroSessionBindingKey(adapterType);
@@ -904,7 +946,7 @@ export const executeHeterogeneousAgent = async (
   let resumeSessionPersistQueue: Promise<void> = Promise.resolve();
   const persistResumeSessionId = (sessionId: string, source: string): Promise<void> => {
     const topicId = context.topicId ?? undefined;
-    if (!topicId || !updateTopicMetadata) return resumeSessionPersistQueue;
+    if (!topicId || (!context.threadId && !updateTopicMetadata)) return resumeSessionPersistQueue;
     if (sessionId === persistedResumeSessionId || sessionId === pendingResumeSessionId) {
       return resumeSessionPersistQueue;
     }
@@ -914,6 +956,36 @@ export const executeHeterogeneousAgent = async (
       .catch(() => {})
       .then(async () => {
         const topicMetadata = getTopicMetadataById(get(), topicId);
+        const thread = context.threadId
+          ? get().threadMaps[topicId]?.find((item) => item.id === context.threadId)
+          : undefined;
+        const currentMetadata = context.threadId ? thread?.metadata : topicMetadata;
+        const nextMetadata = {
+          ...currentMetadata,
+          codexForkTarget:
+            codexForkTarget && sessionId !== codexForkTarget.threadId
+              ? undefined
+              : thread?.metadata?.codexForkTarget,
+          heteroSessionBindingKey: activeSessionBindingKey,
+          heteroSessionBindingKeyByWorkingDirectory: setHeteroSessionBindingKeyForWorkingDirectory(
+            currentMetadata,
+            workingDirectory,
+            activeSessionBindingKey,
+          ),
+          heteroSessionId: sessionId,
+          heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
+            currentMetadata,
+            workingDirectory,
+            sessionId,
+          ),
+          workingDirectory: workingDirectory ?? '',
+          workingDirectoryConfig: getPersistedWorkingDirectoryConfig(currentMetadata),
+        };
+        if (context.threadId) {
+          await persistThreadResumeMetadata(nextMetadata);
+          persistedResumeSessionId = sessionId;
+          return;
+        }
         // The session and its cwd now live on THIS machine, so the topic is
         // pinned here — its next turn and the device picker follow it.
         const runDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
@@ -1061,7 +1133,17 @@ export const executeHeterogeneousAgent = async (
     try {
       await get().optimisticUpdateMessagePlugin(
         toolMsgId,
-        { intervention: { status: 'pending' } },
+        {
+          intervention: {
+            ...(data.identifier === 'codex'
+              ? {
+                  arguments: data.arguments,
+                  interventionId: data.interventionId ?? data.toolCallId,
+                }
+              : {}),
+            status: 'pending',
+          },
+        },
         { operationId },
       );
       // Sidebar topic row swaps the running spinner for a hand icon
@@ -1091,6 +1173,15 @@ export const executeHeterogeneousAgent = async (
     if (!toolMsgId) return false;
 
     await messageWriteBatcher.flush('before-intervention-response');
+    const activeInterventionId =
+      dbMessageSelectors.getDbMessageById(toolMsgId)(get())?.pluginIntervention?.interventionId;
+    if (
+      data.interventionId &&
+      activeInterventionId &&
+      data.interventionId !== activeInterventionId
+    ) {
+      return true;
+    }
 
     try {
       await get().optimisticUpdateMessagePlugin(
@@ -1618,6 +1709,7 @@ export const executeHeterogeneousAgent = async (
           parentId: intent.parentId,
           provider: intent.provider,
           role: 'assistant',
+          threadId: context.threadId ?? undefined,
           topicId: intent.topicId ?? context.topicId ?? undefined,
         } as any;
         messageWriteBatcher.enqueueCreateMessage(messageToCreate, (err) => {
@@ -1711,6 +1803,7 @@ export const executeHeterogeneousAgent = async (
             },
             role: 'tool',
             tool_call_id: x.payload.id,
+            threadId: context.threadId ?? undefined,
             topicId: context.topicId ?? undefined,
           } as any;
         };
@@ -1912,6 +2005,35 @@ export const executeHeterogeneousAgent = async (
         heteroSessionId = sid;
         void persistResumeSessionId(sid, 'stream_start');
       }
+      const turnId = (event.data as { codexTurnId?: string } | undefined)?.codexTurnId;
+      if (adapterType === 'codex' && turnId && turnId !== codexTurnId) {
+        if (!heteroSessionId) {
+          throw new Error('Native Codex turn is missing its thread');
+        }
+        codexTurnId = turnId;
+        const messageIds = [assistantMessageId];
+        if (params.userMessageId) {
+          const source = dbMessageSelectors.getDbMessageById(params.userMessageId)(get());
+          if (!source) throw new Error('Native Codex turn user message is unavailable');
+          // Continue-after-error may be anchored to an earlier assistant/tool row.
+          // Its original native boundary must remain recoverable.
+          if (source.role === 'user') messageIds.unshift(params.userMessageId);
+        }
+        for (const id of messageIds) {
+          const stored = dbMessageSelectors.getDbMessageById(id)(get());
+          const metadata = { ...stored?.metadata, ...heteroProvenance() };
+          // Provenance uses the same durable retry queue as content. A transient
+          // metadata failure must not reject the event FIFO and drop later steps.
+          messageWriteBatcher.enqueueUpdateMessage(id, { metadata }, messageWriteCtx, (error) => {
+            console.error('[HeterogeneousAgent] Failed to persist native turn provenance:', error);
+            stashMainFlush(id, { metadata });
+          });
+          get().internal_dispatchMessage(
+            { id, type: 'updateMessage', value: { metadata } },
+            { operationId },
+          );
+        }
+      }
     }
 
     const ctx: MainAgentReduceCtx = {
@@ -1984,6 +2106,11 @@ export const executeHeterogeneousAgent = async (
   }
 
   try {
+    if (codexForkTarget !== undefined && !resumeSessionId) {
+      throw new Error(
+        'Cannot fork this Codex conversation because its native thread is unavailable',
+      );
+    }
     // Account routing: realize the pinned/balanced account choice as spawn env
     // (CLAUDE_CONFIG_DIR profile). Unbound agents get {} and spawn exactly as
     // before; a quota-service failure must never block the run.
@@ -2008,7 +2135,20 @@ export const executeHeterogeneousAgent = async (
       ...heterogeneousProvider.env,
     };
 
-    const spawnArgs = buildHeteroSpawnArgs(heterogeneousProvider);
+    const codexPermission =
+      adapterType === 'codex'
+        ? resolveCodexPermissionMode({
+            args: heterogeneousProvider.args,
+            permissionMode: heterogeneousProvider.permissionMode,
+          })
+        : undefined;
+    const configuredCodexPermissionMode = codexPermission
+      ? getCodexAppServerPermissionMode(codexPermission)
+      : undefined;
+    const spawnProvider = configuredCodexPermissionMode
+      ? { ...heterogeneousProvider, permissionMode: configuredCodexPermissionMode }
+      : heterogeneousProvider;
+    const spawnArgs = buildHeteroSpawnArgs(spawnProvider);
     const providerBinding = serverDefaultBindingActive
       ? {
           apiConfig: serverDefaultApiConfig,
@@ -2028,6 +2168,8 @@ export const executeHeterogeneousAgent = async (
       agentType: adapterType,
       args: spawnArgs,
       command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
+      codexForkTarget,
+      codexPermissionMode: configuredCodexPermissionMode,
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:

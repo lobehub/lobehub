@@ -6,6 +6,8 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
 import type {
+  CodexForkTarget,
+  CodexPermissionMode,
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
@@ -25,6 +27,8 @@ class HeterogeneousAgentService {
     agentType?: string;
     args?: string[];
     command: string;
+    codexForkTarget?: CodexForkTarget;
+    codexPermissionMode?: CodexPermissionMode;
     cwd?: string;
     env?: Record<string, string>;
     initialModel?: string;
@@ -168,6 +172,7 @@ class HeterogeneousAgentService {
   async submitIntervention(params: {
     cancelReason?: 'timeout' | 'user_cancelled';
     cancelled?: boolean;
+    interventionId?: string;
     operationId: string;
     result?: unknown;
     toolCallId: string;

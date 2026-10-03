@@ -1,5 +1,8 @@
+import type { CodexForkTarget } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { UsageData } from '../types';
+import type { CodexApprovalDecision } from './CodexApprovalBridge';
 import {
   CodexAppServerConnectionError,
   CodexAppServerRpcError,
@@ -24,6 +27,7 @@ interface ClientHarness {
   notify: (method: string, params: unknown) => Promise<void> | void;
   registeredResumeParams: () => unknown;
   releaseConsumer: ReturnType<typeof vi.fn>;
+  requestApproval: (method: string, params: unknown) => Promise<unknown> | undefined;
   requests: Array<{ method: string; params: unknown }>;
   resolveThreadStart: () => void;
   resolveTurnStart: () => void;
@@ -32,6 +36,7 @@ interface ClientHarness {
 
 const createClientHarness = (
   options: {
+    activeResume?: boolean;
     autoComplete?: boolean;
     delayThreadStart?: boolean;
     delayTurnStart?: boolean;
@@ -41,11 +46,15 @@ const createClientHarness = (
     initialThreadId?: string;
     interruptError?: Error;
     malformedThreadStart?: boolean;
+    sourceTurnIds?: string[];
+    permissionMismatch?: boolean;
+    expandedSandbox?: boolean;
     threadNameError?: Error;
   } = {},
 ): ClientHarness => {
   let disconnectHandler: (() => void) | undefined;
   let notificationHandler: ((method: string, params: unknown) => Promise<void>) | undefined;
+  let serverRequestHandler: ((method: string, params: unknown) => Promise<unknown>) | undefined;
   let registration:
     | {
         onResume: (response: unknown) => Promise<void> | void;
@@ -72,6 +81,7 @@ const createClientHarness = (
 
   const client = {
     acquireConsumer: vi.fn(() => releaseConsumer),
+    acquireThread: vi.fn(() => vi.fn()),
     connect: options.connectError
       ? vi.fn().mockRejectedValue(options.connectError)
       : vi.fn().mockResolvedValue({ userAgent: 'codex-test' }),
@@ -84,20 +94,63 @@ const createClientHarness = (
     registerThread: vi.fn((_threadId: string, params: unknown, value: typeof registration) => {
       resumeParams = params;
       registration = value;
-      return vi.fn();
+      return vi.fn(() => {
+        if (registration === value) registration = undefined;
+      });
     }),
     request: vi.fn(async (method: string, params: unknown) => {
       requests.push({ method, params });
       if (method === 'thread/start') {
         await threadStartGate;
         if (options.malformedThreadStart) return { thread: {} };
-        return { model: 'gpt-5.5-codex', thread: { id: 'thread-1' } };
+        return {
+          approvalPolicy: options.expandedSandbox ? 'on-request' : 'never',
+          approvalsReviewer: 'user',
+          model: 'gpt-5.5-codex',
+          cwd: '/workspace',
+          sandbox: options.expandedSandbox
+            ? {
+                type: 'workspaceWrite',
+                networkAccess: true,
+                writableRoots: ['/outside'],
+                excludeTmpdirEnvVar: false,
+                excludeSlashTmp: false,
+              }
+            : { type: options.permissionMismatch ? 'readOnly' : 'dangerFullAccess' },
+          thread: { id: 'thread-1' },
+        };
       }
-      if (method === 'thread/resume') {
+      if (method === 'thread/resume' || method === 'thread/read') {
         if (options.failResume) throw new Error('Thread not found');
         return {
+          approvalPolicy: options.expandedSandbox ? 'on-request' : 'never',
+          approvalsReviewer: 'user',
           model: 'gpt-5.5-codex',
-          thread: { id: options.initialThreadId ?? 'thread-1' },
+          cwd: '/workspace',
+          sandbox: options.expandedSandbox
+            ? {
+                type: 'workspaceWrite',
+                networkAccess: true,
+                writableRoots: ['/outside'],
+                excludeTmpdirEnvVar: false,
+                excludeSlashTmp: false,
+              }
+            : { type: options.permissionMismatch ? 'readOnly' : 'dangerFullAccess' },
+          thread: {
+            id: options.initialThreadId ?? 'thread-1',
+            turns: (options.sourceTurnIds ?? []).map((id) => turn(id, 'completed')),
+            status: { type: options.activeResume ? 'active' : 'idle' },
+          },
+        };
+      }
+      if (method === 'thread/fork') {
+        return {
+          approvalPolicy: 'never',
+          approvalsReviewer: 'user',
+          cwd: '/workspace',
+          sandbox: { type: options.permissionMismatch ? 'readOnly' : 'dangerFullAccess' },
+          model: 'gpt-5.5-codex',
+          thread: { id: 'thread-forked' },
         };
       }
       if (method === 'thread/name/set') {
@@ -144,32 +197,52 @@ const createClientHarness = (
       notificationHandler = handler;
       return vi.fn();
     }),
-    subscribeServerRequests: vi.fn(() => vi.fn()),
+    subscribeServerRequests: vi.fn((_threadId: string, handler: typeof serverRequestHandler) => {
+      serverRequestHandler = handler;
+      return vi.fn();
+    }),
   };
 
   return {
     client,
     disconnect: () => disconnectHandler?.(),
     notify,
+    requestApproval: (method, params) => serverRequestHandler?.(method, params),
     registeredResumeParams: () => resumeParams,
     releaseConsumer,
     requests,
     resolveThreadStart,
     resolveTurnStart,
     resume: (model = 'gpt-5.5-codex') =>
-      registration?.onResume({ model, thread: { id: options.initialThreadId ?? 'thread-1' } }),
+      registration?.onResume({
+        approvalPolicy: 'never',
+        approvalsReviewer: 'user',
+        model,
+        sandbox: { type: options.permissionMismatch ? 'readOnly' : 'dangerFullAccess' },
+        thread: { id: options.initialThreadId ?? 'thread-1' },
+      }),
   };
 };
 
 const createSession = (
   harness: ClientHarness,
-  options: { initialThreadId?: string; onEventsError?: Error; threadName?: string } = {},
+  options: {
+    forkTarget?: CodexForkTarget;
+    initialCumulativeUsage?: UsageData;
+    allowExecFallback?: boolean;
+    initialThreadId?: string;
+    onEventsError?: Error;
+    threadName?: string;
+  } = {},
 ) => {
   const events: any[] = [];
   const statuses: string[] = [];
   const onSessionId = vi.fn();
   const session = new CodexThreadSession({
+    allowExecFallback: options.allowExecFallback,
     client: harness.client,
+    forkTarget: options.forkTarget,
+    initialCumulativeUsage: options.initialCumulativeUsage,
     initialThreadId: options.initialThreadId,
     threadName: options.threadName,
     onEvents: (batch) => {
@@ -181,6 +254,7 @@ const createSession = (
     sessionId: 'session-1',
     threadParams: {
       approvalPolicy: 'never',
+      approvalsReviewer: 'user',
       cwd: '/workspace',
       sandbox: 'danger-full-access',
     },
@@ -195,6 +269,334 @@ const createSession = (
 };
 
 describe('CodexThreadSession', () => {
+  // ROOT CAUSE:
+  // The edit/fork branches attach a child before reaching the normal permission check.
+  // Combining native forks with permission verification must guard every child creation.
+  /** @example An edited first turn cannot start under a mismatched permission profile. */
+  it('rejects mismatched permissions before an edited first turn starts', async () => {
+    const harness = createClientHarness({
+      permissionMismatch: true,
+      sourceTurnIds: ['source-turn'],
+    });
+    const { run, session } = createSession(harness, {
+      forkTarget: { position: 'before', threadId: 'source', turnId: 'source-turn' },
+      initialThreadId: 'source',
+    });
+    try {
+      /** @example Native permission mismatch is rejected before any user prompt executes. */
+      await expect(run('edit', 'edited')).rejects.toThrow();
+      /** @example No turn reaches the native runtime with the wrong permissions. */
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(false);
+    } finally {
+      session.close();
+    }
+  });
+
+  /** @example A forked child must preserve the configured permission profile. */
+  it('rejects mismatched permissions before a forked child starts', async () => {
+    const harness = createClientHarness({
+      permissionMismatch: true,
+      sourceTurnIds: ['source-turn'],
+    });
+    const { run, session } = createSession(harness, {
+      forkTarget: { position: 'after', threadId: 'source', turnId: 'source-turn' },
+      initialThreadId: 'source',
+    });
+    try {
+      /** @example Fork response policy is checked just like start and resume responses. */
+      await expect(run('fork', 'child')).rejects.toThrow();
+      /** @example A rejected fork never executes the user prompt. */
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(false);
+    } finally {
+      session.close();
+    }
+  });
+
+  // ROOT CAUSE:
+  // Editing turn zero starts a fresh thread, but prompt preparation and token
+  // accounting previously treated the source resume ID as retained history.
+  /** @example First-turn edits receive new-session input and their full usage. */
+  it('prepares fresh input and resets usage when editing the first turn', async () => {
+    const harness = createClientHarness({ autoComplete: false, sourceTurnIds: ['source-turn'] });
+    const { events, session } = createSession(harness, {
+      forkTarget: { position: 'before', threadId: 'source-thread', turnId: 'source-turn' },
+      initialThreadId: 'source-thread',
+      initialCumulativeUsage: {
+        inputCacheMissTokens: 100,
+        totalInputTokens: 100,
+        totalOutputTokens: 0,
+        totalTokens: 100,
+      },
+    });
+    const input = vi.fn(async (isNewSession: boolean) => [
+      {
+        text: isNewSession ? 'introduction and edited prompt' : 'edited prompt',
+        text_elements: [],
+        type: 'text' as const,
+      },
+    ]);
+    const run = session.run({ input, operationId: 'edit-first', onRawMessage: vi.fn() });
+    await vi.waitFor(() => {
+      /** @example Input reaches the real native turn-start boundary. */
+      expect(harness.requests.some((request) => request.method === 'turn/start')).toBe(true);
+    });
+    await harness.notify('turn/started', {
+      threadId: 'thread-1',
+      turn: turn('turn-1', 'inProgress'),
+    });
+    await harness.notify('thread/tokenUsage/updated', {
+      threadId: 'thread-1',
+      tokenUsage: {
+        total: {
+          inputTokens: 150,
+          cachedInputTokens: 0,
+          outputTokens: 0,
+          reasoningOutputTokens: 0,
+          totalTokens: 150,
+        },
+      },
+    });
+    await harness.notify('turn/completed', {
+      threadId: 'thread-1',
+      turn: turn('turn-1', 'completed'),
+    });
+    await run;
+    session.close();
+    /** @example The first edited turn carries instructions for a fresh session. */
+    expect(input).toHaveBeenCalledWith(true);
+    /** @example Source usage is never subtracted from a new native thread. */
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'step_complete',
+        data: expect.objectContaining({
+          usage: expect.objectContaining({ totalInputTokens: 150 }),
+        }),
+      }),
+    );
+  });
+
+  // ROOT CAUSE:
+  // Re-entering ensureThread after a disconnect reused the original fork boundary against
+  // the child. Consuming the fork target once makes subsequent connections resume the child.
+  /** @example A completed child reconnects without forking its original boundary again. */
+  it('resumes the child after a forked session disconnects', async () => {
+    const harness = createClientHarness({
+      initialThreadId: 'thread-source',
+      sourceTurnIds: ['turn-a', 'turn-b'],
+    });
+    const { run, session } = createSession(harness, {
+      initialThreadId: 'thread-source',
+      forkTarget: { position: 'after', threadId: 'thread-source', turnId: 'turn-a' },
+    });
+    await run('operation-1', 'First child prompt');
+    harness.disconnect();
+    await run('operation-2', 'Continue child');
+    session.close();
+    expect(harness.requests.filter(({ method }) => method === 'thread/fork')).toHaveLength(1);
+    expect(harness.requests).toContainEqual({
+      method: 'thread/resume',
+      params: expect.objectContaining({ threadId: 'thread-forked' }),
+    });
+  });
+
+  it('forks a resumed thread at an exact turn boundary before starting the next turn', async () => {
+    const harness = createClientHarness({
+      initialThreadId: 'thread-source',
+      sourceTurnIds: ['turn-a', 'turn-b', 'turn-c'],
+    });
+    const { onSessionId, run, session } = createSession(harness, {
+      forkTarget: { position: 'after', threadId: 'thread-source', turnId: 'turn-b' },
+      initialThreadId: 'thread-source',
+      threadName: 'Forked work',
+    });
+
+    await run('operation-1', 'take another approach');
+    session.close();
+
+    expect(harness.requests.slice(0, 4)).toEqual([
+      {
+        method: 'thread/read',
+        params: { includeTurns: true, threadId: 'thread-source' },
+      },
+      {
+        method: 'thread/fork',
+        params: expect.objectContaining({ lastTurnId: 'turn-b', threadId: 'thread-source' }),
+      },
+      {
+        method: 'thread/name/set',
+        params: { name: 'Forked work', threadId: 'thread-forked' },
+      },
+      {
+        method: 'turn/start',
+        params: expect.objectContaining({ threadId: 'thread-forked' }),
+      },
+    ]);
+    expect(onSessionId).toHaveBeenCalledWith('thread-forked');
+  });
+
+  it('starts a clean thread when an edited first turn keeps no history', async () => {
+    const harness = createClientHarness({
+      initialThreadId: 'thread-source',
+      sourceTurnIds: ['turn-a'],
+    });
+    const { run, session } = createSession(harness, {
+      forkTarget: { position: 'before', threadId: 'thread-source', turnId: 'turn-a' },
+      initialThreadId: 'thread-source',
+    });
+
+    await run('operation-1', 'edited first prompt');
+    session.close();
+
+    expect(harness.requests.map(({ method }) => method)).toEqual([
+      'thread/read',
+      'thread/start',
+      'turn/start',
+    ]);
+  });
+
+  /** @example Changing operation after disconnect must invalidate queued old resume parameters. */
+  it('replaces detached reconnect context before starting the next operation', async () => {
+    // ROOT CAUSE:
+    // Disconnect marks the thread detached while keeping its automatic-resume registration.
+    // Checking attached before unregistering allowed reconnect to restore the previous env.
+    // Context changes now invalidate that registration before awaiting connect.
+    const harness = createClientHarness();
+    const { session } = createSession(harness);
+    const run = (operationId: string) =>
+      session.run({
+        env: { LOBEHUB_OPERATION_ID: operationId },
+        input: [],
+        onRawMessage: () => {},
+        operationId,
+      });
+    try {
+      await run('old');
+      harness.disconnect();
+      harness.client.connect.mockImplementationOnce(async () => {
+        await harness.resume();
+      });
+      await run('new');
+      const resume = harness.requests.filter(({ method }) => method === 'thread/resume');
+      /** @example A new cold resume sends the current operation after recovery completes. */
+      expect(resume.at(-1)?.params).toMatchObject({
+        config: { 'shell_environment_policy.set.LOBEHUB_OPERATION_ID': 'new' },
+      });
+      /** @example A later process restart also uses the current operation. */
+      expect(harness.registeredResumeParams()).toMatchObject({
+        config: { 'shell_environment_policy.set.LOBEHUB_OPERATION_ID': 'new' },
+      });
+    } finally {
+      session.close();
+    }
+  });
+
+  /** @example Closing during unsubscribe must not reload a native thread now owned by another session. */
+  it('does not resume after closing during an unsubscribe request', async () => {
+    // ROOT CAUSE:
+    // close releases the native-thread claim while an unsubscribe RPC may still be pending.
+    // Continuing to resume could replace a new owner's shell context with the old run's IDs.
+    // Recheck closed state immediately after unsubscribe before sending another RPC.
+    const harness = createClientHarness({ initialThreadId: 'existing' });
+    const { session } = createSession(harness, { initialThreadId: 'existing' });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const request = harness.client.request.getMockImplementation();
+    harness.client.request.mockImplementation(async (method: string, params: unknown) => {
+      if (method === 'thread/unsubscribe') await gate;
+      return request(method, params);
+    });
+    const run = session.run({
+      env: { LOBEHUB_OPERATION_ID: 'old' },
+      input: [],
+      onRawMessage: () => {},
+      operationId: 'old',
+    });
+    try {
+      /** @example Close precisely while the native unsubscribe is pending. */
+      await vi.waitFor(() =>
+        expect(harness.client.request).toHaveBeenCalledWith('thread/unsubscribe', {
+          threadId: 'existing',
+        }),
+      );
+      session.close();
+      release();
+      await run;
+      /** @example The closed owner cannot send resume or start a turn. */
+      expect(harness.requests.map(({ method }) => method)).toEqual(['thread/unsubscribe']);
+    } finally {
+      release();
+      session.close();
+      await run;
+    }
+  });
+
+  /** @example A previous turn still shutting down cannot silently retain its old shell context. */
+  it('fails safely instead of starting a turn when resume is still active', async () => {
+    const harness = createClientHarness({ activeResume: true, initialThreadId: 'thread-existing' });
+    const { session } = createSession(harness, { initialThreadId: 'thread-existing' });
+    try {
+      /** @example The run reports a retryable boundary instead of executing under stale context. */
+      await expect(
+        session.run({
+          env: { LOBEHUB_OPERATION_ID: 'new' },
+          input: [],
+          onRawMessage: () => {},
+          operationId: 'new',
+        }),
+      ).rejects.toThrow('previous turn is still active');
+      /** @example Native-thread failures must not replay the prompt through exec. */
+      expect(session.canFallbackToExec).toBe(false);
+      /** @example No model turn starts after the unsafe resume. */
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(false);
+    } finally {
+      session.close();
+    }
+  });
+
+  /** @example Later operations reload the native thread with their own shell provenance. */
+  it('updates shell provenance on resume while preserving other thread config', async () => {
+    // ROOT CAUSE:
+    // The process env belongs to the first run, and loaded-thread resume ignores config overrides.
+    // Send provenance in thread config and unsubscribe the idle thread before changing it.
+    const harness = createClientHarness();
+    const { session } = createSession(harness);
+    const run = (operationId: string) =>
+      session.run({
+        input: [{ type: 'text', text: 'hello', text_elements: [] }],
+        onRawMessage: () => {},
+        operationId,
+        env: {
+          LOBEHUB_AGENT_ID: 'agent',
+          LOBEHUB_TOPIC_ID: 'topic',
+          LOBEHUB_OPERATION_ID: operationId,
+        },
+      });
+    try {
+      await run('op-a');
+      await run('op-b');
+      const requests = harness.requests.filter(({ method }) =>
+        ['thread/start', 'thread/unsubscribe', 'thread/resume'].includes(method),
+      );
+      /** @example The second run releases the server subscription before applying new config. */
+      expect(requests.map(({ method }) => method)).toEqual([
+        'thread/start',
+        'thread/unsubscribe',
+        'thread/resume',
+      ]);
+      /** @example A resumed shell receives op-b, never op-a. */
+      expect(requests.at(-1)?.params).toMatchObject({
+        config: {
+          'shell_environment_policy.set.LOBEHUB_OPERATION_ID': 'op-b',
+          'shell_environment_policy.set.LOBEHUB_TOPIC_ID': 'topic',
+        },
+      });
+    } finally {
+      session.close();
+    }
+  });
+
   it('sets the original prompt as the name of a new persisted thread', async () => {
     const harness = createClientHarness();
     const { run, session } = createSession(harness, { threadName: 'Original prompt title' });
@@ -207,6 +609,7 @@ describe('CodexThreadSession', () => {
         method: 'thread/start',
         params: {
           approvalPolicy: 'never',
+          approvalsReviewer: 'user',
           cwd: '/workspace',
           sandbox: 'danger-full-access',
         },
@@ -292,6 +695,7 @@ describe('CodexThreadSession', () => {
         method: 'thread/resume',
         params: {
           approvalPolicy: 'never',
+          approvalsReviewer: 'user',
           cwd: '/workspace',
           sandbox: 'danger-full-access',
           threadId: 'thread-existing',
@@ -308,6 +712,7 @@ describe('CodexThreadSession', () => {
     expect(onSessionId).not.toHaveBeenCalled();
     expect(harness.registeredResumeParams()).toEqual({
       approvalPolicy: 'never',
+      approvalsReviewer: 'user',
       cwd: '/workspace',
       sandbox: 'danger-full-access',
       threadId: 'thread-existing',
@@ -354,6 +759,128 @@ describe('CodexThreadSession', () => {
     expect(session.canFallbackToExec).toBe(true);
     session.close();
   });
+
+  /**
+   * @example Ask cannot accept a native response that widens network or filesystem scope.
+   */
+  it('rejects expanded native sandbox scope before starting a turn', async () => {
+    // ROOT CAUSE:
+    //
+    // Comparing only the sandbox variant allowed inherited writable roots/network access.
+    // The requested Ask preset now constrains those settings and validates the echoed scope.
+    const harness = createClientHarness({ expandedSandbox: true });
+    const session = new CodexThreadSession({
+      allowExecFallback: false,
+      client: harness.client,
+      onEvents: vi.fn(),
+      onRuntimeStatus: vi.fn(),
+      onSessionId: vi.fn(),
+      sessionId: 'scope-test',
+      threadParams: {
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        config: { 'sandbox_workspace_write.network_access': false },
+        cwd: '/workspace',
+        sandbox: 'workspace-write',
+      },
+    });
+    await expect(
+      session.run({
+        input: [{ type: 'text', text: 'start', text_elements: [] }],
+        onRawMessage: vi.fn(),
+        operationId: 'scope-operation',
+      }),
+    ).rejects.toThrow('Codex app-server did not apply the requested permission profile');
+    expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(false);
+    expect(session.canFallbackToExec).toBe(false);
+    session.close();
+  });
+
+  it('fails closed when app-server echoes a different permission profile', async () => {
+    const harness = createClientHarness({ permissionMismatch: true });
+    const { run, session } = createSession(harness, { allowExecFallback: false });
+
+    await expect(run('operation-1', 'start')).rejects.toThrow(
+      'Codex app-server did not apply the requested permission profile',
+    );
+    expect(session.canFallbackToExec).toBe(false);
+    session.close();
+  });
+
+  it.each([
+    [
+      'item/commandExecution/requestApproval',
+      {
+        approvalId: 'approval-1',
+        availableDecisions: [
+          'accept',
+          {
+            acceptWithExecpolicyAmendment: {
+              execpolicy_amendment: ['/usr/bin/curl', '-I', 'https://github.com'],
+            },
+          },
+          'cancel',
+        ],
+        itemId: 'item-1',
+      },
+      'approval-1',
+      'command_execution',
+      {
+        acceptWithExecpolicyAmendment: {
+          execpolicy_amendment: ['/usr/bin/curl', '-I', 'https://github.com'],
+        },
+      } satisfies CodexApprovalDecision,
+    ],
+    [
+      'item/fileChange/requestApproval',
+      { itemId: 'item-1' },
+      'item-1',
+      'file_change',
+      'acceptForSession' as const satisfies CodexApprovalDecision,
+    ],
+  ])(
+    'bridges %s requests to an intervention decision',
+    async (method, params, _nativeId, apiName, decision) => {
+      const harness = createClientHarness({ autoComplete: false });
+      const { events, run, session } = createSession(harness);
+      const running = run('operation-1', 'start');
+      await vi.waitFor(() =>
+        expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
+      );
+
+      const approval = harness.requestApproval(method, {
+        ...params,
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+      });
+      await vi.waitFor(() =>
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              apiName,
+              interventionId: expect.any(String),
+              toolCallId: 'item-1',
+            }),
+            operationId: 'operation-1',
+            type: 'agent_intervention_request',
+          }),
+        ),
+      );
+      const intervention = events.find((event) => event.type === 'agent_intervention_request');
+      expect(JSON.parse(intervention!.data.arguments)).toMatchObject(params);
+      expect(
+        session.resolveApproval('operation-1', intervention!.data.interventionId, decision),
+      ).toBe(true);
+      await expect(approval).resolves.toEqual({ decision });
+
+      await harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+      await running;
+      session.close();
+    },
+  );
 
   it('does not register a thread if the host closes while thread/start is pending', async () => {
     const harness = createClientHarness({ delayThreadStart: true });

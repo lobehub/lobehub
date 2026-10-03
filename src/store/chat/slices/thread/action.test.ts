@@ -121,6 +121,34 @@ afterEach(() => {
 });
 
 describe('thread action', () => {
+  // ROOT CAUSE:
+  // A native child can finish after navigation; updating activeTopicId then writes to the wrong map.
+  /** @example Background session metadata updates target the captured topic. */
+  it('dispatches a background thread update without changing the active topic', () => {
+    const source = {
+      id: 'branch',
+      title: 'Source',
+      metadata: { heteroSessionId: 'old' },
+    } as ThreadItem;
+    const other = { id: 'other', title: 'Other' } as ThreadItem;
+    useChatStore.setState({
+      activeTopicId: 'other-topic',
+      threadMaps: { 'source-topic': [source], 'other-topic': [other] },
+    });
+    useChatStore
+      .getState()
+      .internal_dispatchThread(
+        { id: 'branch', type: 'updateThread', value: { metadata: { heteroSessionId: 'child' } } },
+        'persistHeteroThreadSession',
+        'source-topic',
+      );
+    expect(useChatStore.getState().threadMaps['source-topic'][0].metadata?.heteroSessionId).toBe(
+      'child',
+    );
+    expect(useChatStore.getState().threadMaps['other-topic']).toEqual([other]);
+    expect(useChatStore.getState().activeTopicId).toBe('other-topic');
+  });
+
   describe('updateThreadInputMessage', () => {
     it('should update thread input message', () => {
       const { result } = renderHook(() => useChatStore());
