@@ -24,6 +24,45 @@ export interface TopicAgentViewParams {
   withDetails?: boolean;
 }
 
+/** Sidebar page size when the caller does not name one. */
+export const DEFAULT_TOPIC_PAGE_SIZE = 20;
+
+/**
+ * The one canonical shape of a sidebar list request.
+ *
+ * Shared by the rendering hook, the secondary panels and the pre-paint hydrate
+ * (route loader). The persisted row is keyed by `key` + `query`, so a caller
+ * that normalizes differently reads a row the sidebar never asks for — and the
+ * hydrate silently becomes a no-op.
+ */
+export const normalizeTopicListParams = (
+  input: Partial<TopicListParams>,
+): TopicListParams | null => {
+  const {
+    agentId,
+    excludeStatuses,
+    excludeTriggers,
+    groupId,
+    isInbox,
+    pageSize,
+    sortBy,
+    withDetails,
+  } = input;
+
+  if (!agentId && !groupId) return null;
+
+  return {
+    agentId,
+    excludeStatuses: excludeStatuses?.length ? excludeStatuses : undefined,
+    excludeTriggers: excludeTriggers?.length ? excludeTriggers : undefined,
+    groupId,
+    isInbox,
+    pageSize: pageSize || DEFAULT_TOPIC_PAGE_SIZE,
+    sortBy,
+    withDetails: withDetails || undefined,
+  };
+};
+
 const topicPaging = {
   direction: 'forward',
   getId: (topic: ChatTopic) => topic.id,

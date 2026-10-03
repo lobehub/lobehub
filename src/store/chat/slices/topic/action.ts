@@ -31,6 +31,7 @@ import {
 } from '@/libs/localFirst';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { cronKeys, deviceKeys, isLocalFirstSyncKey, topicKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { aiChatService } from '@/services/aiChat';
 import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
@@ -70,6 +71,7 @@ import { displayMessageSelectors } from '../message/selectors';
 import { type TopicData } from './initialState';
 import {
   applyTopicDispatchToBucket,
+  normalizeTopicListParams,
   type TopicAgentViewParams,
   topicAgentViewResource,
   topicDetailResource,
@@ -1350,32 +1352,29 @@ export class ChatTopicActionImpl {
    */
   useFetchTopics = (
     enable: boolean,
-    {
-      agentId,
-      excludeStatuses,
-      excludeTriggers,
-      groupId,
-      pageSize,
-      isInbox,
-      sortBy,
-      withDetails,
-    }: Partial<TopicListParams> = {},
+    params: Partial<TopicListParams> = {},
   ): LocalFirstSyncResult => {
-    const params: TopicListParams | null =
-      groupId || agentId
-        ? {
-            agentId,
-            excludeStatuses: excludeStatuses?.length ? excludeStatuses : undefined,
-            excludeTriggers: excludeTriggers?.length ? excludeTriggers : undefined,
-            groupId,
-            isInbox,
-            pageSize: pageSize || 20,
-            sortBy,
-            withDetails: withDetails || undefined,
-          }
-        : null;
+    return this.#topicList.useSync(normalizeTopicListParams(params), { enabled: enable });
+  };
 
-    return this.#topicList.useSync(params, { enabled: enable });
+  /**
+   * Seed the sidebar's persisted page for a session before its first paint.
+   *
+   * Called from the agent route loader, where the route's agent is known but the
+   * stores still hold the previously active one. Best-effort by contract: a miss
+   * (nothing persisted for this key + query) is not an error, and the caller
+   * bounds the wait — everything else still flows through `useSync`.
+   */
+  preHydrateTopicList = async (params: Partial<TopicListParams>): Promise<boolean> => {
+    const normalized = normalizeTopicListParams(params);
+    if (!normalized) return false;
+
+    const scope = getCacheScope();
+    // The slot may still hold the previous identity's rows (a session that ended
+    // before the identity round-trip landed); drop them before seeding this one.
+    this.#topicList.ensureScope(scope);
+
+    return this.#topicList.hydrate(normalized, scope);
   };
 
   /**
