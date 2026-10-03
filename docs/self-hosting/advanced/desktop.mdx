@@ -108,11 +108,23 @@ Check if the `APP_URL` environment variable matches the URL you are accessing.
   - Apple Silicon: `LobeHub-Beta-1.83.6-arm64.dmg` or `LobeHub-Beta-1.83.6-arm64-mac.zip`
   - Intel: `LobeHub-Beta-1.83.6-x64.dmg` or `LobeHub-Beta-1.83.6-mac.zip`
 
-### Image Loading Issues
+### Image Loading or Upload Failures
 
-**Issue:** When using a Docker-deployed server, the desktop client cannot load avatars or other image resources after connecting.
+**Issue:** When using a Docker-deployed server, the desktop client cannot load or upload images after connecting.
 
 **Solution:**
 
-- If you are using Minio for storage, ensure that cross-origin requests are allowed in the Minio configuration.
-- Add appropriate CORS settings in your Minio service.
+- `S3_ENDPOINT` must be an HTTPS address that is accessible from both browsers and the desktop client. Do not use container-only addresses such as `http://minio:9000` or `http://rustfs:9000`.
+- Configure CORS for S3, MinIO, or RustFS, allowing both the self-hosted site origin and the desktop client origin, `http://localhost:3015`.
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://lobe.example.com", "http://localhost:3015"],
+    "AllowedMethods": ["GET", "PUT", "HEAD", "POST", "DELETE"],
+    "AllowedHeaders": ["*"]
+  }
+]
+```
+
+Replace `https://lobe.example.com` with the URL used to access LobeHub. See [Configure S3 Storage](/docs/self-hosting/advanced/s3) for more information.
