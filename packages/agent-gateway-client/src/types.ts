@@ -239,7 +239,8 @@ export interface OperationHeartbeatData extends StepCompleteData {
 export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question';
 
 /** Producer that owns the blocked interaction. */
-export type AgentInterventionProvider = 'claude-code' | 'cursor' | 'devin' | 'droid' | 'qoder';
+export type AgentInterventionProvider =
+  'codex' | 'claude-code' | 'cursor' | 'devin' | 'droid' | 'qoder';
 
 /** Whitelisted option surface that may be persisted for cold-start review. */
 export interface AgentInterventionRenderOption {
@@ -283,6 +284,11 @@ export interface AgentInterventionRequestData {
    */
   interactionKind?: AgentInterventionInteractionKind;
   /**
+   * Correlation key for one intervention callback when a tool item can ask
+   * more than once. Falls back to `toolCallId` for legacy producers.
+   */
+  interventionId?: string;
+  /**
    * Agent provider that owns the blocked request. Optional for backward wire
    * compatibility; current producers always include it.
    */
@@ -300,6 +306,8 @@ export interface AgentInterventionResponseData {
   cancelled?: boolean;
   /** When `cancelled`, optional reason for telemetry/logging. */
   cancelReason?: 'timeout' | 'user_cancelled' | 'session_ended';
+  /** Correlation key echoed from the request when it differs from the tool call. */
+  interventionId?: string;
   /** True only on the producer's post-resolution echo (durable ACK boundary). */
   producerAck?: boolean;
   /**

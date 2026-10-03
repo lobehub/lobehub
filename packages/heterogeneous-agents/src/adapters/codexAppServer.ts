@@ -116,7 +116,9 @@ const toToolPayload = (item: ToolItem): ToolCallPayload => ({
       ? { command: item.command }
       : item.type === 'mcpToolCall'
         ? { arguments: item.arguments, server: item.server, tool: item.tool }
-        : item,
+        : item.type === 'fileChange'
+          ? { ...item, ...toFileChangeState(item.changes) }
+          : item,
   ),
   id: item.id,
   identifier: CODEX_IDENTIFIER,

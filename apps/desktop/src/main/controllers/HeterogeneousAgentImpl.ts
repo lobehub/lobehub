@@ -59,7 +59,11 @@ import {
   PiRpcSession,
   type PiRpcSessionCallbacks,
 } from '@lobechat/heterogeneous-agents/rpc';
-import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
+import type {
+  AgentStreamEvent,
+  CodexApprovalDecision,
+  UsageData,
+} from '@lobechat/heterogeneous-agents/spawn';
 import {
   AcpRpcResponseError,
   AgentStreamPipeline,
@@ -87,6 +91,7 @@ import {
   ensureClaudeCodeResumeTranscript,
   getCodexAppServerUnsupportedArgs,
   GrokAcpSession,
+  isCodexApprovalDecision,
   isCodexAppServerCompatibilityError,
   isCursorAcpSessionNotFoundError,
   isDevinAcpSessionNotFoundError,
@@ -109,10 +114,16 @@ import {
   resolveHeteroSpawnCwd,
 } from '@lobechat/heterogeneous-agents/workingDirectory';
 import type {
+  CodexPermissionMode,
   HeterogeneousAgentModelCatalog,
   HeterogeneousServerDefaultApiConfig,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
+} from '@lobechat/types';
+import {
+  getCodexPermissionConfig,
+  getCodexPermissionModeArgs,
+  stripCodexPermissionArgs,
 } from '@lobechat/types';
 import {
   managedProcessEnvironment,
@@ -286,6 +297,8 @@ interface StartSessionParams {
   agentType?: HeterogeneousCliAgentType;
   /** Additional CLI arguments */
   args?: string[];
+  /** Effective typed Codex permission preset. Omitted for legacy full/custom sessions. */
+  codexPermissionMode?: CodexPermissionMode;
   /** Command to execute */
   command: string;
   /** Working directory */
@@ -405,6 +418,8 @@ interface SubmitInterventionParams {
   cancelled?: boolean;
   /** When set, signals user-cancelled or timeout — the bridge resolves with isError. */
   cancelReason?: 'timeout' | 'user_cancelled';
+  /** Runtime callback id when it differs from the parent tool item. */
+  interventionId?: string;
   /** Operation id stamped on the request the renderer is responding to. */
   operationId: string;
   /** Structured user answer; ignored when `cancelled` is true. */
@@ -477,6 +492,7 @@ interface AgentSession {
    */
   cancelledByUs?: boolean;
   codexAppServerFallback?: boolean;
+  codexPermissionMode?: CodexPermissionMode;
   command: string;
   cursorAcpSession?: CursorAcpSession;
   cwd?: string;
@@ -686,14 +702,47 @@ export default class HeterogeneousAgentCtr {
       }
     },
     'codex': async (params, session) => {
+      if (session.codexPermissionMode === 'full-access') {
+        // Materialize the confirmed preset for any exec fallback so legacy policy
+        // arguments cannot override it, while retaining profile and model settings.
+        session.args = [
+          ...(stripCodexPermissionArgs(session.args) ?? []),
+          ...getCodexPermissionModeArgs('full-access'),
+        ];
+        // Provider bindings already use exec and preserve this exact policy.
+        if (session.hostedProviderBinding) return false;
+      }
+      const permissions = buildCodexAppServerThreadParams(
+        session.args,
+        session.cwd ?? process.cwd(),
+        session.model,
+        session.codexPermissionMode,
+      );
+      // Legacy on-failure is CLI-only, including when paired with a sandbox.
+      // Full access also has a lossless CLI representation; safer presets need the bridge.
+      const requiresAppServer =
+        (!!session.codexPermissionMode && session.codexPermissionMode !== 'full-access') ||
+        (getCodexPermissionConfig(session.args).approvalPolicy !== 'on-failure' &&
+          (permissions.approvalPolicy !== 'never' || permissions.sandbox !== 'danger-full-access'));
+      if (requiresAppServer && session.hostedProviderBinding) {
+        throw new Error(
+          'Codex permissions require app-server; the hosted provider transport cannot preserve them',
+        );
+      }
       if (
         session.hostedProviderBinding ||
         session.codexAppServerFallback ||
-        !(session.useCodexAppServer || this.isCodexAppServerLabEnabled)
+        !(
+          requiresAppServer ||
+          session.codexPermissionMode ||
+          session.useCodexAppServer ||
+          this.isCodexAppServerLabEnabled
+        )
       ) {
         return false;
       }
       const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
+        permissionMode: session.codexPermissionMode,
         resume: !!session.agentSessionId,
       });
       if (unsupportedArgs.length === 0) {
@@ -701,7 +750,7 @@ export default class HeterogeneousAgentCtr {
         // the generic `codex exec` spawn.
         return this.sendPromptWithCodexAppServer(params, session);
       }
-      if (session.agentSessionId) {
+      if (session.agentSessionId || requiresAppServer) {
         const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
         this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
         throw new Error(message);
@@ -1731,6 +1780,7 @@ export default class HeterogeneousAgentCtr {
       agentType,
       args: hostedProviderBinding?.args ?? params.args ?? [],
       command: params.command,
+      codexPermissionMode: params.codexPermissionMode,
       cwd: params.cwd,
       env: hostedProviderBinding?.env ?? params.env,
       hostedProviderBinding,
@@ -2268,6 +2318,12 @@ export default class HeterogeneousAgentCtr {
     const appServerSession =
       session.appServerSession ??
       new CodexThreadSession({
+        allowExecFallback:
+          (!session.codexPermissionMode || session.codexPermissionMode === 'full-access') &&
+          buildCodexAppServerThreadParams(session.args, cwd, session.model).approvalPolicy ===
+            'never' &&
+          buildCodexAppServerThreadParams(session.args, cwd, session.model).sandbox ===
+            'danger-full-access',
         client,
         initialCumulativeUsage,
         initialModel: session.model,
@@ -2292,7 +2348,12 @@ export default class HeterogeneousAgentCtr {
           if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
         },
         sessionId: session.sessionId,
-        threadParams: buildCodexAppServerThreadParams(session.args, cwd, session.model),
+        threadParams: buildCodexAppServerThreadParams(
+          session.args,
+          cwd,
+          session.model,
+          session.codexPermissionMode,
+        ),
       });
     session.appServerSession = appServerSession;
 
@@ -4091,8 +4152,30 @@ export default class HeterogeneousAgentCtr {
    * up already (op finished / cancelled).
    */
   async submitIntervention(params: SubmitInterventionParams): Promise<void> {
+    const result = isPlainObject(params.result) ? params.result : undefined;
+    const rawDecision = result?.decision;
+    const decision: CodexApprovalDecision | undefined = params.cancelled
+      ? 'cancel'
+      : isCodexApprovalDecision(rawDecision)
+        ? rawDecision
+        : undefined;
+    if (decision) {
+      const interventionId = params.interventionId ?? params.toolCallId;
+      for (const session of this.sessions.values()) {
+        if (
+          session.appServerSession?.resolveApproval(params.operationId, interventionId, decision)
+        ) {
+          return;
+        }
+      }
+    }
+
     const slot = this.opIdToIntervention.get(params.operationId);
     if (!slot) {
+      if (decision && params.interventionId)
+        throw new Error(
+          'Codex approval is expired, already resolved, or does not allow this decision',
+        );
       logger.warn('submitIntervention: no active intervention for operationId', params.operationId);
       return;
     }

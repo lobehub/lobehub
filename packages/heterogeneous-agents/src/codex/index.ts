@@ -3,7 +3,13 @@ export {
   buildCodexAppServerInput,
   buildCodexAppServerThreadParams,
   getCodexAppServerUnsupportedArgs,
+  getCodexPermissionProfile,
 } from './appServerParams';
+export {
+  CodexApprovalBridge,
+  type CodexApprovalDecision,
+  isCodexApprovalDecision,
+} from './CodexApprovalBridge';
 export {
   CodexAppServerClient,
   type CodexAppServerClientOptions,

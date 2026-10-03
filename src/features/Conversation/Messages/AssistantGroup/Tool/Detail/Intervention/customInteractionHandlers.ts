@@ -19,6 +19,7 @@ const CURSOR_IDENTIFIER = 'cursor';
 const DEVIN_IDENTIFIER = 'devin';
 const DROID_IDENTIFIER = 'droid';
 const QODER_IDENTIFIER = 'qoder';
+const CODEX_IDENTIFIER = 'codex';
 
 interface SubmitToolInteractionOptions {
   createUserMessage?: boolean;
@@ -171,6 +172,7 @@ const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([
   CURSOR_IDENTIFIER,
   DEVIN_IDENTIFIER,
   DROID_IDENTIFIER,
+  CODEX_IDENTIFIER,
   QODER_IDENTIFIER,
 ]);
 
