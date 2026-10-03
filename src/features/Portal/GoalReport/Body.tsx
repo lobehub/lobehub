@@ -20,13 +20,15 @@ import { useReportChapter, useReportGraph } from './useReportGraph';
  */
 
 const styles = createStaticStyles(({ css }) => ({
+  /**
+   * Review: an outline is enough — no tinted fill, so the detour reads as a
+   * callout beside the map rather than a filled warning block.
+   */
   detour: css`
     padding-block: 10px;
     padding-inline: 12px;
     border: 1px dashed ${cssVar.colorWarningBorder};
     border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorWarningBg};
   `,
   scroll: css`
     overflow-y: auto;
