@@ -423,6 +423,80 @@ describe('AbandonOperationService', () => {
     expect(messageUpdateMock).not.toHaveBeenCalled();
   });
 
+  it('leaves a completed operation untouched when its state still lingers (phantom watchdog)', async () => {
+    // Production shape: a run whose terminal event never reached the gateway DO
+    // still has its Redis state around when the watchdog fires ~10min later.
+    // The finalize must not relabel the already-successful turn as errored.
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(stateWith({ status: 'done' })),
+    });
+    const store = buildStore();
+    store.loadPartial.mockResolvedValue({ steps: [{ stepIndex: 0 }] });
+    const db = buildDb({
+      operationRow: { id: 'op_done', status: 'done', userId: 'user_x' },
+    });
+
+    const result = await new AbandonOperationService(db, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    }).finalizeAbandoned('op_done', 'inactivity_watchdog');
+
+    expect(result).toMatchObject({
+      assistantMessageUpdated: false,
+      finalized: false,
+      found: true,
+    });
+    expect(result.abandoned).toBeUndefined();
+    // No trace finalize, no message relabel, no topic settle, no lifecycle hook.
+    expect(store.loadPartial).not.toHaveBeenCalled();
+    expect(store.removePartial).not.toHaveBeenCalled();
+    expect(recordCompletionMock).not.toHaveBeenCalled();
+    expect(messageUpdateMock).not.toHaveBeenCalled();
+    expect(messageCreateMock).not.toHaveBeenCalled();
+    expect(topicSettleRunningOperationMock).not.toHaveBeenCalled();
+    expect(completeOperationMock).not.toHaveBeenCalled();
+    expect(dispatchHooksMock).not.toHaveBeenCalled();
+  });
+
+  it('honors a row that retires during the state lookup (no-state race)', async () => {
+    // The guard must not cache a row read taken before the state lookup: a run
+    // that goes `running → done` inside that await would otherwise still be
+    // treated as abandoned and have its successful message overwritten.
+    let rowStatus = 'running';
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockImplementation(async () => {
+        rowStatus = 'done';
+        return null;
+      }),
+    });
+    const db = buildDb();
+    db.query.agentOperations.findFirst = vi
+      .fn()
+      .mockImplementation(async () => ({
+        id: 'op_x',
+        status: rowStatus,
+        topicId: 'tpc_x',
+        userId: 'user_x',
+      }));
+
+    const result = await new AbandonOperationService(db, {
+      coordinator: coord as any,
+      snapshotStore: buildStore() as any,
+    }).finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+    expect(result).toMatchObject({
+      assistantMessageUpdated: false,
+      finalized: false,
+      found: false,
+    });
+    expect(result.abandoned).toBeUndefined();
+    expect(recordCompletionMock).not.toHaveBeenCalled();
+    expect(topicSettleRunningOperationMock).not.toHaveBeenCalled();
+    expect(messageUpdateMock).not.toHaveBeenCalled();
+    // Read once, after the coordinator miss — never cached across the await.
+    expect(db.query.agentOperations.findFirst).toHaveBeenCalledTimes(1);
+  });
+
   it('does not touch a newer runningOperation when abandoning an old no-state op', async () => {
     const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
     const store = buildStore();
