@@ -64,6 +64,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
     const syncBuiltinTool = useToolStore((s) => s.syncBuiltinTool);
     const syncPluginTools = useToolStore((s) => s.syncPluginTools);
+    const syncLobehubSkillTools = useToolStore((s) => s.syncLobehubSkillTools);
     const resetConnectorPermissions = useToolStore((s) => s.resetConnectorPermissions);
     const disconnectConnector = useToolStore((s) => s.disconnectConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
@@ -126,7 +127,11 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
         if (connector.sourceType === ConnectorSourceType.builtin) {
           await syncBuiltinTool(connector.identifier);
         } else if (connector.sourceType === ConnectorSourceType.marketplace) {
-          await syncPluginTools(connector.identifier);
+          if (connector.identifier === 'linear') {
+            await syncLobehubSkillTools(connector);
+          } else {
+            await syncPluginTools(connector.identifier);
+          }
         } else {
           await syncConnectorTools(connectorId);
         }
@@ -138,6 +143,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       connectorId,
       notifyActionError,
       syncBuiltinTool,
+      syncLobehubSkillTools,
       syncPluginTools,
       syncConnectorTools,
     ]);
@@ -246,7 +252,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             {/* Sync/Refresh: re-sync tool list from manifest */}
             <ManageTooltip title={canSync ? undefined : manageTooltip}>
               <Button
-                disabled={!canSync}
+                disabled={!canSync || syncing}
                 icon={<RefreshCwIcon size={14} />}
                 loading={syncing}
                 size="small"
