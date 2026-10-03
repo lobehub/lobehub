@@ -15,6 +15,29 @@ const decodeJITPayload = (authorization?: string) => {
   };
 };
 
+const COMMAND_ENV_PRELUDE =
+  'if [ -r "$HOME/.creds/sandbox-env.sh" ]; then . "$HOME/.creds/sandbox-env.sh"; fi';
+
+const terminalResponse = (stdout = '') =>
+  new Response(
+    JSON.stringify({
+      exit_code: 0,
+      session_id: 'lobe-user-1-topic-1',
+      stderr: '',
+      stdout,
+    }),
+    { status: 200 },
+  );
+
+const sentBody = (fetchMock: ReturnType<typeof vi.fn>, call = 0) =>
+  JSON.parse(String(fetchMock.mock.calls[call][1].body)) as {
+    command?: string;
+    input?: { command?: string };
+  };
+
+const sentCommand = (fetchMock: ReturnType<typeof vi.fn>, call = 0) =>
+  String(sentBody(fetchMock, call).command);
+
 const verifyJITSignature = (authorization?: string) => {
   const token = authorization?.replace('Bearer ', '') || '';
   const [signed, signature] = token.split(/\.(?=[^.]+$)/);
@@ -78,7 +101,7 @@ describe('OnlyboxesSandboxProvider', () => {
       'https://onlyboxes.example.com/api/v1/commands/terminal',
       expect.objectContaining({
         body: JSON.stringify({
-          command: 'echo ok',
+          command: `${COMMAND_ENV_PRELUDE}\necho ok`,
           create_if_missing: true,
           lease_ttl_sec: 120,
           session_id: 'lobe-user-1-topic-1',
@@ -550,5 +573,77 @@ describe('OnlyboxesSandboxProvider', () => {
     expect(setupBody.command).toContain("curl -fsSL 'https://files.example.com/legacy.zip'");
     expect(setupBody.command).toContain('/legacy-skill/');
     expect(commandBody.command).toContain('/legacy-skill');
+  });
+
+  describe('command environment', () => {
+    const createProvider = async () => {
+      const { OnlyboxesSandboxProvider } = await import('./onlyboxes');
+      return new OnlyboxesSandboxProvider({
+        marketService: {} as MarketService,
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+    };
+
+    it('writes variables into the session env file without putting values in the command', async () => {
+      const fetchMock = vi.fn(async () =>
+        terminalResponse(JSON.stringify({ names: ['GITHUB_TOKEN'], success: true })),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const provider = await createProvider();
+      await provider.writeCommandEnv({ GITHUB_TOKEN: 'ghp_secret-value' });
+
+      const command = sentCommand(fetchMock);
+      expect(command).toContain("Path.home() / '.creds/sandbox-env.sh'");
+      expect(command).toContain('0o600');
+      expect(command).not.toContain('ghp_secret-value');
+
+      const [encoded] = command.match(/main\('([^']+)'\)/)!.slice(1);
+      expect(JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'))).toEqual({
+        env: { GITHUB_TOKEN: 'ghp_secret-value' },
+      });
+    });
+
+    it('throws when the env file cannot be written', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () =>
+          Response.json({
+            exit_code: 1,
+            session_id: 'lobe-user-1-topic-1',
+            stderr: 'PermissionError: denied',
+            stdout: '',
+          }),
+        ),
+      );
+
+      const provider = await createProvider();
+
+      await expect(provider.writeCommandEnv({ API_KEY: 'value' })).rejects.toThrow(
+        'PermissionError: denied',
+      );
+    });
+
+    it('loads the env file before model-issued commands only', async () => {
+      const fetchMock = vi.fn(async () => terminalResponse('{}'));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const provider = await createProvider();
+      await provider.callTool('runCommand', { command: 'gh auth status' });
+      await provider.callTool('runCommand', { background: true, command: 'sleep 10' });
+      await provider.callTool('execScript', { command: 'python run.py' });
+      await provider.callTool('executeCode', { code: 'print(1)', language: 'python' });
+      await provider.callTool('readFile', { path: '/tmp/a.txt' });
+
+      const commands = fetchMock.mock.calls.map((_, index) => sentCommand(fetchMock, index));
+
+      expect(commands[0]).toBe(`${COMMAND_ENV_PRELUDE}\ngh auth status`);
+      expect(sentBody(fetchMock, 1).input?.command).toBe(`${COMMAND_ENV_PRELUDE}\nsleep 10`);
+      expect(commands[2]).toBe(`${COMMAND_ENV_PRELUDE}\npython run.py`);
+      // executeCode writes the file through two scripts, then runs it.
+      expect(commands[5].startsWith(`${COMMAND_ENV_PRELUDE}\npython3 '/tmp/lobe-code-`)).toBe(true);
+      expect(commands[6]).not.toContain(COMMAND_ENV_PRELUDE);
+    });
   });
 });
