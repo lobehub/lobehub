@@ -183,7 +183,7 @@ const styles = createStaticStyles(({ css }) => ({
     width: 14px;
     height: 3px;
     border-radius: 2px;
-    background: ${cssVar.colorPrimary};
+    background: ${cssVar.colorInfo};
   `,
   legendOff: css`
     opacity: 0.35;

@@ -174,10 +174,12 @@ const styles = createStaticStyles(({ css }) => ({
     font-variant-numeric: tabular-nums;
     color: ${cssVar.colorTextTertiary};
   `,
-  /* A ring, not a fill: the kind tint and the state chip must stay readable. */
+  /* A ring, not a fill: the kind tint and the state chip must stay readable.
+     Blue, not `colorPrimary` — the primary is near-black here, so the ring read
+     as a heavier version of the plain card border and told nothing apart. */
   mainline: css`
-    border-color: ${cssVar.colorPrimary};
-    box-shadow: 0 0 0 1px ${cssVar.colorPrimary};
+    border-color: ${cssVar.colorInfo};
+    box-shadow: 0 0 0 1px ${cssVar.colorInfo};
   `,
   selected: css`
     border-color: ${cssVar.colorPrimaryBorder};
