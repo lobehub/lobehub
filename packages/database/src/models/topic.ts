@@ -1642,11 +1642,11 @@ export class TopicModel {
         }
       });
 
-      // copy messages sequentially to respect foreign key constraints
+      // Create every message before restoring parent references. createdAt can
+      // tie or place a child before its parent, so query order is not FK order.
       const duplicatedMessages: DBMessageItem[] = [];
       for (const message of originalMessages) {
         const newId = idMap.get(message.id)!;
-        const newParentId = message.parentId ? idMap.get(message.parentId) || null : null;
 
         // Update tool IDs in tools array
         let newTools = message.tools;
@@ -1667,7 +1667,7 @@ export class TopicModel {
             // count the source's generation twice (the figures themselves stay
             // — they are what the transcript records).
             metadata: markCopiedMessageMetadata(message.metadata),
-            parentId: newParentId,
+            parentId: null,
             tools: newTools,
             topicId: duplicatedTopic.id,
           })
@@ -1689,6 +1689,20 @@ export class TopicModel {
             toolCallId: newToolCallId,
           });
         }
+      }
+
+      for (const [index, message] of originalMessages.entries()) {
+        // Parents outside the selected topic/ownership scope remain detached.
+        const parentId = message.parentId ? idMap.get(message.parentId) : undefined;
+        if (!parentId) continue;
+
+        const copied = duplicatedMessages[index];
+        await tx
+          .update(messages)
+          // Link restoration must not advance the copied access/update times.
+          .set({ accessedAt: message.accessedAt, parentId, updatedAt: message.updatedAt })
+          .where(eq(messages.id, copied.id));
+        copied.parentId = parentId;
       }
 
       return {
