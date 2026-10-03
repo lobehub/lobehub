@@ -51,6 +51,25 @@ const activeDisplayMessages = (s: ChatStoreState): UIChatMessage[] => {
   return getDisplayMessagesByKey(currentDisplayChatKey(s))(s);
 };
 
+/**
+ * Get the display messages from the main conversation scope.
+ *
+ * A thread view still needs the main-scope messages to locate its
+ * `sourceMessageId`. `activeDisplayMessages` is keyed by `activeThreadId`, so
+ * using it while a thread is active loses the parent transcript.
+ */
+const mainScopeDisplayMessages = (s: ChatStoreState): UIChatMessage[] => {
+  if (!s.activeAgentId) return [];
+
+  return getDisplayMessagesByKey(
+    messageMapKey({
+      agentId: s.activeAgentId,
+      groupId: s.activeGroupId,
+      topicId: s.activeTopicId,
+    }),
+  )(s);
+};
+
 // ============= Display Message Queries ========== //
 
 /**
@@ -76,6 +95,11 @@ const getChatsWithThread = (s: ChatStoreState, messages: UIChatMessage[]) => {
   if (!thread) return messages.filter((m) => !m.threadId);
 
   const sourceIndex = messages.findIndex((m) => m.id === thread.sourceMessageId);
+  // The main-scope snapshot can temporarily lag behind the thread snapshot.
+  // Do not render child messages at the end when the source is not available;
+  // wait for the parent snapshot instead.
+  if (sourceIndex < 0) return messages.filter((m) => !m.threadId);
+
   const sliced = messages.slice(0, sourceIndex + 1);
 
   return [...sliced, ...messages.filter((m) => m.threadId === s.activeThreadId)];
@@ -87,7 +111,7 @@ const getChatsWithThread = (s: ChatStoreState, messages: UIChatMessage[]) => {
  * Main display chats for UI rendering (without tool messages, with thread handling)
  */
 const mainDisplayChats = (s: ChatStoreState): UIChatMessage[] => {
-  const displayChats = activeDisplayMessages(s);
+  const displayChats = s.activeThreadId ? mainScopeDisplayMessages(s) : activeDisplayMessages(s);
   return getChatsWithThread(s, displayChats);
 };
 
@@ -100,7 +124,7 @@ const mainDisplayChatIDs = (s: ChatStoreState) => mainDisplayChats(s).map((s) =>
  * Main AI chats (includes tool messages, with thread handling)
  */
 const mainAIChats = (s: ChatStoreState): UIChatMessage[] => {
-  const messages = activeDisplayMessages(s);
+  const messages = s.activeThreadId ? mainScopeDisplayMessages(s) : activeDisplayMessages(s);
   return getChatsWithThread(s, messages);
 };
 
