@@ -36,6 +36,8 @@ import {
 } from '@/helpers/executionTarget';
 import { canUseGatewayProtocolV2 } from '@/helpers/gatewayProtocol';
 import { trackProductUsageEvent } from '@/libs/analytics/productUsageEvent';
+import { mutate } from '@/libs/swr';
+import { topicKeys } from '@/libs/swr/keys';
 import {
   aiAgentService,
   type ClientOperationSnapshot,
@@ -1339,6 +1341,15 @@ export class GatewayActionImpl {
         });
         this.disconnectFromGateway(staleOpId);
       }
+    }
+
+    // A mounted Task drawer reads the by-id detail cache, independently of the
+    // sidebar list. Dispatch has persisted a new receipt; revalidate that same
+    // key after the optimistic marker patch without delaying stream connection.
+    if (result.heteroType && result.topicId && !agentShareId && !continuesGroupMember) {
+      void mutate(topicKeys.detail(result.topicId)).catch((error) =>
+        console.error('[Gateway] Failed to refresh dispatched Topic configuration:', error),
+      );
     }
 
     // When the local operation is cancelled (e.g. user clicks stop), forward

@@ -7,6 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ConstVersion from '@/const/version';
 import { getPendingInterventions } from '@/features/Conversation/store/slices/data/pendingInterventions';
+import type * as Swr from '@/libs/swr';
+import { mutate } from '@/libs/swr';
+import { topicKeys } from '@/libs/swr/keys';
 import { aiAgentService } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
 import { shareChatService } from '@/services/shareChat';
@@ -19,6 +22,11 @@ import * as serverConfigStore from '@/store/serverConfig';
 import type { GatewayConnection } from '../transports/gateway/gateway';
 import { GatewayActionImpl } from '../transports/gateway/gateway';
 import { createMockMessage } from './fixtures';
+
+vi.mock('@/libs/swr', async (importOriginal) => ({
+  ...(await importOriginal<typeof Swr>()),
+  mutate: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
@@ -186,6 +194,7 @@ function createTestAction() {
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
     moveChatContextSelections.mockClear();
+    vi.mocked(mutate).mockResolvedValue(undefined);
     vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
     mockUserDefaultConfig.disableGatewayMode = undefined;
@@ -658,6 +667,50 @@ describe('GatewayActionImpl', () => {
       expect(onTopicCreated).toHaveBeenCalledWith('target-topic');
       expect(onTopicCreated).toHaveBeenCalledTimes(1);
       expect(switchTopic).not.toHaveBeenCalled();
+      expect(connectToGateway).toHaveBeenCalled();
+    });
+
+    /** @example A mounted Task drawer revalidates its existing detail receipt after a follow-up. */
+    it('refreshes the Topic detail key after heterogeneous follow-up dispatch', async () => {
+      const { action, state, connectToGateway } = createExecuteTestAction();
+      // ROOT CAUSE:
+      // The drawer reads topicDetailMap, but follow-ups only patched list/status
+      // state. Revalidate the same by-id SWR key used by the mounted inspector.
+      state.topicDetailMap = {
+        'target-topic': {
+          id: 'target-topic',
+          metadata: {
+            heteroRuntimeConfig: { fields: [], operationId: 'old-operation' },
+          },
+        },
+      };
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'target-agent',
+        assistantMessageId: 'assistant-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        heteroType: 'codex',
+        message: 'ok',
+        operationId: 'new-operation',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'token',
+        topicId: 'target-topic',
+        userMessageId: 'user-1',
+      });
+      await action.executeGatewayAgent({
+        context: {
+          agentId: 'target-agent',
+          isolatedTopic: true,
+          scope: 'main',
+          topicId: 'target-topic',
+        },
+        message: 'Continue after changing Agent speed',
+      });
+      /** @example Revalidation targets the inspected Topic, not the surrounding active chat list. */
+      expect(mutate).toHaveBeenCalledWith(topicKeys.detail('target-topic'));
+      /** @example Cache synchronization does not prevent connecting to the accepted operation. */
       expect(connectToGateway).toHaveBeenCalled();
     });
 

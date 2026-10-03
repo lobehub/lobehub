@@ -1300,6 +1300,10 @@ export class AiAgentService {
           onOperationCreated: params.onOperationCreated,
           parentOperationId,
           pinnedHeterogeneousTopicModel: turn.pinnedHeterogeneousTopicModel,
+          taskModelOverride:
+            operationTaskId && modelOverride
+              ? { model: modelOverride, provider: providerOverride }
+              : undefined,
           requestTrigger: requestTriggerMetadata.trigger,
           requestedDeviceId: turn.requestedDeviceId,
           runAttachments,

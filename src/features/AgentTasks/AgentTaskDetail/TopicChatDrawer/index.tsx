@@ -43,6 +43,7 @@ import { isForbiddenError } from '@/utils/forbiddenError';
 import AssigneeAvatar from '../../features/AssigneeAvatar';
 import { useTopicDrawerArtifactPortal } from '../../hooks/useTopicDrawerArtifactPortal';
 import FeedbackInput from './FeedbackInput';
+import { TopicRuntimeConfig } from './TopicRuntimeConfig';
 
 const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
 const DEFAULT_PANEL_HEIGHT = 'min(640px, calc(100dvh - 16px))';
@@ -108,6 +109,9 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
       >
         <TaskCardScopeProvider value={true}>
           <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
+            <Flexbox align={'flex-start'} paddingInline={12}>
+              <TopicRuntimeConfig agentId={agentId} topicId={topicId} />
+            </Flexbox>
             <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
               <ChatList disableActionsBar itemContent={itemContent} />
             </Flexbox>
