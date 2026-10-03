@@ -42,8 +42,9 @@ describe('SearchService', () => {
     });
 
     it('should create instances for all providers from SEARCH_PROVIDERS', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'tavily,brave';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'anysearch,tavily,brave';
       searchService = new SearchService();
+      expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.AnySearch);
       expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.Tavily);
       expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.Brave);
     });

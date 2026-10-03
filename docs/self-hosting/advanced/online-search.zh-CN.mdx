@@ -32,15 +32,16 @@ CRAWLER_IMPLS="naive,search1api"
 
 支持的爬虫类型如下：
 
-| 值             | 说明                                                               | 环境变量                                                                        |
-| ------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `browserless` | 基于 [Browserless](https://www.browserless.io/) 的无头浏览器爬虫，适合渲染复杂页面。 | `BROWSERLESS_TOKEN`                                                         |
-| `exa`         | 使用 [Exa](https://exa.ai/) 提供的爬虫能力，需申请 API。                       | `EXA_API_KEY`                                                               |
-| `firecrawl`   | [Firecrawl](https://firecrawl.dev/) 无头浏览器 API，适合现代网站抓取。          | `FIRECRAWL_API_KEY`                                                         |
-| `jina`        | 使用 [Jina AI](https://jina.ai/) 的爬虫服务，支持快速提取摘要信息。                 | `JINA_READER_API_KEY`                                                       |
-| `naive`       | 内置简易通用爬虫，适用于标准网页结构。                                              |                                                                             |
-| `search1api`  | 利用 [Search1API](https://www.search1api.com) 提供的页面抓取能力，适合结构化内容提取。 | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
-| `tavily`      | 使用 [Tavily](https://www.tavily.com/) 的网页抓取与摘要 API。               | `TAVILY_API_KEY`                                                            |
+| 值             | 说明                                                                        | 环境变量                                                                        |
+| ------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `anysearch`   | 使用 [AnySearch](https://www.anysearch.com/) Extract API 提取清理后的网页内容，支持匿名访问。 | `ANYSEARCH_API_KEY`（可选）                                                     |
+| `browserless` | 基于 [Browserless](https://www.browserless.io/) 的无头浏览器爬虫，适合渲染复杂页面。          | `BROWSERLESS_TOKEN`                                                         |
+| `exa`         | 使用 [Exa](https://exa.ai/) 提供的爬虫能力，需申请 API。                                | `EXA_API_KEY`                                                               |
+| `firecrawl`   | [Firecrawl](https://firecrawl.dev/) 无头浏览器 API，适合现代网站抓取。                   | `FIRECRAWL_API_KEY`                                                         |
+| `jina`        | 使用 [Jina AI](https://jina.ai/) 的爬虫服务，支持快速提取摘要信息。                          | `JINA_READER_API_KEY`                                                       |
+| `naive`       | 内置简易通用爬虫，适用于标准网页结构。                                                       |                                                                             |
+| `search1api`  | 利用 [Search1API](https://www.search1api.com) 提供的页面抓取能力，适合结构化内容提取。          | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
+| `tavily`      | 使用 [Tavily](https://www.tavily.com/) 的网页抓取与摘要 API。                        | `TAVILY_API_KEY`                                                            |
 
 > 💡 设置多个爬虫可提升成功率，系统将根据优先级尝试不同爬虫。
 
@@ -93,6 +94,7 @@ SEARCH_PROVIDERS="searxng"
 
 | 值            | 说明                                                                                    | 环境变量                                                                        |
 | ------------ | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `anysearch`  | 使用 [AnySearch](https://www.anysearch.com/) 提供实时网络搜索，支持匿名访问。                           | `ANYSEARCH_API_KEY`（可选）                                                     |
 | `anspire`    | 基于 [Anspire（安思派）](https://anspire.ai/) 提供的搜索服务。                                       | `ANSPIRE_API_KEY`                                                           |
 | `bocha`      | 基于 [Bocha（博查）](https://open.bochaai.com/) 提供的搜索服务。                                    | `BOCHA_API_KEY`                                                             |
 | `brave`      | [Brave](https://search.brave.com/help/api)，隐私友好的搜索源。                                  | `BRAVE_API_KEY`                                                             |
@@ -106,6 +108,21 @@ SEARCH_PROVIDERS="searxng"
 | `tavily`     | [Tavily](https://www.tavily.com/)，快速网页摘要与答案返回。                                        | `TAVILY_API_KEY`                                                            |
 
 > ⚠️ 某些搜索提供商需要单独申请 API Key，并在 `.env` 中配置相关凭证。
+
+### AnySearch
+
+AnySearch 可以同时为内置网络搜索和网页内容提取提供服务。API Key 为可选配置；未配置时会使用 AnySearch 的匿名额度。
+
+```env
+SEARCH_PROVIDERS="anysearch"
+CRAWLER_IMPLS="anysearch"
+# 可选
+ANYSEARCH_API_KEY=as_sk_your_key
+```
+
+内置 Web Search 使用 AnySearch 的通用搜索。LobeHub 会让 AnySearch 自行选择底层搜索来源，因此 Google、Bing 等显式搜索引擎限制不会转发给 AnySearch。
+
+如果需要 AnySearch 的垂直领域搜索和并行批量搜索，可在**设置 → 连接器**中添加官方远程 MCP 服务器 `https://api.anysearch.com/mcp`。该 MCP 提供领域发现、垂直搜索、批量搜索和 Extract，并支持匿名访问；如需认证，请在连接器认证设置中保存 `Authorization: Bearer <API_KEY>`，不要写入共享配置。
 
 ---
 

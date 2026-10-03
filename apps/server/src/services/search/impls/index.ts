@@ -1,4 +1,5 @@
 import { AnspireImpl } from './anspire';
+import { AnySearchImpl } from './anysearch';
 import { BochaImpl } from './bocha';
 import { BraveImpl } from './brave';
 import { ExaImpl } from './exa';
@@ -16,6 +17,7 @@ import { type SearchServiceImpl } from './type';
  */
 export enum SearchImplType {
   Anspire = 'anspire',
+  AnySearch = 'anysearch',
   Bocha = 'bocha',
   Brave = 'brave',
   Exa = 'exa',
@@ -35,6 +37,10 @@ export const createSearchServiceImpl = (
   type: SearchImplType = SearchImplType.SearXNG,
 ): SearchServiceImpl => {
   switch (type) {
+    case SearchImplType.AnySearch: {
+      return new AnySearchImpl();
+    }
+
     case SearchImplType.Anspire: {
       return new AnspireImpl();
     }

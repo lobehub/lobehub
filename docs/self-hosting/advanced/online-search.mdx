@@ -39,6 +39,7 @@ Supported crawler types are listed below:
 
 | Value         | Description                                                                                                         | Environment Variable                                                        |
 | ------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `anysearch`   | [AnySearch](https://www.anysearch.com/) Extract API for cleaned page content. Anonymous access is supported.        | `ANYSEARCH_API_KEY` (optional)                                              |
 | `browserless` | Headless browser crawler based on [Browserless](https://www.browserless.io/), suitable for rendering complex pages. | `BROWSERLESS_TOKEN`                                                         |
 | `exa`         | Crawler capabilities provided by [Exa](https://exa.ai/), API required.                                              | `EXA_API_KEY`                                                               |
 | `firecrawl`   | [Firecrawl](https://firecrawl.dev/) headless browser API, ideal for modern websites.                                | `FIRECRAWL_API_KEY`                                                         |
@@ -96,21 +97,37 @@ SEARCH_PROVIDERS="searxng"
 
 Supported search engines include:
 
-| Value        | Description                                                                             | Environment Variable                                                        |
-| ------------ | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `anspire`    | Search service provided by [Anspire](https://anspire.ai/).                              | `ANSPIRE_API_KEY`                                                           |
-| `bocha`      | Search service from [Bocha](https://open.bochaai.com/).                                 | `BOCHA_API_KEY`                                                             |
-| `brave`      | [Brave](https://search.brave.com/help/api), a privacy-friendly search source.           | `BRAVE_API_KEY`                                                             |
-| `exa`        | [Exa](https://exa.ai/), a search API designed for AI.                                   | `EXA_API_KEY`                                                               |
-| `firecrawl`  | Search capabilities via [Firecrawl](https://firecrawl.dev/).                            | `FIRECRAWL_API_KEY`                                                         |
-| `google`     | Uses [Google Programmable Search Engine](https://programmablesearchengine.google.com/). | `GOOGLE_PSE_API_KEY` `GOOGLE_PSE_ENGINE_ID`                                 |
-| `jina`       | Semantic search provided by [Jina AI](https://jina.ai/).                                | `JINA_READER_API_KEY`                                                       |
-| `kagi`       | Premium search API by [Kagi](https://kagi.com/), requires a subscription key.           | `KAGI_API_KEY`                                                              |
-| `search1api` | Aggregated search capabilities from [Search1API](https://www.search1api.com).           | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
-| `searxng`    | Use a self-hosted or public [SearXNG](https://searx.space/) instance.                   | `SEARXNG_URL`                                                               |
-| `tavily`     | [Tavily](https://www.tavily.com/), offers fast web summaries and answers.               | `TAVILY_API_KEY`                                                            |
+| Value        | Description                                                                                  | Environment Variable                                                        |
+| ------------ | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `anysearch`  | [AnySearch](https://www.anysearch.com/) real-time web search. Anonymous access is supported. | `ANYSEARCH_API_KEY` (optional)                                              |
+| `anspire`    | Search service provided by [Anspire](https://anspire.ai/).                                   | `ANSPIRE_API_KEY`                                                           |
+| `bocha`      | Search service from [Bocha](https://open.bochaai.com/).                                      | `BOCHA_API_KEY`                                                             |
+| `brave`      | [Brave](https://search.brave.com/help/api), a privacy-friendly search source.                | `BRAVE_API_KEY`                                                             |
+| `exa`        | [Exa](https://exa.ai/), a search API designed for AI.                                        | `EXA_API_KEY`                                                               |
+| `firecrawl`  | Search capabilities via [Firecrawl](https://firecrawl.dev/).                                 | `FIRECRAWL_API_KEY`                                                         |
+| `google`     | Uses [Google Programmable Search Engine](https://programmablesearchengine.google.com/).      | `GOOGLE_PSE_API_KEY` `GOOGLE_PSE_ENGINE_ID`                                 |
+| `jina`       | Semantic search provided by [Jina AI](https://jina.ai/).                                     | `JINA_READER_API_KEY`                                                       |
+| `kagi`       | Premium search API by [Kagi](https://kagi.com/), requires a subscription key.                | `KAGI_API_KEY`                                                              |
+| `search1api` | Aggregated search capabilities from [Search1API](https://www.search1api.com).                | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
+| `searxng`    | Use a self-hosted or public [SearXNG](https://searx.space/) instance.                        | `SEARXNG_URL`                                                               |
+| `tavily`     | [Tavily](https://www.tavily.com/), offers fast web summaries and answers.                    | `TAVILY_API_KEY`                                                            |
 
 > ⚠️ Some search providers require you to apply for an API Key and configure it in your `.env` file.
+
+### AnySearch
+
+AnySearch can provide both built-in web search and page extraction. An API key is optional; without one, requests use AnySearch's anonymous quota.
+
+```env
+SEARCH_PROVIDERS="anysearch"
+CRAWLER_IMPLS="anysearch"
+# Optional
+ANYSEARCH_API_KEY=as_sk_your_key
+```
+
+The built-in Web Search path uses AnySearch general search. LobeHub lets the provider choose its own backing search source, so explicit engine restrictions such as Google or Bing are not forwarded to AnySearch.
+
+For AnySearch vertical-domain search and parallel batch search, add the official remote MCP server in **Settings → Connectors** using `https://api.anysearch.com/mcp`. The MCP server exposes domain discovery, vertical search, batch search, and Extract. It also supports anonymous access; for authenticated usage, store the `Authorization: Bearer <API_KEY>` header in the Connector authentication settings rather than in shared configuration.
 
 ---
 
