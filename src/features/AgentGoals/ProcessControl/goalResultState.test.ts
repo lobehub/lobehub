@@ -551,8 +551,11 @@ describe('buildUserDecisions', () => {
 
 describe('buildAbandonedNodes', () => {
   it('lists rejected and retired tasks with the reason that ended them', () => {
-    const task = (id: string, status: string, attempts: unknown[] = []) =>
-      ({ attempts, node: { id, kind: 'task', status, title: id } }) as unknown as GoalNodeView;
+    const task = (id: string, status: string, attempts: unknown[] = [], description?: string) =>
+      ({
+        attempts,
+        node: { description, id, kind: 'task', status, title: id },
+      }) as unknown as GoalNodeView;
 
     const abandoned = buildAbandonedNodes({
       nodes: [
@@ -561,9 +564,12 @@ describe('buildAbandonedNodes', () => {
           { outcome: 'failed', reason: 'First try' },
           { outcome: 'retired', reason: 'Source site is down' },
         ]),
-        task('rejected', 'rejected'),
+        // No closing note and no attempt: the node's description is what says why.
+        task('rejected', 'rejected', [], 'Page scraping broke on every restyle'),
+        // Nothing recorded anywhere — still omitted rather than invented.
+        task('bare', 'rejected'),
         {
-          ...task('closed-early', 'retired'),
+          ...task('closed-early', 'retired', [], 'A plan that never ran'),
           closedReason: 'Goal canceled before it started',
         } as GoalNodeView,
       ],
@@ -571,7 +577,8 @@ describe('buildAbandonedNodes', () => {
 
     expect(abandoned.map((a) => [a.view.node.id, a.reason])).toEqual([
       ['retired', 'Source site is down'],
-      ['rejected', undefined],
+      ['rejected', 'Page scraping broke on every restyle'],
+      ['bare', undefined],
       ['closed-early', 'Goal canceled before it started'],
     ]);
   });

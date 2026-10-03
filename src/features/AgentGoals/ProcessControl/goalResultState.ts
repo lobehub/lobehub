@@ -361,7 +361,9 @@ export interface AbandonedNodeView {
 
 /**
  * Task nodes the Goal gave up on — rejected or retired — with the reason
- * recorded when it closed them, falling back to the attempt that ended it.
+ * recorded when it closed them, falling back to the attempt that ended it and
+ * then to the node's own description, so a dropped task still says why it was
+ * dropped even when no closing note was recorded.
  */
 export const buildAbandonedNodes = (graph: Pick<GoalGraphView, 'nodes'>): AbandonedNodeView[] =>
   graph.nodes
@@ -374,7 +376,8 @@ export const buildAbandonedNodes = (graph: Pick<GoalGraphView, 'nodes'>): Abando
       const reason = firstLine(
         view.closedReason ??
           view.attempts.findLast((attempt) => attempt.outcome !== 'running' && attempt.reason)
-            ?.reason,
+            ?.reason ??
+          view.node.description,
       );
       return { ...(reason ? { reason } : {}), view };
     });
