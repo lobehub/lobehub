@@ -80,6 +80,7 @@ import { LobeWenxinAI } from './providers/wenxin';
 import { LobeXAI } from './providers/xai';
 import { LobeXiaomiMiMoAI } from './providers/xiaomimimo';
 import { LobeXinferenceAI } from './providers/xinference';
+import { LobeYAPIAI } from './providers/yapi';
 import { LobeZenMuxAI } from './providers/zenmux';
 import { LobeZeroOneAI } from './providers/zeroone';
 import { LobeZhipuAI } from './providers/zhipu';
@@ -168,6 +169,7 @@ export const providerRuntimeMap = {
   xai: LobeXAI,
   xiaomimimo: LobeXiaomiMiMoAI,
   xinference: LobeXinferenceAI,
+  yapi: LobeYAPIAI,
   zenmux: LobeZenMuxAI,
   zeroone: LobeZeroOneAI,
   zhipu: LobeZhipuAI,

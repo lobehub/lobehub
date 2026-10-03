@@ -82,6 +82,7 @@
   "xai.description": "xAI 致力于构建加速科学发现的 AI，使命是加深人类对宇宙的理解。",
   "xiaomimimo.description": "小米 MiMo 提供兼容 OpenAI API 的对话模型服务。mimo-v2-flash 模型支持深度推理、流式输出、函数调用、256K 上下文窗口，以及最多 128K 的输出。",
   "xinference.description": "Xorbits Inference（Xinference）是一个开源平台，简化 AI 模型的运行与集成，支持在本地或云端运行开源大模型、向量模型与多模态模型，构建强大的 AI 应用。",
+  "yapi.description": "Y-API 是一个兼容 OpenAI 接口的中转服务，通过单一端点提供 DeepSeek、Moonshot AI、OpenAI、腾讯、小米和 Z.ai 的模型，并提供免费额度与按量计费。",
   "zenmux.description": "ZenMux 是一个统一的 AI 聚合平台，支持 OpenAI、Anthropic、Google VertexAI 等，具备灵活路由能力，便于模型切换与管理。",
   "zeroone.description": "01.AI 推动以人为本的 AI 2.0 革命，利用大模型创造经济与社会价值，构建新型 AI 生态与商业模式。",
   "zhipu.description": "智谱 AI 提供开放平台，涵盖文本处理、图像理解与代码辅助等多模态与语言模型能力。"
