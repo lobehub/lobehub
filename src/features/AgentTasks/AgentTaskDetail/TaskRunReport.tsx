@@ -9,9 +9,9 @@ import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors } from '@/store/task/selectors';
 
 import RunReplyEditor from './RunReplyEditor';
+import { resolveRunAgentId, useRunFollowUp } from './useRunFollowUp';
 
 /**
  * What the agent reported for this task, presented as a report.
@@ -26,8 +26,10 @@ import RunReplyEditor from './RunReplyEditor';
  * different job from the avatar's job in a list row.
  *
  * The two actions stay because reading a report is not the end of the job: you
- * either ask the agent about it or leave a note for the next run. They sit under
- * the report rather than inside it, so they never compete with the content.
+ * either open the run's conversation or ask the agent about it. Both are doors
+ * into that conversation — asking sends a user message there and opens the
+ * drawer to show it arrive. They sit under the report rather than inside it, so
+ * they never compete with the content.
  */
 
 interface TaskRunReportProps {
@@ -37,21 +39,16 @@ interface TaskRunReportProps {
 const TaskRunReport = memo<TaskRunReportProps>(({ activity }) => {
   const { t } = useTranslation('chat');
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
-  const addComment = useTaskStore((s) => s.addComment);
-  const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const { canFollowUp, submitFollowUp } = useRunFollowUp(activity);
   const [commenting, setCommenting] = useState(false);
-
-  // A descendant run belongs to `sourceTaskId`, not the open parent.
-  const runTaskId = activity.sourceTaskId ?? activeTaskId;
 
   const openConversation = useCallback(() => {
     if (!activity.id) return;
     openTopicDrawer(activity.id, {
-      agentId:
-        activity.author?.type === 'agent' ? activity.author.id : activity.agentId || undefined,
+      agentId: resolveRunAgentId(activity),
       title: activity.title,
     });
-  }, [activity.agentId, activity.author, activity.id, activity.title, openTopicDrawer]);
+  }, [activity, openTopicDrawer]);
 
   // Nothing was reported yet — the panel's own empty handling covers that case.
   const body = activity.content || activity.summary;
@@ -73,9 +70,9 @@ const TaskRunReport = memo<TaskRunReportProps>(({ activity }) => {
         <RunReplyEditor
           onCancel={() => setCommenting(false)}
           onSubmit={async (text) => {
-            if (!runTaskId) return;
-            await addComment(runTaskId, text, { topicId: activity.id });
-            setCommenting(false);
+            // Close the editor only once the message was accepted: a refused
+            // send keeps the draft so it can be retried.
+            if (await submitFollowUp(text)) setCommenting(false);
           }}
         />
       ) : (
@@ -86,7 +83,7 @@ const TaskRunReport = memo<TaskRunReportProps>(({ activity }) => {
             title={t('taskDetail.openRunChat')}
             onClick={openConversation}
           />
-          {!!runTaskId && (
+          {canFollowUp && (
             <ActionIcon
               icon={MessageCircle}
               size={'small'}

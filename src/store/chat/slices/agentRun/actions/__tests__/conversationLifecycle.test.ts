@@ -622,6 +622,51 @@ describe('ConversationLifecycle actions', () => {
         expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeUndefined();
       });
 
+      it('does not refill the global composer when a send names no editor of its own', async () => {
+        // Regression: an embedded reply (a task run's inline follow-up) passes
+        // `inputEditor: null` to say "no composer here". The lifecycle used to
+        // treat that null as "unset" and fall back to ChatStore's global editor,
+        // writing the failed message into a surface the send does not own.
+        const { result } = renderHook(() => useChatStore());
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+        const executeGatewayAgentSpy = vi
+          .fn()
+          .mockRejectedValue(
+            new TRPCClientError('Topic tpc_test remained busy while starting operation'),
+          );
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue({ root: { children: [], type: 'root' } }),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            inputEditor: null,
+            message: 'Typed into an inline reply',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+        // Prove the gateway branch ran and failed before asserting the global
+        // editor was left untouched.
+        expect(executeGatewayAgentSpy).toHaveBeenCalled();
+        expect(sendMessageOperation?.status).toBe('failed');
+        expect(setDocument).not.toHaveBeenCalled();
+        expect(setJSONState).not.toHaveBeenCalled();
+      });
+
       it('should send a snapshot of the tracked server runs with a gateway send', async () => {
         const context = { ...createTestContext(), topicId: TEST_IDS.TOPIC_ID };
         const contextKey = messageMapKey(context);

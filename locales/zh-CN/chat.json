@@ -1905,6 +1905,7 @@
   "taskDetail.deleteConfirm.content": "此操作不可撤销。",
   "taskDetail.deleteConfirm.ok": "删除",
   "taskDetail.deleteConfirm.title": "确认删除此任务？",
+  "taskDetail.followUpFailed": "追问未发送成功，内容已保留，请重试。",
   "taskDetail.goalTimeline.hover.cost": "成本",
   "taskDetail.goalTimeline.hover.duration": "时长",
   "taskDetail.goalTimeline.hover.status": "状态",
