@@ -1,7 +1,12 @@
 import type { LlmExecuteData, LlmRelayBatch } from '@lobechat/agent-gateway-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { LLM_RELAY_FLUSH_BYTES, LLM_RELAY_HEARTBEAT_MS, RelayBatchUploader } from './batchUploader';
+import {
+  LLM_RELAY_FLUSH_BYTES,
+  LLM_RELAY_HEARTBEAT_MS,
+  LLM_RELAY_REQUEST_TIMEOUT_MS,
+  RelayBatchUploader,
+} from './batchUploader';
 import type { RelayRuntime } from './executor';
 import { LlmRelayExecutor, NON_PREFERRED_CLAIM_DELAY_MS } from './executor';
 
@@ -255,6 +260,29 @@ describe('LlmRelayExecutor', () => {
     expect(createRuntime).toHaveBeenCalledTimes(1);
   });
 
+  it('settles a call cancelled while its claim is stalled', async () => {
+    const stalled = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    ) as unknown as typeof fetch;
+    const createRuntime = vi.fn();
+    const executor = new LlmRelayExecutor({
+      clientId: () => 'tab-1',
+      createRuntime,
+      fetch: stalled,
+    });
+
+    const done = executor.execute(callData());
+    await vi.waitFor(() => expect(stalled).toHaveBeenCalled());
+    executor.cancel({ callId: 'op-1:0:1', reason: 'interrupted' });
+    await done;
+
+    expect(createRuntime).not.toHaveBeenCalled();
+    expect(executor.isRunning('op-1:0:1')).toBe(false);
+  });
+
   it('lets the client that started the run claim first', async () => {
     vi.useFakeTimers();
     const server = createServer(() => ({ body: { cancel: true }, status: 409 }));
@@ -341,6 +369,59 @@ describe('RelayBatchUploader', () => {
     expect(server.batches).toHaveLength(2);
     expect(server.batches[1].chunks.map((c) => c.data)).toEqual(['a', 'b']);
     uploader.dispose();
+  });
+
+  it('gives up on a stalled upload instead of waiting on it forever', async () => {
+    vi.useFakeTimers();
+    const signals: AbortSignal[] = [];
+    // A server that accepts the request and never answers.
+    const stalled = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          signals.push(init.signal!);
+          init.signal!.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    ) as unknown as typeof fetch;
+    const onRejected = vi.fn();
+    const uploader = new RelayBatchUploader({
+      callId: 'c',
+      clientId: 'tab-1',
+      fetch: stalled,
+      leaseToken: 'l',
+      onRejected,
+    });
+
+    const claimed = uploader.claim();
+    await vi.advanceTimersByTimeAsync(LLM_RELAY_REQUEST_TIMEOUT_MS * 3 + 2000);
+
+    expect(await claimed).toBe(false);
+    expect(signals).toHaveLength(3);
+    expect(onRejected).toHaveBeenCalledWith('unreachable');
+  });
+
+  it('aborts the stalled request in flight when disposed', async () => {
+    let signal: AbortSignal | undefined;
+    const stalled = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          signal = init.signal!;
+          signal.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    ) as unknown as typeof fetch;
+    const uploader = new RelayBatchUploader({
+      callId: 'c',
+      clientId: 'tab-1',
+      fetch: stalled,
+      leaseToken: 'l',
+      onRejected: vi.fn(),
+    });
+
+    const claimed = uploader.claim();
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    uploader.dispose();
+
+    expect(signal?.aborted).toBe(true);
+    expect(await claimed).toBe(false);
   });
 
   it('retries a failed upload with the same seq', async () => {

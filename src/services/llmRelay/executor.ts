@@ -153,6 +153,9 @@ export class LlmRelayExecutor {
         if (controller.signal.aborted) return;
         stopReason = reason;
         controller.abort();
+        // A claim still in flight is abandoned; an owned call keeps its
+        // uploader to send the final `aborted` batch.
+        if (!call.owned) uploader.dispose();
       },
     };
     this.active.set(callId, call);

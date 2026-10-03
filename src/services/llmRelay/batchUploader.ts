@@ -11,6 +11,8 @@ export const LLM_RELAY_FLUSH_BYTES = 64 * 1024;
 export const LLM_RELAY_HEARTBEAT_MS = 10_000;
 
 const MAX_SEND_ATTEMPTS = 3;
+/** One upload request; a stalled one is retried, not waited on forever. */
+export const LLM_RELAY_REQUEST_TIMEOUT_MS = 10_000;
 const RETRY_BASE_DELAY_MS = 500;
 
 /**
@@ -81,6 +83,8 @@ export class RelayBatchUploader {
   private sending: Promise<void> = Promise.resolve();
   private rejected: RelayUploadRejection | undefined;
   private finished = false;
+  /** Aborts the upload request in flight once the uploader is disposed. */
+  private readonly inFlight = new AbortController();
 
   constructor(private readonly options: RelayBatchUploaderOptions) {}
 
@@ -95,7 +99,8 @@ export class RelayBatchUploader {
    */
   async claim(): Promise<boolean> {
     await this.enqueueSend([]);
-    if (this.rejected) return false;
+    // Refused, or disposed while the claim was in flight.
+    if (this.rejected || this.inFlight.signal.aborted) return false;
 
     this.heartbeatTimer = setInterval(() => {
       if (this.finished || this.rejected || this.pending.length > 0) return;
@@ -139,6 +144,7 @@ export class RelayBatchUploader {
   /** Stop without telling the server (it already knows, or refused us). */
   dispose() {
     this.finished = true;
+    this.inFlight.abort();
     this.stopTimers();
     this.pending = [];
     this.pendingBytes = 0;
@@ -192,6 +198,10 @@ export class RelayBatchUploader {
     const body = JSON.stringify(batch);
 
     for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt += 1) {
+      const request = new AbortController();
+      const abortRequest = () => request.abort();
+      this.inFlight.signal.addEventListener('abort', abortRequest, { once: true });
+      const timeout = setTimeout(abortRequest, LLM_RELAY_REQUEST_TIMEOUT_MS);
       try {
         const response = await doFetch(
           `${serverBaseUrl}/api/agent/llm-relay/${encodeURIComponent(callId)}/chunks`,
@@ -199,6 +209,7 @@ export class RelayBatchUploader {
             body,
             headers: { 'content-type': 'application/json', [LLM_RELAY_LEASE_HEADER]: leaseToken },
             method: 'POST',
+            signal: request.signal,
           },
         );
 
@@ -211,7 +222,12 @@ export class RelayBatchUploader {
           return;
         }
       } catch {
-        // Network failure: retry the same seq below; the server dedupes it.
+        if (this.inFlight.signal.aborted) return;
+        // Network failure or a stalled request: retry the same seq below;
+        // the server dedupes it.
+      } finally {
+        clearTimeout(timeout);
+        this.inFlight.signal.removeEventListener('abort', abortRequest);
       }
 
       if (attempt < MAX_SEND_ATTEMPTS) {
