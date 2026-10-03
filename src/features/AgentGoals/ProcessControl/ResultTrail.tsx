@@ -9,7 +9,6 @@ import {
   ExternalLink,
   FileDown,
   FileText,
-  GitBranch,
   type LucideIcon,
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
@@ -147,26 +146,29 @@ const styles = createStaticStyles(({ css }) => ({
   stepMuted: css`
     opacity: 0.55;
   `,
+  /**
+   * Review: the count is a note about the chapter, not a badge — plain gray
+   * text, with no tinted fill or pill around it, so it never competes with the
+   * chapter title it sits beside.
+   */
   detour: css`
     cursor: pointer;
 
     display: inline-flex;
     flex: none;
-    gap: 4px;
     align-items: center;
 
-    padding-block: 2px;
-    padding-inline: 8px;
-    border: 1px dashed ${cssVar.colorWarningBorder};
-    border-radius: 999px;
+    /* Reset the native button chrome — the hint is text, not a control. */
+    padding: 0;
+    border: none;
 
     font-size: 12px;
-    color: ${cssVar.colorWarningText};
+    color: ${cssVar.colorTextSecondary};
 
-    background: ${cssVar.colorWarningBg};
+    background: none;
 
     &:hover {
-      border-style: solid;
+      color: ${cssVar.colorText};
     }
 
     &:focus-visible {
@@ -471,7 +473,6 @@ const DetourHint = ({
       }
     >
       <button className={styles.detour} type={'button'} onClick={onOpen}>
-        <Icon icon={GitBranch} size={12} />
         {t('goalProcess.result.story.detours', { count })}
       </button>
     </Tooltip>
