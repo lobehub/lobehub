@@ -837,5 +837,41 @@ describe('createOpenAICompatibleImage', () => {
       expect(result.imageUrl).toBe('data:image/png;base64,imageWithoutUsage');
       expect(result.modelUsage).toBeUndefined();
     });
+
+    it('should return image when usage input token details are missing', async () => {
+      const mockImageResponse = {
+        data: [
+          {
+            b64_json: 'imageWithIncompleteUsage',
+          },
+        ],
+        usage: {
+          total_tokens: 1000,
+          input_tokens: 100,
+          output_tokens: 900,
+        },
+      };
+
+      vi.mocked(mockClient.images.generate).mockResolvedValue(mockImageResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gpt-image-1',
+        params: {
+          prompt: 'Generate image with incomplete usage tracking',
+        },
+      };
+
+      const result = await createOpenAICompatibleImage(mockClient, payload, 'openai');
+
+      expect(result.imageUrl).toBe('data:image/png;base64,imageWithIncompleteUsage');
+      expect(result.modelUsage).toMatchObject({
+        inputImageTokens: 0,
+        inputTextTokens: 100,
+        outputImageTokens: 900,
+        totalInputTokens: 100,
+        totalOutputTokens: 900,
+        totalTokens: 1000,
+      });
+    });
   });
 });
