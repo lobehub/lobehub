@@ -7,7 +7,7 @@ const ALLOW_BUILDS_ENTRY = /^(\s+)('[^']+'|"[^"]+"|[\w@./-]+):\s*(true|false)\s*
 
 export const parseAllowBuilds = (text) => {
   const map = {};
-  const lines = text.split('\n');
+  const lines = text.split(/\r?\n/);
   let inBlock = false;
   for (const line of lines) {
     if (!inBlock) {
@@ -31,11 +31,13 @@ export const mergeAllowBuilds = ({ rootText, extraTexts }) => {
     .filter((key) => !(key in rootMap))
     .sort();
   if (missing.length === 0) return rootText;
-  if (!/^allowBuilds:\n/m.test(rootText)) {
+  const header = rootText.match(/^allowBuilds:[ \t]*\r?\n/m);
+  if (!header) {
     throw new Error('overlay pnpm-workspace.yaml is missing an allowBuilds block');
   }
-  const insert = missing.map((key) => `  ${quoteKey(key)}: ${extras[key]}\n`).join('');
-  return rootText.replace(/^allowBuilds:\n/m, `allowBuilds:\n${insert}`);
+  const nl = header[0].includes('\r') ? '\r\n' : '\n';
+  const insert = missing.map((key) => `  ${quoteKey(key)}: ${extras[key]}${nl}`).join('');
+  return rootText.replace(header[0], `allowBuilds:${nl}${insert}`);
 };
 
 export const mergeAllowBuildsFiles = ({ rootFile, extraFiles }) => {
