@@ -1,0 +1,39 @@
+---
+title: Using QuickSilver Pro in LobeHub
+description: >-
+  Learn how to configure and use your QuickSilver Pro API Key in LobeHub to
+  start chatting and interacting.
+tags:
+  - LobeHub
+  - QuickSilver Pro
+  - API Key
+  - Web UI
+---
+
+# Using QuickSilver Pro in LobeHub
+
+[QuickSilver Pro](https://quicksilverpro.io) is an OpenAI-compatible AI gateway operated by MachineFi Inc. (US). It serves models from multiple upstream providers — including Claude, GPT, Gemini, Grok, DeepSeek, GLM, MiMo, and Qwen — through a unified API at `https://api.quicksilverpro.io/v1`.
+
+This guide will walk you through how to use QuickSilver Pro within LobeHub.
+
+To configure this provider in LobeHub, open **App Settings → AI Providers**, select the provider, and turn on its switch.
+
+<Steps>
+  ### Step 1: Get Your QuickSilver Pro API Key
+
+  - Follow the [QuickSilver Pro documentation](https://quicksilverpro.io/docs) to create an account and obtain an API key (keys look like `sk-...`)
+  - Copy and save the generated API key
+
+  ### Step 2: Configure QuickSilver Pro in LobeHub
+
+  - Go to the `Settings` page in LobeHub
+  - Under the `Language Model` section, find the configuration for `QuickSilver Pro`
+  - Paste the API key you obtained earlier
+  - Choose a model from QuickSilver Pro for your AI assistant to start chatting
+
+    <Callout type={'warning'}>
+      You may need to pay for API usage. See the machine-readable [QuickSilver Pro pricing catalog](https://quicksilverpro.io/pricing.json) for current per-model rates in USD per 1M tokens.
+    </Callout>
+</Steps>
+
+And that’s it! You’re now ready to use QuickSilver Pro models within LobeHub for conversations and interactions.

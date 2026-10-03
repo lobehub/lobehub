@@ -57,6 +57,7 @@ import { default as openrouter } from './openrouter';
 import { default as perplexity } from './perplexity';
 import { default as ppio } from './ppio';
 import { default as qiniu } from './qiniu';
+import { default as quicksilverpro } from './quicksilverpro';
 import { default as qwen } from './qwen';
 import { default as replicate } from './replicate';
 import { default as sambanova } from './sambanova';
@@ -169,6 +170,7 @@ const staticModelMap: ModelsMap = {
   perplexity,
   ppio,
   qiniu,
+  quicksilverpro,
   qwen,
   replicate,
   sambanova,
@@ -287,6 +289,7 @@ export { default as openrouter } from './openrouter';
 export { default as perplexity } from './perplexity';
 export { default as ppio } from './ppio';
 export { default as qiniu } from './qiniu';
+export { default as quicksilverpro } from './quicksilverpro';
 export { default as qwen } from './qwen';
 export { default as replicate } from './replicate';
 export { default as sambanova } from './sambanova';

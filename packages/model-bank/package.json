@@ -69,6 +69,7 @@
     "./perplexity": "./src/aiModels/perplexity.ts",
     "./ppio": "./src/aiModels/ppio.ts",
     "./qiniu": "./src/aiModels/qiniu.ts",
+    "./quicksilverpro": "./src/aiModels/quicksilverpro.ts",
     "./qwen": "./src/aiModels/qwen.ts",
     "./replicate": "./src/aiModels/replicate.ts",
     "./sambanova": "./src/aiModels/sambanova.ts",
