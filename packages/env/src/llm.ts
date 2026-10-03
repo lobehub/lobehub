@@ -219,6 +219,9 @@ export const getLLMConfig = () => {
       ENABLED_AI302: z.boolean(),
       AI302_API_KEY: z.string().optional(),
 
+      ENABLED_QUICKSILVERPRO: z.boolean(),
+      QUICKSILVERPRO_API_KEY: z.string().optional(),
+
       ENABLED_AKASHCHAT: z.boolean(),
       AKASHCHAT_API_KEY: z.string().optional(),
 
@@ -475,6 +478,9 @@ export const getLLMConfig = () => {
 
       ENABLED_AI302: !!process.env.AI302_API_KEY,
       AI302_API_KEY: process.env.AI302_API_KEY,
+
+      ENABLED_QUICKSILVERPRO: !!process.env.QUICKSILVERPRO_API_KEY,
+      QUICKSILVERPRO_API_KEY: process.env.QUICKSILVERPRO_API_KEY,
 
       ENABLED_AKASHCHAT: !!process.env.AKASHCHAT_API_KEY,
       AKASHCHAT_API_KEY: process.env.AKASHCHAT_API_KEY,

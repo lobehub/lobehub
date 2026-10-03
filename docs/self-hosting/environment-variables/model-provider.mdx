@@ -533,6 +533,22 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Default: `https://dashscope.aliyuncs.com/compatible-mode/v1`
 - Example: `https://my-qwen-proxy.com/v1`
 
+## QuickSilver Pro
+
+### `QUICKSILVERPRO_API_KEY`
+
+- Type: Required
+- Description: This is the API key you applied for in the QuickSilver Pro service.
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `QUICKSILVERPRO_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the QuickSilver Pro model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists, see [model-list][model-list]
+- Default: `-`
+- Example: `-all,+claude-opus-5-5,+gpt-6.1-sol`
+
 ## Stepfun AI
 
 ### `STEPFUN_API_KEY`

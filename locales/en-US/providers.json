@@ -56,6 +56,7 @@
   "perplexity.description": "Perplexity provides advanced chat models, including Llama 3.1 variants, for online and offline use and complex NLP workloads.",
   "ppio.description": "PPIO provides reliable, cost-effective open-model APIs, including DeepSeek, Llama, Qwen, and other leading models.",
   "qiniu.description": "Qiniu provides reliable, cost-effective real-time and batch AI inference services that are easy to use.",
+  "quicksilverpro.description": "QuickSilver Pro is an OpenAI-compatible AI gateway operated by MachineFi Inc. (US), serving models from multiple providers through a unified API.",
   "qwen.description": "Qwen is Alibaba Cloud's large-scale language model with strong understanding and generation, covering Q&A, writing, opinion expression, and code across many domains.",
   "replicate.description": "Replicate runs open-source image models like FLUX and Stable Diffusion via a simple cloud API.",
   "sambanova.description": "SambaNova Cloud lets developers use top open-source models with extremely fast inference.",
