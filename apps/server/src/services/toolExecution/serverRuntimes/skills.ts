@@ -1,4 +1,5 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
+import type { SandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 // Note: only `readFile` is wired through deviceGateway. Directory enumeration is
 // left to the model via `local-system.globFiles` so we don't double-fetch.
@@ -36,7 +37,11 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
-import { createSandboxService, normalizeSandboxCommandResult } from '@/server/services/sandbox';
+import {
+  createSandboxService,
+  normalizeSandboxCommandResult,
+  resolveSandboxSessionConfig,
+} from '@/server/services/sandbox';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 import {
@@ -139,6 +144,8 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private topicId?: string;
   private userId: string;
   private workspaceId?: string;
+  private sandboxCwd?: string;
+  private sandboxMode?: SandboxMode;
   private device?: SkillDeviceExecution;
   private disabledSkillIds: Set<string>;
   private isSkillGranted?: (identifier: string) => boolean;
@@ -164,6 +171,15 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     isSkillGranted?: (identifier: string) => boolean;
     marketService: MarketService;
     resourceService: SkillResourceService;
+    /**
+     * Persistence for this run, resolved once by the factory. Every sandbox
+     * this service creates MUST carry the same values the cloud-sandbox runtime
+     * uses: a topic has one sandbox, and a call that disagrees about the mode
+     * routes to the other runtime and tears the live one down, taking installed
+     * CLIs, injected credentials and anything outside the workspace with it.
+     */
+    sandboxCwd?: string;
+    sandboxMode?: SandboxMode;
     serverDB: LobeChatDatabase;
     /** Agent Share only: `lh` must not mint a creator-scoped token for a visitor. */
     shareVisitorBlocked?: boolean;
@@ -182,6 +198,8 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.topicId = options.topicId;
     this.userId = options.userId;
     this.workspaceId = options.workspaceId;
+    this.sandboxCwd = options.sandboxCwd;
+    this.sandboxMode = options.sandboxMode;
     this.device = options.device;
     this.disabledSkillIds = options.disabledSkillIds ?? new Set();
     this.isSkillGranted = options.isSkillGranted;
@@ -315,6 +333,8 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       const sandboxService = createSandboxService({
         fileService: this.fileService,
         marketService: this.marketService,
+        sandboxCwd: this.sandboxCwd,
+        sandboxMode: this.sandboxMode,
         serverDB: this.serverDB,
         topicId: this.topicId,
         userId: this.userId,
@@ -668,6 +688,8 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       const sandboxService = createSandboxService({
         fileService: this.fileService,
         marketService: this.marketService,
+        sandboxCwd: this.sandboxCwd,
+        sandboxMode: this.sandboxMode,
         serverDB: this.serverDB,
         topicId: this.topicId,
         userId: this.userId,
@@ -726,6 +748,8 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       const sandboxService = createSandboxService({
         fileService: this.fileService,
         marketService: this.marketService,
+        sandboxCwd: this.sandboxCwd,
+        sandboxMode: this.sandboxMode,
         topicId: this.topicId,
         userId: this.userId,
       });
@@ -837,9 +861,23 @@ export const skillsRuntime: ServerRuntimeRegistration = {
      * pass it — act as the workspace. Omitting it split one workspace topic
      * across two sandboxes, leaving injected credentials invisible here.
      */
+    // Same resolution, same inputs as the cloud-sandbox runtime — see the
+    // `sandboxMode` note on the service options for what a disagreement costs.
+    const sandbox = await resolveSandboxSessionConfig({
+      isShareVisitorRun: Boolean(context.agentShareVisitor),
+      serverDB: context.serverDB,
+      topicId: context.topicId,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+    });
+
     const marketService = new MarketService({
       accessToken: marketAccessToken,
-      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+      userInfo: {
+        sandboxWorkspace: sandbox.claim,
+        userId: context.userId,
+        workspaceId: context.workspaceId,
+      },
     });
     const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
     const fileModel = new FileModel(context.serverDB, context.userId, context.workspaceId);
@@ -874,6 +912,8 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       isSkillGranted,
       marketService,
       resourceService,
+      sandboxCwd: sandbox.cwd,
+      sandboxMode: sandbox.mode,
       serverDB: context.serverDB,
       shareVisitorBlocked: !!shareVisitor,
       skillModel,
