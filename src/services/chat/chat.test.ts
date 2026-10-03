@@ -12,6 +12,7 @@ import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import * as toolEngineeringModule from '@/helpers/toolEngineering';
 import { agentDocumentService } from '@/services/agentDocument';
+import { ragService } from '@/services/rag';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -160,7 +161,7 @@ beforeEach(async () => {
   vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
     () => ({ searchMode: 'off' }) as any,
   );
-  useAgentStore.setState({ activeAgentId: undefined, agentDocumentsMap: {} } as any);
+  useAgentStore.setState({ activeAgentId: undefined, agentDocumentsMap: {}, agentMap: {} } as any);
   useAiInfraStore.setState({ enabledAiModels: [] });
   useChatStore.setState({ activeAgentId: undefined } as any);
 });
@@ -1694,6 +1695,162 @@ describe('ChatService', () => {
         expect(contextEngineeringSpy).toHaveBeenCalledWith(
           expect.objectContaining({ enableUserMemories: false }),
         );
+      });
+    });
+
+    describe('knowledge file readiness', () => {
+      it('should parse an unparsed knowledge file before the context is assembled', async () => {
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
+        const parseSpy = vi
+          .spyOn(ragService, 'parseFileContent')
+          .mockResolvedValue({ content: 'Project setup steps' } as any);
+        useAgentStore.setState({
+          activeAgentId: 'agent-1',
+          agentMap: {
+            'agent-1': {
+              files: [
+                {
+                  createdAt: new Date('2026-01-01'),
+                  enabled: true,
+                  id: 'file-1',
+                  name: 'setup.md',
+                  size: 10,
+                  type: 'text/markdown',
+                  updatedAt: new Date('2026-01-01'),
+                  url: 'https://example.com/setup.md',
+                },
+              ],
+            },
+          },
+        } as any);
+
+        await chatService.createAssistantMessage({
+          agentId: 'agent-1',
+          messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+          resolvedAgentConfig: createMockResolvedConfig(),
+        });
+
+        expect(parseSpy.mock.calls[0]?.[0]).toBe('file-1');
+        // The parse has to land before the context is assembled — afterwards the
+        // file is already missing from the prompt.
+        expect(parseSpy.mock.invocationCallOrder[0]).toBeLessThan(
+          contextEngineeringSpy.mock.invocationCallOrder[0],
+        );
+        expect(
+          (useAgentStore.getState().agentMap['agent-1'] as { files?: { content?: string }[] })
+            .files?.[0].content,
+        ).toBe('Project setup steps');
+      });
+
+      it('should have the parsed content in the store when the context is assembled', async () => {
+        // Reading the store after the call cannot tell "hydrated before the context was built"
+        // from "hydrated afterwards", so snapshot the value inside the context-engine mock and
+        // hold the parse open first to prove execution actually reached hydration.
+        let contentWhenContextRan: string | undefined;
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockImplementation(async () => {
+            contentWhenContextRan = (
+              useAgentStore.getState().agentMap['agent-1'] as {
+                files?: { content?: string }[];
+              }
+            ).files?.[0]?.content;
+            return [];
+          });
+        vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
+
+        let releaseParse: (value: { content: string }) => void = () => {};
+        const parseSpy = vi.spyOn(ragService, 'parseFileContent').mockReturnValue(
+          new Promise<{ content: string }>((resolve) => {
+            releaseParse = resolve;
+          }) as any,
+        );
+        useAgentStore.setState({
+          activeAgentId: 'agent-1',
+          agentMap: {
+            'agent-1': {
+              files: [
+                {
+                  createdAt: new Date('2026-01-01'),
+                  enabled: true,
+                  id: 'file-1',
+                  name: 'setup.md',
+                  size: 10,
+                  type: 'text/markdown',
+                  updatedAt: new Date('2026-01-01'),
+                  url: 'https://example.com/setup.md',
+                },
+              ],
+            },
+          },
+        } as any);
+
+        const pending = chatService.createAssistantMessage({
+          agentId: 'agent-1',
+          messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+          resolvedAgentConfig: createMockResolvedConfig(),
+        });
+
+        await vi.waitFor(() => expect(parseSpy).toHaveBeenCalled());
+        expect(parseSpy.mock.calls[0]?.[0]).toBe('file-1');
+        // Hydration is still in flight, so the context must not have been assembled yet.
+        expect(contextEngineeringSpy).not.toHaveBeenCalled();
+
+        releaseParse({ content: 'Project setup steps' });
+        await pending;
+
+        expect(contextEngineeringSpy).toHaveBeenCalled();
+        expect(contentWhenContextRan).toBe('Project setup steps');
+      });
+
+      it('should stop waiting for hydration once the send is aborted', async () => {
+        // The caller's signal cancels the waiting only, never the shared parse — another
+        // send may still be waiting on it — so an aborted send has to proceed to assemble
+        // its context instead of hanging on a parse that never settles.
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
+        vi.spyOn(ragService, 'parseFileContent').mockReturnValue(
+          new Promise<{ content: string }>(() => {}) as any,
+        );
+        useAgentStore.setState({
+          activeAgentId: 'agent-1',
+          agentMap: {
+            'agent-1': {
+              files: [
+                {
+                  createdAt: new Date('2026-01-01'),
+                  enabled: true,
+                  id: 'file-1',
+                  name: 'setup.md',
+                  size: 10,
+                  type: 'text/markdown',
+                  updatedAt: new Date('2026-01-01'),
+                  url: 'https://example.com/setup.md',
+                },
+              ],
+            },
+          },
+        } as any);
+
+        const controller = new AbortController();
+        controller.abort();
+
+        const pending = chatService.createAssistantMessage(
+          {
+            agentId: 'agent-1',
+            messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+            resolvedAgentConfig: createMockResolvedConfig(),
+          },
+          { signal: controller.signal },
+        );
+
+        await vi.waitFor(() => expect(contextEngineeringSpy).toHaveBeenCalled());
+        await pending;
       });
     });
 
