@@ -16,6 +16,10 @@ import type { UIChatMessage } from '@lobechat/types';
  *                         turn's input
  * - `toolCallId`        — tool message's `tool_call_id` linking back to the
  *                         assistant tool call
+ * - `toolResult`        — tool execution results (`msg.tools[N].result.content`),
+ *                         shipped to the provider as `tool` role messages; kept
+ *                         separate from `content` so UI can attribute them to the
+ *                         tool bucket instead of the assistant's own text
  * - `toolDefinition`    — top-level `tools[]` array sent alongside messages
  *                         (function schema + description)
  */
@@ -25,6 +29,7 @@ export type TokenSourceType =
   | 'thoughtSignature'
   | 'reasoning'
   | 'toolCallId'
+  | 'toolResult'
   | 'toolDefinition';
 
 /**
