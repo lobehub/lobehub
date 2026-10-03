@@ -54,6 +54,7 @@ import { projectsRouteMeta } from '@/features/Projects/routeMeta';
 import { settingsRouteMeta } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
+import { agentChatTopicListLoader } from '@/routes/(main)/agent/(chat)/topicListLoader';
 import {
   agentChannelRouteMeta,
   agentPermissionRouteMeta,
@@ -146,10 +147,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 element: agentChatElement,
                 handle: { meta: agentRouteMeta },
                 index: true,
+                loader: agentChatTopicListLoader,
               },
               {
                 element: agentChatElement,
                 handle: { meta: agentRouteMeta },
+                loader: agentChatTopicListLoader,
                 path: ':topicId',
               },
             ],
