@@ -15,6 +15,9 @@ on:
     - cron: '0 0 * * *' # every day
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   lighthouse-badger-advanced:
     name: ${{ matrix.NAME }}
