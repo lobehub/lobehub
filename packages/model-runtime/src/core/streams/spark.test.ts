@@ -72,6 +72,177 @@ describe('SparkAIStream', () => {
     );
   });
 
+  it('should preserve reasoning and text from a mixed delta in order', async () => {
+    const mockSparkStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          id: 'mixed-delta',
+          object: 'chat.completion.chunk',
+          created: 1734395014,
+          model: 'max-32k',
+          choices: [
+            {
+              delta: {
+                content: '  text payload  ',
+                reasoning_content: '  reasoning payload  ',
+                role: 'assistant',
+              },
+              index: 0,
+              finish_reason: null,
+            },
+          ],
+        } as OpenAI.ChatCompletionChunk);
+        controller.enqueue({
+          id: 'empty-reasoning-control',
+          object: 'chat.completion.chunk',
+          created: 1734395014,
+          model: 'max-32k',
+          choices: [
+            {
+              delta: {
+                content: 'control text',
+                reasoning_content: '',
+                role: 'assistant',
+              },
+              index: 0,
+              finish_reason: null,
+            },
+          ],
+        } as OpenAI.ChatCompletionChunk);
+        controller.enqueue({
+          id: 'mixed-delta-usage',
+          object: 'chat.completion.chunk',
+          created: 1734395014,
+          model: 'max-32k',
+          choices: [
+            {
+              delta: {
+                content: 'usage text',
+                reasoning_content: 'usage reasoning',
+                role: 'assistant',
+              },
+              index: 0,
+              finish_reason: null,
+            },
+          ],
+          usage: {
+            completion_tokens: 3,
+            prompt_tokens: 2,
+            total_tokens: 5,
+          },
+        } as OpenAI.ChatCompletionChunk);
+        controller.close();
+      },
+    });
+
+    const protocolStream = SparkAIStream(mockSparkStream);
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual([
+      'id: mixed-delta\n',
+      'event: reasoning\n',
+      'data: "  reasoning payload  "\n\n',
+      'id: mixed-delta\n',
+      'event: text\n',
+      'data: "  text payload  "\n\n',
+      'id: empty-reasoning-control\n',
+      'event: text\n',
+      'data: "control text"\n\n',
+      'id: mixed-delta-usage\n',
+      'event: reasoning\n',
+      'data: "usage reasoning"\n\n',
+      'id: mixed-delta-usage\n',
+      'event: text\n',
+      'data: "usage text"\n\n',
+      'id: mixed-delta-usage\n',
+      'event: usage\n',
+      expect.stringContaining('"totalTokens":5'),
+    ]);
+  });
+
+  it('should preserve terminal reasoning, text, usage, and diagnostics', async () => {
+    const mockSparkStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          id: 'terminal-mixed-delta',
+          object: 'chat.completion.chunk',
+          created: 1734395014,
+          model: 'max-32k',
+          choices: [
+            {
+              delta: {
+                content: '  terminal text  ',
+                reasoning_content: '  terminal reasoning  ',
+                role: 'assistant',
+              },
+              finish_reason: 'stop',
+              index: 0,
+            },
+          ],
+          usage: {
+            completion_tokens: 3,
+            prompt_tokens: 2,
+            total_tokens: 5,
+          },
+        } as OpenAI.ChatCompletionChunk);
+        controller.close();
+      },
+    });
+    const onFinal = vi.fn();
+
+    const protocolStream = SparkAIStream(mockSparkStream, {
+      callbacks: { onFinal },
+      payload: {
+        apiMode: 'chat_completions',
+        includeUsageRequested: true,
+        model: 'spark-max',
+        provider: 'spark',
+      },
+    });
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks.filter((chunk) => chunk.startsWith('event: '))).toEqual([
+      'event: reasoning\n',
+      'event: text\n',
+      'event: usage\n',
+    ]);
+    expect(chunks.slice(0, 6)).toEqual([
+      'id: terminal-mixed-delta\n',
+      'event: reasoning\n',
+      'data: "  terminal reasoning  "\n\n',
+      'id: terminal-mixed-delta\n',
+      'event: text\n',
+      'data: "  terminal text  "\n\n',
+    ]);
+    expect(chunks[6]).toBe('id: terminal-mixed-delta\n');
+    expect(chunks[8]).toContain('"totalTokens":5');
+    expect(onFinal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: '  terminal text  ',
+        usage: expect.objectContaining({
+          inputTextTokens: 2,
+          outputTextTokens: 3,
+          totalTokens: 5,
+        }),
+      }),
+    );
+    expect(onFinal).not.toHaveBeenCalledWith(
+      expect.objectContaining({ usageMissingDiagnostics: expect.anything() }),
+    );
+  });
+
   it('should handle reasoning content in stream', async () => {
     const data = [
       {
