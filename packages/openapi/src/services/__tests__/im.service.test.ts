@@ -91,6 +91,28 @@ describe('ImRestService.sync — whole-message delivery', () => {
     expect(landed.unread).toBe(1);
   });
 
+  it('treats a fresh placeholder with no run row yet as the run starting (queue-mode gap)', async () => {
+    // execAgent wrote the user turn and the placeholder; the run row lands ~1s later.
+    const now = Date.now();
+    const iso = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+    await insertMessage('msg_u1', 'user', 'hi', iso(-200));
+    await insertMessage('msg_a1', 'assistant', '...', iso(-190));
+
+    const gap = await service.sync(TOPIC, {});
+    expect(gap.typing).toBe(true);
+    expect(gap.readUpTo?.messageId).toBe('msg_u1');
+    expect(gap.messages.map((m) => m.id)).toEqual(['msg_u1']);
+
+    // The run is recorded, writes its words and settles.
+    await insertRun('op_1', 'running', iso(800));
+    await db.update(messages).set({ content: 'hey there' }).where(eq(messages.id, 'msg_a1'));
+    await db.update(agentOperations).set({ status: 'done' }).where(eq(agentOperations.id, 'op_1'));
+
+    // The cursor from the gap must not have skipped the (then empty) placeholder.
+    const landed = await service.sync(TOPIC, { cursor: gap.cursor });
+    expect(landed.messages.map((m) => [m.id, m.content])).toEqual([['msg_a1', 'hey there']]);
+  });
+
   it('keeps a microsecond cursor so a row in the same millisecond is neither repeated nor skipped', async () => {
     await insertMessage('msg_u1', 'user', 'one', '2026-10-04T10:00:00.000100Z');
     const first = await service.sync(TOPIC, {});

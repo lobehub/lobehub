@@ -287,7 +287,18 @@ export class ImRestService extends BaseService {
     query: Pick<ImSyncQuery, 'cursor' | 'limit'>,
   ): Promise<ImSyncResult> {
     const run = await this.latestRun(topicId);
-    const typing = !!run && TYPING_STATUSES.has(run.status);
+    // `execAgent` stores the user turn and the reply placeholder before the run
+    // row exists (in queue mode the gap is about a second). A placeholder newer
+    // than the latest run is that run starting: the agent already has the
+    // message, so it counts as read and typing, and its reply is withheld.
+    const starting = await this.startingReply(topicId, run);
+    const typing = (!!run && TYPING_STATUSES.has(run.status)) || !!starting;
+    const turn = starting
+      ? { createdAtUs: starting.createdAtUs, readAt: starting.createdAt }
+      : run && {
+          createdAtUs: run.createdAtUs,
+          readAt: run.startedAt ?? new Date(Number(BigInt(run.createdAtUs) / 1000n)),
+        };
     const scope = this.chatRows(topicId, ['user', 'assistant']);
 
     const rows: MessageRow[] = query.cursor
@@ -305,11 +316,14 @@ export class ImRestService extends BaseService {
             .limit(query.limit ?? DEFAULT_HISTORY_LIMIT)
         ).reverse();
 
-    const readUpTo = run ? await this.readUpTo(topicId, run) : null;
+    const readUpTo = turn ? await this.readUpTo(topicId, turn) : null;
 
     // Whole-message rule: while the run is in flight, every agent row after the
     // message it is answering (its placeholder included) is not done yet.
-    const withheldAfter = typing ? BigInt(readUpTo?.createdAtUs ?? run!.createdAtUs) : undefined;
+    const withheldAfter =
+      typing && turn
+        ? BigInt(readUpTo?.createdAtUs ?? turn.createdAtUs) - (readUpTo ? 0n : 1n)
+        : undefined;
     const isWithheld = (row: MessageRow) =>
       withheldAfter !== undefined && row.role !== 'user' && BigInt(row.createdAtUs) > withheldAfter;
 
@@ -339,31 +353,45 @@ export class ImRestService extends BaseService {
     };
   }
 
+  /** A reply placeholder (`...`) written after the latest run: a run that is starting. */
+  private async startingReply(topicId: string, run: LatestRun | undefined) {
+    const [row] = await this.db
+      .select({ createdAt: messages.createdAt, createdAtUs: epochUs(messages.createdAt) })
+      .from(messages)
+      .where(
+        and(
+          this.chatRows(topicId, ['assistant']),
+          eq(messages.content, LOADING_PLACEHOLDER),
+          isNull(messages.error),
+          // A placeholder that never filled in is abandoned, not a run starting.
+          sql`${messages.createdAt} > now() - interval '2 minutes'`,
+          run ? sql`${messages.createdAt} > ${fromEpochUs(run.createdAtUs)}` : undefined,
+        ),
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+    return row;
+  }
+
   /**
    * The agent has "read" every user message that had arrived when its latest
-   * run was created — the run is the agent picking the conversation up.
+   * turn started — the turn is the agent picking the conversation up.
    */
-  private async readUpTo(topicId: string, run: LatestRun) {
+  private async readUpTo(topicId: string, turn: { createdAtUs: string; readAt: Date }) {
     const [read] = await this.db
       .select({ createdAtUs: epochUs(messages.createdAt), id: messages.id })
       .from(messages)
       .where(
         and(
           this.chatRows(topicId, ['user']),
-          lte(messages.createdAt, fromEpochUs(run.createdAtUs)),
+          lte(messages.createdAt, fromEpochUs(turn.createdAtUs)),
         ),
       )
       .orderBy(desc(messages.createdAt))
       .limit(1);
 
     return read
-      ? {
-          createdAtUs: read.createdAtUs,
-          messageId: read.id,
-          readAt: (
-            run.startedAt ?? new Date(Number(BigInt(run.createdAtUs) / 1000n))
-          ).toISOString(),
-        }
+      ? { createdAtUs: read.createdAtUs, messageId: read.id, readAt: turn.readAt.toISOString() }
       : null;
   }
 
