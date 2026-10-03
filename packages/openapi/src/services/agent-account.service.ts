@@ -96,7 +96,14 @@ export class AgentAccountRestService extends BaseService {
     }
   }
 
+  /**
+   * The agent in the path is checked first, so an account of a colleague's
+   * private agent answers 404 exactly like the agent itself does — reaching it
+   * by account id must not bypass the agent's visibility.
+   */
   private async requireAccount(agentId: string, accountId: string): Promise<AgentAccountView> {
+    await this.requireAgent(agentId);
+
     const account = await (await this.identity()).get(accountId);
     if (!account || account.agentId !== agentId) {
       throw this.createNotFoundError('Agent account not found');
