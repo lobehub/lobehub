@@ -9,12 +9,14 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { AgentAccountService } from '../index';
 import { createAgentMailProvider } from '../providers/agentMail';
+import { createLinqProvider } from '../providers/linq';
 import { AgentAccountProviderRegistry } from '../registry';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'agent-identity-service-user';
 const agentId = 'agent-identity-service-agent';
+const otherAgentId = 'agent-identity-service-agent-2';
 const WEBHOOK_SECRET = 'whsec_svc_secret';
 
 const gateKeeper = {
@@ -106,7 +108,10 @@ const inboundBody = (address = 'agent-7@lobe.id') =>
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values({ id: userId });
-  await serverDB.insert(agents).values({ id: agentId, userId });
+  await serverDB.insert(agents).values([
+    { id: agentId, userId },
+    { id: otherAgentId, userId },
+  ]);
 });
 
 afterEach(async () => {
@@ -163,6 +168,57 @@ describe('AgentAccountService — provisioning', () => {
     });
     expect(created).toMatchObject({ kind: 'service', provider: 'user' });
     expect(created.capabilities).toEqual({ login: true, receive: false, send: false });
+  });
+
+  it('releases the issued inbox and refuses readably when the row cannot be written', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    await service.provision({ agentId, provider: 'agent-mail' });
+
+    // The mock hands out the same address again, so the second insert collides
+    // on the routing key after the provider already opened an inbox.
+    await expect(
+      service.provision({ agentId: otherAgentId, provider: 'agent-mail' }),
+    ).rejects.toMatchObject({
+      code: 'identifier_taken',
+      message: expect.stringMatching(/already bound to another agent/),
+    });
+
+    expect(calls.filter((c) => c.method === 'DELETE')).toEqual([
+      { method: 'DELETE', path: '/v1/inboxes/inb_1' },
+    ]);
+    expect(await service.list()).toHaveLength(1);
+  });
+
+  it('lets a released handle be bound again', async () => {
+    const service = buildService(createMailFetch().fetchImpl);
+    const first = await service.provision({ agentId, provider: 'agent-mail' });
+    await service.revoke(first.id);
+
+    const second = await service.provision({ agentId, provider: 'agent-mail' });
+
+    expect(second.identifier).toBe('agent-7@lobe.id');
+    expect(second.status).not.toBe('revoked');
+    expect(second.id).not.toBe(first.id);
+  });
+
+  it('hands out one pool number per live phone account', async () => {
+    const registry = new AgentAccountProviderRegistry().register(
+      createLinqProvider({ apiKey: 'linq_svc', fromNumbers: ['+15550002222'] }),
+    );
+    const service = new AgentAccountService(serverDB, userId, { gateKeeper, registry });
+
+    const first = await service.provision({ agentId, provider: 'linq' });
+    expect(first.identifier).toBe('+15550002222');
+
+    await expect(
+      service.provision({ agentId: otherAgentId, provider: 'linq' }),
+    ).rejects.toMatchObject({ code: 'capacity_exhausted' });
+
+    await service.revoke(first.id);
+    await expect(
+      service.provision({ agentId: otherAgentId, provider: 'linq' }),
+    ).resolves.toMatchObject({ agentId: otherAgentId, identifier: '+15550002222' });
   });
 
   it('surfaces the registry error for a provider the deployment does not run', async () => {

@@ -22,9 +22,9 @@ declare global {
       /** Linq partner API key. */
       LINQ_API_KEY?: string;
       /**
-       * An operator-provisioned Linq number in E.164. Linq numbers are carrier
-       * inventory, not something an API call mints, so a deployment configures
-       * the number an agent account binds to.
+       * The operator's Linq number pool in E.164, comma-separated. Linq numbers
+       * are carrier inventory, not something an API call mints, so a deployment
+       * configures the numbers agent accounts bind to — one live account each.
        */
       LINQ_FROM_NUMBER?: string;
       /** Shared Linq webhook signing secret (`whsec_…`). */

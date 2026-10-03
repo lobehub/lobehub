@@ -1,7 +1,10 @@
+import type { LinqWebhookDedupeStore } from '@lobechat/agent-address-linq';
+import { createInMemoryLinqWebhookDedupeStore } from '@lobechat/agent-address-linq';
 import type { EmailWebhookEvent } from '@lobechat/agent-address-mail';
 import {
   checkInboundEmail,
   LobeMailApiClient,
+  LobeMailApiError,
   parseRawHeaders,
   stripQuotedReply,
   verifyAgentMailSignature,
@@ -23,6 +26,12 @@ export interface AgentMailProviderConfig {
   apiBaseUrl?: string;
   /** Agent Mail API key (`am_…`). */
   apiKey: string;
+  /**
+   * Replay store keyed by webhook event id. The claim-store shape is
+   * transport-neutral, so the bounded in-memory store Linq ships is reused as
+   * the single-process default; a multi-instance deployment injects a shared one.
+   */
+  dedupeStore?: LinqWebhookDedupeStore;
   /** Injected fetch, for tests and offline acceptance. */
   fetchImpl?: typeof fetch;
   /**
@@ -51,6 +60,20 @@ const parse = <T>(body: string): T | undefined => {
 const maskSecret = (secret: string): string =>
   secret.length <= 4 ? '••••' : `••••${secret.slice(-4)}`;
 
+/**
+ * How long an accepted event id is remembered. Comfortably wider than the
+ * signature tolerance, so a captured delivery cannot be replayed while its
+ * signature still verifies.
+ */
+const EVENT_ID_TTL_SECONDS = 24 * 60 * 60;
+
+/**
+ * Process-wide default replay store. The deployment builds a fresh registry —
+ * and so a fresh provider — for every webhook request, so a store created per
+ * provider would forget each claim as soon as the request ended.
+ */
+const defaultDedupeStore = createInMemoryLinqWebhookDedupeStore();
+
 const messageIdOf = (detail: { id?: string } | null | undefined): string => detail?.id ?? '';
 
 /**
@@ -69,6 +92,8 @@ export const createAgentMailProvider = (
     baseUrl: config.apiBaseUrl,
     fetchImpl: config.fetchImpl,
   });
+
+  const dedupeStore = config.dedupeStore ?? defaultDedupeStore;
 
   const inboxIdOf = (ref: AgentAccountRef): string => {
     const fromMetadata = ref.metadata?.inboxId;
@@ -109,7 +134,14 @@ export const createAgentMailProvider = (
     },
 
     release: async (ref: AgentAccountRef): Promise<void> => {
-      await client.deleteInbox(inboxIdOf(ref));
+      try {
+        await client.deleteInbox(inboxIdOf(ref));
+      } catch (error) {
+        // Release is idempotent by contract: an inbox that is already gone is
+        // exactly the state a release asks for, so a retried revoke succeeds.
+        if (error instanceof LobeMailApiError && error.status === 404) return;
+        throw error;
+      }
     },
 
     send: async (
@@ -147,7 +179,13 @@ export const createAgentMailProvider = (
       const event = parse<EmailWebhookEvent>(request.body);
       if (!event?.id || !event.data?.message?.id) return null;
 
-      return { eventId: event.id, payload: event };
+      // Signature first, then the claim: claiming before verifying would let an
+      // unauthenticated caller burn ids and suppress real deliveries.
+      const fresh = await dedupeStore.claim(event.id, EVENT_ID_TTL_SECONDS);
+
+      return fresh
+        ? { eventId: event.id, payload: event }
+        : { duplicate: true, eventId: event.id, payload: event };
     },
 
     normalizeInbound: async (

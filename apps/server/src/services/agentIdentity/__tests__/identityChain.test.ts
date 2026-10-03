@@ -146,7 +146,7 @@ beforeEach(async () => {
         webhookUrl: 'http://127.0.0.1/hook',
       }),
     )
-    .register(createLinqProvider({ apiKey: 'linq_e2e', fromNumber: '+15550002222' }));
+    .register(createLinqProvider({ apiKey: 'linq_e2e', fromNumbers: ['+15550002222'] }));
 
   service = new AgentAccountService(serverDB, userId, { gateKeeper, registry });
 });

@@ -15,8 +15,15 @@ import type {
 } from '@/database/models/agentAccount';
 import { AgentAccountModel } from '@/database/models/agentAccount';
 import type { LobeChatDatabase } from '@/database/type';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 
+import { AgentAccountError } from './errors';
 import type { AgentAccountProviderRegistry } from './registry';
+
+const PG_UNIQUE_VIOLATION = '23505';
+
+export type { AgentAccountErrorCode } from './errors';
+export { AgentAccountError, isAgentAccountError } from './errors';
 
 /** Fields a caller may set when mounting an account it already has a handle for. */
 export interface CreateAgentAccountParams {
@@ -110,17 +117,21 @@ export class AgentAccountService {
       );
     }
 
-    return this.model.create({
-      agentId: params.agentId,
-      capabilities,
-      credential: params.credential,
-      credentialHint: params.credentialHint,
-      displayName: params.displayName ?? null,
-      identifier: params.identifier,
-      kind: params.kind,
-      metadata: params.metadata ?? {},
-      provider: params.provider,
-    });
+    try {
+      return await this.model.create({
+        agentId: params.agentId,
+        capabilities,
+        credential: params.credential,
+        credentialHint: params.credentialHint,
+        displayName: params.displayName ?? null,
+        identifier: params.identifier,
+        kind: params.kind,
+        metadata: params.metadata ?? {},
+        provider: params.provider,
+      });
+    } catch (error) {
+      throw this.toConflictError(error, params.provider, params.identifier) ?? error;
+    }
   };
 
   /**
@@ -133,21 +144,43 @@ export class AgentAccountService {
     const issued = await provider.provision({
       agentId: params.agentId,
       displayName: params.displayName,
+      isIdentifierHeld: (identifier) =>
+        AgentAccountModel.isRoutingKeyHeld(this.db, provider.provider, identifier),
       userId: this.userId,
       workspaceId: this.options.workspaceId,
     });
 
-    return this.model.create({
-      agentId: params.agentId,
-      capabilities: provider.capabilities,
-      credential: issued.credential,
-      credentialHint: issued.credentialHint,
-      displayName: issued.displayName ?? params.displayName ?? null,
-      identifier: issued.identifier,
-      kind: provider.kind,
-      metadata: issued.metadata ?? {},
-      provider: provider.provider,
-    });
+    try {
+      return await this.model.create({
+        agentId: params.agentId,
+        capabilities: provider.capabilities,
+        credential: issued.credential,
+        credentialHint: issued.credentialHint,
+        displayName: issued.displayName ?? params.displayName ?? null,
+        identifier: issued.identifier,
+        kind: provider.kind,
+        metadata: issued.metadata ?? {},
+        provider: provider.provider,
+      });
+    } catch (error) {
+      // The provider already holds a resource (an inbox, a number binding) that
+      // no row points at. Hand it back so a failed write leaves nothing billable
+      // behind; the release is best-effort because the original error is the
+      // one worth surfacing.
+      await provider
+        .release({
+          credential: issued.credential ?? null,
+          // No row was written, so there is no account id to hand over.
+          id: '',
+          identifier: issued.identifier,
+          kind: provider.kind,
+          metadata: issued.metadata ?? {},
+          provider: provider.provider,
+        })
+        .catch(() => undefined);
+
+      throw this.toConflictError(error, provider.provider, issued.identifier) ?? error;
+    }
   };
 
   update = (id: string, patch: AgentAccountPatch): Promise<string | undefined> =>
@@ -227,6 +260,9 @@ export class AgentAccountService {
 
     const event = await provider.verifyInbound(request, ref);
     if (!event) return { accountId: resolved.view.id, outcome: 'rejected' };
+    // Authentic but already handled: acknowledge so the provider stops
+    // retrying, and produce nothing a second time.
+    if (event.duplicate) return { accountId: resolved.view.id, outcome: 'ignored' };
 
     const message = await provider.normalizeInbound(event, ref);
     if (!message) return { accountId: resolved.view.id, outcome: 'ignored' };
@@ -238,6 +274,20 @@ export class AgentAccountService {
 
   private declaredCapabilities = (provider: string): AgentAccountCapabilities | undefined =>
     this.options.registry.has(provider) ? this.options.registry.capabilities(provider) : undefined;
+
+  /** Turn a routing-key unique violation into a refusal a person can act on. */
+  private toConflictError = (
+    error: unknown,
+    provider: string,
+    identifier: string,
+  ): AgentAccountError | undefined => {
+    if (unwrapPgError(error)?.code !== PG_UNIQUE_VIOLATION) return undefined;
+
+    return new AgentAccountError(
+      'identifier_taken',
+      `${identifier} is already bound to another agent on ${provider}. Release that account first.`,
+    );
+  };
 
   private requireActiveAccount = async (accountId: string): Promise<AgentAccountView> => {
     const account = await this.model.findById(accountId);

@@ -304,6 +304,31 @@ export class AgentAccountModel {
   };
 
   /**
+   * Whether any non-revoked account already routes on this handle. Mirrors the
+   * partial unique index on `(provider, identifier)`: a revoked row keeps its
+   * audit trail but no longer holds the handle, so it can be bound again.
+   */
+  static isRoutingKeyHeld = async (
+    db: LobeChatDatabase,
+    provider: string,
+    identifier: string,
+  ): Promise<boolean> => {
+    const [row] = await db
+      .select({ id: agentAccounts.id })
+      .from(agentAccounts)
+      .where(
+        and(
+          eq(agentAccounts.provider, provider),
+          eq(agentAccounts.identifier, identifier),
+          ne(agentAccounts.status, 'revoked'),
+        ),
+      )
+      .limit(1);
+
+    return !!row;
+  };
+
+  /**
    * Decrypt an account's credential while resolving an inbound webhook, so the
    * signature can be verified *before* the request is trusted. The trust model
    * is the same as the bot path: nothing else may call this.

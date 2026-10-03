@@ -118,6 +118,12 @@ export interface AgentAccountProvisionInput {
   agentId: string;
   /** Human label for the new account, when the provider can set one. */
   displayName?: string;
+  /**
+   * Whether a live account already routes on `identifier` for this provider.
+   * Providers that bind from a finite operator inventory (Linq numbers) use it
+   * to pick a free unit instead of colliding on the routing key.
+   */
+  isIdentifierHeld?: (identifier: string) => Promise<boolean>;
   userId: string;
   workspaceId?: string;
 }
@@ -151,6 +157,12 @@ export interface AgentAccountInboundRequest {
 
 /** A delivery whose signature has been verified, still in provider shape. */
 export interface AgentAccountInboundEvent {
+  /**
+   * The signature is valid but this delivery id was already accepted — a
+   * provider retry or a captured request played back. It is acknowledged
+   * without producing a message, so a legitimate retry is not read as forged.
+   */
+  duplicate?: boolean;
   /** Provider delivery id; the replay-dedupe key. */
   eventId: string;
   payload: unknown;
@@ -198,9 +210,10 @@ export interface AgentAccountProvider<K extends AgentAccountKind = AgentAccountK
   ) => Promise<{ providerMessageId: string }>;
 
   /**
-   * Verify the signature over the raw body and reject replays. Returns `null`
-   * for anything forged or already handled, so the caller answers 401/409
-   * without the provider leaking which check failed.
+   * Verify the signature over the raw body and recognise replays. Returns
+   * `null` for anything forged, so the caller answers 401 without the provider
+   * leaking which check failed; an authentic delivery id seen before comes back
+   * flagged `duplicate` and is acknowledged without producing a message.
    */
   verifyInbound: (
     request: AgentAccountInboundRequest,

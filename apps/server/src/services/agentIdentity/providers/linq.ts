@@ -24,6 +24,8 @@ import type {
   AgentAccountRef,
 } from '@lobechat/types';
 
+import { AgentAccountError } from '../errors';
+
 /** Server-side configuration for the Linq (iMessage / SMS) provider. */
 export interface LinqProviderConfig {
   /** REST base override. Defaults to the package's `https://api.linqapp.com/v3`. */
@@ -33,17 +35,27 @@ export interface LinqProviderConfig {
   /** Multi-instance replay store; defaults to the package's in-memory store. */
   dedupeStore?: LinqWebhookDedupeStore;
   /**
-   * An operator-provisioned Linq number in E.164. Linq numbers are carrier
+   * The operator's Linq number pool, in E.164. Linq numbers are carrier
    * inventory rather than something the REST API mints, so provisioning binds
-   * this number to the agent. One number backs one account — a deployment that
-   * wants a number per agent provisions one per agent.
+   * the first free number to the agent. One number backs one live account — a
+   * deployment opens as many phone accounts as it has numbers.
    */
-  fromNumber?: string;
+  fromNumbers?: string[];
   /** Injectable clock, in milliseconds (signature tolerance, `receivedAt` fallback). */
   now?: () => number;
   /** Shared Linq webhook signing secret (`whsec_…`). */
   webhookSecret?: string;
 }
+
+/**
+ * Process-wide default replay store. The deployment builds a fresh registry —
+ * and so a fresh provider — for every webhook request, so a store created per
+ * provider would forget each claim as soon as the request ended.
+ */
+const defaultDedupeStore = createInMemoryLinqWebhookDedupeStore();
+
+/** The only event that carries a message a human sent to the number. */
+const INBOUND_EVENT_TYPE = 'message.received';
 
 const parse = <T>(body: string): T | undefined => {
   try {
@@ -91,9 +103,8 @@ const partsToAttachments = (parts: LinqMessagePart[] | undefined): AgentAccountA
  * produces.
  */
 export const createLinqProvider = (config: LinqProviderConfig): AgentAccountProvider<'phone'> => {
-  const deduplicator = new LinqWebhookDeduplicator(
-    config.dedupeStore ?? createInMemoryLinqWebhookDedupeStore(),
-  );
+  const pool = config.fromNumbers ?? [];
+  const deduplicator = new LinqWebhookDeduplicator(config.dedupeStore ?? defaultDedupeStore);
 
   return {
     /** A phone number can receive and send. */
@@ -101,16 +112,24 @@ export const createLinqProvider = (config: LinqProviderConfig): AgentAccountProv
     kind: 'phone',
     provider: 'linq',
 
-    provision: async (_input: AgentAccountProvisionInput): Promise<AgentAccountProvisionResult> => {
-      const number = config.fromNumber;
-      if (!number) {
+    provision: async (input: AgentAccountProvisionInput): Promise<AgentAccountProvisionResult> => {
+      if (pool.length === 0) {
         throw new Error(
           'Linq provisioning needs an operator-provisioned number: set LINQ_FROM_NUMBER ' +
-            '(or pass fromNumber to createLinqProvider) before opening a phone account.',
+            '(or pass fromNumbers to createLinqProvider) before opening a phone account.',
         );
       }
 
-      return { identifier: number, metadata: { number } };
+      for (const number of pool) {
+        if (input.isIdentifierHeld && (await input.isIdentifierHeld(number))) continue;
+        return { identifier: number, metadata: { number } };
+      }
+
+      throw new AgentAccountError(
+        'capacity_exhausted',
+        `All ${pool.length} phone number(s) on this deployment are already in use by other ` +
+          'agents. Release a phone account or ask the operator to add a number.',
+      );
     },
 
     release: async (_ref: AgentAccountRef): Promise<void> => {
@@ -123,7 +142,7 @@ export const createLinqProvider = (config: LinqProviderConfig): AgentAccountProv
       ref: AgentAccountRef,
       message: AgentAccountOutboundMessage,
     ): Promise<{ providerMessageId: string }> => {
-      const fromNumber = asString(ref.metadata?.number) ?? config.fromNumber;
+      const fromNumber = asString(ref.metadata?.number) ?? ref.identifier;
       const client = new LinqApiClient({
         apiKey: config.apiKey,
         baseUrl: config.apiBaseUrl,
@@ -146,15 +165,15 @@ export const createLinqProvider = (config: LinqProviderConfig): AgentAccountProv
       const data = (event.data ?? {}) as Record<string, unknown>;
       // The number the delivery was addressed to is the routing key. Field
       // naming has moved across Linq API versions, so accept the known
-      // spellings and fall back to the deployment's configured number — a
-      // single-number deployment routes every delivery to that one account.
+      // spellings and fall back to the deployment's number only when there is
+      // exactly one — with a pool, guessing would deliver to the wrong agent.
       return (
         asString(data.to) ??
         asString(data.phone_number) ??
         asString(data.recipient) ??
         asString(event.to) ??
         asString(event.phone_number) ??
-        config.fromNumber
+        (pool.length === 1 ? pool[0] : undefined)
       );
     },
 
@@ -181,12 +200,14 @@ export const createLinqProvider = (config: LinqProviderConfig): AgentAccountProv
       // unauthenticated caller burn ids and suppress real deliveries.
       if (!verified.ok) return null;
 
-      if (!headers.id || (await deduplicator.isDuplicate(headers.id))) return null;
+      if (!headers.id) return null;
 
       const event = parse<LinqWebhookEvent>(request.body);
       if (!event || typeof event.event_type !== 'string') return null;
 
-      return { eventId: headers.id, payload: event };
+      return (await deduplicator.isDuplicate(headers.id))
+        ? { duplicate: true, eventId: headers.id, payload: event }
+        : { eventId: headers.id, payload: event };
     },
 
     normalizeInbound: async (
@@ -194,13 +215,19 @@ export const createLinqProvider = (config: LinqProviderConfig): AgentAccountProv
       ref: AgentAccountRef,
     ): Promise<AgentAccountInboundMessage | null> => {
       const payload = event.payload as LinqWebhookEvent<LinqInboundMessage>;
+      // Linq signs every event type to the same endpoint — delivery receipts,
+      // reactions and the echo of our own sends included. Only a message a
+      // human sent to the number is inbound; anything else would wake the agent
+      // on its own outbound.
+      if (payload.event_type !== INBOUND_EVENT_TYPE) return null;
+
       const data = payload.data;
-      if (!data?.id) return null;
+      if (!data?.id || data.direction === 'outbound') return null;
 
       const text = partsToText(data.parts);
-      if (!text) return null;
-
       const attachments = partsToAttachments(data.parts);
+      // A photo with no caption is still a message.
+      if (!text && attachments.length === 0) return null;
 
       return {
         attachments: attachments.length > 0 ? attachments : undefined,

@@ -11,6 +11,13 @@ export { createAgentMailProvider } from './agentMail';
 export type { LinqProviderConfig } from './linq';
 export { createLinqProvider } from './linq';
 
+/** `LINQ_FROM_NUMBER` is a comma-separated pool; one number is a pool of one. */
+const parseNumberPool = (value: string | undefined): string[] =>
+  (value ?? '')
+    .split(',')
+    .map((number) => number.trim())
+    .filter(Boolean);
+
 /** Which providers a deployment has wired up. Omitted = not registered. */
 export interface AgentIdentityProviderConfig {
   agentMail?: AgentMailProviderConfig;
@@ -54,7 +61,7 @@ export const createDefaultAgentAccountRegistry = (): AgentAccountProviderRegistr
         ? {
             apiBaseUrl: agentIdentityEnv.LINQ_API_BASE_URL,
             apiKey: agentIdentityEnv.LINQ_API_KEY,
-            fromNumber: agentIdentityEnv.LINQ_FROM_NUMBER,
+            fromNumbers: parseNumberPool(agentIdentityEnv.LINQ_FROM_NUMBER),
             webhookSecret: agentIdentityEnv.LINQ_WEBHOOK_SECRET,
           }
         : undefined,

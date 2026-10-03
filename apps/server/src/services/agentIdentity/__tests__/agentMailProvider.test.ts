@@ -1,9 +1,13 @@
+import { createInMemoryLinqWebhookDedupeStore } from '@lobechat/agent-address-linq';
 import type { EmailMessageDetail } from '@lobechat/agent-address-mail';
 import { computeAgentMailSignature } from '@lobechat/agent-address-mail';
 import type { AgentAccountRef } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { createAgentMailProvider } from '../providers/agentMail';
+
+/** A claim store of its own, so one test's accepted ids never leak into the next. */
+const isolated = () => ({ dedupeStore: createInMemoryLinqWebhookDedupeStore() });
 
 const SECRET = 'whsec_mail_secret';
 
@@ -104,7 +108,7 @@ const ref = (overrides: Partial<AgentAccountRef> = {}): AgentAccountRef => ({
 
 describe('agent-mail provider — declaration', () => {
   it('declares the mail identity it issues and what it can do', () => {
-    const provider = createAgentMailProvider({ apiKey: 'am_test' });
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test' });
 
     expect(provider.provider).toBe('agent-mail');
     expect(provider.kind).toBe('mail');
@@ -115,7 +119,7 @@ describe('agent-mail provider — declaration', () => {
 describe('agent-mail provider — provisioning', () => {
   it('opens an inbox and stores the returned handle as the identifier', async () => {
     const { calls, fetchImpl } = createMailFetch();
-    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });
 
     const result = await provider.provision({ agentId: 'agent_7', userId: 'user_1' });
 
@@ -141,7 +145,7 @@ describe('agent-mail provider — provisioning', () => {
 
   it('releases the inbox on release', async () => {
     const { calls, fetchImpl } = createMailFetch();
-    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });
 
     await provider.release(ref());
 
@@ -149,11 +153,26 @@ describe('agent-mail provider — provisioning', () => {
       expect.objectContaining({ method: 'DELETE', path: '/v1/inboxes/inb_1' }),
     );
   });
+
+  it('treats an inbox that is already gone as released', async () => {
+    const fetchImpl: typeof fetch = async () =>
+      json({ error: { code: 'not_found', message: 'Inbox not found' } }, 404);
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });
+
+    await expect(provider.release(ref())).resolves.toBeUndefined();
+  });
+
+  it('still surfaces a release the provider actually refused', async () => {
+    const fetchImpl: typeof fetch = async () => json({ error: { message: 'boom' } }, 500);
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });
+
+    await expect(provider.release(ref())).rejects.toThrow(/500/);
+  });
 });
 
 describe('agent-mail provider — inbound', () => {
   it('routes a delivery by the inbox address in its payload', () => {
-    const provider = createAgentMailProvider({ apiKey: 'am_test' });
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test' });
 
     expect(provider.resolveInboundIdentifier({ body: inboundBody(), headers: {} })).toBe(
       'agent-7@lobe.id',
@@ -162,7 +181,7 @@ describe('agent-mail provider — inbound', () => {
   });
 
   it('accepts a correctly signed delivery and rejects a forged one', async () => {
-    const provider = createAgentMailProvider({ apiKey: 'am_test' });
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test' });
     const body = inboundBody();
     const timestamp = Math.floor(Date.now() / 1000);
 
@@ -190,8 +209,48 @@ describe('agent-mail provider — inbound', () => {
     expect(forged).toBeNull();
   });
 
+  it('flags a replay of an event it already accepted as a duplicate', async () => {
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test' });
+    const body = inboundBody();
+    const headers = {
+      'x-agentmail-signature': computeAgentMailSignature(
+        SECRET,
+        body,
+        Math.floor(Date.now() / 1000),
+      ),
+    };
+
+    await expect(provider.verifyInbound({ body, headers }, ref())).resolves.toEqual(
+      expect.objectContaining({ eventId: 'evt_1' }),
+    );
+    await expect(provider.verifyInbound({ body, headers }, ref())).resolves.toEqual(
+      expect.objectContaining({ duplicate: true }),
+    );
+  });
+
+  it('remembers an accepted event across provider instances, as each webhook request builds one', async () => {
+    const body = inboundBody('agent-7@lobe.id', 'msg_in_1').replace('evt_1', 'evt_cross_instance');
+    const headers = {
+      'x-agentmail-signature': computeAgentMailSignature(
+        SECRET,
+        body,
+        Math.floor(Date.now() / 1000),
+      ),
+    };
+
+    const firstRequest = createAgentMailProvider({ apiKey: 'am_test' });
+    const secondRequest = createAgentMailProvider({ apiKey: 'am_test' });
+
+    await expect(firstRequest.verifyInbound({ body, headers }, ref())).resolves.toEqual(
+      expect.objectContaining({ eventId: 'evt_cross_instance' }),
+    );
+    await expect(secondRequest.verifyInbound({ body, headers }, ref())).resolves.toEqual(
+      expect.objectContaining({ duplicate: true }),
+    );
+  });
+
   it('falls back to the shared secret when the account carries none', async () => {
-    const provider = createAgentMailProvider({ apiKey: 'am_test', webhookSecret: SECRET });
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', webhookSecret: SECRET });
     const body = inboundBody();
     const timestamp = Math.floor(Date.now() / 1000);
 
@@ -208,7 +267,7 @@ describe('agent-mail provider — inbound', () => {
 
   it('normalizes a message, stripping the quoted history', async () => {
     const { fetchImpl } = createMailFetch();
-    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });
 
     const message = await provider.normalizeInbound(
       { eventId: 'evt_1', payload: JSON.parse(inboundBody()) },
@@ -229,7 +288,7 @@ describe('agent-mail provider — inbound', () => {
     const { fetchImpl } = createMailFetch({
       raw: 'From: human@example.com\r\nSubject: Hello\r\nAuto-Submitted: auto-replied\r\n\r\nx',
     });
-    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });
 
     const message = await provider.normalizeInbound(
       { eventId: 'evt_1', payload: JSON.parse(inboundBody()) },
