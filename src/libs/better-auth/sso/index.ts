@@ -91,18 +91,17 @@ export const initBetterAuthSSOProviders = () => {
         throw new Error(`[Better-Auth] Duplicate SSO provider: ${providerId}`);
       }
 
-      // @ts-expect-error - build expects specific env type, but we use union definition type
-      const config = definition.build(env);
+      // build expects specific env type, but we use union definition type
+      const config = definition.build(env as any);
       if (config) {
-        // @ts-expect-error hard to type
-        socialProviders[providerId] = config;
+        socialProviders[providerId] = config as any;
       }
 
       continue;
     }
 
-    // @ts-expect-error - build expects specific env type, but we use union definition type
-    const config = definition.build(env);
+    // build expects specific env type, but we use union definition type
+    const config = definition.build(env as any);
 
     if (config) {
       // the generic oidc callback url is /api/auth/oauth2/callback/{providerId}
