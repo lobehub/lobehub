@@ -137,7 +137,7 @@ function runRescue({ downloadUrl, error, fallback, log = [] }) {
   logger.info(`channel=${channel} feed=${feedUrl ?? '(app-update.yml)'}`);
 
   let installing = false;
-  // quitAndInstall closes every window before Squirrel.Mac takes over; exiting there would
+  // quitAndInstall closes every window before the installer takes over; exiting there would
   // abort the install.
   app.on('window-all-closed', () => {
     if (!installing) app.exit(0);
