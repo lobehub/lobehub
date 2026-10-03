@@ -96,7 +96,7 @@ export const QueryFileListSchema = z.object({
   q: z.string().nullish(),
   showFilesInKnowledgeBase: z.boolean().default(false),
   sortType: z.enum(['desc', 'asc']).optional(),
-  sorter: z.enum(['createdAt', 'size']).optional(),
+  sorter: z.enum(['createdAt', 'name', 'size', 'updatedAt']).optional(),
   /**
    * Origin narrowing driven by the explorer's source filter. Absent / `all`
    * keeps the historical pool (everything except hidden sources).
