@@ -19,6 +19,7 @@ import {
   asc,
   desc,
   eq,
+  exists,
   ilike,
   inArray,
   isNull,
@@ -424,6 +425,7 @@ export class KnowledgeRepo {
     includeContent: boolean = true,
     includeContentPreview: boolean = false,
     includeAgentArtifacts: boolean = false,
+    fileDerivedPage?: SQL,
   ) =>
     this.db
       .select(
@@ -434,7 +436,9 @@ export class KnowledgeRepo {
       .where(
         and(
           this.documentScope(),
-          ne(d.sourceType, 'file'),
+          fileDerivedPage
+            ? or(ne(d.sourceType, 'file'), and(eq(d.sourceType, 'file'), fileDerivedPage))
+            : ne(d.sourceType, 'file'),
           includeAgentArtifacts
             ? undefined
             : notInArray(d.sourceType, [...AGENT_ARTIFACT_SOURCE_TYPES]),
@@ -505,6 +509,29 @@ export class KnowledgeRepo {
       includeContentPreview,
     );
 
+    // Pages are document rows, including pages parsed from uploads. Require the
+    // backing file to pass the same access and KB filters as the file arm; a
+    // document can otherwise expose a private or restricted file in this view.
+    const fileDerivedPage =
+      category === FilesTabs.Pages && !knowledgeBaseId
+        ? exists(
+            this.db
+              .select({ id: f.id })
+              .from(f)
+              .where(
+                and(
+                  eq(f.id, d.fileId),
+                  this.fileScope(sourceFilter),
+                  this.visibilityFilter(visibility, f.visibility),
+                  !showFilesInKnowledgeBase ? this.notInAnyKnowledgeBase() : undefined,
+                  excludeKnowledgeBaseIds?.length
+                    ? this.notInKnowledgeBases(excludeKnowledgeBaseIds)
+                    : undefined,
+                ),
+              ),
+          )
+        : undefined;
+
     const documentArm = this.documentArm(
       [
         ...this.commonFilters(shared, {
@@ -527,6 +554,7 @@ export class KnowledgeRepo {
       includeContent,
       includeContentPreview,
       Boolean(knowledgeBaseId),
+      fileDerivedPage,
     );
 
     const rows = await unionAll(fileArm, documentArm)

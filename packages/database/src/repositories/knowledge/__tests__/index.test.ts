@@ -343,6 +343,75 @@ describe('KnowledgeRepo', () => {
       expect(fileTypes).not.toContain('custom/folder');
     });
 
+    it('should list uploaded-file pages in Pages without duplicating them in All', async () => {
+      await serverDB.insert(documents).values([
+        {
+          id: 'parsed-file-page',
+          userId,
+          fileId: 'file-1',
+          title: 'Parsed PDF',
+          fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+          sourceType: 'file',
+          source: 'https://example.com/doc.pdf',
+          content: 'Extracted PDF text',
+          totalCharCount: 18,
+          totalLineCount: 1,
+        },
+        {
+          id: 'parsed-kb-page',
+          userId,
+          fileId: 'file-in-kb',
+          title: 'KB PDF',
+          fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+          sourceType: 'file',
+          source: 'https://example.com/kb-file.pdf',
+          totalCharCount: 6,
+          totalLineCount: 1,
+        },
+        {
+          id: 'other-parsed-page',
+          userId: otherUserId,
+          fileId: 'other-file',
+          title: 'Other PDF',
+          fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+          sourceType: 'file',
+          source: 'https://example.com/other.txt',
+          totalCharCount: 9,
+          totalLineCount: 1,
+        },
+      ]);
+
+      const pages = await knowledgeRepo.query({ category: FilesTabs.Pages });
+      expect(pages.find((item) => item.id === 'parsed-file-page')).toMatchObject({
+        content: 'Extracted PDF text',
+        fileId: 'file-1',
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+        name: 'Parsed PDF',
+        sourceType: 'document',
+      });
+      expect(pages.map((item) => item.id)).not.toContain('parsed-kb-page');
+      expect(pages.map((item) => item.id)).not.toContain('other-parsed-page');
+
+      const pagesWithKnowledgeBaseFiles = await knowledgeRepo.query({
+        category: FilesTabs.Pages,
+        showFilesInKnowledgeBase: true,
+      });
+      expect(pagesWithKnowledgeBaseFiles.map((item) => item.id)).toContain('parsed-kb-page');
+
+      const pagesWithoutRestrictedKnowledgeBase = await knowledgeRepo.query({
+        category: FilesTabs.Pages,
+        excludeKnowledgeBaseIds: ['kb-1'],
+        showFilesInKnowledgeBase: true,
+      });
+      expect(pagesWithoutRestrictedKnowledgeBase.map((item) => item.id)).not.toContain(
+        'parsed-kb-page',
+      );
+
+      const all = await knowledgeRepo.query({ category: FilesTabs.All });
+      expect(all.filter((item) => item.fileId === 'file-1')).toHaveLength(1);
+      expect(all.find((item) => item.fileId === 'file-1')?.sourceType).toBe('file');
+    });
+
     it('should filter by category - Files returns raw data files only', async () => {
       // Document-table rows (agent instructions, derived docs) must never leak
       // into the Files category even when their fileType matches no other bucket.
