@@ -1,15 +1,13 @@
 import fetch from 'node-fetch';
-import type { RequestFilteringAgentOptions } from 'request-filtering-agent';
 import { RequestFilteringHttpAgent, RequestFilteringHttpsAgent } from 'request-filtering-agent';
+
+import type { SSRFPolicyOptions } from './policy';
+import { resolveSSRFPolicy } from './policy';
 
 /**
  * Options for per-call SSRF configuration overrides
  */
-export interface SSRFOptions {
-  /** List of IP addresses to allow */
-  allowIPAddressList?: string[];
-  /** Whether to allow private/local IP addresses */
-  allowPrivateIPAddress?: boolean;
+export interface SSRFOptions extends SSRFPolicyOptions {
   /**
    * Maximum response body size in bytes. When set, the body is consumed
    * incrementally and reading stops as soon as the cap is reached. The returned
@@ -68,19 +66,7 @@ export const ssrfSafeFetch = async (
   ssrfOptions?: SSRFOptions,
 ): Promise<Response> => {
   try {
-    // Configure SSRF protection options with proper precedence using nullish coalescing
-    const envAllowPrivate = process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS === '1';
-    const allowPrivate = ssrfOptions?.allowPrivateIPAddress ?? envAllowPrivate;
-
-    const agentOptions: RequestFilteringAgentOptions = {
-      allowIPAddressList:
-        ssrfOptions?.allowIPAddressList ??
-        process.env.SSRF_ALLOW_IP_ADDRESS_LIST?.split(',').filter(Boolean) ??
-        [],
-      allowMetaIPAddress: allowPrivate,
-      allowPrivateIPAddress: allowPrivate,
-      denyIPAddressList: [],
-    };
+    const agentOptions = resolveSSRFPolicy(ssrfOptions);
 
     // Create agents for both protocols
     const httpAgent = new RequestFilteringHttpAgent(agentOptions);
