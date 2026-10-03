@@ -269,7 +269,81 @@ describe('DataImporter', () => {
   });
 
   describe('import with self-references', () => {
-    it('should nullify self-reference fields (parentId, quotaId)', async () => {
+    it('should restore self-reference fields with the remapped message IDs', async () => {
+      const data: ImportPgDataStructure = {
+        data: {
+          agents: [
+            {
+              id: 'agt_selfref',
+              slug: 'selfref-agent',
+              model: 'gpt-4',
+              provider: 'openai',
+              systemRole: '',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          agentsToSessions: [{ agentId: 'agt_selfref', sessionId: 'ssn_selfref' }],
+          sessions: [
+            {
+              id: 'ssn_selfref',
+              slug: 'selfref-session',
+              type: 'agent',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          messages: [
+            {
+              id: 'msg_parent',
+              role: 'assistant',
+              content: 'Calling a tool',
+              sessionId: 'ssn_selfref',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+            {
+              id: 'msg_quota',
+              role: 'assistant',
+              content: 'Quota source',
+              sessionId: 'ssn_selfref',
+              createdAt: '2025-01-01T00:00:01Z',
+              updatedAt: '2025-01-01T00:00:01Z',
+            },
+            {
+              id: 'msg_child',
+              role: 'tool',
+              content: 'Tool result',
+              sessionId: 'ssn_selfref',
+              parentId: 'msg_parent',
+              quotaId: 'msg_quota',
+              createdAt: '2025-01-01T00:00:02Z',
+              updatedAt: '2025-01-01T00:00:02Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const result = await importer.importPgData(data);
+
+      expect(result.success).toBe(true);
+      expect(result.results.messages).toMatchObject({ added: 3, errors: 0 });
+
+      const messages = await clientDB.query.messages.findMany({
+        where: eq(Schema.messages.userId, userId),
+      });
+      const messageByClientId = Object.fromEntries(
+        messages.map((message) => [message.clientId, message]),
+      );
+
+      expect(messageByClientId.msg_child.parentId).toBe(messageByClientId.msg_parent.id);
+      expect(messageByClientId.msg_child.quotaId).toBe(messageByClientId.msg_quota.id);
+      expect(messageByClientId.msg_child.updatedAt).toEqual(new Date('2025-01-01T00:00:02Z'));
+    });
+
+    it('should nullify dangling self-reference fields', async () => {
       const data: ImportPgDataStructure = {
         data: {
           agents: [
@@ -315,7 +389,6 @@ describe('DataImporter', () => {
       expect(result.success).toBe(true);
       expect(result.results.messages).toMatchObject({ added: 1, errors: 0 });
 
-      // Verify self-reference fields are set to null
       const messages = await clientDB.query.messages.findMany({
         where: eq(Schema.messages.userId, userId),
       });
