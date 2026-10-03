@@ -188,6 +188,23 @@ describe('QQAdapter', () => {
       expect(mockChat.processMessage).toHaveBeenCalledTimes(1);
     });
 
+    it.each([
+      ['group', QQ_EVENT_TYPES.GROUP_AT_MESSAGE_CREATE, {}],
+      [
+        'guild',
+        QQ_EVENT_TYPES.AT_MESSAGE_CREATE,
+        { channel_id: 'channel_abc', group_openid: undefined, guild_id: 'guild_abc' },
+      ],
+    ])('should mark %s @ messages as mentions', async (_kind, eventType, data) => {
+      const payload = makeWebhookPayload(eventType, data);
+      await adapter.handleWebhook(makeRequest(payload));
+
+      const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
+      const message = await factory?.();
+
+      expect(message?.isMention).toBe(true);
+    });
+
     it('should skip empty content with no attachments', async () => {
       const payload = makeWebhookPayload(QQ_EVENT_TYPES.GROUP_AT_MESSAGE_CREATE, {
         content: '  ',
