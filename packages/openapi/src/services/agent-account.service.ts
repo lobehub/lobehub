@@ -2,7 +2,7 @@ import type { AgentAccountPatch, AgentAccountView } from '@/database/models/agen
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { AgentAccountService } from '@/server/services/agentIdentity';
+import { AgentAccountService, isAgentAccountError } from '@/server/services/agentIdentity';
 import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdentity/providers';
 import type { AgentAccountProviderRegistry } from '@/server/services/agentIdentity/registry';
 
@@ -34,16 +34,6 @@ import type {
  *   reached through a different agent's URL is a 404 rather than a read of the
  *   caller's unrelated row.
  */
-/**
- * Postgres/drizzle unique-index violation (`23505`). The engine puts the code
- * on the error itself or on its `cause` depending on the driver, so both are
- * checked — same shape `agentBotProvider` relies on.
- */
-const isUniqueViolation = (error: unknown): boolean => {
-  const candidate = error as { cause?: { code?: string }; code?: string };
-  return candidate?.code === '23505' || candidate?.cause?.code === '23505';
-};
-
 export class AgentAccountRestService extends BaseService {
   private identityService: AgentAccountService | null = null;
   private readonly registry: AgentAccountProviderRegistry;
@@ -151,24 +141,30 @@ export class AgentAccountRestService extends BaseService {
       try {
         return await identity.create({ agentId, ...body });
       } catch (error) {
-        // `(provider, identifier)` is unique deployment-wide: the same handle
-        // cannot be a second identity, so a duplicate is a 409, not a 500.
-        if (isUniqueViolation(error)) {
-          throw this.createConflictError(
-            `An account with identifier "${body.identifier}" for provider "${body.provider}" is already registered.`,
-          );
-        }
-        throw error;
+        throw this.toConflict(error);
       }
     }
 
     this.requireProvider(body.provider);
 
-    return identity.provision({
-      agentId,
-      displayName: body.displayName,
-      provider: body.provider,
-    });
+    try {
+      return await identity.provision({
+        agentId,
+        displayName: body.displayName,
+        provider: body.provider,
+      });
+    } catch (error) {
+      throw this.toConflict(error);
+    }
+  }
+
+  /**
+   * A routing handle is unique deployment-wide and some providers hand out a
+   * finite pool, so "already bound" and "no number left" are 409s the caller
+   * can act on — never a 500.
+   */
+  private toConflict(error: unknown): unknown {
+    return isAgentAccountError(error) ? this.createConflictError(error.message) : error;
   }
 
   /** Patch the non-secret fields; `status` moves through revoke, not here. */

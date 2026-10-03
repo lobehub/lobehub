@@ -286,7 +286,7 @@ describe('agent account control plane — end to end', () => {
 
     const second = await mountAccount();
     expect(second.res.status).toBe(409);
-    expect(JSON.stringify(second.body)).toContain('already registered');
+    expect(JSON.stringify(second.body)).toContain('already bound to another agent');
   });
 
   it('rejects an unknown provider so a typo cannot silently create an empty account', async () => {

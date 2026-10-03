@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as AgentIdentityErrors from '@/server/services/agentIdentity/errors';
+
 /**
  * Router-level contract for `agentAccount` — the parts that live in the router
  * rather than the service:
@@ -49,7 +51,8 @@ const service = vi.hoisted(() => ({
     async (_id: string, _patch: Record<string, unknown>): Promise<string | undefined> => 'acc_1',
   ),
 }));
-vi.mock('@/server/services/agentIdentity', () => ({
+vi.mock('@/server/services/agentIdentity', async () => ({
+  ...(await vi.importActual<typeof AgentIdentityErrors>('@/server/services/agentIdentity/errors')),
   AgentAccountService: vi.fn(function () {
     return service;
   }),
@@ -173,5 +176,28 @@ describe('agentAccountRouter', () => {
 
     expect(service.update).toHaveBeenCalledWith('acc_1', { displayName: 'Renamed' });
     expect(service.revoke).not.toHaveBeenCalled();
+  });
+
+  it('answers a handle that is already bound as CONFLICT, not a generic failure', async () => {
+    const { AgentAccountError } = await import('@/server/services/agentIdentity/errors');
+    service.create.mockRejectedValueOnce(
+      new AgentAccountError('identifier_taken', 'agent@github is already bound to another agent'),
+    );
+    service.provision.mockRejectedValueOnce(
+      new AgentAccountError('capacity_exhausted', 'All 1 phone number(s) are already in use'),
+    );
+    const caller = agentAccountRouter.createCaller(ctx);
+
+    await expect(
+      caller.create({
+        agentId: 'agt_1',
+        identifier: 'agent@github',
+        kind: 'service',
+        provider: 'user',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT', message: expect.stringMatching(/already bound/) });
+    await expect(caller.provision({ agentId: 'agt_1', provider: 'linq' })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
   });
 });

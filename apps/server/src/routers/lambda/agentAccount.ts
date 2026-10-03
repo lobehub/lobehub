@@ -8,7 +8,7 @@ import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { AgentAccountService } from '@/server/services/agentIdentity';
+import { AgentAccountService, isAgentAccountError } from '@/server/services/agentIdentity';
 import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdentity/providers';
 
 /**
@@ -68,6 +68,11 @@ const ACCOUNT_NOT_FOUND_MESSAGE = 'Agent account not found';
 /** Surface a service-layer refusal as a tRPC error the caller can act on. */
 const mapAccountError = (error: unknown, operation: string): never => {
   if (error instanceof TRPCError) throw error;
+  // A handle already bound elsewhere, or a provider pool with nothing left:
+  // the request was valid, the deployment's state refuses it.
+  if (isAgentAccountError(error)) {
+    throw new TRPCError({ cause: error, code: 'CONFLICT', message: error.message });
+  }
   console.error(`[agentAccount:${operation}]`, error);
   throw new TRPCError({
     cause: error,
