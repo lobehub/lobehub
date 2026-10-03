@@ -16,16 +16,21 @@ import {
 const graphWith = (
   mainline: { edgeIds: string[]; nodeIds: string[] } | undefined,
   nodeIds = ['p', 't1', 't2', 't3', 'x1'],
-) =>
-  ({
-    byId: Object.fromEntries(nodeIds.map((id) => [id, { node: { id } }])),
+  kinds: Record<string, string> = {},
+) => {
+  const nodes = nodeIds.map((id) => ({ node: { id, kind: kinds[id] } }));
+  return {
+    byId: Object.fromEntries(nodes.map((view) => [view.node.id, view])),
+    edges: [],
+    nodes,
     report: {
       latest: {
         metadata: { chapters: [], graphCursor: 'e', headline: 'H', mainline, nextSteps: [] },
       },
       status: 'completed',
     } as unknown as GoalReportState,
-  }) as unknown as Pick<GoalGraphView, 'byId' | 'report'>;
+  } as unknown as Pick<GoalGraphView, 'byId' | 'edges' | 'nodes' | 'report'>;
+};
 
 describe('resolveMainline', () => {
   it('reads the mark from the newest report version', () => {
@@ -44,6 +49,53 @@ describe('resolveMainline', () => {
       ...resolveMainline(graphWith({ edgeIds: [], nodeIds: ['t1', 'gone'] }))!.nodeIds,
     ]).toEqual(['t1']);
     expect(resolveMainline(graphWith({ edgeIds: [], nodeIds: ['gone'] }))).toBeUndefined();
+  });
+
+  it('drops a mark that reaches every card, so the map is never all mainline', () => {
+    // The wrap-up model marks every node when it cannot tell the path apart;
+    // ringing the whole map says nothing, so the plain map is drawn instead.
+    const all = graphWith({ edgeIds: [], nodeIds: ['p', 't1', 't2', 't3', 'x1'] }, undefined, {
+      p: 'problem',
+    });
+    expect(resolveMainline(all)).toBeUndefined();
+  });
+
+  it('keeps the mark while any card stands off it, the root question aside', () => {
+    const root = graphWith({ edgeIds: [], nodeIds: ['t1', 't2', 't3', 'x1'] }, undefined, {
+      p: 'problem',
+    });
+    expect(resolveMainline(root)).toBeUndefined();
+    const oneOff = graphWith({ edgeIds: [], nodeIds: ['t1', 't2', 't3'] }, undefined, {
+      p: 'problem',
+    });
+    expect(resolveMainline(oneOff)).toBeDefined();
+  });
+
+  it('treats a collapsed experiment as on the mainline when its members are', () => {
+    const nodes = [
+      { node: { id: 'p', kind: 'problem' } },
+      { node: { id: 'e1', kind: 'experiment' } },
+      { node: { id: 't1', kind: 'task' } },
+    ];
+    expect(
+      resolveMainline({
+        byId: Object.fromEntries(nodes.map((view) => [view.node.id, view])),
+        edges: [{ id: 'c1', kind: 'contains', sourceNodeId: 'e1', targetNodeId: 't1' }],
+        nodes,
+        report: {
+          latest: {
+            metadata: {
+              chapters: [],
+              graphCursor: 'e',
+              headline: 'H',
+              mainline: { edgeIds: [], nodeIds: ['t1'] },
+              nextSteps: [],
+            },
+          },
+          status: 'completed',
+        },
+      } as unknown as Pick<GoalGraphView, 'byId' | 'edges' | 'nodes' | 'report'>),
+    ).toBeUndefined();
   });
 });
 

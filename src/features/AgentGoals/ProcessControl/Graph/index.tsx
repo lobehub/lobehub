@@ -927,7 +927,9 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       {!fullscreen && toggle}
     </>
   );
-  const hasMainline = !!resolveMainline(props.graph);
+  // Read against the map actually drawn — a scoped drill-down judges its own
+  // cards, so the legend never promises a mainline the view decided to drop.
+  const hasMainline = !!resolveMainline(scopedGraph);
   const legend = (
     <Flexbox horizontal align={'center'} className={styles.legend} gap={10}>
       {hasMainline && (
