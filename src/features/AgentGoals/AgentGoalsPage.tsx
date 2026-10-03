@@ -1,6 +1,5 @@
 'use client';
 
-import type { GoalStatus } from '@lobechat/const/goal';
 import { Block, Empty, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, Segmented, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -13,6 +12,7 @@ import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import type { GoalListFilter } from '@/store/goal';
 import { useGoalStore } from '@/store/goal';
 
 import { createGoalModal } from './CreateGoalModal';
@@ -20,6 +20,7 @@ import { GoalCardItem } from './GoalCardItem';
 import GoalEmptyState from './GoalEmptyState';
 import type { GoalExampleSeed } from './goalExamples';
 import { GoalListItem } from './GoalListItem';
+import { filterGoalsByStatus } from './goalPresentation';
 
 const styles = createStaticStyles(({ css }) => ({
   countBadge: css`
@@ -63,9 +64,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-/** Goals whose loop has stopped for good — hidden by the default "open" filter. */
-const TERMINAL_GOAL_STATUSES = new Set<GoalStatus>(['achieved', 'failed', 'canceled']);
-
 interface AgentGoalsPageProps {
   agentId?: string;
   projectId?: string;
@@ -94,11 +92,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
 
     return { delivered, pursuing: goals.length - delivered, total: goals.length };
   }, [goals]);
-  const filteredGoals = useMemo(() => {
-    if (filter === 'all') return goals;
-
-    return goals.filter(({ goal }) => !TERMINAL_GOAL_STATUSES.has(goal.status));
-  }, [filter, goals]);
+  const filteredGoals = useMemo(() => filterGoalsByStatus(goals, filter), [filter, goals]);
   const visibleGoalCount = filteredGoals.length;
   const GoalItem = viewMode === 'list' ? GoalListItem : GoalCardItem;
   const openCreateGoal = (seed?: GoalExampleSeed) => {
@@ -209,15 +203,19 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                     value={filter}
                     options={[
                       {
-                        label: t('goalPage.filter.open'),
-                        value: 'active',
-                      },
-                      {
                         label: t('goalPage.filter.all'),
                         value: 'all',
                       },
+                      {
+                        label: t('goalPage.filter.review'),
+                        value: 'review',
+                      },
+                      {
+                        label: t('goalPage.filter.running'),
+                        value: 'running',
+                      },
                     ]}
-                    onChange={(value) => setFilter(value as 'active' | 'all')}
+                    onChange={(value) => setFilter(value as GoalListFilter)}
                   />
                   <ActionIcon
                     icon={ListIcon}
