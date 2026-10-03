@@ -2,7 +2,7 @@
 
 import { Flexbox, Markdown } from '@lobehub/ui';
 import { Divider, Skeleton } from '@lobehub/ui/base-ui';
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEntityMarkdown } from '@/features/EntityLink';
@@ -10,7 +10,9 @@ import { useClientDataSWR } from '@/libs/swr';
 import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 
+import GoalAcceptanceHierarchy from './GoalAcceptanceHierarchy';
 import { pickFinalDeliverable } from './goalAcceptanceReport';
+import { buildAcceptanceTree } from './goalAcceptanceTree';
 import GoalCriteriaResults from './GoalCriteriaResults';
 import type { GoalGraphView } from './goalGraphViewModel';
 import { GoalDecisionsMade, GoalUnfinished, useContinueFromResult } from './GoalResultFollowUps';
@@ -74,6 +76,7 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
   const deliverable = pickFinalDeliverable(graph.artifacts, acceptanceNodeId);
   const data = useGoalResultData(graph);
   const continueFromResult = useContinueFromResult(graph, data.outcomes);
+  const acceptanceTree = useMemo(() => buildAcceptanceTree(graph), [graph]);
 
   return (
     <div ref={rootRef}>
@@ -106,7 +109,15 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
               loading={data.isLoading}
               outcomes={data.outcomes}
               onRetry={data.retry}
-            />
+            >
+              {/* The goal's own acceptance IS the criteria list above; every task's
+                  acceptance follows it as the second group of the same section. */}
+              <GoalAcceptanceHierarchy
+                canReview={data.canReview}
+                goalId={graph.goal.id}
+                tree={acceptanceTree}
+              />
+            </GoalCriteriaResults>
           </div>
         </Flexbox>
         <Divider style={{ marginBlock: 24 }} />

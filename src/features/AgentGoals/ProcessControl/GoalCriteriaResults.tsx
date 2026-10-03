@@ -11,7 +11,7 @@ import {
   FileText,
   Paperclip,
 } from 'lucide-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -249,6 +249,8 @@ const CriterionRow = ({ index, outcome }: { index: number; outcome: CriterionOut
 };
 
 interface GoalCriteriaResultsProps {
+  /** The per-task acceptance group, rendered as this section's continuation. */
+  children?: ReactNode;
   /** The acceptance or criteria read failed: its outcomes are not a result. */
   error?: unknown;
   loading: boolean;
@@ -256,7 +258,13 @@ interface GoalCriteriaResultsProps {
   outcomes: CriterionOutcome[];
 }
 
-const GoalCriteriaResults = ({ error, loading, onRetry, outcomes }: GoalCriteriaResultsProps) => {
+const GoalCriteriaResults = ({
+  children,
+  error,
+  loading,
+  onRetry,
+  outcomes,
+}: GoalCriteriaResultsProps) => {
   const { t } = useTranslation('chat');
   const met = outcomes.filter((outcome) => outcome.state === 'passed').length;
 
@@ -293,6 +301,7 @@ const GoalCriteriaResults = ({ error, loading, onRetry, outcomes }: GoalCriteria
           ))}
         </Flexbox>
       )}
+      {children}
     </Flexbox>
   );
 };

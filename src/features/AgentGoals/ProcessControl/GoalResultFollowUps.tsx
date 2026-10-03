@@ -59,6 +59,16 @@ export const SectionTitle = ({ children, extra }: { children: ReactNode; extra?:
   </Flexbox>
 );
 
+/** A group inside a section — one step below `SectionTitle`, same row grammar. */
+export const GroupLabel = ({ children, extra }: { children: ReactNode; extra?: ReactNode }) => (
+  <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+    <Text fontSize={13} type={'secondary'} weight={600}>
+      {children}
+    </Text>
+    {extra}
+  </Flexbox>
+);
+
 const DecisionTime = ({ at }: { at: Date }) => {
   const { text, title } = useActivityTime(at);
   return (
