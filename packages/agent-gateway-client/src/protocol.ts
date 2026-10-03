@@ -10,3 +10,13 @@
  * this constant is exactly what tells the two apart.
  */
 export const CLIENT_PROTOCOL_VERSION = 2 as const;
+
+/**
+ * LLM relay protocol a client declares in `execAgent`'s `llmExecutor` when it
+ * can run relayed LLM attempts (`llm_execute`). The server relays only to a
+ * client that declares a version it speaks.
+ */
+export const LLM_RELAY_CAPABILITY = 'llm_relay@1';
+
+/** Header carrying the per-call lease token on the relay endpoints. */
+export const LLM_RELAY_LEASE_HEADER = 'x-llm-relay-lease';

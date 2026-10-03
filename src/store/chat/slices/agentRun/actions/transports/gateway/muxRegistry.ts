@@ -1,6 +1,7 @@
 import { GatewayMuxClient } from '@lobechat/agent-gateway-client';
 
 import { aiAgentService } from '@/services/aiAgent';
+import { getLlmRelayClientId } from '@/services/llmRelay';
 import { shareChatService } from '@/services/shareChat';
 
 export interface GatewayMuxIdentity {
@@ -56,6 +57,9 @@ export const getGatewayMux = (identity: GatewayMuxIdentity): GatewayMuxClient =>
   let mux = registry.get(key);
   if (!mux) {
     mux = new GatewayMuxClient({
+      // The owner socket uses the id this tab declares as its LLM executor,
+      // so the hub can hand `llm_execute` to the tab that started the run.
+      ...(!identity.agentShareId && { clientId: getLlmRelayClientId() }),
       gatewayUrl: identity.gatewayUrl,
       getToken: buildGetToken(identity),
       keepAlive: true,

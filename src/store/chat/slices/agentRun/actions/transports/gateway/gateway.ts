@@ -43,6 +43,7 @@ import {
   type ResumeToolResultParam,
 } from '@/services/aiAgent';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
+import { getLlmRelayClientId } from '@/services/llmRelay';
 import { messageService } from '@/services/message';
 import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
@@ -509,6 +510,7 @@ export class GatewayActionImpl {
     const client: GatewayConnection['client'] =
       muxClient ??
       this.createClient({
+        ...(!agentShareId && { clientId: getLlmRelayClientId() }),
         gatewayUrl,
         ...(lastEventId && { lastEventId }),
         operationId,

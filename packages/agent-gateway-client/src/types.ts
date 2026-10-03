@@ -440,6 +440,11 @@ export interface LlmRelayBatchAck {
 
 // Client → Server
 export interface AuthMessage {
+  /**
+   * This page's client id. The gateway delivers `llm_execute` to the client
+   * that started the run (`preferredClientId`); older gateways ignore it.
+   */
+  clientId?: string;
   token: string;
   type: 'auth';
 }
@@ -606,6 +611,11 @@ export interface AgentStreamClientEvents {
 export interface AgentStreamClientOptions {
   /** Auto-reconnect with lastEventId resume (default: true) */
   autoReconnect?: boolean;
+  /**
+   * This page's client id, sent with `auth` so the gateway can route
+   * client-targeted events (`llm_execute`) to it. Absent ⇒ not sent.
+   */
+  clientId?: string;
   /** Gateway WebSocket URL base (e.g. https://gateway.lobehub.com) */
   gatewayUrl: string;
   /**

@@ -43,7 +43,7 @@ export type {
   ResumeCompleteInfo,
   ToolResultPayload,
 } from './mux/types';
-export { CLIENT_PROTOCOL_VERSION } from './protocol';
+export { CLIENT_PROTOCOL_VERSION, LLM_RELAY_CAPABILITY, LLM_RELAY_LEASE_HEADER } from './protocol';
 export type {
   AgentInterventionInteractionKind,
   AgentInterventionProvider,

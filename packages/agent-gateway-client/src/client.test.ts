@@ -129,6 +129,18 @@ describe('AgentStreamClient', () => {
       expect(JSON.parse(ws.sent[0])).toEqual({ token: 'test-token', type: 'auth' });
     });
 
+    it('should send its client id with auth so the gateway can target it', async () => {
+      const client = createClient({ clientId: 'tab-1' });
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(JSON.parse(getLatestWs().sent[0])).toEqual({
+        clientId: 'tab-1',
+        token: 'test-token',
+        type: 'auth',
+      });
+    });
+
     it('should transition through connection states', async () => {
       const client = createClient();
       const statuses: ConnectionStatus[] = [];

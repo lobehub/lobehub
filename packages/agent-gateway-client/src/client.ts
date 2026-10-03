@@ -79,6 +79,7 @@ export class AgentStreamClient extends TypedEmitter {
   private resumeMode = false;
   private resumeFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
+  private readonly clientId?: string;
   private readonly gatewayUrl: string;
   private readonly operationId: string;
   private readonly autoReconnect: boolean;
@@ -88,6 +89,7 @@ export class AgentStreamClient extends TypedEmitter {
 
   constructor(options: AgentStreamClientOptions) {
     super();
+    this.clientId = options.clientId;
     this.gatewayUrl = options.gatewayUrl;
     this.operationId = options.operationId;
     this.token = options.token;
@@ -216,7 +218,11 @@ export class AgentStreamClient extends TypedEmitter {
   private handleOpen = (): void => {
     this.reconnectDelay = INITIAL_RECONNECT_DELAY;
     this.setStatus('authenticating');
-    this.sendMessage({ token: this.token, type: 'auth' });
+    this.sendMessage({
+      ...(this.clientId && { clientId: this.clientId }),
+      token: this.token,
+      type: 'auth',
+    });
   };
 
   private handleMessage = (event: MessageEvent): void => {
