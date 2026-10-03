@@ -23,6 +23,7 @@ import {
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 import { buildWorkVersionCumulativeUsage } from '@/utils/workCumulativeUsage';
 
+import { prepareToolResultReview } from './adapters/toolResultReview';
 import { type RuntimeExecutorContext } from './context';
 import { resolveRunActiveDeviceId } from './executors/resolveRunActiveDeviceId';
 
@@ -281,17 +282,21 @@ export const buildServerVirtualSubAgentRunner = (
       // 1. Create (or, after approval, reuse) the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
       //    and renders a loading state until the bridge backfills it.
+      const toolResultControl = prepareToolResultReview(ctx, state, chatToolPayload);
       const pendingState = subAgentId
         ? { status: 'pending', threadId: subAgentId }
         : { status: 'pending' };
       if (existingToolMessageId) {
         await ctx.messageModel.updatePluginState(existingToolMessageId, pendingState);
+        if (toolResultControl)
+          await ctx.messageModel.updateToolResultReview(existingToolMessageId, toolResultControl);
       }
       const placeholder = existingToolMessageId
         ? { id: existingToolMessageId }
         : await ctx.messageModel.create({
             agentId,
             content: '',
+            ...(toolResultControl && { metadata: { toolResultControl } }),
             groupId: state.origin?.groupId ?? undefined,
             parentId: parentMessageId,
             plugin: chatToolPayload as any,
@@ -440,13 +445,19 @@ export const buildServerAgentMemberRunner = (
       // The supervisor assistant message owning this tool call. An approved
       // call resumes with its own tool row as the parent, so step up from it.
       const supervisorMessageId = existingToolMessage?.parentId ?? parentMessageId;
+      const toolResultControl = prepareToolResultReview(ctx, state, chatToolPayload);
       const groupTool = existingToolMessage
         ? { id: existingToolMessage.id }
         : await ctx.messageModel.create({
             agentId,
             content: '',
             groupId,
-            ...(isCouncil ? { metadata: { agentCouncil: true } } : {}),
+            ...((isCouncil || toolResultControl) && {
+              metadata: {
+                ...(isCouncil && { agentCouncil: true }),
+                ...(toolResultControl && { toolResultControl }),
+              },
+            }),
             parentId: parentMessageId,
             plugin: chatToolPayload as any,
             pluginState: { expectedMembers, onComplete, status: 'pending' },
@@ -462,6 +473,8 @@ export const buildServerAgentMemberRunner = (
           status: 'pending',
         });
         if (isCouncil) await ctx.messageModel.updateMetadata(groupTool.id, { agentCouncil: true });
+        if (toolResultControl)
+          await ctx.messageModel.updateToolResultReview(groupTool.id, toolResultControl);
       }
 
       // 2. Per-member anchors. A single member collapses onto the group tool
@@ -481,6 +494,7 @@ export const buildServerAgentMemberRunner = (
             content: '',
             groupId,
             parentId: groupTool.id,
+            ...(toolResultControl && { metadata: { toolResultControl } }),
             plugin: { ...(chatToolPayload as any), id: memberToolCallId },
             pluginState: { status: 'pending' },
             role: 'tool',

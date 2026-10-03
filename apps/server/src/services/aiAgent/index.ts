@@ -1126,8 +1126,12 @@ export class AiAgentService {
       approvedToolEntries,
       batchApprovalAnchorId,
       resumeApprovalPlugin,
+      resolvedToolResult,
     } = await claimApprovalResume(
-      { messageModel: this.messageModel },
+      {
+        controlToolResult: (input) => this.agentRuntimeService.controlCompletedToolResult(input),
+        messageModel: this.messageModel,
+      },
       {
         appContext,
         approvalClaim,
@@ -1424,7 +1428,7 @@ export class AiAgentService {
       resumeApprovalPlugin,
       resumeApprovals,
       resumeFromHistory: runFromHistory,
-      resumeToolResult,
+      resumeToolResult: resolvedToolResult,
       runAttachments,
       selectedToolIds,
       topicBoundDeviceId: turn.topicBoundDeviceId,

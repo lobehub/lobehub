@@ -84,6 +84,38 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
 // either runner does not inherit the parent's shareGate, so for a run with
 // `ctx.agentShareVisitor` set, no runner may be built at all.
 describe('buildServerVirtualSubAgentRunner continuing an earlier sub-agent', () => {
+  it('quarantines the placeholder before a child can write an early completion', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'placeholder' });
+    const execVirtualSubAgent = vi.fn(async () => {
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: {
+            toolResultControl: { operationId: 'op', stepIndex: 4, callIndex: 2, status: 'pending' },
+          },
+        }),
+      );
+      return { operationId: 'child', success: true, threadId: 'thread' };
+    });
+    const runner = buildServerVirtualSubAgentRunner(
+      {
+        operationId: 'op',
+        stepIndex: 4,
+        topicId: 'topic',
+        execVirtualSubAgent,
+        messageModel: { create },
+        hookDispatcher: { hasAfterToolCallControl: () => true },
+      } as unknown as RuntimeExecutorContext,
+      {
+        origin: { agentId: 'agent', topicId: 'topic' },
+        usage: { tools: { byTool: [{ name: 'lobe-agent/callSubAgent', calls: 1 }] } },
+      } as AgentState,
+      { id: 'call', identifier: 'lobe-agent', apiName: 'callSubAgent' } as ChatToolPayload,
+      'assistant',
+    );
+    await runner!.run({ description: 'task', instruction: 'run' });
+    expect(execVirtualSubAgent).toHaveBeenCalledTimes(1);
+  });
+
   it('reuses the sub-agent thread and links the new placeholder to it', async () => {
     const execVirtualSubAgent = vi
       .fn()

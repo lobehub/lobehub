@@ -32,6 +32,10 @@ describe('serialized hook contract', () => {
     const persisted = JSON.stringify(hook);
     expect(serializedAgentHookSchema.parse(JSON.parse(persisted))).toEqual(hook);
   });
+  it.each(['beforeToolCall', 'afterToolCall'])('accepts synchronous %s controls', (type) => {
+    const hook = { ...control, type };
+    expect(serializedAgentHookSchema.parse(hook)).toEqual(hook);
+  });
   it('accepts every legacy hook and notification body/selection', () => {
     for (const type of agentHookTypeSchema.options) {
       expect(
@@ -49,7 +53,7 @@ describe('serialized hook contract', () => {
     }
   });
   it.each([
-    { ...control, type: 'afterToolCall' },
+    { ...control, type: 'onToolCallError' },
     { ...control, type: 'unknown' },
     { ...control, matcher: '[' },
     { ...control, matcher: { identifier: '^fs$', apiName: '^read' } },

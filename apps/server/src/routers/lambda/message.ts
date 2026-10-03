@@ -108,6 +108,13 @@ const heterogeneousToolStateSnapshotSchema = z.object({
   snapshotSeq: z.number().int().positive(),
 });
 
+const publicToolMetadataSchema = z
+  .record(z.string(), z.any())
+  .refine(
+    (value) => !Object.hasOwn(value, 'toolResultControl'),
+    'Tool result review metadata is server-owned',
+  );
+
 const messageBatchOperationSchema = z.discriminatedUnion('type', [
   z.object({
     message: CreateNewMessageParamsSchema,
@@ -124,7 +131,7 @@ const messageBatchOperationSchema = z.discriminatedUnion('type', [
     value: z.object({
       content: z.string().optional(),
       heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
-      metadata: z.record(z.string(), z.any()).optional(),
+      metadata: publicToolMetadataSchema.optional(),
       pluginError: z.any().optional(),
       pluginState: z.record(z.string(), z.any()).optional(),
     }),
@@ -891,7 +898,7 @@ export const messageRouter = router({
       z
         .object({
           id: z.string(),
-          value: z.object({}).passthrough(),
+          value: publicToolMetadataSchema,
         })
         .extend(basicContextSchema.shape),
     )
@@ -1026,7 +1033,7 @@ export const messageRouter = router({
           value: z.object({
             content: z.string().optional(),
             heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
-            metadata: z.object({}).passthrough().optional(),
+            metadata: publicToolMetadataSchema.optional(),
             pluginError: z.any().optional(),
             pluginState: z.object({}).passthrough().optional(),
           }),

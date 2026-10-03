@@ -14,6 +14,7 @@ import { deliverWebhook, executeToolCallWebhook } from './httpWebhook';
 import { matchesHook } from './matcher';
 import { getServerHooks, mergeServerHooks } from './serverHooks';
 import type {
+  AfterToolCallHookEvent,
   AgentHook,
   AgentHookEvent,
   AgentHookType,
@@ -145,6 +146,20 @@ export class HookDispatcher {
     if (criticalError) throw criticalError;
   }
 
+  /** Includes cold-worker and current environment controls, without invoking a receiver. */
+  hasAfterToolCallControl(
+    operationId: string,
+    serializedHooks?: SerializedAgentHook[],
+    event?: { identifier: string; apiName: string },
+  ): boolean {
+    return this.resolveHooks(operationId, serializedHooks).some(
+      (hook) =>
+        hook.type === 'afterToolCall' &&
+        hook.webhook?.responseHandling === 'toolCall' &&
+        (!event || matchesHook(hook.matcher, event)),
+    );
+  }
+
   /** Ordered synchronous controls. Cancellation never goes through onError. */
   async evaluateToolCall(
     operationId: string,
@@ -152,11 +167,31 @@ export class HookDispatcher {
     serializedHooks?: SerializedAgentHook[],
     signal?: AbortSignal,
   ): Promise<{ status: 'allow' | 'blocked' | 'cancelled'; reason?: string }> {
+    return this.evaluateToolControl('beforeToolCall', operationId, event, serializedHooks, signal);
+  }
+
+  /** Result controls run before archival, persistence, streaming, and model consumption. */
+  async evaluateAfterToolCall(
+    operationId: string,
+    event: AfterToolCallHookEvent,
+    serializedHooks?: SerializedAgentHook[],
+    signal?: AbortSignal,
+  ): Promise<{ status: 'allow' | 'blocked' | 'cancelled'; reason?: string }> {
+    return this.evaluateToolControl('afterToolCall', operationId, event, serializedHooks, signal);
+  }
+
+  private async evaluateToolControl(
+    type: 'beforeToolCall' | 'afterToolCall',
+    operationId: string,
+    event: Omit<ToolCallHookEvent, 'mock'> | AfterToolCallHookEvent,
+    serializedHooks?: SerializedAgentHook[],
+    signal?: AbortSignal,
+  ): Promise<{ status: 'allow' | 'blocked' | 'cancelled'; reason?: string }> {
     const hooks = this.resolveHooks(operationId, serializedHooks);
     for (const hook of hooks) {
       if (signal?.aborted) return { status: 'cancelled' };
       if (
-        hook.type !== 'beforeToolCall' ||
+        hook.type !== type ||
         hook.webhook?.responseHandling !== 'toolCall' ||
         !matchesHook(hook.matcher, event)
       )
@@ -164,8 +199,8 @@ export class HookDispatcher {
       const payload = await this.buildWebhookPayload(
         event,
         {},
-        { hookId: hook.id, hookType: 'beforeToolCall' },
-        { signal },
+        { hookId: hook.id, hookType: type },
+        { preserveToolResult: true, signal },
       );
       if (!payload || signal?.aborted) return { status: 'cancelled' };
       const response = await executeToolCallWebhook(hook.webhook, payload, { signal });
@@ -173,7 +208,7 @@ export class HookDispatcher {
       if (response.status === 'success' && response.decision.decision === 'deny') {
         return {
           status: 'blocked',
-          reason: response.decision.reason ?? 'Blocked by beforeToolCall hook.',
+          reason: response.decision.reason ?? `Blocked by ${type} hook.`,
         };
       }
       if (response.status === 'error') {

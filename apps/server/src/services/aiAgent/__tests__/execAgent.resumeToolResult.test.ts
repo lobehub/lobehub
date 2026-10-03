@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AiAgentService } from '../index';
 
 const {
+  mockControlToolResult,
   mockCreateOperation,
   mockFindById,
   mockFindMessagePlugin,
@@ -17,6 +18,7 @@ const {
   mockUpdatePluginState,
   mockUpdateToolMessage,
 } = vi.hoisted(() => ({
+  mockControlToolResult: vi.fn(),
   mockCreateOperation: vi.fn(),
   mockFindById: vi.fn(),
   mockFindMessagePlugin: vi.fn(),
@@ -125,6 +127,7 @@ vi.mock('@/database/models/userMemory/persona', () => ({
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(function () {
     return {
+      controlCompletedToolResult: mockControlToolResult,
       createOperation: mockCreateOperation,
       ensureInterventionContinuationStarted: vi.fn().mockResolvedValue('scheduled'),
       loadInterventionContinuationState: mockLoadInterventionContinuationState,
@@ -206,6 +209,7 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockControlToolResult.mockImplementation(async ({ result }) => result);
     mockCreateOperation.mockResolvedValue({
       autoStarted: true,
       messageId: 'queue-msg-1',
@@ -223,7 +227,7 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
     mockRestoreHumanApproval.mockResolvedValue(undefined);
     mockUpdateMessagePlugin.mockResolvedValue(undefined);
     mockUpdatePluginState.mockResolvedValue(undefined);
-    mockUpdateToolMessage.mockResolvedValue(undefined);
+    mockUpdateToolMessage.mockResolvedValue({ success: true });
     service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
   });
 
@@ -272,6 +276,78 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
     );
     const call = mockCreateOperation.mock.calls[0][0];
     expect(call.initialContext.phase).not.toBe('human_approved_tool');
+  });
+
+  it('withholds a human tool answer before loading continuation history', async () => {
+    const secret = 'synthetic-private-answer';
+    const blocked = {
+      content: 'Tool result withheld by afterToolCall hook.',
+      error: 'hook_denied',
+      state: {
+        phase: 'afterToolCall',
+        type: 'blocked',
+        reason: 'Tool result withheld by afterToolCall hook.',
+      },
+      success: false,
+    };
+    mockControlToolResult.mockResolvedValue(blocked);
+    mockUpdateToolMessage.mockResolvedValue({ success: true });
+    await service.execAgent({
+      ...baseParams,
+      resumeToolResult: {
+        content: secret,
+        pluginState: { answer: secret },
+        parentMessageId: 'tool-msg-1',
+        toolCallId: 'call_ask',
+      },
+    });
+    expect(mockControlToolResult).toHaveBeenCalledWith({
+      operationId: undefined,
+      toolMessageId: 'tool-msg-1',
+      result: { content: secret, state: { answer: secret }, success: true },
+    });
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: blocked.content,
+        pluginState: blocked.state,
+        replacePluginState: true,
+      }),
+    ]);
+    expect(mockUpdateToolMessage).toHaveBeenCalledWith(
+      'tool-msg-1',
+      expect.objectContaining({
+        content: blocked.content,
+        pluginError: 'hook_denied',
+        replacePluginState: true,
+      }),
+    );
+    expect(mockUpdateToolMessage.mock.invocationCallOrder[0]).toBeLessThan(
+      mockMessageQuery.mock.invocationCallOrder[0],
+    );
+    expect(JSON.stringify(mockCreateOperation.mock.calls[0][0].initialContext)).not.toContain(
+      secret,
+    );
+  });
+
+  it('does not start a continuation when withholding the persisted answer fails', async () => {
+    mockControlToolResult.mockResolvedValue({
+      content: 'withheld',
+      state: { phase: 'afterToolCall', type: 'blocked' },
+      success: false,
+    });
+    mockUpdateToolMessage.mockResolvedValue({ success: false });
+    await expect(
+      service.execAgent({
+        ...baseParams,
+        resumeToolResult: {
+          content: 'private answer',
+          parentMessageId: 'tool-msg-1',
+          toolCallId: 'call_ask',
+        },
+      }),
+    ).rejects.toThrow('Failed to persist reviewed tool result');
+    expect(mockCreateOperation).not.toHaveBeenCalled();
+    expect(mockMessageQuery).not.toHaveBeenCalled();
   });
 
   it('persists pluginState when provided', async () => {

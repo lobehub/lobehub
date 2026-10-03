@@ -55,6 +55,8 @@ vi.mock('@/server/services/file', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
     return {
+      findById: vi.fn().mockResolvedValue(undefined),
+      findMessagePlugin: vi.fn().mockResolvedValue(undefined),
       query: vi.fn().mockResolvedValue([]),
     };
   }),
@@ -3299,6 +3301,9 @@ describe('AgentRuntimeService', () => {
     let resumeSpy: MockInstance<AgentRuntimeService['tryResumeParentFromAsyncTool']>;
 
     beforeEach(() => {
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        metadata: { _hooks: [] },
+      });
       updateToolMessage = vi.fn().mockResolvedValue({ success: true });
       (service as any).messageModel.updateToolMessage = updateToolMessage;
       resumeSpy = vi.spyOn(service, 'tryResumeParentFromAsyncTool').mockResolvedValue(true);
@@ -3628,6 +3633,9 @@ describe('AgentRuntimeService', () => {
     let resumeSpy: MockInstance<AgentRuntimeService['tryResumeParentFromAsyncTool']>;
 
     beforeEach(() => {
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        metadata: { _hooks: [] },
+      });
       updateToolMessage = vi.fn().mockResolvedValue({ success: true });
       (service as any).messageModel.updateToolMessage = updateToolMessage;
       resumeSpy = vi.spyOn(service, 'tryResumeParentFromAsyncTool').mockResolvedValue(true);
@@ -3641,6 +3649,8 @@ describe('AgentRuntimeService', () => {
 
       expect(won).toBe(true);
       expect(updateToolMessage).toHaveBeenCalledWith('tool-msg-1', {
+        preserveBlockedResult: true,
+        releaseToolResultReview: true,
         content: 'final answer',
         pluginError: undefined,
         pluginState: {
@@ -3655,6 +3665,80 @@ describe('AgentRuntimeService', () => {
         { parentOperationId: 'parent-op-1' },
         { knownFulfilledMessageId: 'tool-msg-1', scheduleVerifyOnHold: true },
       );
+    });
+
+    it('gates deferred output before backfill and parent resume, including callback replay', async () => {
+      const privateContent = 'synthetic-private-child-answer';
+      const stored = {
+        id: 'tool-msg-1',
+        identifier: 'lobe-agent',
+        apiName: 'callSubAgent',
+        arguments: '{"instruction":"original"}',
+        toolCallId: 'native-child',
+        state: {},
+      };
+      (service as any).messageModel.findMessagePlugin = vi.fn(async () => stored);
+      (service as any).messageModel.findById = vi
+        .fn()
+        .mockResolvedValue({ id: 'tool-msg-1', parentId: 'assistant' });
+      const fetchHook = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(
+          async () => new Response(JSON.stringify({ decision: 'deny', reason: privateContent })),
+        );
+      const hooks = [
+        {
+          id: 'after-control',
+          type: 'afterToolCall',
+          webhook: { url: 'https://hooks.example/control', responseHandling: 'toolCall' },
+        },
+      ];
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        operationId: 'parent-op-1',
+        stepCount: 3,
+        host: { hooks },
+      });
+      updateToolMessage.mockImplementation(async (_id, value) => {
+        stored.state = value.pluginState;
+        return { success: true };
+      });
+      try {
+        await service.completeSubAgentBridge({
+          ...bridgeParams,
+          finalState: {
+            ...childState,
+            messages: [{ role: 'assistant', content: privateContent }],
+          } as any,
+        });
+        expect(JSON.parse(String(fetchHook.mock.calls[0][1]?.body))).toMatchObject({
+          args: { instruction: 'original' },
+          toolCallId: 'native-child',
+          result: { content: expect.stringContaining(privateContent) },
+        });
+        expect(JSON.stringify(updateToolMessage.mock.calls)).not.toContain(privateContent);
+        expect(updateToolMessage).toHaveBeenCalledWith(
+          'tool-msg-1',
+          expect.objectContaining({
+            content: 'Tool result withheld by afterToolCall hook.',
+            replacePluginState: true,
+            preserveBlockedResult: true,
+          }),
+        );
+        expect(resumeSpy).toHaveBeenCalledTimes(1);
+        // A duplicate callback cannot restore the raw child answer after configuration removal.
+        mockCoordinator.loadAgentState.mockResolvedValue(null);
+        await service.completeSubAgentBridge({
+          ...bridgeParams,
+          finalState: {
+            ...childState,
+            messages: [{ role: 'assistant', content: privateContent }],
+          } as any,
+        });
+        expect(fetchHook).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(updateToolMessage.mock.calls)).not.toContain(privateContent);
+      } finally {
+        fetchHook.mockRestore();
+      }
     });
 
     it('ends a callSubAgent result with the sub-agent id so the parent can continue it', async () => {

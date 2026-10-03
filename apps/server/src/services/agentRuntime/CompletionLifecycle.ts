@@ -241,7 +241,11 @@ export class CompletionLifecycle {
       await this.agentOperationModel.recordStart(params);
     } catch (error) {
       persisted = false;
-      log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
+      // Hook configuration may contain inline authorization headers. Never log
+      // a database error that could repeat its bound metadata parameters.
+      if (params.metadata?._hooks)
+        log('[%s] Failed to record operation start (non-fatal)', params.operationId);
+      else log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
     }
 
     // Auto-instantiate the task's verify plan at run start so the completion gate

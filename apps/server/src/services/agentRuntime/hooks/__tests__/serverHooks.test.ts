@@ -135,6 +135,32 @@ describe('environment hooks through real HTTP transport', () => {
     },
   );
 
+  it.each(['toolResult', 'toolCallAndResult'])(
+    'opts into afterToolCall controls with %s without persisting server secrets',
+    async (mode) => {
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', mode);
+      vi.stubEnv(
+        'AGENT_HOOK_WEBHOOK_EVENTS',
+        mode === 'toolResult' ? 'afterToolCall' : 'beforeToolCall,afterToolCall',
+      );
+      response = { decision: 'deny' };
+      const dispatcher = new HookDispatcher();
+      dispatcher.register(event.operationId, []);
+      expect(dispatcher.getSerializedHooks(event.operationId)).toEqual([]);
+      const after = { ...event, mocked: false, result: { content: 'full result', success: true } };
+      expect(await dispatcher.evaluateAfterToolCall(event.operationId, after)).toMatchObject({
+        status: 'blocked',
+      });
+      await dispatcher.dispatch(event.operationId, 'afterToolCall', after);
+      expect(requests).toHaveLength(1);
+      expect(requests[0].body).toMatchObject({ hookType: 'afterToolCall', result: after.result });
+      expect(await dispatcher.evaluateToolCall(event.operationId, event)).toMatchObject({
+        status: mode === 'toolCallAndResult' ? 'blocked' : 'allow',
+      });
+      expect(requests).toHaveLength(mode === 'toolCallAndResult' ? 2 : 1);
+    },
+  );
+
   it('preserves caller handlers and internal callbacks and prevents same-ID replacement', async () => {
     const dispatcher = new HookDispatcher();
     const handler = vi.fn();

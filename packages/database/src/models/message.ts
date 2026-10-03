@@ -103,6 +103,7 @@ import { inJsonStringArray } from '../utils/inJsonStringArray';
 import { documentOriginalCharCount } from '../utils/originalCharCount';
 import { searchableMessage } from '../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopicRef } from '../utils/shareVisitor';
+import { preserveToolResultControl, projectToolResultControl } from '../utils/toolResultControl';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 import { WorkModel } from './work';
@@ -1503,12 +1504,14 @@ export class MessageModel {
     ]);
 
     return {
-      items: items.map(({ tools, ...message }) => ({
-        ...message,
-        error: message.error as ChatMessageError | null,
-        metadata: message.metadata as MessageMetadata | null,
-        tools: Array.isArray(tools) ? (tools as ChatToolPayload[]) : null,
-      })),
+      items: items.map(({ tools, ...message }) =>
+        projectToolResultControl({
+          ...message,
+          error: message.error as ChatMessageError | null,
+          metadata: message.metadata as MessageMetadata | null,
+          tools: Array.isArray(tools) ? (tools as ChatToolPayload[]) : null,
+        }),
+      ),
       total: totalResult[0]?.count ?? 0,
     };
   };
@@ -1886,7 +1889,7 @@ export class MessageModel {
       stageMs: getDurationMs(totalStartedAt),
     });
 
-    return allItems;
+    return allItems.map(projectToolResultControl);
   };
 
   /**
@@ -2690,7 +2693,7 @@ export class MessageModel {
         ...item
       }) => {
         const messageQuery = messageQueriesList.find((relation) => relation.messageId === item.id);
-        return {
+        return projectToolResultControl({
           ...item,
           // Same presence contract as queryWithWhere: collapse a null-id sender
           // (deleted account) to `null` so clients can rely on `sender?.id`.
@@ -2755,7 +2758,7 @@ export class MessageModel {
           audioList: audioList
             .filter((relation) => relation.messageId === item.id)
             .map<ChatAudioItem>(materializeChatAudioItem),
-        } as unknown as UIChatMessage;
+        } as unknown as UIChatMessage);
       },
     );
   };
@@ -3179,7 +3182,7 @@ export class MessageModel {
       )
       .orderBy(asc(messages.createdAt));
 
-    return result as DBMessageItem[];
+    return result.map(projectToolResultControl) as DBMessageItem[];
   };
 
   findMessageQueriesById = async (messageId: string) => {
@@ -3224,7 +3227,7 @@ export class MessageModel {
       .limit(pageSize)
       .offset(offset);
 
-    return result as (DBMessageItem & {
+    return result.map(projectToolResultControl) as (DBMessageItem & {
       agentName: string | null;
       agentTitle: string | null;
     })[];
@@ -3242,7 +3245,7 @@ export class MessageModel {
       .where(and(this.ownership(), this.matchSession(sessionId), notShareVisitorMessage()))
       .orderBy(asc(messages.createdAt));
 
-    return result as DBMessageItem[];
+    return result.map(projectToolResultControl) as DBMessageItem[];
   };
 
   queryByKeyword = async (keyword: string) => {
@@ -3273,7 +3276,7 @@ export class MessageModel {
       )
       .orderBy(desc(messages.createdAt));
 
-    return result as DBMessageItem[];
+    return result.map(projectToolResultControl) as DBMessageItem[];
   };
 
   /**
@@ -4000,7 +4003,9 @@ export class MessageModel {
                   .update(messages)
                   .set({
                     ...message,
-                    ...(metadataToWrite && { metadata: metadataToWrite }),
+                    ...(metadataToWrite && {
+                      metadata: preserveToolResultControl(messages.metadata, metadataToWrite),
+                    }),
                     ...(usageToWrite && { usage: usageToWrite }),
                   })
                   .where(and(eq(messages.id, id), this.ownership()))
@@ -4057,8 +4062,26 @@ export class MessageModel {
 
     return this.db
       .update(messages)
-      .set({ metadata: mergedMetadata, ...(usageToWrite && { usage: usageToWrite }) })
+      .set({
+        metadata: preserveToolResultControl(messages.metadata, mergedMetadata),
+        ...(usageToWrite && { usage: usageToWrite }),
+      })
       .where(and(eq(messages.id, id), this.ownership()));
+  };
+
+  /** Runtime-only initialization/rebinding; never exposed by message update APIs. */
+  updateToolResultReview = async (
+    id: string,
+    review: NonNullable<MessageMetadata['toolResultControl']>,
+  ): Promise<void> => {
+    const [updated] = await this.db
+      .update(messages)
+      .set({
+        metadata: sql`coalesce(${messages.metadata}, '{}'::jsonb) || jsonb_build_object('toolResultControl', ${JSON.stringify(review)}::jsonb)`,
+      })
+      .where(and(eq(messages.id, id), this.ownership()))
+      .returning({ id: messages.id });
+    if (!updated) throw new Error('Cannot persist pending tool result review');
   };
 
   updatePluginState = async (id: string, state: Record<string, any>): Promise<void> => {
@@ -4199,7 +4222,10 @@ export class MessageModel {
         if (resolution.content !== undefined) {
           const [updatedMessage] = await trx
             .update(messages)
-            .set({ content: resolution.content })
+            .set({
+              content: resolution.content,
+              metadata: sql`case when coalesce(${messages.metadata}, '{}'::jsonb) ? 'toolResultControl' then jsonb_set(${messages.metadata}, '{toolResultControl,status}', '"pending"'::jsonb) else ${messages.metadata} end`,
+            })
             .where(and(eq(messages.id, resolution.id), this.ownership()))
             .returning({ id: messages.id });
           if (!updatedMessage) throw new Error(`Message not found: ${resolution.id}`);
@@ -4579,9 +4605,22 @@ export class MessageModel {
       metadata?: Record<string, any>;
       pluginError?: any;
       pluginState?: Record<string, any>;
+      /** Replace rather than merge when withholding a complete tool result. */
+      replacePluginState?: boolean;
+      /** Completion replay may not overwrite an already withheld result. */
+      preserveBlockedResult?: boolean;
+      /** Only runtime-owned completions may release a pending review marker. */
+      releaseToolResultReview?: boolean;
     },
   ): Promise<{ applied: boolean; snapshotSeq?: number; success: boolean }> => {
-    const { content, heterogeneousToolState, metadata, pluginState, pluginError } = params;
+    const {
+      content,
+      heterogeneousToolState,
+      metadata,
+      pluginState,
+      pluginError,
+      replacePluginState,
+    } = params;
 
     // `undefined` while no branch has looked for the row yet; see `update` above
     // for why a write that matches nothing must not report success.
@@ -4591,9 +4630,31 @@ export class MessageModel {
 
     try {
       await this.db.transaction(async (trx) => {
+        if (params.preserveBlockedResult) {
+          const [plugin] = await trx
+            .select({ state: messagePlugins.state })
+            .from(messagePlugins)
+            .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
+            .for('update');
+          if (
+            isPlainRecord(plugin?.state) &&
+            plugin.state.type === 'blocked' &&
+            plugin.state.phase === 'afterToolCall' &&
+            !(pluginState?.type === 'blocked' && pluginState.phase === 'afterToolCall')
+          ) {
+            matchedRow = true;
+            applied = false;
+            return;
+          }
+        }
+
         let existingMetadata: Record<string, any> | undefined;
 
-        if (metadata !== undefined || heterogeneousToolState !== undefined) {
+        if (
+          metadata !== undefined ||
+          heterogeneousToolState !== undefined ||
+          params.releaseToolResultReview
+        ) {
           const baseQuery = trx
             .select({ metadata: messages.metadata })
             .from(messages)
@@ -4631,6 +4692,7 @@ export class MessageModel {
         // Update messages table (content, metadata)
         if (
           content !== undefined ||
+          params.releaseToolResultReview ||
           metadata !== undefined ||
           heterogeneousToolState !== undefined
         ) {
@@ -4640,14 +4702,33 @@ export class MessageModel {
             messageUpdateData.content = content;
           }
 
-          if (metadata !== undefined || heterogeneousToolState !== undefined) {
+          if (
+            metadata !== undefined ||
+            heterogeneousToolState !== undefined ||
+            params.releaseToolResultReview
+          ) {
             const mergedMetadata = merge(existingMetadata || {}, metadata || {});
+            if (params.releaseToolResultReview && mergedMetadata.toolResultControl) {
+              mergedMetadata.toolResultControl = {
+                ...mergedMetadata.toolResultControl,
+                status:
+                  pluginState?.phase === 'afterToolCall' && pluginState.type === 'blocked'
+                    ? 'blocked'
+                    : 'allowed',
+              };
+            }
             messageUpdateData.metadata = heterogeneousToolState
               ? merge(mergedMetadata, {
                   heterogeneousToolStateOperationId: heterogeneousToolState.operationId,
                   heterogeneousToolStateSeq: heterogeneousToolState.snapshotSeq,
                 })
               : mergedMetadata;
+            if (!params.releaseToolResultReview) {
+              messageUpdateData.metadata = preserveToolResultControl(
+                messages.metadata,
+                messageUpdateData.metadata,
+              );
+            }
           }
 
           if (Object.keys(messageUpdateData).length > 0) {
@@ -4669,9 +4750,10 @@ export class MessageModel {
             // Snapshot writes replace the whole runtime state. Ordinary patches
             // own complete top-level keys and merge inside the UPDATE so an
             // answer write cannot race away an intervention-terminal write.
-            pluginUpdateData.state = heterogeneousToolState
-              ? pluginState
-              : sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify(pluginState)}::jsonb`;
+            pluginUpdateData.state =
+              heterogeneousToolState || replacePluginState
+                ? pluginState
+                : sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify(pluginState)}::jsonb`;
           }
 
           if (pluginError !== undefined) {
@@ -5097,7 +5179,7 @@ export class MessageModel {
 
       await tx
         .update(messages)
-        .set({ metadata })
+        .set({ metadata: preserveToolResultControl(messages.metadata, metadata) })
         .where(and(eq(messages.id, snapshot.parentId), this.ownership()));
     }
   };

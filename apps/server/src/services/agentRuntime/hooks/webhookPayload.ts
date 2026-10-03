@@ -64,7 +64,7 @@ export const createWebhookPayloadBuilder = () => {
     event: T,
     webhook: Pick<AgentHookWebhook, 'body' | 'eventFields'>,
     metadata: { hookId: string; hookType: AgentHookType },
-    options: { signal?: AbortSignal } = {},
+    options: { preserveToolResult?: boolean; signal?: AbortSignal } = {},
   ): Promise<AgentHookWebhookPayload | undefined> => {
     const { signal } = options;
     if (signal?.aborted) return undefined;
@@ -76,7 +76,8 @@ export const createWebhookPayloadBuilder = () => {
       }
     }
     const payload: AgentHookWebhookPayload = { ...selected, ...metadata, ...body };
-    if (metadata.hookType === 'afterToolCall' && payload.result) {
+    // Controls inspect the complete result; observation payloads retain their legacy redaction.
+    if (metadata.hookType === 'afterToolCall' && payload.result && !options.preserveToolResult) {
       payload.result = redactResultForEvents(payload.result as ToolRunResult);
     }
     delete payload.finalState;

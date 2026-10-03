@@ -19,7 +19,13 @@ import {
 import type { ChatToolPayload } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { isDeviceCapablePlan, isLocalSandboxEnabled } from '@/helpers/executionTarget';
+import {
+  controlDeferredToolResult,
+  loadDurableToolResultHooks,
+} from '@/server/services/agentRuntime/hooks/deferredToolResultControl';
+import { controlToolResult } from '@/server/services/agentRuntime/hooks/toolResultControl';
 import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceToolAudit';
 import {
   isDeviceToolIdentifier,
@@ -336,17 +342,78 @@ export class ServerToolTransport implements ToolTransport {
         ...execution.result,
         executionTime: execution.result.executionTime ?? 0,
       };
-      const executionResult = await archiveRuntimeToolResult(resultWithExecutionTime, {
-        agentId: context.state.origin?.agentId,
-        canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
-        identifier: chatToolPayload.identifier,
-        limit: context.toolResultMaxLength,
-        serverDB,
-        toolCallId: chatToolPayload.id,
-        topicId: this.ctx.topicId ?? context.state.origin?.topicId,
-        userId,
-        workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
-      });
+      // Evaluate the full result before truncation/archive creation. A denied
+      // archive must not remain retrievable by the model on a later tool call.
+      const existingReview = context.toolMessageId
+        ? (await this.ctx.messageModel.findById(context.toolMessageId))?.metadata?.toolResultControl
+        : undefined;
+      let originalControl: Awaited<ReturnType<typeof controlDeferredToolResult>> | undefined;
+      if (existingReview && context.toolMessageId) {
+        if (!this.ctx.hookDispatcher || !this.ctx.userId) {
+          throw new Error(
+            'Cannot review a resumed tool result without its runtime owner and dispatcher',
+          );
+        }
+        originalControl = await controlDeferredToolResult(
+          {
+            dispatcher: this.ctx.hookDispatcher,
+            loadState: (operationId) =>
+              operationId === this.ctx.operationId
+                ? Promise.resolve(context.state)
+                : (this.ctx.loadAgentState?.(operationId) ?? Promise.resolve(null)),
+            loadDurableHooks: (operationId) =>
+              loadDurableToolResultHooks(
+                new AgentOperationModel(this.ctx.serverDB, this.ctx.userId!, this.ctx.workspaceId),
+                operationId,
+              ),
+            messageModel: this.ctx.messageModel,
+            userId: this.ctx.userId,
+            workspaceId: this.ctx.workspaceId,
+          },
+          {
+            operationId: existingReview.operationId,
+            toolMessageId: context.toolMessageId,
+            result: resultWithExecutionTime,
+            signal: context.abortSignal,
+          },
+        );
+      }
+      // Approval continuations need not inherit caller hooks. Keep the original
+      // gate; any new run controls can only narrow its decision. Never infer
+      // a control decision from the untrusted tool's result.state fields.
+      const controlled =
+        originalControl &&
+        (originalControl.blocked || existingReview?.operationId === this.ctx.operationId)
+          ? originalControl
+          : await controlToolResult(
+              this.ctx.hookDispatcher,
+              {
+                ...buildToolCallHookContext(chatToolPayload, context, this.ctx),
+                mocked: toolCallMocked || !!execution.mocked,
+                result: originalControl?.result ?? resultWithExecutionTime,
+              },
+              context.state.host?.hooks,
+              context.abortSignal,
+            );
+      if (controlled.cancelled) {
+        return { ...execution, interrupted: true, result: controlled.result };
+      }
+      const executionResult = controlled.blocked
+        ? controlled.result
+        : await archiveRuntimeToolResult(
+            { ...controlled.result, executionTime: controlled.result.executionTime ?? 0 },
+            {
+              agentId: context.state.origin?.agentId,
+              canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
+              identifier: chatToolPayload.identifier,
+              limit: context.toolResultMaxLength,
+              serverDB,
+              toolCallId: chatToolPayload.id,
+              topicId: this.ctx.topicId ?? context.state.origin?.topicId,
+              userId,
+              workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
+            },
+          );
 
       await this.dispatchAfterToolCall(chatToolPayload, context, executionResult, toolCallMocked);
 
