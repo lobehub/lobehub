@@ -136,9 +136,11 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         }
       />
       <WideScreenContainer
+        fullWidth
         flex={1}
         gap={16}
         paddingBlock={16}
+        paddingInline={16}
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
         {isLoading && data === undefined ? (
