@@ -340,6 +340,30 @@ describe('working directory topic helpers', () => {
     expect(groupTopicsByProject([...topics].reverse(), 'updatedAt')).toEqual(result);
   });
 
+  /** @example A manager with 1,000 same-name projects retains unique labels and exact topic ownership. */
+  it('disambiguates a large project list without changing membership', () => {
+    // ROOT CAUSE:
+    //
+    // Each label previously split every other project's path, making the growing
+    // manager list quadratic. Shared suffix counts remove that repeated work;
+    // this case protects the resulting labels and membership at the reported scale.
+    const topics = Array.from({ length: 1000 }, (_, index) =>
+      createTopic(String(index), { workingDirectory: `/private/parent-${index}/repo` }, index),
+    );
+    const result = groupTopicsByProject(topics, 'updatedAt');
+
+    /** @example All 1,000 independently owned projects remain visible and distinguishable. */
+    expect(new Set(result.map(({ title }) => title)).size).toBe(1000);
+    /** @example Each label reveals only its distinguishing parent and keeps the original ID and child. */
+    expect(result).toEqual(
+      [...topics].reverse().map((topic) => ({
+        children: [topic],
+        id: `project:/private/parent-${topic.id}/repo`,
+        title: `parent-${topic.id}/repo`,
+      })),
+    );
+  });
+
   /** @example A lone checkout keeps its basename even after a collision disappears. */
   it('keeps a unique project name compact', () => {
     const topics = [createTopic('single', { workingDirectory: '/Users/me/Git/lobehub/lobehub' })];

@@ -129,16 +129,15 @@ const PROJECT_GROUP_PREFIX = 'project:';
  */
 // Extract the final path segment as display name; supports POSIX and Windows separators.
 // Expand only colliding names so unrelated private ancestors stay out of the sidebar.
-const getProjectName = (dir: string, projectPaths: string[]): string => {
-  const segments = dir.split(/[/\\]+/).filter(Boolean);
-  const otherSegments = projectPaths
-    .filter((path) => path !== dir)
-    .map((path) => path.split(/[/\\]+/).filter(Boolean));
-
+const getProjectName = (
+  dir: string,
+  segments: string[],
+  suffixCounts: Map<string, number>,
+): string => {
   // The first unique suffix reveals only as much of the path as needed.
   for (let depth = 1; depth <= segments.length; depth++) {
     const name = segments.slice(-depth).join('/');
-    if (otherSegments.every((other) => other.slice(-depth).join('/') !== name)) return name;
+    if (suffixCounts.get(name) === 1) return name;
   }
 
   // Preserve absolute/relative and separator distinctions when all segments match.
@@ -199,7 +198,7 @@ export const groupTopicsByProject = (
 ): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const groupsMap = new Map<string, { children: ChatTopic[]; path: string }>();
+  const groupsMap = new Map<string, { children: ChatTopic[]; path: string; segments: string[] }>();
 
   for (const topic of topics) {
     const normalized = getTopicWorkingDirectorySourcePath(topic) ?? '';
@@ -208,7 +207,12 @@ export const groupTopicsByProject = (
     if (existing) {
       existing.children.push(topic);
     } else {
-      groupsMap.set(id, { children: [topic], path: normalized });
+      // Parse each source path once; display labels never change its grouping identity.
+      groupsMap.set(id, {
+        children: [topic],
+        path: normalized,
+        segments: normalized.split(/[/\\]+/).filter(Boolean),
+      });
     }
   }
 
@@ -217,12 +221,19 @@ export const groupTopicsByProject = (
     group.children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
   }
 
-  const projectPaths = Array.from(groupsMap.values(), ({ path }) => path);
+  // Count suffixes once so an expanding project list does not compare every pair of paths.
+  const suffixCounts = new Map<string, number>();
+  for (const { segments } of groupsMap.values()) {
+    for (let depth = 1; depth <= segments.length; depth++) {
+      const suffix = segments.slice(-depth).join('/');
+      suffixCounts.set(suffix, (suffixCounts.get(suffix) ?? 0) + 1);
+    }
+  }
   const groups: GroupedTopic[] = Array.from(groupsMap.entries()).map(
-    ([id, { children, path }]) => ({
+    ([id, { children, path, segments }]) => ({
       children,
       id,
-      title: id === NO_PROJECT_GROUP_ID ? undefined : getProjectName(path, projectPaths),
+      title: id === NO_PROJECT_GROUP_ID ? undefined : getProjectName(path, segments, suffixCounts),
     }),
   );
 
