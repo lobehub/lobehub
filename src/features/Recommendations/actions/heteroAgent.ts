@@ -4,6 +4,7 @@ import {
 } from '@lobechat/heterogeneous-agents/client';
 import {
   Amp,
+  Antigravity,
   ClaudeCode,
   CodeBuddy,
   Codex,
@@ -21,6 +22,7 @@ import { createElement } from 'react';
 import type { RecommendedAction } from './types';
 
 const avatarIcons = {
+  'antigravity': Antigravity.Avatar,
   'amp': Amp.Avatar,
   'claude-code': ClaudeCode.Avatar,
   'codebuddy': CodeBuddy.Avatar,

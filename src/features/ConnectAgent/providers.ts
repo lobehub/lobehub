@@ -13,6 +13,7 @@ import {
 } from '@lobechat/heterogeneous-agents/client';
 import {
   Amp,
+  Antigravity,
   ClaudeCode,
   CodeBuddy,
   Codex,
@@ -39,6 +40,7 @@ export interface ConnectableProvider {
   /** Compound brand icon module — render via `icon.Avatar`. */
   brand:
     | typeof Amp
+    | typeof Antigravity
     | typeof ClaudeCode
     | typeof CodeBuddy
     | typeof Codex
@@ -74,6 +76,7 @@ interface BuildConnectAgentConfigOptions {
 }
 
 const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand']> = {
+  'antigravity': Antigravity,
   'amp': Amp,
   'claude-code': ClaudeCode,
   'codebuddy': CodeBuddy,

@@ -67,7 +67,7 @@ interface RecoveredProbeEnvironment {
   resolvedPathEnv: string;
 }
 
-const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?)/;
+const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:-[\dA-Za-z.-]+)?(?:\+[\dA-Za-z.-]+)?)/;
 
 const extractVersion = (versionBanner: string): string | undefined =>
   versionBanner.match(VERSION_PATTERN)?.[1];
@@ -665,6 +665,11 @@ export const detectValidatedCommand = async (
 ): Promise<CliCommandStatus> => detectValidatedCommandCandidates([command], options, probeEnv);
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
+  'antigravity': {
+    validateHelpKeywords: ['--input-format', '--output-format', '--conversation', 'stream-json'],
+    validatePattern:
+      /^(?:(?:agy|antigravity(?: cli)?) (?:version )?)?v?\d+\.\d+\.\d+(?:-[\dA-Z.-]+)?(?:\+[\dA-Z.-]+)?$/i,
+  },
   'amp': {
     validateFlag: '--help',
     validateKeywords: ['Amp CLI'],
@@ -740,6 +745,14 @@ export const DEFAULT_HETERO_COMMAND = Object.fromEntries(
 // desktop app bundles a functional CLI inside its app bundle without symlinking it.
 const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[] => {
   switch (agentType) {
+    case 'antigravity': {
+      if (platform() === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA;
+        return localAppData ? [path.win32.join(localAppData, 'agy', 'bin', 'agy.exe')] : [];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [path.join(homedir(), '.local', 'bin', 'agy')];
+    }
     case 'amp': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
 

@@ -9,6 +9,7 @@ import { spawnManaged } from '@lobechat/utils/managedProcess';
 import type { AskUserBridge } from '../askUser/AskUserBridge';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { buildAntigravityArgs } from './antigravity';
 import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import { buildCursorAcpPrompt, CursorAcpSession } from './cursorAcpSession';
@@ -330,6 +331,9 @@ export const buildQoderArgs = ({
 
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {
+    case 'antigravity': {
+      return buildAntigravityArgs(params);
+    }
     case 'amp': {
       return buildAmpArgs(params);
     }

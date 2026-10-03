@@ -1,4 +1,5 @@
 export default {
+  'settingSystemTools.tools.antigravity.desc': 'Antigravity CLI - Google agentic coding CLI',
   'devices.keepAwake.desc':
     'Prevent automatic sleep while this computer is connected as a device, so it stays reachable. The display can still turn off; closing a laptop lid without an external display still puts it to sleep.',
   'devices.keepAwake.title': 'Keep Awake While Connected',
