@@ -165,7 +165,19 @@ export class RelayModelRuntime implements Pick<ModelRuntime, 'chat' | 'handleCha
       stepIndex: params.stepIndex,
     };
 
-    await params.streamManager.publishStreamEvent(params.operationId, {
+    const { streamManager } = params;
+    if (streamManager.sendLlmExecute) {
+      const { delivered, routed } = await streamManager.sendLlmExecute(params.operationId, data);
+      log(
+        '[%s] llm_execute dispatched (routed=%s, delivered=%s)',
+        params.callId,
+        routed,
+        delivered,
+      );
+      return;
+    }
+
+    await streamManager.publishStreamEvent(params.operationId, {
       data,
       stepIndex: params.stepIndex,
       type: 'llm_execute',
@@ -312,7 +324,15 @@ export class RelayModelRuntime implements Pick<ModelRuntime, 'chat' | 'handleCha
         this.deadlines.totalMs + LLM_RELAY_KEY_GRACE_MS,
       );
       const data: LlmCancelData = { callId, reason };
-      await streamManager.publishStreamEvent(operationId, { data, stepIndex, type: 'llm_cancel' });
+      if (streamManager.sendLlmCancel) {
+        await streamManager.sendLlmCancel(operationId, { ...data, stepIndex });
+      } else {
+        await streamManager.publishStreamEvent(operationId, {
+          data,
+          stepIndex,
+          type: 'llm_cancel',
+        });
+      }
     } catch (error) {
       log('[%s] failed to cancel the relayed attempt: %O', callId, error);
     }
@@ -320,7 +340,7 @@ export class RelayModelRuntime implements Pick<ModelRuntime, 'chat' | 'handleCha
 
   /** Close the call: late uploads find no open call and get `410`. */
   private async cleanup(reader?: RelayBatchReader) {
-    const { callId, redis } = this.params;
+    const { callId, operationId, redis, streamManager } = this.params;
     try {
       await redis
         .multi()
@@ -331,6 +351,8 @@ export class RelayModelRuntime implements Pick<ModelRuntime, 'chat' | 'handleCha
       log('[%s] failed to clean up relay keys: %O', callId, error);
     }
     reader?.close();
+    // Stop the gateway replaying the attempt to clients that subscribe later.
+    await streamManager.closeLlmCall?.(operationId, callId);
   }
 
   private createDiagnostics(options: ChatMethodOptions): ProviderResponseDiagnostics {

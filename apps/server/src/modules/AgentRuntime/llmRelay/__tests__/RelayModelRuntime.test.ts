@@ -365,6 +365,88 @@ describe('RelayModelRuntime + llm-relay handlers', () => {
   });
 });
 
+describe('RelayModelRuntime over a gateway with relay routes', () => {
+  beforeEach(() => {
+    vi.stubEnv('KEY_VAULTS_SECRET', 'test-secret');
+    redis = new FakeRedis();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /** A gateway notifier: `llm_execute` / `llm_cancel` go through their own routes. */
+  const createGatewayManager = () => {
+    const executes: LlmExecuteData[] = [];
+    const manager = {
+      closeLlmCall: vi.fn(async () => {}),
+      publishStreamEvent: vi.fn(async () => 'event-id'),
+      sendLlmCancel: vi.fn(async () => {}),
+      sendLlmExecute: vi.fn(async (_operationId: string, data: LlmExecuteData) => {
+        executes.push(data);
+        return { delivered: 1, routed: true };
+      }),
+    };
+    return { executes, manager };
+  };
+
+  it('dispatches through the routed path and closes the call when the attempt is done', async () => {
+    const { executes, manager } = createGatewayManager();
+    const done = createRuntime(manager)
+      .chat(payload, {})
+      .then((response) => consumeStreamUntilDone(response));
+
+    await vi.waitFor(() => expect(executes).toHaveLength(1));
+    expect(manager.sendLlmExecute).toHaveBeenCalledWith(
+      'op_1',
+      expect.objectContaining({ callId: CALL_ID, preferredClientId: 'tab-a', stepIndex: 0 }),
+    );
+    // Nothing goes out as a broadcast stream event.
+    expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+
+    await post(executes[0].leaseToken, {
+      chunks: [{ data: 'Hi', type: 'text' }],
+      clientId: 'tab-a',
+      final: { reason: 'done' },
+      seq: 1,
+    });
+    await done;
+
+    expect(manager.closeLlmCall).toHaveBeenCalledWith('op_1', CALL_ID);
+    expect(manager.sendLlmCancel).not.toHaveBeenCalled();
+  });
+
+  it('cancels through the routed path on stop, then closes the call', async () => {
+    const { executes, manager } = createGatewayManager();
+    const controller = new AbortController();
+    const response = await createRuntime(manager).chat(payload, { signal: controller.signal });
+    const consumed = consumeStreamUntilDone(response);
+    await vi.waitFor(() => expect(executes).toHaveLength(1));
+    await post(executes[0].leaseToken, { chunks: [], clientId: 'tab-a', seq: 1 });
+
+    controller.abort();
+
+    await expect(consumed).rejects.toMatchObject({ name: 'AbortError' });
+    expect(manager.sendLlmCancel).toHaveBeenCalledWith('op_1', {
+      callId: CALL_ID,
+      reason: 'interrupted',
+      stepIndex: 0,
+    });
+    expect(manager.closeLlmCall).toHaveBeenCalledWith('op_1', CALL_ID);
+    expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+  });
+
+  it('fails as ClientLlmExecutorUnavailable when the gateway refuses the dispatch', async () => {
+    const { manager } = createGatewayManager();
+    manager.sendLlmExecute.mockRejectedValueOnce(new Error('Gateway returned 409'));
+
+    await expect(createRuntime(manager).chat(payload, {})).rejects.toMatchObject({
+      errorType: AgentRuntimeErrorType.ClientLlmExecutorUnavailable,
+    });
+    expect(redis.peek(llmRelayKeys.payload(CALL_ID))).toBeUndefined();
+  });
+});
+
 describe('llm-relay upload handler', () => {
   beforeEach(() => {
     vi.stubEnv('KEY_VAULTS_SECRET', 'test-secret');

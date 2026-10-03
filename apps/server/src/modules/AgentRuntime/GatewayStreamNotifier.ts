@@ -1,4 +1,8 @@
-import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
+import type {
+  LlmCancelData,
+  LlmExecuteData,
+  ToolExecuteData,
+} from '@lobechat/agent-gateway-client';
 import { projectToolEndResult } from '@lobechat/tool-view-model';
 import type { ChatMessageError } from '@lobechat/types';
 import debug from 'debug';
@@ -21,7 +25,11 @@ import {
   type StreamChunkData,
   type StreamEvent,
 } from './StreamEventManager';
-import type { IStreamEventManager, PublishAgentRuntimeEndParams } from './types';
+import type {
+  IStreamEventManager,
+  LlmExecuteDispatchResult,
+  PublishAgentRuntimeEndParams,
+} from './types';
 
 const log = debug('lobe-server:agent-runtime:gateway-notifier');
 
@@ -169,6 +177,12 @@ export interface GatewayStreamNotifierOptions {
 
 export class GatewayStreamNotifier implements IStreamEventManager {
   private inflight = 0;
+
+  /**
+   * The gateway answered 404 for the LLM relay routes (self-hosted Go gateway,
+   * an older Worker deployment): relay events go out as plain stream events.
+   */
+  private llmRelayRoutesMissing = false;
 
   /**
    * Gateway pushes issued for an operation that have not settled yet, and the
@@ -489,6 +503,74 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     await this.httpPostAwait('/api/operations/tool-execute', { data, operationId });
   }
 
+  /**
+   * Hand one relayed LLM attempt to the user's device. The gateway delivers it
+   * to the client that started the run (when connected) and keeps it
+   * replayable until it is cancelled, closed or past its deadline.
+   *
+   * A gateway without the route (the self-hosted Go gateway, an older Worker
+   * deployment) answers 404: the event then goes out as a plain stream event,
+   * which those gateways broadcast to every subscriber — the backend's
+   * per-call lease still keeps a single writer. Rejects on any other failure.
+   */
+  async sendLlmExecute(
+    operationId: string,
+    data: LlmExecuteData,
+  ): Promise<LlmExecuteDispatchResult> {
+    log('sendLlmExecute operation=%s callId=%s', operationId, data.callId);
+    if (!this.llmRelayRoutesMissing) {
+      const res = await this.httpPostResponse('/api/operations/llm-execute', { data, operationId });
+      if (res.ok) {
+        const { delivered } = (await res.json().catch(() => ({}))) as { delivered?: number };
+        return { delivered, routed: true };
+      }
+      if (res.status !== 404) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`Gateway /api/operations/llm-execute returned ${res.status}: ${text}`);
+      }
+      this.llmRelayRoutesMissing = true;
+    }
+
+    await this.publishStreamEvent(operationId, {
+      data,
+      stepIndex: data.stepIndex,
+      type: 'llm_execute',
+    });
+    return { routed: false };
+  }
+
+  /** Stop a relayed LLM attempt on every client (see {@link sendLlmExecute} for the fallback). */
+  async sendLlmCancel(operationId: string, data: LlmCancelData & { stepIndex: number }) {
+    log('sendLlmCancel operation=%s callId=%s', operationId, data.callId);
+    const { stepIndex, ...cancel } = data;
+    if (!this.llmRelayRoutesMissing) {
+      const res = await this.httpPostResponse('/api/operations/llm-cancel', {
+        data: cancel,
+        operationId,
+      });
+      if (res.ok) return;
+      if (res.status !== 404) {
+        throw new Error(`Gateway /api/operations/llm-cancel returned ${res.status}`);
+      }
+      this.llmRelayRoutesMissing = true;
+    }
+
+    await this.publishStreamEvent(operationId, { data: cancel, stepIndex, type: 'llm_cancel' });
+  }
+
+  /**
+   * The attempt is over: the gateway stops replaying its `llm_execute`.
+   * Best effort — the gateway also drops it at the attempt's deadline.
+   */
+  async closeLlmCall(operationId: string, callId: string): Promise<void> {
+    if (this.llmRelayRoutesMissing) return;
+    try {
+      await this.httpPostResponse('/api/operations/llm-close', { callId, operationId });
+    } catch (error) {
+      log('closeLlmCall failed for %s (%s): %O', operationId, callId, error);
+    }
+  }
+
   // ─── Read / subscribe methods: delegate directly to inner ───
 
   async subscribeStreamEvents(
@@ -756,11 +838,20 @@ export class GatewayStreamNotifier implements IStreamEventManager {
    * to know whether the gateway accepted the request.
    */
   private async httpPostAwait(path: string, body: Record<string, unknown>): Promise<void> {
+    const res = await this.httpPostResponse(path, body);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Gateway ${path} returned ${res.status}: ${text}`);
+    }
+  }
+
+  /** POST and hand the response back, whatever its status; rejects on network / timeout. */
+  private async httpPostResponse(path: string, body: Record<string, unknown>): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), POST_TIMEOUT);
 
     try {
-      const res = await fetch(urlJoin(this.gatewayUrl, path), {
+      return await fetch(urlJoin(this.gatewayUrl, path), {
         body: JSON.stringify(body),
         headers: {
           'Authorization': `Bearer ${this.serviceToken}`,
@@ -769,11 +860,6 @@ export class GatewayStreamNotifier implements IStreamEventManager {
         method: 'POST',
         signal: controller.signal,
       });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(`Gateway ${path} returned ${res.status}: ${text}`);
-      }
     } finally {
       clearTimeout(timer);
     }
