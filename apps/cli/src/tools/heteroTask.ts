@@ -222,8 +222,11 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       throw new Error('OpenClaw executable not found');
     }
 
-    // openclaw agent --local is one-shot: each invocation processes one message and exits.
-    // The --session-id links turns into the same conversation history on disk.
+    // openclaw agent without --local talks to the running gateway, which owns
+    // the session store lock. --local would open the store directly and collide
+    // with the gateway's lock (the normal self-hosted setup keeps the gateway
+    // running), making the process exit with code 1 immediately. The --session-id
+    // links turns into the same conversation history on disk.
     const openclawAgent = platformAgentId?.trim() || process.env.OPENCLAW_AGENT_ID || 'main';
 
     // Always inject the notify protocol so openclaw knows how to report results
@@ -238,7 +241,6 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       sessionKey,
       '--message',
       enrichedPrompt,
-      '--local',
     ];
     const spawnPlan = await runtime.prepareSpawn(openclawArgs);
 
@@ -265,7 +267,10 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       cwd: workDir,
       detached: true,
       env: spawnPlan.env,
-      stdio: 'ignore',
+      // Keep stdout ignored (it is not consumed here; piping it without a
+      // reader would fill the OS buffer and hang the child). Pipe stderr so
+      // a non-zero exit can surface the agent's real error.
+      stdio: ['ignore', 'ignore', 'pipe'],
     });
 
     const pid = child.pid;
@@ -273,6 +278,13 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       throw new Error('Failed to get PID for openclaw process');
     }
     child.unref();
+
+    // Cap at 8 KB, retaining the tail so the actual failure stays visible.
+    const STDERR_CAP = 8 * 1024;
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr = `${stderr}${chunk.toString()}`.slice(-STDERR_CAP);
+    });
 
     saveTask({
       agentId,
@@ -299,9 +311,10 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       removeTask(taskId);
       if (code !== 0 || signal !== null) {
         const cancelled = signal !== null;
+        const details = stderr.trim().slice(0, 500);
         const text = cancelled
           ? `Task cancelled (signal: ${signal})`
-          : `Task failed (exit code: ${code})`;
+          : `Task failed (exit code: ${code})${details ? ` — ${details}` : ''}`;
         // Write the notice bubble first, THEN signal terminal (sequential).
         // Fire-and-forget both, but ensure the terminal signal is always sent.
         void sendAutoNotify(topicId, taskId, text, agentId, operationId, workspaceId).finally(() =>

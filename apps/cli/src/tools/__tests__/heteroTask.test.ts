@@ -333,7 +333,7 @@ describe('runHeteroTask (openclaw)', () => {
     );
   });
 
-  it('passes --session-id and --agent args to openclaw', async () => {
+  it('passes --session-id and --agent args to openclaw without --local', async () => {
     const child = makeMockChild();
     spawnMock.mockReturnValue(child);
 
@@ -349,7 +349,43 @@ describe('runHeteroTask (openclaw)', () => {
     expect(spawnArgs).toContain('--session-id');
     expect(spawnArgs[spawnArgs.indexOf('--session-id') + 1]).toBe('my-topic-id');
     expect(spawnArgs).toContain('--agent');
-    expect(spawnArgs).toContain('--local');
+    // --local opens the session store directly and collides with a running
+    // gateway (issue #19914); the agent must talk to the gateway instead.
+    expect(spawnArgs).not.toContain('--local');
+  });
+
+  it('pipes openclaw stderr and surfaces it on a failed exit', async () => {
+    const child = makeMockChild();
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-stderr',
+      prompt: 'hello',
+      taskId: 'task-stderr',
+      topicId: 'topic-stderr',
+    });
+
+    const [, , spawnOptions] = spawnMock.mock.calls[0] as [string, string[], { stdio: string[] }];
+    // stdout is ignored (not consumed → would hang), stderr is piped.
+    expect(spawnOptions.stdio).toEqual(['ignore', 'ignore', 'pipe']);
+
+    child.stderr._emit('Error: session store is locked by the running gateway\n');
+    child._emit('close', 1, null);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(notifyMutateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        done: true,
+        operationId: 'op-stderr',
+        role: 'assistant',
+        topicId: 'topic-stderr',
+      }),
+    );
+    const notifyCall = notifyMutateMock.mock.calls.find(
+      (c) => c[0]?.operationId === 'op-stderr',
+    )?.[0];
+    expect(notifyCall?.content).toContain('session store is locked');
   });
 
   it('spawns the resolved OpenClaw executable with its recovered PATH', async () => {
