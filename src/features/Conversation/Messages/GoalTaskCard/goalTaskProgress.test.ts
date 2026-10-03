@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildGoalStepSegments, getGoalStepPointer, getGoalTaskProgress } from './goalTaskProgress';
+import { getGoalTaskProgress } from './goalTaskProgress';
 
 describe('getGoalTaskProgress', () => {
   it('reports how much of the graph is closed while it runs', () => {
@@ -12,10 +12,18 @@ describe('getGoalTaskProgress', () => {
   it('falls back to the drafted criteria count before the graph is seeded', () => {
     expect(getGoalTaskProgress({ criteriaCount: 4, status: 'planning' })).toEqual({
       passed: 0,
-      phase: 'running',
+      phase: 'planning',
       progress: 0,
       total: 4,
     });
+  });
+
+  it('reads a running goal without any Task yet as planning', () => {
+    // `/goal` from a conversation adopts that run as the first planning turn and
+    // marks the goal running before the plan lands its Tasks.
+    expect(getGoalTaskProgress({ criteriaCount: 2, status: 'running', taskTotal: 0 }).phase).toBe(
+      'planning',
+    );
   });
 
   it('lets a waiting decision gate outrank the goal status', () => {
@@ -35,61 +43,5 @@ describe('getGoalTaskProgress', () => {
     ['verifying', 'verifying'],
   ] as const)('maps goal status %s to phase %s', (status, phase) => {
     expect(getGoalTaskProgress({ criteriaCount: 1, status }).phase).toBe(phase);
-  });
-});
-
-describe('buildGoalStepSegments', () => {
-  it('maps one segment per task in plan order', () => {
-    expect(
-      buildGoalStepSegments(['resolved', 'active', 'proposed', 'waiting', 'rejected']),
-    ).toEqual(['done', 'active', 'pending', 'pending', 'done']);
-  });
-
-  it('retired tasks count as closed steps', () => {
-    expect(buildGoalStepSegments(['retired', 'proposed'])).toEqual(['done', 'pending']);
-  });
-
-  it('slices graphs longer than the segment cap, keeping the least advanced state', () => {
-    const statuses = Array.from({ length: 25 }, (_, index) =>
-      index < 12 ? 'resolved' : 'proposed',
-    );
-
-    // ceil(25 / 12) = 3 tasks per segment: indices 0–11 done, 12–24 pending.
-    expect(buildGoalStepSegments(statuses)).toEqual([
-      ...Array.from({ length: 4 }, () => 'done'),
-      ...Array.from({ length: 5 }, () => 'pending'),
-    ]);
-  });
-});
-
-describe('getGoalStepPointer', () => {
-  const steps = [
-    { status: 'resolved', title: 'Reproduce' },
-    { status: 'active', title: 'Fix the parser' },
-    { status: 'proposed', title: 'Add regression coverage' },
-  ] as const;
-
-  it('points at the first active task while one runs', () => {
-    expect(getGoalStepPointer([...steps], 'running')).toEqual({
-      kind: 'current',
-      title: 'Fix the parser',
-    });
-  });
-
-  it('falls back to the first open task as up next when nothing is active', () => {
-    const paused = steps.map((step) =>
-      step.status === 'active' ? { ...step, status: 'waiting' as const } : step,
-    );
-
-    expect(getGoalStepPointer(paused, 'paused')).toEqual({
-      kind: 'next',
-      title: 'Fix the parser',
-    });
-  });
-
-  it('has no pointer once the goal reached a terminal phase', () => {
-    expect(getGoalStepPointer([...steps], 'achieved')).toBeUndefined();
-    expect(getGoalStepPointer([...steps], 'error')).toBeUndefined();
-    expect(getGoalStepPointer([...steps], 'canceled')).toBeUndefined();
   });
 });

@@ -38,8 +38,81 @@ describe('deriveOperationGoals', () => {
     ]);
 
     expect(goals).toEqual([
-      { criteriaCount: 2, goalId: 'goal-41', name: 'San Francisco night fog' },
+      { criteriaCount: 2, goalId: 'goal-41', name: 'San Francisco night fog', source: 'tool' },
     ]);
+  });
+
+  it('derives a card from a CLI agent creating a conversation goal with lh', () => {
+    const goals = deriveOperationGoals([
+      block([
+        {
+          apiName: 'Bash',
+          arguments: JSON.stringify({
+            command:
+              'lh goal create "整理 LobeHub 目标页区块清单" --conversation -r "需求" --criterion "至少 4 个区块" --criterion "保存为文稿" --json',
+            description: 'Create LobeHub goal bound to conversation',
+          }),
+          id: 'toolu_create',
+          identifier: 'claude-code',
+          result: {
+            content: JSON.stringify({
+              edges: [],
+              goal: { id: 'goal_P0NhivSBktCf', title: '整理 LobeHub 目标页区块清单' },
+              turnToken: 'token',
+            }),
+            id: 'msg_create',
+          },
+          type: 'default',
+        },
+        {
+          apiName: 'Bash',
+          arguments: JSON.stringify({
+            command: 'lh goal plan goal_P0NhivSBktCf --token token --file plan.json --json',
+          }),
+          id: 'toolu_plan',
+          identifier: 'claude-code',
+          result: { content: '{"recorded": true, "action": "tasks"}', id: 'msg_plan' },
+          type: 'default',
+        },
+      ]),
+    ]);
+
+    expect(goals).toEqual([
+      {
+        criteriaCount: 2,
+        goalId: 'goal_P0NhivSBktCf',
+        name: '整理 LobeHub 目标页区块清单',
+        source: 'command',
+      },
+    ]);
+  });
+
+  it('shows no command card before the goal exists, or after a failure', () => {
+    const run = (
+      id: string,
+      command: string,
+      result?: NonNullable<AssistantContentBlock['tools']>[number]['result'],
+    ) => ({
+      apiName: 'command_execution',
+      arguments: JSON.stringify({ command }),
+      id,
+      identifier: 'codex',
+      result,
+      type: 'default' as const,
+    });
+
+    expect(
+      deriveOperationGoals([
+        block([
+          run('running', 'lh goal create "Fog" --conversation --json'),
+          run('failed', 'lh goal create "Fog" --conversation --json', {
+            content: 'Error: An operation-bound token is required',
+            error: { message: 'exit 1' },
+            id: 'tool-failed',
+          }),
+        ]),
+      ]),
+    ).toEqual([]);
   });
 
   it('ignores pending, failed, and non-Goal tool calls', () => {
@@ -109,7 +182,9 @@ describe('deriveOperationGoals', () => {
       ]),
     ]);
 
-    expect(goals).toEqual([{ criteriaCount: 2, goalId: 'goal_abc123', name: 'Weekly digest' }]);
+    expect(goals).toEqual([
+      { criteriaCount: 2, goalId: 'goal_abc123', name: 'Weekly digest', source: 'command' },
+    ]);
   });
 
   it('falls back to the printed goal URL when the CLI output is not JSON', () => {
@@ -132,7 +207,9 @@ describe('deriveOperationGoals', () => {
       ]),
     ]);
 
-    expect(goals).toEqual([{ criteriaCount: 0, goalId: 'goal_abc123', name: 'goal_abc123' }]);
+    expect(goals).toEqual([
+      { criteriaCount: 0, goalId: 'goal_abc123', name: 'goal_abc123', source: 'command' },
+    ]);
   });
 
   it('recovers the goal id from truncated output with a shell notice suffix', () => {
@@ -159,7 +236,12 @@ describe('deriveOperationGoals', () => {
     ]);
 
     expect(goals).toEqual([
-      { criteriaCount: 1, goalId: 'goal_4aVZVqoD5jhu', name: '凭证委托场景全景' },
+      {
+        criteriaCount: 1,
+        goalId: 'goal_4aVZVqoD5jhu',
+        name: '凭证委托场景全景',
+        source: 'command',
+      },
     ]);
   });
 

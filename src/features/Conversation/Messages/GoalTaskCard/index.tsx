@@ -1,61 +1,52 @@
 'use client';
 
-import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRightIcon, CornerDownRightIcon, TargetIcon } from 'lucide-react';
-import { memo } from 'react';
+import { ChevronRightIcon } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import RingLoadingIcon from '@/components/RingLoading';
+import { formatGoalCost } from '@/features/AgentGoals/GoalProgress';
+import GoalStatusGlyph from '@/features/AgentGoals/GoalStatusGlyph';
+import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useChatStore } from '@/store/chat';
 
 import type { OperationGoal } from './deriveOperationGoals';
+import { buildGoalCardModel } from './goalCardModel';
 import GoalElapsedTime from './GoalElapsedTime';
-import GoalStatusLine from './GoalStatusLine';
 import type { GoalTaskPhase } from './goalTaskProgress';
-import { getGoalStepPointer } from './goalTaskProgress';
+import PlanChain from './PlanChain';
+import StageTrack from './StageTrack';
 import { useGoalTaskStatus } from './useGoalTaskStatus';
 
-const ACTIVE_PHASES = new Set<GoalTaskPhase>(['repairing', 'running', 'verifying']);
+const ACTIVE_PHASES = new Set<GoalTaskPhase>(['planning', 'repairing', 'running', 'verifying']);
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
     cursor: pointer;
 
     width: 100%;
-    padding-block: 10px;
-    padding-inline: 12px;
+    padding-block: 12px;
+    padding-inline: 14px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
+    border-radius: 10px;
 
     background: ${cssVar.colorBgElevated};
 
     &:hover {
-      background: ${cssVar.colorFillQuaternary};
+      border-color: ${cssVar.colorBorder};
     }
   `,
   chevron: css`
     flex-shrink: 0;
     color: ${cssVar.colorTextTertiary};
   `,
-  icon: css`
-    flex-shrink: 0;
-
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  stepIcon: css`
-    flex-shrink: 0;
-  `,
-  stepLine: css`
+  meta: css`
     font-size: 12px;
+    font-variant-numeric: tabular-nums;
     color: ${cssVar.colorTextTertiary};
+    white-space: nowrap;
   `,
   title: css`
     min-width: 0;
@@ -67,21 +58,20 @@ const styles = createStaticStyles(({ css }) => ({
 const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
   const { t } = useTranslation('chat');
   const openGoalPortal = useChatStore((s) => s.openGoal);
-  const { progress, startedAt, steps, title } = useGoalTaskStatus({
+  const { progress, snapshot, startedAt, title } = useGoalTaskStatus({
     criteriaCount: goal.criteriaCount,
     goalId: goal.goalId,
   });
+  const model = useMemo(() => (snapshot ? buildGoalCardModel(snapshot) : undefined), [snapshot]);
   const isActive = ACTIVE_PHASES.has(progress.phase);
-  const stepPointer = getGoalStepPointer(steps, progress.phase);
+  const requirement = snapshot?.goal.requirement?.trim();
   // Same destination as the tool card: the goal's progress beside the chat.
   const openGoal = () => openGoalPortal(goal.goalId);
 
   return (
     <Flexbox
-      horizontal
-      align={'center'}
       className={styles.card}
-      gap={10}
+      gap={12}
       role={'button'}
       tabIndex={0}
       onClick={openGoal}
@@ -91,43 +81,56 @@ const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
         openGoal();
       }}
     >
-      <Center className={styles.icon}>
-        {isActive ? (
-          <RingLoadingIcon
-            ringColor={cssVar.colorBorder}
-            size={18}
-            style={{ color: cssVar.colorWarning }}
-          />
-        ) : (
-          <Icon icon={TargetIcon} size={20} />
-        )}
-      </Center>
-      <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-        <Text ellipsis className={styles.title}>
-          {title ?? goal.name}
-        </Text>
-        <GoalStatusLine
-          passed={progress.passed}
-          phase={progress.phase}
-          statuses={steps.map((step) => step.status)}
-          total={progress.total}
-        />
-        {stepPointer && (
-          <Flexbox horizontal align={'center'} gap={4}>
-            <Icon
-              className={styles.stepIcon}
-              color={cssVar.colorTextTertiary}
-              icon={CornerDownRightIcon}
-              size={12}
-            />
-            <Text ellipsis className={styles.stepLine}>
-              {t(`goalTask.${stepPointer.kind}Step`, { title: stepPointer.title })}
-            </Text>
-          </Flexbox>
+      <Flexbox gap={2}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          {isActive || !snapshot ? (
+            <RunningGlyph size={14} />
+          ) : (
+            <GoalStatusGlyph size={14} status={snapshot.goal.status} />
+          )}
+          <Text ellipsis className={styles.title} style={{ flex: 1 }}>
+            {title ?? goal.name}
+          </Text>
+          <Text className={styles.meta} style={{ color: cssVar.colorTextSecondary }}>
+            {t(`goalTask.status.${progress.phase}`)}
+          </Text>
+          {isActive && <GoalElapsedTime startedAt={startedAt} />}
+          <ChevronRightIcon className={styles.chevron} size={16} />
+        </Flexbox>
+        {requirement && requirement !== (title ?? goal.name) && (
+          <Text ellipsis fontSize={12} style={{ paddingInlineStart: 22 }} type={'secondary'}>
+            {requirement}
+          </Text>
         )}
       </Flexbox>
-      {isActive && <GoalElapsedTime startedAt={startedAt} />}
-      <ChevronRightIcon className={styles.chevron} size={16} />
+      {model && (
+        <>
+          <StageTrack stage={model.stage} tone={model.tone} />
+          <PlanChain model={model} />
+          {(model.taskTotal > 0 || model.needsYou > 0 || model.totalCost > 0) && (
+            <Flexbox horizontal align={'center'} gap={12}>
+              {model.needsYou > 0 && (
+                <span className={styles.meta} style={{ color: cssVar.colorWarning }}>
+                  {t('goalList.needsYou', { count: model.needsYou })}
+                </span>
+              )}
+              {model.taskTotal > 0 && (
+                <span className={styles.meta}>
+                  {t('goalList.taskProgress', { done: model.taskDone, total: model.taskTotal })}
+                </span>
+              )}
+              {model.findingCount > 0 && (
+                <span className={styles.meta}>
+                  {t('goalList.findings', { count: model.findingCount })}
+                </span>
+              )}
+              {model.totalCost > 0 && (
+                <span className={styles.meta}>{formatGoalCost(model.totalCost)}</span>
+              )}
+            </Flexbox>
+          )}
+        </>
+      )}
     </Flexbox>
   );
 });

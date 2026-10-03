@@ -12,9 +12,10 @@ export const MAX_LINKED_GOALS = 3;
  * Goals linked to the topic that still need a surface in this conversation.
  *
  * A goal created by the builtin `createGoal` tool already renders as a live card
- * inside its assistant turn, so the tray skips it; what remains are goals the
- * conversation planned some other way — a CLI agent's `lh goal create
- * --conversation` leaves only Bash output behind.
+ * inside its assistant turn, so the tray skips it. A goal a CLI agent created
+ * with `lh goal create --conversation` keeps its tray row even though its turn
+ * now carries a card too: that agent supervises it from this conversation, so
+ * its status stays in reach above the composer after the turn scrolls away.
  */
 export const selectLinkedGoals = (
   goals: GoalListItem[] = [],
@@ -22,7 +23,9 @@ export const selectLinkedGoals = (
 ): GoalListItem[] => {
   const carded = new Set(
     messages.flatMap((message) =>
-      deriveOperationGoals(message.children ?? []).map(({ goalId }) => goalId),
+      deriveOperationGoals(message.children ?? []).flatMap(({ goalId, source }) =>
+        source === 'tool' ? [goalId] : [],
+      ),
     ),
   );
 
