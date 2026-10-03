@@ -432,6 +432,69 @@ const groupResources: Record<string, { listKey: string; schema: string }> = {
 
 const ref = (schema: string): SchemaObject => ({ $ref: `#/components/schemas/${schema}` });
 
+/** One chat bubble of the IM channel — whole, never a partial stream. */
+const imMessageSchema: SchemaObject = {
+  additionalProperties: false,
+  properties: {
+    content: { type: 'string' },
+    createdAt: dateTime,
+    error: { type: 'boolean' },
+    id: { type: 'string' },
+    role: { enum: ['assistant', 'user'], type: 'string' },
+  },
+  required: ['content', 'createdAt', 'error', 'id', 'role'],
+  type: 'object',
+};
+
+const imResponseSchema = (method: string, rest: string): SchemaObject => {
+  if (method === 'post' && rest === 'messages') {
+    return {
+      additionalProperties: false,
+      properties: {
+        accepted: { type: 'boolean' },
+        operationId: nullableString,
+        topicId: { type: 'string' },
+        userMessage: imMessageSchema,
+      },
+      required: ['accepted', 'operationId', 'topicId', 'userMessage'],
+      type: 'object',
+    };
+  }
+
+  if (rest.endsWith('/read')) {
+    return {
+      additionalProperties: false,
+      properties: { unread: { minimum: 0, type: 'integer' } },
+      required: ['unread'],
+      type: 'object',
+    };
+  }
+
+  return {
+    additionalProperties: false,
+    properties: {
+      cursor: { type: 'string' },
+      messages: { items: imMessageSchema, type: 'array' },
+      readUpTo: {
+        anyOf: [
+          {
+            additionalProperties: false,
+            properties: { messageId: { type: 'string' }, readAt: dateTime },
+            required: ['messageId', 'readAt'],
+            type: 'object',
+          },
+          { type: 'null' },
+        ],
+      },
+      state: { type: 'string' },
+      typing: { type: 'boolean' },
+      unread: { minimum: 0, type: 'integer' },
+    },
+    required: ['cursor', 'messages', 'readUpTo', 'state', 'typing', 'unread'],
+    type: 'object',
+  };
+};
+
 /**
  * Personal-agent resources whose payload is coordinator / inbox state rather
  * than a stable CRUD row (a goal's graph snapshot, a category of memory
@@ -587,6 +650,18 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
       },
       required: ['plugins', 'total'],
     });
+
+  if (group === 'im') return successEnvelope(imResponseSchema(method, rest));
+
+  if (group === 'push-tokens') {
+    if (method === 'delete') return successEnvelope({ type: 'null' });
+    return successEnvelope({
+      additionalProperties: false,
+      properties: { deviceId: { type: 'string' }, platform: { type: 'string' } },
+      required: ['deviceId', 'platform'],
+      type: 'object',
+    });
+  }
 
   const resource = groupResources[group];
   if (!resource) return successEnvelope({ additionalProperties: true, type: 'object' });

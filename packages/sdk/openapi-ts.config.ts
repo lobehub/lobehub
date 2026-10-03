@@ -42,6 +42,13 @@ const METHOD_NAME_OVERRIDES: Record<string, string> = {
   'POST /api/v1/notifications/{id}/archive': 'archive',
   'POST /api/v1/signals/source-events': 'emit',
   'POST /api/v1/signals/trigger': 'trigger',
+  // IM channel: `send` / `sync` / `markRead` read like a messaging client;
+  // push tokens are keyed by device, so PUT/DELETE are register/unregister.
+  'DELETE /api/v1/push-tokens/{deviceId}': 'unregister',
+  'GET /api/v1/im/topics/{topicId}/sync': 'sync',
+  'POST /api/v1/im/messages': 'send',
+  'POST /api/v1/im/topics/{topicId}/read': 'markRead',
+  'PUT /api/v1/push-tokens/{deviceId}': 'register',
 };
 
 const pascal = (segment: string) =>

@@ -12686,6 +12686,432 @@ paths:
                 agentId:
                   type: string
                   minLength: 1
+  /api/v1/im/messages:
+    post:
+      operationId: sendImMessage
+      summary: Send a message to an agent; the reply arrives asynchronously via sync
+      tags:
+        - im
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: false
+                    properties:
+                      accepted:
+                        type: boolean
+                      operationId:
+                        type:
+                          - string
+                          - "null"
+                      topicId:
+                        type: string
+                      userMessage:
+                        additionalProperties: false
+                        properties:
+                          content:
+                            type: string
+                          createdAt:
+                            format: date-time
+                            type: string
+                          error:
+                            type: boolean
+                          id:
+                            type: string
+                          role:
+                            enum:
+                              - assistant
+                              - user
+                            type: string
+                        required:
+                          - content
+                          - createdAt
+                          - error
+                          - id
+                          - role
+                        type: object
+                    required:
+                      - accepted
+                      - operationId
+                      - topicId
+                      - userMessage
+                    type: object
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentId:
+                  type: string
+                  minLength: 1
+                clientMessageId:
+                  type: string
+                  pattern: ^msg_[\w-]{8,64}$
+                content:
+                  type: string
+                  minLength: 1
+                  maxLength: 100000
+                topicId:
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                    - type: "null"
+              required:
+                - agentId
+                - content
+  /api/v1/im/topics/{topicId}/sync:
+    get:
+      operationId: syncImTopic
+      summary: Long-poll a conversation for whole new messages, typing and read receipts
+      tags:
+        - im
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: false
+                    properties:
+                      cursor:
+                        type: string
+                      messages:
+                        items:
+                          additionalProperties: false
+                          properties:
+                            content:
+                              type: string
+                            createdAt:
+                              format: date-time
+                              type: string
+                            error:
+                              type: boolean
+                            id:
+                              type: string
+                            role:
+                              enum:
+                                - assistant
+                                - user
+                              type: string
+                          required:
+                            - content
+                            - createdAt
+                            - error
+                            - id
+                            - role
+                          type: object
+                        type: array
+                      readUpTo:
+                        anyOf:
+                          - additionalProperties: false
+                            properties:
+                              messageId:
+                                type: string
+                              readAt:
+                                format: date-time
+                                type: string
+                            required:
+                              - messageId
+                              - readAt
+                            type: object
+                          - type: "null"
+                      state:
+                        type: string
+                      typing:
+                        type: boolean
+                      unread:
+                        minimum: 0
+                        type: integer
+                    required:
+                      - cursor
+                      - messages
+                      - readUpTo
+                      - state
+                      - typing
+                      - unread
+                    type: object
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: topicId
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: query
+          name: cursor
+          schema:
+            type: string
+            pattern: ^\d+$
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+        - in: query
+          name: state
+          schema:
+            type: string
+            maxLength: 200
+        - in: query
+          name: waitMs
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 25000
+  /api/v1/im/topics/{topicId}/read:
+    post:
+      operationId: markImTopicRead
+      summary: Mark the agent's messages read up to a message
+      tags:
+        - im
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: false
+                    properties:
+                      unread:
+                        minimum: 0
+                        type: integer
+                    required:
+                      - unread
+                    type: object
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: topicId
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                messageId:
+                  type: string
+                  minLength: 1
+              required:
+                - messageId
   /api/v1/knowledge-bases:
     get:
       operationId: getApiV1KnowledgeBases
@@ -18304,6 +18730,227 @@ paths:
           description: Internal server error
       tags:
         - providers
+  /api/v1/push-tokens/{deviceId}:
+    put:
+      operationId: registerPushToken
+      summary: Register or rotate this device's push token
+      tags:
+        - push-tokens
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: false
+                    properties:
+                      deviceId:
+                        type: string
+                      platform:
+                        type: string
+                    required:
+                      - deviceId
+                      - platform
+                    type: object
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: deviceId
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                appVersion:
+                  type: string
+                  maxLength: 64
+                expoToken:
+                  type: string
+                  minLength: 1
+                  maxLength: 512
+                locale:
+                  type: string
+                  maxLength: 32
+                platform:
+                  type: string
+                  enum:
+                    - ios
+                    - android
+              required:
+                - expoToken
+                - platform
+    delete:
+      operationId: unregisterPushToken
+      summary: Stop pushing to this device (sign-out)
+      tags:
+        - push-tokens
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    type: "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: deviceId
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+          required: true
+        - in: query
+          name: expoToken
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
   /api/v1/responses:
     post:
       operationId: postApiV1Responses

@@ -208,6 +208,12 @@ export interface ChatTopicMetadata {
   /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
   importedFrom?: string;
   /**
+   * The newest agent message the user has seen in a messaging client (toby),
+   * written by `POST /api/v1/im/topics/{topicId}/read`. Agent messages after
+   * `readAt` count as unread. Only ever moves forward.
+   */
+  imReadCursor?: { messageId: string; readAt: string };
+  /**
    * Root operation that most recently consumed `runningOperation`.
    * Used to scope a post-terminal `unread` → `active` correction when the
    * watching client receives the terminal event after the server cleared the marker.
