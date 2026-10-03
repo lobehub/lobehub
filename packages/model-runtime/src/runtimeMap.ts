@@ -23,6 +23,7 @@ import { LobeElevenLabsAI } from './providers/elevenlabs';
 import { LobeFalAI } from './providers/fal';
 import { LobeFireworksAI } from './providers/fireworksai';
 import { LobeFishAudioAI } from './providers/fishaudio';
+import { LobeFlexAI } from './providers/flexai';
 import { LobeGiteeAI } from './providers/giteeai';
 import { LobeGithubAI } from './providers/github';
 import { LobeGithubCopilotAI } from './providers/githubCopilot';
@@ -115,6 +116,7 @@ export const providerRuntimeMap = {
   fal: LobeFalAI,
   fireworksai: LobeFireworksAI,
   fishaudio: LobeFishAudioAI,
+  flexai: LobeFlexAI,
   giteeai: LobeGiteeAI,
   github: LobeGithubAI,
   githubcopilot: LobeGithubCopilotAI,
