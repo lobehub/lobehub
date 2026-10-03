@@ -242,6 +242,71 @@ export class TaskTopicModel {
     return result.length;
   }
 
+  /**
+   * Flip one run out of `running` — but only while it is still that exact run.
+   *
+   * The orphaned-run reconciliation claims its settle with this before driving
+   * the task lifecycle, so a row a newer operation has already replaced, or one
+   * another sweep converged a moment ago, is never reported twice. Unlike
+   * {@link updateStatus}, a miss is a real answer rather than a silent no-op.
+   */
+  async markEndedIfRunning(topicId: string, operationId: string, status: string): Promise<boolean> {
+    const result = await this.db
+      .update(taskTopics)
+      .set({ status })
+      .where(
+        and(
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.operationId, operationId),
+          eq(taskTopics.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ topicId: taskTopics.topicId });
+
+    if (result.length === 0) return false;
+    if (TERMINAL_TOPIC_STATUSES.has(status)) await this.markTopicEnded(topicId, status);
+    return true;
+  }
+
+  /**
+   * Hand a run claimed by {@link markEndedIfRunning} back to `running` when the
+   * settle it was claimed for failed.
+   *
+   * Keyed on the same operation as the claim, so a newer run that took the row
+   * over in between is never reopened — only the one whose settle was aborted
+   * returns to `running`, and with it the sweep that will retry it. The
+   * `completedAt` the claim stamped is cleared for the same reason.
+   */
+  async reopenEndedRun(topicId: string, operationId: string, fromStatus: string): Promise<boolean> {
+    const result = await this.db
+      .update(taskTopics)
+      .set({ status: 'running' })
+      .where(
+        and(
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.operationId, operationId),
+          eq(taskTopics.status, fromStatus),
+          this.ownership(),
+        ),
+      )
+      .returning({ topicId: taskTopics.topicId });
+
+    if (result.length === 0) return false;
+
+    await this.db
+      .update(topics)
+      .set({ completedAt: null })
+      .where(
+        and(
+          eq(topics.id, topicId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+        ),
+      );
+
+    return true;
+  }
+
   async findByTopicId(topicId: string): Promise<TaskTopicItem | null> {
     const result = await this.db
       .select()

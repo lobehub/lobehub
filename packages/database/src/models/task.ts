@@ -1,4 +1,5 @@
 import type {
+  AgentOperationStatus,
   CheckpointConfig,
   NewTask,
   TaskActivityLogPayload,
@@ -6,6 +7,7 @@ import type {
   TaskAutomationMode,
   TaskAutomationSnapshot,
   TaskItem,
+  TaskRunTrigger,
   TaskSubtaskProgress,
   TaskVerifyConfig,
   WorkspaceData,
@@ -39,6 +41,7 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { merge } from '@/utils/merge';
 
+import { agentOperations } from '../schemas/agentOperations';
 import { documents } from '../schemas/file';
 import type {
   NewTaskActivity,
@@ -74,6 +77,32 @@ const TRACKED_TASK_COLUMNS = [
   'scheduleTimezone',
   'status',
 ] as const;
+
+/**
+ * Operation outcomes the orphaned-run reconciliation settles.
+ *
+ * An allow-list on purpose. `done` needs the success path's own inputs (the
+ * run's last assistant content, the creator bridge) and `interrupted` belongs
+ * to the interrupt path, so converging either from a sweep would mislabel the
+ * outcome; and an operation status added later is skipped rather than guessed
+ * at.
+ */
+const ORPHANED_RUN_OPERATION_STATUSES: AgentOperationStatus[] = ['abandoned', 'error'];
+
+/** One `running` Task run whose operation has already ended — see the finder. */
+export interface OrphanedRunningTopic {
+  completionReason: string | null;
+  /** The failure the operation recorded, when it recorded one. */
+  operationError: { message?: string; type?: string } | null;
+  operationId: string;
+  operationStatus: AgentOperationStatus;
+  taskId: string;
+  taskIdentifier: string;
+  topicId: string;
+  trigger: TaskRunTrigger | null;
+  userId: string;
+  workspaceId: string | null;
+}
 
 /** The automation columns folded into one value — see `TaskAutomationSnapshot`. */
 /**
@@ -1694,6 +1723,71 @@ export class TaskModel {
           sql`${tasks.lastHeartbeatAt} < now() - make_interval(secs => ${tasks.heartbeatTimeout})`,
         ),
       );
+  }
+
+  /**
+   * Running Task runs whose operation has already ended.
+   *
+   * The terminal state of a run reaches `task_topics` / `tasks` through the
+   * run's `onComplete` webhook, and that delivery is fire-and-forget: when it is
+   * lost, the Task keeps a `running` run forever. Everything downstream then
+   * believes a dead run is live — the Goal view reads its frozen heartbeat as
+   * activity, and the coordinator parks on `waiting_external` instead of
+   * recovering it (LOBE-12391). This finder is what lets a sweep settle those
+   * rows without depending on the lost delivery.
+   *
+   * The grace window is what keeps the sweep from racing the normal path: the
+   * operation is settled before its hook is dispatched, so only a run that has
+   * been over for longer than any delivery lag is treated as orphaned.
+   */
+  static async findOrphanedRunningTopics(
+    db: LobeChatDatabase,
+    options: { limit?: number; staleBefore: Date },
+  ): Promise<OrphanedRunningTopic[]> {
+    const { limit = 200, staleBefore } = options;
+
+    return (
+      db
+        .select({
+          completionReason: agentOperations.completionReason,
+          operationError: agentOperations.error,
+          operationId: agentOperations.id,
+          operationStatus: agentOperations.status,
+          taskId: tasks.id,
+          taskIdentifier: tasks.identifier,
+          // Non-null by the guard below; the column is only nullable because a
+          // legacy row could have been written without one.
+          topicId: sql<string>`${taskTopics.topicId}`,
+          trigger: taskTopics.trigger,
+          userId: tasks.createdByUserId,
+          workspaceId: tasks.workspaceId,
+        })
+        .from(taskTopics)
+        // The run row names the operation it belongs to; a row without one cannot
+        // be judged against an operation at all and is left alone.
+        .innerJoin(agentOperations, eq(taskTopics.operationId, agentOperations.id))
+        .innerJoin(tasks, eq(taskTopics.taskId, tasks.id))
+        .where(
+          and(
+            eq(taskTopics.status, 'running'),
+            // Only a Task that still believes it is running is repaired here.
+            // One that left `running` was settled deliberately — by the user, or
+            // by a cascade that already cancelled its run — and must not be
+            // dragged back into a failure.
+            eq(tasks.status, 'running'),
+            isNotNull(taskTopics.operationId),
+            // A run row with no topic cannot be driven through the lifecycle.
+            isNotNull(taskTopics.topicId),
+            // Sub-agent children extend their parent's turn and never own the
+            // Task's run row, so only a top-level operation may settle it.
+            isNull(agentOperations.parentOperationId),
+            inArray(agentOperations.status, ORPHANED_RUN_OPERATION_STATUSES),
+            sql`coalesce(${agentOperations.completedAt}, ${agentOperations.updatedAt}) < ${staleBefore}`,
+          ),
+        )
+        .orderBy(sql`coalesce(${agentOperations.completedAt}, ${agentOperations.updatedAt})`)
+        .limit(limit)
+    );
   }
 
   // ========== Dependencies ==========
