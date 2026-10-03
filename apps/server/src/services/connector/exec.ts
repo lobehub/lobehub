@@ -1,3 +1,4 @@
+import type { GatewayMcpParams } from '@lobechat/device-gateway-client';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
@@ -83,20 +84,66 @@ export const callConnectorToolById = async (
     // Background tool-list refresh is best-effort — never fail the tool call.
   }
 
-  // Fail fast with an actionable message instead of a cryptic spawn/fetch
-  // error: on a cloud deployment (device gateway configured) the server can
-  // never reach a stdio binary or a localhost/LAN endpoint. Those calls run on
-  // the user's device via the gateway-mode tunnel — this path is only hit when
-  // the user manually turned gateway mode off. Gated so a self-hosted server
-  // that shares a LAN with the endpoint keeps working.
+  // Device-only endpoints (stdio or local network URLs) cannot be reached directly
+  // by a cloud deployment. When the device gateway is configured, tunnel the MCP call
+  // to the user's active desktop device over the gateway tunnel.
   const isDeviceOnlyEndpoint =
     connector.mcpConnectionType === ConnectorMcpConnectionType.stdio ||
     (!!connector.mcpServerUrl && isLocalOrPrivateUrl(connector.mcpServerUrl));
+
   if (deviceGateway.isConfigured && isDeviceOnlyEndpoint) {
+    const userId = ctx.userId;
+    if (!userId) {
+      throw new ConnectorToolCallError(
+        'BAD_REQUEST',
+        `User ID is required to execute local MCP '${connector.name}' on device.`,
+      );
+    }
+
+    const devices = await deviceGateway.queryDeviceList(userId, ctx.workspaceId ?? undefined);
+    const onlineDevice = devices.find((d) => d.online);
+
+    if (!onlineDevice) {
+      throw new ConnectorToolCallError(
+        'BAD_REQUEST',
+        `Connector '${connector.name}' points at an MCP endpoint that only your machine can reach (stdio or local network), but no connected desktop device is online. Please ensure LobeHub Desktop is running and connected to the gateway.`,
+      );
+    }
+
+    const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+    const mcpParams = buildConnectorMcpParams(fresh);
+
+    const result = await deviceGateway.executeMcpCall({
+      apiName: params.toolName,
+      arguments: params.args ?? '{}',
+      deviceId: onlineDevice.deviceId,
+      identifier: connector.identifier,
+      params: mcpParams as GatewayMcpParams,
+      userId,
+      workspaceId: ctx.workspaceId ?? undefined,
+    });
+
+    if (!result.success) {
+      throw new ConnectorToolCallError(
+        'BAD_REQUEST',
+        result.error || result.content || `Failed to execute ${params.toolName} on device`,
+      );
+    }
+
+    return {
+      content: result.content,
+      state: result.state,
+      success: true,
+    };
+  }
+
+  if (
+    !deviceGateway.isConfigured &&
+    connector.mcpConnectionType === ConnectorMcpConnectionType.stdio
+  ) {
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
-      `Connector '${connector.name}' points at an MCP endpoint that only your machine can reach (stdio or local network). ` +
-        'These tools run through the agent gateway on desktop — please re-enable gateway mode in settings.',
+      `Connector '${connector.name}' requires a local stdio environment, but the Device Gateway is not configured on this server.`,
     );
   }
 
