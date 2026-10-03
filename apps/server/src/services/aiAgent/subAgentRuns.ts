@@ -15,13 +15,13 @@ import type { AgentOperationModel } from '@/database/models/agentOperation';
 import type { MessageModel } from '@/database/models/message';
 import type { ThreadModel } from '@/database/models/thread';
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
-import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
 } from '@/server/services/agentRuntime/types';
 
+import { withCallAgentHooks } from './hooks/callAgentHooks';
 import {
   createGroupActionMemberBridgeHook,
   createSubAgentBridgeHook,
@@ -162,7 +162,7 @@ const claimSubAgentThread = async (
  * the turn to `execAgent`, and keep the thread row's status/metadata in sync.
  * Shared by `execSubAgent`, `execVirtualSubAgent`, and isolated group members.
  */
-export const execAgentThreadRun = async (
+const startAgentThreadRun = async (
   deps: SubAgentRunDeps,
   params: ExecSubAgentParams | ExecVirtualSubAgentParams,
   options: ExecAgentThreadRunOptions,
@@ -178,18 +178,6 @@ export const execAgentThreadRun = async (
     topicId,
     instruction.slice(0, 50),
   );
-
-  // Dispatch beforeCallAgent hook on parent operation
-  if (parentOperationId) {
-    hookDispatcher
-      .dispatch(parentOperationId, 'beforeCallAgent', {
-        agentId,
-        instruction: instruction.slice(0, 200),
-        operationId: parentOperationId,
-        userId: deps.userId,
-      })
-      .catch(() => {});
-  }
 
   const startedAt = new Date().toISOString();
   const continueThreadId = 'threadId' in params ? params.threadId : undefined;
@@ -210,16 +198,6 @@ export const execAgentThreadRun = async (
 
     if ('error' in claim) {
       log('%s: cannot continue thread %s: %s', options.logScope, continueThreadId, claim.error);
-      if (parentOperationId) {
-        hookDispatcher
-          .dispatch(parentOperationId, 'onCallAgentError', {
-            agentId,
-            error: claim.error,
-            operationId: parentOperationId,
-            userId: deps.userId,
-          })
-          .catch(() => {});
-      }
 
       return {
         assistantMessageId: '',
@@ -395,30 +373,6 @@ export const execAgentThreadRun = async (
       },
       status: ThreadStatus.Failed,
     });
-
-    // Dispatch onCallAgentError hook
-    if (parentOperationId) {
-      hookDispatcher
-        .dispatch(parentOperationId, 'onCallAgentError', {
-          agentId,
-          error: result.error || 'Sub-agent execution failed',
-          operationId: parentOperationId,
-          userId: deps.userId,
-        })
-        .catch(() => {});
-    }
-  } else if (parentOperationId) {
-    // Dispatch afterCallAgent hook
-    hookDispatcher
-      .dispatch(parentOperationId, 'afterCallAgent', {
-        agentId,
-        operationId: parentOperationId,
-        subOperationId: result.operationId,
-        success: true,
-        threadId: thread.id,
-        userId: deps.userId,
-      })
-      .catch(() => {});
   }
 
   return {
@@ -437,7 +391,7 @@ export const execAgentThreadRun = async (
  * group-action member bridge that backfills the member anchor and
  * resumes/finishes the parked supervisor once the K=N member barrier passes.
  */
-export const execAgentMember = async (
+const startAgentMember = async (
   deps: SubAgentRunDeps,
   params: ExecGroupMemberParams,
 ): Promise<ExecGroupMemberResult> => {
@@ -462,16 +416,6 @@ export const execAgentMember = async (
     topicId,
     (instruction ?? '').slice(0, 50),
   );
-
-  // Dispatch beforeCallAgent hook on the supervisor operation.
-  hookDispatcher
-    .dispatch(parentOperationId, 'beforeCallAgent', {
-      agentId,
-      instruction: (instruction ?? '').slice(0, 200),
-      operationId: parentOperationId,
-      userId: deps.userId,
-    })
-    .catch(() => {});
 
   // Inherit the supervisor op's trigger so member rows stay attributable.
   let inheritedTrigger: string | undefined;
@@ -554,3 +498,22 @@ export const execAgentMember = async (
     started: result.success ?? false,
   };
 };
+
+/** Notify the parent about isolated child creation/startup, including early failures. */
+export const execAgentThreadRun = (
+  deps: SubAgentRunDeps,
+  params: ExecSubAgentParams | ExecVirtualSubAgentParams,
+  options: ExecAgentThreadRunOptions,
+): Promise<ExecSubAgentResult> =>
+  withCallAgentHooks(deps.agentRuntimeService, { ...params, userId: deps.userId }, () =>
+    startAgentThreadRun(deps, params, options),
+  );
+
+/** Shared-group members use the same parent notification lifecycle without a thread. */
+export const execAgentMember = (
+  deps: SubAgentRunDeps,
+  params: ExecGroupMemberParams,
+): Promise<ExecGroupMemberResult> =>
+  withCallAgentHooks(deps.agentRuntimeService, { ...params, userId: deps.userId }, () =>
+    startAgentMember(deps, params),
+  );
