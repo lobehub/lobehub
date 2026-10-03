@@ -139,7 +139,9 @@ which checks the live operation principal and then the Goal turn binding. Normal
 user credentials retain the existing scoped endpoint. Prompt instructions are not a
 shell sandbox. Do not install a broad personal credential in an untrusted runtime.
 
-Legacy `--supervise` Goals retain their existing behavior and cancellation fixes.
+Supervision is now a creation invariant — every new Goal gets it — so a Goal
+created before that change keeps its original behavior, and `--supervise` no
+longer exists as a flag.
 
 Each new planning turn includes up to 20 recent Task comments (2,000 characters
 per comment); the main Agent can read full comments through `lh task view`. A

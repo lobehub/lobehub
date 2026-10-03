@@ -79,6 +79,28 @@ afterEach(async () => {
 });
 
 describe('GoalService', () => {
+  it('supervises every Goal it creates, even when the caller omits the policy', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Supervised by default' });
+    expect(graph.goal.config?.supervision).toMatchObject({ enabled: true });
+  });
+
+  it('keeps the caller incident cap while forcing supervision on', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      config: { supervision: { enabled: true, maxIncidents: 4 } },
+      title: 'Capped supervision',
+    });
+    expect(graph.goal.config?.supervision).toEqual({ enabled: true, maxIncidents: 4 });
+  });
+
+  it('rejects a caller that tries to create an unsupervised Goal', async () => {
+    const service = new GoalService(serverDB, userId);
+    await expect(
+      service.create({ config: { supervision: { enabled: false } }, title: 'No supervision' }),
+    ).rejects.toThrow('Supervision is required for every goal and cannot be disabled');
+  });
+
   it('explores after result settlement and dispatches the new graph node through the ordinary Task path', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({

@@ -540,7 +540,6 @@ describe('goal create command', () => {
       'Repair',
       '--max-attempts-per-task',
       '4',
-      '--supervise',
       '--max-supervision-incidents',
       '6',
     ]);

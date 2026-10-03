@@ -275,10 +275,9 @@ export function registerGoalCommand(program: Command) {
     .option('--project <id>', 'Project ID')
     .option('--explore <instruction>', 'Explore alternatives using completed experiment results')
     .option('--max-experiments <n>', 'Maximum experiment nodes (requires --explore, default 10)')
-    .option('--supervise', 'Enable bounded recovery supervision in an independent topic')
     .option(
       '--max-supervision-incidents <n>',
-      'Maximum supervised interruptions (default 10, maximum 100)',
+      'Maximum supervised interruptions (supervision is always on; default 10, maximum 100)',
     )
     .option('--max-rounds <n>', 'Maximum goal rounds')
     .option('--max-cost <usd>', 'Maximum total cost in USD')
@@ -315,7 +314,7 @@ export function registerGoalCommand(program: Command) {
         config:
           options.maxManagerTurns ||
           options.explore ||
-          options.supervise ||
+          options.maxSupervisionIncidents ||
           options.maxAttemptsPerTask ||
           options.maxStepsPerRun ||
           options.operationLeaseTimeoutMs ||
@@ -332,12 +331,13 @@ export function registerGoalCommand(program: Command) {
                       maxExperiments: Number(options.maxExperiments ?? 10),
                     }
                   : undefined,
-                supervision: options.supervise
+                // Supervision itself is the server's creation invariant now; the
+                // CLI only carries the caller's incident cap, since opting out is
+                // no longer possible.
+                supervision: options.maxSupervisionIncidents
                   ? {
                       enabled: true,
-                      maxIncidents: options.maxSupervisionIncidents
-                        ? Number.parseInt(options.maxSupervisionIncidents, 10)
-                        : undefined,
+                      maxIncidents: Number.parseInt(options.maxSupervisionIncidents, 10),
                     }
                   : undefined,
                 maxConcurrentTasks: options.maxConcurrentTasks
