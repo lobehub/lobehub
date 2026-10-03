@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { chatTopicMetadataUpdateSchema, resolveHeterogeneousRuntimeConfig } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
@@ -169,6 +170,78 @@ describe('TaskService', () => {
     });
     (WorkspaceMemberModel as any).mockImplementation(function () {
       return mockWorkspaceMemberModel;
+    });
+  });
+
+  /** @example A Task created with a native model keeps that model after Agent snapshot merging. */
+  describe('createTask native model snapshots', () => {
+    beforeEach(() => {
+      mockAgentModel.getAgentSnapshotForTaskCreate.mockResolvedValueOnce({
+        nativeModelProvider: 'codex',
+        snapshot: { model: 'codex', provider: 'openai' },
+        visibility: 'private',
+      });
+      mockTaskModel.create.mockImplementation(async (data: Parameters<TaskModel['create']>[0]) => ({
+        ...data,
+        id: 'task-native-model',
+        identifier: 'T-1',
+        seq: 1,
+      }));
+    });
+
+    /** @example Creating with Terra alone resolves to Terra / Task override, not Sol / Agent default. */
+    it('keeps a model-only native override effective after task creation', async () => {
+      // ROOT CAUSE:
+      //
+      // createTask merged { model: 'codex', provider: 'openai' } beneath the caller's model.
+      // The resulting Terra/openai pin was rejected by the native Codex resolver.
+      // Resolve the missing provider from the native runtime during creation instead.
+      const task = await new TaskService(db, userId).createTask({
+        assigneeAgentId: 'agent-codex',
+        config: { model: 'gpt-5.6-terra' },
+        instruction: 'Use the requested native model',
+      });
+      /** @example The persisted Task uses the native provider rather than the runtime snapshot provider. */
+      expect(task.config).toEqual({ model: 'gpt-5.6-terra', provider: 'codex' });
+      /** @example The real inspector resolver consumes the created Task without dropping its override. */
+      expect(
+        resolveHeterogeneousRuntimeConfig(
+          { authMode: 'subscription', model: 'gpt-5.6-sol', type: 'codex' },
+          chatTopicMetadataUpdateSchema.pick({ model: true, provider: true }).parse(task.config),
+        ).find((field) => field.key === 'model'),
+      ).toEqual({ key: 'model', source: 'task', value: 'gpt-5.6-terra' });
+    });
+
+    /** @example An omitted override retains the historical codex/openai Agent snapshot. */
+    it('keeps inherited runtime snapshots unchanged', async () => {
+      const task = await new TaskService(db, userId).createTask({
+        assigneeAgentId: 'agent-codex',
+        instruction: 'Use Agent defaults',
+      });
+      /** @example Runtime IDs stay distinguishable from explicit native model pins. */
+      expect(task.config).toEqual({ model: 'codex', provider: 'openai' });
+    });
+
+    /** @example Specifying the runtime ID alone is a snapshot, not a native model override. */
+    it('keeps explicit runtime-ID snapshots unchanged', async () => {
+      const task = await new TaskService(db, userId).createTask({
+        assigneeAgentId: 'agent-codex',
+        config: { model: 'codex' },
+        instruction: 'Use the Codex runtime',
+      });
+      /** @example codex/openai continues to resolve through Agent defaults. */
+      expect(task.config).toEqual({ model: 'codex', provider: 'openai' });
+    });
+
+    /** @example A caller-supplied provider must not be silently replaced. */
+    it('preserves explicit provider choices', async () => {
+      const task = await new TaskService(db, userId).createTask({
+        assigneeAgentId: 'agent-codex',
+        config: { model: 'gpt-4o', provider: 'openai' },
+        instruction: 'Keep the explicit provider',
+      });
+      /** @example Existing incompatible native pins remain rejectable by the resolver. */
+      expect(task.config).toEqual({ model: 'gpt-4o', provider: 'openai' });
     });
   });
 

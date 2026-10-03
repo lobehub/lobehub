@@ -20,6 +20,7 @@ import {
   buildHeteroExecArgs,
   ChatErrorType,
   getWorkingDirEffectivePath,
+  resolveHeterogeneousRuntimeConfig,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
@@ -282,6 +283,8 @@ export interface HeteroDispatchInput {
   runAttachments: { imageList?: Array<{ alt: string; id: string; url: string }> };
   /** Ids of the rows THIS turn just persisted (excluded from recovery history). */
   selfMessageIds: Set<string>;
+  /** Explicit Task model override, also used to attribute the dispatched receipt. */
+  taskModelOverride?: HeterogeneousTopicPin;
   topicStartOwnerOperationId?: string;
 }
 
@@ -341,6 +344,34 @@ export const dispatchHeteroAgent = async (
   // so hetero ops aren't visually distinct bare nanoids in the trace/op tables.
   const operationId = `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
+  // Retain only public configuration dimensions. CLI args and API credentials must
+  // never be copied into topic metadata or an inspector response.
+  // setupTurn already reconciles a continued Topic with the requested Task model.
+  // Prefer that result so a Task runtime identifier cannot replace the native
+  // model in the receipt after dispatch has correctly retained the Topic pin.
+  const runtimePin = {
+    ...input.taskModelOverride,
+    ...pinnedHeterogeneousTopicModel,
+    provider:
+      pinnedHeterogeneousTopicModel?.provider ??
+      input.taskModelOverride?.provider ??
+      (input.taskModelOverride?.model ? heteroType : undefined),
+  };
+  const runtimeFields = resolveHeterogeneousRuntimeConfig(
+    heterogeneousProvider ?? { type: heteroType },
+    runtimePin,
+    'topic',
+  );
+  const modelField = runtimeFields.find((field) => field.key === 'model');
+  if (
+    input.taskModelOverride?.model &&
+    input.taskModelOverride.model === runtimePin.model &&
+    modelField?.source === 'topic'
+  ) {
+    modelField.source = 'task';
+  }
+  const runtimeConfig = { fields: runtimeFields, operationId };
+
   // Hooks belong to this operation's lifecycle. Persist their serializable
   // form on the durable operation row before dispatch; runningOperation below
   // remains a compatibility mirror for older terminal consumers.
@@ -367,6 +398,7 @@ export const dispatchHeteroAgent = async (
     metadata: {
       _hooks: serializedHooks,
       assistantMessageId,
+      heterogeneousRuntimeConfig: runtimeConfig,
     },
     operationId,
     parentOperationId,
@@ -681,7 +713,15 @@ export const dispatchHeteroAgent = async (
       await deps.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
     }
   } else if (!appContext?.isolationThread) {
-    await deps.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
+    // The receipt previously had a separate projection write after this marker.
+    // Store both together so a follow-up cannot install a new running operation
+    // while retaining the previous operation's displayed configuration.
+    // Task drawer follow-ups can omit taskId; receipt ownership is independent
+    // of Task lifecycle association, while isolated children keep the root receipt.
+    await deps.topicModel.updateMetadata(topicId, {
+      heteroRuntimeConfig: runtimeConfig,
+      runningOperation: childOperation,
+    });
   }
 
   // Always persist operation metadata (userId/workspaceId) to the state

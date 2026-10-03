@@ -148,6 +148,23 @@ describe('snapshotAgentReasoning', () => {
     expect(await snapshotAgentReasoning(without, {})).toBeUndefined();
   });
 
+  /** @example New Codex Topics remember Standard even if the Agent switches to Fast later. */
+  it('snapshots Codex speed from both structured defaults and legacy CLI args', async () => {
+    const standard = seedAgent('codex-standard', {
+      agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+    });
+    const fast = seedAgent('codex-fast', {
+      agencyConfig: {
+        heterogeneousProvider: { args: ['-c', 'service_tier="fast"'], type: 'codex' },
+      },
+    });
+
+    /** @example Missing structured speed resolves to an explicit Standard snapshot for a new Topic. */
+    expect(await snapshotAgentReasoning(standard, {})).toEqual({ heteroSpeed: 'default' });
+    /** @example Legacy Fast arguments remain the effective initial speed. */
+    expect(await snapshotAgentReasoning(fast, {})).toEqual({ heteroSpeed: 'fast' });
+  });
+
   it('skips models without reasoning extend params', async () => {
     const id = seedAgent('plain', { model: 'gpt-4o', provider: 'openai' });
 

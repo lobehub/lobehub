@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { UNFINISHED_TASK_STATUSES } from '@lobechat/builtin-tool-task';
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import { TASK_ASSIGNEE_PERMISSION_CODES } from '@lobechat/const/rbac';
 import type {
   TaskAssignmentKind,
@@ -183,7 +184,23 @@ export class TaskService {
     if (input.assigneeAgentId) {
       const agentInfo = await this.agentModel.getAgentSnapshotForTaskCreate(input.assigneeAgentId);
       if (agentInfo) {
-        if (agentInfo.snapshot) createData.config = { ...agentInfo.snapshot, ...createData.config };
+        if (agentInfo.snapshot) {
+          const config = createData.config;
+          // A native model-only override must not inherit the Agent's runtime wrapper
+          // provider (for example codex/openai), which would make the pin incompatible.
+          // Explicit providers, API bindings and runtime-ID snapshots keep their semantics.
+          const isNativeModelOnly =
+            agentInfo.nativeModelProvider &&
+            typeof config?.model === 'string' &&
+            config.model.length > 0 &&
+            !isHeterogeneousAgentModelId(config.model) &&
+            config.provider === undefined;
+          createData.config = {
+            ...agentInfo.snapshot,
+            ...config,
+            ...(isNativeModelOnly ? { provider: agentInfo.nativeModelProvider } : {}),
+          };
+        }
         agentVisibility = agentInfo.visibility;
       }
     }

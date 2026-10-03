@@ -25,12 +25,13 @@ const HeteroModel = memo(() => {
     isEqual,
   );
   const { allowed: canCreateContent, reason } = usePermission('create_content');
-  // Model picks are topic-scoped once a topic exists; the remaining dimensions
-  // still write the shared heterogeneous-provider config.
+  // Model, effort and speed picks are topic-scoped once a topic exists;
+  // before the first topic, the selector configures the Agent defaults.
   const { canConfigureResource } = useChatInputResourceAccess();
   const enabled = canCreateContent && canConfigureResource;
   const patch = useHeteroProviderPatch({ agentId, enabled, provider });
-  // Model AND effort pins: both follow the active topic once one exists.
+  // All three runtime pins follow the active topic once one exists.
+  const topicScoped = useChatStore((s) => !!s.activeTopicId);
   const topicPin = useChatStore(topicSelectors.activeTopicHeteroPin, isEqual);
   const effectiveProvider = provider
     ? applyTopicModelToHeterogeneousProvider(provider, topicPin)
@@ -59,6 +60,8 @@ const HeteroModel = memo(() => {
       patch={patch}
       permissionReason={reason}
       provider={effectiveProvider}
+      topicPin={topicPin}
+      topicScoped={topicScoped}
     />
   );
 });

@@ -9,6 +9,18 @@ import {
 describe.each([chatTopicCreateMetadataSchema, chatTopicMetadataUpdateSchema])(
   'reasoning metadata validation',
   (schema) => {
+    /** @example Topic speed survives both creation/model-switch and metadata-update validation. */
+    it('retains explicit fast and standard speed pins', () => {
+      for (const heteroSpeed of ['fast', 'default']) {
+        /** @example Standard is stored as "default", rather than stripped as an unknown field. */
+        expect(schema.parse({ heteroSpeed })).toEqual({ heteroSpeed });
+      }
+      /** @example An absent speed remains inherited; an unknown value is rejected. */
+      expect(schema.parse({})).toEqual({});
+      /** @example Invalid speed must not reach persisted Topic metadata. */
+      expect(schema.safeParse({ heteroSpeed: 'invalid' }).success).toBe(false);
+    });
+
     it('rejects invalid known reasoning enum values', () => {
       expect(
         schema.safeParse({ reasoningConfig: { gpt5ReasoningEffort: 'invalid' } }).success,

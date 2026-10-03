@@ -12,6 +12,7 @@ import TopicChatDrawer from './index';
 
 const mocks = vi.hoisted(() => ({
   agentState: {
+    agentMap: {},
     useHydrateAgentConfig: vi.fn(),
   },
   chatState: {
@@ -24,6 +25,9 @@ const mocks = vi.hoisted(() => ({
     portalStack: [] as { artifact?: { id: string }; taskId?: string; type: string }[],
     replaceMessages: vi.fn(),
     showPortal: false,
+    topicDataMap: {},
+    topicDetailMap: {},
+    useFetchTopicDetail: vi.fn(),
   },
   permission: {
     allowed: true,
@@ -269,6 +273,7 @@ describe('TopicChatDrawer', () => {
   beforeEach(() => {
     mocks.agentState.useHydrateAgentConfig.mockClear();
     mocks.chatState.replaceMessages.mockClear();
+    mocks.chatState.useFetchTopicDetail.mockClear();
     mocks.chatState.portalStack = [];
     mocks.chatState.showPortal = false;
     mocks.chatState.closeArtifact.mockClear();
@@ -325,6 +330,8 @@ describe('TopicChatDrawer', () => {
     render(<TopicChatDrawer />);
 
     expect(mocks.agentState.useHydrateAgentConfig).toHaveBeenCalledWith(true, 'agt_assignee');
+    /** @example The mounted config inspector hydrates this drawer Topic rather than active chat state. */
+    expect(mocks.chatState.useFetchTopicDetail).toHaveBeenCalledWith('topic-1');
   });
 
   it('keeps the floating drawer reply input collapsed by default', () => {

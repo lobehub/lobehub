@@ -2542,13 +2542,21 @@ describe('ConversationLifecycle actions', () => {
           window.__LOBE_GLOBAL_AGENT_CONTEXT__ = { desktopPath: DESKTOP_PATH };
         });
 
-        it('snapshots the heterogeneous effort into the first-send topic', async () => {
+        /** @example First send retains high effort and Fast inherited from legacy Codex arguments. */
+        it('snapshots the heterogeneous effort and resolved speed into the first-send topic', async () => {
           const sendSpy = setupHeteroRun({
-            heterogeneousProvider: { command: 'codex', effort: 'high', type: 'codex' },
+            heterogeneousProvider: {
+              args: ['-c', 'service_tier="fast"'],
+              command: 'codex',
+              effort: 'high',
+              type: 'codex',
+            },
           });
           await sendHeteroMessage();
+          /** @example Persistence receives both runtime dimensions alongside directory metadata. */
           expect(sendSpy.mock.calls[0][0].newTopic?.metadata).toMatchObject({
             heteroEffort: 'high',
+            heteroSpeed: 'fast',
           });
         });
 
@@ -2574,11 +2582,16 @@ describe('ConversationLifecycle actions', () => {
             }),
           );
           // …and the topic is born pinned to the same directory.
+          // ROOT CAUSE:
+          // New Codex Topics now snapshot Standard even without an explicit Agent speed.
+          // Keep the exact metadata assertion: the runtime snapshot must coexist with cwd pins.
+          /** @example Standard is persisted without changing the bound device or directory. */
           expect(sendMessageInServerSpy).toHaveBeenCalledWith(
             expect.objectContaining({
               newTopic: expect.objectContaining({
                 metadata: {
                   boundDeviceId: HETERO_DEVICE_ID,
+                  heteroSpeed: 'default',
                   workingDirectory: '/repo/device-default',
                   workingDirectoryConfig: { path: '/repo/device-default' },
                 },

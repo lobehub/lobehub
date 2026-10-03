@@ -68,6 +68,7 @@ describe('topicSelectors', () => {
         provider: 'claude-code',
       },
       { id: 'heteroEffortOnly', metadata: { heteroEffort: 'default' }, name: 'Hetero effort' },
+      { id: 'heteroSpeedOnly', metadata: { heteroSpeed: 'default' }, name: 'Hetero speed' },
       { id: 'heteroNone', name: 'Hetero none' },
     ] as any;
     const state = merge(initialStore, { topicDataMap: pinTopicDataMap, activeAgentId: 'test' });
@@ -120,6 +121,14 @@ describe('topicSelectors', () => {
       expect(
         topicSelectors.activeTopicHeteroPin(merge(state, { activeTopicId: 'heteroBoth' })),
       ).toEqual({ effort: 'max', model: 'opus', provider: 'claude-code' });
+    });
+
+    /** @example Explicit Standard remains a pin even when no model or effort was selected. */
+    it('resolves a speed-only pin independently of the model columns', () => {
+      /** @example Standard is preserved instead of being mistaken for an unconfigured Topic. */
+      expect(topicSelectors.getTopicHeteroPinById('heteroSpeedOnly')(state)).toEqual({
+        speed: 'default',
+      });
     });
   });
 

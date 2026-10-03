@@ -1440,6 +1440,34 @@ describe('TopicModel', () => {
   });
 
   describe('updateModelPin', () => {
+    /** @example Switching models preserves or explicitly replaces the Topic's speed pin. */
+    it('persists a speed reset atomically with the model and retains unrelated metadata', async () => {
+      const topic = await topicModel.create({
+        metadata: { heteroEffort: 'low', heteroSpeed: 'fast', workingDirectory: '/w' },
+        model: 'gpt-5.6-sol',
+        provider: 'codex',
+        title: 'speed pin',
+      });
+      const [updated] = await topicModel.updateModelPin(topic.id, {
+        metadata: { heteroSpeed: 'default' },
+        model: 'gpt-5.6-terra',
+        provider: 'codex',
+      });
+
+      /** @example Standard, existing effort and working directory survive the server write. */
+      expect(updated.metadata).toEqual({
+        heteroEffort: 'low',
+        heteroSpeed: 'default',
+        workingDirectory: '/w',
+      });
+      const [switchedAgain] = await topicModel.updateModelPin(topic.id, {
+        model: 'gpt-5.6-sol',
+        provider: 'codex',
+      });
+      /** @example A later model-only selection does not clear explicit Standard. */
+      expect(switchedAgain.metadata?.heteroSpeed).toBe('default');
+    });
+
     it('switches model and replaces the reasoning pin in one write', async () => {
       const topic = await topicModel.create({
         metadata: { reasoningConfig: { glm5_2ReasoningEffort: 'max' }, workingDirectory: '/w' },

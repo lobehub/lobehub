@@ -2,7 +2,11 @@ import type { AiModelReasoningConfig } from 'model-bank';
 import { AiModelReasoningConfigSchema } from 'model-bank/aiModel';
 import { z } from 'zod';
 
-import type { HeterogeneousReasoningEffort } from '../agent/heteroSelectorCapabilities';
+import type { HeterogeneousRuntimeConfigField } from '../agent/heterogeneousRuntimeConfig';
+import type {
+  HeterogeneousReasoningEffort,
+  HeterogeneousSpeedMode,
+} from '../agent/heteroSelectorCapabilities';
 import type { SerializedAgentHook } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
@@ -165,6 +169,13 @@ export interface ChatTopicMetadata {
    * agent's effort" by `applyTopicModelToHeterogeneousProvider`.
    */
   heteroEffort?: HeterogeneousReasoningEffort;
+  /** Latest Task run's dispatched settings; no args, credentials or system context. */
+  heteroRuntimeConfig?: {
+    /** Per-field configuration and provenance captured before dispatch. */
+    fields: HeterogeneousRuntimeConfigField[];
+    /** Durable operation whose metadata retains this same receipt. */
+    operationId: string;
+  };
   /**
    * Secret-free identity of the provider/auth binding that created
    * `heteroSessionId`. Resume is allowed only when this identity still matches.
@@ -205,6 +216,12 @@ export interface ChatTopicMetadata {
    * (message counts are not comparable across transcript records and DB rows).
    */
   heteroSourceEndAt?: string;
+  /**
+   * Topic speed snapshot or override. `default` explicitly selects Standard;
+   * absent on legacy topics, which continue to inherit the Agent's speed.
+   * @default undefined
+   */
+  heteroSpeed?: HeterogeneousSpeedMode;
   /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
   importedFrom?: string;
   /**
@@ -512,6 +529,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
   heteroEffort: z
     .custom<HeterogeneousReasoningEffort>((value) => typeof value === 'string')
     .optional(),
+  heteroSpeed: z.enum(['default', 'fast']).optional(),
   heteroSessionBindingKey: z.string().optional(),
   heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
@@ -576,6 +594,7 @@ export type UpdateTopicMetadataInput = z.input<typeof chatTopicMetadataUpdateSch
  */
 export const chatTopicCreateMetadataSchema = chatTopicMetadataUpdateSchema.pick({
   heteroEffort: true,
+  heteroSpeed: true,
   reasoningConfig: true,
 });
 

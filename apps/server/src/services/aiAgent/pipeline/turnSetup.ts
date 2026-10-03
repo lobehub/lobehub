@@ -13,6 +13,7 @@ import type {
 import {
   agentShareFileAccessScope,
   ChatErrorType,
+  getHeteroSelectorCapability,
   ordinaryFileAccessScope,
   RequestTrigger,
   resolveHeterogeneousProviderTopicModel,
@@ -60,8 +61,9 @@ export interface RunAttachments {
 
 /**
  * Build the reasoning snapshot for a topic being created — see
- * `ChatTopicMetadata.reasoningConfig` / `heteroEffort`. Returns undefined when
- * there is nothing to pin (non-reasoning model, hetero agent without an effort)
+ * `ChatTopicMetadata.reasoningConfig` / `heteroEffort` / `heteroSpeed`.
+ * Returns undefined when there is nothing to pin (non-reasoning model,
+ * heterogeneous agent without effort or speed)
  * so the caller leaves metadata untouched. Never throws: a failed lookup just
  * means the topic follows the user-level config until the user pins one.
  */
@@ -77,10 +79,21 @@ const resolveTopicReasoningSnapshot = async ({
   isHeteroTopic: boolean;
   model: string;
   provider: string;
-}): Promise<Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'> | undefined> => {
+}): Promise<
+  Pick<ChatTopicMetadata, 'heteroEffort' | 'heteroSpeed' | 'reasoningConfig'> | undefined
+> => {
   if (isHeteroTopic) {
     const effort = heterogeneousProvider?.effort;
-    return effort === undefined ? undefined : { heteroEffort: effort };
+    const speed = heterogeneousProvider
+      ? getHeteroSelectorCapability(heterogeneousProvider.type)?.speed?.resolve(
+          heterogeneousProvider,
+        )
+      : undefined;
+    if (effort === undefined && speed === undefined) return undefined;
+    return {
+      ...(effort === undefined ? {} : { heteroEffort: effort }),
+      ...(speed === undefined ? {} : { heteroSpeed: speed }),
+    };
   }
 
   try {
@@ -607,8 +620,13 @@ export const setupTurn = async (
     const canUseTopicPin = !existingTopic?.groupId || existingTopic.agentId === resolvedAgentId;
     const pinnedModel = canUseTopicPin ? existingTopic?.model : undefined;
     if (pinnedModel) {
-      model = modelOverride || pinnedModel;
-      provider = providerOverride || existingTopic?.provider || provider;
+      // Task snapshots identify the runtime (e.g. codex/openai), not its native
+      // model. Continuing a Topic must retain its native model/provider pin.
+      const isRuntimeSnapshot =
+        !!heterogeneousProvider && !!modelOverride && isHeterogeneousAgentModelId(modelOverride);
+      model = (isRuntimeSnapshot ? undefined : modelOverride) || pinnedModel;
+      provider =
+        (isRuntimeSnapshot ? undefined : providerOverride) || existingTopic?.provider || provider;
       pinnedHeterogeneousTopicModel = { model, provider };
       log(
         'execAgent: using topic-pinned model=%s provider=%s for topic %s',
@@ -617,13 +635,15 @@ export const setupTurn = async (
         topicId,
       );
     }
-    // The heterogeneous effort pin lives in metadata and is independent of the
-    // model pin (a runtime without a model selector can still pin an effort).
+    // Heterogeneous effort and speed pins live in metadata, independently of
+    // the model pin (a runtime without a model selector can still pin an effort).
     const pinnedHeteroEffort = canUseTopicPin ? existingTopic?.metadata?.heteroEffort : undefined;
-    if (pinnedHeteroEffort !== undefined) {
+    const pinnedHeteroSpeed = canUseTopicPin ? existingTopic?.metadata?.heteroSpeed : undefined;
+    if (pinnedHeteroEffort !== undefined || pinnedHeteroSpeed !== undefined) {
       pinnedHeterogeneousTopicModel = {
         ...pinnedHeterogeneousTopicModel,
-        effort: pinnedHeteroEffort,
+        ...(pinnedHeteroEffort === undefined ? {} : { effort: pinnedHeteroEffort }),
+        ...(pinnedHeteroSpeed === undefined ? {} : { speed: pinnedHeteroSpeed }),
       };
     }
 

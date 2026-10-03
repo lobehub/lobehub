@@ -63,6 +63,58 @@ describe('resolveSelectorShape', () => {
 });
 
 describe('dimensions per provider', () => {
+  /** @example A Task bound to an API model must not display a former native Codex model. */
+  it('summarizes the API model instead of stale native model settings', () => {
+    const view = viewOf({
+      apiConfig: { model: 'glm-5.2', providerId: 'custom-provider' },
+      args: ['--model', 'gpt-5.6-sol'],
+      authMode: 'api',
+      model: 'gpt-5.6-sol',
+      type: 'codex',
+    });
+
+    // ROOT CAUSE:
+    // Task summaries reuse the selector view. Its native resolver previously
+    // read model/args even when execution used apiConfig.model.
+    // The shared view must resolve the model according to the active auth mode.
+    /** @example The API binding is the effective model despite stale native args. */
+    expect(view.model).toBe('glm-5.2');
+    /** @example The Task's visible model dimension uses the same binding. */
+    expect(view.dimensions.find(({ key }) => key === 'model')?.valueLabel).toBe('glm-5.2');
+  });
+
+  /** @example A speed-only override is labeled Topic while model and effort remain inherited. */
+  it('distinguishes inherited values from explicit topic overrides, including Standard', () => {
+    const provider = { model: 'gpt-5.6-sol', type: 'codex' } as const;
+    const view = buildSelectorView({
+      capability: selectorCapabilityOf('codex'),
+      provider,
+      t,
+      topicPin: { speed: 'default' },
+      topicScoped: true,
+    });
+
+    /** @example Model and reasoning inherit; explicit Standard is a Topic override. */
+    expect(view.dimensions.map(({ key, source }) => ({ key, source }))).toEqual([
+      { key: 'model', source: 'heteroAgent.modelSelector.source.inherited' },
+      { key: 'reasoning', source: 'heteroAgent.modelSelector.source.inherited' },
+      { key: 'speed', source: 'heteroAgent.modelSelector.source.topic' },
+    ]);
+  });
+
+  /** @example A model pin for another runtime must not be advertised as effective. */
+  it('does not label a rejected model pin as a topic override', () => {
+    const view = buildSelectorView({
+      capability: selectorCapabilityOf('codex'),
+      provider: { model: 'gpt-5.6-sol', type: 'codex' },
+      t,
+      topicPin: { model: 'opus', provider: 'claude-code' },
+      topicScoped: true,
+    });
+    /** @example The Codex model remains inherited despite an old Claude pin. */
+    expect(view.dimensions[0].source).toBe('heteroAgent.modelSelector.source.inherited');
+  });
+
   it('offers Astra before older Codex models with five reasoning levels through max', () => {
     const options = viewOf({ type: 'codex' }).dimensions[0].options;
     expect(options[1]).toEqual({ label: 'GPT-6 Astra', value: 'gpt-6-astra' });

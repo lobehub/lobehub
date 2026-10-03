@@ -360,6 +360,37 @@ describe('AgentModel', () => {
   });
 
   describe('getAgentSnapshotForTaskCreate', () => {
+    /** @example A Codex native model-only Task needs codex, while its inherited snapshot remains codex/openai. */
+    it('reports the native model provider without changing the Agent snapshot', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: { heterogeneousProvider: { authMode: 'subscription', type: 'codex' } },
+        id: 'native-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      /** @example The creation service can distinguish native model pins from runtime IDs. */
+      expect(await agentModel.getAgentSnapshotForTaskCreate('native-task-snapshot')).toMatchObject({
+        nativeModelProvider: 'codex',
+        snapshot: { model: 'codex', provider: 'openai' },
+      });
+    });
+
+    /** @example API-auth Codex Tasks retain their API provider when only the model changes. */
+    it('does not substitute the native provider for API authentication', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: { heterogeneousProvider: { authMode: 'api', type: 'codex' } },
+        id: 'api-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      /** @example No native-provider fallback is offered to the Task creation merge. */
+      expect(
+        await agentModel.getAgentSnapshotForTaskCreate('api-task-snapshot'),
+      ).not.toHaveProperty('nativeModelProvider');
+    });
+
     it('returns model/provider snapshot + visibility in one call', async () => {
       const agentId = 'snap-task-create-1';
       await serverDB.insert(agents).values({

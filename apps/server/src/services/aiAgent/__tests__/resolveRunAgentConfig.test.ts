@@ -1,4 +1,7 @@
+import { buildHeteroExecArgs } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { AgentConfigWithId } from '@/server/services/agent';
 
 import { resolveRunAgentConfig } from '../pipeline/resolveRunAgentConfig';
 
@@ -123,4 +126,59 @@ describe('resolveRunAgentConfig', () => {
     expect(memberDeviceOverride).toEqual({ boundDeviceId: 'dev-1', executionTarget: 'local' });
     expect(agentConfig.agencyConfig?.executionTarget).toBe('local');
   });
+});
+
+/** @example A Task model override must reach the Codex command, not only agentConfig.model. */
+describe('Codex Task model overrides', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getPreference.mockResolvedValue({});
+    isResourceAuthorOrAdmin.mockResolvedValue(false);
+    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+  });
+
+  /** @example Task gpt-5.4 replaces the assignee's gpt-5.5 CLI argument. */
+  it.each(['codex', undefined])(
+    'applies a Task model with provider %s before snapshots are built',
+    async (providerOverride) => {
+      // ROOT CAUSE:
+      //
+      // TaskRunner passes model/provider overrides to execAgent, but the resolver
+      // previously changed only the ordinary agent model fields. Codex dispatch
+      // reads agencyConfig.heterogeneousProvider, so it still ran the Agent model.
+      // Apply the same runtime-aware pin merger used by topic execution.
+      const row: AgentConfigWithId = {
+        ...(webOnboardingRow() as AgentConfigWithId),
+        agencyConfig: {
+          heterogeneousProvider: {
+            args: ['--model', 'gpt-5.5'],
+            effort: 'high',
+            speed: 'fast',
+            type: 'codex',
+          },
+        },
+        id: 'agent-codex',
+        slug: null,
+      };
+      const { agentConfig } = await resolveRunAgentConfig(
+        { ...deps, resolveAgentConfigOrThrow: async () => row },
+        {
+          identifier: row.id,
+          modelOverride: 'gpt-5.4',
+          providerOverride,
+          throwIfExecutionAborted: async () => {},
+        },
+      );
+
+      /** @example The dispatched CLI receives the Task model and retains Agent effort/speed. */
+      expect(buildHeteroExecArgs(agentConfig.agencyConfig!.heterogeneousProvider!)).toEqual([
+        '--model',
+        'gpt-5.4',
+        '--effort',
+        'high',
+        '--speed',
+        'fast',
+      ]);
+    },
+  );
 });

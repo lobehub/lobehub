@@ -256,3 +256,46 @@ describe('taskDetailSelectors', () => {
     });
   });
 });
+
+/** @example Task configuration remains visible for all runnable and active statuses. */
+describe('activeTaskRuntimeConfig', () => {
+  /** @example A Task pin applies independently of backlog, running or paused state. */
+  it('exposes values and sources without depending on task lifecycle status', () => {
+    for (const status of ['backlog', 'running', 'paused'] as const) {
+      const state = createState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': { ...mockDetail, config: { model: 'gpt-5.4' }, status },
+        },
+      });
+      /** @example The Task owns the model while Agent effort and speed remain inherited. */
+      expect(
+        taskDetailSelectors.activeTaskRuntimeConfig({
+          type: 'codex',
+          model: 'gpt-5.5',
+          effort: 'high',
+          speed: 'fast',
+        })(state),
+      ).toEqual([
+        { key: 'runtime', source: 'agent', value: 'codex' },
+        { key: 'model', source: 'task', value: 'gpt-5.4' },
+        { key: 'effort', source: 'agent', value: 'high' },
+        { key: 'speed', source: 'agent', value: 'fast' },
+      ]);
+    }
+  });
+
+  /** @example Clearing the Task model restores inheritance; ordinary Agents keep ModelSelect. */
+  it('restores Agent values when the Task pin is cleared', () => {
+    const state = createState({
+      activeTaskId: 'T-1',
+      taskDetailMap: { 'T-1': { ...mockDetail, config: {} } },
+    });
+    /** @example No stale Task override remains after reset. */
+    expect(
+      taskDetailSelectors.activeTaskRuntimeConfig({ type: 'codex', model: 'gpt-5.5' })(state)?.[1],
+    ).toEqual({ key: 'model', source: 'agent', value: 'gpt-5.5' });
+    /** @example An ordinary Agent takes the unchanged regular model-picker branch. */
+    expect(taskDetailSelectors.activeTaskRuntimeConfig(undefined)(state)).toBeUndefined();
+  });
+});

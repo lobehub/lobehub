@@ -1145,6 +1145,60 @@ describe('canPublishAgentTopicLink', () => {
   });
 });
 
+/** @example A speed-only Topic override leaves the Agent configuration unchanged. */
+describe('applyTopicModelToHeterogeneousProvider - speed pin', () => {
+  /** @example Pinning one dimension preserves the other's inherited CLI arguments. */
+  it('does not clear an inherited dimension while applying another pin', () => {
+    const agent = {
+      args: ['-c', 'service_tier="fast"', '-c', 'model_reasoning_effort="high"'],
+      model: 'gpt-5.6-sol',
+      type: 'codex',
+    } as const;
+    const config = { ...agent, args: [...agent.args] };
+    const effortOnly = applyTopicModelToHeterogeneousProvider(config, { effort: 'low' });
+    const speedOnly = applyTopicModelToHeterogeneousProvider(config, { speed: 'default' });
+
+    /** @example Low effort leaves Fast inherited from the Agent's arguments. */
+    expect(resolveCodexSpeedMode(effortOnly)).toBe('fast');
+    /** @example Explicit Standard leaves high effort inherited from the Agent's arguments. */
+    expect(resolveCodexReasoningEffort(speedOnly)).toBe('high');
+  });
+
+  /** @example Fast can be pinned without also pinning a model or effort. */
+  it('applies a speed-only pin without mutating the Agent default', () => {
+    const agent = { model: 'gpt-5.6-sol', speed: 'default', type: 'codex' } as const;
+    const effective = applyTopicModelToHeterogeneousProvider(agent, { speed: 'fast' });
+
+    /** @example The runtime resolves Fast from the Topic. */
+    expect(effective.speed).toBe('fast');
+    /** @example New Topics still receive the Agent's Standard. */
+    expect(agent.speed).toBe('default');
+  });
+
+  /** @example An explicit Standard overrides Fast even when Fast came from CLI args. */
+  it('removes the inherited fast argument for an explicit standard pin', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { args: ['-c', 'service_tier="fast"'], model: 'gpt-5.6-sol', type: 'codex' },
+      { speed: 'default' },
+    );
+
+    /** @example Standard remains an explicit Topic pin rather than an absent value. */
+    expect(effective.speed).toBe('default');
+    /** @example The spawned runtime cannot recover the Agent's stale fast argument. */
+    expect(buildHeteroExecArgs(effective)?.join(' ') ?? '').not.toContain('service_tier');
+  });
+
+  /** @example Missing pins preserve the exact inherited configuration. */
+  it('inherits speed when absent and ignores unsupported provider dimensions', () => {
+    const agent = { model: 'gpt-5.6-sol', speed: 'fast', type: 'codex' } as const;
+    /** @example No Topic override preserves Fast and object identity. */
+    expect(applyTopicModelToHeterogeneousProvider(agent, undefined)).toBe(agent);
+    const cursor = { model: 'auto', type: 'cursor' } as const;
+    /** @example A stale speed pin cannot add unsupported speed to Cursor. */
+    expect(applyTopicModelToHeterogeneousProvider(cursor, { speed: 'fast' })).toBe(cursor);
+  });
+});
+
 describe('applyTopicModelToHeterogeneousProvider - effort pin', () => {
   it.each(['server-default', 'user-provider'] as const)(
     'drops an unsupported effort when an API binding rejects the old model pin (%s)',

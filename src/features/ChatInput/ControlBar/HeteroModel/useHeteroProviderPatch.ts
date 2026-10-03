@@ -5,6 +5,18 @@ import { useCallback } from 'react';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
+/**
+ * Persist composer runtime selections in the active Topic or the Agent defaults.
+ *
+ * Use when:
+ * - Applying a heterogeneous runtime selector change.
+ *
+ * Expects:
+ * - The owning Agent and permission to configure the conversation.
+ *
+ * Returns:
+ * - A patch callback that keeps model, effort and speed local to an existing Topic.
+ */
 export const useHeteroProviderPatch = ({
   agentId,
   enabled,
@@ -22,13 +34,18 @@ export const useHeteroProviderPatch = ({
     async (selection: HeteroSelection) => {
       if (!enabled || !agentId || !provider) return;
 
-      // Model and effort are topic-scoped once a topic exists (the topic keeps
-      // its own pins, see `ChatTopic.model` / `ChatTopicMetadata.heteroEffort`);
-      // the remaining dimensions (mode, speed) still write the shared agent config.
-      const { effort, model, ...agentSelection } = selection;
+      // Model, effort and speed are topic-scoped once a topic exists (see
+      // `ChatTopic.model` / `ChatTopicMetadata.heteroEffort` / `heteroSpeed`).
+      // Mode remains an Agent setting for the runtimes that expose it.
+      const { effort, model, speed, ...agentSelection } = selection;
       if (activeTopicId) {
-        if (model !== undefined || effort !== undefined) {
-          await updateTopicHeteroPin(activeTopicId, { effort, model, provider: provider.type });
+        if (model !== undefined || effort !== undefined || speed !== undefined) {
+          await updateTopicHeteroPin(activeTopicId, {
+            effort,
+            model,
+            provider: provider.type,
+            speed,
+          });
         }
         if (Object.keys(agentSelection).length === 0) return;
       }

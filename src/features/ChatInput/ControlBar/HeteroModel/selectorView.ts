@@ -2,6 +2,7 @@ import type {
   HeterogeneousProviderConfig,
   HeterogeneousReasoningEffort,
   HeterogeneousSpeedMode,
+  HeterogeneousTopicPin,
   HeteroSelection,
   HeteroSelectorCapability,
 } from '@lobechat/types';
@@ -31,6 +32,8 @@ export interface SelectorDimension {
   key: 'mode' | 'model' | 'reasoning' | 'speed';
   label: string;
   options: SelectorDimensionOption[];
+  /** Localized origin of this dimension's effective value. */
+  source: string;
   valueLabel: string;
 }
 
@@ -101,16 +104,37 @@ export const resolveModelSwitchSelection = ({
   };
 };
 
+/**
+ * Describe runtime dimensions using their effective values and persisted origins.
+ *
+ * Use when:
+ * - Rendering the composer selector or a Task's inherited runtime summary.
+ *
+ * Expects:
+ * - An effective provider config and, for a Topic, its original optional pins.
+ *
+ * Returns:
+ * - Localized dimensions that distinguish saved Topic values from Agent defaults.
+ */
 export const buildSelectorView = ({
   capability,
   provider,
   t,
+  topicPin,
+  topicScoped = false,
 }: {
   capability: HeteroSelectorCapability;
   provider: HeterogeneousProviderConfig;
   t: Translate;
+  /** Stored Topic pins, before inheritance; omitted for the Agent defaults surface. */
+  topicPin?: HeterogeneousTopicPin;
+  /** Whether changes target an existing Topic. @default false */
+  topicScoped?: boolean;
 }): SelectorView => {
-  const model = capability.model?.resolve(provider) ?? HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+  const model =
+    (provider.authMode === 'api'
+      ? provider.apiConfig?.model
+      : capability.model?.resolve(provider)) ?? HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
   const effort = capability.effort?.resolve(provider);
   const mode = capability.mode?.resolve(provider);
   const speedSupported = capability.speed?.supported(model) ?? false;
@@ -128,6 +152,13 @@ export const buildSelectorView = ({
   const isModeOnly =
     !!capability.mode && !capability.model && !capability.effort && !capability.speed;
 
+  const inheritedSource = t(
+    topicScoped
+      ? 'heteroAgent.modelSelector.source.inherited'
+      : 'heteroAgent.modelSelector.source.agent',
+  );
+  const topicSource = t('heteroAgent.modelSelector.source.topic');
+  const effectiveModelPin = topicPin?.model !== undefined && topicPin.provider === provider.type;
   const dimensions: SelectorDimension[] = [];
 
   if (capability.model && !isCatalogModel) {
@@ -139,6 +170,7 @@ export const buildSelectorView = ({
     dimensions.push({
       current: model,
       key: 'model',
+      source: topicScoped && effectiveModelPin ? topicSource : inheritedSource,
       label: t('heteroAgent.modelSelector.model'),
       options: baseOptions.some((option) => option.value === model)
         ? baseOptions
@@ -151,6 +183,7 @@ export const buildSelectorView = ({
     dimensions.push({
       current: mode,
       key: 'mode',
+      source: t('heteroAgent.modelSelector.source.agent'),
       label: t('heteroAgent.modelSelector.mode.label'),
       options: [
         { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
@@ -167,6 +200,7 @@ export const buildSelectorView = ({
     dimensions.push({
       current: effort,
       key: 'reasoning',
+      source: topicScoped && topicPin?.effort !== undefined ? topicSource : inheritedSource,
       label: t('heteroAgent.modelSelector.reasoning'),
       options: [
         { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
@@ -183,6 +217,7 @@ export const buildSelectorView = ({
     dimensions.push({
       current: speed,
       key: 'speed',
+      source: topicScoped && topicPin?.speed !== undefined ? topicSource : inheritedSource,
       label: t('heteroAgent.modelSelector.speed'),
       options: [
         {

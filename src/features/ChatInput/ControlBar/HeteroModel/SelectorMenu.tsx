@@ -3,6 +3,7 @@ import type {
   HeterogeneousProviderConfig,
   HeterogeneousReasoningEffort,
   HeterogeneousSpeedMode,
+  HeterogeneousTopicPin,
   HeteroSelection,
   HeteroSelectorCapability,
   ListHeterogeneousAgentModelsParams,
@@ -29,15 +30,17 @@ interface SelectorMenuProps {
   patch: (selection: HeteroSelection) => Promise<void>;
   permissionReason?: string;
   provider: HeterogeneousProviderConfig;
+  topicPin?: HeterogeneousTopicPin;
+  topicScoped?: boolean;
 }
 
 const SelectorMenu = memo<SelectorMenuProps>(
-  ({ agentId, capability, patch, permissionReason, provider }) => {
+  ({ agentId, capability, patch, permissionReason, provider, topicPin, topicScoped }) => {
     const { t } = useTranslation('chat');
 
     const view = useMemo(
-      () => buildSelectorView({ capability, provider, t }),
-      [capability, provider, t],
+      () => buildSelectorView({ capability, provider, t, topicPin, topicScoped }),
+      [capability, provider, t, topicPin, topicScoped],
     );
 
     const select = useCallback(
@@ -60,15 +63,16 @@ const SelectorMenu = memo<SelectorMenuProps>(
       [capability, patch, provider, view.isFastSpeed],
     );
 
-    const items = view.dimensions.map((dimension) =>
-      buildSelectorSubmenu({
+    const items = view.dimensions.map((dimension) => ({
+      ...buildSelectorSubmenu({
         current: dimension.current,
         label: dimension.label,
         onSelect: (value: string) => select(dimension.key, value),
         options: dimension.options,
         valueLabel: dimension.valueLabel,
       }),
-    );
+      desc: dimension.source,
+    }));
 
     return (
       <DropdownMenuRoot>
@@ -85,7 +89,7 @@ const SelectorMenu = memo<SelectorMenuProps>(
               right-anchored send area — only its right edge holds still. Aligning to
               the left edge drags the open popup sideways on every pick. */}
           <DropdownMenuPositioner placement="topRight" sideOffset={8}>
-            <DropdownMenuPopup style={{ width: 240 }}>
+            <DropdownMenuPopup style={{ width: 280 }}>
               {view.isCatalogModel && (
                 <ModelCatalogSelector
                   agentId={agentId}

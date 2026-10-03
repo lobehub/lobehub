@@ -9,6 +9,7 @@ import {
 import {
   type ChatTopicMetadata,
   type HeterogeneousReasoningEffort,
+  type HeterogeneousSpeedMode,
   type MessageMapScope,
   RequestTrigger,
   type UIChatMessage,
@@ -533,12 +534,12 @@ export class ChatTopicActionImpl {
    * Model + pin land in one server write (`topic.updateTopicModel`) so a run or
    * a concurrent switch can never see the new model with the old model's pin.
    * Optimistically mirrors the server merge: `reasoningConfig` is replaced,
-   * `heteroEffort` only when given.
+   * `heteroEffort` and `heteroSpeed` only when given.
    */
   #writeTopicModelPin = async (
     id: string,
     value: {
-      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'heteroSpeed' | 'reasoningConfig'>;
       model: string;
       provider: string;
     },
@@ -627,10 +628,16 @@ export class ChatTopicActionImpl {
   };
 
   /**
-   * Apply a heterogeneous (Claude Code / Codex) model + effort selection to one
-   * topic. When the selector pairs a model switch with an effort reset (the new
-   * model does not support the current effort) both land in the same write, so
-   * the topic never carries a model with an effort it cannot run.
+   * Apply a heterogeneous model, effort and speed selection to one topic.
+   * When the selector pairs a model switch with an effort or speed reset (the
+   * new model does not support it), all dimensions land in the same write.
+   *
+   * Call stack:
+   *
+   * useHeteroProviderPatch
+   *   -> updateTopicHeteroPin
+   *     -> #enqueueTopicEffortWrite
+   *       -> #writeTopicModelPin / #writeTopicEffortPin
    */
   updateTopicHeteroPin = async (
     id: string,
@@ -638,19 +645,25 @@ export class ChatTopicActionImpl {
       effort,
       model,
       provider,
-    }: { effort?: HeterogeneousReasoningEffort; model?: string; provider: string },
+      speed,
+    }: {
+      effort?: HeterogeneousReasoningEffort;
+      model?: string;
+      provider: string;
+      speed?: HeterogeneousSpeedMode;
+    },
   ): Promise<void> => {
-    if (model === undefined) {
-      if (effort !== undefined) await this.#get().updateTopicHeteroEffort(id, effort);
-      return;
-    }
-    /** Model resets and later effort selections must share one persistence order. */
+    const metadata = {
+      ...(effort === undefined ? {} : { heteroEffort: effort }),
+      ...(speed === undefined ? {} : { heteroSpeed: speed }),
+    };
+    if (model === undefined && Object.keys(metadata).length === 0) return;
+
+    /** Model resets and later effort/speed selections must share one persistence order. */
     await this.#enqueueTopicEffortWrite(id, () =>
-      this.#writeTopicModelPin(id, {
-        metadata: effort === undefined ? undefined : { heteroEffort: effort },
-        model,
-        provider,
-      }),
+      model === undefined
+        ? this.#writeTopicEffortPin(id, metadata)
+        : this.#writeTopicModelPin(id, { metadata, model, provider }),
     );
   };
 
@@ -693,7 +706,7 @@ export class ChatTopicActionImpl {
    */
   #writeTopicEffortPin = async (
     id: string,
-    metadata: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>,
+    metadata: Pick<ChatTopicMetadata, 'heteroEffort' | 'heteroSpeed' | 'reasoningConfig'>,
   ): Promise<void> => {
     const containerKey = topicSelectors.getTopicContainerKeyById(id)(this.#get());
     const previous = topicSelectors.getTopicById(id)(this.#get());

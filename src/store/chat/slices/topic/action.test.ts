@@ -482,9 +482,10 @@ describe('topic action', () => {
       });
     };
 
-    it('writes model and effort reset in one request', async () => {
+    /** @example A model switch can reset effort and speed in the same persisted write. */
+    it('writes model, effort and speed reset in one request', async () => {
       const { result } = renderHook(() => useChatStore());
-      const spy = vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
+      const spy = vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue([]);
       seed();
 
       await act(async () => {
@@ -492,13 +493,34 @@ describe('topic action', () => {
           effort: 'default',
           model: 'new-model',
           provider: 'codex',
+          speed: 'default',
         });
       });
 
       expect(spy).toHaveBeenCalledWith('hetero-topic', {
-        metadata: { heteroEffort: 'default' },
+        metadata: { heteroEffort: 'default', heteroSpeed: 'default' },
         model: 'new-model',
         provider: 'codex',
+      });
+    });
+
+    /** @example Selecting Fast updates only this Topic's speed and preserves its effort. */
+    it('persists a speed-only selection and keeps sibling metadata', async () => {
+      seed();
+      const spy = vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValue([]);
+      await act(() =>
+        useChatStore.getState().updateTopicHeteroPin('hetero-topic', {
+          provider: 'codex',
+          speed: 'fast',
+        }),
+      );
+
+      /** @example Persistence receives just the requested speed field. */
+      expect(spy).toHaveBeenCalledWith('hetero-topic', { heteroSpeed: 'fast' });
+      /** @example The Topic keeps its prior high effort alongside Fast. */
+      expect(useChatStore.getState().topicDataMap[KEY].items[0].metadata).toEqual({
+        heteroEffort: 'high',
+        heteroSpeed: 'fast',
       });
     });
 
