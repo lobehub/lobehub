@@ -6,6 +6,7 @@ export enum ModelProvider {
   AkashChat = 'akashchat',
   AntGroup = 'antgroup',
   Anthropic = 'anthropic',
+  AvalAI = 'avalai',
   Azure = 'azure',
   AzureAI = 'azureai',
   Baichuan = 'baichuan',
