@@ -38,6 +38,13 @@ const MAX_MISSED_HEARTBEATS = 3; // Force reconnect after 3 missed acks
  */
 const CONNECT_TIMEOUT = 15_000; // 15s
 const METRICS_ACK_TIMEOUT_MS = 15_000;
+/**
+ * Close reason the gateway sends when a newer socket with the same
+ * `connectionId` takes over. `connectionId` is persisted per install, so this
+ * is how a second process of the same install (two `lh connect` sharing one
+ * home) shows up.
+ */
+const REPLACED_CLOSE_REASON = 'Replaced by new connection';
 
 // ─── Logger Interface ───
 
@@ -116,6 +123,15 @@ export class GatewayClient extends EventEmitter {
     { reject: (error: Error) => void; resolve: () => void }
   >();
   private intentionalDisconnect = false;
+  /**
+   * When each socket abandoned mid-handshake was abandoned. Only such a socket
+   * can reach the gateway after its successor and knock it off with the
+   * takeover reason: an opened socket was registered before the successor
+   * existed. Each can do that at most once, and only within `connectTimeoutMs`
+   * (the handshake budget), so a takeover consumes one live entry and anything
+   * beyond them is another client.
+   */
+  private inFlightAbandons: number[] = [];
   private deviceId: string;
   private connectionId: string;
   private channel?: string;
@@ -489,6 +505,25 @@ export class GatewayClient extends EventEmitter {
     this.clearConnectWatchdog();
     this.ws = null;
 
+    if (
+      !this.intentionalDisconnect &&
+      reason.toString() === REPLACED_CLOSE_REASON &&
+      !this.consumeInFlightAbandon()
+    ) {
+      // Another client holding our connectionId just took over. Reconnecting
+      // would knock it off in turn: the two would trade the connection every
+      // second, and each tool call would land on whichever connected last —
+      // including a getCommandOutput sent to the process that never ran the
+      // command. Newest wins; this one stays down.
+      this.logger.warn(
+        'Connection taken over by another client with the same connection id; not reconnecting',
+      );
+      this.setStatus('disconnected');
+      this.emit('replaced');
+      this.emit('disconnected');
+      return;
+    }
+
     if (!this.intentionalDisconnect && this.autoReconnect) {
       this.setStatus('reconnecting');
       this.scheduleReconnect();
@@ -497,6 +532,13 @@ export class GatewayClient extends EventEmitter {
       this.emit('disconnected');
     }
   };
+
+  /** Attribute a takeover to one of our own late sockets, if one can still land. */
+  private consumeInFlightAbandon(): boolean {
+    const now = Date.now();
+    this.inFlightAbandons = this.inFlightAbandons.filter((at) => now - at <= this.connectTimeoutMs);
+    return this.inFlightAbandons.shift() !== undefined;
+  }
 
   private handleError = (error: Error) => {
     this.logger.error('WebSocket error:', error.message);
@@ -625,6 +667,7 @@ export class GatewayClient extends EventEmitter {
       return;
     }
     const ws = this.ws;
+    if (ws.readyState === WebSocket.CONNECTING) this.inFlightAbandons.push(Date.now());
     const suppressCloseError = (error: Error) => {
       this.logger.debug(`Ignoring WebSocket error during close: ${error.message}`);
     };

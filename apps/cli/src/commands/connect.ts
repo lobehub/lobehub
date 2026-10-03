@@ -592,6 +592,13 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       closeWorkspaceConnection(wsId);
     });
 
+    wsClient.on('replaced', () => {
+      error(
+        `Workspace ${wsId} share connection was taken over by another '${CLI_PRIMARY_BIN} connect' on this machine. Closing it here.`,
+      );
+      closeWorkspaceConnection(wsId);
+    });
+
     wsClient.on('auth_failed', (reason) => {
       // Only this share connection is affected — never exit the personal process.
       error(`Workspace ${wsId} authentication failed: ${reason}. Closing share connection.`);
@@ -766,6 +773,17 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     }
 
     error("Could not refresh token. Run 'lh login' to re-authenticate.");
+    cleanup();
+    process.exit(1);
+  });
+
+  // Another `lh connect` of this install (same persisted connection id) took
+  // over. The client no longer reconnects — doing so is what made the two trade
+  // the connection every second — so exit instead of sitting silently offline.
+  client.on('replaced', () => {
+    error(
+      `Another '${CLI_PRIMARY_BIN} connect' on this machine took over this device's gateway connection. Only one can be connected at a time; stopping this one.`,
+    );
     cleanup();
     process.exit(1);
   });
