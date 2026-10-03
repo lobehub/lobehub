@@ -595,10 +595,16 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     const openCreateWorktree = useCallback(() => {
       setOpen(false);
       openCreateWorktreeModal({
+        // The worktree list is the branch data this surface already holds; the
+        // generated default skips any branch it shows so a name is not handed
+        // out twice (see `generateWorktreeBranchName`).
+        excludeBranches: worktrees
+          .map((worktree) => worktree.branch)
+          .filter((branch): branch is string => !!branch),
         onSubmit: handleCreateWorktree,
         resolvePath: (branch) => deriveWorktreePath(sourcePath, branch),
       });
-    }, [handleCreateWorktree, sourcePath]);
+    }, [handleCreateWorktree, sourcePath, worktrees]);
 
     // Scroll the current worktree into view each time the dropdown opens — the
     // list mounts at scrollTop=0, so a current worktree below the fold would
