@@ -35,7 +35,7 @@ export const GoalReportManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Submit the Goal wrap-up report. The storyline (headline, chapters with their main-path nodes, findings and Work versions, detours with reason and lesson, next steps) is stored as structured metadata and `content` as the full markdown report; each call appends a new report version. The mainline marks the nodes and edges of the path that led to the result; chapters tell exactly that path. Every id must belong to this Goal: chapter and mainline nodeIds must be resolved, mainline edges must join two mainline nodes, detour nodeIds must be rejected, retired or superseded (revises / contradicts). A rejected call lists every invalid reference — fix them and call again.',
+        'Submit the Goal wrap-up report. The storyline (headline, chapters with their main-path nodes, findings and Work versions, detours with reason and lesson, next steps) is stored as structured metadata and `content` as the full markdown report; each call appends a new report version. The mainline marks the nodes and edges of the path that led to the result; chapters tell exactly that path. Every id must belong to this Goal: chapter and mainline nodeIds must be resolved, mainline edges must join two mainline nodes, detour nodeIds must be rejected, retired or superseded (revises / contradicts). When the instruction lists candidate detours, the report must tell at least one of them — a report that tells none is rejected. A rejected call lists every invalid reference — fix them and call again.',
       name: GoalReportApiName.submitGoalReport,
       parameters: {
         additionalProperties: false,
@@ -74,7 +74,11 @@ export const GoalReportManifest: BuiltinToolManifest = {
             description: 'The full written report in markdown, built from the metadata above.',
             type: 'string',
           },
-          deliverableWorkId: { type: 'string' },
+          deliverableWorkId: {
+            description:
+              'Work id of the Goal\'s final deliverable. Omit this field entirely when the Goal produced no deliverable; do not send an empty string or a placeholder such as "none".',
+            type: 'string',
+          },
           goalId: { type: 'string' },
           graphCursor: {
             description: 'The graph cursor given in the instruction.',

@@ -18,7 +18,7 @@ import { WorkModel } from '@/database/models/work';
 import { goalEvents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { validateGoalReport } from './report';
+import { reconcileGoalReport, validateGoalReport } from './report';
 
 /**
  * How long a wrap-up run may go without submitting before the page stops
@@ -148,11 +148,20 @@ export class GoalReportStore {
           .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
           .join('; ')}`,
       });
-    const content = input.content.trim();
+    const content = typeof input.content === 'string' ? input.content.trim() : '';
     if (!content)
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid report: content is empty' });
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Invalid report: content: required — the full markdown report is missing or empty',
+      });
 
-    const errors = validateGoalReport(graph, parsed.data, { eventIds });
+    // Reconcile the storyline with the graph before judging it: a weak default
+    // model can narrate the whole path and still drop every detour, hang a
+    // detour off a chapter's own nodeIds, or mark a mainline node it never
+    // narrates. Those are recovered deterministically (see reconcileGoalReport);
+    // any remaining invalid reference is still the agent's to fix.
+    const metadata = reconcileGoalReport(graph, parsed.data);
+    const errors = validateGoalReport(graph, metadata, { eventIds });
     if (errors.length > 0)
       throw new TRPCError({
         code: 'BAD_REQUEST',
@@ -163,7 +172,7 @@ export class GoalReportStore {
       agentId: caller?.agentId,
       content,
       goalId,
-      metadata: parsed.data,
+      metadata,
       rootOperationId: caller?.operationId,
       title: `Goal report: ${graph.goal.title}`,
       toolCallId: caller?.toolCallId,

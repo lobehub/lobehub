@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import RightPanel from '@/features/RightPanel';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -45,7 +46,16 @@ import ExplorationEdge from './ExplorationEdge';
 import { explorationMap } from './explorationMap';
 import GraphNodeView, { GhostNodeView, type GraphNodeData } from './GraphNode';
 import { type GraphBridge, hideKinds, layoutGraph, NODE_WIDTH } from './layout';
-import { type EdgeTone, edgeTone, isNodeDimmed, nodeEmphasis, resolveMainline } from './mainline';
+import {
+  edgeMarkerColor,
+  type EdgeTone,
+  edgeTone,
+  isNodeDimmed,
+  MUTED_EDGE_OPACITY,
+  MUTED_EDGE_OPACITY_DARK,
+  nodeEmphasis,
+  resolveMainline,
+} from './mainline';
 import { type MeasuredSizes, mergeMeasuredSizes } from './measuredSizes';
 import { revealCenter } from './revealNode';
 import { useExplorationNavigation } from './useExplorationNavigation';
@@ -102,7 +112,7 @@ const styles = createStaticStyles(({ css }) => ({
     }
 
     .react-flow__edge.goal-muted:not(.goal-hot) {
-      opacity: 0.3;
+      opacity: ${MUTED_EDGE_OPACITY};
     }
 
     .react-flow__edge.goal-hot .react-flow__edge-path {
@@ -112,6 +122,20 @@ const styles = createStaticStyles(({ css }) => ({
 
     .react-flow__edge.goal-mainline.goal-hot .react-flow__edge-path {
       stroke-width: 2.5;
+    }
+
+    /* Off-mainline lines keep their step-back on the light canvas. On the dark
+       one that same border token at a third opacity turns into background, so
+       the line is lifted just enough to read; the mainline stays the boldest
+       line on the map either way, so the hierarchy is not flattened. These
+       dark-theme overrides carry higher specificity, so they sit last to keep
+       the cascade ascending. */
+    html[data-theme='dark'] & .react-flow__edge.goal-muted:not(.goal-hot) {
+      opacity: ${MUTED_EDGE_OPACITY_DARK};
+    }
+
+    html[data-theme='dark'] & .react-flow__edge.goal-muted:not(.goal-hot) .react-flow__edge-path {
+      stroke: ${cssVar.colorTextQuaternary};
     }
 
     .react-flow__edge-textbg {
@@ -159,7 +183,7 @@ const styles = createStaticStyles(({ css }) => ({
     width: 14px;
     height: 3px;
     border-radius: 2px;
-    background: ${cssVar.colorPrimary};
+    background: ${cssVar.colorInfo};
   `,
   legendOff: css`
     opacity: 0.35;
@@ -388,6 +412,7 @@ const Canvas = memo<
     const containerRef = useRef<HTMLDivElement>(null);
     const subtitleOf = useSubtitle();
     const edgeLabel = useEdgeLabel();
+    const isDarkMode = useIsDark();
 
     const hasExperiments = graph.nodes.some((item) => item.node.kind === 'experiment');
     const map = useMemo(
@@ -577,13 +602,13 @@ const Canvas = memo<
 
     const flowEdges: FlowEdge[] = useMemo(() => {
       const marker = {
-        color: cssVar.colorBorder,
+        color: edgeMarkerColor(undefined, isDarkMode),
         height: 12,
         type: MarkerType.ArrowClosed,
         width: 12,
       };
-      const mainlineMarker = { ...marker, color: cssVar.colorPrimary };
-      const detourMarker = { ...marker, color: cssVar.colorWarning };
+      const mainlineMarker = { ...marker, color: edgeMarkerColor('mainline', isDarkMode) };
+      const detourMarker = { ...marker, color: edgeMarkerColor('detour', isDarkMode) };
       const isMainlineCard = (id: string) => emphasisById.get(id) === 'mainline';
       const toneOf = (edge: Parameters<typeof edgeTone>[1]) =>
         edgeTone(mainline, edge, isMainlineCard, highlightedIds);
@@ -656,6 +681,7 @@ const Canvas = memo<
       mainline,
       emphasisById,
       highlightedIds,
+      isDarkMode,
     ]);
 
     const ghostFlowEdges: FlowEdge[] = useMemo(
@@ -901,7 +927,9 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       {!fullscreen && toggle}
     </>
   );
-  const hasMainline = !!resolveMainline(props.graph);
+  // Read against the map actually drawn — a scoped drill-down judges its own
+  // cards, so the legend never promises a mainline the view decided to drop.
+  const hasMainline = !!resolveMainline(scopedGraph);
   const legend = (
     <Flexbox horizontal align={'center'} className={styles.legend} gap={10}>
       {hasMainline && (

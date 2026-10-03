@@ -1,4 +1,4 @@
-import { type GoalStatus, goalStatuses } from '@lobechat/const/goal';
+import { GOAL_ACCEPTANCE_TASK_TITLE, type GoalStatus, goalStatuses } from '@lobechat/const/goal';
 import type { GoalMetricCriterion, GoalTickResult } from '@lobechat/types';
 
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
@@ -43,6 +43,35 @@ const SERVER_ADVANCING_STATUSES = new Set<GoalStatus>(['planning', 'running', 'v
 /** Kept coarse on purpose — this is liveness, not a progress bar. */
 const GOAL_GRAPH_POLL_INTERVAL = 5000;
 const PENDING_CLARIFICATIONS_POLL_INTERVAL = 30_000;
+
+/**
+ * Acceptance states in which the Goal's own delivery has nothing left in
+ * flight. Anything else (`rejected`, `repairing`, `verifying`, …) is a write
+ * still on its way from the coordinator or from the verify run it dispatched.
+ */
+const SETTLED_ACCEPTANCE_STATUSES = new Set(['accepted', 'closed', 'delivered', 'errored']);
+
+/**
+ * Whether the Goal's own acceptance has a write still coming.
+ *
+ * A terminal Goal whose own acceptance has not settled is **mid-transition**:
+ * the verdict is not written yet. Stopping the poll on that half-written
+ * snapshot is what froze an open result page after a rework — the Goal already
+ * read 已达成 while the sign-off strip still showed the rejected round and the
+ * criteria count stayed at the rework's starting point, until the page was
+ * reloaded. Keep reading until the acceptance settles; the settled snapshot is
+ * the one the page can rest on.
+ */
+const goalAcceptanceUnsettled = (graph: {
+  acceptances?: Record<string, { status: string }>;
+  nodes?: { id: string; kind: string; title: string }[];
+}): boolean => {
+  const terminal = graph.nodes?.find(
+    (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE,
+  );
+  const acceptance = terminal ? graph.acceptances?.[terminal.id] : undefined;
+  return !!acceptance && !SETTLED_ACCEPTANCE_STATUSES.has(acceptance.status);
+};
 
 /** A conversation rarely plans more than one goal; this only bounds a runaway topic. */
 const TOPIC_GOAL_FETCH_LIMIT = 20;
@@ -193,9 +222,13 @@ export class GoalActionImpl {
       },
       // The wrap-up report is written after the Goal settles, so a finished
       // Goal keeps polling until its report run ends and the storyline lands.
+      // A Goal that already reads terminal while its own acceptance has not
+      // settled is mid-transition too — the verdict is still coming.
       refreshInterval: (graph) =>
         graph &&
-        (SERVER_ADVANCING_STATUSES.has(graph.goal.status) || graph.report?.status === 'running')
+        (SERVER_ADVANCING_STATUSES.has(graph.goal.status) ||
+          graph.report?.status === 'running' ||
+          (graph.goal.status === 'achieved' && goalAcceptanceUnsettled(graph)))
           ? GOAL_GRAPH_POLL_INTERVAL
           : 0,
       revalidateOnFocus: true,

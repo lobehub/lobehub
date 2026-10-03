@@ -361,7 +361,9 @@ export interface AbandonedNodeView {
 
 /**
  * Task nodes the Goal gave up on — rejected or retired — with the reason
- * recorded when it closed them, falling back to the attempt that ended it.
+ * recorded when it closed them, falling back to the attempt that ended it and
+ * then to the node's own description, so a dropped task still says why it was
+ * dropped even when no closing note was recorded.
  */
 export const buildAbandonedNodes = (graph: Pick<GoalGraphView, 'nodes'>): AbandonedNodeView[] =>
   graph.nodes
@@ -374,7 +376,8 @@ export const buildAbandonedNodes = (graph: Pick<GoalGraphView, 'nodes'>): Abando
       const reason = firstLine(
         view.closedReason ??
           view.attempts.findLast((attempt) => attempt.outcome !== 'running' && attempt.reason)
-            ?.reason,
+            ?.reason ??
+          view.node.description,
       );
       return { ...(reason ? { reason } : {}), view };
     });
@@ -497,6 +500,22 @@ export const resultTrailSource = (graph: Pick<GoalGraphView, 'report'>): ResultT
   if (!parsed.success) return { kind: 'derived' };
   return { kind: 'story', metadata: parsed.data, report: report.latest };
 };
+
+/** Whether the wrap-up agent is writing this result's storyline right now. */
+export const isGoalReportOrganizing = (graph: Pick<GoalGraphView, 'report'>): boolean =>
+  graph.report?.status === 'running';
+
+/**
+ * The one-line headline of the result.
+ *
+ * `report.latest` is the *previous* version until a new wrap-up lands, so while
+ * one is running (`report.status === 'running'`) there is no headline for this
+ * result yet. Returning the last version's here is what put the old result's
+ * title on top of a rework that had not produced its own; the caller shows the
+ * organizing state instead and the title swaps in when the run completes.
+ */
+export const goalResultHeadline = (graph: Pick<GoalGraphView, 'report'>): string | undefined =>
+  isGoalReportOrganizing(graph) ? undefined : graph.report?.latest?.metadata.headline;
 
 export interface StoryChapterView {
   artifacts: GoalArtifactView[];
