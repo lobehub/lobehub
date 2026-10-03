@@ -7,6 +7,7 @@ import type {
 import { AgentAccountApiName, AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
 
 import { AgentAccountModel } from '@/database/models/agentAccount';
+import type { AgentInboxMessageItem } from '@/database/schemas';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentAccountService } from '@/server/services/agentIdentity';
 import { AgentInboxService } from '@/server/services/agentIdentity/inbox';
@@ -73,6 +74,9 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
     const accounts = () =>
       new AgentAccountModel(db, userId, undefined, workspaceId).query({
         agentId: requireAgentId(),
+        // A released address is not the agent's any more: it can neither be
+        // listed, sent from, nor waited on.
+        liveOnly: true,
       });
 
     const inbox = new AgentInboxService(db, userId, workspaceId);
@@ -82,14 +86,15 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
       list.find((account) => account.id === ref || account.identifier === ref);
 
     /**
-     * Why an unattended reply may not go out, or `undefined` when it may. Only
-     * reached when the call named a thread — without one the send was already
-     * held for the user's approval by the manifest's outbound audit.
+     * Check an unattended thread reply. Only reached when the call named a
+     * thread — without one the send was already held for the user's approval
+     * by the manifest's outbound audit. Returns the refusal, or the newest
+     * message from the recipient on that thread, which the reply answers.
      */
-    const refuseThreadReply = async (
+    const checkThreadReply = async (
       accountId: string,
       args: SendMessageArgs & { threadKey: string },
-    ): Promise<string | undefined> => {
+    ): Promise<{ refusal: string } | { replyTo: AgentInboxMessageItem }> => {
       const recipient = normalizeAddress(args.to);
       const thread = await inbox.list({
         accountId,
@@ -98,8 +103,12 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         threadKey: args.threadKey,
       });
 
-      if (!thread.some((message) => normalizeAddress(message.from) === recipient)) {
-        return `Thread ${args.threadKey} has no message from ${args.to} in this inbox, so this is not a reply. Send it without \`threadKey\` to ask the user to approve it.`;
+      // `list` is newest first, so this is the message being answered.
+      const replyTo = thread.find((message) => normalizeAddress(message.from) === recipient);
+      if (!replyTo) {
+        return {
+          refusal: `Thread ${args.threadKey} has no message from ${args.to} in this inbox, so this is not a reply. Send it without \`threadKey\` to ask the user to approve it.`,
+        };
       }
 
       const recent = await inbox.list({
@@ -113,10 +122,12 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
           (message.codes ?? []).some((code) => args.text.includes(code)),
       );
       if (relayed) {
-        return `This reply contains a verification code that ${relayed.from} sent you. Codes are never relayed to another sender without the user's approval — send it without \`threadKey\` to ask the user.`;
+        return {
+          refusal: `This reply contains a verification code that ${relayed.from} sent you. Codes are never relayed to another sender without the user's approval — send it without \`threadKey\` to ask the user.`,
+        };
       }
 
-      return undefined;
+      return { replyTo };
     };
 
     return {
@@ -193,12 +204,14 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
           };
         }
 
+        let replyTo: AgentInboxMessageItem | undefined;
         if (args.threadKey) {
-          const refusal = await refuseThreadReply(target.id, {
+          const checked = await checkThreadReply(target.id, {
             ...args,
             threadKey: args.threadKey,
           });
-          if (refusal) return { content: refusal, success: false };
+          if ('refusal' in checked) return { content: checked.refusal, success: false };
+          replyTo = checked.replyTo;
         }
 
         try {
@@ -209,6 +222,7 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
           });
 
           const { providerMessageId } = await service.send(target.id, {
+            replyToProviderMessageId: replyTo?.providerMessageId,
             subject: args.subject,
             text: args.text,
             threadKey: args.threadKey,
@@ -279,6 +293,9 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
           const hit = candidates.find(matches);
 
           if (hit) {
+            // The model now holds this message, so it no longer counts as
+            // unread in the identity block of the following steps.
+            await inbox.markRead([hit.id]);
             return {
               content: `matched: true\n${fenceUntrustedInbox([toUntrustedInboxEntry(hit)])}`,
               state: { inboxMessageId: hit.id },

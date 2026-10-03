@@ -120,6 +120,8 @@ describe('agent-account server runtime', () => {
       from: 'login@service.com',
       subject: 'Your verification code',
     });
+    // Handed to the model, so it is no longer announced as unread.
+    expect(await AgentInboxService.summary(serverDB, agentId)).toEqual({ unreadCount: 0 });
   });
 
   it('waitForMessage reports a retryable timeout when nothing arrives', async () => {
@@ -300,6 +302,23 @@ describe('agent-account server runtime', () => {
     // Past every guard: it fails only at the unconfigured provider.
     expect(result.success).toBe(false);
     expect(result.content).toContain('Failed to send');
+  });
+
+  it('treats a released address as no longer the agent\'s', async () => {
+    await new AgentAccountService(serverDB, userId, {
+      registry: new AgentAccountProviderRegistry(),
+    }).revoke(accountId, { release: false });
+
+    const listed = JSON.parse((await runtime().listAccounts({})).content);
+    expect(listed.accounts).toEqual([]);
+
+    const send = await runtime().sendMessage({
+      accountId: 'toby-agent@lobe.id',
+      text: 'hi',
+      to: 'someone@example.com',
+    });
+    expect(send.success).toBe(false);
+    expect(send.content).toContain('is owned by this agent');
   });
 
   it('reports an honest failure when no send provider is configured', async () => {

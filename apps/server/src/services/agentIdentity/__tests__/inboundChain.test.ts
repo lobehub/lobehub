@@ -35,26 +35,37 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 const agentCalls = vi.hoisted(() => [] as Array<{ execAgent: any; userId: string }>);
+const execAgentFailure = vi.hoisted(() => ({ next: undefined as Error | undefined }));
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: class {
     private readonly userId: string;
     constructor(_db: unknown, userId: string) {
       this.userId = userId;
     }
-    async execAgent(params: unknown) {
+    async execAgent(params: any) {
       agentCalls.push({ execAgent: params, userId: this.userId });
+      if (execAgentFailure.next) {
+        const error = execAgentFailure.next;
+        execAgentFailure.next = undefined;
+        throw error;
+      }
       return {
         agentId: 'agent-inbound-chain',
         assistantMessageId: 'msg_assistant_inbox',
         autoStarted: true,
         createdAt: new Date().toISOString(),
         operationId: 'op_inbox_1',
+        topicId: params.appContext?.topicId ?? `tpc_inbox_${agentCalls.length}`,
       };
     }
   },
 }));
 
 let mockBaseUrl = '';
+
+// One claim store per test, shared by every request inside it — the same shape
+// as the deployment's process-wide store, without leaking ids between tests.
+const claims = vi.hoisted(() => ({ store: undefined as any }));
 
 // The route's factory builds its registry from deployment env, which this
 // environment has not configured. Point `createDefaultAgentAccountRegistry` at
@@ -67,7 +78,7 @@ vi.mock('../providers', async (importOriginal) => {
     ...actual,
     createDefaultAgentAccountRegistry: () =>
       actual.createAgentAccountRegistry({
-        agentMail: { apiBaseUrl: mockBaseUrl, apiKey: 'am_route_test' },
+        agentMail: { apiBaseUrl: mockBaseUrl, apiKey: 'am_route_test', dedupeStore: claims.store },
       }),
   };
 });
@@ -171,6 +182,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
   agentCalls.length = 0;
+  const { createInMemoryLinqWebhookDedupeStore } = await import('@lobechat/agent-address-linq');
+  claims.store = createInMemoryLinqWebhookDedupeStore();
   await serverDB.delete(users);
   await serverDB.insert(users).values({ id: userId });
   await serverDB.insert(agents).values({ id: agentId, userId });
@@ -250,7 +263,9 @@ describe('Agent inbound webhook — end to end over the real route', () => {
       providerMessageId: 'msg_in_chain',
       subject: 'Your verification code',
     });
-    expect(rows[0].readAt).toBeNull();
+    // The woken run received the message, so it no longer counts as unread
+    // and will not be announced again on the agent's next step.
+    expect(rows[0].readAt).not.toBeNull();
 
     // 3. The wake is a real run on the account's owner, stamped `inbox`.
     expect(agentCalls).toHaveLength(1);
@@ -270,14 +285,15 @@ describe('Agent inbound webhook — end to end over the real route', () => {
     expect(fenced).toContain('"839201"');
     expect(fenced.trimEnd().endsWith('</untrusted_inbox>')).toBe(true);
 
-    // 4. The provider retries the SAME delivery: idempotent, no second wake.
+    // 4. The provider retries the SAME delivery: acknowledged by its event id
+    // (200, so the provider stops retrying), nothing stored or woken twice.
     const retry = await post('agent-mail', body, signedHeaders(body));
     const retryJson = await retry.json();
     transcript.push(
-      `4. retry same delivery -> ${retry.status} created=${retryJson.created} wake=${retryJson.wake?.reason} execAgentCalls=${agentCalls.length}`,
+      `4. retry same delivery -> ${retry.status} outcome=${retryJson.outcome} execAgentCalls=${agentCalls.length}`,
     );
     expect(retry.status).toBe(200);
-    expect(retryJson).toMatchObject({ created: false, messageId: firstJson.messageId });
+    expect(retryJson).toMatchObject({ outcome: 'ignored' });
     expect(agentCalls).toHaveLength(1);
 
     const afterRetry = await serverDB
@@ -313,7 +329,34 @@ describe('Agent inbound webhook — end to end over the real route', () => {
     console.log(`\n[agent-inbound-chain]\n${transcript.join('\n')}\n[/agent-inbound-chain]\n`);
   });
 
+  it('continues a mail thread in the topic its first message woke', async () => {
+    const first = inboundBody({ eventId: 'evt_thread_1', messageId: 'msg_thread_1' });
+    const second = inboundBody({ eventId: 'evt_thread_2', messageId: 'msg_thread_2' });
+
+    await post('agent-mail', first, signedHeaders(first));
+    await post('agent-mail', second, signedHeaders(second));
+
+    expect(agentCalls).toHaveLength(2);
+    expect(agentCalls[0].execAgent.appContext.topicId).toBeUndefined();
+    expect(agentCalls[1].execAgent.appContext).toEqual({ scope: 'agent', topicId: 'tpc_inbox_1' });
+  });
+
+  it('answers the provider with a fixed code, never the internal failure', async () => {
+    execAgentFailure.next = new Error('connect ECONNREFUSED 10.0.0.12:5432 (secret-db-host)');
+    const body = inboundBody({ eventId: 'evt_fail', messageId: 'msg_fail' });
+
+    const response = await post('agent-mail', body, signedHeaders(body));
+    const text = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(text).wake).toEqual({ reason: 'wake-failed', started: false });
+    expect(text).not.toContain('ECONNREFUSED');
+    expect(text).not.toContain('secret-db-host');
+  });
+
   it('summarizes the inbox as an unread count and nothing a sender wrote', async () => {
+    // A delivery whose wake did not start stays unread for the next turn.
+    execAgentFailure.next = new Error('no run');
     const body = inboundBody();
     await post('agent-mail', body, signedHeaders(body));
 

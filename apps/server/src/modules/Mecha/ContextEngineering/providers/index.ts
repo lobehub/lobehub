@@ -191,10 +191,11 @@ export const createServerContextFactProviders = ({
     },
 
     /**
-     * The agent's own identity as first-class state: the addresses it owns and
-     * how much is unread in its inbox (never the messages themselves). Read on every step so a message that landed mid-conversation
-     * is visible on the next one — this is what the runtime relies on instead of
-     * carrying an always-on mailbox tool.
+     * The agent's own identity as first-class state: the live addresses it owns
+     * and how much is unread in its inbox (never the messages themselves). Read
+     * on every step so a message that landed mid-conversation is visible on the
+     * next one — this is what the runtime relies on instead of carrying an
+     * always-on mailbox tool.
      *
      * A share visitor never gets the agent's identity: it is the creator's.
      */
@@ -204,6 +205,7 @@ export const createServerContextFactProviders = ({
 
       const accounts = await new AgentAccountModel(db, userId, undefined, workspaceId).query({
         agentId: targetAgentId,
+        liveOnly: true,
       });
       if (accounts.length === 0) return undefined;
 

@@ -56,7 +56,9 @@ export async function agentAccountWebhook(c: Context): Promise<Response> {
           messageId: result.messageId,
           outcome: result.outcome,
           success: true,
-          wake: result.wake,
+          // Only the fixed outcome code: the provider is an outside caller and
+          // must not learn internal errors or which topic the run landed in.
+          wake: { reason: result.wake.reason, started: result.wake.started },
         },
         result.status,
       );

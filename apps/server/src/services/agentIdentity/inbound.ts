@@ -32,6 +32,8 @@ export interface AgentInboundWakeResult {
   reason: string;
   /** Whether a run was actually started. */
   started: boolean;
+  /** The topic the run landed in, so later mail on the same thread can join it. */
+  topicId?: string;
 }
 
 export interface AgentInboundWaker {
@@ -218,10 +220,10 @@ export class AgentInboundService {
     try {
       return await waker.wake({ account, message });
     } catch (error) {
-      return {
-        reason: `wake-failed: ${error instanceof Error ? error.message : String(error)}`,
-        started: false,
-      };
+      // The reason travels back to the provider in the webhook response, so it
+      // stays a fixed code; the detail goes to the server log only.
+      console.error('[agentInbound] wake failed for account %s:', account.id, error);
+      return { reason: 'wake-failed', started: false };
     }
   };
 

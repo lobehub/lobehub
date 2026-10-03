@@ -122,6 +122,51 @@ export class AgentInboxModel {
   };
 
   /**
+   * The topic an earlier wake on this thread ran in, if any. Unscoped like
+   * {@link record}: the waker learns the account from the webhook, before any
+   * user is known, and the thread belongs to that account's owner.
+   */
+  static findThreadTopicId = async (
+    db: LobeChatDatabase,
+    params: { accountId: string; threadKey: string },
+  ): Promise<string | undefined> => {
+    const [row] = await db
+      .select({ topicId: sql<string | null>`${agentInboxMessages.metadata}->>'topicId'` })
+      .from(agentInboxMessages)
+      .where(
+        and(
+          eq(agentInboxMessages.accountId, params.accountId),
+          eq(agentInboxMessages.threadKey, params.threadKey),
+          sql`${agentInboxMessages.metadata} ? 'topicId'`,
+        ),
+      )
+      .orderBy(desc(agentInboxMessages.receivedAt))
+      .limit(1);
+
+    return row?.topicId ?? undefined;
+  };
+
+  /**
+   * Stamp a delivery whose wake started: the run received its content, so it is
+   * read, and the topic it ran in is remembered so its thread can continue there.
+   */
+  static markWoken = async (
+    db: LobeChatDatabase,
+    id: string,
+    topicId: string | undefined,
+  ): Promise<void> => {
+    await db
+      .update(agentInboxMessages)
+      .set({
+        metadata: topicId
+          ? sql`coalesce(${agentInboxMessages.metadata}, '{}'::jsonb) || ${JSON.stringify({ topicId })}::jsonb`
+          : undefined,
+        readAt: sql`coalesce(${agentInboxMessages.readAt}, now())`,
+      })
+      .where(eq(agentInboxMessages.id, id));
+  };
+
+  /**
    * Mark messages read. Scoped to the caller's own rows; an id that is not
    * theirs is silently skipped rather than reported, so the call cannot be
    * used to probe another inbox.

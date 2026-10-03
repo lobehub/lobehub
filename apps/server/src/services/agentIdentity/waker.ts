@@ -1,6 +1,7 @@
 import { RequestTrigger } from '@lobechat/types';
 
 import type { AgentAccountView } from '@/database/models/agentAccount';
+import { AgentInboxModel } from '@/database/models/agentInbox';
 import type { AgentInboxMessageItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -38,20 +39,37 @@ export const createAgentInboundWaker = (db: LobeChatDatabase): AgentInboundWaker
       workspaceId: account.workspaceId ?? undefined,
     });
 
+    // A reply in an ongoing thread continues the conversation the earlier
+    // message started, instead of opening one topic per email.
+    const threadTopicId = message.threadKey
+      ? await AgentInboxModel.findThreadTopicId(db, {
+          accountId: account.id,
+          threadKey: message.threadKey,
+        })
+      : undefined;
+
     // Returns once the operation exists (`ExecAgentResult` is "started", not
     // "finished"), so the webhook answers the provider promptly while the run
     // continues in the background.
-    const result = await service.execAgent({
-      agentId: account.agentId,
-      appContext: { scope: 'agent' } as never,
-      prompt: buildInboundPrompt(account, message),
-      trigger: RequestTrigger.Inbox,
-    });
+    const start = (topicId?: string) =>
+      service.execAgent({
+        agentId: account.agentId,
+        appContext: { scope: 'agent', topicId },
+        prompt: buildInboundPrompt(account, message),
+        trigger: RequestTrigger.Inbox,
+      });
+
+    let result = await start(threadTopicId);
+    // The thread's topic may have been deleted since; a fresh topic beats no wake.
+    if (result.error && threadTopicId) result = await start();
 
     if (result.error) {
-      return { reason: `start-failed: ${result.error}`, started: false };
+      console.error('[agentInbound] run did not start for account %s: %s', account.id, result.error);
+      return { reason: 'start-failed', started: false };
     }
 
-    return { reason: 'started', started: true };
+    await AgentInboxModel.markWoken(db, message.id, result.topicId);
+
+    return { reason: 'started', started: true, topicId: result.topicId };
   },
 });

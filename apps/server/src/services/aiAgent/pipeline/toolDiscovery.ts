@@ -559,9 +559,9 @@ export const discoverTools = async (
       deps.userId,
       undefined,
       deps.workspaceId,
-    ).query({ agentId: resolvedAgentId });
+    ).query({ agentId: resolvedAgentId, liveOnly: true });
 
-    return accounts.some((account) => account.status !== 'revoked');
+    return accounts.length > 0;
   }
 
   // Every other read this send needs, started together. They hit different

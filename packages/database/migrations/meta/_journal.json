@@ -1246,6 +1246,13 @@
       "when": 1791660970899,
       "tag": "0177_agent_accounts_live_unique_and_goal_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 177,
+      "version": "7",
+      "when": 1791221285998,
+      "tag": "0177_agent_inbox_messages",
+      "breakpoints": true
     }
   ],
   "version": "6"

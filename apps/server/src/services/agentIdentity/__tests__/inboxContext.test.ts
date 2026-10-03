@@ -115,6 +115,36 @@ describe('Agent identity as first-class runtime state', () => {
     expect(system).not.toContain('839201');
   });
 
+  it('stops presenting an address once it has been released', async () => {
+    const service = new AgentAccountService(serverDB, userId, {
+      registry: new AgentAccountProviderRegistry(),
+    });
+    const live = await service.create({
+      agentId,
+      capabilities: { receive: true, send: true },
+      identifier: 'toby-agent@lobe.id',
+      kind: 'mail',
+      provider: 'user',
+    });
+    const released = await service.create({
+      agentId,
+      capabilities: { receive: true, send: true },
+      identifier: 'old-toby@lobe.id',
+      kind: 'mail',
+      provider: 'user',
+    });
+    await service.revoke(released.id, { release: false });
+
+    const facts = await gatherContextFacts(factsRequest(), providers());
+    expect(facts.step.agentAccountContext?.accounts.map((a) => a.identifier)).toEqual([
+      'toby-agent@lobe.id',
+    ]);
+
+    await service.revoke(live.id, { release: false });
+    const afterAll = await gatherContextFacts(factsRequest(), providers());
+    expect(afterAll.step.agentAccountContext).toBeUndefined();
+  });
+
   it('adds no identity block for an agent that owns nothing', async () => {
     const facts = await gatherContextFacts(factsRequest(), providers());
     expect(facts.step.agentAccountContext).toBeUndefined();

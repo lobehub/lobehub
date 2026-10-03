@@ -84,13 +84,16 @@ export const agentInboxMessages = pgTable(
     ...timestamps,
   },
   (t) => [
+    // Also serves every per-account lookup (its leading column), so there is no
+    // separate account_id index.
     uniqueIndex('agent_inbox_messages_account_provider_message_unique').on(
       t.accountId,
       t.providerMessageId,
     ),
-    index('agent_inbox_messages_agent_id_idx').on(t.agentId),
-    index('agent_inbox_messages_account_id_idx').on(t.accountId),
-    index('agent_inbox_messages_received_at_idx').on(t.receivedAt),
+    // The inbox read: one agent's messages, newest first.
+    index('agent_inbox_messages_agent_received_at_idx').on(t.agentId, t.receivedAt),
+    // Thread lookups: the reply check and continuing a thread in its topic.
+    index('agent_inbox_messages_account_thread_idx').on(t.accountId, t.threadKey),
     index('agent_inbox_messages_user_id_idx').on(t.userId),
   ],
 );
