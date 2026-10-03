@@ -10,6 +10,12 @@ const ThinkingLevelSlider = createLevelSliderComponent<ThinkingLevel>({
   configKey: 'thinkingLevel',
   defaultValue: 'high',
   levels: THINKING_LEVELS,
+  marks: Object.fromEntries(
+    THINKING_LEVELS.map((label, index) => [
+      index,
+      { label, style: { overflowWrap: 'normal', whiteSpace: 'nowrap' } },
+    ]),
+  ),
   style: { minWidth: 200 },
 });
 
