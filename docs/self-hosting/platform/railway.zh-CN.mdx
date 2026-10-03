@@ -1,0 +1,45 @@
+---
+title: 在 Railway 上部署 LobeHub 数据库版
+description: >-
+  在 Railway 上一键部署 LobeHub：包含 LobeHub、ParadeDB Postgres 和 RustFS 对象存储，
+  且只允许你填写的邮箱注册。
+tags:
+  - 部署 LobeHub
+  - Railway 部署
+  - 自定义域名
+---
+
+# 在 Railway 上部署 LobeHub 数据库版
+
+<Callout type="info">
+  本文假设你已经熟悉 LobeHub 服务端数据库版的部署原理和流程，因此只包含与核心环境变量配置相关的内容。
+  如果你还不熟悉，请先参考 [快速开始](/zh/docs/self-hosting/start)。
+</Callout>
+
+Railway 模板包含 3 个服务：
+
+- LobeHub 数据库版，使用官方 `lobehub/lobehub` 镜像。
+- 带 pgvector 和 pg_search 的 PostgreSQL（ParadeDB），用于数据存储和索引。
+- RustFS，用于文件存储。
+
+<Steps>
+  ### 部署模板
+
+  [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/lobehub-1?referralCode=9bD9mT)
+
+  唯一需要填写的是 `AUTH_ALLOWED_EMAILS`：允许注册的邮箱地址，也可以是用逗号分隔的多个地址或域名。`KEY_VAULTS_SECRET`、`AUTH_SECRET`、数据库密码和存储密钥都会自动生成。
+
+  ### 注册账号
+
+  部署完成后，打开 `lobehub` 服务的公开域名（也可以在 `LOBEHUB_URL` 变量中找到），用你填写的邮箱注册，然后在设置中添加模型服务商的 API Key。
+
+  ### 绑定自定义域名（可选）
+
+  在 Railway 中为 `lobehub` 服务添加域名，把 `APP_URL` 改成 `https://你的域名`，然后重新部署该服务。模板的启动步骤会在每次启动时把存储的 CORS 规则更新为新的地址。
+</Steps>
+
+## 文件和密钥的处理方式
+
+文件通过预签名 URL 从浏览器直接上传到 RustFS 的公开域名，因此存储桶需要为你的 `APP_URL` 配置 CORS 规则。模板的启动步骤会创建存储桶并设置该规则。存储桶保持私有，文件通过预签名 URL 展示。
+
+`JWKS_KEY` 会在首次启动时生成并保存在私有存储桶中，之后每次重启都会读取同一个密钥。如果想使用自己的密钥，请在 `lobehub` 服务上设置 `JWKS_KEY`。
