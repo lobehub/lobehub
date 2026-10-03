@@ -1,4 +1,4 @@
-import type { AIImageModelCard } from '../types';
+import type { AIImageModelCard, AIVideoModelCard } from '../types';
 
 // Replicate image models
 // https://replicate.com/black-forest-labs
@@ -86,6 +86,45 @@ const imageModels: AIImageModelCard[] = [
   },
 ];
 
-export const allModels = [...imageModels];
+// Replicate video models
+// https://replicate.com/prunaai/p-video
+const videoModels: AIVideoModelCard[] = [
+  {
+    description:
+      'Fast video generation with text-to-video and image-to-video in a single endpoint, tuned for rapid creative iteration.',
+    displayName: 'P-Video',
+    enabled: true,
+    id: 'prunaai/p-video',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '1:1'],
+      },
+      duration: { default: 5, max: 20, min: 1, step: 1 },
+      endImageUrl: { default: null },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['720p', '1080p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [
+        {
+          lookup: {
+            pricingParams: ['resolution'],
+            prices: { '1080p': 0.04, '720p': 0.02 },
+          },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'second',
+        },
+      ],
+    },
+    releasedAt: '2026-08-06',
+    type: 'video',
+  },
+];
+
+export const allModels = [...imageModels, ...videoModels];
 
 export default allModels;
