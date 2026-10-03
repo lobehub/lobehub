@@ -4,7 +4,7 @@ import {
   formatModifyNodesResult,
   parseLiteXMLBlocks,
 } from '@lobechat/editor-runtime';
-import type { CommandName } from 'just-bash';
+import type { CommandName } from 'just-bash/browser';
 
 import type { BashState } from '../types';
 
@@ -133,7 +133,9 @@ export const runPageBash = async (
   runtime: EditorRuntime,
   command: string,
 ): Promise<{ content: string; state: BashState }> => {
-  const { Bash, defineCommand } = await import('just-bash');
+  // The browser build keeps the virtual shell without tracing optional SQL,
+  // Python, or JavaScript runtimes into serverless functions.
+  const { Bash, defineCommand } = await import('just-bash/browser');
 
   const {
     metadata: { title },
