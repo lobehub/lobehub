@@ -13,8 +13,9 @@ import {
   CodexAdapter,
   CursorAcpAdapter,
   CursorAdapter,
-  DroidAcpAdapter,
   DevinAcpAdapter,
+  DroidAcpAdapter,
+  DshAdapter,
   GrokBuildAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
@@ -81,6 +82,14 @@ const runtimeAdapterRegistry = {
   },
   'droid-acp': {
     createAdapter: () => new DroidAcpAdapter(),
+  },
+  /**
+   * DeepSeek Harness SDK runtime. Registered here rather than in
+   * `localAgentRegistry` because it is a JSON-RPC server, not a CLI that prints
+   * a JSONL dialect, so it carries no local CLI install/auth descriptor.
+   */
+  'deepseek-harness': {
+    createAdapter: () => new DshAdapter(),
   },
 } satisfies Record<string, AgentRegistryEntry>;
 

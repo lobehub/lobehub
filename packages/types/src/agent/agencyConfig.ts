@@ -5,6 +5,7 @@ import { hasAnyCliFlag, hasCliConfigKey, hasCliFlag } from './heteroCliArgs';
 import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
 import {
   HETEROGENEOUS_AGENT_CONFIGS,
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './heterogeneousAgent';
 import type {
@@ -353,6 +354,7 @@ export const applyTopicModelToHeterogeneousProvider = (
 
 const HETEROGENEOUS_AGENT_TYPES = new Set<string>([
   ...HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+  ...LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
   ...REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
 ]);
 

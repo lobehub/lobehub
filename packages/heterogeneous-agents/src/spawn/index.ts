@@ -108,6 +108,13 @@ export {
   parseDroidAcpModelCatalog,
 } from './droidAcpSession';
 export {
+  DSH_COMMAND,
+  DSH_SDK_PROFILE_ARGS,
+  type DshSdkSessionHandle,
+  type DshSdkSessionOptions,
+  spawnDshSdkSession,
+} from './dshSdkSession';
+export {
   createFileStoreImageUploader,
   type FileStoreCreateFileInput,
   type FileStorePort,

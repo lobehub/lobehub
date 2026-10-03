@@ -254,6 +254,7 @@
   "connectAgent.providerDesc.codebuddy": "腾讯编码助理 CLI",
   "connectAgent.providerDesc.codex": "OpenAI 编码助理 CLI",
   "connectAgent.providerDesc.cursor": "Cursor 编码助理 CLI",
+  "connectAgent.providerDesc.deepseek-harness": "DeepSeek Harness Agent（dsh CLI），支持工具调用和子 Agent",
   "connectAgent.providerDesc.devin": "Cognition 编码助理 CLI",
   "connectAgent.providerDesc.droid": "Factory 编码助理 CLI",
   "connectAgent.providerDesc.grok-build": "xAI 编码助理 CLI",

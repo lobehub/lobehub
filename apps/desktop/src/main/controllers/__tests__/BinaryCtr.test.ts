@@ -57,4 +57,15 @@ describe('BinaryCtr', () => {
     await expect(manager.detect('codex')).resolves.toMatchObject(detectedStatus);
     expect(detectSpec).toHaveBeenCalledTimes(2);
   });
+
+  it('reports a bundled local runtime as available without probing an external binary', async () => {
+    const controller = new BinaryCtr({} as App);
+
+    await expect(
+      controller.detectHeterogeneousAgentCommand({
+        agentType: 'deepseek-harness',
+        command: 'dsh',
+      }),
+    ).resolves.toEqual({ available: true });
+  });
 });

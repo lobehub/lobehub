@@ -61,6 +61,7 @@ import {
   setHeteroSessionBindingKeyForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
 } from '@/helpers/heteroSessionByWorkingDirectory';
+import { createPayloadWithKeyVaults } from '@/services/_auth';
 import { agentQuotaService } from '@/services/agentQuota';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import {
@@ -596,8 +597,13 @@ export const executeHeterogeneousAgent = async (
   // completion stay in this executor's flow because the resume-session-id save
   // must run before queued follow-up sends. `parentMessage*` are unused for non-client.
   const runScope: RunScope = context.scope === 'sub_agent' ? 'sub_agent' : 'top_level';
+  // Set when the producer emits `session_title`; consumed by the lifecycle at
+  // completion, where the new-topic gate lives.
+  let producerTitle: string | undefined;
+
   const runLifecycle = buildRunLifecycle(get, {
     context,
+    getProducerTitle: () => producerTitle,
     parentMessageId: assistantMessageId,
     parentMessageType: 'assistant',
     runId: operationId,
@@ -2007,6 +2013,10 @@ export const executeHeterogeneousAgent = async (
       // over both provenance and account routing.
       ...heterogeneousProvider.env,
     };
+    if (adapterType === 'deepseek-harness' && !sessionEnv.DEEPSEEK_API_KEY) {
+      const deepSeekAuth = createPayloadWithKeyVaults('deepseek');
+      if (deepSeekAuth.apiKey) sessionEnv.DEEPSEEK_API_KEY = deepSeekAuth.apiKey;
+    }
 
     const spawnArgs = buildHeteroSpawnArgs(heterogeneousProvider);
     const providerBinding = serverDefaultBindingActive
@@ -2027,11 +2037,17 @@ export const executeHeterogeneousAgent = async (
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: spawnArgs,
-      command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
+      command:
+        adapterType === 'deepseek-harness'
+          ? ''
+          : resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:
-        (adapterType === 'devin' || adapterType === 'droid' || adapterType === 'trae') &&
+        (adapterType === 'devin' ||
+          adapterType === 'droid' ||
+          adapterType === 'trae' ||
+          adapterType === 'deepseek-harness') &&
         !providerBindingActive &&
         heterogeneousProvider.model &&
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
@@ -2120,6 +2136,16 @@ export const executeHeterogeneousAgent = async (
         get().updateOperationMetadata?.(operationId, {
           streamRetry: toStreamRetryMetadata(event, adapterType),
         });
+        return;
+      }
+
+      // The producer titled its own session. Hold it for the lifecycle rather
+      // than writing the topic here: only the completion path knows whether
+      // this is a new topic, and a producer title must not overwrite the title
+      // of a topic the user is continuing.
+      if (event.type === 'session_title') {
+        const title = (event.data as { title?: unknown } | undefined)?.title;
+        if (typeof title === 'string' && title.trim()) producerTitle = title.trim();
         return;
       }
 

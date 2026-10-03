@@ -29,6 +29,9 @@ const IDLE: AgentScanState = { agents: null, status: 'idle' };
 export const scanLocal = async (): Promise<HeterogeneousAgentScanMap> => {
   const entries = await Promise.all(
     CONNECTABLE_PROVIDERS.map(async (provider) => {
+      if (provider.kind === 'runtime') {
+        return [provider.type, { available: true }] as const;
+      }
       try {
         const status = await binaryService.detectHeterogeneousAgentCommand({
           agentType: provider.type,

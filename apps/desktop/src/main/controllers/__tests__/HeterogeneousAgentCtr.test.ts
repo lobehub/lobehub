@@ -193,6 +193,10 @@ const {
   devinAcpSessionConstructMock,
   devinAcpSessionInterruptMock,
   devinAcpSessionRunMock,
+  dshDetectMock,
+  dshDisposeMock,
+  dshPromptMock,
+  dshSpawnMock,
   grokAcpSessionCloseMock,
   grokAcpSessionConstructMock,
   grokAcpSessionInterruptMock,
@@ -233,6 +237,10 @@ const {
   devinAcpSessionConstructMock: vi.fn(),
   devinAcpSessionInterruptMock: vi.fn(),
   devinAcpSessionRunMock: vi.fn(),
+  dshDetectMock: vi.fn(),
+  dshDisposeMock: vi.fn(),
+  dshPromptMock: vi.fn(),
+  dshSpawnMock: vi.fn(),
   grokAcpSessionCloseMock: vi.fn(),
   grokAcpSessionConstructMock: vi.fn(),
   grokAcpSessionInterruptMock: vi.fn(),
@@ -251,6 +259,11 @@ const {
 const { ensureResumeTranscriptMock } = vi.hoisted(() => ({
   ensureResumeTranscriptMock: vi.fn(async () => ({ path: '', written: false })),
 }));
+
+vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, detectValidatedCommand: dshDetectMock };
+});
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -604,6 +617,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     CursorAcpSession: MockCursorAcpSession,
     DroidAcpSession: MockDroidAcpSession,
     DevinAcpSession: MockDevinAcpSession,
+    spawnDshSdkSession: dshSpawnMock,
     isCodexAppServerCompatibilityError: (error: Error) =>
       error.name === 'CodexAppServerConnectionError',
     GrokAcpSession: MockGrokAcpSession,
@@ -780,6 +794,22 @@ describe('HeterogeneousAgentCtr', () => {
     devinAcpSessionConstructMock.mockReset();
     devinAcpSessionInterruptMock.mockReset();
     devinAcpSessionRunMock.mockReset();
+    dshDetectMock.mockReset();
+    dshDetectMock.mockResolvedValue({
+      available: true,
+      path: '/usr/local/bin/dsh',
+      resolvedPathEnv: '/usr/local/bin:/usr/bin',
+      version: '0.2.0-rc.2',
+    });
+    dshDisposeMock.mockReset();
+    dshDisposeMock.mockResolvedValue(undefined);
+    dshPromptMock.mockReset();
+    dshSpawnMock.mockReset();
+    dshSpawnMock.mockResolvedValue({ dispose: dshDisposeMock, prompt: dshPromptMock });
+    dshPromptMock.mockImplementation(async function* () {
+      yield { data: { text: 'DSH UI OK' }, type: 'content_delta' };
+      yield { data: { reason: 'complete' }, type: 'agent_runtime_end' };
+    });
     grokAcpSessionCloseMock.mockReset();
     grokAcpSessionConstructMock.mockReset();
     grokAcpSessionInterruptMock.mockReset();
@@ -1328,6 +1358,117 @@ describe('HeterogeneousAgentCtr', () => {
       await ctr.getKimiCodeQuota({ ...params, force: true });
 
       expect(fetchKimiCodeQuotaMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('sendPrompt (deepseek-harness)', () => {
+    it('drives the installed dsh CLI sdk profile and broadcasts unified stream events', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        command: '',
+        cwd: '/workspace',
+        env: { DEEPSEEK_API_KEY: 'test-key' },
+        initialModel: 'deepseek-chat',
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-dsh',
+        prompt: 'hello',
+        sessionId,
+        systemContext: 'follow project rules',
+      });
+
+      // An empty renderer command falls back to the `dsh` binary, resolved
+      // through the login-shell PATH a GUI launch otherwise lacks.
+      expect(dshDetectMock).toHaveBeenCalledWith(
+        'dsh',
+        expect.objectContaining({ validatePattern: expect.any(RegExp) }),
+        expect.objectContaining({ DEEPSEEK_API_KEY: 'test-key' }),
+      );
+      expect(dshSpawnMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: '/usr/local/bin/dsh',
+          cwd: '/workspace',
+          env: expect.objectContaining({
+            DEEPSEEK_API_KEY: 'test-key',
+            PATH: '/usr/local/bin:/usr/bin',
+          }),
+          model: 'deepseek-chat',
+          provider: 'deepseek-official',
+        }),
+      );
+      expect(dshSpawnMock.mock.calls[0][0]).not.toHaveProperty('sessionRoot');
+      expect(dshPromptMock).toHaveBeenCalledWith('follow project rules\n\nhello');
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentEvent',
+        expect.objectContaining({
+          event: expect.objectContaining({ operationId: 'op-dsh', type: 'content_delta' }),
+          sessionId,
+        }),
+      );
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+      expect(dshDisposeMock).toHaveBeenCalledOnce();
+    });
+
+    it('fails the turn with an install hint when the dsh CLI is missing', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
+      dshDetectMock.mockResolvedValueOnce({ available: false, error: 'not found' });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        command: '',
+        cwd: '/workspace',
+        initialModel: 'deepseek-chat',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-dsh', prompt: 'hello', sessionId }),
+      ).rejects.toThrow(/npm i -g @deepseek-ai\/dsh/);
+      expect(dshSpawnMock).not.toHaveBeenCalled();
+    });
+
+    it('does not prompt when Stop lands while the runtime is initializing', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        command: '',
+        cwd: '/workspace',
+        initialModel: 'deepseek-chat',
+      });
+
+      let finishInit!: () => void;
+      dshSpawnMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishInit = () => resolve({ dispose: dshDisposeMock, prompt: dshPromptMock });
+          }),
+      );
+
+      const sending = ctr.sendPrompt({ operationId: 'op-dsh', prompt: 'hello', sessionId });
+      await vi.waitFor(() => expect(dshSpawnMock).toHaveBeenCalled());
+      // No handle exists yet, so cancel can only record the intent.
+      await ctr.cancelSession({ sessionId });
+      finishInit();
+      await sending;
+
+      expect(dshPromptMock).not.toHaveBeenCalled();
+      expect(dshDisposeMock).toHaveBeenCalledOnce();
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
   });
 
@@ -5487,6 +5628,41 @@ describe('HeterogeneousAgentCtr', () => {
       event.preventDefault.mockClear();
       beforeQuit(event);
       expect(event.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('before-quit waits for a running DSH runtime to dispose before quitting', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+      electron.app.quit.mockClear();
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        command: '',
+        cwd: '/workspace',
+      });
+      const session = (ctr as any).sessions.get(sessionId);
+      let finishDispose!: () => void;
+      const dispose = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishDispose = resolve;
+          }),
+      );
+      session.dshSession = { dispose, prompt: dshPromptMock };
+
+      ctr.afterAppReady();
+      const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
+      beforeQuit({ preventDefault: vi.fn() });
+
+      expect(dispose).toHaveBeenCalledOnce();
+      expect(session.cancelledByUs).toBe(true);
+      await Promise.resolve();
+      expect(electron.app.quit).not.toHaveBeenCalled();
+      finishDispose();
+      await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
     });
 
     it('before-quit closes a running TRAE ACP session', async () => {
