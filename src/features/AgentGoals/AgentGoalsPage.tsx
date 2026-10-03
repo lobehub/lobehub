@@ -13,7 +13,7 @@ import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { GoalListFilter } from '@/store/goal';
-import { filterGoalsByStatus, useGoalStore } from '@/store/goal';
+import { useGoalStore } from '@/store/goal';
 
 import { createGoalModal } from './CreateGoalModal';
 import { GoalCardItem } from './GoalCardItem';
@@ -63,6 +63,28 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+/**
+ * The list failed to load — the page's own read, or the selected tab's. Both
+ * carry the same retry, which revalidates every tab's entry at once.
+ */
+const GoalLoadError = ({ onRetry }: { onRetry: () => void }) => {
+  const { t } = useTranslation('chat');
+
+  return (
+    <Block padding={32} variant={'outlined'}>
+      <Flexbox align={'center'} gap={12}>
+        <Text weight={600}>{t('goalList.loadError')}</Text>
+        <Text fontSize={13} type={'secondary'}>
+          {t('goalList.loadErrorDescription')}
+        </Text>
+        <Button icon={RefreshCwIcon} onClick={onRetry}>
+          {t('goalList.retry')}
+        </Button>
+      </Flexbox>
+    </Block>
+  );
+};
+
 interface AgentGoalsPageProps {
   agentId?: string;
   projectId?: string;
@@ -96,20 +118,35 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const reviewSWR = useFetchGoals(agentId, projectId, 'review');
   const summary = useMemo(() => {
     const total = data?.total ?? goals.length;
-    const delivered =
-      reviewSWR.data?.total ?? goals.filter(({ goal }) => goal.status === 'review').length;
+    // An aggregate that has not answered is unknown, not zero. Falling back to
+    // the review goals visible in the list's page would understate it for
+    // exactly the accounts this page reads past one page, and present that
+    // partial count as the delivered total.
+    const delivered = reviewSWR.data?.total;
 
-    return { delivered, pursuing: total - delivered, total };
-  }, [data, goals, reviewSWR.data]);
-  // A page of the newest goals cannot prove a tab empty, so until the tab's own
-  // read answers the list holds its shape instead of claiming an outcome.
-  const isTabPending = filter !== 'all' && tabSWR.data === undefined;
+    return {
+      delivered,
+      pursuing: delivered === undefined ? undefined : total - delivered,
+      total,
+    };
+  }, [data, goals.length, reviewSWR.data]);
+  // A page of the newest goals cannot prove a tab empty, and neither can a read
+  // that failed: hold the list's shape while the tab's own read is in flight,
+  // and surface its failure rather than spinning on it.
+  const isTabUnresolved = filter !== 'all' && tabSWR.data === undefined;
+  const isTabPending = isTabUnresolved && !tabSWR.error;
+  const isTabError = isTabUnresolved && Boolean(tabSWR.error);
+  // The rows are the tab's own read, with no client-side fallback: a page of the
+  // newest goals cannot stand in for the tab's answer, and presenting it as if
+  // it could is what let a tab claim an outcome it had no way to know.
   const filteredGoals = useMemo(
-    () => (filter === 'all' ? goals : (tabSWR.data?.goals ?? filterGoalsByStatus(goals, filter))),
+    () => (filter === 'all' ? goals : (tabSWR.data?.goals ?? [])),
     [filter, goals, tabSWR.data],
   );
-  const isFilterEmpty = !isTabPending && filteredGoals.length === 0;
-  const visibleGoalCount = filteredGoals.length;
+  const isFilterEmpty = !isTabUnresolved && filteredGoals.length === 0;
+  // The tab's count is the server's answer for that tab. Until it arrives — or
+  // when it failed — the list's page cannot stand in for it either.
+  const visibleGoalCount = isTabUnresolved ? '—' : filteredGoals.length;
   const GoalItem = viewMode === 'list' ? GoalListItem : GoalCardItem;
   const openCreateGoal = (seed?: GoalExampleSeed) => {
     createGoalModal({
@@ -154,17 +191,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         {isLoading && data === undefined ? (
           <GoalSkeleton chrome={'body'} />
         ) : error ? (
-          <Block padding={32} variant={'outlined'}>
-            <Flexbox align={'center'} gap={12}>
-              <Text weight={600}>{t('goalList.loadError')}</Text>
-              <Text fontSize={13} type={'secondary'}>
-                {t('goalList.loadErrorDescription')}
-              </Text>
-              <Button icon={RefreshCwIcon} onClick={() => void refreshGoals(scopeId)}>
-                {t('goalList.retry')}
-              </Button>
-            </Flexbox>
-          </Block>
+          <GoalLoadError onRetry={() => void refreshGoals(scopeId)} />
         ) : goals.length === 0 ? (
           <GoalEmptyState onCreate={openCreateGoal} />
         ) : (
@@ -188,7 +215,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                   </Flexbox>
                   <Flexbox className={styles.metric} gap={2}>
                     <Text fontSize={20} weight={600}>
-                      {summary.pursuing}
+                      {summary.pursuing ?? '—'}
                     </Text>
                     <Text fontSize={12} type={'secondary'}>
                       {t('goalPage.metrics.pursuing')}
@@ -196,7 +223,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                   </Flexbox>
                   <Flexbox className={styles.metric} gap={2}>
                     <Text fontSize={20} weight={600}>
-                      {summary.delivered}
+                      {summary.delivered ?? '—'}
                     </Text>
                     <Text fontSize={12} type={'secondary'}>
                       {t('goalPage.metrics.delivered')}
@@ -252,7 +279,9 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                 </Flexbox>
               </Flexbox>
               <div className={viewMode === 'card' ? styles.list : styles.listRows}>
-                {isTabPending ? (
+                {isTabError ? (
+                  <GoalLoadError onRetry={() => void refreshGoals(scopeId)} />
+                ) : isTabPending ? (
                   <GoalListRowsSkeleton />
                 ) : isFilterEmpty ? (
                   <Block padding={32} variant={'outlined'}>

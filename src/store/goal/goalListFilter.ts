@@ -29,18 +29,3 @@ const allGoalStatuses = (): GoalStatus[] => [...goalStatuses];
  */
 export const goalStatusesForFilter = (filter: GoalListFilter): GoalStatus[] =>
   goalListFilterStatuses[filter] ?? allGoalStatuses();
-
-/**
- * Goal list rows kept by the active tab.
- *
- * This is the instant paint while the tab's own read is in flight. It is never
- * the evidence that a tab is empty — that claim waits for the server's answer.
- */
-export const filterGoalsByStatus = <T extends { goal: { status: GoalStatus } }>(
-  goals: T[],
-  filter: GoalListFilter,
-): T[] => {
-  const keptStatuses = goalListFilterStatuses[filter];
-
-  return keptStatuses ? goals.filter(({ goal }) => keptStatuses.includes(goal.status)) : goals;
-};
