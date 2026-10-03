@@ -2,7 +2,7 @@ import { renderHook } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getTitleTextAreaInteractionProps } from './TitleSection';
+import { getTitleTextAreaInteractionProps, shouldSubmitPageTitle } from './TitleSection';
 
 describe('PageEditor title interaction', () => {
   it('keeps a non-editable title visually enabled but read-only', () => {
@@ -11,6 +11,14 @@ describe('PageEditor title interaction', () => {
     expect(props).toEqual({ readOnly: true });
     expect(props).not.toHaveProperty('disabled');
     expect(getTitleTextAreaInteractionProps(true)).toEqual({ readOnly: false });
+  });
+
+  it('does not submit when Enter confirms an IME composition', () => {
+    expect(shouldSubmitPageTitle('Enter', true)).toBe(false);
+  });
+
+  it('submits when Enter is pressed outside an IME composition', () => {
+    expect(shouldSubmitPageTitle('Enter', false)).toBe(true);
   });
 });
 
