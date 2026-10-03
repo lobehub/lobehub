@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
@@ -47,6 +48,7 @@ const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
 
 export const useSend = (mode: HomeMode = 'chat') => {
   const { t } = useTranslation('home');
+  const { t: tChat } = useTranslation('chat');
   const router = useQueryRoute();
   const activeWorkspaceId = useActiveWorkspaceId();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -138,16 +140,37 @@ export const useSend = (mode: HomeMode = 'chat') => {
         if (mode === 'task') {
           if (!message || !selectedAgentId) return;
           setIsSubmitting(true);
+          const name = taskNameFromMessage(message);
           const created = await createTask({
             assigneeAgentId: selectedAgentId,
             editorData,
             instruction: message,
-            name: taskNameFromMessage(message),
+            name,
             visibility: activeWorkspaceId ? 'private' : undefined,
           });
           if (!created?.identifier) throw new Error('Task creation returned no identifier');
           submitted = true;
-          toast.success(t('dashboard.task.created'));
+          // The task outlives the toast, so the toast is the only handle on the
+          // thing the user just wrote. Say where it went and give it a way in,
+          // mirroring the task list's own create toast.
+          toast.success({
+            actions: [
+              {
+                label: tChat('taskIntent.openCreated'),
+                onClick: () =>
+                  router.push(
+                    taskDetailPath(
+                      created.identifier,
+                      created.assigneeAgentId ?? selectedAgentId,
+                      name,
+                    ),
+                  ),
+                variant: 'text',
+              },
+            ],
+            description: t('dashboard.task.createdHint'),
+            title: t('dashboard.task.created'),
+          });
           return;
         }
 
@@ -254,6 +277,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
       canUseResource,
       canCreateContent,
       t,
+      tChat,
     ],
   );
 

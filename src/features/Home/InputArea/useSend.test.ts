@@ -4,6 +4,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 
 import { useSend } from './useSend';
@@ -236,7 +237,20 @@ describe('Home InputArea useSend', () => {
     expect(toggleTaskAgentPanelMock).not.toHaveBeenCalled();
     expect(routerMock.push).not.toHaveBeenCalled();
     expect(sendMessageMock).not.toHaveBeenCalled();
-    expect(messageSuccessMock).toHaveBeenCalledWith('dashboard.task.created');
+    expect(messageSuccessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'dashboard.task.created' }),
+    );
+    // The toast is the only handle on the task once the composer is cleared, so
+    // its action must open that task rather than just dismiss the toast.
+    const [{ actions }] = messageSuccessMock.mock.calls.at(-1) as [
+      { actions: { label: string; onClick: () => void }[] },
+    ];
+    expect(actions).toHaveLength(1);
+    expect(actions[0].label).toBe('taskIntent.openCreated');
+    actions[0].onClick();
+    expect(routerMock.push).toHaveBeenCalledWith(
+      taskDetailPath('T-26', 'agt_custom', 'Prepare the weekly report'),
+    );
     expect(clearContentMock).toHaveBeenCalledTimes(1);
   });
 
