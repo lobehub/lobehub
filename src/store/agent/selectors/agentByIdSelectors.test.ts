@@ -213,7 +213,7 @@ describe('agentByIdSelectors', () => {
   describe('hasAgentConfigInScope', () => {
     it('only treats a cached config as renderable in the scope that wrote it', () => {
       const state = createState({
-        agentConfigScopeMap: { 'agent-1': 'user-1:workspace-a' },
+        agentConfigReplica: { entries: {}, scope: 'user-1:workspace-a' },
         agentMap: { 'agent-1': { title: 'From workspace A' } },
       });
 

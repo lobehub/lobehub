@@ -243,15 +243,6 @@ export const isDocumentCommentKeyForEvent = (
   return false;
 };
 
-// ---- agent --------------------------------------------------------------
-export const agentProjectionKeys = {
-  configHydration: def('agentProjection:configHydration', (scope: string, agentId: string) => [
-    'agentProjection:configHydration',
-    scope,
-    agentId,
-  ]),
-};
-
 // ---- agent labels -------------------------------------------------------
 export const agentLabelKeys = {
   /**
@@ -520,22 +511,11 @@ export const homeInboxKeys = {
 // ---- agent config / available / search ----------------------------------
 export const agentConfigKeys = {
   available: def('agent:available', () => ['agent:available']),
-  config: def('agentSync:config', (agentId: string, scope: string) => [
-    'agentSync:config',
-    agentId,
-    scope,
-  ]),
   search: def('agent:search', (keyword?: string) => ['agent:search', keyword]),
   serverDefaultHeterogeneousCapability: def('agent:serverDefaultHeterogeneousCapability', () => [
     'agent:serverDefaultHeterogeneousCapability',
   ]),
 };
-
-export const isAgentConfigKey = (key: unknown, agentId: string, scope: string): boolean =>
-  Array.isArray(key) &&
-  key[0] === agentConfigKeys.config.root &&
-  key[1] === agentId &&
-  key[2] === scope;
 
 // ---- aiModel ------------------------------------------------------------
 export const aiModelKeys = {
@@ -1522,7 +1502,7 @@ export const matchDomain =
  * Aggregate registry — one entry point for every domain's keys.
  */
 export const swrKeys = {
-  agent: { ...agentConfigKeys, ...agentProjectionKeys },
+  agent: agentConfigKeys,
   agentBot: agentBotKeys,
   agentBuilder: agentBuilderKeys,
   agentDocument: agentDocumentSWRKeys,

@@ -115,6 +115,32 @@ describe('createReplicaSlice', () => {
       await waitFor(() => expect(storage.rows.get('user-1:personal|a')?.data).toEqual(['server']));
     });
 
+    it('runs onSuccess after the response is folded in, and onError on a failed fetch', async () => {
+      const { slice, store } = setup();
+      const seen: unknown[] = [];
+      renderHook(
+        () =>
+          slice.useSync(
+            { id: 'a' },
+            { onSuccess: (data) => seen.push([data, store.getState().lists.a]) },
+          ),
+        { wrapper },
+      );
+      // The callback already sees the store view the response produced.
+      await waitFor(() => expect(seen).toEqual([[['server'], ['server']]]));
+
+      const failure = new Error('offline');
+      const onError = vi.fn();
+      const failing = setup({
+        fetcher: vi.fn(async () => {
+          throw failure;
+        }),
+      });
+      renderHook(() => failing.slice.useSync({ id: 'b' }, { onError }), { wrapper });
+      await waitFor(() => expect(onError).toHaveBeenCalledWith(failure));
+      expect(failing.store.getState().lists.b).toBeUndefined();
+    });
+
     it('does not let a slow hydration overwrite a faster server response', async () => {
       const storage = createMemoryStorage();
       storage.rows.set('user-1:personal|a', { data: ['cached'], updatedAt: 1 });

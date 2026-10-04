@@ -35,8 +35,15 @@ export interface CreateReplicaSliceOptions<TStore, TParams, TData, TFetched> ext
   view: ReplicaLens<TStore, TData>;
 }
 
-export interface ReplicaSyncOptions {
+export interface ReplicaSyncOptions<TFetched = unknown> {
   enabled?: boolean;
+  /** Side effects of a failed fetch (error side-maps); the store view is left as is. */
+  onError?: (error: unknown) => void;
+  /**
+   * Side effects of a response, run after it is folded into the replica
+   * (e.g. adopting an active id, or settling a "not found" state).
+   */
+  onSuccess?: (data: TFetched) => void;
 }
 
 export interface ReplicaSyncResult {
@@ -104,7 +111,7 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
    */
   const useSync = (
     params: TParams | null | undefined,
-    { enabled = true }: ReplicaSyncOptions = {},
+    { enabled = true, onError, onSuccess }: ReplicaSyncOptions<TFetched> = {},
   ): ReplicaSyncResult => {
     const scope = resource.scope.use();
     const key = params ? resource.key(params) : undefined;
@@ -132,7 +139,13 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
         ? replicaKeys.sync(resource.name, resource.version, scope, key!, params)
         : null,
       () => fetcher!(params!, undefined),
-      { onSuccess: (data) => replace(params!, data, scope) },
+      {
+        onError,
+        onSuccess: (data) => {
+          replace(params!, data, scope);
+          onSuccess?.(data);
+        },
+      },
     );
 
     return {

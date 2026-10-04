@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   agentBuilderKeys,
-  agentConfigKeys,
-  agentProjectionKeys,
   documentCommentKeys,
   isAcceptanceListKey,
   isDocumentCommentKeyForEvent,
@@ -46,23 +44,12 @@ describe('recentKeys', () => {
   });
 });
 
-describe('agent projection keys', () => {
-  it('keeps network sync and hydration isolated by identity scope', () => {
-    expect(agentConfigKeys.config('agent-1', 'user-1:workspace-1')).not.toEqual(
-      agentConfigKeys.config('agent-1', 'user-1:workspace-2'),
-    );
-    expect(agentProjectionKeys.configHydration('user-1:workspace-1', 'agent-1')).toEqual([
-      'agentProjection:configHydration',
-      'user-1:workspace-1',
-      'agent-1',
-    ]);
-  });
-
+describe('replica sync keys', () => {
   it('keeps SWR orchestration entries out of the persistence tiers', () => {
     for (const key of [
       // Replicas persist through their own storage, never through the SWR tiers.
       replicaKeys.sync('agentList', 1, 'user-1:personal', 'sidebar', {}),
-      agentConfigKeys.config('agent-1', 'user-1:personal'),
+      replicaKeys.sync('agentConfig', 1, 'user-1:personal', 'agent-1', { agentId: 'agent-1' }),
     ]) {
       const serialized = unstable_serialize(key);
       expect(

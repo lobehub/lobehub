@@ -84,14 +84,14 @@ const isAgentConfigLoadingById = (agentId: string) => (s: AgentStoreState) =>
   !agentId || (!s.agentMap[agentId] && !s.agentNotFoundMap[agentId]);
 
 /**
- * Whether the cached config for `agentId` belongs to `scope` and may be
- * rendered. `agentMap` is not partitioned by workspace, so an entry left by
- * the previous scope must not stand in for the active one while it loads.
+ * Whether the config for `agentId` belongs to `scope` and may be rendered.
+ * `agentMap` only ever holds one scope; this guards the frame between a scope
+ * switch and the replica dropping the previous identity's entries.
  */
 const hasAgentConfigInScope =
   (agentId: string, scope: string) =>
   (s: AgentStoreState): boolean =>
-    !!agentId && !!s.agentMap[agentId] && s.agentConfigScopeMap[agentId] === scope;
+    !!agentId && !!s.agentMap[agentId] && s.agentConfigReplica.scope === scope;
 
 /**
  * Get agent mode by agentId.

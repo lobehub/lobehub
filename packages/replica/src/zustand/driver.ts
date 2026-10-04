@@ -1,6 +1,7 @@
 export interface ReplicaQueryOptions<T> {
   /** Run once per key: no refetch on focus, reconnect or remount (hydration reads). */
   once?: boolean;
+  onError?: (error: unknown) => void;
   onSuccess?: (data: T) => void;
 }
 
@@ -45,13 +46,14 @@ export const createSWRDriver = ({
   useSWR: SWRLikeHook;
 }): ReplicaSyncDriver => ({
   revalidate: (match) => mutate(match),
-  useQuery: (key, fetcher, { once, onSuccess }) =>
+  useQuery: (key, fetcher, { once, onError, onSuccess }) =>
     useSWR(key, fetcher, {
       ...(once && {
         revalidateIfStale: false,
         revalidateOnFocus: false,
         revalidateOnReconnect: false,
       }),
+      ...(onError && { onError: (error: unknown) => onError(error) }),
       ...(onSuccess && { onSuccess: (data: unknown) => onSuccess(data as never) }),
     }),
 });
