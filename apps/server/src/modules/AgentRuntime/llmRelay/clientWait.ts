@@ -22,6 +22,12 @@ export const DEFAULT_LLM_RELAY_CLIENT_WAIT_MS = 10 * 60_000;
 
 const MAX_LLM_RELAY_CLIENT_WAIT_MS = 25 * 60_000;
 
+/**
+ * Below this much remaining wait a run does not (re-)park: its expiry would be
+ * due before the parking step commits.
+ */
+export const MIN_CLIENT_LLM_WAIT_REMAINING_MS = 5000;
+
 export const resolveClientLlmWaitMs = (env: Record<string, string | undefined> = process.env) => {
   const configured = Number(env.AGENT_LLM_RELAY_CLIENT_WAIT_MS);
   if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_LLM_RELAY_CLIENT_WAIT_MS;

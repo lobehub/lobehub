@@ -424,9 +424,41 @@ describe('waiting_for_client (U4c)', () => {
       });
     });
 
-    it('has the re-park in place before arming an expiry that fires at once', async () => {
+    it('fails instead of re-parking once the original wait is used up', async () => {
       const t = createService();
-      const deadline = new Date(NOW - 1000).toISOString();
+      t.setStored(
+        waitingState({
+          clientLlmWait: {
+            assistantMessageId: 'msg-assistant',
+            context: { phase: 'user_input' },
+            expiresAt: new Date(NOW + 1000).toISOString(),
+            parkedAt: new Date(NOW - 600_000).toISOString(),
+            provider: 'lmstudio',
+            reason: 'no_executor',
+          },
+        }),
+      );
+      t.messageModel.findLatestAssistantByOperationId.mockResolvedValue({ id: 'msg-assistant' });
+      t.mockStep({
+        events: [],
+        newState: unavailableErrorState('not_delivered'),
+        nextContext: undefined,
+      });
+
+      await t.service.executeStep({
+        operationId: OPERATION_ID,
+        resumeClientLlm: true,
+        stepIndex: 2,
+      });
+
+      // No expiry could race the step's own commit: the run just fails.
+      expect(t.getStored().status).toBe('error');
+      expect(t.scheduleMessage).not.toHaveBeenCalled();
+    });
+
+    it('has the re-park in place before arming its expiry', async () => {
+      const t = createService();
+      const deadline = new Date(NOW + 10_000).toISOString();
       t.setStored(
         waitingState({
           clientLlmWait: {
@@ -466,7 +498,7 @@ describe('waiting_for_client (U4c)', () => {
 
       expect(t.scheduleMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          delay: 0,
+          delay: 10_000,
           payload: { clientLlmWaitExpired: expect.any(String) },
         }),
       );

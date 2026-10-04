@@ -71,6 +71,7 @@ import {
   buildClientLlmWaitMessageError,
   buildClientLlmWaitResumeContext,
   isClientLlmWaitExpiryOf,
+  MIN_CLIENT_LLM_WAIT_REMAINING_MS,
 } from '@/server/modules/AgentRuntime/llmRelay/clientWait';
 import {
   createClientLlmExecutorUnavailableError,
@@ -3654,6 +3655,13 @@ export class AgentRuntimeService {
     }
 
     const wait = buildClientLlmWait({ assistantMessage, context, notAfter, provider, reason });
+    // A re-park with (almost) nothing left of its wait would arm an expiry that
+    // can land before this step commits and be overwritten by it. The wait is
+    // over anyway: fail the step with its actionable error instead.
+    if (Date.parse(wait.expiresAt) - Date.now() < MIN_CLIENT_LLM_WAIT_REMAINING_MS) {
+      log('[%s] Client wait already used up, failing instead', operationId);
+      return;
+    }
     const parkedState: AgentState = {
       ...errorState,
       clientLlmWait: wait,
