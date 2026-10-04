@@ -256,6 +256,7 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       });
 
       expect(action.createClient).toHaveBeenCalledWith({
+        clientId: expect.any(String),
         gatewayUrl: GATEWAY_URL,
         operationId: 'op-1',
         resumeOnConnect: undefined,
@@ -412,6 +413,7 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
 
       expect(action.createClient).toHaveBeenCalledTimes(2);
       expect(action.createClient).toHaveBeenNthCalledWith(1, {
+        clientId: expect.any(String),
         gatewayUrl: GATEWAY_URL,
         operationId: 'op-1',
         // The run kept executing on the server while the mux was failing, so a
@@ -435,6 +437,7 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       // Replaying from the start would re-apply chunks and re-run
       // `tool_execute` events this tab already executed.
       expect(action.createClient).toHaveBeenCalledWith({
+        clientId: expect.any(String),
         gatewayUrl: GATEWAY_URL,
         lastEventId: '42',
         operationId: 'op-1',
