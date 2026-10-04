@@ -1,12 +1,19 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { ClipboardCheckIcon, ListTodoIcon, SettingsIcon, TargetIcon } from 'lucide-react';
+import {
+  ClipboardCheckIcon,
+  LayoutDashboardIcon,
+  ListTodoIcon,
+  SettingsIcon,
+  TargetIcon,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
+import { useDashboardFeature } from '@/features/Dashboard/hooks/useDashboardFeature';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
@@ -15,7 +22,12 @@ import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
 import { ProjectDirectoryTopics } from '../WorkingDirectories/SidebarTopics';
-import { getProjectAcceptancePath, getProjectGoalsPath, getProjectTasksPath } from './navigation';
+import {
+  getProjectAcceptancePath,
+  getProjectDashboardPath,
+  getProjectGoalsPath,
+  getProjectTasksPath,
+} from './navigation';
 import ProjectHeader from './ProjectHeader';
 
 const ProjectSidebarContent = memo(() => {
@@ -25,9 +37,11 @@ const ProjectSidebarContent = memo(() => {
   const { pathname } = useLocation();
   const detail = useCurrentProjectDetail(projectId);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
+  const { enabled: dashboardEnabled } = useDashboardFeature();
   const projectTasksPath = getProjectTasksPath(projectId!);
   const projectGoalsPath = getProjectGoalsPath(projectId!);
   const projectAcceptancePath = getProjectAcceptancePath(projectId!);
+  const projectDashboardPath = getProjectDashboardPath(projectId!);
 
   const header = <ProjectHeader project={detail?.project} />;
 
@@ -58,6 +72,16 @@ const ProjectSidebarContent = memo(() => {
             title={t('sections.goals')}
             onClick={() => navigate(projectGoalsPath)}
           />
+          {dashboardEnabled && (
+            <NavItem
+              icon={LayoutDashboardIcon}
+              title={t('sections.dashboard')}
+              active={
+                pathname === projectDashboardPath || pathname.startsWith(`${projectDashboardPath}/`)
+              }
+              onClick={() => navigate(projectDashboardPath)}
+            />
+          )}
           <NavItem
             active={pathname === projectAcceptancePath}
             icon={ClipboardCheckIcon}

@@ -64,6 +64,7 @@ export interface SidebarItemConfig {
 
 const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'tasks', labelKey: 'tab.tasks', routeId: 'tasks' },
+  { id: 'dashboard', labelKey: 'tab.dashboard', routeId: 'dashboard' },
   { id: 'pages', labelKey: 'tab.pages', routeId: 'page' },
   { id: 'recents', labelKey: 'recents' },
   { id: 'project', labelKey: 'project:sidebar.title' },
@@ -80,7 +81,7 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
 // would render an empty accordion no user can populate.
 export const getAvailableSidebarItems = (isWorkspaceMode: boolean): SidebarItemConfig[] =>
   ALL_SIDEBAR_ITEMS.filter((item) => {
-    if (isWorkspaceMode && item.id === 'memory') return false;
+    if (isWorkspaceMode && (item.id === 'memory' || item.id === 'dashboard')) return false;
     if (!isWorkspaceMode && item.id === 'private') return false;
     return true;
   });

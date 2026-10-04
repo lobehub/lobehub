@@ -47,6 +47,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
+import { dashboardRouteMeta, dashboardsRouteMeta } from '@/features/Dashboard/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import {
   projectConversationRouteMeta,
@@ -997,6 +998,30 @@ export const sharedMainAreaChildren: RouteObject[] = [
     path: 'projects',
   },
 
+  // Personal dashboards (free-form monitoring boards)
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/dashboard'), 'Desktop > Dashboards', {
+          preloadId: 'dashboard',
+        }),
+        handle: { meta: dashboardsRouteMeta },
+        index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/dashboard/[dashboardId]'),
+          'Desktop > Dashboard Detail',
+          { preloadId: 'dashboard' },
+        ),
+        handle: { meta: dashboardRouteMeta },
+        path: ':dashboardId',
+      },
+    ],
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'dashboard',
+  },
+
   // Task workspace routes (cross-agent)
   {
     children: [
@@ -1037,6 +1062,29 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         handle: { meta: goalsRouteMeta },
         path: 'goals',
+      },
+      {
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/project/[projectId]/dashboard'),
+              'Desktop > Project Dashboards',
+              { preloadId: 'dashboard' },
+            ),
+            handle: { meta: dashboardsRouteMeta },
+            index: true,
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/project/[projectId]/dashboard/[dashboardId]'),
+              'Desktop > Project Dashboard Detail',
+              { preloadId: 'dashboard' },
+            ),
+            handle: { meta: dashboardRouteMeta },
+            path: ':dashboardId',
+          },
+        ],
+        path: 'dashboard',
       },
       {
         children: [

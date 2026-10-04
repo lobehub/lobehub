@@ -263,6 +263,8 @@ describe('systemStatusSelectors', () => {
         status: { sidebarItems: stored },
       });
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
+        // Defaults missing from a saved layout (here the newer `dashboard`) are backfilled.
+        'dashboard',
         'private',
         'agent',
         'recents',
@@ -280,6 +282,7 @@ describe('systemStatusSelectors', () => {
     it('should preserve a canonically-positioned spacer', () => {
       const stored = [
         'pages',
+        'dashboard',
         'project',
         'recents',
         'private',
@@ -318,6 +321,7 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
         'tasks',
         'pages',
+        'dashboard',
         'recents',
         'project',
         'private',
@@ -363,6 +367,7 @@ describe('systemStatusSelectors', () => {
       // the legacy state was saved) is backfilled at the head of the block.
       expect(items).toEqual([
         'tasks',
+        'dashboard',
         'resource',
         'private',
         'agent',
@@ -385,6 +390,7 @@ describe('systemStatusSelectors', () => {
       // backfilled at the head of the block; recents/agent keep legacy order.
       expect(items).toEqual([
         'tasks',
+        'dashboard',
         'resource',
         'private',
         'recents',

@@ -1,0 +1,226 @@
+'use client';
+
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, Skeleton, Tag, Text, toast, Tooltip } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { ArrowUpRightIcon, PanelRightOpenIcon, RocketIcon } from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import type { DashboardWidgetDetail, DashboardWidgetRunItem } from '@/services/dashboard';
+import { useChatStore } from '@/store/chat';
+import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
+
+import { formatDuration } from '../utils/format';
+import WidgetCard from '../WidgetCard';
+import AddToDashboardButton from './AddToDashboardButton';
+import { findSucceededPreviewRun, getPreviewPublishState, toPreviewWidget } from './previewWidget';
+
+const styles = createStaticStyles(({ css }) => ({
+  definition: css`
+    padding-block: 8px;
+    padding-inline: 10px;
+    border-radius: ${cssVar.borderRadius};
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  root: css`
+    width: 100%;
+    padding: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+  `,
+}));
+
+/** Card height by output shape — a single number needs far less room than rows. */
+const CARD_HEIGHT: Record<string, number> = { list: 260, series: 240, stat: 150, table: 260 };
+
+type PreviewRun = Pick<
+  DashboardWidgetRunItem,
+  'durationMs' | 'error' | 'finishedAt' | 'id' | 'output' | 'startedAt' | 'status' | 'versionId'
+>;
+
+interface WidgetPreviewBodyProps {
+  run: PreviewRun;
+  widget: DashboardWidgetDetail;
+}
+
+/**
+ * A dry run as the user will see it on a board, with what the number means
+ * and the decisions that follow: publish it, place it, or open the details.
+ */
+export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) => {
+  const { t } = useTranslation('dashboard');
+  const navigate = useWorkspaceAwareNavigate();
+  const openDashboardWidget = useChatStore((s) => s.openDashboardWidget);
+  const publishWidgetVersion = useDashboardStore((s) => s.publishWidgetVersion);
+  const publishing = useDashboardStore(dashboardSelectors.isWidgetPublishing(widget.id));
+  const useFetchWidgetVersions = useDashboardStore((s) => s.useFetchWidgetVersions);
+  useFetchWidgetVersions(widget.id);
+  const versions = useDashboardStore(dashboardSelectors.widgetVersions(widget.id));
+
+  const version = versions.find((item) => item.id === run.versionId);
+  const draft = versions.find((item) => item.id === widget.draftVersionId);
+  const publishState = getPreviewPublishState(widget, run);
+  const preview = toPreviewWidget(widget, run);
+  const outputType = run.output?.type ?? version?.outputType ?? 'stat';
+
+  const handlePublish = async () => {
+    try {
+      const result = await publishWidgetVersion(widget.id, run.versionId);
+      toast.success(t('chat.published', { version: result?.version.version }));
+    } catch (error) {
+      toast.error(
+        t('chat.publishFailed', { message: error instanceof Error ? error.message : '' }),
+      );
+    }
+  };
+
+  return (
+    <Flexbox className={styles.root} data-widget-preview={widget.id} gap={10}>
+      <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+        {version && (
+          <Tag color={publishState === 'live' ? 'success' : 'info'} size={'small'}>
+            {t(publishState === 'live' ? 'chat.preview.live' : 'chat.preview.draft', {
+              version: version.version,
+            })}
+          </Tag>
+        )}
+        <Text fontSize={12} type={'secondary'}>
+          {[t(`run.status.${run.status}`), formatDuration(run.durationMs)]
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
+        <Flexbox flex={1} />
+        <Button
+          data-widget-open-portal
+          icon={PanelRightOpenIcon}
+          size={'small'}
+          type={'text'}
+          onClick={() => openDashboardWidget(widget.id, run.id)}
+        >
+          {t('chat.openDetail')}
+        </Button>
+      </Flexbox>
+
+      <div style={{ height: CARD_HEIGHT[outputType] ?? 200 }}>
+        <WidgetCard view={version?.view} widget={preview} />
+      </div>
+
+      <Flexbox className={styles.definition} gap={2}>
+        <Text fontSize={12} type={'secondary'} weight={500}>
+          {t('chat.definition')}
+        </Text>
+        <Text data-widget-definition fontSize={12}>
+          {widget.description || t('chat.noDefinition')}
+        </Text>
+      </Flexbox>
+
+      {publishState === 'outdated' && draft && (
+        <Text fontSize={12} type={'warning'}>
+          {t('chat.outdated', { version: draft.version })}
+        </Text>
+      )}
+
+      <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+        {publishState === 'publishable' && (
+          <Button
+            data-widget-publish
+            icon={RocketIcon}
+            loading={publishing}
+            size={'small'}
+            type={'primary'}
+            onClick={handlePublish}
+          >
+            {t('chat.publish')}
+          </Button>
+        )}
+        {publishState === 'notReady' && (
+          <Tooltip title={t('chat.publishHint')}>
+            <Button disabled icon={RocketIcon} size={'small'}>
+              {t('chat.publish')}
+            </Button>
+          </Tooltip>
+        )}
+        <AddToDashboardButton
+          placedIds={widget.dashboards.map((dashboard) => dashboard.id)}
+          widgetId={widget.id}
+        />
+        {widget.dashboards.map((dashboard) => (
+          <Button
+            data-widget-dashboard-link={dashboard.id}
+            icon={ArrowUpRightIcon}
+            key={dashboard.id}
+            size={'small'}
+            type={'text'}
+            onClick={() => navigate(`/dashboard/${dashboard.id}`)}
+          >
+            {t('chat.onDashboard', { title: dashboard.title })}
+          </Button>
+        ))}
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+WidgetPreviewBody.displayName = 'DashboardWidgetPreviewBody';
+
+interface WidgetPreviewCardProps {
+  /** The dry run to show. */
+  runId: string;
+  widgetId: string;
+}
+
+/** Loads a widget and one of its dry runs, then renders the preview. */
+const WidgetPreviewCard = memo<WidgetPreviewCardProps>(({ widgetId, runId }) => {
+  const { t } = useTranslation('dashboard');
+  const useFetchWidgetDetail = useDashboardStore((s) => s.useFetchWidgetDetail);
+  const useFetchWidgetRun = useDashboardStore((s) => s.useFetchWidgetRun);
+  const widgetRequest = useFetchWidgetDetail(widgetId);
+  const runRequest = useFetchWidgetRun(widgetId, runId);
+  const widget = useDashboardStore(dashboardSelectors.widgetDetail(widgetId));
+  const run = useDashboardStore(dashboardSelectors.widgetRunDetail(runId));
+
+  if (widgetRequest.error || runRequest.error) {
+    return (
+      <Flexbox horizontal align={'center'} className={styles.root} gap={6}>
+        <Icon color={cssVar.colorTextTertiary} icon={RocketIcon} size={14} />
+        <Text fontSize={12} type={'secondary'}>
+          {t('chat.unavailable')}
+        </Text>
+      </Flexbox>
+    );
+  }
+  if (!widget || !run) {
+    return (
+      <Flexbox className={styles.root} gap={10}>
+        <Skeleton height={150} width={'100%'} />
+        <Skeleton.Text rows={2} />
+      </Flexbox>
+    );
+  }
+
+  return <WidgetPreviewBody run={run} widget={widget} />;
+});
+
+WidgetPreviewCard.displayName = 'DashboardWidgetPreviewCard';
+
+/** A version's latest successful dry run — e.g. the one a publish approval was based on. */
+export const WidgetVersionPreviewCard = memo<{ versionId: string; widgetId: string }>(
+  ({ widgetId, versionId }) => {
+    const useFetchWidgetDetail = useDashboardStore((s) => s.useFetchWidgetDetail);
+    const useFetchWidgetRuns = useDashboardStore((s) => s.useFetchWidgetRuns);
+    useFetchWidgetDetail(widgetId);
+    useFetchWidgetRuns(widgetId);
+    const widget = useDashboardStore(dashboardSelectors.widgetDetail(widgetId));
+    const runs = useDashboardStore(dashboardSelectors.widgetRuns(widgetId));
+    const run = findSucceededPreviewRun(runs, versionId);
+
+    if (!widget || !run) return null;
+    return <WidgetPreviewBody run={run} widget={widget} />;
+  },
+);
+
+WidgetVersionPreviewCard.displayName = 'DashboardWidgetVersionPreviewCard';
+
+export default WidgetPreviewCard;

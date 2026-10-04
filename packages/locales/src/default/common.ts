@@ -535,6 +535,7 @@ export default {
   'tab.chat': 'Chat',
   'recents': 'Recents',
   'tab.community': 'Community',
+  'tab.dashboard': 'Dashboards',
   'tab.create': 'Create',
   'tab.discover': 'Discover',
   'tab.eval': 'Eval Lab',

@@ -3,6 +3,7 @@ export default {
   'navigation.agents': 'Agents',
   'navigation.channels': 'Channels',
   'navigation.chat': 'Chat',
+  'navigation.dashboard': 'Dashboards',
   'navigation.discover': 'Discover',
   'navigation.discoverAssistants': 'Discover Agents',
   'navigation.discoverMcp': 'Discover MCP',

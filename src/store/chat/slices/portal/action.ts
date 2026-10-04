@@ -687,6 +687,15 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ messageId, type: PortalViewType.MessageDetail });
   };
 
+  /** A dashboard widget in full: data, the dry run that produced a preview, versions and logs. */
+  openDashboardWidget = (widgetId: string, runId?: string): void => {
+    this.#get().pushPortalView({
+      ...(runId ? { runId } : {}),
+      type: PortalViewType.DashboardWidget,
+      widgetId,
+    });
+  };
+
   openNotebook = (): void => {
     this.#get().pushPortalView({ type: PortalViewType.Notebook });
   };
