@@ -50,8 +50,10 @@ const layoutSchema = z.object({
   y: z.number().int().min(0),
 });
 
-const fail = (error: unknown, operation: string): never =>
-  mapWidgetError(error, 'widget', operation);
+// A declaration (not an arrow const) so `fail(...)` narrows control flow as `never`.
+function fail(error: unknown, operation: string): never {
+  return mapWidgetError(error, 'widget', operation);
+}
 
 /**
  * Widgets, their versions and runs.

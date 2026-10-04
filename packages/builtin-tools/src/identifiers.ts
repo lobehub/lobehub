@@ -15,6 +15,7 @@ import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
+import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
 import {
   GoalManifest,
   GoalReportManifest,
@@ -49,6 +50,7 @@ export const builtinToolIdentifiers: string[] = [
   CalculatorManifest.identifier,
   CloudSandboxManifest.identifier,
   CredsManifest.identifier,
+  DashboardManifest.identifier,
   GroupAgentBuilderManifest.identifier,
   GroupManagementManifest.identifier,
   GoalManifest.identifier,

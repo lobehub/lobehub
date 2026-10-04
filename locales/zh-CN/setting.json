@@ -1799,6 +1799,8 @@
   "tools.builtins.lobe-computer-use.title": "使用电脑",
   "tools.builtins.lobe-creds.description": "管理用于身份验证、环境变量注入和 API 调用的用户凭据 — 处理 API 密钥、OAuth 令牌以及第三方集成所需的密钥。",
   "tools.builtins.lobe-creds.title": "凭据管理",
+  "tools.builtins.lobe-dashboard.description": "用沙箱脚本构建实时监控组件，用真实数据试运行预览，并添加到看板",
+  "tools.builtins.lobe-dashboard.title": "看板",
   "tools.builtins.lobe-group-agent-builder.description": "配置群组的元信息、成员和共享内容，用于多助手群组",
   "tools.builtins.lobe-group-agent-builder.title": "群组助手构建器",
   "tools.builtins.lobe-group-management.description": "编排并管理多助手群组对话",

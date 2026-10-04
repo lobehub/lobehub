@@ -1799,6 +1799,8 @@
   "tools.builtins.lobe-computer-use.title": "Computer Use",
   "tools.builtins.lobe-creds.description": "Manage user credentials for authentication, environment variable injection, and API verification — handle API keys, OAuth tokens, and secrets for third-party integrations.",
   "tools.builtins.lobe-creds.title": "Credentials",
+  "tools.builtins.lobe-dashboard.description": "Build live monitoring widgets from sandboxed scripts, preview them with real data and put them on dashboards",
+  "tools.builtins.lobe-dashboard.title": "Dashboards",
   "tools.builtins.lobe-group-agent-builder.description": "Configure group metadata, members, and shared content for multi-agent groups",
   "tools.builtins.lobe-group-agent-builder.title": "Group Agent Builder",
   "tools.builtins.lobe-group-management.description": "Orchestrate and manage multi-agent group conversations",

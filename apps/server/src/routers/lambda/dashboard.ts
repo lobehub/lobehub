@@ -1,3 +1,5 @@
+import { DashboardApiName } from '@lobechat/builtin-tool-dashboard';
+import { DashboardExecutionRuntime } from '@lobechat/builtin-tool-dashboard/executionRuntime';
 import { DASHBOARD_VISIBILITIES } from '@lobechat/types';
 import { z } from 'zod';
 
@@ -9,6 +11,7 @@ import { DashboardModel } from '@/database/models/dashboard';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DashboardService } from '@/server/services/dashboard';
+import { createDashboardToolService, resolveClientTopic } from '@/server/services/widget/agentTool';
 
 import { mapWidgetError, notFound } from './_helpers/widgetError';
 
@@ -43,8 +46,10 @@ const layoutSchema = z.object({
   y: z.number().int().min(0),
 });
 
-const fail = (error: unknown, operation: string): never =>
-  mapWidgetError(error, 'dashboard', operation);
+// A declaration (not an arrow const) so `fail(...)` narrows control flow as `never`.
+function fail(error: unknown, operation: string): never {
+  return mapWidgetError(error, 'dashboard', operation);
+}
 
 /**
  * Dashboards (boards) and the placement of widgets on them. Widgets
@@ -162,6 +167,48 @@ export const dashboardRouter = router({
       fail(error, 'restore dashboard');
     }
   }),
+
+  /**
+   * Execute one `lobe-dashboard` tool call for an agent run driven by the
+   * client runtime. The server agent runtime executes the same runtime and
+   * service in-process; both scope created widgets to the conversation's
+   * agent and (for a project topic) project. Publishing still requires the
+   * user's approval, which the agent runtime enforces before dispatching.
+   */
+  runAgentTool: dashboardWriteProcedure
+    .input(
+      z.object({
+        apiName: z.enum(Object.values(DashboardApiName) as [string, ...string[]]),
+        args: z.record(z.string(), z.unknown()),
+        context: z
+          .object({
+            agentId: z.string().nullish(),
+            messageId: z.string().nullish(),
+            operationId: z.string().nullish(),
+            topicId: z.string().nullish(),
+          })
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const context = input.context ?? {};
+      const topic = await resolveClientTopic(ctx.serverDB, context.topicId, ctx.userId);
+      const runtime = new DashboardExecutionRuntime(
+        createDashboardToolService(ctx.serverDB, {
+          agentId: context.agentId ?? undefined,
+          messageId: context.messageId ?? undefined,
+          operationId: context.operationId ?? undefined,
+          projectId: topic.projectId,
+          topicId: topic.topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        }),
+      );
+      const method = runtime[input.apiName as keyof DashboardExecutionRuntime] as (
+        args: unknown,
+      ) => ReturnType<DashboardExecutionRuntime['listDashboards']>;
+      return method.call(runtime, input.args);
+    }),
 
   trash: dashboardWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {

@@ -5,6 +5,7 @@ import {
   metricPoints,
   metrics,
   projects,
+  topics,
   widgetRuns,
   widgets,
   widgetVersions,
@@ -742,6 +743,68 @@ describe('widget + dashboard routers integration', () => {
       await owner.dryRun({ widgetId: agentWidget.id });
 
       expect(runSandbox.mock.calls[1][0].env).toEqual({ GITHUB_TOKEN: 'agent-token-789' });
+    });
+  });
+
+  describe('runAgentTool', () => {
+    it('scopes widgets to the conversation’s agent and project, ignoring foreign topics', async () => {
+      const agentId = await createTestAgent(db, ownerId);
+      const coordinatorId = await createTestAgent(db, ownerId);
+      const [project] = await db
+        .insert(projects)
+        .values({
+          coordinatorAgentId: coordinatorId,
+          identifier: 'TOOL',
+          name: 'P',
+          userId: ownerId,
+        })
+        .returning();
+      await db.insert(topics).values([
+        { agentId, id: `tpc_own_${ownerId}`, projectId: project.id, userId: ownerId },
+        { id: `tpc_other_${memberId}`, projectId: project.id, userId: memberId },
+      ]);
+      const { board } = callers(ownerId);
+      const createArgs = { ...statScript, description: 'Always 7', title: 'Seven' };
+
+      const created = await board.runAgentTool({
+        apiName: 'createWidgetDraft',
+        args: createArgs,
+        context: { agentId, operationId: 'op_1', topicId: `tpc_own_${ownerId}` },
+      });
+      expect(created).toMatchObject({ success: true });
+      const [widget] = await db
+        .select()
+        .from(widgets)
+        .where(eq(widgets.id, created.state.widgetId));
+      expect(widget).toMatchObject({ agentId, projectId: project.id, userId: ownerId });
+
+      // Another user's topic id is dropped instead of leaking its project.
+      const foreign = await board.runAgentTool({
+        apiName: 'createWidgetDraft',
+        args: createArgs,
+        context: { agentId, topicId: `tpc_other_${memberId}` },
+      });
+      const [foreignWidget] = await db
+        .select()
+        .from(widgets)
+        .where(eq(widgets.id, foreign.state.widgetId));
+      expect(foreignWidget).toMatchObject({ agentId, projectId: null });
+
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 7 }));
+      const dryRun = await board.runAgentTool({
+        apiName: 'dryRunWidget',
+        args: { widgetId: widget.id },
+        context: { operationId: 'op_1' },
+      });
+      expect(dryRun).toMatchObject({ state: { status: 'succeeded' }, success: true });
+      expect(dryRun.content).toContain('"value": 7');
+    });
+
+    it('rejects unknown tool APIs', async () => {
+      const { board } = callers(ownerId);
+      await expect(
+        board.runAgentTool({ apiName: 'publish', args: {} } as any),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     });
   });
 

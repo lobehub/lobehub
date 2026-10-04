@@ -3645,6 +3645,9 @@ When I am ___, I need ___
   'tools.builtins.lobe-skill-store.title': 'Skill Store',
   'tools.builtins.lobe-skills.description': 'Activate and use reusable skill packages',
   'tools.builtins.lobe-skills.title': 'Skills',
+  'tools.builtins.lobe-dashboard.description':
+    'Build live monitoring widgets from sandboxed scripts, preview them with real data and put them on dashboards',
+  'tools.builtins.lobe-dashboard.title': 'Dashboards',
   'tools.builtins.lobe-task.description':
     'Create, schedule, list, edit, and delete tasks with dependencies and review configuration',
   'tools.builtins.lobe-task.title': 'Task Tools',
