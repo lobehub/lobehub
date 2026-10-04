@@ -17,9 +17,21 @@ import { and, asc, desc, eq, inArray, isNotNull, lte, max, sql } from 'drizzle-o
 import { sha256Json } from '../repositories/ftsSearchDocument/fingerprint';
 import { agents } from '../schemas/agent';
 import { projects } from '../schemas/project';
-import { type WidgetRow, widgetRuns, widgets, widgetVersions } from '../schemas/widget';
+import {
+  type WidgetRow,
+  type WidgetRunRow,
+  widgetRuns,
+  widgets,
+  widgetVersions,
+} from '../schemas/widget';
 import type { LobeChatDatabase, Transaction } from '../type';
-import { assertScopeParents, buildDirectLevelWhere, hasPrivateParent } from '../utils/scopeLevel';
+import {
+  assertScopeParents,
+  buildDirectLevelWhere,
+  buildParentVisibilityWhere,
+  buildProjectWhere,
+  hasPrivateParent,
+} from '../utils/scopeLevel';
 import { isTrashed, notTrashed, restoreStamp, trashStamp } from '../utils/softDelete';
 import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -128,9 +140,17 @@ export class WidgetModel {
     return { userId: this.userId, workspaceId: this.workspaceId };
   }
 
-  /** Visible to the caller; `widgets` is trash-aware, so trashed rows drop out. */
+  /**
+   * Visible to the caller: workspace + own visibility (`widgets` is
+   * trash-aware, so trashed rows drop out) and the *current* visibility of the
+   * attached project / agent. Versions, runs and the metric subject are all
+   * reached through this predicate.
+   */
   private readable() {
-    return buildWorkspaceWhere(this.ctx, widgets);
+    return and(
+      buildWorkspaceWhere(this.ctx, widgets),
+      buildParentVisibilityWhere(this.ctx, widgets),
+    );
   }
 
   private manageable() {
@@ -181,6 +201,15 @@ export class WidgetModel {
       .select()
       .from(widgets)
       .where(and(this.readable(), buildDirectLevelWhere(widgets, filter)))
+      .orderBy(desc(widgets.updatedAt));
+  }
+
+  /** Every widget of a project, including those an agent of the project also owns. */
+  async listByProject(projectId: string) {
+    return this.db
+      .select()
+      .from(widgets)
+      .where(and(this.readable(), buildProjectWhere(widgets, projectId)))
       .orderBy(desc(widgets.updatedAt));
   }
 
@@ -598,11 +627,39 @@ export class WidgetModel {
   }
 
   /**
+   * Whether a finished non-preview run may update the widget snapshot: it ran
+   * the published version and started no earlier than the snapshot's run.
+   */
+  private static async isCurrentRun(
+    tx: Transaction,
+    widget: Pick<WidgetRow, 'lastRunId' | 'publishedVersionId'>,
+    run: Pick<WidgetRunRow, 'id' | 'startedAt' | 'versionId'>,
+  ) {
+    if (run.versionId !== widget.publishedVersionId) return false;
+    if (!widget.lastRunId || widget.lastRunId === run.id) return true;
+
+    const [last] = await tx
+      .select({ startedAt: widgetRuns.startedAt })
+      .from(widgetRuns)
+      .where(eq(widgetRuns.id, widget.lastRunId))
+      .limit(1);
+
+    return !last || run.startedAt.getTime() >= last.startedAt.getTime();
+  }
+
+  /**
    * Close a running run and, unless it was a preview, fold the result into
    * the widget snapshot: `succeeded` and `partial` store the output and reset
    * the failure streak; `failed` / `timeout` increment it and keep the last
    * usable output. Finishing an already-finished run is a no-op that returns
    * undefined.
+   *
+   * Runs finish out of order (a slow manual refresh can report after the next
+   * scheduled run, or after a new version went live). The run row is always
+   * persisted, but it only folds into the snapshot when it is still current:
+   * its version is the widget's published version and it started no earlier
+   * than the run that last updated the snapshot (`last_run_id`). The widget
+   * row is locked for the decision so concurrent finishers serialize.
    */
   static async finishRun(db: LobeChatDatabase, runId: string, input: FinishWidgetRunInput) {
     return db.transaction(async (tx) => {
@@ -627,6 +684,17 @@ export class WidgetModel {
       if (!run) return undefined;
 
       if (run.trigger === 'preview') return run;
+
+      const [widget] = await tx
+        .select({
+          lastRunId: widgets.lastRunId,
+          publishedVersionId: widgets.publishedVersionId,
+        })
+        .from(widgets)
+        .where(eq(widgets.id, run.widgetId))
+        .limit(1)
+        .for('update');
+      if (!widget || !(await WidgetModel.isCurrentRun(tx, widget, run))) return run;
 
       const usable = producesOutput(input.status);
       await tx

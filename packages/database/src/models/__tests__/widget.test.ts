@@ -208,6 +208,79 @@ describe('WidgetModel', () => {
       expect((await member.findById(inPublicProject.id))?.id).toBe(inPublicProject.id);
     });
 
+    it('honors the current visibility of the parent project / agent on every read', async () => {
+      // Parents start public, so the widgets are created public …
+      await seedProject('wgt-proj-flip');
+      await serverDB.insert(agents).values({ id: 'wgt-agent-flip', userId, workspaceId });
+      const inProject = await ws.create({ projectId: 'wgt-proj-flip', title: 'p' });
+      const inAgent = await ws.create({ agentId: 'wgt-agent-flip', title: 'a' });
+      expect([inProject.visibility, inAgent.visibility]).toEqual(['public', 'public']);
+
+      const v1 = await ws.createVersion(inProject.id, script(1));
+      await ws.publishVersion(inProject.id, v1!.id);
+      const run = await ws.startRun(inProject.id, { trigger: 'manual' });
+      await ws.finishRun(run!.id, { status: 'succeeded' });
+      expect((await member.findById(inProject.id))?.id).toBe(inProject.id);
+
+      // … then the parents turn private: the widget rows still say public.
+      await serverDB
+        .update(projects)
+        .set({ visibility: 'private' })
+        .where(eq(projects.id, 'wgt-proj-flip'));
+      await serverDB
+        .update(agents)
+        .set({ visibility: 'private' })
+        .where(eq(agents.id, 'wgt-agent-flip'));
+
+      expect(await member.findById(inProject.id)).toBeUndefined();
+      expect(await member.findById(inAgent.id)).toBeUndefined();
+      expect(await member.list({ projectId: 'wgt-proj-flip' })).toEqual([]);
+      expect(await member.list({ agentId: 'wgt-agent-flip' })).toEqual([]);
+      expect(await member.listByProject('wgt-proj-flip')).toEqual([]);
+      expect(await member.listVersions(inProject.id)).toEqual([]);
+      expect(await member.findVersion(inProject.id, v1!.id)).toBeUndefined();
+      expect(await member.listRuns(inProject.id)).toEqual([]);
+      expect(await member.findRun(inProject.id, run!.id)).toBeUndefined();
+      expect(await member.startRun(inProject.id, { trigger: 'manual' })).toBeUndefined();
+      expect(await member.hasSucceededRunForContentHash(inProject.id, v1!.contentHash)).toBe(false);
+
+      // the parents' creator still sees everything
+      expect((await ws.findById(inProject.id))?.id).toBe(inProject.id);
+      expect((await ws.listByProject('wgt-proj-flip')).map((w) => w.id)).toEqual([inProject.id]);
+      expect(await ws.listRuns(inProject.id)).toHaveLength(1);
+    });
+
+    it('hides a widget from its own creator once a teammate makes the parent private', async () => {
+      await seedProject('wgt-proj-teammate', { owner: otherUserId });
+      const widget = await ws.create({ projectId: 'wgt-proj-teammate', title: 'mine' });
+      expect((await ws.findById(widget.id))?.id).toBe(widget.id);
+
+      await serverDB
+        .update(projects)
+        .set({ visibility: 'private' })
+        .where(eq(projects.id, 'wgt-proj-teammate'));
+
+      expect(await ws.findById(widget.id)).toBeUndefined();
+      expect(await ws.update(widget.id, { title: 'x' })).toBeUndefined();
+      expect((await member.findById(widget.id))?.id).toBe(widget.id);
+    });
+
+    it('lists every widget of a project, with or without an agent', async () => {
+      await seedProject('wgt-proj-all');
+      await serverDB.insert(agents).values({ id: 'wgt-agent-all', userId, workspaceId });
+      const direct = await ws.create({ projectId: 'wgt-proj-all', title: 'direct' });
+      const viaAgent = await ws.create({
+        agentId: 'wgt-agent-all',
+        projectId: 'wgt-proj-all',
+        title: 'agent',
+      });
+      await ws.create({ title: 'elsewhere' });
+
+      expect((await ws.listByProject('wgt-proj-all')).map((w) => w.id).sort()).toEqual(
+        [direct.id, viaAgent.id].sort(),
+      );
+    });
+
     it('applies visibility in workspace mode and limits writes to the creator', async () => {
       const pub = await ws.create({ title: 'pub' });
       const priv = await ws.create({ title: 'priv', visibility: 'private' });
@@ -473,6 +546,74 @@ describe('WidgetModel', () => {
       expect(runs.every((r) => r.userId === userId && r.versionId === v1!.id)).toBe(true);
       expect(await model.listRuns(widget.id, { limit: 1 })).toHaveLength(1);
       expect(await other.listRuns(widget.id)).toEqual([]);
+    });
+
+    it('does not fold a run that started before the snapshot run into the widget', async () => {
+      const widget = await model.create({ title: 'w' });
+      const v1 = await model.createVersion(widget.id, script(1));
+      await model.publishVersion(widget.id, v1!.id);
+
+      const older = await model.startRun(widget.id, { trigger: 'manual' });
+      const newer = await model.startRun(widget.id, { trigger: 'schedule' });
+      await serverDB
+        .update(widgetRuns)
+        .set({ startedAt: new Date(Date.now() - 120_000) })
+        .where(eq(widgetRuns.id, older!.id));
+      await serverDB
+        .update(widgetRuns)
+        .set({ startedAt: new Date(Date.now() - 60_000) })
+        .where(eq(widgetRuns.id, newer!.id));
+
+      await model.finishRun(newer!.id, {
+        output: { type: 'stat', value: 2 },
+        status: 'succeeded',
+      });
+      // the slower, older run reports last — it must not overwrite the newer result
+      const late = await model.finishRun(older!.id, {
+        error: { code: 'NON_ZERO_EXIT', message: 'boom' },
+        status: 'failed',
+      });
+      expect(late).toMatchObject({ id: older!.id, status: 'failed' });
+
+      expect(await model.findById(widget.id)).toMatchObject({
+        consecutiveFailures: 0,
+        lastRunError: null,
+        lastRunId: newer!.id,
+        lastRunStatus: 'succeeded',
+        latestOutput: { type: 'stat', value: 2 },
+      });
+      expect(await model.findRun(widget.id, older!.id)).toMatchObject({ status: 'failed' });
+    });
+
+    it('does not fold a run of a version that is no longer published', async () => {
+      const widget = await model.create({ title: 'w' });
+      const v1 = await model.createVersion(widget.id, script(1));
+      await model.publishVersion(widget.id, v1!.id);
+      const first = await model.startRun(widget.id, { trigger: 'manual' });
+      await model.finishRun(first!.id, { output: { type: 'stat', value: 1 }, status: 'succeeded' });
+
+      const stale = await model.startRun(widget.id, { trigger: 'schedule' });
+      // v2 goes live while v1's run is still in flight
+      const v2 = await model.createVersion(widget.id, script(2));
+      await model.publishVersion(widget.id, v2!.id);
+
+      const finished = await model.finishRun(stale!.id, {
+        output: { type: 'stat', value: 99 },
+        status: 'succeeded',
+      });
+      expect(finished).toMatchObject({ id: stale!.id, status: 'succeeded', versionId: v1!.id });
+      expect(await model.findById(widget.id)).toMatchObject({
+        lastRunId: first!.id,
+        latestOutput: { type: 'stat', value: 1 },
+      });
+
+      // a run of the live version still folds
+      const fresh = await model.startRun(widget.id, { trigger: 'manual' });
+      await model.finishRun(fresh!.id, { output: { type: 'stat', value: 2 }, status: 'succeeded' });
+      expect(await model.findById(widget.id)).toMatchObject({
+        lastRunId: fresh!.id,
+        latestOutput: { type: 'stat', value: 2 },
+      });
     });
 
     it('lets workspace readers run a public widget but not a private one', async () => {

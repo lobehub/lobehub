@@ -1,4 +1,4 @@
-import { and, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, eq, isNull, type SQL, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { agents } from '../schemas/agent';
@@ -153,4 +153,38 @@ export const buildDirectLevelWhere = (
     return and(eq(cols.projectId, filter.projectId), isNull(cols.agentId)) as SQL;
   }
   return and(isNull(cols.projectId), isNull(cols.agentId)) as SQL;
+};
+
+/**
+ * Predicate selecting everything that belongs to a project, whether or not an
+ * agent inside the project also owns it — what a project's page shows.
+ * Combine with `buildWorkspaceWhere` for access control.
+ */
+export const buildProjectWhere = (cols: { projectId: AnyPgColumn }, projectId: string): SQL =>
+  eq(cols.projectId, projectId);
+
+/**
+ * Read gate for level-scoped rows: a row attached to a project or agent is
+ * readable only while the caller can see that parent *now*. A row's own
+ * `visibility` is clamped when it is written, but a parent can turn private
+ * later — without this gate a still-'public' child would keep exposing the
+ * parent's content to the whole workspace.
+ *
+ * A parent hides its children from the caller when it is private and the
+ * caller is not its creator (NULL visibility counts as public, as in
+ * `buildWorkspaceWhere`). Personal mode returns `undefined`: every parent
+ * there is the caller's own.
+ *
+ * Combine with `buildWorkspaceWhere` for every ordinary read.
+ */
+export const buildParentVisibilityWhere = (
+  ctx: ScopeCtx,
+  cols: { agentId: AnyPgColumn; projectId: AnyPgColumn },
+): SQL | undefined => {
+  if (!ctx.workspaceId) return undefined;
+
+  const hiddenProject = sql`EXISTS (SELECT 1 FROM ${projects} WHERE ${projects.id} = ${cols.projectId} AND ${projects.visibility} = 'private' AND ${projects.userId} <> ${ctx.userId})`;
+  const hiddenAgent = sql`EXISTS (SELECT 1 FROM ${agents} WHERE ${agents.id} = ${cols.agentId} AND ${agents.visibility} = 'private' AND ${agents.userId} <> ${ctx.userId})`;
+
+  return sql`NOT ${hiddenProject} AND NOT ${hiddenAgent}`;
 };
