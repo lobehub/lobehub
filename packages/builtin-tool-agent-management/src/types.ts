@@ -285,20 +285,16 @@ export interface CallAgentParams {
    */
   instruction: string;
   /**
-   * If true, execute as an async background task
-   */
-  runAsTask?: boolean;
-  /**
    * If true (and in a group context), skip calling supervisor after agent responds.
    * Only relevant when used within agent groups. Default: false
    */
   skipCallSupervisor?: boolean;
   /**
-   * Task title (required when runAsTask is true)
+   * Title for the delegated agent run (shown in UI). Defaults to `Call agent <agentId>`.
    */
   taskTitle?: string;
   /**
-   * Timeout in milliseconds for task execution (default: 1800000 = 30 minutes)
+   * Timeout in milliseconds for the delegated agent run (default: 1800000 = 30 minutes).
    */
   timeout?: number;
 }

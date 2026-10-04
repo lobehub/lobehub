@@ -280,8 +280,7 @@ export const AgentManagementManifest: BuiltinToolManifest = {
 
     // ==================== Execution ====================
     {
-      description:
-        'Call an agent to handle a specific task or respond to an instruction. Can run synchronously (immediate response) or as a background task for longer operations.',
+      description: 'Call an agent to handle a specific task or respond to an instruction.',
       name: AgentManagementApiName.callAgent,
       parameters: {
         properties: {
@@ -294,20 +293,15 @@ export const AgentManagementManifest: BuiltinToolManifest = {
               'The instruction or task for the agent to execute. Be specific about expected deliverables.',
             type: 'string',
           },
-          runAsTask: {
-            default: false,
-            description:
-              'If true, run as a background task for longer operations. The agent will work asynchronously and return results upon completion.',
-            type: 'boolean',
-          },
           taskTitle: {
-            description: 'Brief title for the task (shown in UI). Required when runAsTask is true.',
+            description:
+              'Title for the delegated agent run (shown in UI). Defaults to `Call agent <agentId>`.',
             type: 'string',
           },
           timeout: {
             default: 1_800_000,
             description:
-              'Maximum time in milliseconds to wait for task completion (default: 1800000 = 30 minutes). Only applies when runAsTask is true.',
+              'Maximum time in milliseconds to wait for the delegated agent run (default: 1800000 = 30 minutes).',
             type: 'number',
           },
           skipCallSupervisor: {

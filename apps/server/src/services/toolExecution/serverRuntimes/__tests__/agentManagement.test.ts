@@ -147,7 +147,6 @@ describe('agentManagementRuntime', () => {
         {
           agentId: 'agent-target',
           instruction: 'Do delegated work',
-          runAsTask: true,
         },
         { toolManifestMap: {} },
       );
@@ -168,7 +167,6 @@ describe('agentManagementRuntime', () => {
         {
           agentId: 'agent-target',
           instruction: 'Do delegated work',
-          runAsTask: true,
           taskTitle: 'Delegated task',
           timeout: 1234,
         },
@@ -208,7 +206,6 @@ describe('agentManagementRuntime', () => {
         {
           agentId: 'agent-target',
           instruction: 'Do delegated work',
-          runAsTask: true,
         },
         {
           subAgent: { run },
