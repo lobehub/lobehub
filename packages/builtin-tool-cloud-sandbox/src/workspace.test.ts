@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatSandboxWorkspacePromptVariables } from './workspace';
+import { formatSandboxStoragePromptVariables } from './workspace';
 
-describe('formatSandboxWorkspacePromptVariables', () => {
+describe('formatSandboxStoragePromptVariables', () => {
   it('leaves the ephemeral wording exactly as a run without persistence has always had it', () => {
     // The ordinary sandbox is every free run and every topic that never asked
     // for persistence; its prompt must not drift because the persistent one
     // gained a rule.
-    expect(formatSandboxWorkspacePromptVariables()).toEqual({
+    expect(formatSandboxStoragePromptVariables()).toEqual({
       sandbox_session_files: '- Files from previous sessions may not persist',
       sandbox_workspace: [
         '- Files created here are temporary and session-specific',
@@ -16,13 +16,13 @@ describe('formatSandboxWorkspacePromptVariables', () => {
         '- The sandbox has its own isolated file system starting at the root directory',
       ].join('\n'),
     });
-    expect(formatSandboxWorkspacePromptVariables({ mode: 'ephemeral' })).toEqual(
-      formatSandboxWorkspacePromptVariables(),
+    expect(formatSandboxStoragePromptVariables({ mode: 'ephemeral' })).toEqual(
+      formatSandboxStoragePromptVariables(),
     );
   });
 
   it('tells a persistent run to work where it starts rather than in scratch space', () => {
-    const { sandbox_workspace: prompt } = formatSandboxWorkspacePromptVariables({
+    const { sandbox_workspace: prompt } = formatSandboxStoragePromptVariables({
       cwd: 'hello-dev',
       mode: 'persistent',
     });
@@ -33,7 +33,7 @@ describe('formatSandboxWorkspacePromptVariables', () => {
   });
 
   it('says the same about placement when no subdirectory was chosen', () => {
-    const { sandbox_workspace: prompt } = formatSandboxWorkspacePromptVariables({
+    const { sandbox_workspace: prompt } = formatSandboxStoragePromptVariables({
       mode: 'persistent',
     });
 
@@ -45,7 +45,7 @@ describe('formatSandboxWorkspacePromptVariables', () => {
     // instance's directory, so a prompt that names the volume directory as the
     // working directory disagrees with `pwd` — and a model that notices goes
     // hunting for the "real" one.
-    const { sandbox_workspace: prompt } = formatSandboxWorkspacePromptVariables({
+    const { sandbox_workspace: prompt } = formatSandboxStoragePromptVariables({
       cwd: 'r18-copy',
       mode: 'persistent',
       workingDir: '/root/work',
@@ -63,7 +63,7 @@ describe('the placement text the skills runtime also renders', () => {
     // The skills tool now carries `{{sandbox_workspace}}` too, and its prompt
     // is assembled for every run — including the ones with no entitlement, where
     // the variable generators call this with nothing.
-    const { sandbox_workspace: prompt } = formatSandboxWorkspacePromptVariables();
+    const { sandbox_workspace: prompt } = formatSandboxStoragePromptVariables();
 
     expect(prompt).toContain('Files created here are temporary and session-specific');
     expect(prompt).not.toContain('{{');

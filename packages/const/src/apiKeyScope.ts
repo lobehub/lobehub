@@ -269,7 +269,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // under `file:*` would let a key given knowledge-base write access delete
   // working files too, which is not what that grant means. Blocked until the
   // feature ships with a scope of its own (full-access keys still reach it).
-  sandboxWorkspace: 'blocked',
+  sandboxStorage: 'blocked',
   search: rw('chat:read', null),
   // source-control integration wiring (installations, linked identities,
   // tracked pull requests) is configured from Settings, not from keys

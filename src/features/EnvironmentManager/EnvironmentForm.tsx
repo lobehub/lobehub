@@ -11,8 +11,8 @@ import useSWR from 'swr';
 
 import {
   type SandboxEnvironmentSpecification,
-  sandboxWorkspaceService,
-} from '@/services/sandboxWorkspace';
+  sandboxStorageService,
+} from '@/services/sandboxStorage';
 
 import EnvironmentVariables from './EnvironmentVariables';
 import { describeError } from './errorMessage';
@@ -98,7 +98,7 @@ const BranchField = memo<{
   const [editing, setEditing] = useState(false);
   const { data, error, isLoading } = useSWR(
     editing ? ['sandbox-github-branches', owner, repository] : null,
-    () => sandboxWorkspaceService.listGithubBranches({ owner, repository }),
+    () => sandboxStorageService.listGithubBranches({ owner, repository }),
   );
 
   const canPick = !error && data?.connected !== false && !data?.truncated;

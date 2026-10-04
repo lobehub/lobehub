@@ -15,7 +15,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
+import { sandboxStorageService } from '@/services/sandboxStorage';
 import { formatSize } from '@/utils/format';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -155,7 +155,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }
 
   const listing = useSWR(
     ['sandbox-instance-files', cwd],
-    () => sandboxWorkspaceService.listFiles({ instanceId, path: cwd }),
+    () => sandboxStorageService.listFiles({ instanceId, path: cwd }),
     {
       // Each listing is a sandbox round trip. A missing directory is an answer,
       // not a failure to retry, and refocusing the window must not re-list.
@@ -166,7 +166,7 @@ const InstanceFileBrowser = memo<InstanceFileBrowserProps>(({ instanceId, root }
 
   const file = useSWR(
     openFile ? ['sandbox-instance-file', openFile] : null,
-    ([, path]: [string, string]) => sandboxWorkspaceService.readFile({ instanceId, path }),
+    ([, path]: [string, string]) => sandboxStorageService.readFile({ instanceId, path }),
   );
   const content = file.data?.content ?? '';
 

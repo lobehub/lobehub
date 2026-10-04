@@ -1,4 +1,4 @@
-import { formatSandboxWorkspacePromptVariables } from '@lobechat/builtin-tool-cloud-sandbox';
+import { formatSandboxStoragePromptVariables } from '@lobechat/builtin-tool-cloud-sandbox';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import type { VariableGenerators } from '@lobechat/context-engine';
 
@@ -99,8 +99,8 @@ export const createVariableGenerators = ({
     // arrives through `variables` only for a run that actually got one
     // (entitlement claim AND persistent mode); every other run renders the
     // original ephemeral-session text rather than leaking the literal tokens.
-    sandbox_session_files: () => formatSandboxWorkspacePromptVariables().sandbox_session_files,
-    sandbox_workspace: () => formatSandboxWorkspacePromptVariables().sandbox_workspace,
+    sandbox_session_files: () => formatSandboxStoragePromptVariables().sandbox_session_files,
+    sandbox_workspace: () => formatSandboxStoragePromptVariables().sandbox_workspace,
   };
 
   return {

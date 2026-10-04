@@ -310,7 +310,7 @@ const execInSandboxHandler = async ({
     const marketService = sandbox.claim
       ? new MarketService({
           accessToken: ctx.marketAccessToken,
-          userInfo: { ...ctx.marketUserInfo, sandboxWorkspace: sandbox.claim, userId: ctx.userId },
+          userInfo: { ...ctx.marketUserInfo, sandboxStorage: sandbox.claim, userId: ctx.userId },
         })
       : ctx.marketService;
 

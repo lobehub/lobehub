@@ -1,17 +1,17 @@
 import {
-  deriveSandboxWorkspaceKey,
-  type SandboxWorkspaceClaim,
-  type SandboxWorkspaceScope,
+  deriveSandboxStorageKey,
+  type SandboxStorageClaim,
+  type SandboxStorageScope,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
-import { resolveSandboxWorkspaceEntitlement } from '@/business/server/sandboxWorkspace';
+import { resolveSandboxStorageEntitlement } from '@/business/server/sandboxStorage';
 import { UserModel } from '@/database/models/user';
 
 const log = debug('lobe-server:sandbox:entitlement');
 
-export interface SandboxWorkspaceClaimInput extends SandboxWorkspaceScope {
+export interface SandboxStorageClaimInput extends SandboxStorageScope {
   /**
    * Whether this run is an Agent Share visitor's. Required rather than optional:
    * such a run executes under the CREATOR's identity, so every input this
@@ -46,15 +46,15 @@ export interface SandboxWorkspaceClaimInput extends SandboxWorkspaceScope {
  * the sandbox down with it. The run degrades to an ephemeral sandbox, which is
  * what every session does today.
  */
-export const resolveSandboxWorkspaceClaim = async ({
+export const resolveSandboxStorageClaim = async ({
   isShareVisitorRun,
   serverDB,
   userId,
   workspaceId,
-}: SandboxWorkspaceClaimInput): Promise<SandboxWorkspaceClaim | null> => {
+}: SandboxStorageClaimInput): Promise<SandboxStorageClaim | null> => {
   if (isShareVisitorRun) return null;
 
-  const key = deriveSandboxWorkspaceKey({ userId, workspaceId });
+  const key = deriveSandboxStorageKey({ userId, workspaceId });
   if (!key) return null;
 
   try {
@@ -65,7 +65,7 @@ export const resolveSandboxWorkspaceClaim = async ({
     const preference = await new UserModel(serverDB, userId).getUserPreference();
     if (preference?.lab?.enablePersistentSandbox !== true) return null;
 
-    const entitlement = await resolveSandboxWorkspaceEntitlement({ userId, workspaceId });
+    const entitlement = await resolveSandboxStorageEntitlement({ userId, workspaceId });
     const quotaBytes = entitlement?.quotaBytes;
     if (typeof quotaBytes !== 'number' || !Number.isSafeInteger(quotaBytes) || quotaBytes <= 0) {
       return null;

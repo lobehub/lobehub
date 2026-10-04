@@ -900,7 +900,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     const marketService = new MarketService({
       accessToken: marketAccessToken,
       userInfo: {
-        sandboxWorkspace: sandbox.claim,
+        sandboxStorage: sandbox.claim,
         userId: context.userId,
         workspaceId,
       },

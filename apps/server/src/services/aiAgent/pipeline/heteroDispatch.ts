@@ -70,12 +70,12 @@ export interface HeteroDispatchDeps {
   bindTopicWorkingDirectory: (params: BindTopicWorkingDirectoryParams) => Promise<void>;
   db: LobeChatDatabase;
   /**
-   * With a `sandboxWorkspace` claim, a service whose trust token carries the
+   * With a `sandboxStorage` claim, a service whose trust token carries the
    * entitlement a persistent sandbox run needs — built for that run rather
    * than taken from the cache, because the claim is signed into the token.
    */
   getMarketService: (options?: {
-    sandboxWorkspace: NonNullable<SandboxSessionConfig['claim']>;
+    sandboxStorage: NonNullable<SandboxSessionConfig['claim']>;
   }) => Promise<MarketService>;
   messageModel: MessageModel;
   resolveDeviceWorkspaceId: (deviceId: string | undefined) => Promise<string | undefined>;
@@ -1172,7 +1172,7 @@ export const dispatchHeteroAgent = async (
       // The entitlement rides on the trust token; without it the execution
       // plane routes to the ephemeral sandbox whatever the request says.
       const marketService = await deps.getMarketService(
-        sandbox?.claim ? { sandboxWorkspace: sandbox.claim } : undefined,
+        sandbox?.claim ? { sandboxStorage: sandbox.claim } : undefined,
       );
       // The sandbox authenticates its nested `lh` calls with this JWT. The
       // narrow `hetero-operation` token (used for the device-dispatch path

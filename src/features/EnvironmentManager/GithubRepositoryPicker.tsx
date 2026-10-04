@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
+import { sandboxStorageService } from '@/services/sandboxStorage';
 
 const styles = createStaticStyles(({ css }) => ({
   field: css`
@@ -111,7 +111,7 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
   };
 
   const { data, isLoading } = useSWR('sandbox-github-repositories', () =>
-    sandboxWorkspaceService.listGithubRepositories(),
+    sandboxStorageService.listGithubRepositories(),
   );
 
   // Memoised, not a bare `??` fallback: a fresh `[]` on every render would

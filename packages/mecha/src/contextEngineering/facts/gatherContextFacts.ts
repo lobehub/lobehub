@@ -3,7 +3,7 @@ import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import {
   CloudSandboxIdentifier,
-  formatSandboxWorkspacePromptVariables,
+  formatSandboxStoragePromptVariables,
   formatUploadedFilesPrompt,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
@@ -538,7 +538,7 @@ export const gatherContextFacts = async (
       // fallback renders the original wording; spelling it out here would mean
       // two copies of the same ephemeral text to keep in step.
       ...(sandboxPersistence?.mode === 'persistent'
-        ? formatSandboxWorkspacePromptVariables(sandboxPersistence)
+        ? formatSandboxStoragePromptVariables(sandboxPersistence)
         : {}),
       topic_id: request.topicId ?? '',
       topic_title: topic?.title ?? '',

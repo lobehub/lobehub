@@ -1,4 +1,4 @@
-import type { SandboxWorkspaceClaim } from '@lobechat/builtin-tool-cloud-sandbox';
+import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
   buildTrustedClientPayload,
   createTrustedClientToken,
@@ -12,13 +12,13 @@ export interface TrustedClientUserInfo {
   name?: string;
   /**
    * Persistent-sandbox entitlement for this principal, resolved by
-   * `resolveSandboxWorkspaceClaim`. Absent — the shape every caller that does
+   * `resolveSandboxStorageClaim`. Absent — the shape every caller that does
    * not create sandboxes leaves it in — means the sandbox stays ephemeral.
    *
    * It rides the token rather than the request body on purpose: it is the one
    * thing the execution plane must not let a caller choose for itself.
    */
-  sandboxWorkspace?: SandboxWorkspaceClaim | null;
+  sandboxStorage?: SandboxStorageClaim | null;
   userId: string;
   /**
    * Cloud workspace id the request acts on behalf of. When set, Market treats
@@ -89,8 +89,8 @@ export const generateTrustedClientToken = (userInfo: TrustedClientUserInfo): str
     // Omitted when there is no entitlement, which is the free-tier shape and
     // leaves today's tokens unchanged.
     // TODO: pass through buildTrustedClientPayload once the SDK carries it.
-    const signedPayload: TrustedClientPayload = userInfo.sandboxWorkspace
-      ? ({ ...payload, sandboxWorkspace: userInfo.sandboxWorkspace } as TrustedClientPayload)
+    const signedPayload: TrustedClientPayload = userInfo.sandboxStorage
+      ? ({ ...payload, sandboxStorage: userInfo.sandboxStorage } as TrustedClientPayload)
       : payload;
 
     return createTrustedClientToken(signedPayload, MARKET_TRUSTED_CLIENT_SECRET);

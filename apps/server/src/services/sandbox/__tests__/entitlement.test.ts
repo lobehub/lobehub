@@ -1,12 +1,12 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const resolveSandboxWorkspaceEntitlement = vi.fn();
+const resolveSandboxStorageEntitlement = vi.fn();
 const getUserPreference = vi.fn();
 
-vi.mock('@/business/server/sandboxWorkspace', () => ({
-  resolveSandboxWorkspaceEntitlement: (...args: unknown[]) =>
-    resolveSandboxWorkspaceEntitlement(...args),
+vi.mock('@/business/server/sandboxStorage', () => ({
+  resolveSandboxStorageEntitlement: (...args: unknown[]) =>
+    resolveSandboxStorageEntitlement(...args),
 }));
 
 vi.mock('@/database/models/user', () => ({
@@ -15,24 +15,24 @@ vi.mock('@/database/models/user', () => ({
   }),
 }));
 
-const { resolveSandboxWorkspaceClaim } = await import('../entitlement');
+const { resolveSandboxStorageClaim } = await import('../entitlement');
 
 const serverDB = {} as LobeChatDatabase;
 
 const resolve = (overrides: Record<string, unknown> = {}) =>
-  resolveSandboxWorkspaceClaim({
+  resolveSandboxStorageClaim({
     isShareVisitorRun: false,
     serverDB,
     userId: 'user_1',
     ...overrides,
   });
 
-describe('resolveSandboxWorkspaceClaim', () => {
+describe('resolveSandboxStorageClaim', () => {
   beforeEach(() => {
-    resolveSandboxWorkspaceEntitlement.mockReset();
+    resolveSandboxStorageEntitlement.mockReset();
     getUserPreference.mockReset();
     getUserPreference.mockResolvedValue({ lab: { enablePersistentSandbox: true } });
-    resolveSandboxWorkspaceEntitlement.mockResolvedValue({ quotaBytes: 2048 });
+    resolveSandboxStorageEntitlement.mockResolvedValue({ quotaBytes: 2048 });
   });
 
   it('pairs the derived key with the plan quota', async () => {
@@ -42,19 +42,19 @@ describe('resolveSandboxWorkspaceClaim', () => {
   it('passes the overage licence through, and only when granted', async () => {
     // The execution plane is told the answer, never the inputs — and absent
     // has to read as no, so a deployment that says nothing cannot bill anyone.
-    resolveSandboxWorkspaceEntitlement.mockResolvedValue({
+    resolveSandboxStorageEntitlement.mockResolvedValue({
       overageAllowed: true,
       quotaBytes: 2048,
     });
 
     await expect(
-      resolveSandboxWorkspaceClaim({ isShareVisitorRun: false, serverDB: {} as any, userId: 'u1' }),
+      resolveSandboxStorageClaim({ isShareVisitorRun: false, serverDB: {} as any, userId: 'u1' }),
     ).resolves.toMatchObject({ overageAllowed: true });
 
-    resolveSandboxWorkspaceEntitlement.mockResolvedValue({ quotaBytes: 2048 });
+    resolveSandboxStorageEntitlement.mockResolvedValue({ quotaBytes: 2048 });
 
     expect(
-      await resolveSandboxWorkspaceClaim({
+      await resolveSandboxStorageClaim({
         isShareVisitorRun: false,
         serverDB: {} as any,
         userId: 'u1',
@@ -63,13 +63,13 @@ describe('resolveSandboxWorkspaceClaim', () => {
   });
 
   it('judges an organization run by its workspace', async () => {
-    resolveSandboxWorkspaceEntitlement.mockResolvedValue({ quotaBytes: 4096 });
+    resolveSandboxStorageEntitlement.mockResolvedValue({ quotaBytes: 4096 });
 
     await expect(resolve({ workspaceId: 'wsp_42' })).resolves.toEqual({
       key: 'ws-org-wsp_42',
       quotaBytes: 4096,
     });
-    expect(resolveSandboxWorkspaceEntitlement).toHaveBeenCalledWith({
+    expect(resolveSandboxStorageEntitlement).toHaveBeenCalledWith({
       userId: 'user_1',
       workspaceId: 'wsp_42',
     });
@@ -83,7 +83,7 @@ describe('resolveSandboxWorkspaceClaim', () => {
       await expect(resolve()).resolves.toBeNull();
     }
 
-    expect(resolveSandboxWorkspaceEntitlement).not.toHaveBeenCalled();
+    expect(resolveSandboxStorageEntitlement).not.toHaveBeenCalled();
   });
 
   // A share visitor's run executes under the CREATOR's identity, so every input
@@ -93,11 +93,11 @@ describe('resolveSandboxWorkspaceClaim', () => {
     await expect(resolve({ isShareVisitorRun: true })).resolves.toBeNull();
 
     expect(getUserPreference).not.toHaveBeenCalled();
-    expect(resolveSandboxWorkspaceEntitlement).not.toHaveBeenCalled();
+    expect(resolveSandboxStorageEntitlement).not.toHaveBeenCalled();
   });
 
   it('is null for a plan with no persistence', async () => {
-    resolveSandboxWorkspaceEntitlement.mockResolvedValue(null);
+    resolveSandboxStorageEntitlement.mockResolvedValue(null);
 
     await expect(resolve()).resolves.toBeNull();
   });
@@ -107,7 +107,7 @@ describe('resolveSandboxWorkspaceClaim', () => {
   // leave here.
   it('rejects a quota that is not a usable size', async () => {
     for (const quota of [0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 2, '2048']) {
-      resolveSandboxWorkspaceEntitlement.mockResolvedValue(quota);
+      resolveSandboxStorageEntitlement.mockResolvedValue(quota);
       await expect(resolve()).resolves.toBeNull();
     }
   });
@@ -117,7 +117,7 @@ describe('resolveSandboxWorkspaceClaim', () => {
     await expect(resolve({ userId: '../etc/passwd' })).resolves.toBeNull();
 
     expect(getUserPreference).not.toHaveBeenCalled();
-    expect(resolveSandboxWorkspaceEntitlement).not.toHaveBeenCalled();
+    expect(resolveSandboxStorageEntitlement).not.toHaveBeenCalled();
   });
 
   // Losing either lookup must degrade to an ephemeral sandbox — the behaviour
@@ -127,7 +127,7 @@ describe('resolveSandboxWorkspaceClaim', () => {
     await expect(resolve()).resolves.toBeNull();
 
     getUserPreference.mockResolvedValue({ lab: { enablePersistentSandbox: true } });
-    resolveSandboxWorkspaceEntitlement.mockRejectedValue(new Error('entitlement lookup failed'));
+    resolveSandboxStorageEntitlement.mockRejectedValue(new Error('entitlement lookup failed'));
     await expect(resolve()).resolves.toBeNull();
   });
 });

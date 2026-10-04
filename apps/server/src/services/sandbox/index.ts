@@ -1,4 +1,4 @@
-export { resolveSandboxWorkspaceClaim } from './entitlement';
+export { resolveSandboxStorageClaim } from './entitlement';
 export { createSandboxService, getSandboxProviderKind } from './factory';
 export { MarketSandboxProvider, ServerSandboxService } from './providers/market';
 export { OnlyboxesSandboxProvider } from './providers/onlyboxes';

@@ -1353,51 +1353,51 @@ export default {
   'gatewayMode.cardTitle': 'Agent Gateway Mode',
   'gatewayMode.desc':
     "Run agents in the cloud through LobeHub's Agent Gateway. Tasks keep running even after you close the page.",
-  'sandboxWorkspace.ephemeral': 'Temporary working directory',
-  'sandboxWorkspace.ephemeralDesc': 'Cleaned up when the sandbox is recycled',
-  'sandboxWorkspace.persistentUpsell': 'Persistent working directory',
-  'sandboxWorkspace.persistentUpsellDesc': 'Keep files across runs and topics',
-  'sandboxWorkspace.setUpEnvironmentDesc': 'A persistent directory lives in an environment',
-  'sandboxWorkspace.setUpEnvironment': 'Set up an environment',
+  'sandboxStorage.ephemeral': 'Temporary working directory',
+  'sandboxStorage.ephemeralDesc': 'Cleaned up when the sandbox is recycled',
+  'sandboxStorage.persistentUpsell': 'Persistent working directory',
+  'sandboxStorage.persistentUpsellDesc': 'Keep files across runs and topics',
+  'sandboxStorage.setUpEnvironmentDesc': 'A persistent directory lives in an environment',
+  'sandboxStorage.setUpEnvironment': 'Set up an environment',
   // The other empty state: environments exist, none has been materialized
   // into a working copy yet. Naming the environment page rather than opening
   // a dialog here — this menu picks between instances, it does not make them.
-  'sandboxWorkspace.noInstances': 'Create an instance',
-  'sandboxWorkspace.noInstancesDesc': 'Your environments have no working copy yet',
-  'sandboxWorkspace.manage': 'Manage',
+  'sandboxStorage.noInstances': 'Create an instance',
+  'sandboxStorage.noInstancesDesc': 'Your environments have no working copy yet',
+  'sandboxStorage.manage': 'Manage',
   // The menu names the thing it picks — an instance of an environment —
   // rather than the slot it fills. The explainer carries the distinction,
   // because "environment" and "instance of one" is the whole model.
-  'sandboxWorkspace.pickerTitle': 'Environment Instance',
-  'sandboxWorkspace.pickerInfoTooltip':
+  'sandboxStorage.pickerTitle': 'Environment Instance',
+  'sandboxStorage.pickerInfoTooltip':
     'An environment describes what a run needs around it — repositories, setup, variables. An instance is one working copy of it, with its own folder and its own installed packages; conversations run inside an instance and keep what they leave there.',
-  'sandboxWorkspace.environmentsUnavailable': 'Environments could not be loaded',
+  'sandboxStorage.environmentsUnavailable': 'Environments could not be loaded',
   // One conversation at a time per instance: the execution plane takes a
   // lease and answers the second writer with 409 ENVIRONMENT_IN_USE, because
   // two runs snapshotting one folder means whichever ends last silently
   // discards the other's work. The tag says which rows that applies to before
   // the first message meets the refusal.
-  'sandboxWorkspace.running': 'Running',
+  'sandboxStorage.running': 'Running',
   // A build holds the same single-writer lease a run does, so it is refused
   // for the same reason — but it is not a conversation, and saying "running"
   // would send someone looking for one.
-  'sandboxWorkspace.building': 'Building',
-  'sandboxWorkspace.buildFailed': 'Not built',
-  'sandboxWorkspace.instanceBusy':
+  'sandboxStorage.building': 'Building',
+  'sandboxStorage.buildFailed': 'Not built',
+  'sandboxStorage.instanceBusy':
     '{{name}} is running in another conversation. This one keeps it, and picks it up when that run ends.',
   // Pool captions inside a workspace, in the execution-target menu's words:
   // which pool an environment is in decides who else can reach what a run
   // leaves behind. A personal account has one pool and needs neither.
-  'sandboxWorkspace.privateGroup': 'Private Environments',
-  'sandboxWorkspace.workspaceGroup': 'Workspace Environments',
+  'sandboxStorage.privateGroup': 'Private Environments',
+  'sandboxStorage.workspaceGroup': 'Workspace Environments',
   // Says where the hidden ones went. Dropped from the list rather than
   // dimmed, the way the execution-target menu drops a workspace agent's
   // personal devices, so this is the only place they are accounted for.
-  'sandboxWorkspace.publicAgentHint_one':
+  'sandboxStorage.publicAgentHint_one':
     '{{count}} private environment is hidden — a public agent can only use workspace environments. Publish it to use it here.',
-  'sandboxWorkspace.publicAgentHint_other':
+  'sandboxStorage.publicAgentHint_other':
     '{{count}} private environments are hidden — a public agent can only use workspace environments. Publish one to use it here.',
-  'sandboxWorkspace.privateInstanceBlocked':
+  'sandboxStorage.privateInstanceBlocked':
     '“{{name}}” is in a private environment, which a public agent cannot use. This topic runs in a temporary working directory instead.',
   'search.grounding.imageSearchQueries': 'Image Search Keywords',
   'search.grounding.imageTitle': 'Found {{count}} images',

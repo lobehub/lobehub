@@ -7,7 +7,7 @@ import { lambdaClient } from '@/libs/trpc/client';
 import { agentService } from '@/services/agent';
 import { messageService } from '@/services/message';
 import { notebookService } from '@/services/notebook';
-import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
+import { sandboxStorageService } from '@/services/sandboxStorage';
 import { userService } from '@/services/user';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -233,7 +233,7 @@ export const createBrowserContextFactProviders = ({
   // would not survive — cloned into /tmp.
   resolveSandboxPersistence: async () => {
     const topicId = getChatStoreState().activeTopicId ?? undefined;
-    const placement = await sandboxWorkspaceService.resolveSessionPlacement({ topicId });
+    const placement = await sandboxStorageService.resolveSessionPlacement({ topicId });
     return placement ?? undefined;
   },
 

@@ -151,7 +151,7 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
     const marketService = new MarketService({
       accessToken,
       userInfo: {
-        sandboxWorkspace: sandbox.claim,
+        sandboxStorage: sandbox.claim,
         userId: context.userId,
         workspaceId,
       },

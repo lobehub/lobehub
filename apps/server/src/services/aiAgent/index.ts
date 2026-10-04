@@ -1,6 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import type { SandboxWorkspaceClaim } from '@lobechat/builtin-tool-cloud-sandbox';
+import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   ExecAgentResult,
@@ -221,7 +221,7 @@ export class AiAgentService {
 
   private async getMarketService(
     runFacts?: RunFacts,
-    options?: { sandboxWorkspace: SandboxWorkspaceClaim },
+    options?: { sandboxStorage: SandboxStorageClaim },
   ): Promise<MarketService> {
     if (!options && this._marketService) return this._marketService;
 
@@ -239,7 +239,7 @@ export class AiAgentService {
     if (options) {
       return new MarketService({
         accessToken,
-        userInfo: { sandboxWorkspace: options.sandboxWorkspace, userId: this.userId },
+        userInfo: { sandboxStorage: options.sandboxStorage, userId: this.userId },
       });
     }
 

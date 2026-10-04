@@ -1,25 +1,23 @@
 import {
   DEFAULT_SANDBOX_MODE,
-  deriveSandboxWorkspaceKey,
-  formatSandboxWorkspacePrompt,
-  formatSandboxWorkspacePromptVariables,
+  deriveSandboxStorageKey,
+  formatSandboxStoragePrompt,
+  formatSandboxStoragePromptVariables,
   isSafeSandboxCwd,
   isSafeSandboxEnvironmentId,
-  type SandboxWorkspacePromptVariables,
+  type SandboxStoragePromptVariables,
   systemPrompt,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import { describe, expect, it } from 'vitest';
 
-describe('deriveSandboxWorkspaceKey', () => {
+describe('deriveSandboxStorageKey', () => {
   it('uses the personal key when no workspace is scoped', () => {
-    expect(deriveSandboxWorkspaceKey({ userId: 'user_abc' })).toBe('ws-user_abc');
-    expect(deriveSandboxWorkspaceKey({ userId: 'user_abc', workspaceId: null })).toBe(
-      'ws-user_abc',
-    );
+    expect(deriveSandboxStorageKey({ userId: 'user_abc' })).toBe('ws-user_abc');
+    expect(deriveSandboxStorageKey({ userId: 'user_abc', workspaceId: null })).toBe('ws-user_abc');
   });
 
   it('shares one key across an organization workspace', () => {
-    expect(deriveSandboxWorkspaceKey({ userId: 'user_abc', workspaceId: 'wsp_42' })).toBe(
+    expect(deriveSandboxStorageKey({ userId: 'user_abc', workspaceId: 'wsp_42' })).toBe(
       'ws-org-wsp_42',
     );
   });
@@ -29,20 +27,20 @@ describe('deriveSandboxWorkspaceKey', () => {
   // `ws-user_a-b`, and a length cap aliases every id sharing a prefix — either
   // way two principals land in ONE directory and read each other's files.
   it('refuses an id that is not already a safe path segment', () => {
-    expect(deriveSandboxWorkspaceKey({ userId: '../etc/passwd' })).toBeUndefined();
-    expect(deriveSandboxWorkspaceKey({ userId: '$(rm -rf /)' })).toBeUndefined();
-    expect(deriveSandboxWorkspaceKey({ userId: 'user a' })).toBeUndefined();
-    expect(deriveSandboxWorkspaceKey({ userId: 'évil' })).toBeUndefined();
-    expect(deriveSandboxWorkspaceKey({ userId: '' })).toBeUndefined();
-    expect(deriveSandboxWorkspaceKey({ userId: 'u', workspaceId: 'wsp/42' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: '../etc/passwd' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: '$(rm -rf /)' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: 'user a' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: 'évil' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: '' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: 'u', workspaceId: 'wsp/42' })).toBeUndefined();
     // Over the 128-char ceiling the receiving end enforces.
-    expect(deriveSandboxWorkspaceKey({ userId: 'x'.repeat(200) })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: 'x'.repeat(200) })).toBeUndefined();
   });
 
   // Two ids that differ at all must never produce the same key.
   it('is injective for the id shapes the platform issues', () => {
     const keys = ['user_a_b', 'user_a-b', 'user_ab', 'user_A_B'].map((userId) =>
-      deriveSandboxWorkspaceKey({ userId }),
+      deriveSandboxStorageKey({ userId }),
     );
 
     expect(keys.every(Boolean)).toBe(true);
@@ -52,14 +50,14 @@ describe('deriveSandboxWorkspaceKey', () => {
   // Both shapes share one namespace, so `ws-<userId>` with a userId of
   // `org-wsp_42` would address the very directory the workspace `wsp_42` uses.
   it('keeps personal and organization namespaces apart', () => {
-    expect(deriveSandboxWorkspaceKey({ userId: 'u', workspaceId: 'wsp_42' })).toBe('ws-org-wsp_42');
-    expect(deriveSandboxWorkspaceKey({ userId: 'org-wsp_42' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: 'u', workspaceId: 'wsp_42' })).toBe('ws-org-wsp_42');
+    expect(deriveSandboxStorageKey({ userId: 'org-wsp_42' })).toBeUndefined();
   });
 });
 
-describe('formatSandboxWorkspacePromptVariables', () => {
+describe('formatSandboxStoragePromptVariables', () => {
   const placeholders = ['{{sandbox_workspace}}', '{{sandbox_session_files}}'];
-  const render = (vars: SandboxWorkspacePromptVariables) =>
+  const render = (vars: SandboxStoragePromptVariables) =>
     placeholders.reduce(
       (acc, key) => acc.replaceAll(key, vars[key.slice(2, -2) as keyof typeof vars]),
       systemPrompt,
@@ -67,11 +65,11 @@ describe('formatSandboxWorkspacePromptVariables', () => {
 
   it('defaults to ephemeral', () => {
     expect(DEFAULT_SANDBOX_MODE).toBe('ephemeral');
-    expect(formatSandboxWorkspacePromptVariables()).toEqual(
-      formatSandboxWorkspacePromptVariables({ mode: 'ephemeral' }),
+    expect(formatSandboxStoragePromptVariables()).toEqual(
+      formatSandboxStoragePromptVariables({ mode: 'ephemeral' }),
     );
-    expect(formatSandboxWorkspacePrompt()).toBe(
-      formatSandboxWorkspacePromptVariables().sandbox_workspace,
+    expect(formatSandboxStoragePrompt()).toBe(
+      formatSandboxStoragePromptVariables().sandbox_workspace,
     );
   });
 
@@ -79,7 +77,7 @@ describe('formatSandboxWorkspacePromptVariables', () => {
   // run renders this branch, so it has to reproduce the pre-placeholder prompt
   // exactly — including the lines surrounding the two spliced sections.
   it('renders the original ephemeral wording, byte for byte', () => {
-    const vars = formatSandboxWorkspacePromptVariables();
+    const vars = formatSandboxStoragePromptVariables();
     const rendered = render(vars);
 
     for (const key of placeholders) expect(rendered).not.toContain(key);
@@ -92,7 +90,7 @@ describe('formatSandboxWorkspacePromptVariables', () => {
   });
 
   it('describes a persistent workspace without naming a directory', () => {
-    const vars = formatSandboxWorkspacePromptVariables({ mode: 'persistent' });
+    const vars = formatSandboxStoragePromptVariables({ mode: 'persistent' });
     const rendered = render(vars);
 
     for (const key of placeholders) expect(rendered).not.toContain(key);
@@ -111,7 +109,7 @@ describe('formatSandboxWorkspacePromptVariables', () => {
   });
 
   it('names the chosen subdirectory and places it under the workspace root', () => {
-    const vars = formatSandboxWorkspacePromptVariables({
+    const vars = formatSandboxStoragePromptVariables({
       cwd: 'projects/atlas',
       mode: 'persistent',
     });
@@ -125,8 +123,8 @@ describe('formatSandboxWorkspacePromptVariables', () => {
 
   it('ignores a subdirectory on an ephemeral run', () => {
     expect(
-      formatSandboxWorkspacePromptVariables({ cwd: 'projects/atlas', mode: 'ephemeral' }),
-    ).toEqual(formatSandboxWorkspacePromptVariables());
+      formatSandboxStoragePromptVariables({ cwd: 'projects/atlas', mode: 'ephemeral' }),
+    ).toEqual(formatSandboxStoragePromptVariables());
   });
 
   // The mount root belongs to the execution plane. Spelling an absolute path
@@ -137,7 +135,7 @@ describe('formatSandboxWorkspacePromptVariables', () => {
       { mode: 'persistent' } as const,
       { cwd: 'a/b', mode: 'persistent' } as const,
     ]) {
-      const vars = formatSandboxWorkspacePromptVariables(input);
+      const vars = formatSandboxStoragePromptVariables(input);
       expect(vars.sandbox_workspace).not.toContain('/mnt/');
       expect(vars.sandbox_workspace).not.toContain('ws-');
       expect(vars.sandbox_session_files).not.toContain('/mnt/');

@@ -5,8 +5,8 @@ import { useSWRConfig } from 'swr';
 import { useClientDataSWR } from '@/libs/swr';
 import {
   type SandboxEnvironmentSpecification,
-  sandboxWorkspaceService,
-} from '@/services/sandboxWorkspace';
+  sandboxStorageService,
+} from '@/services/sandboxStorage';
 
 const ENVIRONMENTS_KEY = 'sandbox-environments';
 const INSTANCES_KEY = 'sandbox-environment-instances';
@@ -29,9 +29,9 @@ const BUILD_KEY = 'sandbox-instance-build';
  * for whom.
  */
 export const useEnvironments = (visibility?: EnvironmentVisibility) =>
-  useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.listEnvironments>>>(
+  useClientDataSWR<Awaited<ReturnType<typeof sandboxStorageService.listEnvironments>>>(
     [ENVIRONMENTS_KEY, visibility ?? 'all'],
-    () => sandboxWorkspaceService.listEnvironments(visibility ? { visibility } : undefined),
+    () => sandboxStorageService.listEnvironments(visibility ? { visibility } : undefined),
   );
 
 /**
@@ -47,13 +47,13 @@ export const useEnvironments = (visibility?: EnvironmentVisibility) =>
  * store cannot be reached the rows still list with `snapshotsUnavailable` set.
  */
 export const useInstances = () => {
-  const rows = useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.listInstances>>>(
+  const rows = useClientDataSWR<Awaited<ReturnType<typeof sandboxStorageService.listInstances>>>(
     [INSTANCES_KEY, 'rows'],
-    () => sandboxWorkspaceService.listInstances({ withSizes: false }),
+    () => sandboxStorageService.listInstances({ withSizes: false }),
   );
-  const sizes = useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.listInstances>>>(
+  const sizes = useClientDataSWR<Awaited<ReturnType<typeof sandboxStorageService.listInstances>>>(
     rows.data ? [INSTANCES_KEY, 'sizes'] : null,
-    () => sandboxWorkspaceService.listInstances(),
+    () => sandboxStorageService.listInstances(),
     // A size does not change while the user looks at the page, and each
     // refetch is a sandbox round trip; refocusing the tab must not pay it.
     { dedupingInterval: 30_000, revalidateOnFocus: false },
@@ -97,9 +97,9 @@ export const useInstances = () => {
  * this is a paid feature, and an account without one simply has no meter.
  */
 export const useWorkspaceUsage = () => {
-  const swr = useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.getWorkspace>>>(
+  const swr = useClientDataSWR<Awaited<ReturnType<typeof sandboxStorageService.getWorkspace>>>(
     [WORKSPACE_KEY],
-    () => sandboxWorkspaceService.getWorkspace(),
+    () => sandboxStorageService.getWorkspace(),
     // The number moves when a session writes, not while someone reads the
     // page; refocusing the tab is not a reason to ask again.
     { revalidateOnFocus: false },
@@ -108,7 +108,7 @@ export const useWorkspaceUsage = () => {
   const refresh = useCallback(async () => {
     // Optimistically publish what the measurement returns, so the meter moves
     // with the click instead of after a second round trip.
-    await swr.mutate(() => sandboxWorkspaceService.refreshWorkspaceUsage(), {
+    await swr.mutate(() => sandboxStorageService.refreshWorkspaceUsage(), {
       revalidate: false,
     });
   }, [swr.mutate]);
@@ -165,11 +165,10 @@ export const useInstanceBuild = (instanceId: string, active: boolean, buildId?: 
   const { mutate: refreshInstances } = useInstances();
 
   const swr = useClientDataSWR<
-    Awaited<ReturnType<typeof sandboxWorkspaceService.instanceBuildStatus>>
+    Awaited<ReturnType<typeof sandboxStorageService.instanceBuildStatus>>
   >(
     active ? [BUILD_KEY, instanceId] : null,
-    () =>
-      sandboxWorkspaceService.instanceBuildStatus({ id: instanceId, logOffset: offset.current }),
+    () => sandboxStorageService.instanceBuildStatus({ id: instanceId, logOffset: offset.current }),
     {
       onSuccess: (data) => {
         if (data.chunk) {
@@ -207,9 +206,9 @@ const SESSIONS_KEY = 'sandbox-environment-sessions';
  * panel fetches its own rather than serving the previous one's rows.
  */
 export const useInstanceSessions = (environmentId: string) =>
-  useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.listInstanceSessions>>>(
+  useClientDataSWR<Awaited<ReturnType<typeof sandboxStorageService.listInstanceSessions>>>(
     [SESSIONS_KEY, environmentId],
-    () => sandboxWorkspaceService.listInstanceSessions({ environmentId }),
+    () => sandboxStorageService.listInstanceSessions({ environmentId }),
     {
       // A run that is still going changes on its own — it ends, or a snapshot
       // lands — so the panel keeps looking while one is on screen and stops
@@ -247,7 +246,7 @@ export const useEnvironmentActions = () => {
 
   return {
     copyInstance: async (params: { id: string; name: string; workingDirectory: string }) => {
-      await sandboxWorkspaceService.copyInstance(params);
+      await sandboxStorageService.copyInstance(params);
       await refreshInstances();
     },
 
@@ -257,7 +256,7 @@ export const useEnvironmentActions = () => {
       name: string;
       visibility?: EnvironmentVisibility;
     }) => {
-      await sandboxWorkspaceService.createEnvironment(params);
+      await sandboxStorageService.createEnvironment(params);
       await refreshEnvironments();
     },
 
@@ -272,7 +271,7 @@ export const useEnvironmentActions = () => {
      */
     buildInstance: async (id: string) => {
       try {
-        await sandboxWorkspaceService.startInstanceBuild({ id });
+        await sandboxStorageService.startInstanceBuild({ id });
       } catch {
         /* recorded on the instance; the list shows it */
       }
@@ -289,7 +288,7 @@ export const useEnvironmentActions = () => {
      */
     rebuildInstance: async (id: string) => {
       try {
-        await sandboxWorkspaceService.startInstanceBuild({ id });
+        await sandboxStorageService.startInstanceBuild({ id });
       } finally {
         await refreshInstances();
       }
@@ -300,7 +299,7 @@ export const useEnvironmentActions = () => {
       name: string;
       workingDirectory: string;
     }) => {
-      const created = await sandboxWorkspaceService.createInstance(params);
+      const created = await sandboxStorageService.createInstance(params);
       await refreshInstances();
       return {
         // No build has been asked for yet — `buildInstance` is the next call
@@ -325,22 +324,22 @@ export const useEnvironmentActions = () => {
     },
 
     setEnvironmentVisibility: async (params: { id: string; visibility: EnvironmentVisibility }) => {
-      await sandboxWorkspaceService.setEnvironmentVisibility(params);
+      await sandboxStorageService.setEnvironmentVisibility(params);
       await refreshEnvironments();
     },
 
     removeEnvironment: async (id: string) => {
-      await sandboxWorkspaceService.removeEnvironment({ id });
+      await sandboxStorageService.removeEnvironment({ id });
       await refreshEnvironments();
     },
 
     removeInstance: async (id: string) => {
-      await sandboxWorkspaceService.removeInstance({ id });
+      await sandboxStorageService.removeInstance({ id });
       await refreshInstances();
     },
 
     renameInstance: async (params: { id: string; name: string }) => {
-      await sandboxWorkspaceService.renameInstance(params);
+      await sandboxStorageService.renameInstance(params);
       await refreshInstances();
     },
 
@@ -350,7 +349,7 @@ export const useEnvironmentActions = () => {
       id: string;
       name?: string;
     }) => {
-      await sandboxWorkspaceService.updateEnvironment(params);
+      await sandboxStorageService.updateEnvironment(params);
       // Existing instances are untouched by a specification edit, so only the
       // environment list has anything new to show.
       await refreshEnvironments();

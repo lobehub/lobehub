@@ -4,7 +4,7 @@ import {
   isSafeSandboxEnvironmentId,
   SANDBOX_LOCAL_WORK_ROOT,
   type SandboxMode,
-  type SandboxWorkspaceClaim,
+  type SandboxStorageClaim,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { EnvironmentConfiguration } from '@lobechat/types';
@@ -14,7 +14,7 @@ import { AgentModel } from '@/database/models/agent';
 import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
 import { TopicModel } from '@/database/models/topic';
 
-import { resolveSandboxWorkspaceClaim } from './entitlement';
+import { resolveSandboxStorageClaim } from './entitlement';
 import type { SandboxSessionSpecification } from './types';
 
 const log = debug('lobe-server:sandbox:session');
@@ -26,7 +26,7 @@ export interface SandboxSessionConfig {
    * THIS topic writes to it, and the file browser reads it from an ephemeral
    * topic just as well.
    */
-  claim: SandboxWorkspaceClaim | null;
+  claim: SandboxStorageClaim | null;
   /**
    * Chosen subdirectory of the workspace, relative to its root. Only ever set
    * on a run that is actually persistent.
@@ -112,7 +112,7 @@ const hasLocalCheckout = (instance: {
   !!instance.configurationSnapshot?.sources?.some((source) => source.kind === 'git');
 
 interface SandboxSessionConfigInput {
-  /** See `resolveSandboxWorkspaceClaim` — a visitor run never gets an entitlement. */
+  /** See `resolveSandboxStorageClaim` — a visitor run never gets an entitlement. */
   isShareVisitorRun: boolean;
   /**
    * Optional because some runtimes are constructed without one. No database
@@ -148,7 +148,7 @@ export const resolveSandboxSessionConfig = async ({
 }: SandboxSessionConfigInput): Promise<SandboxSessionConfig> => {
   if (!serverDB) return { claim: null, mode: DEFAULT_SANDBOX_MODE };
 
-  const claim = await resolveSandboxWorkspaceClaim({
+  const claim = await resolveSandboxStorageClaim({
     isShareVisitorRun,
     serverDB,
     userId,

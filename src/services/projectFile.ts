@@ -19,7 +19,7 @@ import { mutate } from '@/libs/swr';
 import { localFileKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type LocalFilePreview, localFileService } from '@/services/electron/localFileService';
-import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
+import { sandboxStorageService } from '@/services/sandboxStorage';
 
 export type { LocalFilePreview } from '@/services/electron/localFileService';
 
@@ -159,11 +159,11 @@ class ProjectFileService {
     topicId?: string;
   }): Promise<ProjectFileIndexResult | undefined> {
     const [workspace, listing] = await Promise.all([
-      sandboxWorkspaceService.getWorkspace(),
+      sandboxStorageService.getWorkspace(),
       // The topic still travels: it names the warm session the read can go
       // through, and is what lets a listing be refreshed before it is served.
       // The instance is the address; the topic is the route.
-      sandboxWorkspaceService.listFiles({
+      sandboxStorageService.listFiles({
         instanceId,
         path: scope || undefined,
         recursive: true,

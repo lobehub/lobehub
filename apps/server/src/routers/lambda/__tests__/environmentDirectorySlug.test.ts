@@ -1,7 +1,7 @@
 import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { describe, expect, it } from 'vitest';
 
-import { environmentDirectorySlug } from '../sandboxWorkspace';
+import { environmentDirectorySlug } from '../sandboxStorage';
 
 describe('environmentDirectorySlug', () => {
   it('keeps letters of any script, because a Chinese name must not become dashes', () => {

@@ -3,9 +3,9 @@
 import { memo, type PropsWithChildren } from 'react';
 import useSWR from 'swr';
 
-import { SandboxWorkspaceUpgradeGuide } from '@/business/client/features/SandboxWorkspaceUpsell';
+import { SandboxStorageUpgradeGuide } from '@/business/client/features/SandboxStorageUpsell';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
-import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
+import { sandboxStorageService } from '@/services/sandboxStorage';
 
 /**
  * Environments are specifications for a persistent workspace, so the page
@@ -19,13 +19,13 @@ import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
  */
 const EnvironmentsGate = memo<PropsWithChildren>(({ children }) => {
   const { data } = useSWR('sandbox-workspace-entitlement', () =>
-    sandboxWorkspaceService.getEntitlement(),
+    sandboxStorageService.getEntitlement(),
   );
 
   // Nothing rather than a flash of the upgrade page at a user who turns out to
   // be entitled.
   if (!data) return <RouteLoading />;
-  if (!data.entitled) return <SandboxWorkspaceUpgradeGuide />;
+  if (!data.entitled) return <SandboxStorageUpgradeGuide />;
 
   return children;
 });

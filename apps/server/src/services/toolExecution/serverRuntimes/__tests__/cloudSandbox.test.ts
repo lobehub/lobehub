@@ -237,7 +237,7 @@ describe('cloudSandboxRuntime', () => {
     expect(mocks.MarketService).toHaveBeenCalledWith(
       expect.objectContaining({
         userInfo: expect.objectContaining({
-          sandboxWorkspace: { key: 'ws-user-1', quotaBytes: 2048 },
+          sandboxStorage: { key: 'ws-user-1', quotaBytes: 2048 },
         }),
       }),
     );

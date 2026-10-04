@@ -19,10 +19,10 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { openSandboxWorkspaceUpsell } from '@/business/client/features/SandboxWorkspaceUpsell';
+import { openSandboxStorageUpsell } from '@/business/client/features/SandboxStorageUpsell';
 import { repositoryPath } from '@/features/EnvironmentManager/repository';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
+import { sandboxStorageService } from '@/services/sandboxStorage';
 
 import OptionRow from './OptionRow';
 import type { SandboxSelection } from './useSandboxMode';
@@ -209,7 +209,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     // the closed chip with nothing to look up.
     const { data, isLoading: instancesLoading } = useSWR(
       entitled && (open || boundInstanceId) ? ['sandbox-instances', topicId] : null,
-      () => sandboxWorkspaceService.listInstances({ topicId, withSizes: false }),
+      () => sandboxStorageService.listInstances({ topicId, withSizes: false }),
       // The topic is in the key because occupancy is answered per conversation
       // — "in use by another one" is a different answer here than there. The
       // instances themselves are the same list either way, so the first send,
@@ -225,7 +225,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       // Also while closed when an instance is bound: whether that instance
       // is still usable depends on its environment's visibility.
     } = useSWR(entitled && (open || boundInstanceId) ? 'sandbox-environments' : null, () =>
-      sandboxWorkspaceService.listEnvironments(),
+      sandboxStorageService.listEnvironments(),
     );
 
     const instances = data?.instances ?? [];
@@ -344,11 +344,11 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
           }
           tag={
             preparing
-              ? t('sandboxWorkspace.building')
+              ? t('sandboxStorage.building')
               : unbuilt
-                ? t('sandboxWorkspace.buildFailed')
+                ? t('sandboxStorage.buildFailed')
                 : instance.inUse
-                  ? t('sandboxWorkspace.running')
+                  ? t('sandboxStorage.running')
                   : undefined
           }
           onClick={() => void select({ instanceId: instance.id, mode: 'persistent' })}
@@ -391,7 +391,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     const chipLabel = current
       ? current.name
       : value.mode === 'ephemeral'
-        ? t('sandboxWorkspace.ephemeral')
+        ? t('sandboxStorage.ephemeral')
         : t('workingDirectory.title', { ns: 'device' });
 
     // Built before the popover on purpose. The dev-time code inspector marks one
@@ -404,8 +404,8 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
         <div className={styles.header}>
           <Flexbox horizontal align={'center'} gap={4}>
-            <span className={styles.headerTitle}>{t('sandboxWorkspace.pickerTitle')}</span>
-            <Tooltip title={t('sandboxWorkspace.pickerInfoTooltip')}>
+            <span className={styles.headerTitle}>{t('sandboxStorage.pickerTitle')}</span>
+            <Tooltip title={t('sandboxStorage.pickerInfoTooltip')}>
               <span className={styles.headerInfo}>
                 <Icon icon={InfoIcon} size={12} />
               </span>
@@ -418,14 +418,14 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
               onClick={() => leaveTo(() => navigate('/settings/environments'))}
             >
               <Icon icon={SettingsIcon} size={11} />
-              <span>{t('sandboxWorkspace.manage')}</span>
+              <span>{t('sandboxStorage.manage')}</span>
             </button>
           )}
         </div>
 
         {current && currentBlocked && (
           <Text className={styles.blockedNotice}>
-            {t('sandboxWorkspace.privateInstanceBlocked', { name: current.name })}
+            {t('sandboxStorage.privateInstanceBlocked', { name: current.name })}
           </Text>
         )}
 
@@ -434,16 +434,16 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
             saying nothing would leave a 409 to do the explaining. */}
         {current && !currentBlocked && current.inUse && !current.inUseByThisTopic && (
           <Text className={styles.blockedNotice}>
-            {t('sandboxWorkspace.instanceBusy', { name: current.name })}
+            {t('sandboxStorage.instanceBusy', { name: current.name })}
           </Text>
         )}
 
         <Flexbox className={styles.temporary}>
           <OptionRow
             active={value.mode === 'ephemeral'}
-            desc={t('sandboxWorkspace.ephemeralDesc')}
+            desc={t('sandboxStorage.ephemeralDesc')}
             icon={<Icon icon={TimerIcon} size={16} />}
-            label={t('sandboxWorkspace.ephemeral')}
+            label={t('sandboxStorage.ephemeral')}
             onClick={() => void select({ mode: 'ephemeral' })}
           />
         </Flexbox>
@@ -454,18 +454,18 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
           // more place files could go — and the tag says why it is not
           // simply selectable.
           <OptionRow
-            desc={t('sandboxWorkspace.persistentUpsellDesc')}
+            desc={t('sandboxStorage.persistentUpsellDesc')}
             icon={<Icon icon={FolderClockIcon} size={16} />}
-            label={t('sandboxWorkspace.persistentUpsell')}
+            label={t('sandboxStorage.persistentUpsell')}
             tag={t('pro', { ns: 'common' })}
-            onClick={() => leaveTo(openSandboxWorkspaceUpsell)}
+            onClick={() => leaveTo(openSandboxStorageUpsell)}
           />
         )}
 
         {entitled && (environmentsLoading || instancesLoading) && <EnvironmentSectionSkeleton />}
 
         {entitled && environmentError && (
-          <Text className={styles.notice}>{t('sandboxWorkspace.environmentsUnavailable')}</Text>
+          <Text className={styles.notice}>{t('sandboxStorage.environmentsUnavailable')}</Text>
         )}
 
         {entitled && hasNoInstances && (
@@ -476,13 +476,11 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
             icon={<Icon icon={PlusIcon} size={16} />}
             desc={t(
               hasNoEnvironments
-                ? 'sandboxWorkspace.setUpEnvironmentDesc'
-                : 'sandboxWorkspace.noInstancesDesc',
+                ? 'sandboxStorage.setUpEnvironmentDesc'
+                : 'sandboxStorage.noInstancesDesc',
             )}
             label={t(
-              hasNoEnvironments
-                ? 'sandboxWorkspace.setUpEnvironment'
-                : 'sandboxWorkspace.noInstances',
+              hasNoEnvironments ? 'sandboxStorage.setUpEnvironment' : 'sandboxStorage.noInstances',
             )}
             onClick={() => leaveTo(() => navigate('/settings/environments'))}
           />
@@ -494,14 +492,14 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
 
         {entitled && inWorkspace && privatePool.length > 0 && (
           <>
-            <div className={styles.groupLabel}>{t('sandboxWorkspace.privateGroup')}</div>
+            <div className={styles.groupLabel}>{t('sandboxStorage.privateGroup')}</div>
             {privatePool.map((instance) => renderInstance(instance))}
           </>
         )}
 
         {entitled && inWorkspace && workspacePool.length > 0 && (
           <>
-            <div className={styles.groupLabel}>{t('sandboxWorkspace.workspaceGroup')}</div>
+            <div className={styles.groupLabel}>{t('sandboxStorage.workspaceGroup')}</div>
             {workspacePool.map((instance) => renderInstance(instance))}
           </>
         )}
@@ -511,7 +509,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
             were dropped; which ones is the settings page's job. */}
         {entitled && hiddenPrivateCount > 0 && (
           <Text className={styles.notice}>
-            {t('sandboxWorkspace.publicAgentHint', { count: hiddenPrivateCount })}
+            {t('sandboxStorage.publicAgentHint', { count: hiddenPrivateCount })}
           </Text>
         )}
       </Flexbox>
@@ -534,7 +532,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
           <Tooltip
             title={
               current && currentBlocked
-                ? t('sandboxWorkspace.privateInstanceBlocked', { name: current.name })
+                ? t('sandboxStorage.privateInstanceBlocked', { name: current.name })
                 : undefined
             }
           >

@@ -8,7 +8,7 @@ import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatIn
 
 import CloudRepoSwitcher from './CloudRepoSwitcher';
 import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
-import SandboxWorkspaceSection from './SandboxWorkspaceSection';
+import SandboxStorageSection from './SandboxStorageSection';
 import { useWorkspaceSurface, type WorkspaceSurface } from './useWorkspaceSurface';
 import WorkingDirectorySection from './WorkingDirectorySection';
 
@@ -49,7 +49,7 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
           return <CloudRepoSwitcher agentId={agentId} />;
         }
         case 'sandbox': {
-          return <SandboxWorkspaceSection agentId={agentId} />;
+          return <SandboxStorageSection agentId={agentId} />;
         }
       }
     };

@@ -8,7 +8,7 @@
  * actually gets one:
  *
  * 1. **Entitlement** — LobeHub resolves the caller's plan into a signed
- *    `sandboxWorkspace` claim (`{ key, quotaBytes }` or none) on the trusted
+ *    `sandboxStorage` claim (`{ key, quotaBytes }` or none) on the trusted
  *    client token. LobeHub is the sole authority for the key; nothing derives
  *    it from a request body.
  * 2. **Mode** — the run asks for `'persistent'` or `'ephemeral'`. Default is
@@ -34,7 +34,7 @@ export type SandboxMode = 'ephemeral' | 'persistent';
 
 export const DEFAULT_SANDBOX_MODE: SandboxMode = 'ephemeral';
 
-export interface SandboxWorkspaceScope {
+export interface SandboxStorageScope {
   userId: string;
   /** Organization workspace id when the run is workspace-scoped. */
   workspaceId?: string | null;
@@ -44,8 +44,8 @@ export interface SandboxWorkspaceScope {
  * The entitlement itself, as it travels on the trusted-client token. `null` (or
  * absent) is the free-tier shape and means "no persistent workspace".
  */
-export interface SandboxWorkspaceClaim {
-  /** Directory name inside the volume — see {@link deriveSandboxWorkspaceKey}. */
+export interface SandboxStorageClaim {
+  /** Directory name inside the volume — see {@link deriveSandboxStorageKey}. */
   key: string;
   /**
    * Whether this subject may write past {@link quotaBytes} and be billed for
@@ -94,10 +94,10 @@ const ORG_KEY_INFIX = 'org-';
  * (Clerk's `user_<base58>`, workspace ids) is already safe, so this rejects
  * nothing real.
  */
-export const deriveSandboxWorkspaceKey = ({
+export const deriveSandboxStorageKey = ({
   userId,
   workspaceId,
-}: SandboxWorkspaceScope): string | undefined => {
+}: SandboxStorageScope): string | undefined => {
   const segment = workspaceId || userId;
   if (!segment || !isSafeKeySegment(segment)) return undefined;
 
@@ -192,12 +192,12 @@ export const isSafeSandboxEnvironmentId = (value: string): boolean =>
  * a second source of truth that can only ever drift out of agreement with the
  * first one.
  */
-export interface SandboxWorkspacePromptVariables {
+export interface SandboxStoragePromptVariables {
   sandbox_session_files: string;
   sandbox_workspace: string;
 }
 
-export interface SandboxWorkspacePromptInput {
+export interface SandboxStoragePromptInput {
   /** Chosen subdirectory of the workspace, relative to its root. */
   cwd?: string;
   mode?: SandboxMode;
@@ -212,11 +212,11 @@ export interface SandboxWorkspacePromptInput {
   workingDir?: string;
 }
 
-export const formatSandboxWorkspacePromptVariables = ({
+export const formatSandboxStoragePromptVariables = ({
   cwd,
   mode = DEFAULT_SANDBOX_MODE,
   workingDir,
-}: SandboxWorkspacePromptInput = {}): SandboxWorkspacePromptVariables => {
+}: SandboxStoragePromptInput = {}): SandboxStoragePromptVariables => {
   if (mode !== 'persistent') {
     return {
       sandbox_session_files: '- Files from previous sessions may not persist',
@@ -278,6 +278,6 @@ export const formatSandboxWorkspacePromptVariables = ({
   };
 };
 
-/** The `{{sandbox_workspace}}` section alone — see {@link formatSandboxWorkspacePromptVariables}. */
-export const formatSandboxWorkspacePrompt = (input?: SandboxWorkspacePromptInput): string =>
-  formatSandboxWorkspacePromptVariables(input).sandbox_workspace;
+/** The `{{sandbox_workspace}}` section alone — see {@link formatSandboxStoragePromptVariables}. */
+export const formatSandboxStoragePrompt = (input?: SandboxStoragePromptInput): string =>
+  formatSandboxStoragePromptVariables(input).sandbox_workspace;

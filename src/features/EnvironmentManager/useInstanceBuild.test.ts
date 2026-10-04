@@ -19,8 +19,8 @@ vi.mock('@/libs/swr', () => ({
   },
 }));
 
-vi.mock('@/services/sandboxWorkspace', () => ({
-  sandboxWorkspaceService: { instanceBuildStatus: vi.fn(), listInstances: vi.fn() },
+vi.mock('@/services/sandboxStorage', () => ({
+  sandboxStorageService: { instanceBuildStatus: vi.fn(), listInstances: vi.fn() },
 }));
 
 /** The most recent `onSuccess` SWR was handed — this hook's whole update path. */

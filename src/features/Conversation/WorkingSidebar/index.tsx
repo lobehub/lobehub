@@ -63,7 +63,7 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
-import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
+import { sandboxStorageService } from '@/services/sandboxStorage';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -397,7 +397,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // why the tab's gate is the topic rather than a truthy path.
   const { data: sandboxInstances } = useSWR(
     isSandboxExecution && sandboxInstanceId ? ['sandbox-instance-dir', sandboxInstanceId] : null,
-    () => sandboxWorkspaceService.getInstance({ id: sandboxInstanceId! }),
+    () => sandboxStorageService.getInstance({ id: sandboxInstanceId! }),
   );
   const sandboxDirectory = sandboxInstances?.workingDirectory ?? '';
   // The empty string IS the workspace root, so an unresolved instance does not

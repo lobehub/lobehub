@@ -8,9 +8,9 @@ import pMap from 'p-map';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
 import {
-  createSandboxWorkspaceClient,
-  type SandboxWorkspaceClient,
-} from '@/server/services/sandbox/workspaceFiles';
+  createSandboxStorageClient,
+  type SandboxStorageClient,
+} from '@/server/services/sandbox/storageFiles';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 
 import {
@@ -960,8 +960,8 @@ export class MarketService {
    * replacing it with the generated client later is a deletion. The workspace it
    * addresses is always the one the caller's signed entitlement names.
    */
-  getSandboxWorkspaceClient(): SandboxWorkspaceClient {
-    return createSandboxWorkspaceClient({
+  getSandboxStorageClient(): SandboxStorageClient {
+    return createSandboxStorageClient({
       baseURL: MARKET_BASE_URL,
       headers: this.oauthProxyHeaders,
     });

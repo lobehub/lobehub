@@ -7,13 +7,13 @@ const mocks = vi.hoisted(() => ({
   findById: vi.fn(),
   getAgentVisibility: vi.fn(),
   findInstanceById: vi.fn(),
-  resolveSandboxWorkspaceClaim: vi.fn(),
+  resolveSandboxStorageClaim: vi.fn(),
 }));
 
-const { findById, findInstanceById, getAgentVisibility, resolveSandboxWorkspaceClaim } = mocks;
+const { findById, findInstanceById, getAgentVisibility, resolveSandboxStorageClaim } = mocks;
 
 vi.mock('../entitlement', () => ({
-  resolveSandboxWorkspaceClaim: mocks.resolveSandboxWorkspaceClaim,
+  resolveSandboxStorageClaim: mocks.resolveSandboxStorageClaim,
 }));
 
 vi.mock('@/database/models/topic', () => ({
@@ -47,7 +47,7 @@ const resolve = (overrides: Record<string, unknown> = {}) =>
 
 describe('resolveSandboxSessionConfig', () => {
   beforeEach(() => {
-    resolveSandboxWorkspaceClaim.mockReset();
+    resolveSandboxStorageClaim.mockReset();
     findById.mockReset();
     findInstanceById.mockReset();
     getAgentVisibility.mockReset();
@@ -59,7 +59,7 @@ describe('resolveSandboxSessionConfig', () => {
     mocks.EnvironmentInstanceModel.mockImplementation(function () {
       return { findById: findInstanceById };
     });
-    resolveSandboxWorkspaceClaim.mockResolvedValue(CLAIM);
+    resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
     findById.mockResolvedValue({
       metadata: { sandboxInstanceId: INSTANCE_ID, sandboxMode: 'persistent' },
     });
@@ -187,7 +187,7 @@ describe('resolveSandboxSessionConfig', () => {
   // chosen instance untouched on the topic is what lets a resubscription resume
   // exactly where the user left off.
   it('does not read the topic when there is no entitlement', async () => {
-    resolveSandboxWorkspaceClaim.mockResolvedValue(null);
+    resolveSandboxStorageClaim.mockResolvedValue(null);
 
     await expect(resolve()).resolves.toEqual({ claim: null, mode: 'ephemeral' });
     expect(findById).not.toHaveBeenCalled();
@@ -303,13 +303,13 @@ describe('resolveSandboxSessionConfig', () => {
   });
 
   it('stays ephemeral for a share-visitor run', async () => {
-    resolveSandboxWorkspaceClaim.mockResolvedValue(null);
+    resolveSandboxStorageClaim.mockResolvedValue(null);
 
     await expect(resolve({ isShareVisitorRun: true })).resolves.toEqual({
       claim: null,
       mode: 'ephemeral',
     });
-    expect(resolveSandboxWorkspaceClaim).toHaveBeenCalledWith(
+    expect(resolveSandboxStorageClaim).toHaveBeenCalledWith(
       expect.objectContaining({ isShareVisitorRun: true }),
     );
   });
