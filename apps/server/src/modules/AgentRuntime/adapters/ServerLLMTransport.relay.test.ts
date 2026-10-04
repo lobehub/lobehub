@@ -256,4 +256,27 @@ describe('ServerLLMTransport · LLM relay', () => {
     await transport.runAttempt(createInput(3));
     expect(update).toHaveBeenCalledWith('msg-1', expect.objectContaining({ content: 'Half' }));
   });
+
+  it('keeps the partial of an earlier attempt when the re-dispatch finds no executor', async () => {
+    const { ctx, update } = createCtx();
+    relay.chat
+      .mockImplementationOnce(
+        answerWith('Half', createClientLlmExecutorLostError('ollama', 'idle')),
+      )
+      .mockImplementationOnce(async () => {
+        // The tab that ran attempt 1 is gone: nobody claims the re-dispatch.
+        throw createClientLlmExecutorUnavailableError('ollama', 'claim_timeout');
+      });
+    const transport = new ServerLLMTransport(ctx);
+
+    await transport.runAttempt(createInput(1));
+    expect(update).not.toHaveBeenCalled();
+
+    const execution = await transport.runAttempt(createInput(2));
+    expect(execution.ok).toBe(false);
+    expect(update).toHaveBeenCalledWith('msg-1', {
+      content: 'Half',
+      metadata: { executionSite: 'client', interruptedMidStream: true },
+    });
+  });
 });

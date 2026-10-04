@@ -276,6 +276,16 @@ export class ServerLLMTransport implements LLMTransport {
     ReturnType<ServerLLMTransport['createModelRuntime']>
   >();
 
+  /**
+   * Output of the latest relayed attempt that failed after producing some,
+   * per assistant message. A re-dispatch that never gets claimed (the tab that
+   * ran the attempt is gone) ends the step with nothing of its own to keep.
+   */
+  private readonly relayPartials = new Map<
+    string,
+    Pick<LLMAttemptExecution['output'], 'content' | 'thinkingContent'>
+  >();
+
   private relayStreamCount = 0;
 
   /** Keeps a redriven step's call ids apart from the execution it replaces. */
@@ -429,22 +439,33 @@ export class ServerLLMTransport implements LLMTransport {
    * re-dispatch budget is spent, or the total deadline passed — keep what the
    * device had already produced on the message, marked as cut short, rather
    * than dropping it with the error (U4b). Retried attempts start over, so
-   * their partial output is discarded as usual.
+   * their partial output is discarded as usual — unless the last re-dispatch
+   * produced nothing, in which case the latest earlier partial is kept.
    */
   private async keepRelayPartialOnTerminalError(
     input: LLMAttemptInput,
     execution: Extract<LLMAttemptExecution, { ok: false }>,
   ) {
-    const { error, output } = execution;
-    if (!input.assistantMessageId || !isClientLlmRelayError(error)) return;
-    if (!output.content && !output.thinkingContent) return;
+    const { error } = execution;
+    const messageId = input.assistantMessageId;
+    if (!messageId || !isClientLlmRelayError(error)) return;
+
+    let output: Pick<LLMAttemptExecution['output'], 'content' | 'thinkingContent'> =
+      execution.output;
+    if (output.content || output.thinkingContent) {
+      this.relayPartials.set(messageId, output);
+    } else {
+      const earlier = this.relayPartials.get(messageId);
+      if (!earlier) return;
+      output = earlier;
+    }
 
     const classified = this.retryPolicy.classifyError(error);
     const budget = this.retryPolicy.resolveRetryBudget(input.provider, error);
     if (shouldRetryLLM(classified.kind, input.attempt, budget)) return;
 
     try {
-      await this.ctx.messageModel.update(input.assistantMessageId, {
+      await this.ctx.messageModel.update(messageId, {
         content: output.content,
         metadata: { executionSite: 'client', interruptedMidStream: true } as any,
         ...(output.thinkingContent && { reasoning: { content: output.thinkingContent } }),
