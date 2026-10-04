@@ -11,11 +11,10 @@ import RecentListItem from './Item';
 interface ConnectedItemProps {
   itemRef: RecentEntityRef;
   queryKey: string;
-  scope: string;
 }
 
-const ConnectedItem = memo<ConnectedItemProps>(({ itemRef, queryKey, scope }) => {
-  const item = useHomeStore(homeRecentSelectors.item(scope, queryKey, itemRef));
+const ConnectedItem = memo<ConnectedItemProps>(({ itemRef, queryKey }) => {
+  const item = useHomeStore(homeRecentSelectors.item(queryKey, itemRef));
   if (!item) return null;
 
   // `slugTitle`, not `title`: the displayed title falls back to the task's

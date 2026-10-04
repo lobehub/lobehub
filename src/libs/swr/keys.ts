@@ -330,19 +330,6 @@ export const threadKeys = {
 
 // ---- recent -------------------------------------------------------------
 export const recentKeys = {
-  /** Home "all recents" drawer list, keyed by open state and identity scope. */
-  allDrawer: def('recent:allDrawer', (open: boolean, scope: string) => [
-    'recent:allDrawer',
-    open,
-    scope,
-  ]),
-  /** Home recents list, keyed by login + limit + identity scope. */
-  list: def('recent:list', (isLogin: boolean, limit: number, scope: string) => [
-    'recent:list',
-    isLogin,
-    limit,
-    scope,
-  ]),
   /** Home chat-only list; filtering happens before the server-side limit. */
   topicList: def('recent:topicList', (limit: number, scope: string, view: 'mine' | 'team') => [
     'recent:topicList',

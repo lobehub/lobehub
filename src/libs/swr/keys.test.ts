@@ -18,27 +18,6 @@ import {
 import { CACHE_TIERS } from './localStorageProvider';
 
 describe('recentKeys', () => {
-  it('keys the Home recent list by identity cache scope', () => {
-    expect(recentKeys.list(true, 10, 'user-1:workspace-1')).toEqual([
-      'recent:list',
-      true,
-      10,
-      'user-1:workspace-1',
-    ]);
-  });
-
-  it('keeps users isolated in the same workspace', () => {
-    expect(recentKeys.list(true, 10, 'user-1:workspace-1')).not.toEqual(
-      recentKeys.list(true, 10, 'user-2:workspace-1'),
-    );
-  });
-
-  it('keeps workspaces isolated for the same user', () => {
-    expect(recentKeys.allDrawer(true, 'user-1:workspace-1')).not.toEqual(
-      recentKeys.allDrawer(true, 'user-1:workspace-2'),
-    );
-  });
-
   it('keys the Home topic-only list independently from mixed recents', () => {
     expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).toEqual([
       'recent:topicList',
