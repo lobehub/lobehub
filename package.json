@@ -133,6 +133,7 @@
     "tunnel:ngrok": "ngrok http http://localhost:3010",
     "type-check": "tsgo -p tsconfig.type-check.json --noEmit --checkers 2",
     "type-check:tsc": "tsc --noEmit",
+    "widget:tick": "tsx ./scripts/widgetTick/index.mts",
     "workflow:cdn": "tsx ./scripts/cdnWorkflow/index.ts",
     "workflow:changelog": "tsx ./scripts/changelogWorkflow/index.ts",
     "workflow:changelog:gen": "tsx ./scripts/changelogWorkflow/generateChangelog.ts",

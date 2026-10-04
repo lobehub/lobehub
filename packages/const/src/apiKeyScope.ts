@@ -212,6 +212,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   composio: 'blocked',
   config: 'open',
   connector: 'blocked',
+  // boards only lay out widgets; reads mirror `widget`, writes stay key-less
+  // so a restricted key cannot reshape what a widget run is attached to
+  dashboard: rw('agent:read', null),
   device: 'blocked',
   deviceMetric: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
@@ -294,6 +297,10 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   video: { any: 'model:invoke' },
   waitlist: 'blocked',
   webBrowsing: { any: 'model:invoke' },
+  // widget runs execute user scripts in the sandbox with the owner's connector
+  // credentials, so restricted keys may read widgets and runs but not change
+  // or trigger them
+  widget: rw('agent:read', null),
   work: rw('agent:read', 'agent:write'),
   workspace: rw('workspace:read', 'workspace:write'),
   workspaceAuditLog: rw('workspace:read', null),
