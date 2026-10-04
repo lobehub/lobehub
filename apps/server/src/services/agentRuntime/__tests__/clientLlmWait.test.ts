@@ -315,6 +315,27 @@ describe('waiting_for_client (U4c)', () => {
       expect(t.scheduleMessage).not.toHaveBeenCalled();
     });
 
+    it('stays parked and resumable when the resume step cannot be enqueued', async () => {
+      const t = createService();
+      const parked = waitingState();
+      t.setStored(parked);
+      t.operationModel.revertClientWaitResume = vi.fn().mockResolvedValue(true);
+      t.scheduleMessage.mockRejectedValueOnce(new Error('QStash 503'));
+
+      await expect(
+        t.service.resumeFromClientLlmWait({ llmExecutor, operationId: OPERATION_ID }),
+      ).rejects.toThrow('QStash 503');
+
+      expect(t.operationModel.revertClientWaitResume).toHaveBeenCalledWith(OPERATION_ID);
+      expect(t.getStored()).toEqual(parked);
+      expect(t.messageModel.update).toHaveBeenLastCalledWith('msg-assistant', {
+        error: expect.objectContaining({
+          body: expect.objectContaining({ waitingForClient: true }),
+          type: AgentRuntimeErrorType.ClientLlmExecutorUnavailable,
+        }),
+      });
+    });
+
     it('does nothing for a run that is not parked', async () => {
       const t = createService();
       t.setStored(runningState());

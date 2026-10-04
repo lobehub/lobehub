@@ -904,6 +904,26 @@ export class AgentOperationModel {
   }
 
   /**
+   * Undo a won `tryResumeFromClientWait` whose resume step never got enqueued,
+   * so the run stays parked (resumable, expirable, stoppable) instead of
+   * sitting in `running` with nothing scheduled.
+   */
+  async revertClientWaitResume(operationId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(agentOperations)
+      .set({ status: 'waiting_for_client' })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.userId, this.userId),
+          eq(agentOperations.status, 'running'),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return rows.length === 1;
+  }
+
+  /**
    * Retire an op still parked in `waiting_for_client` (its wait ran out or it
    * was stopped while waiting). Only matches the parked row, so a run a client
    * already resumed is never settled under it.

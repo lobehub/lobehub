@@ -3701,15 +3701,31 @@ export class AgentRuntimeService {
     }
 
     if (this.queueService) {
-      await this.queueService.scheduleMessage({
-        context: undefined,
-        delay: 100,
-        endpoint: `${this.baseURL}/run`,
-        operationId,
-        payload: { resumeClientLlm: true },
-        priority: 'high',
-        stepIndex: state.stepCount,
-      });
+      try {
+        await this.queueService.scheduleMessage({
+          context: undefined,
+          delay: 100,
+          endpoint: `${this.baseURL}/run`,
+          operationId,
+          payload: { resumeClientLlm: true },
+          priority: 'high',
+          stepIndex: state.stepCount,
+        });
+      } catch (error) {
+        // Nothing will run the parked step: put the wait back so the run can
+        // still be resumed, expire, or be stopped.
+        log('[%s] Could not enqueue the resume, staying parked: %O', operationId, error);
+        await this.coordinator.saveAgentState(operationId, state);
+        await this.agentOperationModel.revertClientWaitResume(operationId);
+        if (wait?.assistantMessageId) {
+          await this.messageModel
+            .update(wait.assistantMessageId, { error: buildClientLlmWaitMessageError(wait) })
+            .catch((restoreError) =>
+              log('[%s] Failed to restore the waiting notice: %O', operationId, restoreError),
+            );
+        }
+        throw error;
+      }
     }
 
     log('[%s] Resumed from waiting_for_client at step %d', operationId, state.stepCount);
