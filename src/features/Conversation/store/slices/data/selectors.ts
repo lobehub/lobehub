@@ -166,9 +166,17 @@ const workSummariesByRootOperationId = (rootOperationId?: string | null) => (s: 
 const isAssistantRow = (m: UIChatMessage) =>
   m.role === 'assistant' || m.role === 'assistantGroup' || m.role === 'supervisor';
 
-/** The refreshing hint belongs to the latest assistant reply only. */
-const isRefreshingAt = (id: string) => (s: State) =>
-  s.isRefreshingMessages && s.displayMessages.findLast(isAssistantRow)?.id === id;
+/**
+ * The refreshing hint belongs to the row rendering the latest assistant reply.
+ * A steered continuation folds into its host row, so resolve through the steer
+ * chain before comparing.
+ */
+const isRefreshingAt = (id: string) => (s: State) => {
+  if (!s.isRefreshingMessages) return false;
+  const latestId = s.displayMessages.findLast(isAssistantRow)?.id;
+  if (!latestId) return false;
+  return (collectSteerChains(s.displayMessages).hostOf.get(latestId) ?? latestId) === id;
+};
 
 const isSecondLastMessageFromUser = (s: State) => s.displayMessages.at(-2)?.role === 'user';
 

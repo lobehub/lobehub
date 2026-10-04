@@ -106,6 +106,20 @@ describe('isRefreshingAt', () => {
     expect(dataSelectors.isRefreshingAt('u3')(refreshing(true))).toBe(false);
   });
 
+  it('marks the host row when the latest reply is a folded steer continuation', () => {
+    const state = {
+      displayMessages: [
+        { content: 'first draft', id: 'a1', role: 'assistant' },
+        { content: 'shorter please', id: 's1', metadata: { steer: true }, role: 'user' },
+        { children: [{ content: 'final answer', id: 'b1' }], id: 'g2', role: 'assistantGroup' },
+      ],
+      isRefreshingMessages: true,
+    } as unknown as State;
+
+    expect(dataSelectors.isRefreshingAt('a1')(state)).toBe(true);
+    expect(dataSelectors.isRefreshingAt('g2')(state)).toBe(false);
+  });
+
   it('marks nothing once the fetch settled', () => {
     expect(dataSelectors.isRefreshingAt('g2')(refreshing(false))).toBe(false);
   });

@@ -8,7 +8,7 @@ import { memo, useCallback, useEffect, useMemo } from 'react';
 import AsyncError from '@/components/AsyncError';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
-import { getMessageListCacheIdentity } from '@/services/message/cache';
+import { getMessageListCacheIdentity, isMessageListServerVerified } from '@/services/message/cache';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -159,8 +159,10 @@ const ChatList = memo<ChatListProps>(
       isValidating: messagesSWR.isValidating,
       mutate: messagesSWR.mutate,
     });
+    const isServerVerified = useCallback(() => isMessageListServerVerified(context), [context]);
     const isInitialRevalidation = useInitialRevalidation({
       identity: messageListIdentity,
+      isServerVerified,
       isValidating: messagesSWR.isValidating,
     });
     const allDisplayMessages = useConversationStore(dataSelectors.displayMessages);
