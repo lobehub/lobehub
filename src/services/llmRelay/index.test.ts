@@ -26,7 +26,7 @@ describe('buildLlmExecutorDeclaration', () => {
 
   it('declares the providers of the runtime state a chat page has loaded', () => {
     expect(buildLlmExecutorDeclaration()).toEqual({
-      capabilities: ['llm_relay@1'],
+      capabilities: ['llm_relay@1', 'llm_client_wait@1'],
       clientId: 'tab-1',
       providers: ['lmstudio', 'ollama'],
     });

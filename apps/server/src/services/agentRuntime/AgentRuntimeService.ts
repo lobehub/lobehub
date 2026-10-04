@@ -78,6 +78,7 @@ import {
   createClientLlmExecutorUnavailableError,
   getClientLlmWaitableReason,
 } from '@/server/modules/AgentRuntime/llmRelay/errors';
+import { CLIENT_LLM_WAIT_CAPABILITY } from '@/server/modules/AgentRuntime/llmRelay/protocol';
 import { hasNonPersistedMessage } from '@/server/modules/AgentRuntime/messagePersistence';
 import {
   createRuntimeExecutors,
@@ -774,6 +775,15 @@ export class AgentRuntimeService {
       }
       if (await this.agentOperationModel.settleClientWait(operationId, 'interrupted')) {
         await this.completionLifecycle.dispatchHooks(operationId, interruptedState, 'interrupted');
+      } else if (parkedWait) {
+        // The wait's expiry claimed the row first and has not finished (its
+        // Redis state still read this park). Its retry would find the state
+        // this Stop just wrote and give up, so finish it here as the row says.
+        const row = await this.agentOperationModel.findById(operationId).catch(() => undefined);
+        if (row?.status === 'error') {
+          log('[%s] Stop lost to the wait expiry; finishing the expiry', operationId);
+          await this.endExpiredClientLlmWait(operationId, state, parkedWait);
+        }
       }
     }
 
@@ -3634,6 +3644,15 @@ export class AgentRuntimeService {
     const reason = getClientLlmWaitableReason(errorState.error);
     if (!reason || !this.queueService) return;
 
+    // A client that started the run but predates the wait takes the parked
+    // call's error as the run's end and settles it locally, while the row
+    // stays parked under its topic. Fail the step for it as before.
+    const declaredExecutor = errorState.host?.llmExecutor;
+    if (declaredExecutor && !declaredExecutor.capabilities?.includes(CLIENT_LLM_WAIT_CAPABILITY)) {
+      log("[%s] The run's client cannot wait for a client, failing instead", operationId);
+      return;
+    }
+
     const errorBody = (errorState.error as { body?: { provider?: unknown } } | undefined)?.body;
     const provider =
       (typeof errorBody?.provider === 'string' && errorBody.provider) ||
@@ -3959,13 +3978,29 @@ export class AgentRuntimeService {
       log('[%s] Finishing a client wait expiry that settled but did not finish', operationId);
     }
 
-    const provider = state.clientLlmWait.provider;
+    await this.endExpiredClientLlmWait(operationId, state, state.clientLlmWait);
+
+    log('[%s] waiting_for_client expired (parked at %s)', operationId, parkedAt);
+    return true;
+  }
+
+  /**
+   * The terminal half of an expiry, once the durable row reads `error`: the
+   * parked call's row, the Redis state (which ends the stream) and the
+   * lifecycle. `state` is the run as it was parked on `wait`.
+   */
+  private async endExpiredClientLlmWait(
+    operationId: string,
+    state: AgentState,
+    wait: AgentRunClientLlmWait,
+  ) {
+    const provider = wait.provider;
     const finalState: AgentState = {
       ...state,
       clientLlmWait: undefined,
       error: formatErrorForState(
         createClientLlmExecutorUnavailableError(provider, 'wait_timeout', {
-          waitedSince: parkedAt,
+          waitedSince: wait.parkedAt,
         }),
       ),
       lastModified: new Date().toISOString(),
@@ -3976,7 +4011,7 @@ export class AgentRuntimeService {
     // with a `uiMessages` snapshot read from the DB, and an open tab adopts it,
     // so writing it later would leave that tab on the waiting notice. The
     // lifecycle writes the same error again when it finalizes the run.
-    const assistantMessageId = state.clientLlmWait.assistantMessageId;
+    const assistantMessageId = wait.assistantMessageId;
     if (assistantMessageId && finalState.error) {
       const message = this.completionLifecycle.extractErrorMessage(finalState.error);
       await this.messageModel
@@ -3994,9 +4029,6 @@ export class AgentRuntimeService {
     await this.coordinator.saveAgentState(operationId, finalState);
     await this.completionLifecycle.emitSignalEvents(operationId, finalState, 'error');
     await this.finishClientLlmWaitExpiry(operationId, finalState);
-
-    log('[%s] waiting_for_client expired (parked at %s)', operationId, parkedAt);
-    return true;
   }
 
   /** Lifecycle delivery of an expired client wait; safe to repeat on redelivery. */

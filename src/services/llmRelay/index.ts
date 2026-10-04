@@ -1,4 +1,4 @@
-import { LLM_RELAY_CAPABILITY } from '@lobechat/agent-gateway-client';
+import { CLIENT_LLM_WAIT_CAPABILITY, LLM_RELAY_CAPABILITY } from '@lobechat/agent-gateway-client';
 import type { ExecAgentLlmExecutor } from '@lobechat/types';
 
 import { initializeWithClientStore } from '@/services/chat/mecha/clientModelRuntime';
@@ -44,7 +44,7 @@ export const buildLlmExecutorDeclaration = (): ExecAgentLlmExecutor | undefined 
     .slice(0, 256);
 
   return {
-    capabilities: [LLM_RELAY_CAPABILITY],
+    capabilities: [LLM_RELAY_CAPABILITY, CLIENT_LLM_WAIT_CAPABILITY],
     clientId: getLlmRelayClientId(),
     providers,
   };

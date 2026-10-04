@@ -103,7 +103,7 @@ const waitingState = (overrides: Record<string, unknown> = {}) =>
   });
 
 const llmExecutor = {
-  capabilities: ['llm_relay@1'],
+  capabilities: ['llm_relay@1', 'llm_client_wait@1'],
   clientId: 'tab-b',
   providers: ['lmstudio'],
 };
@@ -246,6 +246,35 @@ describe('waiting_for_client (U4c)', () => {
           expect.objectContaining({ status: 'waiting_for_client' }),
           'waiting_for_client',
         );
+      },
+    );
+
+    it.each([
+      ['a client that cannot wait', ['llm_relay@1'], 'error'],
+      ['a client that can wait', ['llm_relay@1', 'llm_client_wait@1'], 'waiting_for_client'],
+    ])(
+      'for a run started by %s (%j), the step ends as %s',
+      async (_label, capabilities, status) => {
+        const t = createService();
+        const host = { llmExecutor: { capabilities, clientId: 'tab-a', providers: ['lmstudio'] } };
+        t.setStored(runningState({ host }));
+        t.messageModel.findLatestAssistantByOperationId.mockResolvedValue({
+          id: 'msg-assistant',
+          parentId: 'msg-user',
+        });
+        t.mockStep({
+          events: [],
+          newState: { ...unavailableErrorState('no_executor'), host },
+          nextContext: undefined,
+        });
+
+        await t.service.executeStep({
+          context: { phase: 'user_input' } as any,
+          operationId: OPERATION_ID,
+          stepIndex: 1,
+        });
+
+        expect(t.getStored().status).toBe(status);
       },
     );
 
@@ -966,6 +995,34 @@ describe('waiting_for_client (U4c)', () => {
     expect(t.dispatchHooks).toHaveBeenCalledWith(
       OPERATION_ID,
       expect.objectContaining({ status: 'interrupted' }),
+      'interrupted',
+    );
+  });
+
+  it('finishes the expiry a Stop lost the row to, so the run does not hang half-ended', async () => {
+    const t = createService();
+    t.setStored(waitingState());
+    // The expiry settled the row to `error` and failed before saving Redis.
+    t.operationModel.settleClientWait = vi.fn().mockResolvedValue(false);
+    t.operationModel.findById.mockResolvedValue({ status: 'error' });
+
+    await expect(t.service.interruptOperation(OPERATION_ID)).resolves.toBe(true);
+
+    // Redis ends as the row says, which a retried expiry can redeliver.
+    expect(t.getStored()).toMatchObject({
+      error: expect.objectContaining({
+        body: expect.objectContaining({ reason: 'wait_timeout' }),
+      }),
+      status: 'error',
+    });
+    expect(t.dispatchHooks).toHaveBeenCalledWith(
+      OPERATION_ID,
+      expect.objectContaining({ status: 'error' }),
+      'error',
+    );
+    expect(t.dispatchHooks).not.toHaveBeenCalledWith(
+      OPERATION_ID,
+      expect.anything(),
       'interrupted',
     );
   });

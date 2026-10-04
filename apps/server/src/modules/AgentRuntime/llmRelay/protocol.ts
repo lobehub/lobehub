@@ -1,7 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import type { LlmRelayDeadlines } from '@lobechat/agent-gateway-client';
-import { LLM_RELAY_CAPABILITY, LLM_RELAY_LEASE_HEADER } from '@lobechat/agent-gateway-client';
+import {
+  CLIENT_LLM_WAIT_CAPABILITY,
+  LLM_RELAY_CAPABILITY,
+  LLM_RELAY_LEASE_HEADER,
+} from '@lobechat/agent-gateway-client';
 
 /**
  * Shared constants and keys of the LLM relay: a server-driven agent loop hands
@@ -17,7 +21,7 @@ import { LLM_RELAY_CAPABILITY, LLM_RELAY_LEASE_HEADER } from '@lobechat/agent-ga
  * - `llm_relay:stream:{callId}`   Redis Stream of uploaded batches (`seq`, `body`)
  */
 
-export { LLM_RELAY_CAPABILITY, LLM_RELAY_LEASE_HEADER };
+export { CLIENT_LLM_WAIT_CAPABILITY, LLM_RELAY_CAPABILITY, LLM_RELAY_LEASE_HEADER };
 
 /** Upper bound of the whole attempt; keeps it inside a 600s step invocation. */
 const MAX_TOTAL_MS = 540_000;
