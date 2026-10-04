@@ -126,6 +126,32 @@ describe('createGatewayEventHandler — LLM relay', () => {
     ]);
   });
 
+  it('keeps handling the run after a parked call error, so a resume streams into it', async () => {
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'msg-1',
+      context,
+      operationId: 'op-1',
+    });
+
+    // No client took the call: the run parks in `waiting_for_client`.
+    handler(
+      makeEvent('error', {
+        body: { reason: 'no_executor', recoverable: true },
+        error: 'ClientLlmExecutorUnavailable',
+      }),
+    );
+    await flush();
+    // A client resumed it; the replayed call reaches this session.
+    handler(makeEvent('llm_execute', execute({ callId: 'op-1:1:1', stepIndex: 1 })));
+
+    expect(relay.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ callId: 'op-1:1:1' }),
+      expect.anything(),
+    );
+    expect(relay.cancelOperation).not.toHaveBeenCalled();
+  });
+
   it('applies the echo when another client ran the call', async () => {
     const store = createStore();
     const handler = createGatewayEventHandler(() => store, {

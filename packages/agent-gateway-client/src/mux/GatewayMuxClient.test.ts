@@ -605,6 +605,35 @@ describe('GatewayMuxClient', () => {
       expect(sub.active).toBe(true);
     });
 
+    it('does not end on a parked LLM call error, only on the run end after it', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage({
+        event: {
+          data: {
+            body: { reason: 'not_delivered', recoverable: true },
+            error: 'ClientLlmExecutorUnavailable',
+          },
+          operationId: 'op-1',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'error',
+        } as any,
+        id: '1',
+        operationId: 'op-1',
+        type: 'agent_event',
+      });
+      expect(sub.active).toBe(true);
+      expect(onComplete).not.toHaveBeenCalled();
+
+      ws.simulateMessage(agentEvent('op-1', '2', 'agent_runtime_end'));
+      expect(sub.active).toBe(false);
+    });
+
     it('does NOT end on a mirrored member terminal for a different operationId', async () => {
       const { mux } = createMux();
       const ws = await connectAndReady(mux);

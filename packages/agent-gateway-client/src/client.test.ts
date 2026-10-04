@@ -342,6 +342,40 @@ describe('AgentStreamClient', () => {
       expect(client.connectionStatus).toBe('disconnected');
     });
 
+    it('stays connected through a parked LLM call error, then ends on the run end', async () => {
+      // The run waits for a client (`waiting_for_client`) and streams on in
+      // this session once one resumes it.
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      ws.simulateMessage({
+        event: {
+          data: {
+            body: { reason: 'no_executor', recoverable: true },
+            error: 'ClientLlmExecutorUnavailable',
+          },
+          operationId: 'op-123',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'error',
+        },
+        type: 'agent_event',
+      });
+      expect(client.connectionStatus).toBe('connected');
+
+      ws.simulateMessage({
+        event: {
+          data: {},
+          operationId: 'op-123',
+          stepIndex: 1,
+          timestamp: 2,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
     it('should NOT disconnect on a forwarded terminal for a different operationId', async () => {
       // Single-connection WS multiplexing: a broadcast member's
       // agent_runtime_end is mirrored onto the supervisor's channel. It must

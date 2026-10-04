@@ -14,6 +14,7 @@ import type {
   ToolStartData,
   ToolStateChunkData,
 } from '@lobechat/agent-gateway-client';
+import { isSessionTerminalEvent } from '@lobechat/agent-gateway-client';
 import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import type { BuiltinToolResult, ConversationContext, UIChatMessage } from '@lobechat/types';
@@ -623,7 +624,9 @@ export const createGatewayEventHandler = (
       return;
     }
 
-    if (event.type === 'agent_runtime_end' || event.type === 'error') {
+    // A parked LLM call's error is not terminal: the run streams on in this
+    // same session once a client resumes it.
+    if (isSessionTerminalEvent(event)) {
       terminalState = event.type === 'error' ? 'error' : 'completed';
       // A relayed attempt this tab still runs for the run is moot now.
       llmRelayExecutor.cancelOperation(event.operationId || gatewayOperationId);

@@ -6,6 +6,7 @@ import {
   type ConnectionStatus,
   createOperationClient,
   type GatewayMuxClient,
+  isSessionTerminalEvent,
   type MuxOpLifecycleMessage,
   type OperationClient,
   type OperationClientOptions,
@@ -615,7 +616,9 @@ export class GatewayActionImpl {
     // treat as this op's to preserve prior behavior).
     client.on('agent_event', (event) => {
       const isOwnOp = !event.operationId || event.operationId === operationId;
-      if (isOwnOp && (event.type === 'agent_runtime_end' || event.type === 'error')) {
+      // Same rule the transport ends the session by: a parked LLM call's error
+      // is not the run's end.
+      if (isOwnOp && isSessionTerminalEvent(event)) {
         receivedTerminalEvent = true;
       }
       // Only a clean completion counts as success — a cancel ('interrupted') or

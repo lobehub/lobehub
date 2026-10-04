@@ -1,4 +1,5 @@
 import { MirroredTerminalEchoGuard } from '../mirroredTerminalEcho';
+import { isSessionTerminalEvent } from '../terminalEvent';
 import type {
   AgentStreamEvent,
   AgentStreamSessionCompletion,
@@ -221,7 +222,7 @@ class OperationSubscriptionImpl implements OperationSubscription {
         // subscription — only THIS op's terminal (or one with no operationId,
         // legacy gateway) is terminal here. Mirrors v1 exactly.
         const isOwnTerminal =
-          (agentEvent.type === 'agent_runtime_end' || agentEvent.type === 'error') &&
+          isSessionTerminalEvent(agentEvent) &&
           (!agentEvent.operationId || agentEvent.operationId === this.operationId);
         this.terminalEchoGuard.observe(agentEvent);
         this.listeners.emit('agent_event', agentEvent);

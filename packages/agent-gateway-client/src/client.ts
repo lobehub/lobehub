@@ -1,4 +1,5 @@
 import { MirroredTerminalEchoGuard } from './mirroredTerminalEcho';
+import { isSessionTerminalEvent } from './terminalEvent';
 import type {
   AgentStreamClientEvents,
   AgentStreamClientOptions,
@@ -296,7 +297,7 @@ export class AgentStreamClient extends TypedEmitter {
           // sibling/supervisor streaming. Events with no operationId (legacy
           // gateway) are treated as this op's, preserving old behavior.
           const isOwnTerminal =
-            (agentEvent.type === 'agent_runtime_end' || agentEvent.type === 'error') &&
+            isSessionTerminalEvent(agentEvent) &&
             (!agentEvent.operationId || agentEvent.operationId === this.operationId);
 
           if (this.resumeMode) {

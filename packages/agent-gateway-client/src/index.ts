@@ -44,6 +44,7 @@ export type {
   ToolResultPayload,
 } from './mux/types';
 export { CLIENT_PROTOCOL_VERSION, LLM_RELAY_CAPABILITY, LLM_RELAY_LEASE_HEADER } from './protocol';
+export { isSessionTerminalEvent } from './terminalEvent';
 export type {
   AgentInterventionInteractionKind,
   AgentInterventionProvider,
