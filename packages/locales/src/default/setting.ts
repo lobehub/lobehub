@@ -1845,6 +1845,7 @@ When I am ___, I need ___
   'trash.purge.success': 'Deleted permanently',
   'trash.title': 'Trash',
   'trash.type.agent': 'Agent',
+  'trash.type.dashboard': 'Dashboard',
   'trash.type.message': 'Message',
   'trash.type.topic': 'Topic',
   'trash.type.widget': 'Widget',

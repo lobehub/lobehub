@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
+import { DashboardModel } from '@/database/models/dashboard';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { TopicModel } from '@/database/models/topic';
@@ -15,6 +16,7 @@ import {
   agents,
   messages,
   sessions,
+  dashboards,
   topics,
   trashItems,
   users,
@@ -618,6 +620,36 @@ describe('TrashService', () => {
 
       expect(await service.emptyTrash()).toEqual({ hasMore: false, purged: 1 });
       expect(await serverDB.select().from(widgets)).toHaveLength(0);
+      expect(await serverDB.select().from(trashItems)).toHaveLength(0);
+    });
+  });
+
+  describe('dashboards', () => {
+    it('restores a trashed dashboard from the bin', async () => {
+      const dashboardModel = new DashboardModel(serverDB, userId);
+      const board = await dashboardModel.create({ title: 'Ops' });
+      await dashboardModel.trash(board.id);
+
+      const { items } = await service.list();
+      expect(items.map((i) => [i.resourceType, i.resourceId])).toEqual([['dashboard', board.id]]);
+
+      const outcome = await service.restore(items.map((i) => i.id));
+      expect(outcome.failed).toEqual([]);
+      expect(outcome.restored).toHaveLength(1);
+      expect(await dashboardModel.findById(board.id)).toMatchObject({
+        id: board.id,
+        isDeleted: null,
+      });
+      expect(await serverDB.select().from(trashItems)).toHaveLength(0);
+    });
+
+    it('purges a trashed dashboard when the bin is emptied', async () => {
+      const dashboardModel = new DashboardModel(serverDB, userId);
+      const board = await dashboardModel.create({ title: 'Ops' });
+      await dashboardModel.trash(board.id);
+
+      expect(await service.emptyTrash()).toEqual({ hasMore: false, purged: 1 });
+      expect(await serverDB.select().from(dashboards)).toHaveLength(0);
       expect(await serverDB.select().from(trashItems)).toHaveLength(0);
     });
   });

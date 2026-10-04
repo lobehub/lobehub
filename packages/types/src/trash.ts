@@ -15,7 +15,7 @@
  * are still registered as `trash_items` children so a restore / purge of the
  * root can find them, but the UI never lists them on their own.
  */
-export const TRASH_RESOURCE_TYPES = ['agent', 'topic', 'message', 'widget'] as const;
+export const TRASH_RESOURCE_TYPES = ['agent', 'topic', 'message', 'widget', 'dashboard'] as const;
 export type TrashResourceType = (typeof TRASH_RESOURCE_TYPES)[number];
 
 /**

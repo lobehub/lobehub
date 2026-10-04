@@ -40,6 +40,7 @@ import { TrashModel } from './trash';
 export interface CreateWidgetInput {
   agentId?: string | null;
   description?: string | null;
+  metadata?: Record<string, unknown> | null;
   projectId?: string | null;
   schedulePattern?: string | null;
   scheduleTimezone?: string | null;
@@ -50,6 +51,7 @@ export interface CreateWidgetInput {
 
 export interface UpdateWidgetInput {
   description?: string | null;
+  metadata?: Record<string, unknown> | null;
   metricId?: string | null;
   /** Recomputed by the service whenever the schedule changes. */
   nextRunAt?: Date | null;
