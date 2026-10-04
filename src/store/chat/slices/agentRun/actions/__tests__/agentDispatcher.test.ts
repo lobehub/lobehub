@@ -37,6 +37,15 @@ describe('selectRuntimeType', () => {
       expect(selectRuntimeType({ isGatewayMode: true }, opts)).toBe('gateway');
     });
 
+    it('keeps device-only model providers (Ollama / LM Studio) on gateway', () => {
+      // The agent's model provider is deliberately not a routing input: a
+      // provider only this device can reach still runs its loop on the server,
+      // which relays each LLM attempt back to this client (`agent_llm_relay`).
+      // Falling back to the client runtime here would reintroduce #19624.
+      const localModelAgent = { isGatewayMode: true, model: 'qwen3', provider: 'lmstudio' };
+      expect(selectRuntimeType(localModelAgent, opts)).toBe('gateway');
+    });
+
     it('routes local heterogeneousProvider to gateway on web', () => {
       expect(
         selectRuntimeType({ heterogeneousProvider: heteroProvider, isGatewayMode: true }, opts),
