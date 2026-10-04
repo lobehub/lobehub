@@ -3808,22 +3808,66 @@ export class AgentRuntimeService {
 
   /**
    * Put a run whose resume claim could not be completed back into its wait.
-   * The durable row goes first — it is what resume, expiry and Stop key off —
-   * and each later step is best-effort so one failure does not skip the rest.
+   * Other transitions may have raced the claim, so this re-reads the run
+   * first. If a Stop moved it on (its settle could not match the claimed
+   * `running` row), the row is settled to match instead of re-parked. If it is
+   * still this park, the durable row goes back first — it is what resume,
+   * expiry and Stop key off — and the expiry is re-armed, because one that
+   * fired while the row read `running` gave up. Each step is best-effort so
+   * one failure does not skip the rest.
    */
   private async restoreClientLlmWait(operationId: string, parkedState: AgentState) {
+    const wait = parkedState.clientLlmWait;
+    const current = await this.coordinator.loadAgentState(operationId).catch(() => null);
+    const stillParked =
+      current?.status === 'waiting_for_client' &&
+      current.clientLlmWait?.parkedAt === wait?.parkedAt;
+
+    if (!stillParked) {
+      if (current?.status === 'interrupted') {
+        const settled = await this.agentOperationModel
+          .settleRunning(operationId, 'interrupted')
+          .catch(() => false);
+        if (settled) {
+          await this.completionLifecycle
+            .dispatchHooks(operationId, current, 'interrupted')
+            .catch((error) => log('[%s] Failed to finish the stop: %O', operationId, error));
+        }
+      }
+      return;
+    }
+
     await this.agentOperationModel
       .revertClientWaitResume(operationId)
       .catch((error) => log('[%s] Failed to re-park the durable row: %O', operationId, error));
     await this.coordinator
       .saveAgentState(operationId, parkedState)
       .catch((error) => log('[%s] Failed to restore the parked state: %O', operationId, error));
-    const wait = parkedState.clientLlmWait;
     if (wait?.assistantMessageId) {
       await this.messageModel
         .update(wait.assistantMessageId, { error: buildClientLlmWaitMessageError(wait) })
         .catch((error) => log('[%s] Failed to restore the waiting notice: %O', operationId, error));
     }
+    if (!wait) return;
+
+    // Duplicate expiries are no-ops (they match on `parkedAt` and the row CAS).
+    if (Date.now() >= Date.parse(wait.expiresAt)) {
+      await this.expireClientLlmWait(operationId, wait.parkedAt).catch((error) =>
+        log('[%s] Failed to expire the overdue wait: %O', operationId, error),
+      );
+      return;
+    }
+    await this.queueService
+      ?.scheduleMessage({
+        context: undefined,
+        delay: Math.max(Date.parse(wait.expiresAt) - Date.now(), 0),
+        endpoint: `${this.baseURL}/run`,
+        operationId,
+        payload: { clientLlmWaitExpired: wait.parkedAt },
+        priority: 'normal',
+        stepIndex: parkedState.stepCount,
+      })
+      .catch((error) => log('[%s] Failed to re-arm the wait expiry: %O', operationId, error));
   }
 
   /**

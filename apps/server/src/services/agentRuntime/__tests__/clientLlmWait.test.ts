@@ -427,7 +427,9 @@ describe('waiting_for_client (U4c)', () => {
       ).rejects.toThrow('redis down');
 
       expect(t.operationModel.revertClientWaitResume).toHaveBeenCalledWith(OPERATION_ID);
-      expect(t.scheduleMessage).not.toHaveBeenCalled();
+      expect(t.scheduleMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ payload: { resumeClientLlm: true } }),
+      );
       expect(t.messageModel.update).toHaveBeenLastCalledWith('msg-assistant', {
         error: expect.objectContaining({
           body: expect.objectContaining({ waitingForClient: true }),
@@ -573,6 +575,51 @@ describe('waiting_for_client (U4c)', () => {
       expect(result.resumed).toBe(false);
       expect(t.operationModel.tryResumeFromClientWait).not.toHaveBeenCalled();
       expect(t.scheduleMessage).not.toHaveBeenCalled();
+    });
+
+    it('re-arms the expiry when rolling back, since one may have fired during the claim', async () => {
+      const t = createService();
+      const parked = waitingState();
+      t.setStored(parked);
+      t.operationModel.revertClientWaitResume = vi.fn().mockResolvedValue(true);
+      t.scheduleMessage.mockRejectedValueOnce(new Error('QStash 503')).mockResolvedValue('queued');
+
+      await expect(
+        t.service.resumeFromClientLlmWait({ llmExecutor, operationId: OPERATION_ID }),
+      ).rejects.toThrow('QStash 503');
+
+      expect(t.getStored().status).toBe('waiting_for_client');
+      expect(t.scheduleMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: { clientLlmWaitExpired: new Date(NOW).toISOString() },
+        }),
+      );
+    });
+
+    it('settles a Stop that raced the claim instead of re-parking over it', async () => {
+      const t = createService();
+      t.setStored(waitingState());
+      t.operationModel.revertClientWaitResume = vi.fn().mockResolvedValue(true);
+      t.operationModel.settleRunning = vi.fn().mockResolvedValue(true);
+      // Stop lands while the row reads `running`: it saves `interrupted`, and its
+      // own settle (which only matches a parked row) cannot apply.
+      t.scheduleMessage.mockImplementationOnce(async () => {
+        t.setStored({ ...t.getStored(), clientLlmWait: undefined, status: 'interrupted' });
+        throw new Error('QStash 503');
+      });
+
+      await expect(
+        t.service.resumeFromClientLlmWait({ llmExecutor, operationId: OPERATION_ID }),
+      ).rejects.toThrow('QStash 503');
+
+      expect(t.operationModel.revertClientWaitResume).not.toHaveBeenCalled();
+      expect(t.getStored().status).toBe('interrupted');
+      expect(t.operationModel.settleRunning).toHaveBeenCalledWith(OPERATION_ID, 'interrupted');
+      expect(t.dispatchHooks).toHaveBeenCalledWith(
+        OPERATION_ID,
+        expect.objectContaining({ status: 'interrupted' }),
+        'interrupted',
+      );
     });
 
     it('does nothing for a run that is not parked', async () => {
