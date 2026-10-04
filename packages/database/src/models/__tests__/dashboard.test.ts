@@ -423,6 +423,64 @@ describe('DashboardModel', () => {
       expect((await owner.listByProject(projectId)).map((d) => d.id)).toEqual([inProject.id]);
     });
 
+    it('hides boards and widget items while their project or agent is trashed', async () => {
+      const personalProject = await seedProject('dash-bin', userId, null);
+      const personalAgent = await seedAgent('dash-bin-agent', userId, null);
+      const wsProject = await seedProject('dash-bin-ws', userId, workspaceId);
+      const setTrashed = async (trashed: boolean) => {
+        const stamp = trashed
+          ? { deletedAt: new Date(), isDeleted: true }
+          : { deletedAt: null, isDeleted: null };
+        await serverDB.update(projects).set(stamp).where(eq(projects.id, personalProject));
+        await serverDB.update(projects).set(stamp).where(eq(projects.id, wsProject));
+        await serverDB.update(agents).set(stamp).where(eq(agents.id, personalAgent));
+      };
+
+      // personal mode
+      const personal = new DashboardModel(serverDB, userId);
+      const inProject = await personal.create({ projectId: personalProject, title: 'p' });
+      const inAgent = await personal.create({ agentId: personalAgent, title: 'a' });
+      const home = await personal.create({ title: 'home' });
+      const widgetModel = new WidgetModel(serverDB, userId);
+      const projectWidget = await widgetModel.create({ projectId: personalProject, title: 'pw' });
+      const looseWidget = await widgetModel.create({ title: 'loose' });
+      await personal.addItem(home.id, projectWidget.id);
+      await personal.addItem(home.id, looseWidget.id);
+      await personal.addItem(inProject.id, looseWidget.id);
+
+      // workspace mode, public project read by a teammate
+      const owner = new DashboardModel(serverDB, userId, workspaceId);
+      const member = new DashboardModel(serverDB, otherUserId, workspaceId);
+      const wsBoard = await owner.create({ projectId: wsProject, title: 'team' });
+
+      await setTrashed(true);
+
+      expect(await personal.findById(inProject.id)).toBeUndefined();
+      expect(await personal.findById(inAgent.id)).toBeUndefined();
+      expect(await personal.list({ projectId: personalProject })).toEqual([]);
+      expect(await personal.list({ agentId: personalAgent })).toEqual([]);
+      expect(await personal.listByProject(personalProject)).toEqual([]);
+      expect(await personal.listItems(inProject.id)).toEqual([]);
+      // a live board drops the widget of the trashed project
+      expect((await personal.listItems(home.id)).map((r) => r.widget.title)).toEqual(['loose']);
+      expect((await personal.listByWidget(looseWidget.id)).map((d) => d.id)).toEqual([home.id]);
+      for (const reader of [owner, member]) {
+        expect(await reader.findById(wsBoard.id)).toBeUndefined();
+        expect(await reader.listByProject(wsProject)).toEqual([]);
+      }
+
+      // restoring the parents brings everything back
+      await setTrashed(false);
+
+      expect((await personal.findById(inProject.id))?.id).toBe(inProject.id);
+      expect((await personal.findById(inAgent.id))?.id).toBe(inAgent.id);
+      expect((await personal.listItems(home.id)).map((r) => r.widget.title)).toEqual([
+        'pw',
+        'loose',
+      ]);
+      expect((await member.listByProject(wsProject)).map((d) => d.id)).toEqual([wsBoard.id]);
+    });
+
     it('drops widgets the reader cannot see from a public board', async () => {
       const projectId = await seedProject('dash-items', userId, workspaceId);
       const owner = new DashboardModel(serverDB, userId, workspaceId);

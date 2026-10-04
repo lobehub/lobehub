@@ -167,24 +167,27 @@ export const buildProjectWhere = (cols: { projectId: AnyPgColumn }, projectId: s
  * Read gate for level-scoped rows: a row attached to a project or agent is
  * readable only while the caller can see that parent *now*. A row's own
  * `visibility` is clamped when it is written, but a parent can turn private
- * later — without this gate a still-'public' child would keep exposing the
- * parent's content to the whole workspace.
+ * or be trashed later — without this gate a still-'public' child would keep
+ * exposing the parent's content.
  *
- * A parent hides its children from the caller when it is private and the
+ * A parent hides its children when it sits in the recycle bin (personal and
+ * workspace mode alike), or — in workspace mode — when it is private and the
  * caller is not its creator (NULL visibility counts as public, as in
- * `buildWorkspaceWhere`). Personal mode returns `undefined`: every parent
- * there is the caller's own.
+ * `buildWorkspaceWhere`). Restoring or re-publishing the parent shows them
+ * again.
  *
  * Combine with `buildWorkspaceWhere` for every ordinary read.
  */
 export const buildParentVisibilityWhere = (
   ctx: ScopeCtx,
   cols: { agentId: AnyPgColumn; projectId: AnyPgColumn },
-): SQL | undefined => {
-  if (!ctx.workspaceId) return undefined;
+): SQL => {
+  const hiddenProject = ctx.workspaceId
+    ? sql`${projects.isDeleted} IS TRUE OR (${projects.visibility} = 'private' AND ${projects.userId} <> ${ctx.userId})`
+    : sql`${projects.isDeleted} IS TRUE`;
+  const hiddenAgent = ctx.workspaceId
+    ? sql`${agents.isDeleted} IS TRUE OR (${agents.visibility} = 'private' AND ${agents.userId} <> ${ctx.userId})`
+    : sql`${agents.isDeleted} IS TRUE`;
 
-  const hiddenProject = sql`EXISTS (SELECT 1 FROM ${projects} WHERE ${projects.id} = ${cols.projectId} AND ${projects.visibility} = 'private' AND ${projects.userId} <> ${ctx.userId})`;
-  const hiddenAgent = sql`EXISTS (SELECT 1 FROM ${agents} WHERE ${agents.id} = ${cols.agentId} AND ${agents.visibility} = 'private' AND ${agents.userId} <> ${ctx.userId})`;
-
-  return sql`NOT ${hiddenProject} AND NOT ${hiddenAgent}`;
+  return sql`NOT EXISTS (SELECT 1 FROM ${projects} WHERE ${projects.id} = ${cols.projectId} AND (${hiddenProject})) AND NOT EXISTS (SELECT 1 FROM ${agents} WHERE ${agents.id} = ${cols.agentId} AND (${hiddenAgent}))`;
 };

@@ -250,6 +250,64 @@ describe('WidgetModel', () => {
       expect(await ws.listRuns(inProject.id)).toHaveLength(1);
     });
 
+    it('hides widgets while their project or agent is trashed, in personal and workspace mode', async () => {
+      const setTrashed = async (trashed: boolean) => {
+        const stamp = trashed
+          ? { deletedAt: new Date(), isDeleted: true }
+          : { deletedAt: null, isDeleted: null };
+        await serverDB.update(projects).set(stamp).where(eq(projects.id, 'wgt-proj-bin'));
+        await serverDB.update(agents).set(stamp).where(eq(agents.id, 'wgt-agent-bin'));
+        await serverDB.update(projects).set(stamp).where(eq(projects.id, 'wgt-proj-bin-ws'));
+        await serverDB.update(agents).set(stamp).where(eq(agents.id, 'wgt-agent-bin-ws'));
+      };
+
+      // personal mode: the caller owns every parent
+      await seedProject('wgt-proj-bin', { workspaceId: null });
+      await serverDB.insert(agents).values({ id: 'wgt-agent-bin', userId, workspaceId: null });
+      const inProject = await model.create({ projectId: 'wgt-proj-bin', title: 'p' });
+      const inAgent = await model.create({ agentId: 'wgt-agent-bin', title: 'a' });
+      const v1 = await model.createVersion(inProject.id, script(1));
+      await model.publishVersion(inProject.id, v1!.id);
+      const run = await model.startRun(inProject.id, { trigger: 'manual' });
+
+      // workspace mode: public parents, read by a teammate
+      await seedProject('wgt-proj-bin-ws');
+      await serverDB.insert(agents).values({ id: 'wgt-agent-bin-ws', userId, workspaceId });
+      const wsInProject = await ws.create({ projectId: 'wgt-proj-bin-ws', title: 'wp' });
+      const wsInAgent = await ws.create({ agentId: 'wgt-agent-bin-ws', title: 'wa' });
+
+      await setTrashed(true);
+
+      expect(await model.findById(inProject.id)).toBeUndefined();
+      expect(await model.findById(inAgent.id)).toBeUndefined();
+      expect(await model.list({ projectId: 'wgt-proj-bin' })).toEqual([]);
+      expect(await model.list({ agentId: 'wgt-agent-bin' })).toEqual([]);
+      expect(await model.listByProject('wgt-proj-bin')).toEqual([]);
+      expect(await model.listVersions(inProject.id)).toEqual([]);
+      expect(await model.findVersion(inProject.id, v1!.id)).toBeUndefined();
+      expect(await model.listRuns(inProject.id)).toEqual([]);
+      expect(await model.findRun(inProject.id, run!.id)).toBeUndefined();
+      expect(await model.startRun(inProject.id, { trigger: 'manual' })).toBeUndefined();
+      for (const reader of [ws, member]) {
+        expect(await reader.findById(wsInProject.id)).toBeUndefined();
+        expect(await reader.findById(wsInAgent.id)).toBeUndefined();
+        expect(await reader.listByProject('wgt-proj-bin-ws')).toEqual([]);
+        expect(await reader.list({ agentId: 'wgt-agent-bin-ws' })).toEqual([]);
+      }
+
+      // restoring the parents brings the widgets back
+      await setTrashed(false);
+
+      expect((await model.findById(inProject.id))?.id).toBe(inProject.id);
+      expect((await model.findById(inAgent.id))?.id).toBe(inAgent.id);
+      expect((await model.listByProject('wgt-proj-bin')).map((w) => w.id)).toEqual([inProject.id]);
+      expect(await model.listRuns(inProject.id)).toHaveLength(1);
+      expect((await member.findById(wsInProject.id))?.id).toBe(wsInProject.id);
+      expect((await member.list({ agentId: 'wgt-agent-bin-ws' })).map((w) => w.id)).toEqual([
+        wsInAgent.id,
+      ]);
+    });
+
     it('hides a widget from its own creator once a teammate makes the parent private', async () => {
       await seedProject('wgt-proj-teammate', { owner: otherUserId });
       const widget = await ws.create({ projectId: 'wgt-proj-teammate', title: 'mine' });
