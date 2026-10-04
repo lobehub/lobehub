@@ -28,6 +28,20 @@ describe('useInitialRevalidation', () => {
     expect(result.current).toBe(true);
   });
 
+  it('reports again when reopening a settled conversation through one that never validated', () => {
+    const { rerender, result } = renderHook((props) => useInitialRevalidation(props), {
+      initialProps: { identity: 'topic-a', isValidating: true },
+    });
+    rerender({ identity: 'topic-a', isValidating: false });
+
+    // B renders from a still-verified cache and never starts a fetch.
+    rerender({ identity: 'topic-b', isValidating: false });
+
+    // Back on A after its verification window lapsed: a new first fetch.
+    rerender({ identity: 'topic-a', isValidating: true });
+    expect(result.current).toBe(true);
+  });
+
   it('stays hidden while no fetch is in flight', () => {
     const { result } = renderHook(() =>
       useInitialRevalidation({ identity: 'topic-a', isValidating: false }),

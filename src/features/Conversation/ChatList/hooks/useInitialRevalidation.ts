@@ -20,7 +20,11 @@ export const useInitialRevalidation = ({
 
   useEffect(() => {
     const previous = previousRef.current;
-    if (previous.identity === identity && previous.isValidating && !isValidating) {
+    if (previous.identity !== identity) {
+      // Each opening gets its own first fetch: the hook and its provider
+      // outlive context switches, so a settlement must not carry over.
+      setSettledIdentity(undefined);
+    } else if (previous.isValidating && !isValidating) {
       setSettledIdentity(identity);
     }
     previousRef.current = { identity, isValidating };
