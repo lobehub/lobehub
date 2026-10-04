@@ -36,7 +36,7 @@ vi.mock('@/server/services/messenger/wechatPush', () => ({
 
 const serverDB = { kind: 'db' } as unknown as LobeChatDatabase;
 
-const buildLink = (platform: 'discord' | 'slack' | 'telegram', tenantId = '') => ({
+const buildLink = (platform: 'discord' | 'linq' | 'slack' | 'telegram', tenantId = '') => ({
   id: `link-${platform}-${tenantId}`,
   platform,
   platformUserId: `${platform}-user`,
