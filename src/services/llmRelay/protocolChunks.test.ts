@@ -56,4 +56,15 @@ describe('readProtocolChunks', () => {
       { data: 'stop', type: 'stop' },
     ]);
   });
+
+  it('finds the event boundary when a CRLF pair straddles two reads', async () => {
+    const chunks = await collect(
+      streamOf('event: text\r\ndata: "a"\r\n\r', '\nevent: text\r\ndata: "b"\r\n\r\n'),
+    );
+
+    expect(chunks).toEqual([
+      { data: 'a', type: 'text' },
+      { data: 'b', type: 'text' },
+    ]);
+  });
 });

@@ -46,7 +46,8 @@ export async function* readProtocolChunks(
       const { done, value } = await reader.read();
       if (done) break;
 
-      buffer += decoder.decode(value, { stream: true }).replaceAll('\r\n', '\n');
+      // Normalize the whole buffer: a `\r\n` pair can straddle two reads.
+      buffer = (buffer + decoder.decode(value, { stream: true })).replaceAll('\r\n', '\n');
 
       let boundary = buffer.indexOf('\n\n');
       while (boundary !== -1) {
