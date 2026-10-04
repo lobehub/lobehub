@@ -567,23 +567,6 @@ export const isAgentConfigKey = (key: unknown, agentId: string, scope: string): 
   key[1] === agentId &&
   key[2] === scope;
 
-// ---- project ------------------------------------------------------------
-export const projectKeys = {
-  detail: def('project:detail', (scope: string, id: string) => ['project:detail', scope, id]),
-  detailHydration: def('project:detailHydration', (scope: string, id: string) => [
-    'project:detailHydration',
-    scope,
-    id,
-  ]),
-  list: def('project:list', (scope: string) => ['project:list', scope]),
-  listHydration: def('project:listHydration', (scope: string) => ['project:listHydration', scope]),
-};
-
-export const isProjectDetailKey = (key: unknown, scope: string, id: string): boolean =>
-  Array.isArray(key) && key[0] === projectKeys.detail.root && key[1] === scope && key[2] === id;
-export const isProjectListKey = (key: unknown, scope: string): boolean =>
-  Array.isArray(key) && key[0] === projectKeys.list.root && key[1] === scope;
-
 // ---- aiModel ------------------------------------------------------------
 export const aiModelKeys = {
   disabledModelsPage: def('aiModel:disabledModelsPage', (providerId: string, offset: number) => [
@@ -1611,7 +1594,6 @@ export const swrKeys = {
   onboarding: onboardingKeys,
   openInApp: openInAppKeys,
   portal: portalKeys,
-  project: projectKeys,
   provider: providerKeys,
   ragEval: ragEvalKeys,
   recent: recentKeys,

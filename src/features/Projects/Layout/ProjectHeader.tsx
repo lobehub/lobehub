@@ -22,7 +22,11 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
   const { t } = useTranslation(['project', 'common']);
   const navigate = useWorkspaceAwareNavigate();
   const projects = useCurrentProjectList();
-  const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectList)(true);
+  const { error, isHydrated, isValidating, revalidate } = useProjectStore(
+    (s) => s.useFetchProjectList,
+  )(true);
+  // Rows come from the store; the hook only reports fetch progress.
+  const isLoading = !isHydrated || isValidating;
 
   const items = useMemo<SwitcherItem[]>(
     () =>
@@ -48,12 +52,12 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
           content={
             <SwitcherMenu
               activeId={project?.slug ?? project?.id}
-              error={error}
+              error={items.length === 0 ? error : undefined}
               isLoading={isLoading && items.length === 0}
               items={items}
               kind={'project'}
               searchPlaceholder={t('navPanel.searchProject', { ns: 'common' })}
-              onRetry={() => mutate()}
+              onRetry={() => revalidate()}
               onSelect={handleSelect}
             />
           }

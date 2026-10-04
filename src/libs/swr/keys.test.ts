@@ -9,7 +9,6 @@ import {
   documentCommentKeys,
   isAcceptanceListKey,
   isDocumentCommentKeyForEvent,
-  projectKeys,
   recentKeys,
   resourceKeys,
   taskKeys,
@@ -93,20 +92,6 @@ describe('agent projection keys', () => {
         [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
       ).toBe(false);
     }
-  });
-});
-
-describe('projectKeys', () => {
-  it('uses the same scoped factory family for list, detail, and hydration', () => {
-    expect(projectKeys.list('user-1:workspace-1')).toEqual(['project:list', 'user-1:workspace-1']);
-    expect(projectKeys.detail('user-1:workspace-1', 'project-1')).toEqual([
-      'project:detail',
-      'user-1:workspace-1',
-      'project-1',
-    ]);
-    expect(projectKeys.listHydration('user-1:workspace-1')).not.toEqual(
-      projectKeys.listHydration('user-1:workspace-2'),
-    );
   });
 });
 

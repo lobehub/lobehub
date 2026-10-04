@@ -28,6 +28,7 @@ import {
   recordLens,
   type ReplicaPageResult,
   type ReplicaSyncResult,
+  singleEntity,
 } from '@/libs/replica';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
@@ -268,7 +269,7 @@ export class ChatTopicActionImpl {
     });
     this.#topicDetail = createReplicaSlice(topicDetailResource, {
       actionPrefix: n('topicDetail'),
-      entity: { getId: (topic) => topic.id },
+      entity: singleEntity<ChatTopic>((topic) => topic.id),
       fetcher: (topicId) => topicService.getTopicDetail(topicId),
       get,
       // A missing topic keeps whatever is cached (the list may still hold it).

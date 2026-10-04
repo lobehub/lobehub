@@ -1,259 +1,259 @@
-import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+/**
+ * @vitest-environment happy-dom
+ *
+ * The project list and project pages are replicas: they paint from the
+ * persisted copy on the first frame, the network only confirms, and a rename
+ * or delete reaches the list row and every loaded project page at once.
+ */
+import { randomUUID } from 'node:crypto';
 
-import { mutate } from '@/libs/swr';
-import { projectKeys } from '@/libs/swr/keys';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import type { PropsWithChildren } from 'react';
+import { createElement, useEffect } from 'react';
+import { SWRConfig, useSWRConfig } from 'swr';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { cacheScope } from '@/libs/replica';
+import { setScopedMutate } from '@/libs/swr/mutate';
 import { projectService } from '@/services/project';
 
-import { projectListProjection } from './projection';
-import type { ProjectDetail, ProjectListItem } from './store';
-import { useCurrentProjectDetail, useCurrentProjectList, useProjectStore } from './store';
+import type { ProjectDetail, ProjectListItem } from './projection';
+import { PROJECT_LIST_KEY, projectDetailResource, projectListResource } from './projection';
+import {
+  initialProjectState,
+  useCurrentProjectDetail,
+  useCurrentProjectList,
+  useProjectStore,
+} from './store';
 
-const mocks = vi.hoisted(() => ({
-  activeWorkspaceId: null as string | null,
-  cacheScope: 'user-1:personal',
-  currentCacheScope: 'user-1:personal',
-  swrData: undefined as unknown,
-  swrDataByKey: {} as Record<string, unknown>,
-  swrConfigs: [] as Array<{ onSuccess?: (response: unknown) => void }>,
-  swrKeys: [] as unknown[],
-  fetchers: [] as Array<() => Promise<unknown>>,
-}));
+const mocks = vi.hoisted(() => ({ activeWorkspaceId: null as string | null }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => mocks.activeWorkspaceId,
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
 
-vi.mock('@/libs/swr/useCacheScope', () => ({
-  getCacheScope: () => mocks.currentCacheScope,
-  useCacheScope: () => mocks.cacheScope,
+vi.mock('@/services/project', () => ({
+  projectService: {
+    create: vi.fn(),
+    delete: vi.fn(),
+    detail: vi.fn(),
+    listAll: vi.fn(),
+    update: vi.fn(),
+  },
 }));
 
-vi.mock('@/libs/swr', () => ({
-  mutate: vi.fn(),
-  useClientDataSWR: vi.fn(
-    (
-      key: unknown,
-      _fetcher: () => Promise<unknown>,
-      config: { onSuccess?: (response: unknown) => void } = {},
-    ) => {
-      mocks.fetchers.push(_fetcher);
-      mocks.swrConfigs.push(config);
-      mocks.swrKeys.push(key);
-      const serializedKey = JSON.stringify(key);
-      return {
-        data:
-          serializedKey in mocks.swrDataByKey ? mocks.swrDataByKey[serializedKey] : mocks.swrData,
-      };
-    },
-  ),
-}));
+const MutateBridge = () => {
+  const { mutate } = useSWRConfig();
+  useEffect(() => setScopedMutate(mutate), [mutate]);
+  return null;
+};
 
-describe('project store cache scope', () => {
+const wrapper = ({ children }: PropsWithChildren) =>
+  createElement(
+    SWRConfig,
+    { value: { dedupingInterval: 0, provider: () => new Map() } },
+    createElement(MutateBridge),
+    children,
+  );
+
+const project = (id: string, name = id): ProjectListItem =>
+  ({ id, name, slug: `${id}-slug` }) as ProjectListItem;
+const detailOf = (item: ProjectListItem): ProjectDetail => ({ project: item }) as ProjectDetail;
+const ok = <T>(data: T) => ({ data, message: 'ok', success: true as const });
+
+/** Never-resolving fetch: the first frame can only come from storage. */
+const pending = () => new Promise<never>(() => {});
+
+const LIST_STORAGE_KEY = projectListResource.storageKey({});
+
+describe('project store replicas', () => {
+  const scopes = new Set<string>();
+  let scope = '';
+  const useScope = (next: string) => {
+    scope = next;
+    scopes.add(next);
+    vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
+    vi.spyOn(cacheScope, 'use').mockImplementation(() => scope);
+    vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+  };
+
   beforeEach(() => {
     mocks.activeWorkspaceId = null;
-    mocks.cacheScope = 'user-1:personal';
-    mocks.currentCacheScope = 'user-1:personal';
-    mocks.swrData = undefined;
-    mocks.swrDataByKey = {};
-    mocks.swrConfigs = [];
-    mocks.swrKeys = [];
-    mocks.fetchers = [];
-    useProjectStore.setState({
-      projectDetails: {},
-      projectLists: {},
-      projectOptimisticPatches: {},
-    });
+    useScope(`project-user-${randomUUID()}:personal`);
+    act(() => useProjectStore.setState(initialProjectState));
   });
 
-  it('restores a persisted project list without waiting for the network', async () => {
-    const cachedProject = { id: 'cached-project', name: 'Cached project' } as ProjectListItem;
-    vi.spyOn(projectListProjection, 'get').mockResolvedValueOnce({
-      data: [cachedProject],
-      updatedAt: 1,
-    });
-
-    renderHook(() => useProjectStore.getState().useFetchProjectList());
-
-    await act(async () => {
-      await mocks.fetchers[0]();
-    });
-    expect(useProjectStore.getState().projectLists['user-1:personal']).toEqual([cachedProject]);
+  afterEach(async () => {
+    await Promise.all(
+      [...scopes].flatMap((value) => [
+        projectListResource.storage!.remove({ queryKey: LIST_STORAGE_KEY, scope: value }),
+        projectDetailResource.storage!.remove({ queryKey: 'launch', scope: value }),
+      ]),
+    );
+    scopes.clear();
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
-  it('ignores a project response from a workspace that is no longer active', () => {
-    const staleProject = { id: 'stale-project' } as ProjectListItem;
-    mocks.swrData = { data: [staleProject], message: 'stale', success: true };
-    mocks.cacheScope = 'user-1:personal';
-    mocks.currentCacheScope = 'user-1:workspace-1';
+  it('paints the persisted list before the network answers', async () => {
+    await projectListResource.storage!.set(
+      { queryKey: LIST_STORAGE_KEY, scope },
+      { data: [project('p1', 'Cached')], updatedAt: 1 },
+    );
+    vi.mocked(projectService.listAll).mockImplementation(pending);
 
-    renderHook(() => useProjectStore.getState().useFetchProjectList());
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess?.({ data: [staleProject], success: true }));
+    const sync = renderHook(() => useProjectStore((s) => s.useFetchProjectList)(true), {
+      wrapper,
+    });
+    const list = renderHook(() => useCurrentProjectList());
 
-    expect(useProjectStore.getState().projectLists['user-1:personal']).toBeUndefined();
-    expect(useProjectStore.getState().projectLists['user-1:workspace-1']).toBeUndefined();
+    await waitFor(() => expect(list.result.current.map((p) => p.name)).toEqual(['Cached']));
+    expect(sync.result.current.isHydrated).toBe(true);
+    expect(sync.result.current.isValidating).toBe(true);
   });
 
-  it('hides the previous account project list while old SWR data is still present', () => {
-    const previousProject = { id: 'previous-project', name: 'Previous account' } as ProjectListItem;
-    const previousResponse = { data: [previousProject], success: true };
-    // Simulate the old shared key remaining populated until Query reloads the new scope.
-    mocks.swrDataByKey = {
-      [JSON.stringify('project/list')]: previousResponse,
-      [JSON.stringify(['project/list', 'user-1:personal'])]: previousResponse,
+  it('replaces the list with the server response and persists it', async () => {
+    vi.mocked(projectService.listAll).mockResolvedValue(ok([project('p1', 'Server')]) as any);
+
+    renderHook(() => useProjectStore((s) => s.useFetchProjectList)(true), { wrapper });
+
+    await waitFor(() =>
+      expect(useProjectStore.getState().projectListMap[PROJECT_LIST_KEY]?.[0]?.name).toBe('Server'),
+    );
+    await waitFor(async () =>
+      expect(
+        (await projectListResource.storage!.get({ queryKey: LIST_STORAGE_KEY, scope }))?.data,
+      ).toEqual([project('p1', 'Server')]),
+    );
+  });
+
+  it('paints a project page from the persisted copy, keyed by the route slug', async () => {
+    await projectDetailResource.storage!.set(
+      { queryKey: 'launch', scope },
+      { data: detailOf(project('p1', 'Cached page')), updatedAt: 1 },
+    );
+    vi.mocked(projectService.detail).mockImplementation(pending);
+
+    renderHook(() => useProjectStore((s) => s.useFetchProjectDetail)('launch'), { wrapper });
+    const detail = renderHook(() => useCurrentProjectDetail('launch'));
+
+    await waitFor(() => expect(detail.result.current?.project.name).toBe('Cached page'));
+  });
+
+  it('drops the previous identity’s projects before the next one paints', async () => {
+    vi.mocked(projectService.listAll).mockResolvedValue(ok([project('p1', 'Mine')]) as any);
+    const sync = renderHook(() => useProjectStore((s) => s.useFetchProjectList)(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(useProjectStore.getState().projectListMap.all).toHaveLength(1));
+
+    vi.mocked(projectService.listAll).mockImplementation(pending);
+    useScope(`project-user-${randomUUID()}:personal`);
+    sync.rerender();
+
+    await waitFor(() => expect(useProjectStore.getState().projectListMap.all).toBeUndefined());
+  });
+
+  describe('mutations', () => {
+    const seed = () => {
+      const original = project('p1', 'Original');
+      act(() => {
+        useProjectStore.getState(); // store constructed
+        useProjectStore.setState(initialProjectState);
+      });
+      // Land both copies through the replicas (not a raw setState) so they hold bookkeeping.
+      vi.mocked(projectService.listAll).mockResolvedValue(ok([original, project('p2')]) as any);
+      vi.mocked(projectService.detail).mockResolvedValue(ok(detailOf(original)) as any);
+      renderHook(
+        () => {
+          useProjectStore((s) => s.useFetchProjectList)(true);
+          useProjectStore((s) => s.useFetchProjectDetail)('launch');
+        },
+        { wrapper },
+      );
+      return original;
     };
-    const { rerender } = renderHook(() => useProjectStore.getState().useFetchProjectList());
+    const waitSeeded = () =>
+      waitFor(() => {
+        expect(useProjectStore.getState().projectListMap.all).toHaveLength(2);
+        expect(useProjectStore.getState().projectDetailMap.launch).toBeDefined();
+      });
 
-    mocks.cacheScope = 'user-2:personal';
-    mocks.currentCacheScope = 'user-2:personal';
-    rerender();
+    it('renames the list row and the project page optimistically', async () => {
+      const original = seed();
+      await waitSeeded();
+      let resolveUpdate!: (value: unknown) => void;
+      vi.mocked(projectService.update).mockImplementation(
+        () => new Promise((resolve) => (resolveUpdate = resolve)) as any,
+      );
 
-    expect(mocks.swrKeys).toEqual([
-      projectKeys.listHydration('user-1:personal'),
-      projectKeys.list('user-1:personal'),
-      projectKeys.listHydration('user-2:personal'),
-      projectKeys.list('user-2:personal'),
-    ]);
-    expect(renderHook(() => useCurrentProjectList()).result.current).toEqual([]);
-  });
+      const operation = useProjectStore.getState().updateProject('p1', { name: 'Renamed' });
 
-  it('hides the previous account project detail after switching accounts', () => {
-    const previousDetail = {
-      project: { id: 'shared-id', name: 'Previous account' },
-    } as ProjectDetail;
-    const { rerender } = renderHook(() =>
-      useProjectStore.getState().useFetchProjectDetail('shared-id'),
-    );
+      expect(useProjectStore.getState().projectListMap.all[0].name).toBe('Renamed');
+      expect(useProjectStore.getState().projectDetailMap.launch.project.name).toBe('Renamed');
 
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess?.({ data: previousDetail, success: true }));
-    mocks.cacheScope = 'user-2:personal';
-    mocks.currentCacheScope = 'user-2:personal';
-    rerender();
-
-    expect(renderHook(() => useCurrentProjectDetail('shared-id')).result.current).toBeUndefined();
-  });
-
-  it('keeps project lists isolated between personal and workspace contexts', () => {
-    const personalProject = { id: 'personal-project' } as ProjectListItem;
-    const workspaceProject = { id: 'workspace-project' } as ProjectListItem;
-    mocks.swrData = { data: [personalProject], success: true };
-    const { rerender } = renderHook(() => useProjectStore.getState().useFetchProjectList());
-
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess?.({ data: [personalProject], success: true }));
-    mocks.activeWorkspaceId = 'workspace-1';
-    mocks.cacheScope = 'user-1:workspace-1';
-    mocks.currentCacheScope = 'user-1:workspace-1';
-    mocks.swrData = { data: [workspaceProject], success: true };
-    rerender();
-
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess?.({ data: [workspaceProject], success: true }));
-    expect(renderHook(() => useCurrentProjectList()).result.current).toEqual([workspaceProject]);
-
-    mocks.activeWorkspaceId = null;
-    mocks.cacheScope = 'user-1:personal';
-    mocks.currentCacheScope = 'user-1:personal';
-    expect(renderHook(() => useCurrentProjectList()).result.current).toEqual([personalProject]);
-  });
-
-  it('keeps project details isolated between personal and workspace contexts', () => {
-    const personalDetail = { project: { id: 'shared-id', name: 'Personal' } } as ProjectDetail;
-    const workspaceDetail = { project: { id: 'shared-id', name: 'Workspace' } } as ProjectDetail;
-    const { rerender } = renderHook(() =>
-      useProjectStore.getState().useFetchProjectDetail('shared-id'),
-    );
-
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess?.({ data: personalDetail, success: true }));
-    mocks.activeWorkspaceId = 'workspace-1';
-    mocks.cacheScope = 'user-1:workspace-1';
-    mocks.currentCacheScope = 'user-1:workspace-1';
-    rerender();
-    act(() => mocks.swrConfigs.at(-1)?.onSuccess?.({ data: workspaceDetail, success: true }));
-
-    expect(mocks.swrKeys).toEqual([
-      projectKeys.detailHydration('user-1:personal', 'shared-id'),
-      projectKeys.detail('user-1:personal', 'shared-id'),
-      projectKeys.detailHydration('user-1:workspace-1', 'shared-id'),
-      projectKeys.detail('user-1:workspace-1', 'shared-id'),
-    ]);
-    expect(renderHook(() => useCurrentProjectDetail('shared-id')).result.current).toBe(
-      workspaceDetail,
-    );
-    mocks.activeWorkspaceId = null;
-    mocks.cacheScope = 'user-1:personal';
-    mocks.currentCacheScope = 'user-1:personal';
-    expect(renderHook(() => useCurrentProjectDetail('shared-id')).result.current).toBe(
-      personalDetail,
-    );
-  });
-
-  it('pins project creation to the active workspace', async () => {
-    mocks.activeWorkspaceId = 'workspace-1';
-    const project = { id: 'project-1', slug: 'launch' } as ProjectListItem;
-    vi.spyOn(projectService, 'create').mockResolvedValue({
-      data: project,
-      message: 'Project created',
-      success: true,
+      const renamed = { ...original, name: 'Renamed', updatedAt: 'server' };
+      // The refresh that follows the rename sees the server's new state.
+      vi.mocked(projectService.listAll).mockResolvedValue(ok([renamed, project('p2')]) as any);
+      await act(async () => {
+        resolveUpdate(ok(renamed));
+        await operation;
+      });
+      expect(useProjectStore.getState().projectListMap.all[0]).toMatchObject({
+        name: 'Renamed',
+        updatedAt: 'server',
+      });
+      expect(useProjectStore.getState().projectDetailMap.launch.project.updatedAt).toBe('server');
     });
 
-    await expect(
-      useProjectStore
-        .getState()
-        .createProject({ identifier: 'LOB', name: 'Launch', slug: 'launch' }),
-    ).resolves.toBe(project);
+    it('rolls both copies back when the rename fails', async () => {
+      seed();
+      await waitSeeded();
+      vi.mocked(projectService.update).mockRejectedValue(new Error('boom'));
 
-    expect(projectService.create).toHaveBeenCalledWith(
-      { identifier: 'LOB', name: 'Launch', slug: 'launch' },
-      'workspace-1',
-    );
-  });
+      await expect(
+        useProjectStore.getState().updateProject('p1', { name: 'Renamed' }),
+      ).rejects.toThrow('boom');
 
-  it('refreshes the project list after deletion', async () => {
-    vi.mocked(mutate).mockClear();
-    vi.spyOn(projectService, 'delete').mockResolvedValue({
-      data: { id: 'project-1' } as ProjectListItem,
-      message: 'Project deleted',
-      success: true,
-    });
-    await useProjectStore.getState().deleteProject('project-1');
-
-    expect(projectService.delete).toHaveBeenCalledWith('project-1');
-    const matcher = vi.mocked(mutate).mock.calls.at(-1)?.[0];
-    expect(typeof matcher === 'function' && matcher(projectKeys.list('user-1:personal'))).toBe(
-      true,
-    );
-  });
-
-  it('updates project list and detail caches after renaming', async () => {
-    const project = { id: 'project-1', name: 'Original', slug: 'launch' } as ProjectListItem;
-    const renamed = { ...project, name: 'Renamed' };
-    const detail = { project } as ProjectDetail;
-    let resolveUpdate!: (value: { data: ProjectListItem; message: string; success: true }) => void;
-    vi.spyOn(projectService, 'update').mockImplementation(
-      () => new Promise((resolve) => (resolveUpdate = resolve)),
-    );
-    useProjectStore.setState({
-      projectDetails: { 'user-1:personal': { launch: detail } },
-      projectLists: { 'user-1:personal': [project] },
+      expect(useProjectStore.getState().projectListMap.all[0].name).toBe('Original');
+      expect(useProjectStore.getState().projectDetailMap.launch.project.name).toBe('Original');
     });
 
-    const operation = useProjectStore.getState().updateProject('project-1', { name: 'Renamed' });
+    it('removes a deleted project from the list and its page', async () => {
+      seed();
+      await waitSeeded();
+      vi.mocked(projectService.delete).mockResolvedValue(ok(project('p1')) as any);
+      vi.mocked(projectService.listAll).mockResolvedValue(ok([project('p2')]) as any);
 
-    expect(renderHook(() => useCurrentProjectList()).result.current[0].name).toBe('Renamed');
-    expect(renderHook(() => useCurrentProjectDetail('launch')).result.current?.project.name).toBe(
-      'Renamed',
-    );
+      await act(() => useProjectStore.getState().deleteProject('p1'));
 
-    resolveUpdate({ data: renamed, message: 'Project updated', success: true });
-    await operation;
+      expect(useProjectStore.getState().projectListMap.all.map((p) => p.id)).toEqual(['p2']);
+      expect(useProjectStore.getState().projectDetailMap.launch).toBeUndefined();
+    });
 
-    expect(useProjectStore.getState().projectLists['user-1:personal'][0].name).toBe('Renamed');
-    expect(useProjectStore.getState().projectDetails['user-1:personal'].launch.project.name).toBe(
-      'Renamed',
-    );
-    const matcher = vi.mocked(mutate).mock.calls.at(-1)?.[0];
-    expect(typeof matcher === 'function' && matcher(projectKeys.list('user-1:personal'))).toBe(
-      true,
-    );
+    it('creates the project in the active workspace and shows it at the top', async () => {
+      seed();
+      await waitSeeded();
+      mocks.activeWorkspaceId = 'workspace-1';
+      const created = project('p3', 'Launch');
+      vi.mocked(projectService.create).mockResolvedValue(ok(created) as any);
+      // Keep the follow-up refresh in flight: the new row must show before it lands.
+      vi.mocked(projectService.listAll).mockImplementation(pending);
+
+      await act(async () => {
+        await expect(
+          useProjectStore
+            .getState()
+            .createProject({ identifier: 'LOB', name: 'Launch', slug: 'launch' }),
+        ).resolves.toBe(created);
+      });
+
+      expect(projectService.create).toHaveBeenCalledWith(
+        { identifier: 'LOB', name: 'Launch', slug: 'launch' },
+        'workspace-1',
+      );
+      expect(useProjectStore.getState().projectListMap.all[0].id).toBe('p3');
+    });
   });
 });

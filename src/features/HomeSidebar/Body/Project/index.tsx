@@ -34,7 +34,11 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
   const enabled = useUserStore(labPreferSelectors.enableProjects);
   const navigate = useWorkspaceAwareNavigate();
   const projects = useCurrentProjectList();
-  const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectList)(enabled);
+  const { error, isHydrated, isValidating, revalidate } = useProjectStore(
+    (s) => s.useFetchProjectList,
+  )(enabled);
+  // Rows come from the store; the hook only reports fetch progress.
+  const isLoading = !isHydrated || isValidating;
 
   if (!enabled) return null;
 
@@ -62,8 +66,8 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
         </div>
       </AccordionHeader>
       <AccordionPanel>
-        {error ? (
-          <AsyncError error={error} variant="inline" onRetry={() => mutate()} />
+        {error && projects.length === 0 ? (
+          <AsyncError error={error} variant="inline" onRetry={() => revalidate()} />
         ) : isLoading && projects.length === 0 ? (
           <SkeletonList rows={3} />
         ) : projects.length === 0 ? (

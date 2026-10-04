@@ -55,8 +55,8 @@ const ProjectConversation = memo(() => {
     [projectSlug],
   );
 
-  if (detailSWR.error) {
-    return <AsyncError error={detailSWR.error} variant="page" onRetry={detailSWR.mutate} />;
+  if (detailSWR.error && !detail) {
+    return <AsyncError error={detailSWR.error} variant="page" onRetry={detailSWR.revalidate} />;
   }
   if (!detail || !coordinatorAgentId) {
     return (

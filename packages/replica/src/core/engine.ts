@@ -42,20 +42,26 @@ export interface ReplicaStorePort<TData> {
 }
 
 /**
- * How an entity (e.g. one topic) appears inside this resource's value. Paged
- * resources get it for free from `paging.getId`; a single-entity resource
- * (a detail cache) passes `getId`.
+ * How entities (e.g. topics) appear inside a non-paged resource value. Paged
+ * resources get this for free from `paging.getId`. Build one with
+ * `singleEntity` (a detail value), `arrayEntity` (a plain list) or by hand for
+ * nested shapes (grouped lists).
  */
 export interface ReplicaEntityAdapter<TData, TItem> {
-  /** Map the entity value into the resource value; defaults to identity. */
-  apply?: (data: TData, item: TItem) => TData;
-  getId: (data: TData) => string;
+  /** Whether `data` holds the entity. */
+  has: (data: TData, id: string) => boolean;
+  /**
+   * Map the entity inside `data` (`fn` returning `undefined` deletes it).
+   * Return `data` itself when nothing changed, or `undefined` when the whole
+   * value goes away with the entity (a detail value).
+   */
+  map: (data: TData, id: string, fn: (item: TItem) => TItem | undefined) => TData | undefined;
 }
 
 export interface ReplicaEngineOptions<TParams, TData, TFetched> {
   /** Label prefix of host updates (devtools action names). Defaults to the resource name. */
   actionPrefix?: string;
-  /** Single-entity resources only: how to find / patch the entity. */
+  /** Non-paged resources: how entities sit in the value (see `linkReplicaEntity`). */
   entity?: ReplicaEntityAdapter<TData, any>;
   /** Overrides `resource.fetcher` when the fetch needs store context. */
   fetcher?: (params: TParams, cursor?: any) => Promise<TFetched>;
@@ -426,11 +432,11 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
       const data = port.read(key);
       if (data === undefined) return false;
       if (paging) return hasPagedItem(data as any, id, paging);
-      return options.entity ? options.entity.getId(data) === id : false;
+      return options.entity ? options.entity.has(data, id) : false;
     });
   };
 
-  /** Map one entity inside a value; `undefined` from `fn` removes it (paged only). */
+  /** Map one entity inside a value; `undefined` means the whole value goes away. */
   const mapEntity = <TItem>(
     data: TData,
     id: string,
@@ -438,10 +444,8 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   ): TData | undefined => {
     if (paging) return mapPagedItem(data as any, id, fn as any, paging) as TData;
     const entity = options.entity;
-    if (!entity || entity.getId(data) !== id) return data;
-    const next = fn(data as unknown as TItem);
-    if (next === undefined) return undefined;
-    return entity.apply ? entity.apply(data, next) : (next as unknown as TData);
+    if (!entity || !entity.has(data, id)) return data;
+    return entity.map(data, id, fn);
   };
 
   /**
@@ -504,7 +508,7 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     fn: (item: TItem) => TItem | undefined,
   ): ReplicaOptimisticToken<TData>[] =>
     entityKeys(id).flatMap((key) => {
-      // Removing a single-entity value is applied on commit, not optimistically.
+      // Removing a whole value (a detail) is applied on commit, not optimistically.
       if (!paging) {
         const current = port.read(key);
         if (current !== undefined && mapEntity(current, id, fn) === undefined) return [];

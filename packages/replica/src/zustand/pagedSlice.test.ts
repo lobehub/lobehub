@@ -4,6 +4,7 @@ import { createStore } from 'zustand/vanilla';
 import { testDriver as driver } from '../../tests/testDriver';
 import { definePagedReplica, defineReplica } from '../core/defineReplica';
 import { linkReplicaEntity } from '../core/entity';
+import { singleEntity } from '../core/entityAdapters';
 import type { ReplicaPagedData, ReplicaPageResult } from '../core/paging';
 import { createReplicaState } from '../core/reducer';
 import type { ReplicaRow, ReplicaScope, ReplicaState, ReplicaStorage } from '../core/types';
@@ -115,7 +116,7 @@ const setup = (
   });
   const detail = createReplicaSlice(detailResource, {
     driver,
-    entity: { getId: (item) => item.id },
+    entity: singleEntity<Row>((item) => item.id),
     get: store.getState,
     set: (partial) => store.setState(partial),
     stateKey: 'detailsReplica',
