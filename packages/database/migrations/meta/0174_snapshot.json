@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "9868d795-2231-4b5a-ac68-74656c3ee5d3",
+  "id": "1ec22f99-e826-4ffd-8175-89b688547805",
   "policies": {},
   "prevId": "e4b7b254-1a41-4943-bd9a-f988c0a76a50",
   "roles": {},
@@ -14181,6 +14181,12 @@
         },
         "enforcement": {
           "name": "enforcement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "direction": {
+          "name": "direction",
           "type": "text",
           "primaryKey": false,
           "notNull": false

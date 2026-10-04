@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS "widgets" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "expertise_lessons" ADD COLUMN IF NOT EXISTS "direction" text;--> statement-breakpoint
 ALTER TABLE "dashboard_items" DROP CONSTRAINT IF EXISTS "dashboard_items_dashboard_id_dashboards_id_fk";--> statement-breakpoint
 ALTER TABLE "dashboard_items" ADD CONSTRAINT "dashboard_items_dashboard_id_dashboards_id_fk" FOREIGN KEY ("dashboard_id") REFERENCES "public"."dashboards"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "dashboard_items" DROP CONSTRAINT IF EXISTS "dashboard_items_widget_id_widgets_id_fk";--> statement-breakpoint

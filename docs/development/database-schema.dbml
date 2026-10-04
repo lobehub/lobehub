@@ -1672,6 +1672,7 @@ table expertise_lessons {
   retired_at "timestamp with time zone"
   sort_order integer
   enforcement text
+  direction text
   compilability text [not null, default: 'compilable']
   backtest jsonb
   compiled_criterion_id uuid
