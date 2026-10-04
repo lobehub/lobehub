@@ -133,7 +133,12 @@ const createService = () => {
   operationModel.recordCompletion = vi.fn().mockResolvedValue(true);
   vi.spyOn(completionLifecycle, 'emitSignalEvents').mockResolvedValue([]);
   const dispatchHooks = vi.spyOn(completionLifecycle, 'dispatchHooks').mockResolvedValue(undefined);
-  vi.spyOn((service as any).traceRecorder, 'finalize').mockResolvedValue(undefined);
+  const traceFinalize = vi
+    .spyOn((service as any).traceRecorder, 'finalize')
+    .mockResolvedValue(undefined);
+  const traceFlushPartial = vi
+    .spyOn((service as any).traceRecorder, 'flushPartial')
+    .mockResolvedValue(undefined);
 
   const mockStep = (result: any) => {
     const step = vi.fn().mockResolvedValue(result);
@@ -143,6 +148,8 @@ const createService = () => {
 
   return {
     coordinator,
+    traceFinalize,
+    traceFlushPartial,
     dispatchHooks,
     getStored: () => stored,
     messageModel,
@@ -228,6 +235,10 @@ describe('waiting_for_client (U4c)', () => {
             stepIndex: 2,
           }),
         );
+
+        // No trace boundary: the partial carries over to the resumed steps.
+        expect(t.traceFinalize).not.toHaveBeenCalled();
+        expect(t.traceFlushPartial).toHaveBeenCalled();
 
         // Persisted as a park: same lifecycle as an async-tool park, no completion.
         expect(t.dispatchHooks).toHaveBeenCalledWith(
@@ -538,6 +549,30 @@ describe('waiting_for_client (U4c)', () => {
       expect(t.getStored().status).toBe('waiting_for_client');
       expect(t.getStored().clientLlmWait.expiresAt).toBe(deadline);
       expect(t.scheduleMessage).toHaveBeenCalledWith(expect.objectContaining({ delay: 120_000 }));
+    });
+
+    it('leaves a wait past its deadline to the (late) expiry instead of resuming it', async () => {
+      const t = createService();
+      t.setStored(
+        waitingState({
+          clientLlmWait: {
+            assistantMessageId: 'msg-assistant',
+            expiresAt: new Date(NOW - 1).toISOString(),
+            parkedAt: new Date(NOW - 600_000).toISOString(),
+            provider: 'lmstudio',
+            reason: 'no_executor',
+          },
+        }),
+      );
+
+      const result = await t.service.resumeFromClientLlmWait({
+        llmExecutor,
+        operationId: OPERATION_ID,
+      });
+
+      expect(result.resumed).toBe(false);
+      expect(t.operationModel.tryResumeFromClientWait).not.toHaveBeenCalled();
+      expect(t.scheduleMessage).not.toHaveBeenCalled();
     });
 
     it('does nothing for a run that is not parked', async () => {

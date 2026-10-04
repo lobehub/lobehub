@@ -2895,28 +2895,33 @@ export class AgentRuntimeService {
           // Finalize tracing snapshot. The error catch below uses the same
           // recorder so propagated failures still write the canonical S3
           // snapshot instead of orphaning the partial ().
+          // A client park is no trace boundary: keep the partial so the resumed
+          // steps extend the same trajectory and the real end finalizes it whole.
           const newStateError = stepResult.newState.error;
-          await this.traceRecorder.finalize(operationId, {
-            appendEventsToLastStep: completionSignalEvents,
-            completionReason: reason,
-            error: newStateError
-              ? {
-                  attribution: newStateError.attribution,
-                  body: newStateError.body,
-                  category: newStateError.category,
-                  countAsFailure: newStateError.countAsFailure,
-                  httpStatus: newStateError.httpStatus,
-                  message:
-                    this.completionLifecycle.extractErrorMessage(newStateError) ??
-                    JSON.stringify(newStateError),
-                  numericId: newStateError.numericId,
-                  retryable: newStateError.retryable,
-                  severity: newStateError.severity,
-                  type: String(newStateError.type ?? newStateError.errorType ?? 'unknown'),
-                }
-              : undefined,
-            state: stepResult.newState,
-          });
+          if (reason === 'waiting_for_client') {
+            await this.traceRecorder.flushPartial();
+          } else
+            await this.traceRecorder.finalize(operationId, {
+              appendEventsToLastStep: completionSignalEvents,
+              completionReason: reason,
+              error: newStateError
+                ? {
+                    attribution: newStateError.attribution,
+                    body: newStateError.body,
+                    category: newStateError.category,
+                    countAsFailure: newStateError.countAsFailure,
+                    httpStatus: newStateError.httpStatus,
+                    message:
+                      this.completionLifecycle.extractErrorMessage(newStateError) ??
+                      JSON.stringify(newStateError),
+                    numericId: newStateError.numericId,
+                    retryable: newStateError.retryable,
+                    severity: newStateError.severity,
+                    type: String(newStateError.type ?? newStateError.errorType ?? 'unknown'),
+                  }
+                : undefined,
+              state: stepResult.newState,
+            });
           logToolCallPc(operationId, stepIndex, 'post.trace_finalized', () => ({ reason }));
         }
 
@@ -3749,6 +3754,12 @@ export class AgentRuntimeService {
     const state = await this.coordinator.loadAgentState(operationId);
     if (!state || state.status !== 'waiting_for_client') return { resumed: false };
     if (state.origin?.userId && state.origin.userId !== this.userId) return { resumed: false };
+
+    // Past its deadline the wait is over even if the expiry is still in flight
+    // (QStash can deliver late): leave the run to it rather than run the call
+    // after the advertised time.
+    const expiresAt = Date.parse(state.clientLlmWait?.expiresAt ?? '');
+    if (Number.isFinite(expiresAt) && Date.now() >= expiresAt) return { resumed: false };
 
     const won = await this.agentOperationModel.tryResumeFromClientWait(operationId);
     if (!won) return { resumed: false };
