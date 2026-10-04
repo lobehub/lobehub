@@ -81,6 +81,8 @@ export interface ReplicaResource<TParams, TData, TFetched = TData> {
   paging?: ReplicaPagingConfig<any>;
   /** Whether the resource survives a reload (it has a storage). */
   persisted: boolean;
+  /** Whether an entry key may be hydrated and persisted (see `persistKey`). */
+  persistKey: (key: string) => boolean;
   /**
    * Query identity beyond `key` (filters, page size). Persisted rows are
    * stored per query, so a different query never hydrates; in memory a query

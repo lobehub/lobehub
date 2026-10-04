@@ -166,6 +166,7 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     // Until identity resolves the scope is a guess; never write into it.
     if (!resource.scope.canPersist()) return;
     for (const effect of effects) {
+      if (!resource.persistKey(effect.key)) continue;
       const key = { ...storageKey(effect.key, effect.query), scope: effect.scope };
       if (effect.type === 'remove') {
         writeQueue.remove(key);
@@ -232,6 +233,7 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   const hydrate = async (params: TParams, scope = resource.scope.get()) => {
     if (!resource.storage) return false;
     const key = resource.key(params);
+    if (!resource.persistKey(key)) return false;
     const query = resource.query(params);
     const cached = await resource.storage.get({ ...storageKey(key, query), scope });
     if (!cached) return false;
@@ -308,6 +310,18 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   ) => dispatch({ apply, key, persist, scope: resource.scope.get(), type: 'update' });
 
   const remove = (key: string) => dispatch({ key, scope: resource.scope.get(), type: 'remove' });
+
+  /**
+   * Persist the confirmed value of an entry as it is now — the flush after a
+   * burst of in-memory `update(..., { persist: false })` writes (a stream).
+   */
+  const persist = (key: string) => {
+    const scope = resource.scope.get();
+    if (getSlot().scope !== undefined && getSlot().scope !== scope) return;
+    const data = getConfirmed(key);
+    if (data === undefined) return;
+    runEffects([{ data, key, query: getSlot().entries[key]?.query, scope, type: 'persist' }]);
+  };
 
   const revalidate = (key?: string): Promise<unknown> =>
     options.revalidate ? options.revalidate(key) : Promise.resolve();
@@ -530,6 +544,7 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     loadMore,
     optimistic,
     patchStoredEntity,
+    persist,
     remove,
     replace,
     resource,

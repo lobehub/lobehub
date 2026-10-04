@@ -17,9 +17,23 @@
 export type ReplicaPagingMode = 'cursor' | 'offset';
 export type ReplicaPagingDirection = 'backward' | 'forward';
 
-export interface ReplicaPagingConfig<TItem> {
+export interface ReplicaPagingConfig<TItem, TCursor = any> {
+  /**
+   * Cursor mode: cursor to the page past `item`, the last cursor-eligible row
+   * on the far side, for a server that pages by row but reports no
+   * `nextCursor` (a plain list). Only safe when the row carries a lossless
+   * position; omit it when the server owns the cursor, and paging then waits
+   * for one.
+   */
+  deriveCursor?: (item: TItem) => TCursor;
   direction: ReplicaPagingDirection;
   getId: (item: TItem) => string;
+  /**
+   * Rows that may anchor a join or derive a cursor. Synthetic rows the query
+   * injects (group / summary nodes) have no position of their own on the
+   * server, so they are skipped. Defaults to every row.
+   */
+  isCursorable?: (item: TItem) => boolean;
   mode: ReplicaPagingMode;
   /** Which part survives a reload. Defaults to the head page only. */
   persist?: {
@@ -28,7 +42,12 @@ export interface ReplicaPagingConfig<TItem> {
     /** Number of pages from the head side. Default 1. */
     pages?: number;
   };
-  /** Optional total order re-applied after every merge (e.g. messages by createdAt). */
+  /**
+   * Optional total order re-applied after every merge (e.g. messages by
+   * createdAt). The sort is stable: rows the comparator ties keep the order
+   * the server sent them in, so compare positions only — an id tie-break
+   * would reorder rows created within the same tick.
+   */
   sort?: (a: TItem, b: TItem) => number;
 }
 
@@ -60,6 +79,12 @@ export interface ReplicaPagedData<TItem, TCursor = number> {
   /** Index of the last merged page (0 = head only). */
   currentPage: number;
   hasMore: boolean;
+  /**
+   * Synthetic (non-cursorable) rows of the head page. A sort can place them
+   * among older pages, so a head refresh drops them by id rather than by
+   * position — the fresh head brings its own.
+   */
+  headSyntheticIds?: string[];
   isLoadingMore?: boolean;
   items: TItem[];
   loadMoreError?: unknown;
@@ -115,11 +140,40 @@ const offsetNext = (more: boolean, nextIndex: number) => (more ? nextIndex : nul
  */
 export const getNextPageCursor = <TItem, TCursor>(
   data: ReplicaPagedData<TItem, TCursor> | undefined,
-  config: Pick<ReplicaPagingConfig<TItem>, 'mode'>,
+  config: Pick<
+    ReplicaPagingConfig<TItem, TCursor>,
+    'deriveCursor' | 'direction' | 'isCursorable' | 'mode'
+  >,
 ): TCursor | null | undefined => {
   if (!data) return undefined;
-  if (data.nextCursor !== undefined || config.mode !== 'offset') return data.nextCursor;
-  return (data.hasMore ? (data.currentPage ?? 0) + 1 : null) as TCursor | null;
+  if (data.nextCursor !== undefined) return data.nextCursor;
+  if (config.mode === 'offset')
+    return (data.hasMore ? (data.currentPage ?? 0) + 1 : null) as TCursor | null;
+  if (!config.deriveCursor || !data.hasMore) return undefined;
+  const boundary = farBoundary(data.items, config);
+  return boundary === undefined ? undefined : config.deriveCursor(boundary);
+};
+
+/**
+ * The boundary row on the far side of `items` (forward: last, backward: first)
+ * that may anchor a join or derive a cursor.
+ */
+const farBoundary = <TItem>(
+  items: TItem[],
+  config: Pick<ReplicaPagingConfig<TItem>, 'direction' | 'isCursorable'>,
+): TItem | undefined => {
+  const eligible = config.isCursorable ?? (() => true);
+  if (config.direction === 'forward') return items.findLast((item) => eligible(item));
+  return items.find((item) => eligible(item));
+};
+
+const syntheticIds = <TItem>(
+  items: TItem[],
+  config: Pick<ReplicaPagingConfig<TItem>, 'getId' | 'isCursorable'>,
+): string[] | undefined => {
+  if (!config.isCursorable) return undefined;
+  const ids = items.filter((item) => !config.isCursorable!(item)).map(config.getId);
+  return ids.length ? ids : undefined;
 };
 
 const splitClientOnly = <TItem>(items: TItem[], ctx: ReplicaPagingContext<TItem>) => {
@@ -169,6 +223,7 @@ export const applyHeadPage = <TItem, TCursor>(
     const data = {
       anchorId: undefined,
       currentPage: 0,
+      headSyntheticIds: syntheticIds(fresh, config),
       items: ordered(headItems, config),
       nextCursor,
       pageSize: options.pageSize,
@@ -185,7 +240,10 @@ export const applyHeadPage = <TItem, TCursor>(
   };
 
   const extended = !!current && current.currentPage > 0 && !options.reset;
-  if (!extended || current.pageSize !== options.pageSize) return headOnly();
+  // A cursor walk keys pages by position, so a head page of another length
+  // (round-trimmed windows vary on every refresh) still joins by its anchor.
+  if (!extended || (config.mode === 'offset' && current.pageSize !== options.pageSize))
+    return headOnly();
 
   let rest: TItem[];
   let anchorId: string | undefined;
@@ -202,14 +260,17 @@ export const applyHeadPage = <TItem, TCursor>(
     const anchorIndex = current.anchorId
       ? currentServer.findIndex((item) => getId(item) === current.anchorId)
       : -1;
-    if (anchorIndex === -1 || !freshIds.has(current.anchorId!) || current.nextCursor === undefined)
-      return headOnly();
+    // Without a known next cursor the loaded pages can only be kept when the
+    // cursor is derivable from the rows themselves.
+    const cursorKnown = current.nextCursor !== undefined || !!config.deriveCursor;
+    if (anchorIndex === -1 || !freshIds.has(current.anchorId!) || !cursorKnown) return headOnly();
     const farSide =
       direction === 'forward'
         ? currentServer.slice(anchorIndex + 1)
         : currentServer.slice(0, anchorIndex);
-    rest = farSide.filter((item) => !freshIds.has(getId(item)));
-    const boundary = direction === 'forward' ? fresh.at(-1) : fresh[0];
+    const staleHead = new Set(current.headSyntheticIds);
+    rest = farSide.filter((item) => !freshIds.has(getId(item)) && !staleHead.has(getId(item)));
+    const boundary = farBoundary(fresh, config);
     anchorId = boundary ? getId(boundary) : current.anchorId;
   }
 
@@ -219,6 +280,7 @@ export const applyHeadPage = <TItem, TCursor>(
   const data = {
     anchorId: anchorId ?? current.anchorId,
     currentPage: current.currentPage,
+    headSyntheticIds: syntheticIds(fresh, config),
     items: ordered(join(headItems, rest, direction), config),
     nextCursor: current.nextCursor,
     pageSize: options.pageSize,
@@ -258,8 +320,7 @@ export const applyNextPage = <TItem, TCursor>(
   // The first extension pins the join anchor at the head page's boundary.
   let anchorId = current.anchorId;
   if (current.currentPage === 0) {
-    const server = splitClientOnly(current.items, ctx).server;
-    const boundary = direction === 'forward' ? server.at(-1) : server[0];
+    const boundary = farBoundary(splitClientOnly(current.items, ctx).server, config);
     anchorId = boundary ? getId(boundary) : undefined;
   }
 

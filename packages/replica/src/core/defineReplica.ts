@@ -41,6 +41,11 @@ export interface DefineReplicaOptions<TParams, TData, TFetched = TData> {
   name: string;
   paging?: ReplicaPagingConfig<any>;
   /**
+   * Entries that never touch storage (no hydrate, no persist) — e.g. scoped
+   * buckets whose rows must not land under an ordinary entry. Defaults to all.
+   */
+  persistKey?: (key: string) => boolean;
+  /**
    * Query identity beyond `key` (filters, sort, page size) — anything that
    * changes the rows without changing the key. Persisted rows are kept per
    * query, so a projection taken under other filters never hydrates; in memory
@@ -68,6 +73,7 @@ export const defineReplica = <TParams, TData, TFetched = TData>(
     name: options.name,
     namespace,
     paging: options.paging,
+    persistKey: options.persistKey ?? (() => true),
     persisted: !!storage,
     query: (params) => (options.query ? stableQueryKey(options.query(params)) : undefined),
     storageKey: (params) =>
