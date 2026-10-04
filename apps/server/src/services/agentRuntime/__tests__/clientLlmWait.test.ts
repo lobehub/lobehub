@@ -271,6 +271,30 @@ describe('waiting_for_client (U4c)', () => {
       expect(t.scheduleMessage).not.toHaveBeenCalled();
     });
 
+    it('fails the step instead of parking when it has no assistant row to reconnect on', async () => {
+      const t = createService();
+      t.setStored(runningState());
+      t.messageModel.findLatestAssistantByOperationId.mockResolvedValue(undefined);
+      t.mockStep({
+        events: [],
+        newState: unavailableErrorState('no_executor'),
+        nextContext: undefined,
+      });
+
+      await t.service.executeStep({
+        context: { phase: 'user_input' } as any,
+        operationId: OPERATION_ID,
+        stepIndex: 1,
+      });
+
+      expect(t.getStored().status).toBe('error');
+      expect(t.operationModel.recordCompletion).not.toHaveBeenCalledWith(
+        OPERATION_ID,
+        expect.objectContaining({ status: 'waiting_for_client' }),
+      );
+      expect(t.scheduleMessage).not.toHaveBeenCalled();
+    });
+
     it('keeps failing a step a client cannot fix (relay_unsupported)', async () => {
       const t = createService();
       t.setStored(runningState());
@@ -641,6 +665,33 @@ describe('waiting_for_client (U4c)', () => {
       expect(result.state).toEqual({ status: 'error' });
       expect(t.getStored()).toMatchObject({ clientLlmWait: undefined, status: 'error' });
       expect(t.dispatchHooks).toHaveBeenCalledWith(
+        OPERATION_ID,
+        expect.objectContaining({ status: 'error' }),
+        'error',
+      );
+    });
+
+    it('redelivers the lifecycle when a critical hook failed after the run ended', async () => {
+      const t = createService();
+      t.setStored(waitingState());
+      t.dispatchHooks.mockRejectedValueOnce(new Error('critical hook delivery failed'));
+      const expire = () =>
+        t.service.executeStep({
+          clientLlmWaitExpired: new Date(NOW).toISOString(),
+          operationId: OPERATION_ID,
+          stepIndex: 2,
+        });
+
+      await expect(expire()).rejects.toThrow('critical hook delivery failed');
+      expect(t.getStored().status).toBe('error');
+
+      // QStash redelivers; the durable row is terminal and Redis already says error.
+      t.operationModel.findById.mockResolvedValue({ status: 'error' });
+      const result = await expire();
+
+      expect(result.state).toEqual({ status: 'error' });
+      expect(t.dispatchHooks).toHaveBeenCalledTimes(2);
+      expect(t.dispatchHooks).toHaveBeenLastCalledWith(
         OPERATION_ID,
         expect.objectContaining({ status: 'error' }),
         'error',

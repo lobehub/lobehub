@@ -70,6 +70,7 @@ import {
   buildClientLlmWait,
   buildClientLlmWaitMessageError,
   buildClientLlmWaitResumeContext,
+  isClientLlmWaitExpiryOf,
 } from '@/server/modules/AgentRuntime/llmRelay/clientWait';
 import {
   createClientLlmExecutorUnavailableError,
@@ -3644,6 +3645,14 @@ export class AgentRuntimeService {
       }
     }
 
+    // A client picks a wait up by subscribing to the run's stream, which needs
+    // the run's topic and assistant row. Without them nothing could claim the
+    // wait, so fail the step as before instead of parking it.
+    if (!topicId || !assistantMessage) {
+      log('[%s] No stream anchor to park on, failing instead', operationId);
+      return;
+    }
+
     const wait = buildClientLlmWait({ assistantMessage, context, notAfter, provider, reason });
     const parkedState: AgentState = {
       ...errorState,
@@ -3833,6 +3842,16 @@ export class AgentRuntimeService {
    */
   private async expireClientLlmWait(operationId: string, parkedAt: string): Promise<boolean> {
     const state = await this.coordinator.loadAgentState(operationId);
+
+    // A redelivery after this expiry already ended the run but its lifecycle
+    // delivery threw (a critical hook asks QStash to retry): deliver it again,
+    // like a retried terminal step does.
+    if (state?.status === 'error' && isClientLlmWaitExpiryOf(state, parkedAt)) {
+      log('[%s] Redelivering the lifecycle of an expired client wait', operationId);
+      await this.finishClientLlmWaitExpiry(operationId, state);
+      return true;
+    }
+
     if (state?.status !== 'waiting_for_client' || state.clientLlmWait?.parkedAt !== parkedAt) {
       return false;
     }
@@ -3866,18 +3885,25 @@ export class AgentRuntimeService {
     // parked call's assistant row and finalizes the run like any failure.
     await this.coordinator.saveAgentState(operationId, finalState);
     await this.completionLifecycle.emitSignalEvents(operationId, finalState, 'error');
+    await this.finishClientLlmWaitExpiry(operationId, finalState);
+
+    log('[%s] waiting_for_client expired (parked at %s)', operationId, parkedAt);
+    return true;
+  }
+
+  /** Lifecycle delivery of an expired client wait; safe to repeat on redelivery. */
+  private async finishClientLlmWaitExpiry(operationId: string, finalState: AgentState) {
+    const provider = (finalState.error as { body?: { provider?: string } } | undefined)?.body
+      ?.provider;
     await this.completionLifecycle.dispatchHooks(operationId, finalState, 'error');
     await this.traceRecorder.finalize(operationId, {
       completionReason: 'error',
       error: {
-        message: `No LobeHub client picked up the ${provider} call in time`,
+        message: `No LobeHub client picked up the ${provider ?? 'local model'} call in time`,
         type: String(finalState.error?.type ?? 'ClientLlmExecutorUnavailable'),
       },
       state: finalState,
     });
-
-    log('[%s] waiting_for_client expired (parked at %s)', operationId, parkedAt);
-    return true;
   }
 
   /**

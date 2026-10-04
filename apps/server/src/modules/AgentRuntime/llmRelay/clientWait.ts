@@ -101,3 +101,13 @@ export const buildClientLlmWaitResumeContext = (
     phase: 'user_input',
   } as AgentRuntimeContext;
 };
+
+/**
+ * Whether `state` is the terminal error an expiry of the park at `parkedAt`
+ * wrote, so a redelivered expiry can finish that run's lifecycle again.
+ */
+export const isClientLlmWaitExpiryOf = (state: { error?: unknown }, parkedAt: string): boolean => {
+  const body = (state.error as { body?: { reason?: unknown; waitedSince?: unknown } } | undefined)
+    ?.body;
+  return body?.reason === 'wait_timeout' && body.waitedSince === parkedAt;
+};
