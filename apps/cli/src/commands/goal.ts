@@ -713,6 +713,63 @@ export function registerGoalCommand(program: Command) {
     });
 
   goal
+    .command('bind-conversation <id>')
+    .description(
+      'Attach an existing goal to the current conversation run: this agent supervises it from this conversation, as if it had been created here with create --conversation',
+    )
+    .option('--force', 'Move a goal that is already bound to another conversation or task')
+    .option(
+      '--goal-only',
+      'When the goal agent changes, leave existing tasks with their current agent',
+    )
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (
+        id: string,
+        options: { force?: boolean; goalOnly?: boolean; json?: boolean | string },
+      ) => {
+        const operationId = process.env.LOBEHUB_OPERATION_ID;
+        if (!operationId)
+          throw new Error(
+            'bind-conversation must run inside an agent conversation (LOBEHUB_OPERATION_ID)',
+          );
+        const client = await getTrpcClient();
+        const buildUrl = await resolveAppUrlBuilder(client);
+        const input = { force: options.force, goalOnly: options.goalOnly, id, operationId };
+        // Same split as `create --conversation`: the server takes the agent and
+        // conversation from the run; a local desktop run, whose operation lives
+        // only on the client, also names them for the server to check.
+        const result = hasOperationToken()
+          ? await client.goal.bindOperationConversation.mutate(input)
+          : await client.goal.bindConversation.mutate({
+              ...input,
+              agentId: process.env.LOBEHUB_AGENT_ID,
+              topicId: process.env.LOBEHUB_TOPIC_ID,
+            });
+        const turnToken = result.turnToken;
+        const url = buildUrl(`/goal/${encodeURIComponent(result.data!.goal.id)}`);
+        if (options.json !== undefined)
+          return outputJson(
+            {
+              ...result.data,
+              previousSubject: result.previousSubject,
+              reassignedTaskIds: result.reassignedTaskIds,
+              turnToken,
+              url,
+            },
+            options.json,
+          );
+        log.info(result.message);
+        console.log(`${pc.bold('goal')}: ${url}`);
+        if (turnToken) {
+          console.log(
+            `${pc.bold('planning turn')}: lh goal plan ${result.data!.goal.id} --token ${turnToken} --file <plan.json>`,
+          );
+        }
+      },
+    );
+
+  goal
     .command('restart <id>')
     .description('Start every unfinished task over (cancel stale runs, reset to backlog)')
     .option(

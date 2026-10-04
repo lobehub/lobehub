@@ -291,6 +291,27 @@ export class GoalGraphModel {
     });
   };
 
+  /**
+   * Record a change to the goal row itself that is not a status move, such as
+   * binding it to a conversation, so the goal's timeline says when and by whom
+   * its carrier changed.
+   */
+  recordGoalUpdate = async (
+    goalId: string,
+    input: { operationId?: string; reason: string },
+  ): Promise<void> => {
+    await this.db.insert(goalEvents).values({
+      actorId: this.actor?.id ?? this.userId,
+      actorType: this.actor?.type ?? 'user',
+      entityId: goalId,
+      entityType: 'goal',
+      eventType: 'updated',
+      goalId,
+      operationId: input.operationId,
+      reason: input.reason,
+    });
+  };
+
   attachWorkVersion = async (
     goalId: string,
     nodeId: string,

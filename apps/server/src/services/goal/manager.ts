@@ -4,6 +4,7 @@ import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 import { buildGoalManagerPrompt } from '@lobechat/prompts';
 import type {
   GoalGraphSnapshot,
+  GoalItem,
   GoalManagerState,
   GoalTickResult,
   TaskItem,
@@ -25,6 +26,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 
+import { TERMINAL_GOAL_STATUSES as finishedGoalStatuses } from './goalTraceRecorder';
 import { countDeviceOfflineRuns, DEFAULT_MANAGER_MAX_TURNS } from './recoveryPolicy';
 import { scheduleGoalAdvance } from './scheduler';
 import { recoveryEligibility } from './supervisor/policy';
@@ -291,6 +293,160 @@ export class GoalManagerService {
       };
       await this.save(db, goalId, next);
       return next;
+    });
+
+  /**
+   * Attach an existing goal to a conversation so it ends up in the state
+   * `/goal` in that conversation would have left it: the conversation's agent is
+   * the goal agent, the conversation is the goal's `topic` subject, the goal
+   * has a main Agent policy, and its management conversation
+   * (`managerState.topicId`) is this conversation, so later planning turns land
+   * there.
+   *
+   * The graph, Tasks, budgets and status are left alone. The binding run is
+   * adopted as a planning turn only when the goal is where a freshly created
+   * conversation goal would be — no turn in flight and no unfinished Task to
+   * preempt — because an adopted turn holds task coordination until it settles.
+   * Otherwise the next turn the coordinator starts is dispatched here.
+   *
+   * Refused while a planning turn is in flight elsewhere: `settleInFlight`
+   * finds that turn's run through `state.topicId`, so moving it would strand
+   * the turn and pause the goal.
+   */
+  bindConversation = async (
+    goalId: string,
+    run: { agentId: string; operationId: string; topicId: string },
+    options?: { force?: boolean },
+  ): Promise<{
+    goal: GoalItem;
+    previousAgentId: string | null;
+    previousSubject: { id: string | null; type: GoalItem['subjectType'] };
+    turnToken?: string;
+  }> =>
+    this.db.transaction(async (db) => {
+      const model = new GoalModel(db, this.userId, this.workspaceId);
+      const goal = await model.lockById(goalId);
+      if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      if (finishedGoalStatuses.has(goal.status))
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `Goal is ${goal.status}; a finished goal cannot be bound to a conversation`,
+        });
+
+      const previousSubject = { id: goal.subjectId, type: goal.subjectType };
+      const alreadyBound = goal.subjectType === 'topic' && goal.subjectId === run.topicId;
+      if (!alreadyBound && goal.subjectId && !options?.force)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `Goal is already bound to ${goal.subjectType} ${goal.subjectId}; pass force to move it to this conversation`,
+        });
+
+      const state = goal.config?.managerState;
+      if (
+        state &&
+        !state.consumed &&
+        (state.topicId !== run.topicId || goal.agentId !== run.agentId)
+      )
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `A planning turn of this goal is in flight in ${state.topicId}; wait for it to settle (or confirm its exit with lh goal resume ${goalId} --confirm-exit) before binding`,
+        });
+
+      // Same default as `createFromConversation`: a conversation goal always
+      // has a main Agent; an existing policy (turn cap, instruction) is kept.
+      await db
+        .update(goals)
+        .set({
+          agentId: run.agentId,
+          config: sql`COALESCE(${goals.config}, '{}'::jsonb) || jsonb_build_object('manager', COALESCE(${goals.config}->'manager', '{}'::jsonb))`,
+          subjectId: run.topicId,
+          subjectType: 'topic',
+          updatedAt: new Date(),
+        })
+        .where(eq(goals.id, goalId));
+
+      let turnToken: string | undefined;
+      // An in-flight turn reaching here is already this conversation's.
+      if (!state || state.consumed) {
+        const graph = await this.graph(db).getGraph(goalId);
+        if (!graph) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        const previousTopicIds = [
+          ...new Set([
+            ...(state?.previousTopicIds ?? []),
+            ...(state?.topicId && state.topicId !== run.topicId ? [state.topicId] : []),
+          ]),
+        ];
+        const maxTurns = graph.goal.config?.manager?.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS;
+        const quiet =
+          activeStatuses.has(goal.status) &&
+          !state?.readyForAcceptance &&
+          (state?.turns ?? 0) < maxTurns &&
+          !graph.decisions.some((d) => d.status === 'pending') &&
+          !graph.nodes.some((n) => n.kind === 'task' && !terminalNodes.has(n.status)) &&
+          !(await this.budgetBlocked(graph, db));
+        let next: GoalManagerState;
+        if (quiet) {
+          // What `adoptConversationTurn` records for a goal created here.
+          next = {
+            adopted: true,
+            adoptedOperationId: run.operationId,
+            operationId: run.operationId,
+            ...(previousTopicIds.length > 0 && { previousTopicIds }),
+            reviewSnapshot: (await this.reviews(graph, db)).hash,
+            snapshot: managerSnapshot(graph),
+            startedAt: new Date().toISOString(),
+            token: randomUUID(),
+            topicId: run.topicId,
+            turns: (state?.turns ?? 0) + 1,
+          };
+          turnToken = next.token;
+        } else {
+          // No turn now: re-point the settled receipt (or record a settled
+          // one with no turn spent) so the next turn the coordinator starts is
+          // dispatched into this conversation instead of a new topic.
+          next = state
+            ? {
+                ...state,
+                ...(previousTopicIds.length > 0 && { previousTopicIds }),
+                topicId: run.topicId,
+              }
+            : {
+                consumed: true,
+                snapshot: managerSnapshot(graph),
+                startedAt: new Date().toISOString(),
+                token: managerTurnToken(goalId),
+                topicId: run.topicId,
+                turns: 0,
+              };
+        }
+        await this.save(db, goalId, next);
+        if (quiet && goal.status === 'planning') await model.updateStatus(goalId, 'running');
+      }
+
+      if (!alreadyBound || goal.agentId !== run.agentId) {
+        const moved =
+          previousSubject.id && !alreadyBound
+            ? ` (moved from ${previousSubject.type} ${previousSubject.id})`
+            : '';
+        const agentChange =
+          goal.agentId !== run.agentId
+            ? `; goal agent ${goal.agentId ?? 'none'} → ${run.agentId}`
+            : '';
+        await new GoalGraphModel(db, this.userId, this.workspaceId, {
+          id: run.agentId,
+          type: 'agent',
+        }).recordGoalUpdate(goalId, {
+          operationId: run.operationId,
+          reason: `bound to conversation ${run.topicId}${moved}${agentChange}`,
+        });
+      }
+
+      return {
+        goal: (await model.findById(goalId))!,
+        previousAgentId: goal.agentId,
+        previousSubject,
+        turnToken,
+      };
     });
 
   private save = async (db: LobeChatDatabase, id: string, state: GoalManagerState) => {

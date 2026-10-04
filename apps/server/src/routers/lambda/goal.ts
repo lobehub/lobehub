@@ -147,6 +147,35 @@ const createGoalInput = conversationGoalInput.extend({
   createdByAgentId: z.string().optional(),
 });
 
+const bindConversationInput = idInput.extend({
+  /** Move a goal already bound to another conversation or task. */
+  force: z.boolean().optional(),
+  /** Keep unfinished Tasks with their current agent when the goal agent changes. */
+  goalOnly: z.boolean().optional(),
+  /** The conversation run doing the binding; its agent and topic are used. */
+  operationId: z.string().min(1),
+});
+
+const bindConversationResponse = ({
+  graph,
+  previousSubject,
+  reassignedTaskIds,
+  topicId,
+  turnToken,
+}: Awaited<ReturnType<GoalService['bindConversation']>>) => ({
+  data: graph,
+  message:
+    `Goal bound to conversation ${topicId}` +
+    (previousSubject.id && previousSubject.id !== topicId
+      ? ` (moved from ${previousSubject.type} ${previousSubject.id})`
+      : '') +
+    (reassignedTaskIds.length ? `; ${reassignedTaskIds.length} task(s) reassigned` : ''),
+  previousSubject,
+  reassignedTaskIds,
+  success: true,
+  turnToken,
+});
+
 function mapGoalError(error: unknown, operation: string): never {
   if (error instanceof TRPCError) throw error;
   console.error(`[goal:${operation}]`, error);
@@ -387,6 +416,99 @@ export const goalRouter = router({
         return { data: graph, message: 'Goal created', success: true, turnToken };
       } catch (error) {
         mapGoalError(error, 'create');
+      }
+    }),
+
+  /**
+   * Attach an existing goal to the conversation of a run authenticated by its
+   * operation token (device and gateway runs), as if the goal had been created
+   * there with `/goal`. Takes the same `goal:manage` capability as creating one.
+   */
+  bindOperationConversation: heteroAuthedProcedure
+    .use(serverDatabase)
+    .input(bindConversationInput)
+    .mutation(async ({ ctx, input: { id, operationId, force, goalOnly } }) => {
+      if (ctx.heteroAuthKind !== 'operation' || !ctx.heteroOperation) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'An operation-bound token is required',
+        });
+      }
+      let principal;
+      try {
+        principal = await resolveActiveHeteroOperationPrincipal({
+          capability: 'goal:manage',
+          claims: ctx.heteroOperation,
+          db: ctx.serverDB,
+          operationId,
+        });
+      } catch (error) {
+        if (!(error instanceof HeteroOperationPrincipalError)) throw error;
+        throw new TRPCError({
+          cause: error,
+          code:
+            error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
+          message: error.message,
+        });
+      }
+      try {
+        const goal = await new GoalModel(
+          ctx.serverDB,
+          principal.userId,
+          principal.workspaceId,
+        ).findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        // A token carries no workspace role, so only the goal's creator may
+        // move it — the strict side of the rule `setAgent` applies.
+        assertWorkspaceRowManageable(principal, goal.userId, 'goal');
+        const result = await new GoalService(
+          ctx.serverDB,
+          principal.userId,
+          principal.workspaceId,
+        ).bindConversation(id, operationId, { force, goalOnly });
+        await scheduleGoalAdvance({
+          goalId: id,
+          trigger: 'manual',
+          userId: principal.userId,
+          workspaceId: principal.workspaceId,
+        });
+        return bindConversationResponse(result);
+      } catch (error) {
+        mapGoalError(error, 'bindConversation');
+      }
+    }),
+
+  /**
+   * Attach an existing goal to the conversation run with this id (a desktop
+   * run signed in as the user). Agent and conversation come from the operation;
+   * a local run without a server row also names them, checked like `create`.
+   */
+  bindConversation: goalWriteProcedure
+    .input(
+      bindConversationInput.extend({
+        agentId: z.string().min(1).optional(),
+        topicId: z.string().min(1).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input: { id, operationId, agentId, topicId, force, goalOnly } }) => {
+      try {
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+        const result = await ctx.goalService.bindConversation(id, operationId, {
+          force,
+          goalOnly,
+          localRun: agentId && topicId ? { agentId, topicId } : undefined,
+        });
+        await scheduleGoalAdvance({
+          goalId: id,
+          trigger: 'manual',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return bindConversationResponse(result);
+      } catch (error) {
+        mapGoalError(error, 'bindConversation');
       }
     }),
 

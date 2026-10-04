@@ -10,6 +10,8 @@ const { mockClient } = vi.hoisted(() => ({
   mockClient: {
     goal: {
       wake: { mutate: vi.fn() },
+      bindConversation: { mutate: vi.fn() },
+      bindOperationConversation: { mutate: vi.fn() },
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
       submitPlan: { mutate: vi.fn() },
@@ -578,6 +580,111 @@ describe('goal create command', () => {
         config: expect.objectContaining({ supervision: { enabled: true } }),
       }),
     );
+  });
+});
+
+describe('goal bind-conversation command', () => {
+  const operationJwt = `header.${Buffer.from(JSON.stringify({ purpose: 'hetero-operation' })).toString('base64url')}.signature`;
+  const bound = (turnToken?: string) => ({
+    data: { goal: { id: 'goal-1', subjectId: 'tpc-1', subjectType: 'topic' } },
+    message: 'Goal bound to conversation tpc-1',
+    previousSubject: { id: null, type: 'standalone' },
+    reassignedTaskIds: [],
+    success: true,
+    turnToken,
+  });
+  const output = () =>
+    vi
+      .mocked(console.log)
+      .mock.calls.map(([value]) => String(value))
+      .join('\n');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(log, 'info').mockImplementation(() => {});
+    vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-1');
+    vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc-1');
+    vi.stubEnv('LOBEHUB_AGENT_ID', 'agent-1');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.mocked(console.log).mockRestore();
+  });
+
+  it('names the run, conversation and agent on a desktop run signed in as the user', async () => {
+    vi.stubEnv('LOBEHUB_JWT', undefined);
+    mockClient.goal.bindConversation.mutate.mockResolvedValue(bound());
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'bind-conversation', 'goal-1']);
+
+    expect(mockClient.goal.bindConversation.mutate).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      force: undefined,
+      goalOnly: undefined,
+      id: 'goal-1',
+      operationId: 'op-1',
+      topicId: 'tpc-1',
+    });
+    expect(mockClient.goal.bindOperationConversation.mutate).not.toHaveBeenCalled();
+    expect(output()).not.toContain('planning turn');
+  });
+
+  it('sends only the operation on a device run, never a client-named conversation', async () => {
+    vi.stubEnv('LOBEHUB_JWT', operationJwt);
+    mockClient.goal.bindOperationConversation.mutate.mockResolvedValue(bound('turn-1'));
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'goal',
+      'bind-conversation',
+      'goal-1',
+      '--force',
+      '--goal-only',
+    ]);
+
+    expect(mockClient.goal.bindOperationConversation.mutate).toHaveBeenCalledWith({
+      force: true,
+      goalOnly: true,
+      id: 'goal-1',
+      operationId: 'op-1',
+    });
+    expect(mockClient.goal.bindConversation.mutate).not.toHaveBeenCalled();
+    expect(output()).toContain('lh goal plan goal-1 --token turn-1 --file <plan.json>');
+    expect(output()).toContain('https://app.lobehub.com/goal/goal-1');
+  });
+
+  it('prints the turn token and subject in JSON output', async () => {
+    vi.stubEnv('LOBEHUB_JWT', undefined);
+    mockClient.goal.bindConversation.mutate.mockResolvedValue(bound('turn-1'));
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'goal',
+      'bind-conversation',
+      'goal-1',
+      '--json',
+    ]);
+
+    const json = JSON.parse(output());
+    expect(json).toMatchObject({
+      goal: { subjectId: 'tpc-1', subjectType: 'topic' },
+      previousSubject: { type: 'standalone' },
+      turnToken: 'turn-1',
+      url: 'https://app.lobehub.com/goal/goal-1',
+    });
+  });
+
+  it('refuses to run outside an agent conversation', async () => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', undefined);
+
+    await expect(
+      createProgram().parseAsync(['node', 'test', 'goal', 'bind-conversation', 'goal-1']),
+    ).rejects.toThrow(/LOBEHUB_OPERATION_ID/);
+    expect(mockClient.goal.bindConversation.mutate).not.toHaveBeenCalled();
+    expect(mockClient.goal.bindOperationConversation.mutate).not.toHaveBeenCalled();
   });
 });
 
