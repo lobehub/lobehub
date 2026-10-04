@@ -3,7 +3,7 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo } from 'react';
 
 import AsyncError from '@/components/AsyncError';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
@@ -26,11 +26,17 @@ import MessageItem from '../Messages';
 import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
 import { BackgroundRunHintContext } from '../Messages/Contexts/BackgroundRunHintContext';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
-import { dataSelectors, inputSelectors, useConversationStore } from '../store';
+import {
+  dataSelectors,
+  inputSelectors,
+  useConversationStore,
+  useConversationStoreApi,
+} from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
 import { RefreshError } from './components/RefreshError';
 import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
+import { useInitialRevalidation } from './hooks/useInitialRevalidation';
 import { useMessageRefreshError } from './hooks/useMessageRefreshError';
 import { resolveMessageListFeedback } from './resolveMessageListFeedback';
 import { buildChatRows } from './utils/chatRows';
@@ -146,11 +152,16 @@ const ChatList = memo<ChatListProps>(
       skipFetch: skipFetch || isCreatingTopic,
       syncInterventions: true,
     });
+    const messageListIdentity = getMessageListCacheIdentity(context);
     const refreshError = useMessageRefreshError({
       error: messagesSWR.error,
-      identity: getMessageListCacheIdentity(context),
+      identity: messageListIdentity,
       isValidating: messagesSWR.isValidating,
       mutate: messagesSWR.mutate,
+    });
+    const isInitialRevalidation = useInitialRevalidation({
+      identity: messageListIdentity,
+      isValidating: messagesSWR.isValidating,
     });
     const allDisplayMessages = useConversationStore(dataSelectors.displayMessages);
     const displayMessages = useMemo(
@@ -253,10 +264,18 @@ const ChatList = memo<ChatListProps>(
     const isNewConversation = !context.topicId;
     const feedback = resolveMessageListFeedback({
       error: refreshError.error,
+      isInitialRevalidation,
       isNewConversation,
       isStreaming,
       messagesInit,
     });
+
+    // The hint renders inside the latest assistant row, which subscribes to the
+    // store itself (virtua would not repaint a cached row from a prop change).
+    const storeApi = useConversationStoreApi();
+    useEffect(() => {
+      storeApi.setState({ isRefreshingMessages: feedback.showRefreshing });
+    }, [feedback.showRefreshing, storeApi]);
 
     // `messagesInit` is the settled-data signal: [] is a valid loaded result.
     // A first-load failure owns the whole surface, while a background failure

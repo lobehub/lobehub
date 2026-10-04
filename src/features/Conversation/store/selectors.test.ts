@@ -38,6 +38,7 @@ const createMockState = (overrides: Partial<State> = {}): State => ({
   displayMessages: [],
   hooks: {},
   isLoadingEarlierMessages: false,
+  isRefreshingMessages: false,
   messagesInit: false,
   operationState: DEFAULT_OPERATION_STATE,
   skipFetch: false,

@@ -101,6 +101,7 @@
   "chatList.expandMessage": "Expand Message",
   "chatList.longMessageDetail": "View Details",
   "chatList.refreshError": "Couldn't refresh messages",
+  "chatList.refreshing": "Fetching latest messages…",
   "chatMode.agent": "Agent",
   "chatMode.agentCap.env": "Runtime env",
   "chatMode.agentCap.files": "File access",

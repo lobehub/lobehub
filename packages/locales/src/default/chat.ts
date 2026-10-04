@@ -170,6 +170,7 @@ export default {
   'chatList.expandMessage': 'Expand Message',
   'chatList.longMessageDetail': 'View Details',
   'chatList.refreshError': "Couldn't refresh messages",
+  'chatList.refreshing': 'Fetching latest messages…',
   'clearCurrentMessages': 'Clear current conversation messages',
   'compressedHistory': 'Compressed History',
   'compression.cancel': 'Uncompress',

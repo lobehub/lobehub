@@ -88,3 +88,25 @@ describe('getRowLatestMessageWithoutTools', () => {
     });
   });
 });
+
+describe('isRefreshingAt', () => {
+  const messages = [
+    { id: 'u1', role: 'user' },
+    { id: 'a1', role: 'assistant' },
+    { id: 'u2', role: 'user' },
+    { id: 'g2', role: 'assistantGroup' },
+    { id: 'u3', role: 'user' },
+  ];
+  const refreshing = (isRefreshingMessages: boolean) =>
+    ({ displayMessages: messages, isRefreshingMessages }) as unknown as State;
+
+  it('marks only the latest assistant row while refreshing', () => {
+    expect(dataSelectors.isRefreshingAt('g2')(refreshing(true))).toBe(true);
+    expect(dataSelectors.isRefreshingAt('a1')(refreshing(true))).toBe(false);
+    expect(dataSelectors.isRefreshingAt('u3')(refreshing(true))).toBe(false);
+  });
+
+  it('marks nothing once the fetch settled', () => {
+    expect(dataSelectors.isRefreshingAt('g2')(refreshing(false))).toBe(false);
+  });
+});

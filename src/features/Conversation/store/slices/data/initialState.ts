@@ -27,6 +27,13 @@ export interface DataState {
   isLoadingEarlierMessages: boolean;
 
   /**
+   * Cached rows are on screen while the conversation's first server fetch is
+   * still in flight. Drives the "fetching latest messages" hint beside the
+   * latest assistant reply.
+   */
+  isRefreshingMessages: boolean;
+
+  /**
    * Whether messages have been initialized
    */
   messagesInit: boolean;
@@ -41,5 +48,6 @@ export const dataInitialState: DataState = {
   dbMessages: [],
   displayMessages: [],
   isLoadingEarlierMessages: false,
+  isRefreshingMessages: false,
   messagesInit: false,
 };
