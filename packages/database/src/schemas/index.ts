@@ -11,6 +11,7 @@ export * from './agentInboxMessage';
 export * from './agentIntervention';
 export * from './agentLabel';
 export * from './agentOperations';
+export * from './agentPhoneNumber';
 export * from './agentQuota';
 export * from './agentShare';
 export * from './agentSkill';

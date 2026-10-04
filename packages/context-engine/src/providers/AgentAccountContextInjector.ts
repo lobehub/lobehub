@@ -1,4 +1,4 @@
-import type { AgentAccountContext } from '@lobechat/types';
+import type { AgentAccountContext, AgentAccountContextItem } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseSystemRoleProvider } from '../base/BaseSystemRoleProvider';
@@ -24,6 +24,18 @@ const capabilityWords = (capabilities: {
   if (capabilities.sign) words.push('sign');
   if (capabilities.login) words.push('log in');
   return words.length > 0 ? words.join('/') : 'none';
+};
+
+/**
+ * Why an account that could send does not — stated so the model never offers
+ * to text from a number that cannot.
+ */
+const sendBlockedNote = (account: AgentAccountContextItem): string => {
+  if (account.capabilities.send) return '';
+  if (account.sendBlockedReason === 'messaging_campaign_not_approved') {
+    return ' (receive only: outbound SMS is not enabled until the number is on an approved 10DLC campaign — do not offer to text from it)';
+  }
+  return account.kind === 'phone' ? ' (receive only: do not offer to text from it)' : '';
 };
 
 export interface AgentAccountContextInjectorConfig {
@@ -78,7 +90,7 @@ export class AgentAccountContextInjector extends BaseSystemRoleProvider {
       for (const account of context.accounts) {
         const label = account.displayName ? ` (${account.displayName})` : '';
         parts.push(
-          `- ${account.kind} ${account.identifier}${label} — ${account.provider}, can ${capabilityWords(account.capabilities)}`,
+          `- ${account.kind} ${account.identifier}${label} — ${account.provider}, can ${capabilityWords(account.capabilities)}${sendBlockedNote(account)}`,
         );
       }
     }

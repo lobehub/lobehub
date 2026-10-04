@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 
+import { agentAccountVoiceWebhook } from './handlers/agentAccountVoiceWebhook';
 import { agentAccountWebhook } from './handlers/agentAccountWebhook';
+import { agentNumberMaintenance } from './handlers/agentNumberMaintenance';
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { execAgent } from './handlers/execAgent';
@@ -60,6 +62,14 @@ app.get(
   gatewayCron,
 );
 
+// GET /api/agent/accounts/numbers/maintenance — dedicated-number cron:
+// warm pool top-up, 10DLC refresh, monthly fees, quarantine release (Bearer CRON_SECRET)
+app.get(
+  '/accounts/numbers/maintenance',
+  bearerSecretAuth(() => process.env.CRON_SECRET),
+  agentNumberMaintenance,
+);
+
 // GET /api/agent/reap-operations — Vercel cron entry point (Bearer CRON_SECRET)
 app.get(
   '/reap-operations',
@@ -102,6 +112,8 @@ app.post('/webhooks/:platform/:appId?', platformWebhook);
 // for the agent's own accounts. Auth is the provider signature, verified inside
 // the handler, so this route carries no middleware (mirrors the bot webhook).
 app.post('/accounts/webhooks/:provider', agentAccountWebhook);
+// POST /api/agent/accounts/webhooks/:provider/voice — inbound calls to a dedicated number
+app.post('/accounts/webhooks/:provider/voice', agentAccountVoiceWebhook);
 
 // GET /api/agent/messenger/:platform/install — start per-tenant OAuth install
 app.get('/messenger/:platform/install', messengerInstall);

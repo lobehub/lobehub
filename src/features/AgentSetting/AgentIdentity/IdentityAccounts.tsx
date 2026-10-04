@@ -9,7 +9,7 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 import AccountCard from './AccountCard';
-import { IDENTITY_CHANNELS } from './const';
+import { IDENTITY_CHANNELS, resolveChannelProvider } from './const';
 import InlineError from './InlineError';
 import ProvisionCard from './ProvisionCard';
 import SectionHeader from './SectionHeader';
@@ -67,14 +67,16 @@ const IdentityAccounts = memo<IdentityAccountsProps>(({ agentId, disabled }) => 
 
         if (owned.length === 0) {
           // An offer this deployment cannot fulfil would only fail on click.
-          if (!providers.includes(channel.provider)) return null;
+          const provider = resolveChannelProvider(channel, providers);
+          if (!provider) return null;
 
           return (
             <ProvisionCard
               agentId={agentId}
               channel={channel}
               disabled={disabled}
-              key={channel.provider}
+              key={channel.kind}
+              provider={provider}
               onProvisioned={mutate}
             />
           );

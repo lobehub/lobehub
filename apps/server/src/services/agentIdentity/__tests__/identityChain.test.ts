@@ -14,8 +14,11 @@ import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { AgentAccountService } from '../index';
+import { createDedicatedNumberAccountProvider } from '../numbers/accountProvider';
+import { createTwilioSandbox } from '../numbers/sandbox/twilioSandbox';
+import { DedicatedNumberService } from '../numbers/service';
+import { createTwilioNumberProvider } from '../numbers/twilio';
 import { createAgentMailProvider } from '../providers/agentMail';
-import { createLinqProvider } from '../providers/linq';
 import { AgentAccountProviderRegistry } from '../registry';
 
 /**
@@ -34,6 +37,26 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'agent-identity-chain-user';
 const agentId = 'agent-identity-chain-agent';
 const WEBHOOK_SECRET = 'whsec_e2e_agent_mail';
+
+/** A dedicated-number provider on the in-process Twilio sandbox (no real carrier). */
+const dedicatedNumbers = () => {
+  const auth = { accountSid: 'AC00000000000000000000000000000e2e', authToken: 'e2e_token' };
+  const sandbox = createTwilioSandbox({ ...auth, inventory: { '555': ['+15550002222'] } });
+  const smsWebhookUrl = 'http://127.0.0.1/api/agent/accounts/webhooks/twilio';
+  return new DedicatedNumberService(
+    serverDB,
+    createTwilioNumberProvider({ ...auth, fetch: sandbox.fetch, smsWebhookUrl }),
+    {
+      country: 'US',
+      limits: { dailyOutboundSegments: 200, monthlySpendUsd: 20 },
+      poolAreaCodes: [],
+      poolSize: 0,
+      pricing: { carrierFeeUsd: 0.003, monthlyFeeUsd: 1.15, smsSegmentUsd: 0.0083 },
+      quarantineDays: 45,
+      smsWebhookUrl,
+    },
+  );
+};
 
 const mailDetail = (overrides: Partial<EmailMessageDetail> = {}): EmailMessageDetail => ({
   attachments: [],
@@ -146,7 +169,7 @@ beforeEach(async () => {
         webhookUrl: 'http://127.0.0.1/hook',
       }),
     )
-    .register(createLinqProvider({ apiKey: 'linq_e2e', fromNumbers: ['+15550002222'] }));
+    .register(createDedicatedNumberAccountProvider(dedicatedNumbers()));
 
   service = new AgentAccountService(serverDB, userId, { gateKeeper, registry });
 });
@@ -176,12 +199,17 @@ describe('Agent identity chain — end to end over loopback', () => {
       kind: 'mail',
     });
 
-    // 2. Provision a phone account (Linq number comes from deployment config).
-    const phone = await service.provision({ agentId, provider: 'linq' });
+    // 2. Provision a dedicated phone number (bought from the carrier sandbox).
+    const phone = await service.provision({ agentId, provider: 'twilio' });
     transcript.push(
-      `2. provision(linq) -> ${phone.identifier} kind=${phone.kind} capabilities=${JSON.stringify(phone.capabilities)}`,
+      `2. provision(twilio) -> ${phone.identifier} kind=${phone.kind} capabilities=${JSON.stringify(phone.capabilities)}`,
     );
-    expect(phone).toMatchObject({ identifier: '+15550002222', kind: 'phone', provider: 'linq' });
+    expect(phone).toMatchObject({
+      capabilities: { receive: true, send: false },
+      identifier: '+15550002222',
+      kind: 'phone',
+      provider: 'twilio',
+    });
 
     // 3. Reads never carry the ciphertext; the credential is stated, not shown.
     const listed = await service.list({ agentId });

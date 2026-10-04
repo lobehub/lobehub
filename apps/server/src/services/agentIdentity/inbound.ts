@@ -51,6 +51,8 @@ export type AgentInboundResult =
       wake: AgentInboundWakeResult;
     }
   | { accountId?: string; outcome: 'ignored'; status: 200 }
+  /** A number in quarantine: acknowledged (and maybe auto-answered), never routed to an agent. */
+  | { detail: string; outcome: 'quarantined'; status: 200 }
   | { accountId?: string; outcome: 'rejected'; status: 401 }
   | { outcome: 'unknown-account' | 'unroutable'; status: 404 };
 
@@ -124,6 +126,9 @@ export class AgentInboundService {
       }
       case 'ignored': {
         return { accountId: decision.accountId, outcome: 'ignored', status: 200 };
+      }
+      case 'quarantined': {
+        return { detail: decision.detail, outcome: 'quarantined', status: 200 };
       }
       case 'unknown-account':
       case 'unroutable': {
@@ -243,7 +248,7 @@ export const createAgentInboundService = async (
 ): Promise<AgentInboundService> => {
   const accountService = new AgentAccountService(db, '', {
     gateKeeper: await KeyVaultsGateKeeper.initWithEnvKey(),
-    registry: createDefaultAgentAccountRegistry(),
+    registry: createDefaultAgentAccountRegistry(db),
   });
 
   return new AgentInboundService(db, {

@@ -122,7 +122,8 @@ export const getServerGlobalConfig = async () => {
   const config: GlobalServerConfig = {
     agentIdentityProviders: [
       agentIdentityEnv.ENABLED_AGENT_MAIL ? 'agent-mail' : null,
-      agentIdentityEnv.ENABLED_LINQ ? 'linq' : null,
+      agentIdentityEnv.ENABLED_TWILIO ? 'twilio' : null,
+      agentIdentityEnv.ENABLED_TELNYX ? 'telnyx' : null,
     ].filter((provider): provider is string => !!provider),
     aiProvider: await genServerAiProvidersConfig(aiProviderSpecificConfig),
     defaultAgent: {

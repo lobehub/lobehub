@@ -1,13 +1,14 @@
 'use client';
 
 import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Tag, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Tag, Text, Tooltip } from '@lobehub/ui/base-ui';
 import { Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AgentAccountView } from '@/services/agentAccount';
 
+import { describeAccountCapability } from './capability';
 import type { IdentityChannel } from './const';
 import { identityStyles } from './styles';
 import { useAccountActions } from './useIdentityActions';
@@ -40,6 +41,8 @@ interface AccountCardProps {
 const AccountCard = memo<AccountCardProps>(({ account, channel, agentId, disabled, onChanged }) => {
   const { t } = useTranslation('setting');
   const { release } = useAccountActions({ agentId, onChanged });
+  // Say *why* it cannot send — a pending carrier campaign is not a broken number.
+  const capability = describeAccountCapability(account);
 
   return (
     <Flexbox horizontal align={'center'} className={identityStyles.card} gap={12}>
@@ -50,9 +53,22 @@ const AccountCard = memo<AccountCardProps>(({ account, channel, agentId, disable
             {account.identifier}
           </Text>
           <Tag>{t(STATUS_KEYS[account.status])}</Tag>
+          {capability.labels.map(({ key, tone }) =>
+            key === 'identity.capability.sendBlocked' && capability.sendBlockedKey ? (
+              <Tooltip key={key} title={t(capability.sendBlockedKey)}>
+                <Tag color={tone}>{t(key)}</Tag>
+              </Tooltip>
+            ) : (
+              <Tag color={tone} key={key}>
+                {t(key)}
+              </Tag>
+            ),
+          )}
         </Flexbox>
         <Text fontSize={12} type={'secondary'}>
-          {account.displayName || t(channel.titleKey)}
+          {capability.sendBlockedKey
+            ? t(capability.sendBlockedKey)
+            : account.displayName || t(channel.titleKey)}
         </Text>
       </Flexbox>
       <CopyButton content={account.identifier} title={t('identity.copy')} />

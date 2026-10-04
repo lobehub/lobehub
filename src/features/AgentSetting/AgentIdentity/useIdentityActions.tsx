@@ -41,7 +41,7 @@ export const useAccountActions = ({ agentId, onChanged }: UseAccountActionsParam
   const { t } = useTranslation('setting');
 
   const provision = useCallback(
-    async (channel: IdentityChannel, prefix: string) => {
+    async (channel: IdentityChannel, provider: string, prefix: string) => {
       // A provider that cannot honour a prefix must not be sent a meaningless
       // one, so the preference is only forwarded down a prefixable channel.
       const requested = channel.prefixable ? prefix.trim() : '';
@@ -50,7 +50,7 @@ export const useAccountActions = ({ agentId, onChanged }: UseAccountActionsParam
         const account = await agentAccountService.provision({
           agentId,
           prefix: requested || undefined,
-          provider: channel.provider,
+          provider,
         });
         toast.success(t('identity.provision.success', { identifier: account.identifier }));
         await onChanged();

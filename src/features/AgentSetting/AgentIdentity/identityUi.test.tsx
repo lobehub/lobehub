@@ -48,9 +48,16 @@ describe('AccountCard', () => {
     fresh(
       <AccountCard
         disabled
-        account={{ id: 'acc_1', identifier: 'toby@lobe.id', status: 'active' } as any}
         agentId={'agt_1'}
         channel={mailChannel}
+        account={
+          {
+            capabilities: { receive: true, send: true },
+            id: 'acc_1',
+            identifier: 'toby@lobe.id',
+            status: 'active',
+          } as any
+        }
         onChanged={vi.fn()}
       />,
     );
@@ -81,9 +88,7 @@ describe('InboxSection', () => {
 
     fresh(<InboxSection agentId={'agt_1'} />);
 
-    await waitFor(() =>
-      expect(service.getInboxUnreadCount).toHaveBeenCalledWith('agt_1'),
-    );
+    await waitFor(() => expect(service.getInboxUnreadCount).toHaveBeenCalledWith('agt_1'));
     expect(await screen.findByText('identity.inbox.unread')).toBeInTheDocument();
   });
 

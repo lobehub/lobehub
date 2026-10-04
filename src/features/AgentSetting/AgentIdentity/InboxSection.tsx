@@ -96,12 +96,17 @@ const InboxSection = memo<InboxSectionProps>(({ agentId }) => {
       <Flexbox gap={8}>
         {messages.map((message) => {
           const unread = !message.readAt;
+          // A text message has no subject line; its body is the headline.
+          const headline =
+            message.subject ||
+            (message.kind === 'phone' ? message.text : '') ||
+            t('identity.inbox.noSubject');
 
           return (
             <Flexbox
               horizontal
               align={'center'}
-              aria-label={`${message.from} — ${message.subject || t('identity.inbox.noSubject')}`}
+              aria-label={`${message.from} — ${headline}`}
               className={identityStyles.inboxRow}
               gap={10}
               key={message.id}
@@ -130,7 +135,7 @@ const InboxSection = memo<InboxSectionProps>(({ agentId }) => {
                   </Text>
                 </Flexbox>
                 <Text ellipsis className={identityStyles.subject}>
-                  {message.subject || t('identity.inbox.noSubject')}
+                  {headline}
                 </Text>
               </Flexbox>
             </Flexbox>

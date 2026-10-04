@@ -40,7 +40,7 @@ export class AgentAccountRestService extends BaseService {
 
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
-    this.registry = createDefaultAgentAccountRegistry();
+    this.registry = createDefaultAgentAccountRegistry(db);
   }
 
   /**

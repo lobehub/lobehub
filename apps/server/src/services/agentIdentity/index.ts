@@ -63,6 +63,7 @@ export interface RevokeAgentAccountOptions {
 /** What `handleInbound` decided, so the webhook route can pick a status code. */
 export type AgentAccountInboundOutcome =
   | { accountId: string; message: AgentAccountInboundMessage; outcome: 'delivered' }
+  | { detail: string; outcome: 'quarantined' }
   | { accountId?: string; outcome: 'ignored' | 'rejected' | 'unknown-account' | 'unroutable' };
 
 export interface AgentAccountServiceOptions {
@@ -161,10 +162,13 @@ export class AgentAccountService {
       workspaceId: this.options.workspaceId,
     });
 
+    let created: AgentAccountView;
     try {
-      return await this.model.create({
+      created = await this.model.create({
         agentId: params.agentId,
-        capabilities: provider.capabilities,
+        // A provider may narrow its declaration per account (a number that can
+        // receive now but not send until its campaign is approved).
+        capabilities: issued.capabilities ?? provider.capabilities,
         credential: issued.credential,
         credentialHint: issued.credentialHint,
         displayName: issued.displayName ?? params.displayName ?? null,
@@ -197,6 +201,9 @@ export class AgentAccountService {
 
       throw this.toConflictError(error, provider.provider, issued.identifier) ?? error;
     }
+
+    await provider.onProvisioned?.(this.toRef(created));
+    return created;
   };
 
   update = (id: string, patch: AgentAccountPatch): Promise<string | undefined> =>
@@ -239,6 +246,17 @@ export class AgentAccountService {
     message: AgentAccountOutboundMessage,
   ): Promise<{ providerMessageId: string }> => {
     const account = await this.requireActiveAccount(accountId);
+    // The row states what the account can do; a receive-only number must not
+    // be able to text just because its provider has a send call.
+    if (!account.capabilities.send) {
+      throw new AgentAccountError(
+        'send_not_enabled',
+        `${account.identifier} can receive but cannot send yet` +
+          (account.metadata?.sendBlockedReason === 'messaging_campaign_not_approved'
+            ? ': it is not on an approved 10DLC campaign.'
+            : '.'),
+      );
+    }
     const provider = this.options.registry.get(account.provider);
     const credential = await this.model.getCredential(accountId);
 
@@ -270,7 +288,14 @@ export class AgentAccountService {
       identifier,
       this.options.gateKeeper,
     );
-    if (!resolved) return { outcome: 'unknown-account' };
+    if (!resolved) {
+      // A handle the provider still holds without a live account (a number in
+      // quarantine) is answered by the provider itself, never by an agent.
+      const unrouted = await provider.handleUnroutedInbound?.(request);
+      if (unrouted?.outcome === 'quarantined') return unrouted;
+      if (unrouted?.outcome === 'rejected') return { outcome: 'rejected' };
+      return { outcome: 'unknown-account' };
+    }
 
     const ref = this.toRef(resolved.view, resolved.credential);
 

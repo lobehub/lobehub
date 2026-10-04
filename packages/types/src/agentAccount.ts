@@ -10,6 +10,8 @@
  * change with no migration.
  */
 
+import type { AgentAccountSendBlockedReason } from './agentPhoneNumber';
+
 /** The sorts of identity an agent can own. */
 export const AGENT_ACCOUNT_KINDS = ['mail', 'phone', 'wallet', 'service'] as const;
 export type AgentAccountKind = (typeof AGENT_ACCOUNT_KINDS)[number];
@@ -137,6 +139,12 @@ export interface AgentAccountContextItem {
   identifier: string;
   kind: AgentAccountKind;
   provider: string;
+  /**
+   * Set when the account declares it cannot send *yet* and there is a reason a
+   * person can act on — a dedicated number waiting for its 10DLC campaign. The
+   * model is told so it never offers to text from a receive-only number.
+   */
+  sendBlockedReason?: AgentAccountSendBlockedReason;
   status: AgentAccountStatus;
 }
 
@@ -217,6 +225,12 @@ export interface AgentAccountProvisionInput {
  * KeyVaults gatekeeper and never hands it back to a read.
  */
 export interface AgentAccountProvisionResult {
+  /**
+   * What *this* account can do, when it is narrower than the provider's
+   * declaration — a dedicated number that can receive at once but cannot send
+   * until its 10DLC campaign is approved. Omitted = the provider's declaration.
+   */
+  capabilities?: AgentAccountCapabilities;
   credential?: Record<string, string>;
   /** Non-secret display facts for the stored credential. */
   credentialHint?: AgentAccountCredentialHint;
@@ -249,6 +263,15 @@ export interface AgentAccountInboundEvent {
   payload: unknown;
 }
 
+/** What a provider did with a delivery no live account routes on. */
+export type AgentAccountUnroutedOutcome =
+  /** A handle the provider still holds out of service; `detail` says what it answered. */
+  | { detail: string; outcome: 'quarantined' }
+  /** Forged. */
+  | { outcome: 'rejected' }
+  /** Not the provider's to answer — the delivery stays unknown. */
+  | { outcome: 'not-handled' };
+
 /**
  * The narrow contract a transport implements so an agent can own an address
  * with it.
@@ -261,13 +284,29 @@ export interface AgentAccountInboundEvent {
 export interface AgentAccountProvider<K extends AgentAccountKind = AgentAccountKind> {
   /** What the account can do — declared here and persisted onto the account. */
   readonly capabilities: AgentAccountCapabilities;
+  /**
+   * A delivery for a handle no live account routes on. A provider that keeps
+   * holding a handle after its account is gone — a dedicated number in
+   * quarantine — answers it here (verified, never routed to an agent).
+   * Omitted = such a delivery is simply unknown.
+   */
+  handleUnroutedInbound?: (
+    request: AgentAccountInboundRequest,
+  ) => Promise<AgentAccountUnroutedOutcome>;
   /** The account kind this provider issues. */
   readonly kind: K;
+
   /** Normalize a verified delivery into the transport-neutral message. */
   normalizeInbound: (
     event: AgentAccountInboundEvent,
     ref: AgentAccountRef,
   ) => Promise<AgentAccountInboundMessage | null>;
+
+  /**
+   * Called once the account row exists, with its id — for a provider whose own
+   * records point back at the account (a number's inventory row).
+   */
+  onProvisioned?: (ref: AgentAccountRef) => Promise<void>;
 
   /** Stable provider id (`agent-mail`, `linq`, …); the account's `provider` value. */
   readonly provider: string;

@@ -307,6 +307,19 @@ export default {
   'agentTab.prompt': 'Agent Profile',
   'agentTab.selfIteration': 'Self-Iteration',
   'agentTab.tts': 'Voice Service',
+  'identity.capability.receive': 'Can receive',
+  'identity.capability.send': 'Can send',
+  'identity.capability.sendBlocked': 'Sending not enabled',
+  'identity.capability.sendBlocked.campaign':
+    'Receives SMS, codes and voicemail now. Sending SMS opens once the carrier approves the number’s 10DLC registration.',
+  'identity.capability.sendBlocked.generic': 'This address can receive but not send.',
+  'identity.phone.areaCode.hint':
+    'Optional 3-digit US area code. Leave empty for the fastest available number.',
+  'identity.phone.areaCode.placeholder': 'Area code (optional), e.g. 415',
+  'identity.phone.desc':
+    'A dedicated US number for this agent alone. It receives texts, verification codes and voicemail immediately.',
+  'identity.phone.note':
+    'Paid: the number’s monthly fee and per-message charges are billed to this agent. A released number stays out of service for at least 30 days before anyone else can get it.',
   'identity.copy': 'Copy address',
   'identity.desc':
     'Addresses this agent owns and can be reached at. Opening one is an explicit action; releasing it hands the address back.',
@@ -327,7 +340,6 @@ export default {
   'identity.mail.desc': 'A @lobe.id inbox the agent can receive mail at and reply from.',
   'identity.mail.title': 'Email',
   'identity.noAgent': 'Select an agent to see the addresses it owns.',
-  'identity.phone.desc': 'A phone number people can text the agent at.',
   'identity.phone.title': 'Phone',
   'identity.prefix.hint': 'Optional. Letters, numbers, dot, underscore and dash.',
   'identity.prefix.placeholder': 'Preferred prefix (optional)',

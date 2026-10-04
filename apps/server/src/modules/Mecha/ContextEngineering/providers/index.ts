@@ -217,6 +217,10 @@ export const createServerContextFactProviders = ({
           identifier: account.identifier,
           kind: account.kind,
           provider: account.provider,
+          sendBlockedReason:
+            account.metadata?.sendBlockedReason === 'messaging_campaign_not_approved'
+              ? ('messaging_campaign_not_approved' as const)
+              : undefined,
           status: account.status,
         })),
         inbox: summary,

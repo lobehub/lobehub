@@ -5,6 +5,7 @@ export * from './agentGroup';
 export * from './agentHook';
 export * from './agentHookResponse';
 export * from './agentOperation';
+export * from './agentPhoneNumber';
 export * from './aiChat';
 export * from './aiProvider';
 export * from './apiKey';

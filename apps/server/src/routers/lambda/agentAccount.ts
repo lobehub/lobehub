@@ -36,7 +36,7 @@ const agentAccountProcedure = wsCompatProcedure.use(serverDatabase).use(async (o
     ctx: {
       agentAccountService: new AgentAccountService(opts.ctx.serverDB, opts.ctx.userId, {
         gateKeeper,
-        registry: createDefaultAgentAccountRegistry(),
+        registry: createDefaultAgentAccountRegistry(opts.ctx.serverDB),
         workspaceId,
       }),
       // The inbox is scoped exactly like the accounts: by the caller's

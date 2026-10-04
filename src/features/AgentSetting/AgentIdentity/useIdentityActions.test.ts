@@ -46,7 +46,7 @@ describe('useAccountActions', () => {
     const onChanged = vi.fn();
     const { result } = renderHook(() => useAccountActions({ agentId: 'agt_1', onChanged }));
 
-    await result.current.provision(mailChannel, '  support  ');
+    await result.current.provision(mailChannel, 'agent-mail', '  support  ');
 
     expect(service.provision).toHaveBeenCalledWith({
       agentId: 'agt_1',
@@ -57,17 +57,31 @@ describe('useAccountActions', () => {
     expect(ui.toast.success).toHaveBeenCalledTimes(1);
   });
 
+  it('opens a phone number through the resolved carrier, with the area code as the preference', async () => {
+    const { result } = renderHook(() =>
+      useAccountActions({ agentId: 'agt_1', onChanged: vi.fn() }),
+    );
+
+    await result.current.provision(phoneChannel, 'telnyx', ' 415 ');
+
+    expect(service.provision).toHaveBeenCalledWith({
+      agentId: 'agt_1',
+      prefix: '415',
+      provider: 'telnyx',
+    });
+  });
+
   it('never sends a prefix down a channel that cannot honour one', async () => {
     const { result } = renderHook(() =>
       useAccountActions({ agentId: 'agt_1', onChanged: vi.fn() }),
     );
 
-    await result.current.provision(phoneChannel, 'support');
+    await result.current.provision({ ...mailChannel, prefixable: false }, 'agent-mail', 'support');
 
     expect(service.provision).toHaveBeenCalledWith({
       agentId: 'agt_1',
       prefix: undefined,
-      provider: 'linq',
+      provider: 'agent-mail',
     });
   });
 
@@ -76,7 +90,9 @@ describe('useAccountActions', () => {
     const onChanged = vi.fn();
     const { result } = renderHook(() => useAccountActions({ agentId: 'agt_1', onChanged }));
 
-    await expect(result.current.provision(mailChannel, 'support')).resolves.toBeUndefined();
+    await expect(
+      result.current.provision(mailChannel, 'agent-mail', 'support'),
+    ).resolves.toBeUndefined();
 
     expect(onChanged).not.toHaveBeenCalled();
     expect(ui.toast.error).toHaveBeenCalledTimes(1);

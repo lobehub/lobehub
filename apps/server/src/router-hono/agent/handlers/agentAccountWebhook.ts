@@ -6,12 +6,14 @@ import { createAgentInboundService } from '@/server/services/agentIdentity/inbou
 
 const log = debug('lobe-server:agent:account-webhook');
 
+const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+
 /**
  * Inbound webhook for the agent's own accounts.
  *
  * `POST /api/agent/accounts/webhooks/:provider`
  *
- * Runs BEFORE any authorization middleware: the provider (Agent Mail, Linq) is
+ * Runs BEFORE any authorization middleware: the provider (Agent Mail, Twilio, Telnyx) is
  * an untrusted caller and the only thing it can prove is its signature, which
  * the account service verifies against the credential of the account the
  * delivery routes to. Nothing is trusted until `handleInbound` says
@@ -40,6 +42,24 @@ export async function agentAccountWebhook(c: Context): Promise<Response> {
     const serverDB = await getServerDB();
     const service = await createAgentInboundService(serverDB);
     const result = await service.handle(provider, { body, headers });
+
+    // Twilio reads the webhook response as TwiML; anything else is logged as an
+    // error on the carrier side. An empty <Response/> acknowledges without
+    // replying, and the outcome travels in headers for operators.
+    if (provider === 'twilio') {
+      const wake = result.outcome === 'delivered' ? result.wake.reason : undefined;
+      log('twilio outcome=%s wake=%s', result.outcome, wake);
+      return c.body(EMPTY_TWIML, result.status, {
+        'Content-Type': 'text/xml',
+        'X-Lobehub-Outcome':
+          result.outcome === 'quarantined' ? `quarantined:${result.detail}` : result.outcome,
+        ...(wake ? { 'X-Lobehub-Wake': wake } : {}),
+      });
+    }
+
+    if (result.outcome === 'quarantined') {
+      return c.json({ detail: result.detail, outcome: result.outcome, success: true }, 200);
+    }
 
     if (result.outcome === 'delivered') {
       log(

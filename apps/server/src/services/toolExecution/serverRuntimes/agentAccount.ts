@@ -136,7 +136,10 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         if (args?.accountId) {
           const target = findOwned(await accounts(), args.accountId);
           if (!target) {
-            return { content: `No account ${args.accountId} is owned by this agent.`, success: false };
+            return {
+              content: `No account ${args.accountId} is owned by this agent.`,
+              success: false,
+            };
           }
           accountId = target.id;
         }
@@ -204,6 +207,18 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
           };
         }
 
+        // Say why up front instead of letting the carrier call fail: a dedicated
+        // number receives at once but only sends once its 10DLC campaign is approved.
+        if (!target.capabilities.send) {
+          return {
+            content:
+              target.metadata?.sendBlockedReason === 'messaging_campaign_not_approved'
+                ? `${target.identifier} can receive but cannot send SMS yet: it is not on an approved 10DLC campaign. Tell the user instead of retrying.`
+                : `${target.identifier} is receive-only and cannot send.`,
+            success: false,
+          };
+        }
+
         let replyTo: AgentInboxMessageItem | undefined;
         if (args.threadKey) {
           const checked = await checkThreadReply(target.id, {
@@ -217,7 +232,7 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         try {
           const service = new AgentAccountService(db, userId, {
             gateKeeper: await KeyVaultsGateKeeper.initWithEnvKey(),
-            registry: createDefaultAgentAccountRegistry(),
+            registry: createDefaultAgentAccountRegistry(db),
             workspaceId,
           });
 

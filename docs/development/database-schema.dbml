@@ -193,6 +193,7 @@ table agent_accounts {
   indexes {
     (agent_id, kind, provider, identifier) [name: 'agent_accounts_agent_kind_provider_identifier_unique', unique]
     (provider, identifier) [name: 'agent_accounts_provider_identifier_unique', unique]
+    identifier [name: 'agent_accounts_phone_identifier_live_unique', unique]
     agent_id [name: 'agent_accounts_agent_id_idx']
     user_id [name: 'agent_accounts_user_id_idx']
     workspace_id [name: 'agent_accounts_workspace_id_idx']
@@ -546,6 +547,60 @@ table agent_inbox_messages {
     (agent_id, received_at) [name: 'agent_inbox_messages_agent_received_at_idx']
     (account_id, thread_key) [name: 'agent_inbox_messages_account_thread_idx']
     user_id [name: 'agent_inbox_messages_user_id_idx']
+  }
+}
+
+table agent_number_charges {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  number_id uuid
+  agent_id text
+  user_id text [not null]
+  workspace_id text
+  type text [not null]
+  quantity integer [not null, default: 1]
+  amount_usd "numeric(20, 6)" [not null]
+  external_id text [not null]
+  occurred_at "timestamp with time zone" [not null, default: `now()`]
+  metadata jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    external_id [name: 'agent_number_charges_external_id_unique', unique]
+    (agent_id, occurred_at) [name: 'agent_number_charges_agent_occurred_idx']
+    user_id [name: 'agent_number_charges_user_id_idx']
+  }
+}
+
+table agent_phone_numbers {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  provider text [not null]
+  phone_number text [not null]
+  provider_number_id text [not null]
+  country text [not null, default: 'US']
+  area_code text
+  status text [not null, default: 'pooled']
+  agent_id text
+  user_id text
+  workspace_id text
+  account_id uuid
+  campaign_status text [not null, default: 'none']
+  campaign_id text
+  monthly_cost_usd "numeric(20, 6)"
+  purchased_at "timestamp with time zone" [not null, default: `now()`]
+  assigned_at "timestamp with time zone"
+  quarantined_at "timestamp with time zone"
+  quarantine_until "timestamp with time zone"
+  released_at "timestamp with time zone"
+  metadata jsonb [default: `{}`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    phone_number [name: 'agent_phone_numbers_phone_number_live_unique', unique]
+    (provider, status, area_code) [name: 'agent_phone_numbers_status_area_code_idx']
+    agent_id [name: 'agent_phone_numbers_agent_id_idx']
+    quarantine_until [name: 'agent_phone_numbers_quarantine_until_idx']
   }
 }
 

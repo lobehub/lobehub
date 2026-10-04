@@ -107,6 +107,13 @@ export const agentAccounts = pgTable(
     uniqueIndex('agent_accounts_provider_identifier_unique')
       .on(t.provider, t.identifier)
       .where(sql`${t.status} <> 'revoked'`),
+    // A phone number is one line on the network whichever carrier holds it, so
+    // it routes to at most one live account across providers (a number ported
+    // from Twilio to Telnyx must not stay bound to two agents). Revoked rows
+    // fall out for the same reason as above.
+    uniqueIndex('agent_accounts_phone_identifier_live_unique')
+      .on(t.identifier)
+      .where(sql`${t.kind} = 'phone' AND ${t.status} <> 'revoked'`),
     index('agent_accounts_agent_id_idx').on(t.agentId),
     index('agent_accounts_user_id_idx').on(t.userId),
     index('agent_accounts_workspace_id_idx').on(t.workspaceId),
