@@ -99,15 +99,26 @@ vi.mock('@/features/AgentBreadcrumb/useAgentRoutePath', () => ({
 vi.mock('@/features/WideScreenContainer', () => ({
   default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
-vi.mock('./GoalChat', () => ({ default: () => <div data-testid="goal-chat" /> }));
+vi.mock('./GoalChat', () => ({
+  default: ({ agentId }: { agentId: string }) => (
+    <div data-agent-id={agentId} data-testid="goal-chat" />
+  ),
+}));
 vi.mock('./GoalDetailActions', () => ({ default: () => null }));
 vi.mock('./GoalHeaderMetrics', () => ({ default: () => null }));
 vi.mock('./GoalRequirement', () => ({ default: () => null }));
 vi.mock('./NorthStarMetrics', () => ({ default: () => null }));
 vi.mock('./ProcessControl', () => ({ default: () => null }));
 vi.mock('./GoalSupervision', () => ({
-  GoalSupervision: ({ topicId }: { topicId: string }) => (
-    <div data-testid="goal-supervision">{topicId}</div>
+  GoalSupervision: ({ onOpenChat, topicId }: { onOpenChat?: () => void; topicId: string }) => (
+    <div data-testid="goal-supervision">
+      {topicId}
+      {onOpenChat && (
+        <button data-testid="goal-supervision-open-chat" onClick={onOpenChat}>
+          open chat
+        </button>
+      )}
+    </div>
   ),
 }));
 
@@ -136,16 +147,33 @@ describe('GoalDetailPage', () => {
     expect(screen.getByTestId('goal-right-panel')).toHaveAttribute('data-expand', 'true');
   });
 
-  // A goal without a supervision record has nothing to show there, so the same
-  // entry opens the side conversation instead of an empty panel — and says so.
-  it('falls back to the goal conversation, and labels it, without a supervision record', () => {
+  // The fallback has to resolve on the agent-less route too: there the route
+  // names no agent and an unmanaged goal has no record, so the goal row's own
+  // agent is the only thing that can say whose conversation this is.
+  it('falls back to the goal agent’s conversation without a route agent or a record', () => {
     mocks.hasSupervision = false;
-    render(<GoalDetailPage agentId={'agt_manager'} goalId={'goal_1'} />);
+    render(<GoalDetailPage goalId={'goal_1'} />);
 
     expect(screen.getByTestId('goal-supervisor-toggle')).toHaveTextContent('goalChat.title');
     fireEvent.click(screen.getByTestId('goal-supervisor-toggle'));
 
-    expect(screen.getByTestId('goal-chat')).toBeInTheDocument();
+    expect(screen.getByTestId('goal-chat')).toHaveAttribute('data-agent-id', 'agt_manager');
+    expect(screen.getByTestId('goal-right-panel')).toHaveAttribute('data-expand', 'true');
+  });
+
+  // The record is read-only, so a goal that has one must keep a route back to the
+  // editable conversation — otherwise consolidating the header's two controls
+  // would have removed the only way to ask the goal's agent anything.
+  it('hands a managed goal back to its editable conversation from the record', () => {
+    render(<GoalDetailPage agentId={'agt_manager'} goalId={'goal_1'} />);
+
+    fireEvent.click(screen.getByTestId('goal-supervisor-toggle'));
+    expect(screen.getByTestId('goal-supervision')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('goal-supervision-open-chat'));
+
+    expect(screen.queryByTestId('goal-supervision')).not.toBeInTheDocument();
+    expect(screen.getByTestId('goal-chat')).toHaveAttribute('data-agent-id', 'agt_manager');
     expect(screen.getByTestId('goal-right-panel')).toHaveAttribute('data-expand', 'true');
   });
 

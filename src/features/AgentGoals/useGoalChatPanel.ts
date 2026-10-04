@@ -2,7 +2,8 @@ import { useState } from 'react';
 
 interface ConversationTarget {
   agentId: string;
-  topicId: string;
+  /** Absent opens the agent's side conversation rather than a specific topic. */
+  topicId?: string;
 }
 
 interface PanelState {
@@ -22,9 +23,12 @@ export const useGoalChatPanel = (goalId: string, responsibleAgentId?: string) =>
   return {
     agentId: current.target?.agentId ?? responsibleAgentId,
     open: current.open,
-    // Re-entering supervision must restore its topic even after browsing history
-    // or starting another conversation in the same agent's panel.
-    openSupervision: (target: ConversationTarget) => {
+    /**
+     * Send the panel to one destination: the supervision record when the target
+     * names a topic, the agent's side conversation otherwise. Re-targeting bumps
+     * `request` because the panel remounts on the new conversation.
+     */
+    openConversation: (target: ConversationTarget) => {
       setState({ goalId, open: true, request: current.request + 1, target });
     },
     request: current.request,

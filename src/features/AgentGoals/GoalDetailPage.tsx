@@ -145,24 +145,30 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const { goal, nodes } = snapshot;
   const managerConversation = goalManagerConversation(goal);
 
-  // Who supervises this page: the agent the route names, else the goal's own
-  // agent (the agent-less route still reaches the supervision record). The panel
-  // can only host a conversation for an agent it can resolve, so the entry's
-  // visibility follows the same rule.
-  const supervisingAgentId = chat.agentId ?? managerConversation?.agentId;
+  // Who supervises this page: the agent the route names, the agent behind the
+  // supervision record, or the goal's own agent. That last fallback is what keeps
+  // the agent-less `/goal/:goalId` route working — there the route names no agent
+  // and an unmanaged goal has no record, but the goal still knows whose
+  // conversation this is.
+  const supervisingAgentId =
+    chat.agentId ?? managerConversation?.agentId ?? goal.agentId ?? undefined;
   const panelExpandable = !!supervisingAgentId;
   const chatVisible = chat.open && panelExpandable;
 
   /**
    * One entry, one destination. A goal with a supervision conversation opens that
    * record; one without opens the side conversation, rather than an empty panel.
-   * Re-targeting only when the record is not already the open conversation keeps
-   * a reopen from bumping the request and remounting the panel.
+   * Re-targeting only when the destination is not already the open one keeps a
+   * reopen from bumping the request and remounting the panel.
    */
   const openPanel = () => {
-    if (managerConversation && chat.topicId !== managerConversation.topicId) {
+    if (!supervisingAgentId) return;
+    const target = managerConversation
+      ? { agentId: managerConversation.agentId, topicId: managerConversation.topicId }
+      : { agentId: supervisingAgentId, topicId: undefined };
+    if (chat.topicId !== target.topicId) {
       clearPortalStack();
-      chat.openSupervision(managerConversation);
+      chat.openConversation(target);
       return;
     }
     chat.setOpen(true);
@@ -266,8 +272,8 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
       {/* Same Portal the conversation surface uses — the drill-down chain
           (metric / node → task detail → topic) rides its view stack, and the
           header's back arrow and close come for free. When no drill-down is
-          open, the panel hosts the conversation with the goal's responsible
-          agent so a user can just ask about progress.
+          open, the panel hosts the goal agent's supervision record, or its side
+          conversation when the goal has no record yet.
 
           On the agent-less route the task workspace already mounts the portal
           host, so a drill-down renders there and this panel stays out of the
@@ -289,20 +295,23 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
           hasWorkspaceSidePanel ? null : (
             <PortalContent />
           )
-        ) : chat.agentId && chat.topicId ? (
+        ) : supervisingAgentId && chat.topicId ? (
           <GoalSupervision
-            agentId={chat.agentId}
+            agentId={supervisingAgentId}
             goalId={goalId}
-            key={`${goalId}:${chat.agentId}:${chat.request}`}
+            key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             topicId={chat.topicId}
             onCollapse={() => chat.setOpen(false)}
+            // The record is read-only and the avatar is the panel's only entry, so
+            // this is how a goal with a record gets back to an editable chat.
+            onOpenChat={() => chat.openConversation({ agentId: supervisingAgentId })}
           />
-        ) : chat.agentId ? (
+        ) : supervisingAgentId ? (
           <GoalChat
-            agentId={chat.agentId}
+            agentId={supervisingAgentId}
             goalId={goalId}
             initialTopicId={chat.topicId}
-            key={`${goalId}:${chat.agentId}:${chat.request}`}
+            key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             onCollapse={() => chat.setOpen(false)}
           />
         ) : null}
