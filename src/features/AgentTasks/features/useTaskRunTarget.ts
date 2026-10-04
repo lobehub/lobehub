@@ -16,6 +16,7 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
+import { useElectronStore } from '@/store/electron';
 
 export type DeviceLabelSource = Pick<DeviceListItem, 'deviceId' | 'friendlyName' | 'hostname'>;
 
@@ -100,6 +101,8 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
     (s) => s.localAgentWorkingDirectoryMap[agentId],
   );
   const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
+  // This desktop's own device id — the machine a `local` target means here.
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
 
   // The pool a task may pin from must be the pool its runs can reach: a deviceId
   // carries the identity it was enrolled under, so a workspace agent cannot run
@@ -129,11 +132,20 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   const pinApplies = !!pinnedDeviceId && canSelectExecutionTarget;
   const isDeviceTarget = pinApplies;
   const effectiveTarget: DeviceExecutionTarget = pinApplies ? 'device' : inheritedTarget;
+  // A `local` target is a machine too — this desktop. A task run carries no
+  // `localDeviceId`, so the server routes it to the agent's bound device (the
+  // desktop syncs its own id there); fall back to this desktop's id when the
+  // binding has not been written yet. Without this the directory axis showed a
+  // dead "Follow agent" hint, although the run starts in a path on a machine.
+  // Picking a directory then pins this machine (`applyTaskDirectorySelection`),
+  // so the run is routed to where the path exists.
   const deviceId = pinApplies
     ? pinnedDeviceId
     : inheritedTarget === 'device'
       ? agencyConfig?.boundDeviceId
-      : undefined;
+      : inheritedTarget === 'local'
+        ? agencyConfig?.boundDeviceId || currentDeviceId
+        : undefined;
 
   const rawDeviceDefaultCwd = useDeviceStore(deviceSelectors.getDeviceDefaultCwd(deviceId));
   const deviceDefaultCwd = getWorkingDirectoryPathString(rawDeviceDefaultCwd);
