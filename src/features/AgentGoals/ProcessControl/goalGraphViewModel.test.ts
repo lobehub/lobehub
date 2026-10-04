@@ -385,6 +385,48 @@ describe('buildGoalGraphView', () => {
     expect(view.byId.d1.gateSubjectId).toBe('w1');
   });
 
+  it.each(['canceled', 'achieved'] as const)(
+    'offers no gate to answer once the goal is %s',
+    (status) => {
+      // The server refuses every answer on an ended goal until it is reopened.
+      const view = buildGoalGraphView(
+        snapshot({
+          decisions: [
+            {
+              authority: 'user',
+              canceledAt: null,
+              createdAt: at(50),
+              id: 'dec-1',
+              nodeId: 'd1',
+              options: [{ id: 'retry', label: 'Retry task' }],
+              question: 'Retry?',
+              recommendedOptionId: 'retry',
+              requestedProjectRole: null,
+              requestedUserId: 'user-1',
+              resolution: null,
+              resolvedAt: null,
+              resolvedByAgentId: null,
+              resolvedByUserId: null,
+              resolvedOptionId: null,
+              status: 'pending',
+              updatedAt: at(50),
+            },
+          ],
+          edges: [edge('w1', 'd1', 'leads_to')],
+          goal: goal({ status }),
+          nodes: [
+            node('w1', { status: 'waiting' }),
+            node('d1', { kind: 'decision', status: 'waiting' }),
+          ],
+        }),
+        NOW,
+      );
+
+      expect(view.frontier).toHaveLength(0);
+      expect(view.needsYou).toBe(0);
+    },
+  );
+
   it('links a finding to the task that produced it and the problem it answers', () => {
     const view = buildGoalGraphView(
       snapshot({

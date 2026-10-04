@@ -189,6 +189,8 @@ export const isRunningNode = (view: GoalNodeView): boolean => {
 
 /** A goal in one of these states runs nothing, whatever its nodes still say. */
 const CLOSED_GOAL_STATUSES = new Set<string>(['achieved', 'canceled', 'failed']);
+/** Ended by a person or by success: `GoalService.decide` refuses gates until a reopen. */
+const GOAL_ENDED_STATUSES = new Set<string>(['achieved', 'canceled']);
 
 export type FrontierItemKind = 'gate' | 'stale' | 'verifying' | 'running' | 'ready' | 'done';
 
@@ -480,7 +482,10 @@ export const buildGoalGraphView = (
   for (const view of views) {
     const { node } = view;
     if (node.kind === 'decision' && node.status === 'waiting' && view.decision) {
-      frontier.push({ key: node.id, kind: 'gate', rank: 0, view });
+      // An ended goal refuses answers until it is reopened, so its gates are
+      // not something the reader can act on.
+      if (!GOAL_ENDED_STATUSES.has(goal.status))
+        frontier.push({ key: node.id, kind: 'gate', rank: 0, view });
       continue;
     }
     if (node.kind !== 'task') continue;

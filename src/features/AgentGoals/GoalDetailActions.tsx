@@ -13,25 +13,17 @@ import { useTranslation } from 'react-i18next';
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import { renderMenuCheck } from '@/features/AgentTasks/features/menuExtra';
 import { usePermission } from '@/hooks/usePermission';
+import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import { goalStatusToTaskStatus } from './goalPresentation';
+import {
+  isStatusChoiceDisabled,
+  MANUAL_STATUSES,
+  type ManualGoalStatus,
+  toManualStatus,
+} from './goalStatusMenu';
 import { useConfirmDeleteGoal, useGoalShareUrl } from './useGoalActions';
-
-/**
- * The states a person may put a goal in. The rest (planning / verifying /
- * review / failed) are the coordinator's verdicts, so they read as "running"
- * here and picking "running" on a closed goal reopens it.
- */
-type ManualGoalStatus = 'running' | 'paused' | 'achieved' | 'canceled';
-
-const MANUAL_STATUSES: ManualGoalStatus[] = ['running', 'paused', 'achieved', 'canceled'];
-
-const toManualStatus = (status: string | undefined): ManualGoalStatus | undefined => {
-  if (status === 'paused' || status === 'achieved' || status === 'canceled') return status;
-  if (status === 'failed') return;
-  return status ? 'running' : undefined;
-};
 
 interface GoalDetailActionsProps {
   /** Absent for a goal with no responsible agent — e.g. one created from a project. */
@@ -46,6 +38,10 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId, proje
   const shareUrl = useGoalShareUrl({ agentId, goalId });
   const confirmDelete = useConfirmDeleteGoal({ agentId, goalId, projectId });
   const status = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.status);
+  const creatorUserId = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.userId);
+  // Closing interrupts runs, so the server only lets the creator or a
+  // workspace owner do it — the same rule as restart.
+  const canClose = useResourceManageable(creatorUserId);
   const pauseGoal = useGoalStore((s) => s.pauseGoal);
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
   const closeGoal = useGoalStore((s) => s.closeGoal);
@@ -77,6 +73,7 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId, proje
         children: MANUAL_STATUSES.map((next) => {
           const visual = TASK_STATUS_VISUALS[goalStatusToTaskStatus(next)];
           return {
+            disabled: isStatusChoiceDisabled(next, status, canClose),
             extra: renderMenuCheck(next === current),
             icon: <Icon color={visual.color} icon={visual.icon} />,
             key: `status-${next}`,
@@ -120,7 +117,7 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId, proje
         onClick: confirmDelete,
       },
     ],
-    [canEditTask, changeStatus, confirmDelete, current, goalId, shareUrl, status, t],
+    [canClose, canEditTask, changeStatus, confirmDelete, current, goalId, shareUrl, status, t],
   );
 
   return (
