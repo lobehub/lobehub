@@ -42,6 +42,7 @@ import { resolveMessageListFeedback } from './resolveMessageListFeedback';
 import { buildChatRows } from './utils/chatRows';
 import type { MessageDeepLink } from './utils/messageDeepLink';
 import { resolveMessageDeepLink } from './utils/messageDeepLink';
+import { resolveRefreshingRowId } from './utils/refreshingRow';
 
 const MessageAuthorConfigLoader = memo<{ agentId: string; isLogin: boolean | undefined }>(
   ({ agentId, isLogin }) => {
@@ -274,10 +275,17 @@ const ChatList = memo<ChatListProps>(
 
     // The hint renders inside the latest assistant row, which subscribes to the
     // store itself (virtua would not repaint a cached row from a prop change).
+    // Resolved against the rows actually rendered: folded steer chains in the
+    // default list, flat (and possibly filtered) messages for custom renderers.
+    const refreshingRowId = useMemo(
+      () =>
+        feedback.showRefreshing ? resolveRefreshingRowId(displayMessages, !itemContent) : undefined,
+      [displayMessages, feedback.showRefreshing, itemContent],
+    );
     const storeApi = useConversationStoreApi();
     useEffect(() => {
-      storeApi.setState({ isRefreshingMessages: feedback.showRefreshing });
-    }, [feedback.showRefreshing, storeApi]);
+      storeApi.setState({ refreshingRowId });
+    }, [refreshingRowId, storeApi]);
 
     // `messagesInit` is the settled-data signal: [] is a valid loaded result.
     // A first-load failure owns the whole surface, while a background failure

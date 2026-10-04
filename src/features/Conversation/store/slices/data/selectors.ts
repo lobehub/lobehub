@@ -163,20 +163,7 @@ const pendingInterventions = (s: State) => getPendingInterventions(s.displayMess
 const workSummariesByRootOperationId = (rootOperationId?: string | null) => (s: State) =>
   getWorkSummariesByRootOperationId(s.dbMessages, rootOperationId);
 
-const isAssistantRow = (m: UIChatMessage) =>
-  m.role === 'assistant' || m.role === 'assistantGroup' || m.role === 'supervisor';
-
-/**
- * The refreshing hint belongs to the row rendering the latest assistant reply.
- * A steered continuation folds into its host row, so resolve through the steer
- * chain before comparing.
- */
-const isRefreshingAt = (id: string) => (s: State) => {
-  if (!s.isRefreshingMessages) return false;
-  const latestId = s.displayMessages.findLast(isAssistantRow)?.id;
-  if (!latestId) return false;
-  return (collectSteerChains(s.displayMessages).hostOf.get(latestId) ?? latestId) === id;
-};
+const isRefreshingAt = (id: string) => (s: State) => s.refreshingRowId === id;
 
 const isSecondLastMessageFromUser = (s: State) => s.displayMessages.at(-2)?.role === 'user';
 

@@ -92,7 +92,7 @@ export const createEphemeralResetState = (): Partial<State> => ({
   heteroOverloadWaitOpIds: {},
   inputMessage: '',
   isLoadingEarlierMessages: false,
-  isRefreshingMessages: false,
+  refreshingRowId: undefined,
   isScrolling: false,
   messageEditingIds: [],
   messageLoadingIds: [],
