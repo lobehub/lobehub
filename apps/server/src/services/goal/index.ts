@@ -1646,9 +1646,29 @@ export class GoalService {
     const status = graph.decisions.some((decision) => decision.status === 'pending')
       ? 'review'
       : 'running';
-    await this.setPauseReason(goalId, undefined);
-    const goal = await this.transitionStatus(graph.goal, status, 'resumed by user', 'user');
-    return goal ?? graph.goal;
+    // Compare-and-set under the row lock `close` commits under: a resume that
+    // read the goal before a concurrent close ended it must not write its stale
+    // `running` over the ended goal, where the close already put interrupted
+    // Tasks back to `backlog` and they would dispatch again. Reopening an ended
+    // goal still works — that resume reads the ended status itself.
+    return this.db.transaction(async (tx) => {
+      const model = new GoalModel(tx, this.userId, this.workspaceId);
+      const current = await model.lockById(goalId);
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      if (current.status !== graph.goal.status) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'The goal changed while it was being resumed; try again.',
+        });
+      }
+      await model.updatePauseReason(goalId, undefined);
+      if (current.status === status) return current;
+      const updated = await model.updateStatus(goalId, status);
+      await new GoalGraphModel(tx, this.userId, this.workspaceId)
+        .recordGoalStatus(goalId, current.status, status, 'resumed by user')
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+      return updated ?? current;
+    });
   };
 
   /**

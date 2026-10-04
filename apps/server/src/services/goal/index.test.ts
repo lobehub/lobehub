@@ -1409,6 +1409,28 @@ describe('GoalService', () => {
     expect((await new GoalModel(serverDB, userId).findById(graph.goal.id))?.status).toBe('running');
   });
 
+  it('does not let a resume that read the goal before a close reopen it afterwards', async () => {
+    // The resume read the fenced `paused` goal; the close then committed the
+    // terminal status. The stale resume must not write `running` over it.
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ tasks: ['Runs'], title: 'Resume after close' });
+    await service.pause(graph.goal.id);
+    const requireGraph = (service as unknown as { requireGraph: GoalService['graph'] })
+      .requireGraph;
+    vi.spyOn(service as any, 'requireGraph').mockImplementationOnce(async (id) => {
+      const snapshot = await requireGraph(id as string);
+      await new GoalService(serverDB, userId).close(graph.goal.id, 'canceled');
+      return snapshot;
+    });
+
+    await expect(service.resume(graph.goal.id)).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect((await new GoalModel(serverDB, userId).findById(graph.goal.id))?.status).toBe(
+      'canceled',
+    );
+    // An explicit reopen of the ended goal still works.
+    expect((await service.resume(graph.goal.id)).status).toBe('running');
+  });
+
   it('keeps runs already stopped reopenable when a later interruption fails', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
