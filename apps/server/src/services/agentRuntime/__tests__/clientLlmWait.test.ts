@@ -908,6 +908,28 @@ describe('waiting_for_client (U4c)', () => {
       });
     });
 
+    it('retries a failed expiry-row write before ending the stream', async () => {
+      const t = createService();
+      t.setStored(waitingState());
+      t.messageModel.update.mockRejectedValueOnce(new Error('db blip'));
+      let rowWritesAtEnd = 0;
+      t.coordinator.saveAgentState.mockImplementationOnce(async (_id: string, state: any) => {
+        rowWritesAtEnd = t.messageModel.update.mock.calls.filter(
+          ([id]: any[]) => id === 'msg-assistant',
+        ).length;
+        t.setStored(state);
+      });
+
+      await t.service.executeStep({
+        clientLlmWaitExpired: new Date(NOW).toISOString(),
+        operationId: OPERATION_ID,
+        stepIndex: 2,
+      });
+
+      // The failed write and its successful retry both happened before the end.
+      expect(rowWritesAtEnd).toBe(2);
+    });
+
     it('finishes on retry when an earlier delivery settled the row but failed to finish', async () => {
       const t = createService();
       t.setStored(waitingState());
