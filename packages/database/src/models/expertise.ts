@@ -1,9 +1,11 @@
-import type {
-  ExpertiseAnchorCandidate,
-  ExpertiseCanonEntry,
-  ExpertiseEnforcement,
-  ExpertiseLayerDefinition,
-  ExpertiseLessonSection,
+import {
+  EXPERTISE_RULE_DIRECTIONS,
+  type ExpertiseAnchorCandidate,
+  type ExpertiseCanonEntry,
+  type ExpertiseEnforcement,
+  type ExpertiseLayerDefinition,
+  type ExpertiseLessonSection,
+  type ExpertiseRuleDirection,
 } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm';
 
@@ -230,6 +232,8 @@ export class ExpertiseModel {
           compilability: expertiseLessons.compilability,
           createdAt: expertiseLessons.createdAt,
           createdByUserId: expertiseLessons.createdByUserId,
+          // Null until judged; the page asks for the unjudged ones to be settled.
+          direction: expertiseLessons.direction,
           domainId: expertiseLessons.domainId,
           originRunId: expertiseLessons.originRunId,
           // Rows that predate the column hold null; they have only ever been reminders.
@@ -1111,6 +1115,7 @@ export class ExpertiseModel {
    */
   createRule = async (params: {
     compilability?: 'compilable' | 'not-compilable';
+    direction?: ExpertiseRuleDirection;
     domainId: string;
     enforcement?: ExpertiseEnforcement;
     how?: string;
@@ -1139,6 +1144,7 @@ export class ExpertiseModel {
           code,
           compilability: params.compilability ?? 'not-compilable',
           createdByUserId: this.userId,
+          direction: params.direction ?? null,
           domainId: params.domainId,
           enforcement: params.enforcement ?? 'remind',
           polarity: 'rule',
@@ -1183,6 +1189,21 @@ export class ExpertiseModel {
       .update(expertiseLessons)
       .set({ ...fields, updatedAt: new Date() })
       .where(eq(expertiseLessons.id, lessonId));
+  };
+
+  /**
+   * Writes judged directions onto rules that still have none. A rule the reviewer flipped while
+   * the judgment was in flight keeps their choice: only null rows are filled.
+   */
+  fillLessonDirections = async (judged: { direction: ExpertiseRuleDirection; id: string }[]) => {
+    for (const direction of EXPERTISE_RULE_DIRECTIONS) {
+      const ids = judged.filter((rule) => rule.direction === direction).map((rule) => rule.id);
+      if (ids.length === 0) continue;
+      await this.db
+        .update(expertiseLessons)
+        .set({ direction, updatedAt: new Date() })
+        .where(and(inArray(expertiseLessons.id, ids), isNull(expertiseLessons.direction)));
+    }
   };
 
   /**

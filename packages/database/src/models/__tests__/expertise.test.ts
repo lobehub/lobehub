@@ -596,6 +596,30 @@ describe('ExpertiseModel', () => {
     expect(await model.createRule({ domainId: 'rules-foreign-domain', title: 'x' })).toBeNull();
   });
 
+  it('fills judged directions only on rules that have none', async () => {
+    const { first, second } = await seedRuleGroup();
+    const model = new ExpertiseModel(serverDB, userId);
+    const created = await model.createRule({
+      direction: 'negative',
+      domainId: 'rules-domain',
+      title: '非链接控件不要套蓝色链接样式',
+    });
+
+    // The reviewer flipped one while the judgment was in flight; their choice stands.
+    await model.updateLessonFields(second, { direction: 'positive' });
+    await model.fillLessonDirections([
+      { direction: 'positive', id: first },
+      { direction: 'negative', id: second },
+      { direction: 'positive', id: created!.id },
+    ]);
+
+    const [group] = await model.listRules();
+    const directionOf = (id: string) => group.rules.find((rule) => rule.id === id)?.direction;
+    expect(directionOf(first)).toBe('positive');
+    expect(directionOf(second)).toBe('positive');
+    expect(directionOf(created!.id)).toBe('negative');
+  });
+
   it('versions a rewording but not a switch flip', async () => {
     const { first } = await seedRuleGroup();
     const model = new ExpertiseModel(serverDB, userId);

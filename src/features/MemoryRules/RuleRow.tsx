@@ -1,6 +1,6 @@
 'use client';
 
-import type { ExpertiseEnforcement } from '@lobechat/types';
+import type { ExpertiseEnforcement, ExpertiseRuleDirection } from '@lobechat/types';
 import { Flexbox, SortableList } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu, Tag, Tooltip } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { RuleItem } from '@/services/expertise';
 
+import DirectionToggle from './DirectionToggle';
 import EnforcementToggle from './EnforcementToggle';
 import { styles } from './styles';
 
@@ -18,7 +19,10 @@ interface RuleRowProps {
   /** Where an archived rule went, when it was folded into another one. */
   archivedInto?: string | null;
   code: string;
+  /** Off while the sheet is sorted by a column: that order is not the reviewer's to drag. */
+  draggable?: boolean;
   menu: DropdownItem[];
+  onDirection: (next: ExpertiseRuleDirection) => void;
   onEnforcement: (next: ExpertiseEnforcement) => void;
   onSelect: () => void;
   rule: RuleItem;
@@ -35,7 +39,9 @@ const RuleRow = ({
   active,
   archivedInto,
   code,
+  draggable = true,
   menu,
+  onDirection,
   onEnforcement,
   onSelect,
   rule,
@@ -62,7 +68,7 @@ const RuleRow = ({
         onClick={onSelect}
       >
         <span data-hover className={styles.hover} onClick={(e) => e.stopPropagation()}>
-          {!archived && <SortableList.DragHandle size={'small'} />}
+          {!archived && draggable && <SortableList.DragHandle size={'small'} />}
         </span>
         <span className={styles.cellId}>{code}</span>
         <div style={{ minWidth: 0 }}>
@@ -89,6 +95,7 @@ const RuleRow = ({
             )}
           </Flexbox>
         </div>
+        <DirectionToggle disabled={archived} value={rule.direction} onChange={onDirection} />
         <EnforcementToggle disabled={archived} value={rule.enforcement} onChange={onEnforcement} />
         <span className={styles.muted}>{t(`rules.method.${rule.compilability}`)}</span>
         <Tooltip

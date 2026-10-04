@@ -113,7 +113,7 @@ export const chainExpertiseDomainDraft = ({
       ],
 });
 
-export const EXPERTISE_RULE_DRAFT_PROMPT_VERSION = 'v2';
+export const EXPERTISE_RULE_DRAFT_PROMPT_VERSION = 'v3';
 
 /**
  * One rule drafted from whatever the reviewer typed or pasted: a sentence, a paragraph, or a
@@ -126,6 +126,7 @@ export const EXPERTISE_RULE_DRAFT_JSON_SCHEMA = {
     additionalProperties: false,
     properties: {
       compilability: { enum: ['compilable', 'not-compilable'], type: 'string' },
+      direction: { enum: ['positive', 'negative'], type: 'string' },
       enforcement: { enum: ['block', 'remind'], type: 'string' },
       groupId: { type: ['string', 'null'] },
       how: { type: ['string', 'null'] },
@@ -144,6 +145,7 @@ export const EXPERTISE_RULE_DRAFT_JSON_SCHEMA = {
     },
     required: [
       'compilability',
+      'direction',
       'enforcement',
       'groupId',
       'how',
@@ -163,6 +165,7 @@ Return:
 - why: one or two sentences on what goes wrong when it is broken, or null when the reviewer gave no reason and none is obvious;
 - how: what counts as breaking it, as a concrete example a checker could look for, or null;
 - limits: when it does NOT apply, or null when the reviewer set no boundary;
+- direction: "positive" when the rule steers toward a quality to reach (what good looks like), "negative" when it names a thing that gets a delivery sent back (what must not appear). Judge what the rule asks for, not how the sentence is worded or where it came from;
 - enforcement: "block" only when the reviewer clearly wants deliveries held until fixed (words like must, never, reject, block, 必须, 不许, 打回); otherwise "remind";
 - compilability: "compilable" when a program could check it or gather the evidence for it from the delivery (a diff, a file, a count), "not-compilable" when only a person or a model can judge it;
 - groupId: the id of the existing group whose gate question this rule passes, or null when none fits;
@@ -192,6 +195,56 @@ export const chainExpertiseRuleDraft = ({
       ].join('\n\n'),
       role: 'user',
     },
+  ],
+});
+
+export const EXPERTISE_RULE_DIRECTION_PROMPT_VERSION = 'v1';
+
+/**
+ * Judges which way each of a batch of existing rules pushes the work. Rules written before the
+ * direction existed, and rules distilled from runs, reach the page without one; this settles
+ * them in one call per batch instead of one per rule.
+ */
+export const EXPERTISE_RULE_DIRECTION_JSON_SCHEMA = {
+  name: 'expertise_rule_direction',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      rules: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            direction: { enum: ['positive', 'negative'], type: 'string' },
+            id: { type: 'string' },
+          },
+          required: ['direction', 'id'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    required: ['rules'],
+    type: 'object',
+  },
+} as const satisfies ExpertiseGenerateObjectSchema;
+
+const EXPERTISE_RULE_DIRECTION_SYSTEM_PROMPT = `Each line below is one delivery rule. For every rule decide which way it pushes the work:
+
+- "positive" — it steers toward a quality to reach: what a good delivery has or does ("give empty states a clear purpose", "keep the source view when opening a detail");
+- "negative" — it names a thing that gets a delivery sent back: what must not appear or must not happen ("no blue link styling on controls that are not links", "do not show raw fraction scores").
+
+Judge what the rule asks for, not the grammar: "X instead of Y" is positive when the point is reaching X, negative when the point is ruling out Y. A rule that says both leans the way its first clause does.
+
+Return one entry per rule, with its id copied exactly. Do not skip a rule and do not invent ids.`;
+
+export const chainExpertiseRuleDirection = ({
+  rules,
+}: {
+  rules: { id: string; title: string }[];
+}): { messages: OpenAIChatMessage[] } => ({
+  messages: [
+    { content: EXPERTISE_RULE_DIRECTION_SYSTEM_PROMPT, role: 'system' },
+    { content: rules.map((rule) => `- ${rule.id} · ${rule.title}`).join('\n'), role: 'user' },
   ],
 });
 

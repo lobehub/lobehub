@@ -2,6 +2,7 @@ import type {
   ExpertiseEnforcement,
   ExpertiseLessonSection,
   ExpertiseReasonKind,
+  ExpertiseRuleDirection,
 } from '@lobechat/types';
 
 import { ExpertiseModel } from '../../models/expertise';
@@ -11,6 +12,7 @@ export type RuleSectionPatch = Partial<Record<'rule' | 'why' | 'how' | 'limits',
 
 export interface UpdateRulePatch {
   compilability?: 'compilable' | 'not-compilable';
+  direction?: ExpertiseRuleDirection;
   enforcement?: ExpertiseEnforcement;
   reasonKind?: ExpertiseReasonKind;
   sections?: RuleSectionPatch;
@@ -38,7 +40,7 @@ export class ExpertiseRuleRepository {
    * Field-level edits from the rule document. Wording and body edits are versioned like a
    * conversational correction — same table, same `user-feedback` kind — so the history reads as
    * one list whether the reviewer typed a sentence or rewrote a paragraph. Switches (enforcement,
-   * compilability, reason kind) are not versioned: they are settings, not judgments.
+   * direction, compilability, reason kind) are not versioned: they are settings, not judgments.
    */
   updateRule = async (lessonId: string, patch: UpdateRulePatch) =>
     this.inTransaction(async (model) => {
@@ -89,6 +91,7 @@ export class ExpertiseRuleRepository {
       }
       await model.updateLessonFields(lessonId, {
         ...(patch.compilability && { compilability: patch.compilability }),
+        ...(patch.direction && { direction: patch.direction }),
         ...(patch.enforcement && { enforcement: patch.enforcement }),
         ...(patch.reasonKind && { reasonKind: patch.reasonKind }),
         ...(titleChanged && { title }),

@@ -14,6 +14,7 @@ export const TRACING_SCENARIOS = {
   ExpertiseConsolidation: 'expertise_consolidation',
   ExpertiseDomainDraft: 'expertise_domain_draft',
   ExpertiseRejectionIngestion: 'expertise_rejection_ingestion',
+  ExpertiseRuleDirection: 'expertise_rule_direction',
   ExpertiseRuleDraft: 'expertise_rule_draft',
   ExpertiseRuleGroupDraft: 'expertise_rule_group_draft',
   ExpertiseTopicIngestion: 'expertise_topic_ingestion',

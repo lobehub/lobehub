@@ -1,4 +1,4 @@
-import { EXPERTISE_ENFORCEMENTS } from '@lobechat/types';
+import { EXPERTISE_ENFORCEMENTS, EXPERTISE_RULE_DIRECTIONS } from '@lobechat/types';
 import { z } from 'zod';
 
 import {
@@ -266,6 +266,15 @@ export const expertiseRouter = router({
     .input(DraftRuleInputSchema)
     .mutation(async ({ ctx, input }) => ctx.expertiseRuleDraftService.draftRule(input)),
 
+  /**
+   * Settles which way unjudged rules push the work, one bounded batch per call. The page fires it
+   * when the list it read still holds rules without a direction; a rule the reviewer already set
+   * is never overwritten.
+   */
+  judgeRuleDirections: expertiseWriteProcedure.mutation(async ({ ctx }) =>
+    ctx.expertiseRuleDraftService.judgeDirections(),
+  ),
+
   /** Drafts a group (name + gate question) from a sentence; `createRuleGroup` persists it. */
   draftRuleGroup: expertiseWriteProcedure
     .input(z.object({ brief: z.string().min(1).max(20_000) }))
@@ -278,6 +287,7 @@ export const expertiseRouter = router({
         // `compiled` is only true once the compiler links a criterion; nobody can claim it by hand.
         compilability: z.enum(['compilable', 'not-compilable']).optional(),
         domainId: z.string(),
+        direction: z.enum(EXPERTISE_RULE_DIRECTIONS).optional(),
         enforcement: z.enum(EXPERTISE_ENFORCEMENTS).optional(),
         how: z.string().max(8000).optional(),
         limits: z.string().max(4000).optional(),
@@ -293,6 +303,7 @@ export const expertiseRouter = router({
       z.object({
         // `compiled` is only true once the compiler links a criterion; nobody can claim it by hand.
         compilability: z.enum(['compilable', 'not-compilable']).optional(),
+        direction: z.enum(EXPERTISE_RULE_DIRECTIONS).optional(),
         enforcement: z.enum(EXPERTISE_ENFORCEMENTS).optional(),
         lessonId: z.string(),
         reasonKind: z.enum(['mechanism', 'taste']).optional(),
