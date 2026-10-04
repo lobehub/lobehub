@@ -854,6 +854,9 @@ describe('GatewayActionImpl', () => {
 
         expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce();
         expect(action.createClient).toHaveBeenLastCalledWith({
+          // The page-scoped relay client id, so the gateway can route
+          // `llm_execute` to the tab that started the run.
+          clientId: expect.any(String),
           gatewayUrl: expectedUrl,
           operationId: 'server-op-1',
           resumeOnConnect: undefined,
@@ -871,6 +874,9 @@ describe('GatewayActionImpl', () => {
 
         expect(aiAgentService.refreshGatewayToken).toHaveBeenCalledWith('topic-1');
         expect(action.createClient).toHaveBeenLastCalledWith({
+          // The page-scoped relay client id, so the gateway can route
+          // `llm_execute` to the tab that started the run.
+          clientId: expect.any(String),
           gatewayUrl: expectedUrl,
           operationId: 'server-op-1',
           resumeOnConnect: true,
