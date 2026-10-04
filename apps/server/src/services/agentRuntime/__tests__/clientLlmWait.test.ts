@@ -232,7 +232,7 @@ describe('waiting_for_client (U4c)', () => {
             delay: 600_000,
             operationId: OPERATION_ID,
             payload: { clientLlmWaitExpired: new Date(NOW).toISOString() },
-            stepIndex: 2,
+            stepIndex: 1,
           }),
         );
 
@@ -248,6 +248,33 @@ describe('waiting_for_client (U4c)', () => {
         );
       },
     );
+
+    it('parks on the step count the call started from, so the replay does not spend a step', async () => {
+      const t = createService();
+      // The parked call is the run's last allowed step.
+      t.setStored(runningState({ maxSteps: 2, stepCount: 1 }));
+      t.messageModel.findLatestAssistantByOperationId.mockResolvedValue({
+        id: 'msg-assistant',
+        parentId: 'msg-user',
+      });
+      // `runtime.step` counted the call and hit the limit before it failed.
+      t.mockStep({
+        events: [],
+        newState: { ...unavailableErrorState('no_executor'), forceFinish: true, maxSteps: 2 },
+        nextContext: undefined,
+      });
+
+      await t.service.executeStep({
+        context: { phase: 'user_input' } as any,
+        operationId: OPERATION_ID,
+        stepIndex: 1,
+      });
+
+      const parked = t.getStored();
+      expect(parked.status).toBe('waiting_for_client');
+      expect(parked.stepCount).toBe(1);
+      expect(parked.forceFinish).toBeUndefined();
+    });
 
     it.each([
       ['the durable row cannot be written', () => Promise.reject(new Error('db down'))],
@@ -575,6 +602,56 @@ describe('waiting_for_client (U4c)', () => {
       expect(result.resumed).toBe(false);
       expect(t.operationModel.tryResumeFromClientWait).not.toHaveBeenCalled();
       expect(t.scheduleMessage).not.toHaveBeenCalled();
+    });
+
+    it('retries a failed durable rollback before restoring the wait', async () => {
+      vi.useFakeTimers({ now: NOW, toFake: ['Date', 'setTimeout'] });
+      const t = createService();
+      t.setStored(waitingState());
+      t.operationModel.revertClientWaitResume = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('db blip'))
+        .mockResolvedValue(true);
+      t.scheduleMessage.mockRejectedValueOnce(new Error('QStash 503')).mockResolvedValue('queued');
+
+      const resume = t.service.resumeFromClientLlmWait({ llmExecutor, operationId: OPERATION_ID });
+      const settled = expect(resume).rejects.toThrow('QStash 503');
+      await vi.runAllTimersAsync();
+      await settled;
+
+      expect(t.operationModel.revertClientWaitResume).toHaveBeenCalledTimes(2);
+      expect(t.getStored().status).toBe('waiting_for_client');
+      expect(t.messageModel.update).toHaveBeenLastCalledWith('msg-assistant', {
+        error: expect.objectContaining({
+          body: expect.objectContaining({ waitingForClient: true }),
+        }),
+      });
+    });
+
+    it('does not restore a wait whose durable row cannot be put back', async () => {
+      vi.useFakeTimers({ now: NOW, toFake: ['Date', 'setTimeout'] });
+      const t = createService();
+      t.setStored(waitingState());
+      t.operationModel.revertClientWaitResume = vi.fn().mockRejectedValue(new Error('db down'));
+      t.scheduleMessage.mockRejectedValueOnce(new Error('QStash 503')).mockResolvedValue('queued');
+
+      const resume = t.service.resumeFromClientLlmWait({ llmExecutor, operationId: OPERATION_ID });
+      const settled = expect(resume).rejects.toThrow('QStash 503');
+      await vi.runAllTimersAsync();
+      await settled;
+
+      expect(t.operationModel.revertClientWaitResume).toHaveBeenCalledTimes(3);
+      // No waiting notice or expiry advertising a wait nothing can resume.
+      expect(t.messageModel.update).not.toHaveBeenCalledWith('msg-assistant', {
+        error: expect.objectContaining({
+          body: expect.objectContaining({ waitingForClient: true }),
+        }),
+      });
+      expect(t.scheduleMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ clientLlmWaitExpired: expect.any(String) }),
+        }),
+      );
     });
 
     it('re-arms the expiry when rolling back, since one may have fired during the claim', async () => {

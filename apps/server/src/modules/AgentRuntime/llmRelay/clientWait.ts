@@ -28,6 +28,9 @@ const MAX_LLM_RELAY_CLIENT_WAIT_MS = 25 * 60_000;
  */
 export const MIN_CLIENT_LLM_WAIT_REMAINING_MS = 5000;
 
+/** Backoff for putting a claimed wait's row back after a failed resume. */
+export const CLIENT_WAIT_REVERT_RETRY_DELAYS_MS = [0, 200, 1000] as const;
+
 export const resolveClientLlmWaitMs = (env: Record<string, string | undefined> = process.env) => {
   const configured = Number(env.AGENT_LLM_RELAY_CLIENT_WAIT_MS);
   if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_LLM_RELAY_CLIENT_WAIT_MS;

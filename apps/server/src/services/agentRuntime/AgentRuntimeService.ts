@@ -70,6 +70,7 @@ import {
   buildClientLlmWait,
   buildClientLlmWaitMessageError,
   buildClientLlmWaitResumeContext,
+  CLIENT_WAIT_REVERT_RETRY_DELAYS_MS,
   isClientLlmWaitExpiryOf,
   MIN_CLIENT_LLM_WAIT_REMAINING_MS,
 } from '@/server/modules/AgentRuntime/llmRelay/clientWait';
@@ -2505,6 +2506,7 @@ export class AgentRuntimeService {
             stepResult.newState,
             currentContext,
             resumedClientLlmWait?.expiresAt,
+            currentState,
           );
           if (parkedState) {
             stepResult = { ...stepResult, newState: parkedState, nextContext: undefined };
@@ -3627,6 +3629,7 @@ export class AgentRuntimeService {
     errorState: AgentState,
     context: AgentRuntimeContext | undefined,
     notAfter?: string,
+    stepStartState?: AgentState,
   ): Promise<AgentState | undefined> {
     const reason = getClientLlmWaitableReason(errorState.error);
     if (!reason || !this.queueService) return;
@@ -3669,6 +3672,14 @@ export class AgentRuntimeService {
     }
     const parkedState: AgentState = {
       ...errorState,
+      // The call never ran, so it does not spend a step: the resume replays it
+      // through `runtime.step`, which counts it (and applies the step limit)
+      // then. Keeping the incremented count would count it twice and, at the
+      // limit, replay it as a forced final answer.
+      ...(stepStartState && {
+        forceFinish: stepStartState.forceFinish,
+        stepCount: stepStartState.stepCount,
+      }),
       clientLlmWait: wait,
       error: undefined,
       lastModified: wait.parkedAt,
@@ -3835,9 +3846,13 @@ export class AgentRuntimeService {
       return;
     }
 
-    await this.agentOperationModel
-      .revertClientWaitResume(operationId)
-      .catch((error) => log('[%s] Failed to re-park the durable row: %O', operationId, error));
+    // The visible wait is only worth restoring once the row is parked again:
+    // with the row stuck `running`, no resume, expiry or Stop can reach it, and
+    // the abandoned-run watchdog is what settles it.
+    if (!(await this.revertClientWaitResumeWithRetry(operationId))) {
+      log('[%s] Could not re-park the durable row; leaving it to the watchdog', operationId);
+      return;
+    }
     await this.coordinator
       .saveAgentState(operationId, parkedState)
       .catch((error) => log('[%s] Failed to restore the parked state: %O', operationId, error));
@@ -3866,6 +3881,21 @@ export class AgentRuntimeService {
         stepIndex: parkedState.stepCount,
       })
       .catch((error) => log('[%s] Failed to re-arm the wait expiry: %O', operationId, error));
+  }
+
+  /** Put the claimed row back to `waiting_for_client`, riding out a transient DB error. */
+  private async revertClientWaitResumeWithRetry(operationId: string): Promise<boolean> {
+    for (const delayMs of CLIENT_WAIT_REVERT_RETRY_DELAYS_MS) {
+      if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+      try {
+        // `false` means the row is no longer the claimed `running` one, so it
+        // is not ours to put back.
+        return await this.agentOperationModel.revertClientWaitResume(operationId);
+      } catch (error) {
+        log('[%s] Failed to re-park the durable row: %O', operationId, error);
+      }
+    }
+    return false;
   }
 
   /**
