@@ -3,6 +3,7 @@ import {
   type DefinePagedReplicaOptions,
   defineReplica as defineCoreReplica,
   type DefineReplicaOptions,
+  isReplicaSyncKey,
   type ReplicaPagedData,
   type ReplicaResource,
   type ReplicaScope,
@@ -84,6 +85,18 @@ export const replicaSWRDriver = createSWRDriver({
   useSWR: (key, fetcher, config) => useClientDataSWR(key, fetcher, config),
 });
 
+/**
+ * Revalidate a replica's sync queries (one entry, or all of the active scope)
+ * from code that cannot reach the owning store without an import cycle.
+ */
+export const revalidateReplica = (
+  resource: Pick<ReplicaResource<any, any, any>, 'name' | 'scope'>,
+  key?: string,
+) =>
+  replicaSWRDriver.revalidate((queryKey) =>
+    isReplicaSyncKey(queryKey, resource.name, { key, scope: resource.scope.get() }),
+  );
+
 /** `createReplicaSlice` bound to the app's SWR driver. */
 export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
   resource: ReplicaResource<TParams, TData, TFetched>,
@@ -91,4 +104,4 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
 ) => createCoreReplicaSlice(resource, { driver: replicaSWRDriver, ...options });
 
 export * from '@lobechat/replica';
-export { recordLens, type ReplicaSyncResult } from '@lobechat/replica/zustand';
+export { recordLens, type ReplicaLens, type ReplicaSyncResult } from '@lobechat/replica/zustand';

@@ -16,13 +16,13 @@ import type { PartialDeep } from 'type-fest';
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { analyticsClient } from '@/libs/analytics/client';
+import { revalidateReplica } from '@/libs/replica';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import {
   agentConfigKeys,
   agentProjectionKeys,
   builtinAgentKeys,
   isAgentConfigKey,
-  isAgentListKey,
 } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
@@ -36,6 +36,8 @@ import {
 import { aiAgentService } from '@/services/aiAgent';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
+// Projection module only (no store import), so this does not cycle through the home store.
+import { agentListResource } from '@/store/home/slices/agentList/projection';
 import type { StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -795,7 +797,7 @@ export class AgentSliceActionImpl {
         const confirmed = this.#get().agentMap[id];
         if (confirmed) this.#replaceConfirmedAgentConfig(id, scope, confirmed as LobeAgentConfig);
         await this.#get().internal_refreshAgentConfig(id, result.agent, scope);
-        void mutate((key) => isAgentListKey(key, scope));
+        void revalidateReplica(agentListResource);
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');

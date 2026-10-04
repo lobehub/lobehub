@@ -44,7 +44,6 @@ const fileState = vi.hoisted(() => ({
 
 const homeState = vi.hoisted(() => ({
   agentGroups: [],
-  agentOptimisticPatches: {},
   homeInputLoading: false,
   inputActiveMode: null as any,
   isAgentListInit: true,

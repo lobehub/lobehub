@@ -244,27 +244,11 @@ export const isDocumentCommentKeyForEvent = (
 };
 
 // ---- agent --------------------------------------------------------------
-export const agentKeys = {
-  /** Sidebar agent list network sync. Zustand owns the persisted UI projection. */
-  list: def('agentSync:list', (isLogin: boolean, scope: string) => [
-    'agentSync:list',
-    isLogin,
-    scope,
-  ]),
-};
-
-export const isAgentListKey = (key: unknown, scope: string): boolean =>
-  Array.isArray(key) && key[0] === agentKeys.list.root && key[2] === scope;
-
 export const agentProjectionKeys = {
   configHydration: def('agentProjection:configHydration', (scope: string, agentId: string) => [
     'agentProjection:configHydration',
     scope,
     agentId,
-  ]),
-  listHydration: def('agentProjection:listHydration', (scope: string) => [
-    'agentProjection:listHydration',
-    scope,
   ]),
 };
 
@@ -534,7 +518,6 @@ export const homeInboxKeys = {
 };
 
 // ---- agent config / available / search ----------------------------------
-// (agentKeys.list defined above)
 export const agentConfigKeys = {
   available: def('agent:available', () => ['agent:available']),
   config: def('agentSync:config', (agentId: string, scope: string) => [
@@ -1539,7 +1522,7 @@ export const matchDomain =
  * Aggregate registry — one entry point for every domain's keys.
  */
 export const swrKeys = {
-  agent: { ...agentKeys, ...agentConfigKeys, ...agentProjectionKeys },
+  agent: { ...agentConfigKeys, ...agentProjectionKeys },
   agentBot: agentBotKeys,
   agentBuilder: agentBuilderKeys,
   agentDocument: agentDocumentSWRKeys,

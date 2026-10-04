@@ -1,10 +1,10 @@
+import { replicaKeys } from '@lobechat/replica';
 import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
 import {
   agentBuilderKeys,
   agentConfigKeys,
-  agentKeys,
   agentProjectionKeys,
   documentCommentKeys,
   isAcceptanceListKey,
@@ -48,9 +48,6 @@ describe('recentKeys', () => {
 
 describe('agent projection keys', () => {
   it('keeps network sync and hydration isolated by identity scope', () => {
-    expect(agentKeys.list(true, 'user-1:workspace-1')).not.toEqual(
-      agentKeys.list(true, 'user-2:workspace-1'),
-    );
     expect(agentConfigKeys.config('agent-1', 'user-1:workspace-1')).not.toEqual(
       agentConfigKeys.config('agent-1', 'user-1:workspace-2'),
     );
@@ -63,7 +60,8 @@ describe('agent projection keys', () => {
 
   it('keeps SWR orchestration entries out of the persistence tiers', () => {
     for (const key of [
-      agentKeys.list(true, 'user-1:personal'),
+      // Replicas persist through their own storage, never through the SWR tiers.
+      replicaKeys.sync('agentList', 1, 'user-1:personal', 'sidebar', {}),
       agentConfigKeys.config('agent-1', 'user-1:personal'),
     ]) {
       const serialized = unstable_serialize(key);
