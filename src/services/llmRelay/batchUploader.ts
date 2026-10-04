@@ -191,13 +191,15 @@ export class RelayBatchUploader {
   }
 
   private async send(batch: LlmRelayBatch): Promise<void> {
-    if (this.rejected) return;
+    // Queued behind a request that `dispose()` aborted: never start it.
+    if (this.rejected || this.inFlight.signal.aborted) return;
 
     const { callId, leaseToken, serverBaseUrl = '' } = this.options;
     const doFetch = this.options.fetch ?? fetch;
     const body = JSON.stringify(batch);
 
     for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt += 1) {
+      if (this.inFlight.signal.aborted) return;
       const request = new AbortController();
       const abortRequest = () => request.abort();
       this.inFlight.signal.addEventListener('abort', abortRequest, { once: true });

@@ -424,6 +424,34 @@ describe('RelayBatchUploader', () => {
     expect(await claimed).toBe(false);
   });
 
+  it('never starts the uploads queued behind a stalled request once disposed', async () => {
+    const sent: number[] = [];
+    const stalledOnBatch = vi.fn((_url: string, init: RequestInit) => {
+      const batch = JSON.parse(init.body as string) as LlmRelayBatch;
+      sent.push(batch.seq);
+      if (batch.seq === 1) return Promise.resolve(new Response(JSON.stringify({ ackSeq: 1 })));
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal!.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    }) as unknown as typeof fetch;
+    const uploader = new RelayBatchUploader({
+      callId: 'c',
+      clientId: 'tab-1',
+      fetch: stalledOnBatch,
+      leaseToken: 'l',
+      onRejected: vi.fn(),
+    });
+
+    expect(await uploader.claim()).toBe(true);
+    uploader.push({ data: 'a'.repeat(LLM_RELAY_FLUSH_BYTES), type: 'text' });
+    await vi.waitFor(() => expect(sent).toEqual([1, 2]));
+    uploader.push({ data: 'b'.repeat(LLM_RELAY_FLUSH_BYTES), type: 'text' });
+    uploader.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(sent).toEqual([1, 2]);
+  });
+
   it('retries a failed upload with the same seq', async () => {
     vi.useFakeTimers();
     let failures = 1;
