@@ -1218,6 +1218,13 @@
       "when": 1790854414712,
       "tag": "0173_agent_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 174,
+      "version": "7",
+      "when": 1791107994631,
+      "tag": "0174_widgets_dashboards",
+      "breakpoints": true
     }
   ],
   "version": "6"
