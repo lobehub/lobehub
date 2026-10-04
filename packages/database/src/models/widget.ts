@@ -539,7 +539,15 @@ export class WidgetModel {
       .select({ version: widgetVersions, widget: widgets })
       .from(widgets)
       .innerJoin(widgetVersions, eq(widgets.publishedVersionId, widgetVersions.id))
-      .where(and(eq(widgets.id, widgetId), notTrashed(widgets.isDeleted)))
+      .where(
+        and(
+          eq(widgets.id, widgetId),
+          notTrashed(widgets.isDeleted),
+          // Same gate as `findDue`: a slot dispatched just before the parent was
+          // trashed or made private must not run on the owner's credentials.
+          buildParentAccessibleToOwnerWhere(widgets),
+        ),
+      )
       .limit(1);
 
     return row;

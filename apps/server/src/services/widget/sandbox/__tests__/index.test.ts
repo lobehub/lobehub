@@ -5,7 +5,7 @@ describe('createWidgetSandboxRunner', () => {
     vi.resetModules();
   });
 
-  it('defaults to the Cloudflare Worker provider with the full allowlist format', async () => {
+  it('defaults to the Cloudflare Worker provider with the boolean network format', async () => {
     vi.doMock('@/envs/sandbox', () => ({
       sandboxEnv: { WIDGET_SANDBOX_TOKEN: 'tok', WIDGET_SANDBOX_URL: 'https://w.example.dev' },
     }));
@@ -28,16 +28,14 @@ describe('createWidgetSandboxRunner', () => {
       subject: { id: 'w', kind: 'widget' },
     });
     expect(fetchImpl.mock.calls[0][0]).toBe('https://w.example.dev/run');
-    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).network).toEqual({
-      allow: ['api.github.com'],
-    });
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).network).toBe(true);
     vi.unstubAllGlobals();
   });
 
-  it('honors the boolean network format', async () => {
+  it('honors the allowlist network format', async () => {
     vi.doMock('@/envs/sandbox', () => ({
       sandboxEnv: {
-        WIDGET_SANDBOX_NETWORK_FORMAT: 'boolean',
+        WIDGET_SANDBOX_NETWORK_FORMAT: 'allowlist',
         WIDGET_SANDBOX_PROVIDER: 'cloudflare-worker',
         WIDGET_SANDBOX_TOKEN: 'tok',
         WIDGET_SANDBOX_URL: 'https://w.example.dev',
@@ -58,7 +56,9 @@ describe('createWidgetSandboxRunner', () => {
       script: 'x',
       subject: { id: 'w', kind: 'widget' },
     });
-    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).network).toBe(true);
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).network).toEqual({
+      allow: ['api.github.com'],
+    });
     vi.unstubAllGlobals();
   });
 });

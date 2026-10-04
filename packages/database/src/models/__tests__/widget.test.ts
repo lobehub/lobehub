@@ -810,6 +810,13 @@ describe('WidgetModel', () => {
 
       // a private parent the widget's owner created does not block it
       expect(await dueIds()).toEqual([inOwnPrivate.id]);
+      // nor can an already-dispatched slot load them for execution
+      for (const w of [inTrashedProject, inTrashedAgent, inTeammateProject]) {
+        expect(await WidgetModel.findLiveWithPublishedVersion(serverDB, w.id)).toBeUndefined();
+      }
+      expect(
+        await WidgetModel.findLiveWithPublishedVersion(serverDB, inOwnPrivate.id),
+      ).toBeDefined();
       // skipped widgets keep their slot
       const rows = await serverDB
         .select()
