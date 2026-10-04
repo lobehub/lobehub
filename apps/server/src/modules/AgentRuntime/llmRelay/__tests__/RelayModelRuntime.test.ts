@@ -416,6 +416,25 @@ describe('RelayModelRuntime over a gateway with relay routes', () => {
     expect(manager.sendLlmCancel).not.toHaveBeenCalled();
   });
 
+  it('settles the stream without waiting on a stalled gateway close', async () => {
+    const { executes, manager } = createGatewayManager();
+    manager.closeLlmCall.mockImplementation(() => new Promise<void>(() => {}));
+    const done = createRuntime(manager)
+      .chat(payload, {})
+      .then((response) => consumeStreamUntilDone(response));
+
+    await vi.waitFor(() => expect(executes).toHaveLength(1));
+    await post(executes[0].leaseToken, {
+      chunks: [{ data: 'Hi', type: 'text' }],
+      clientId: 'tab-a',
+      final: { reason: 'done' },
+      seq: 1,
+    });
+
+    await expect(done).resolves.toBeUndefined();
+    expect(manager.closeLlmCall).toHaveBeenCalledWith('op_1', CALL_ID);
+  });
+
   it('cancels through the routed path on stop, then closes the call', async () => {
     const { executes, manager } = createGatewayManager();
     const controller = new AbortController();

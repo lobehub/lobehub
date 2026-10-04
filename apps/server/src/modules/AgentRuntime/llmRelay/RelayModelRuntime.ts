@@ -352,7 +352,11 @@ export class RelayModelRuntime implements Pick<ModelRuntime, 'chat' | 'handleCha
     }
     reader?.close();
     // Stop the gateway replaying the attempt to clients that subscribe later.
-    await streamManager.closeLlmCall?.(operationId, callId);
+    // Best-effort and bounded by the attempt deadline anyway, so a stalled
+    // gateway must not hold up settling the stream.
+    void Promise.resolve(streamManager.closeLlmCall?.(operationId, callId)).catch((error) =>
+      log('[%s] failed to close the call on the gateway: %O', callId, error),
+    );
   }
 
   private createDiagnostics(options: ChatMethodOptions): ProviderResponseDiagnostics {
