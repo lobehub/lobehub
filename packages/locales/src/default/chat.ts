@@ -2041,7 +2041,7 @@ export default {
     '{{count}} acceptances will be accepted in one go. Each keeps its own result — this only records your sign-off.',
   'goalProcess.acceptanceHierarchy.acceptAllDone': 'Accepted {{count}} acceptances',
   'goalProcess.acceptanceHierarchy.acceptAllPartial':
-    '{{count}} acceptances could not be accepted and were left as they were',
+    'Accepted {{accepted}} · {{failed}} could not be signed off and were left as they were',
   'goalProcess.acceptanceHierarchy.acceptAllTitle': 'Accept every waiting acceptance?',
   'goalProcess.acceptanceHierarchy.acceptError': 'Could not save the sign-off. Try again.',
   'goalProcess.acceptanceHierarchy.accepted': 'Accepted “{{title}}”',

@@ -586,7 +586,7 @@
   "goalProcess.acceptanceHierarchy.acceptAll": "全部验收通过",
   "goalProcess.acceptanceHierarchy.acceptAllConfirm": "将一次性验收通过 {{count}} 个验收。每个验收保留自身结果，这里只记录你的签署。",
   "goalProcess.acceptanceHierarchy.acceptAllDone": "已验收通过 {{count}} 个验收",
-  "goalProcess.acceptanceHierarchy.acceptAllPartial": "有 {{count}} 个验收无法签署，已保持原状",
+  "goalProcess.acceptanceHierarchy.acceptAllPartial": "已验收通过 {{accepted}} 个 · {{failed}} 个无法签署，已保持原状",
   "goalProcess.acceptanceHierarchy.acceptAllTitle": "全部验收通过？",
   "goalProcess.acceptanceHierarchy.acceptError": "验收未能保存，请重试。",
   "goalProcess.acceptanceHierarchy.accepted": "已验收通过「{{title}}」",

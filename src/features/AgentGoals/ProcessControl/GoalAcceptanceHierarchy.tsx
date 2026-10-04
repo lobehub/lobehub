@@ -25,6 +25,7 @@ import {
   checkDisplayTitle,
   checkHeadMeta,
   CriterionRow,
+  rowKeyDownHandler,
   useAcceptanceBundle,
 } from '@/features/Acceptance';
 import { useChatStore } from '@/store/chat';
@@ -34,9 +35,9 @@ import { GroupLabel } from './GoalResultFollowUps';
 import { useAcceptanceSignOff } from './useAcceptanceSignOff';
 
 const styles = createStaticStyles(({ css }) => ({
-  /* One row per level, and the row is a container rather than a button: it
-     carries both the expand toggle and — while the level waits on the owner — a
-     one-click sign-off, which a single full-width button could not hold. */
+  /* One row per level. The row itself is the expand target (the acceptance
+     page's own criterion-row grammar), so the level's title, its sign-off, its
+     count and the chevron are all inside one clickable band. */
   row: css`
     display: flex;
     gap: 10px;
@@ -61,9 +62,12 @@ const styles = createStaticStyles(({ css }) => ({
     &:hover .acc-hierarchy-action {
       opacity: 1;
     }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -2px;
+    }
   `,
-  /* Only the level's label expands it, so reaching for the sign-off on the
-     right never opens or folds the level. */
   rowToggle: css`
     cursor: pointer;
 
@@ -103,15 +107,24 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
+  /* Sized to its own text, so what follows it — the sign-off — sits directly
+     after the title rather than out at the row's trailing edge. It still gives
+     way (truncating) when the title is the long thing on the row. */
   title: css`
     overflow: hidden;
-    flex: 1;
+    flex: 0 1 auto;
 
     min-width: 0;
 
     font-size: 14px;
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  /* Everything after the sign-off is right-aligned: the count is the row's own
+     trailing meta, not a neighbour of the title. */
+  spacer: css`
+    flex: 1 1 0;
+    min-width: 0;
   `,
   /* A level with nothing produced yet drops one step of text colour. A failed
      level keeps full weight: a failure is a result, an absence is not. */
@@ -217,11 +230,13 @@ const LevelRow = memo<LevelRowProps>(
     const { t } = useTranslation('chat');
     return (
       <div className={cx(styles.row, 'acc-hierarchy-row')}>
-        <button
+        <div
           aria-expanded={chevron === ChevronDown}
           className={styles.rowToggle}
-          type={'button'}
+          role={'button'}
+          tabIndex={0}
           onClick={onToggle}
+          onKeyDown={rowKeyDownHandler(onToggle)}
         >
           <Icon
             aria-label={t(LEVEL_LABEL_KEY[state] as any)}
@@ -232,15 +247,16 @@ const LevelRow = memo<LevelRowProps>(
           />
           {seq && <span className={styles.seq}>{seq}</span>}
           <span className={cx(styles.title, dim && styles.titleQuiet)}>{title}</span>
+          {action}
+          <span className={styles.spacer} />
           {meta && <span className={styles.meta}>{meta}</span>}
-        </button>
-        {action}
-        <Icon
-          color={cssVar.colorTextQuaternary}
-          icon={chevron}
-          size={15}
-          style={{ flex: 'none' }}
-        />
+          <Icon
+            color={cssVar.colorTextQuaternary}
+            icon={chevron}
+            size={15}
+            style={{ flex: 'none' }}
+          />
+        </div>
       </div>
     );
   },
@@ -448,7 +464,12 @@ const GoalAcceptanceHierarchy = memo<GoalAcceptanceHierarchyProps>(
                         loading={pendingKey === level.key}
                         size={'small'}
                         type={'text'}
-                        onClick={() => void acceptLevel(level)}
+                        // The sign-off sits inside the row's own expand target;
+                        // acting on it must not also fold the level.
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void acceptLevel(level);
+                        }}
                       >
                         {t('goalProcess.acceptanceHierarchy.accept')}
                       </Button>

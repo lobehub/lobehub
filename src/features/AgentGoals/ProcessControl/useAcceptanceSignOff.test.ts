@@ -11,15 +11,17 @@ const mocks = vi.hoisted(() => ({
   refreshGoalGraph: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
+  toastWarning: vi.fn(),
   updateAcceptanceStatusBatch: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { count?: number; title?: string }) => {
-      if (options?.count !== undefined) return `${key}::${options.count}`;
-      if (options?.title !== undefined) return `${key}::${options.title}`;
-      return key;
+    t: (key: string, options?: Record<string, unknown>) => {
+      if (!options) return key;
+      return `${key}::${Object.entries(options)
+        .map(([name, value]) => `${name}=${value}`)
+        .join(',')}`;
     },
   }),
 }));
@@ -29,6 +31,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   toast: {
     error: (...args: unknown[]) => mocks.toastError(...args),
     success: (...args: unknown[]) => mocks.toastSuccess(...args),
+    warning: (...args: unknown[]) => mocks.toastWarning(...args),
   },
 }));
 
@@ -120,23 +123,31 @@ describe('useAcceptanceSignOff', () => {
       ['acc-wait', 'acc-wait-2'],
       'accepted',
     );
+    // A clean sweep reports once, on the success channel.
+    expect(mocks.toastSuccess).toHaveBeenCalledTimes(1);
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
-      expect.objectContaining({ title: expect.stringContaining('::2') }),
+      expect.objectContaining({ title: expect.stringContaining('count=2') }),
     );
+    expect(mocks.toastWarning).not.toHaveBeenCalled();
     expect(mocks.refreshGoalGraph).toHaveBeenCalledWith('goal-1');
   });
 
-  it('reports the levels a sweep could not sign off instead of hiding them', async () => {
+  it('reports a partial sweep in ONE toast, naming both halves', async () => {
     mocks.updateAcceptanceStatusBatch.mockResolvedValue({ failedIds: ['acc-wait'], updated: 1 });
     const { result } = renderHook(() => useAcceptanceSignOff('goal-1', [waiting, alsoWaiting]));
 
     act(() => result.current.acceptAll());
     await act(() => sweepConfig().onOk());
 
-    expect(mocks.toastSuccess).toHaveBeenCalledWith(
-      expect.objectContaining({ title: expect.stringContaining('::1') }),
+    // One action, one report: a single toast carries what landed AND what did not.
+    expect(mocks.toastWarning).toHaveBeenCalledTimes(1);
+    expect(mocks.toastWarning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.stringContaining('accepted=1,failed=1'),
+      }),
     );
-    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('::1'));
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    expect(mocks.toastError).not.toHaveBeenCalled();
   });
 
   it('never opens a sweep when nothing is waiting', () => {

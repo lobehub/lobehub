@@ -78,15 +78,23 @@ export const useAcceptanceSignOff = (
             ids,
             'accepted',
           );
-          if (updated > 0)
+          // One sweep is one report, however it went: a partial outcome says
+          // both halves in a single toast. Two toasts for one action read as two
+          // separate events, and the second one's duration decides how long the
+          // first stays legible.
+          if (failedIds.length > 0)
+            toast.warning({
+              placement: 'top',
+              title: t('goalProcess.acceptanceHierarchy.acceptAllPartial', {
+                accepted: updated,
+                failed: failedIds.length,
+              }),
+            });
+          else if (updated > 0)
             toast.success({
               placement: 'top',
               title: t('goalProcess.acceptanceHierarchy.acceptAllDone', { count: updated }),
             });
-          if (failedIds.length > 0)
-            toast.error(
-              t('goalProcess.acceptanceHierarchy.acceptAllPartial', { count: failedIds.length }),
-            );
           await refreshGoalGraph(goalId);
         } catch (cause) {
           console.error('[goal:acceptance-sign-off:sweep]', cause);
