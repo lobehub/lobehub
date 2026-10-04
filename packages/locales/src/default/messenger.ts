@@ -283,7 +283,7 @@ export default {
   'messenger.linq.code.label': 'Your one-time link code',
   'messenger.linq.code.sendTo': 'Text it to {{number}}',
   'messenger.linq.code.tip':
-    'Scan the QR code with your iPhone camera or tap Open in Messages on your phone, then send the prefilled message. The number is shared — LobeHub recognizes you by the phone you text from. The code is single-use and expires in 30 minutes.',
+    'Scan the QR code with your phone camera or tap Open in Messages on your phone, then send the prefilled message. The number is shared — LobeHub recognizes you by the phone you text from. The code works once.',
   'messenger.linq.code.waiting': 'Waiting for your message…',
   'messenger.linq.connectCta': 'Get link code',
   'messenger.linq.connected': 'iMessage connected.',
@@ -301,4 +301,8 @@ export default {
     'Text your LobeHub agents from iMessage or SMS — no app to install, and /agents switches agents.',
   'messenger.unlinkConfirmLinq':
     'Messages from this phone number will no longer reach your agents. You can reconnect any time with a new link code.',
+  'messenger.linq.code.expiresAt': 'Valid until {{time}}',
+  'messenger.linq.error.refreshFailed':
+    'Your phone is connected, but this page could not refresh. Try again.',
+  'messenger.linq.refresh': 'Refresh',
 };

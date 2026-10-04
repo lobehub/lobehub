@@ -63,6 +63,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface LinqLinkSession {
   code: string;
   deepLink: { body?: string; imessage: string; number: string; sms: string };
+  expiresAt: number;
   pollId: string;
 }
 
@@ -70,6 +71,10 @@ type SetupState =
   | { stage: 'idle' }
   | { stage: 'loading' }
   | { message: string; stage: 'error' }
+  // The link exists server-side; only the local refresh is pending / failed.
+  // Never offer a new code from here — `createLinqLink` would answer CONFLICT.
+  | { stage: 'linked' }
+  | { message: string; stage: 'refreshError' }
   | { session: LinqLinkSession; stage: 'waiting' };
 
 interface LinqLinkSetupProps {
@@ -102,6 +107,19 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
     };
   }, [stopPolling]);
 
+  const finishLinked = useCallback(async () => {
+    setState({ stage: 'linked' });
+    try {
+      await onLinked();
+    } catch (error) {
+      if (!aliveRef.current) return;
+      setState({
+        message: getMessengerErrorMessage(error, t, 'messenger.linq.error.refreshFailed'),
+        stage: 'refreshError',
+      });
+    }
+  }, [onLinked, t]);
+
   const start = useCallback(async () => {
     if (disabled) return;
     stopPolling();
@@ -120,7 +138,7 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
 
           if (result.status === 'linked') {
             stopPolling();
-            await onLinked();
+            await finishLinked();
             return;
           }
           if (result.status === 'expired') {
@@ -156,7 +174,7 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
         stage: 'error',
       });
     }
-  }, [disabled, onLinked, stopPolling, t]);
+  }, [disabled, finishLinked, stopPolling, t]);
 
   return (
     <Block className={styles.setup}>
@@ -171,7 +189,7 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
             {t('messenger.linq.connectCta')}
           </Button>
         )}
-        {state.stage === 'loading' && <Spin size="large" />}
+        {(state.stage === 'loading' || state.stage === 'linked') && <Spin size="large" />}
         {state.stage === 'waiting' && (
           <>
             <div className={styles.qrSlot}>
@@ -198,6 +216,14 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
             >
               {t('messenger.linq.openMessages')}
             </Button>
+            <Text type="secondary">
+              {t('messenger.linq.code.expiresAt', {
+                time: new Date(state.session.expiresAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
+              })}
+            </Text>
             <Text type="secondary">{t('messenger.linq.code.waiting')}</Text>
           </>
         )}
@@ -215,6 +241,15 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
           </Flexbox>
         )}
 
+        {state.stage === 'refreshError' && (
+          <Flexbox align="center" gap={12} width="100%">
+            <Alert showIcon message={state.message} type="warning" />
+            <Button icon={<Icon icon={RefreshCwIcon} />} type="primary" onClick={finishLinked}>
+              {t('messenger.linq.refresh')}
+            </Button>
+          </Flexbox>
+        )}
+
         <Text className={styles.tips} type="secondary">
           <Icon icon={InfoIcon} style={{ marginInlineEnd: 4 }} />
           {t('messenger.linq.code.tip')}
@@ -224,6 +259,8 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
   );
 });
 LinqLinkSetup.displayName = 'MessengerLinqLinkSetup';
+
+export { LinqLinkSetup };
 
 interface LinqDetailProps {
   name: string;
