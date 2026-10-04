@@ -1744,6 +1744,7 @@ export default {
   'taskDetail.cancelSchedule': 'Cancel schedule',
   'taskDetail.nextRunCountdown': 'Next run in {{countdown}}',
   'taskDetail.nextRunCountdownDays': 'Next run in {{days}}d {{hours}}h',
+  'taskDetail.partOfGoal': 'Part of goal',
   'taskDetail.pauseTask': 'Pause task',
   'taskDetail.rerunTask': 'Re-run task',
   'taskDetail.runNow': 'Run now',

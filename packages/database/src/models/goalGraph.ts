@@ -385,6 +385,32 @@ export class GoalGraphModel {
     return row?.count ?? 0;
   };
 
+  /**
+   * The goal a task belongs to — either as the responsible Task of one of its
+   * nodes, or as the goal's own execution carrier. Lets a Task page link back
+   * to the goal that owns it.
+   */
+  findGoalByTaskId = async (
+    taskId: string,
+  ): Promise<{ agentId: string | null; id: string; title: string } | undefined> => {
+    const [row] = await this.db
+      .select({ agentId: goals.agentId, id: goals.id, title: goals.title })
+      .from(goals)
+      .leftJoin(goalNodes, and(eq(goalNodes.goalId, goals.id), eq(goalNodes.taskId, taskId)))
+      .where(
+        and(
+          this.ownership(),
+          or(
+            eq(goalNodes.taskId, taskId),
+            and(eq(goals.subjectType, 'task'), eq(goals.subjectId, taskId)),
+          ),
+        ),
+      )
+      .orderBy(desc(goals.createdAt))
+      .limit(1);
+    return row;
+  };
+
   createNode = async (goalId: string, input: CreateNodeInput) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;

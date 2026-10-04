@@ -178,6 +178,35 @@ describe('GoalGraphModel', () => {
     expect(graph?.events.filter((event) => event.entityType === 'task')).toHaveLength(1);
   });
 
+  it('finds the goal a task belongs to, as a node task or as the carrier', async () => {
+    const taskModel = new TaskModel(serverDB, userId);
+    const [nodeTask, carrierTask, looseTask] = await Promise.all([
+      taskModel.create({ instruction: 'Node task' }),
+      taskModel.create({ instruction: 'Carrier task' }),
+      taskModel.create({ instruction: 'Loose task' }),
+    ]);
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Owning goal' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Do it' });
+    await graphModel.claimTaskNode(goal.id, node!.id, new Date(0));
+    await graphModel.bindTask(goal.id, node!.id, nodeTask.id);
+    const carrierGoal = await goalModel.create({
+      subjectId: carrierTask.id,
+      subjectType: 'task',
+      title: 'Carrier goal',
+    });
+
+    expect(await graphModel.findGoalByTaskId(nodeTask.id)).toEqual({
+      agentId: null,
+      id: goal.id,
+      title: 'Owning goal',
+    });
+    expect((await graphModel.findGoalByTaskId(carrierTask.id))?.id).toBe(carrierGoal.id);
+    expect(await graphModel.findGoalByTaskId(looseTask.id)).toBeUndefined();
+    expect(
+      await new GoalGraphModel(serverDB, otherUserId).findGoalByTaskId(nodeTask.id),
+    ).toBeUndefined();
+  });
+
   it('refuses to bind a task to a node retired while the task was being created', async () => {
     // Retirement fences the node before it looks for bound Tasks; a Task a
     // concurrent coordinator finishes creating afterwards must not flip the

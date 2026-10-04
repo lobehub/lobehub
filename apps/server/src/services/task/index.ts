@@ -20,6 +20,7 @@ import type {
 import { TRPCError } from '@trpc/server';
 
 import { AgentModel } from '@/database/models/agent';
+import { GoalGraphModel } from '@/database/models/goalGraph';
 import { ProjectModel } from '@/database/models/project';
 import { RbacModel } from '@/database/models/rbac';
 import {
@@ -1153,6 +1154,11 @@ export class TaskService {
       }
     }
 
+    // Resolve the goal this task belongs to, so the page can link back to it
+    const goal = await new GoalGraphModel(this.db, this.userId, this.workspaceId).findGoalByTaskId(
+      task.id,
+    );
+
     // Build workspace tree (recursive)
     const buildWorkspaceNodes = (treeNodes: typeof workspace.tree): TaskDetailWorkspaceNode[] =>
       treeNodes.map((node) => {
@@ -1378,6 +1384,7 @@ export class TaskService {
       description: task.description,
       editorData: task.editorData ?? undefined,
       error: task.error,
+      goal: goal ?? null,
       files: taskFiles.length > 0 ? taskFiles : undefined,
       heartbeat:
         task.heartbeatInterval || task.heartbeatTimeout || task.lastHeartbeatAt

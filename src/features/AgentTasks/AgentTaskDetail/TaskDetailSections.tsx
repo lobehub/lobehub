@@ -9,6 +9,7 @@ import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 import TaskDetailRunPauseAction from './TaskDetailRunPauseAction';
 import TaskDetailTitleInput from './TaskDetailTitleInput';
 import TaskExecutionConfig from './TaskExecutionConfig';
+import TaskGoalBar from './TaskGoalBar';
 import TaskInstruction from './TaskInstruction';
 import TaskModelConfig from './TaskModelConfig';
 import TaskParentBar from './TaskParentBar';
@@ -26,6 +27,7 @@ const TaskDetailSections = memo(() => {
     <div className={styles.root}>
       <div className={styles.header}>
         <Flexbox className={styles.main} gap={12}>
+          <TaskGoalBar />
           <TaskParentBar />
           <TaskDetailTitleInput />
           <Flexbox horizontal align={'center'} gap={8} style={{ maxWidth: '100%' }} wrap={'wrap'}>

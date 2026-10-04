@@ -610,6 +610,8 @@ export interface TaskDetailData {
   error?: string | null;
   /** Files attached to the task instruction (persistent context for every run). */
   files?: ChatFileItem[];
+  /** The goal this task belongs to (as a goal node's task or the goal's carrier); null when none. */
+  goal?: { agentId: string | null; id: string; title: string } | null;
   // heartbeat.interval: periodic execution interval | heartbeat.timeout+lastAt: watchdog monitoring (detects stuck tasks)
   heartbeat?: {
     interval?: number | null;

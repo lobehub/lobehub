@@ -1972,6 +1972,7 @@
   "taskDetail.notFound.title": "找不到该任务",
   "taskDetail.openDetail": "展开详情",
   "taskDetail.openRunChat": "打开这次运行的对话",
+  "taskDetail.partOfGoal": "隶属于目标",
   "taskDetail.pauseTask": "暂停任务",
   "taskDetail.priority.high": "高",
   "taskDetail.priority.low": "低",

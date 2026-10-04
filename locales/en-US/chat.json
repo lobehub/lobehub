@@ -1972,6 +1972,7 @@
   "taskDetail.notFound.title": "Task not found",
   "taskDetail.openDetail": "Open detail",
   "taskDetail.openRunChat": "Open this run’s conversation",
+  "taskDetail.partOfGoal": "Part of goal",
   "taskDetail.pauseTask": "Pause task",
   "taskDetail.priority.high": "High",
   "taskDetail.priority.low": "Low",
