@@ -284,6 +284,99 @@ describe('normalizeGithubShellToolResult', () => {
     });
   });
 
+  it('registers gh pr create that follows a heredoc body with an apostrophe', () => {
+    // Claude Code writes the PR body with a heredoc in the same Bash call; the
+    // body is file content, so its `panel's` must not read as an open quote.
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: [
+          "cd /repo && cat > /tmp/pr-body.md <<'EOF'",
+          "Rename in the panel's menu now opens a dialog.",
+          'EOF',
+          'gh pr create --base canary --title "Fix rename" --body-file /tmp/pr-body.md',
+        ].join('\n'),
+        output: 'https://github.com/lobehub/lobehub/pull/20360\n',
+      },
+      toolName: 'Bash',
+    });
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#20360',
+      resourceType: 'github_pull_request',
+      title: 'Fix rename',
+    });
+  });
+
+  it('treats an unquoted newline as a command separator', () => {
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: 'git push -u origin fix/x\ngh pr create --title "Fix x" --body "Details"',
+        output: 'https://github.com/lobehub/lobehub/pull/20361\n',
+      },
+      toolName: 'Bash',
+    });
+
+    expect(operation?.params).toMatchObject({
+      identifier: 'lobehub/lobehub#20361',
+      title: 'Fix x',
+    });
+  });
+
+  it('keeps a newline inside a quoted body as part of the argument', () => {
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: 'gh pr create --title "Fix y" --body "line one\nline two"',
+        output: 'https://github.com/lobehub/lobehub/pull/20362\n',
+      },
+      toolName: 'Bash',
+    });
+
+    expect(operation?.params).toMatchObject({
+      identifier: 'lobehub/lobehub#20362',
+      title: 'Fix y',
+    });
+  });
+
+  it('strips a heredoc body inside a codex login-shell wrapper', () => {
+    const payload = [
+      "cat > /tmp/b.md <<'EOF'",
+      "It's ready",
+      'EOF',
+      'gh pr create --title "Fix z" --body-file /tmp/b.md',
+    ].join('\n');
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: `/bin/zsh -lc '${payload.replaceAll("'", `'\\''`)}'`,
+        exitCode: 0,
+        output: 'https://github.com/lobehub/lobehub/pull/20363\n',
+      },
+      toolName: 'command_execution',
+    });
+
+    expect(operation?.params).toMatchObject({
+      identifier: 'lobehub/lobehub#20363',
+      title: 'Fix z',
+    });
+  });
+
+  it('leaves the command intact when a `<<` never reaches its delimiter', () => {
+    // A `<<` inside a quoted argument is not a heredoc; with no delimiter line
+    // nothing is stripped and the command parses as before.
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: 'gh pr create --title "Shift a << b" --body "Details"',
+        output: 'https://github.com/lobehub/lobehub/pull/20364\n',
+      },
+      toolName: 'Bash',
+    });
+
+    expect(operation?.params).toMatchObject({
+      identifier: 'lobehub/lobehub#20364',
+      title: 'Shift a << b',
+    });
+  });
+
   it('skips failed commands and non-gh shell output', () => {
     expect(
       normalizeGithubShellToolResult({

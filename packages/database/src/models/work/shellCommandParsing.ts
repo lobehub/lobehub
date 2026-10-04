@@ -8,9 +8,55 @@
 const CONTROL_OPERATORS = new Set(['&&', '||', ';', '|', '&']);
 
 /**
+ * `<<EOF`, `<<-EOF`, `<<'EOF'`, `<< "EOF"` — the delimiter word is group 2.
+ * The lookbehind keeps a `<<<` here-string from matching.
+ */
+const HEREDOC_OPERATOR = /(?<!<)<<-?\s*(['"]?)([\w.-]+)\1/g;
+
+/**
+ * Drop here-document bodies, keeping the redirection lines themselves. A body
+ * is file content, not command text: an apostrophe in prose (`panel's`) would
+ * otherwise read as an unterminated quote and void the whole command, hiding a
+ * `gh pr create` that follows the heredoc on its own line.
+ *
+ * The scan is line-based and not quote-aware, so a `<<` inside a quoted
+ * argument could be mistaken for an operator. That case is caught by the
+ * delimiter check: when any body never reaches its delimiter line, the input
+ * is returned unchanged rather than truncated.
+ */
+const stripHeredocBodies = (input: string): string => {
+  if (!input.includes('<<')) return input;
+
+  const lines = input.split('\n');
+  const kept: string[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    kept.push(line);
+    i++;
+
+    for (const match of line.matchAll(HEREDOC_OPERATOR)) {
+      const delimiter = match[2];
+      const stripTabs = match[0].startsWith('<<-');
+      const end = lines.findIndex(
+        (candidate, index) =>
+          index >= i && (stripTabs ? candidate.replace(/^\t+/, '') : candidate) === delimiter,
+      );
+      if (end === -1) return input;
+      i = end + 1;
+    }
+  }
+
+  return kept.join('\n');
+};
+
+/**
  * Minimal POSIX-ish tokenizer: whitespace splitting with single/double quote
- * and backslash handling. Returns null on unterminated quotes — better to
- * skip registration than to mis-attribute flag values.
+ * and backslash handling. An unquoted newline ends a command like `;` does, so
+ * a multi-line script yields one segment per line. Returns null on
+ * unterminated quotes — better to skip registration than to mis-attribute flag
+ * values.
  *
  * Deliberately hand-rolled instead of adding a `shell-quote`-style dependency:
  * a real shell parser would also expand what we must keep literal (`$VAR`,
@@ -72,6 +118,10 @@ const tokenizeShellCommand = (input: string): string[] | null => {
         hasCurrent = true;
         i += 2;
       }
+    } else if (ch === '\n') {
+      push();
+      tokens.push(';');
+      i++;
     } else if (/\s/.test(ch)) {
       push();
       i++;
@@ -130,19 +180,20 @@ const expandShellWrapperSegment = (segment: string[]): string[][] => {
       continue;
     }
     if (!hasCommandFlag) return [segment];
-    const payload = tokenizeShellCommand(token);
+    const payload = tokenizeShellCommand(stripHeredocBodies(token));
     return payload ? splitCommandSegments(payload) : [];
   }
   return [segment];
 };
 
 /**
- * Parse raw shell command text into simple-command token segments: tokenize,
- * split on control operators, and expand login-shell `-c` wrappers in place.
+ * Parse raw shell command text into simple-command token segments: drop
+ * heredoc bodies, tokenize, split on control operators and unquoted newlines,
+ * and expand login-shell `-c` wrappers in place.
  * Returns null when the text cannot be tokenized (unterminated quoting).
  */
 export const parseShellCommandSegments = (command: string): string[][] | null => {
-  const tokens = tokenizeShellCommand(command);
+  const tokens = tokenizeShellCommand(stripHeredocBodies(command));
   if (!tokens) return null;
 
   return splitCommandSegments(tokens).flatMap(expandShellWrapperSegment);
