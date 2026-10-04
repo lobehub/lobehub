@@ -614,6 +614,39 @@ describe('waiting_for_client (U4c)', () => {
       );
     });
 
+    it('finishes on retry when an earlier delivery settled the row but failed to finish', async () => {
+      const t = createService();
+      t.setStored(waitingState());
+      // First delivery: the CAS settled the row, then the Redis write failed.
+      t.coordinator.saveAgentState.mockRejectedValueOnce(new Error('redis down'));
+      await expect(
+        t.service.executeStep({
+          clientLlmWaitExpired: new Date(NOW).toISOString(),
+          operationId: OPERATION_ID,
+          stepIndex: 2,
+        }),
+      ).rejects.toThrow('redis down');
+      expect(t.getStored().status).toBe('waiting_for_client');
+
+      // The retry finds the row already terminal and the same park in Redis.
+      t.operationModel.settleClientWait.mockResolvedValue(false);
+      t.operationModel.findById.mockResolvedValue({ status: 'error' });
+
+      const result = await t.service.executeStep({
+        clientLlmWaitExpired: new Date(NOW).toISOString(),
+        operationId: OPERATION_ID,
+        stepIndex: 2,
+      });
+
+      expect(result.state).toEqual({ status: 'error' });
+      expect(t.getStored()).toMatchObject({ clientLlmWait: undefined, status: 'error' });
+      expect(t.dispatchHooks).toHaveBeenCalledWith(
+        OPERATION_ID,
+        expect.objectContaining({ status: 'error' }),
+        'error',
+      );
+    });
+
     it('is a no-op once the run left that wait (resumed, or parked again later)', async () => {
       const t = createService();
       t.setStored(waitingState());

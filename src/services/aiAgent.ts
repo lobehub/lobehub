@@ -351,8 +351,11 @@ class AiAgentService {
   }
 
   /** Runs parked in `waiting_for_client`, waiting for a client to run their LLM call. */
-  async listClientLlmWaits(): Promise<ClientLlmWaitItem[]> {
-    return await lambdaClient.aiAgent.listClientLlmWaits.query();
+  /** Runs parked for a client, narrowed to `providers` (the ones this client can run). */
+  async listClientLlmWaits(providers?: string[]): Promise<ClientLlmWaitItem[]> {
+    return await lambdaClient.aiAgent.listClientLlmWaits.query(
+      providers ? { providers } : undefined,
+    );
   }
 
   /** Continue a run parked in `waiting_for_client`, with this client as its executor. */

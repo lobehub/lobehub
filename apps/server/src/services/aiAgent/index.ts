@@ -369,8 +369,8 @@ export class AiAgentService {
   }
 
   /** Runs of this user parked in `waiting_for_client`. */
-  listClientLlmWaits(): ReturnType<AgentRuntimeService['listClientLlmWaits']> {
-    return this.agentRuntimeService.listClientLlmWaits();
+  listClientLlmWaits(providers?: string[]): ReturnType<AgentRuntimeService['listClientLlmWaits']> {
+    return this.agentRuntimeService.listClientLlmWaits(providers);
   }
 
   /** Mint a lock owner that spans a whole inline step loop. */

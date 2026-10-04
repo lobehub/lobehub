@@ -935,8 +935,14 @@ export class AgentOperationModel {
     return this.settleFrom(operationId, status, ['waiting_for_client']);
   }
 
-  /** Operations of this user parked in `waiting_for_client`, newest first. */
-  async listWaitingForClient(limit = 20) {
+  /**
+   * Operations of this user parked in `waiting_for_client`, newest first.
+   * `providers` narrows to the ones the asking client can run before the
+   * limit applies, so waits for another device's providers cannot crowd out
+   * the ones it could take.
+   */
+  async listWaitingForClient(options: { limit?: number; providers?: string[] } = {}) {
+    const { limit = 20, providers } = options;
     return this.db
       .select({
         id: agentOperations.id,
@@ -944,7 +950,13 @@ export class AgentOperationModel {
         topicId: agentOperations.topicId,
       })
       .from(agentOperations)
-      .where(and(eq(agentOperations.status, 'waiting_for_client'), this.ownership()))
+      .where(
+        and(
+          eq(agentOperations.status, 'waiting_for_client'),
+          this.ownership(),
+          providers ? inArray(agentOperations.provider, providers) : undefined,
+        ),
+      )
       .orderBy(desc(agentOperations.createdAt))
       .limit(limit);
   }

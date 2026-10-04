@@ -1677,6 +1677,21 @@ export class AgentRuntimeService {
       return this.handleGroupMemberTimeout(groupMemberTimeout);
     }
 
+    // Expiry check of a `waiting_for_client` park. It executes nothing: the CAS
+    // on the durable row decides whether the wait (still parked, same park) ends
+    // here or a resume already took the run. Ahead of the terminal-row guard
+    // below, because a retried expiry whose first attempt settled the row but
+    // failed to finish must still get to finish it.
+    if (clientLlmWaitExpired) {
+      const expired = await this.expireClientLlmWait(operationId, clientLlmWaitExpired);
+      return {
+        nextStepScheduled: false,
+        state: expired ? { status: 'error' } : {},
+        stepResult: null,
+        success: true,
+      };
+    }
+
     // Redis keeps the resumable step state, but the durable operation row is
     // the authority for cancellation/recovery. A queued QStash delivery can
     // outlive a crashed process and arrive after Goal recovery has atomically
@@ -1732,19 +1747,6 @@ export class AgentRuntimeService {
       return {
         nextStepScheduled: resumed,
         state: {},
-        stepResult: null,
-        success: true,
-      };
-    }
-
-    // Expiry check of a `waiting_for_client` park. Like the barrier verify above
-    // it executes nothing: the CAS on the durable row decides whether the wait
-    // (still parked, same park) ends here or a resume already took the run.
-    if (clientLlmWaitExpired) {
-      const expired = await this.expireClientLlmWait(operationId, clientLlmWaitExpired);
-      return {
-        nextStepScheduled: false,
-        state: expired ? { status: 'error' } : {},
         stepResult: null,
         success: true,
       };
@@ -3801,8 +3803,8 @@ export class AgentRuntimeService {
    * to pick one up: the provider it must be able to run, and where the run's
    * conversation lives so it can subscribe to the stream before resuming.
    */
-  async listClientLlmWaits(): Promise<ClientLlmWaitItem[]> {
-    const rows = await this.agentOperationModel.listWaitingForClient();
+  async listClientLlmWaits(providers?: string[]): Promise<ClientLlmWaitItem[]> {
+    const rows = await this.agentOperationModel.listWaitingForClient({ providers });
     const items = await pMap(
       rows,
       async (row): Promise<ClientLlmWaitItem | undefined> => {
@@ -3835,8 +3837,17 @@ export class AgentRuntimeService {
       return false;
     }
 
+    // Redis still holds this exact park. A row this CAS cannot claim is one a
+    // resume took (`running`), unless it is already `error`: then an earlier
+    // delivery of this expiry settled it and failed before finishing (resumes,
+    // Stop and failing steps all move the Redis state off this park first), so
+    // finish it now — QStash retries the delivery that threw.
     const settled = await this.agentOperationModel.settleClientWait(operationId);
-    if (!settled) return false;
+    if (!settled) {
+      const row = await this.agentOperationModel.findById(operationId);
+      if (row?.status !== 'error') return false;
+      log('[%s] Finishing a client wait expiry that settled but did not finish', operationId);
+    }
 
     const provider = state.clientLlmWait.provider;
     const finalState: AgentState = {

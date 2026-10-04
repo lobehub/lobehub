@@ -1563,6 +1563,15 @@ export class GatewayActionImpl {
     if (!connected) return false;
 
     const { resumed } = await aiAgentService.resumeClientLlmWait({ llmExecutor, operationId });
+    // Whichever caller won (the conversation's card or the app-level pick-up),
+    // drop the waiting notice locally: the resumed step streams into this row
+    // and the server already cleared it.
+    if (resumed && assistantMessageId && agentId && topicId) {
+      this.#get().internal_dispatchMessage(
+        { id: assistantMessageId, type: 'updateMessage', value: { error: null } },
+        { conversationContext: { agentId, threadId, topicId } },
+      );
+    }
     return resumed;
   };
 

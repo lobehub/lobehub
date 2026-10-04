@@ -25,13 +25,16 @@ const params = {
 };
 
 const createAction = (status?: string) => {
-  const state: any = { gatewayConnections: status ? { 'op-1': { status } } : {} };
+  const state: any = {
+    gatewayConnections: status ? { 'op-1': { status } } : {},
+    internal_dispatchMessage: vi.fn(),
+  };
   const action = new GatewayActionImpl(vi.fn(), () => state);
   const reconnect = vi.fn(async () => {
     state.gatewayConnections['op-1'] = { status: 'connected' };
   });
   (action as any).reconnectToGatewayOperation = reconnect;
-  return { action, reconnect };
+  return { action, reconnect, state };
 };
 
 describe('continueClientLlmWait', () => {
@@ -56,6 +59,26 @@ describe('continueClientLlmWait', () => {
     expect(reconnect.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(aiAgentService.resumeClientLlmWait).mock.invocationCallOrder[0],
     );
+  });
+
+  it('drops the local waiting notice whichever caller wins the resume', async () => {
+    const { action, state } = createAction('connected');
+
+    await action.continueClientLlmWait(params);
+
+    expect(state.internal_dispatchMessage).toHaveBeenCalledWith(
+      { id: 'msg-assistant', type: 'updateMessage', value: { error: null } },
+      { conversationContext: { agentId: 'agt-1', threadId: undefined, topicId: 'tpc-1' } },
+    );
+  });
+
+  it('keeps the local notice when another caller already resumed the run', async () => {
+    vi.mocked(aiAgentService.resumeClientLlmWait).mockResolvedValueOnce({ resumed: false });
+    const { action, state } = createAction('connected');
+
+    await expect(action.continueClientLlmWait(params)).resolves.toBe(false);
+
+    expect(state.internal_dispatchMessage).not.toHaveBeenCalled();
   });
 
   it('reuses a stream this tab is already subscribed to', async () => {

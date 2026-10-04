@@ -3223,9 +3223,11 @@ export const aiAgentRouter = router({
    * the user's device and no client took it. A client that can run the provider
    * continues them with `resumeClientLlmWait`.
    */
-  listClientLlmWaits: aiAgentProcedure.query(async ({ ctx }) => {
-    return ctx.aiAgentService.listClientLlmWaits();
-  }),
+  listClientLlmWaits: aiAgentProcedure
+    .input(z.object({ providers: z.array(z.string().min(1)).max(256).optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      return ctx.aiAgentService.listClientLlmWaits(input?.providers);
+    }),
 
   /**
    * Continue a run parked in `waiting_for_client` from the step it parked on,

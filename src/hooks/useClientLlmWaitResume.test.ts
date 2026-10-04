@@ -14,9 +14,10 @@ const listClientLlmWaits = vi.fn();
 const continueClientLlmWait = vi.fn();
 
 vi.mock('@/services/aiAgent', () => ({
-  aiAgentService: { listClientLlmWaits: () => listClientLlmWaits() },
+  aiAgentService: { listClientLlmWaits: (providers?: string[]) => listClientLlmWaits(providers) },
 }));
 vi.mock('@/services/llmRelay', () => ({
+  buildLlmExecutorDeclaration: () => ({ clientId: 'tab-a', providers: ['lmstudio'] }),
   getLlmExecutorDeclarationFor: (provider: string) =>
     provider === 'lmstudio' ? { clientId: 'tab-a', providers: ['lmstudio'] } : undefined,
 }));
@@ -69,6 +70,8 @@ describe('useClientLlmWaitResume', () => {
     await flush();
 
     expect(listClientLlmWaits).toHaveBeenCalledTimes(2);
+    // Only the providers this client can run, so the server limit applies after.
+    expect(listClientLlmWaits).toHaveBeenLastCalledWith(['lmstudio']);
     expect(continueClientLlmWait).toHaveBeenCalledWith(parked);
   });
 

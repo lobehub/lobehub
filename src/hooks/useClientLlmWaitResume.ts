@@ -3,7 +3,7 @@ import useSWR from 'swr';
 
 import { gatewayKeys } from '@/libs/swr/keys';
 import { aiAgentService } from '@/services/aiAgent';
-import { getLlmExecutorDeclarationFor } from '@/services/llmRelay';
+import { buildLlmExecutorDeclaration, getLlmExecutorDeclarationFor } from '@/services/llmRelay';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -38,7 +38,8 @@ export const useClientLlmWaitResume = (): void => {
       ? gatewayKeys.clientLlmWaits()
       : null,
     async () => {
-      const waits = (await aiAgentService.listClientLlmWaits()).filter(
+      const providers = buildLlmExecutorDeclaration()?.providers ?? [];
+      const waits = (await aiAgentService.listClientLlmWaits(providers)).filter(
         (wait) => !!getLlmExecutorDeclarationFor(wait.provider),
       );
 
