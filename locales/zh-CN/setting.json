@@ -1782,6 +1782,7 @@
   "trash.type.agent": "助手",
   "trash.type.message": "消息",
   "trash.type.topic": "话题",
+  "trash.type.widget": "小组件",
   "trash.untitled": "未命名",
   "workspace.apiKey.policy.desc": "选择哪些成员可以创建代表自己访问此工作区的个人 API Key。",
   "workspace.apiKey.policy.options.allMembers": "所有成员",

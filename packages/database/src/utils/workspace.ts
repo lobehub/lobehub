@@ -37,6 +37,7 @@ export const TRASH_AWARE_TABLES: ReadonlySet<string> = new Set([
   'threads',
   'topics',
   'user_memories',
+  'widgets',
   'works',
 ]);
 

@@ -1847,6 +1847,7 @@ When I am ___, I need ___
   'trash.type.agent': 'Agent',
   'trash.type.message': 'Message',
   'trash.type.topic': 'Topic',
+  'trash.type.widget': 'Widget',
   'trash.untitled': 'Untitled',
   'workspace.create.descPlaceholder': 'Describe what this workspace is for (optional)',
   'workspace.create.namePlaceholder': 'e.g. Acme Team',

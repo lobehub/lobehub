@@ -49,6 +49,12 @@ vi.mock('@/database/models/agent', () => ({
     return { existsById: vi.fn().mockResolvedValue(false) };
   }),
 }));
+const mockWidgetFindById = vi.fn();
+vi.mock('@/database/models/widget', () => ({
+  WidgetModel: vi.fn(function () {
+    return { findById: mockWidgetFindById };
+  }),
+}));
 vi.mock('@/database/models/project', () => ({
   ProjectModel: vi.fn(function () {
     return { findById: vi.fn().mockResolvedValue(null) };
@@ -173,6 +179,27 @@ describe('metricRouter', () => {
       expect(mockModel.findByKeys).not.toHaveBeenCalled();
       expect(mockModel.listPoints).not.toHaveBeenCalled();
       expect(mockModel.addPoint).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('widget subject', () => {
+    it('lists series of a widget the caller can see', async () => {
+      mockWidgetFindById.mockResolvedValue({ id: 'widget-1' });
+      mockModel.findBySubject.mockResolvedValue([{ id: 'mtr_w' }]);
+
+      await caller.listSeries({ subjectId: 'widget-1', subjectType: 'widget' });
+
+      expect(mockWidgetFindById).toHaveBeenCalledWith('widget-1');
+      expect(mockModel.findBySubject).toHaveBeenCalledWith('widget', 'widget-1');
+    });
+
+    it('refuses series of a widget the caller cannot see', async () => {
+      mockWidgetFindById.mockResolvedValue(undefined);
+
+      await expect(
+        caller.listSeries({ subjectId: 'widget-2', subjectType: 'widget' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockModel.findBySubject).not.toHaveBeenCalled();
     });
   });
 

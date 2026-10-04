@@ -1782,6 +1782,7 @@
   "trash.type.agent": "Agent",
   "trash.type.message": "Message",
   "trash.type.topic": "Topic",
+  "trash.type.widget": "Widget",
   "trash.untitled": "Untitled",
   "workspace.apiKey.policy.desc": "Choose who can create personal API Keys that act on their behalf in this workspace.",
   "workspace.apiKey.policy.options.allMembers": "All members",

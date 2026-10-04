@@ -1,4 +1,5 @@
 import type { MetricSubjectType } from '@lobechat/types';
+import { METRIC_SUBJECT_TYPES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -9,6 +10,7 @@ import { GoalModel } from '@/database/models/goal';
 import { MetricModel } from '@/database/models/metric';
 import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
+import { WidgetModel } from '@/database/models/widget';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -31,7 +33,7 @@ const metricWriteProcedure = metricProcedure.use(withScopedPermission('agent:upd
 const idInput = z.object({ id: z.string() });
 const subjectInput = z.object({
   subjectId: z.string(),
-  subjectType: z.enum(['goal', 'task', 'agent', 'project', 'workspace']),
+  subjectType: z.enum(METRIC_SUBJECT_TYPES),
 });
 const configSchema = z.object({
   direction: z.enum(['higher_is_better', 'lower_is_better']).optional(),
@@ -102,6 +104,9 @@ const assertSubjectVisible = async (
       }
       case 'task': {
         return new TaskModel(db, ctx.userId, workspaceId).findById(subjectId);
+      }
+      case 'widget': {
+        return new WidgetModel(db, ctx.userId, workspaceId).findById(subjectId);
       }
       case 'workspace': {
         return workspaceId === subjectId;

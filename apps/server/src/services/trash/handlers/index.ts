@@ -4,6 +4,7 @@ import { agentHandler } from './agent';
 import { messageHandler } from './message';
 import { topicHandler } from './topic';
 import type { TrashHandler } from './types';
+import { widgetHandler } from './widget';
 
 /**
  * One handler per trashable kind. `Partial` on purpose: `TrashResourceType`
@@ -17,6 +18,7 @@ export const TRASH_HANDLERS: Partial<Record<TrashResourceType, TrashHandler>> = 
   agent: agentHandler,
   message: messageHandler,
   topic: topicHandler,
+  widget: widgetHandler,
 };
 
 /**
