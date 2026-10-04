@@ -19,8 +19,8 @@ import { workspaces } from './workspace';
  * `defaultToolIds` + `alwaysOnToolIds`).
  *
  * One inbound provider delivery maps to one row. `(account_id,
- * provider_message_id)` is unique, so a provider retry (Agent Mail / Linq both
- * redeliver) is idempotent and never duplicates the inbox.
+ * provider_message_id)` is unique, so a provider retry (Agent Mail
+ * redelivers) is idempotent and never duplicates the inbox.
  */
 export const agentInboxMessages = pgTable(
   'agent_inbox_messages',
@@ -42,7 +42,7 @@ export const agentInboxMessages = pgTable(
       .references(() => agentAccounts.id, { onDelete: 'cascade' })
       .notNull(),
 
-    /** Provider that delivered it (`agent-mail`, `linq`, …). */
+    /** Provider that delivered it (`agent-mail`, …). */
     provider: text('provider').notNull(),
 
     /** Denormalized account kind so the inbox can be read without a join. */

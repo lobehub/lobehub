@@ -14,8 +14,8 @@ import { users } from './user';
 import { workspaces } from './workspace';
 
 /**
- * The identity assets an agent owns: its `mail` address, `phone` number,
- * `wallet`, or a third-party `service` login.
+ * The identity assets an agent owns: its `mail` address, a `wallet`, or a
+ * third-party `service` login.
  *
  * This is deliberately **not** `agent_bot_providers`. A bot provider models
  * "our bot inside someone else's platform" — the address belongs to the
@@ -60,7 +60,7 @@ export const agentAccounts = pgTable(
     /** Human label, e.g. "Work mailbox". */
     displayName: text('display_name'),
 
-    /** Who issues/owns this account: `agent-mail`, `linq`, `user`, … */
+    /** Who issues/owns this account: `agent-mail`, `user`, … */
     provider: text('provider').notNull(),
 
     status: text('status').$type<AgentAccountStatus>().notNull().default('provisioning'),

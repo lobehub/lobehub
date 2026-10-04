@@ -11,7 +11,7 @@ const log = debug('lobe-server:agent:account-webhook');
  *
  * `POST /api/agent/accounts/webhooks/:provider`
  *
- * Runs BEFORE any authorization middleware: the provider (Agent Mail, Linq) is
+ * Runs BEFORE any authorization middleware: the provider (e.g. Agent Mail) is
  * an untrusted caller and the only thing it can prove is its signature, which
  * the account service verifies against the credential of the account the
  * delivery routes to. Nothing is trusted until `handleInbound` says

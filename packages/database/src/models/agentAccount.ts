@@ -108,7 +108,7 @@ export const ROUTING_KEY_HELD_STATUSES: AgentAccountStatus[] = [
 ];
 
 /**
- * Agent accounts (mail / phone / wallet / service) and their credentials.
+ * Agent accounts (mail / wallet / service) and their credentials.
  *
  * Credential handling mirrors `AgentBotProviderModel` / `messengerAccountLinks`:
  * the secret is AES-GCM ciphertext written through an injected gatekeeper, and
@@ -397,12 +397,11 @@ export class AgentAccountModel {
    * signature can be verified *before* the request is trusted. The trust model
    * is the same as the bot path: nothing else may call this.
    *
-   * Only a live account is routable. A revoked number that keeps receiving is
+   * Only a live account is routable. A revoked address that keeps receiving is
    * the worst kind of release: the row says the identity is gone while the
-   * carrier still delivers to it — and for Linq it is not even caught by the
-   * credential check, because the signing secret comes from deployment config
-   * rather than the account. Suspended accounts are excluded for the same
-   * reason.
+   * provider still delivers to it — and when the signing secret comes from
+   * deployment config rather than the account, the credential check does not
+   * catch it either. Suspended accounts are excluded for the same reason.
    */
   static findForInboundVerification = async (
     db: LobeChatDatabase,

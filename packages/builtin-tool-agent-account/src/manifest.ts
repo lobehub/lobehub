@@ -22,7 +22,7 @@ export const AgentAccountManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'List the addresses this agent owns (email inbox, phone number) and what each can do (receive / send). The same addresses are already in your context, so only call this to re-check.',
+        'List the addresses this agent owns (e.g. an email inbox) and what each can do (receive / send). The same addresses are already in your context, so only call this to re-check.',
       name: AgentAccountApiName.listAccounts,
       parameters: { properties: {}, type: 'object' },
       renderDisplayControl: 'collapsed',

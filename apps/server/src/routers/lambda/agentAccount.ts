@@ -15,8 +15,8 @@ import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdenti
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 
 /**
- * Agent accounts — the identity assets an agent owns (mail / phone / wallet /
- * service) and the credentials some of them carry.
+ * Agent accounts — the identity assets an agent owns (mail / wallet / service)
+ * and the credentials some of them carry.
  *
  * The router is a thin control plane over `AgentAccountService`: the service
  * owns provider orchestration and the model owns storage + scoping. Two rules
@@ -91,8 +91,8 @@ const prefixSchema = z
 /** Surface a service-layer refusal as a tRPC error the caller can act on. */
 const mapAccountError = (error: unknown, operation: string): never => {
   if (error instanceof TRPCError) throw error;
-  // A handle already bound elsewhere, or a provider pool with nothing left:
-  // the request was valid, the deployment's state refuses it.
+  // A handle already bound elsewhere: the request was valid, the
+  // deployment's state refuses it.
   if (isAgentAccountError(error)) {
     throw new TRPCError({ cause: error, code: 'CONFLICT', message: error.message });
   }
@@ -212,9 +212,9 @@ export const agentAccountRouter = router({
     }),
 
   /**
-   * Ask a provider to issue a brand-new account (a lobe.id inbox, a Linq
-   * number) and persist it. A provider-issued secret — an inbox signing key —
-   * is stored encrypted and never returned, exactly like a caller-supplied one.
+   * Ask a provider to issue a brand-new account (a lobe.id inbox) and persist
+   * it. A provider-issued secret — an inbox signing key — is stored encrypted
+   * and never returned, exactly like a caller-supplied one.
    *
    * `prefix` is a *preference*, not a contract: a mail inbox is opened at
    * `<prefix>@…` when the provider can honour it. The response always carries

@@ -128,7 +128,7 @@ export interface GlobalServerConfig {
   agentGatewayUrl?: string;
   /**
    * Agent identity providers this deployment has credentials for
-   * (`agent-mail`, `linq`). Empty means an agent cannot be given an address
+   * (`agent-mail`). Empty means an agent cannot be given an address
    * here, so the identity settings have nothing to offer.
    */
   agentIdentityProviders?: string[];
