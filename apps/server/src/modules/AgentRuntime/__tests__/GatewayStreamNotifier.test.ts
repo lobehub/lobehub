@@ -1117,6 +1117,22 @@ describe('GatewayStreamNotifier', () => {
       expect(callsTo('/api/operations/llm-close')).toHaveLength(0);
     });
 
+    it('stops probing the relay routes once a close returns 404', async () => {
+      mockFetch.mockImplementation((url: string) =>
+        Promise.resolve(
+          url.includes('/llm-close')
+            ? { ok: false, status: 404, text: () => Promise.resolve('404 page not found') }
+            : { ok: true, status: 200, text: () => Promise.resolve('') },
+        ),
+      );
+
+      await notifier.closeLlmCall('op-1', 'op-1:2:0');
+      await notifier.closeLlmCall('op-1', 'op-1:2:1');
+
+      expect(callsTo('/api/operations/llm-close')).toHaveLength(1);
+      expect(await notifier.sendLlmExecute('op-1', executeData)).toEqual({ routed: false });
+    });
+
     it('times out a gateway that sends headers and then stalls the body', async () => {
       vi.useFakeTimers();
       try {

@@ -569,7 +569,13 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   async closeLlmCall(operationId: string, callId: string): Promise<void> {
     if (this.llmRelayRoutesMissing) return;
     try {
-      await this.httpPostResponse('/api/operations/llm-close', { callId, operationId });
+      const res = await this.httpPostResponse('/api/operations/llm-close', { callId, operationId });
+      if (res.ok) return;
+      if (res.status === 404) {
+        this.llmRelayRoutesMissing = true;
+        return;
+      }
+      log('closeLlmCall for %s (%s): gateway returned %d', operationId, callId, res.status);
     } catch (error) {
       log('closeLlmCall failed for %s (%s): %O', operationId, callId, error);
     }
