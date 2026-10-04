@@ -295,7 +295,7 @@ export function registerGoalCommand(program: Command) {
     )
     .option(
       '--conversation',
-      "Link the goal to the current conversation. Use it whenever you create a goal for the user from a chat, not only for /goal: without it the goal is standalone and never shows on this conversation's goal tray. This agent supervises the goal from this conversation; the output carries a turnToken, so submit the first plan with `lh goal plan <id> --token <turnToken>`",
+      "Link the goal to the current conversation. Use it whenever you create a goal for the user from a chat, not only for /goal: without it the goal is standalone and never shows on this conversation's goal tray. This agent supervises the goal from this conversation; the output carries a turnToken, so submit the first plan with `lh goal plan <id> --token <turnToken> --file <plan.json>`",
     )
     .option('--criterion <text...>', 'Acceptance criterion (repeatable)')
     .option('--json [fields]', 'Output JSON')
