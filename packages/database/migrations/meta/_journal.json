@@ -1225,6 +1225,13 @@
       "when": 1791109715438,
       "tag": "0174_widgets_dashboards",
       "breakpoints": true
+    },
+    {
+      "idx": 175,
+      "version": "7",
+      "when": 1791169090046,
+      "tag": "0175_environment_visibility_and_build_state",
+      "breakpoints": true
     }
   ],
   "version": "6"
