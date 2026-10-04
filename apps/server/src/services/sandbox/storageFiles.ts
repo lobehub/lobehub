@@ -264,7 +264,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
       return request(`${CURRENT_STORAGE}/file?${query.toString()}`, { method: 'DELETE' });
     },
 
-    getWorkspace: async (params: RequestContext = {}): Promise<SandboxStorageInfo> => {
+    getStorage: async (params: RequestContext = {}): Promise<SandboxStorageInfo> => {
       const query = withTopic(new URLSearchParams(), params);
       const suffix = query.size > 0 ? `?${query.toString()}` : '';
 
@@ -274,7 +274,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
     /**
      * Re-measure the directory and return the workspace with the fresh figure.
      *
-     * Separate from {@link getWorkspace}, which reads the stored number: this
+     * Separate from {@link getStorage}, which reads the stored number: this
      * one walks the volume, and it also stamps the workspace as active. So it
      * belongs on something the user asked for — a refresh button — and never
      * on a page load, where it would keep every workspace it displays

@@ -81,7 +81,7 @@ vi.mock('@/server/services/market', () => ({
         buildStatus: mockBuildStatus,
         copyInstance: mockCopyEnvironment,
         deleteInstance: mockDeleteEnvironment,
-        getWorkspace: mockGetWorkspace,
+        getStorage: mockGetWorkspace,
         listEnvironmentSessions: mockListEnvironmentSessions,
         listInstances: mockListEnvironments,
         listFiles: mockListFiles,
@@ -686,7 +686,7 @@ describe('sandboxStorageRouter', () => {
       mockGetWorkspace.mockResolvedValue(info);
       const caller = sandboxStorageRouter.createCaller(ctx);
 
-      await expect(caller.getWorkspace()).resolves.toMatchObject({ usageBytes: 166_731 });
+      await expect(caller.getStorage()).resolves.toMatchObject({ usageBytes: 166_731 });
       expect(mockRefreshUsage).not.toHaveBeenCalled();
     });
 
@@ -694,7 +694,7 @@ describe('sandboxStorageRouter', () => {
       mockRefreshUsage.mockResolvedValue({ ...info, usageBytes: 4_096 });
       const caller = sandboxStorageRouter.createCaller(ctx);
 
-      await expect(caller.refreshWorkspaceUsage()).resolves.toMatchObject({ usageBytes: 4_096 });
+      await expect(caller.refreshStorageUsage()).resolves.toMatchObject({ usageBytes: 4_096 });
       expect(mockRefreshUsage).toHaveBeenCalledTimes(1);
     });
 
@@ -702,7 +702,7 @@ describe('sandboxStorageRouter', () => {
       mockResolveClaim.mockResolvedValue(null);
       const caller = sandboxStorageRouter.createCaller(ctx);
 
-      await expect(caller.refreshWorkspaceUsage()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(caller.refreshStorageUsage()).rejects.toMatchObject({ code: 'FORBIDDEN' });
       expect(mockRefreshUsage).not.toHaveBeenCalled();
     });
   });

@@ -170,14 +170,14 @@ class SandboxStorageService {
   getEntitlement = async () => lambdaClient.sandboxStorage.getEntitlement.query();
 
   /** Quota and last measured usage of the workspace directory. */
-  getWorkspace = async () => lambdaClient.sandboxStorage.getWorkspace.query();
+  getStorage = async () => lambdaClient.sandboxStorage.getStorage.query();
 
   /**
    * Walk the workspace and answer with the fresh figure. For a refresh the
-   * user asked for — {@link getWorkspace} reads what was last measured, which
+   * user asked for — {@link getStorage} reads what was last measured, which
    * is what a page load should show.
    */
-  refreshWorkspaceUsage = async () => lambdaClient.sandboxStorage.refreshWorkspaceUsage.mutate();
+  refreshStorageUsage = async () => lambdaClient.sandboxStorage.refreshStorageUsage.mutate();
 
   listFiles = async (
     params: { instanceId?: string; path?: string; recursive?: boolean; topicId?: string } = {},

@@ -83,7 +83,7 @@ const WORKSPACE_ERROR_CODES: Record<number, TRPCError['code']> = {
   507: 'PAYLOAD_TOO_LARGE',
 };
 
-const mapWorkspaceError = (error: unknown): never => {
+const mapStorageError = (error: unknown): never => {
   if (error instanceof SandboxStorageFilesError) {
     throw new TRPCError({
       code: WORKSPACE_ERROR_CODES[error.status] ?? 'BAD_GATEWAY',
@@ -99,10 +99,21 @@ const mapWorkspaceError = (error: unknown): never => {
   throw error;
 };
 
-// The caller is always acting as themselves here — this is a signed-in user
-// browsing their own workspace, not an agent run executing under someone
-// else's identity — so there is no share-visitor case to suppress.
-const workspaceProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+/**
+ * Resolves the caller's sandbox-storage claim: which directory on the volume
+ * they are entitled to and how large it may be.
+ *
+ * It reads `ctx.workspaceId`, but that is the TEAM workspace, and it is read
+ * only to decide whose storage this is — a member inside a team gets the
+ * team's shared directory, otherwise their personal one. The claim itself has
+ * nothing to do with the team workspace, which is why neither this nor
+ * anything built on it is named after one.
+ *
+ * The caller is always acting as themselves here — a signed-in user browsing
+ * their own storage, not an agent run executing under someone else's identity
+ * — so there is no share-visitor case to suppress.
+ */
+const storageClaimProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
 
@@ -129,7 +140,7 @@ const workspaceProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
  * here keeps a client that renders the panel too eagerly from looking like a
  * server fault.
  */
-const entitledProcedure = workspaceProcedure.use(async (opts) => {
+const entitledProcedure = storageClaimProcedure.use(async (opts) => {
   const { claim, marketService } = opts.ctx;
   if (!claim) {
     throw new TRPCError({
@@ -469,7 +480,7 @@ export const sandboxStorageRouter = router({
     .mutation(async ({ ctx, input: { instanceId, ...input } }) => {
       assertWithinRoot(input.path, await resolveFileRoot(ctx, { instanceId }, 'write'));
 
-      return ctx.client.createDirectory(input).catch(mapWorkspaceError);
+      return ctx.client.createDirectory(input).catch(mapStorageError);
     }),
 
   /**
@@ -478,7 +489,7 @@ export const sandboxStorageRouter = router({
    * without an entitlement renders the upgrade prompt, and both renders the
    * workspace.
    */
-  getEntitlement: workspaceProcedure.query(async ({ ctx }) => ({
+  getEntitlement: storageClaimProcedure.query(async ({ ctx }) => ({
     entitled: Boolean(ctx.claim),
     quotaBytes: ctx.claim?.quotaBytes ?? null,
   })),
@@ -497,7 +508,7 @@ export const sandboxStorageRouter = router({
    * use for an entitlement it cannot sign anything with, and every sandbox call
    * it makes is routed through a server that resolves the claim again.
    */
-  resolveSessionPlacement: workspaceProcedure
+  resolveSessionPlacement: storageClaimProcedure
     .input(z.object({ topicId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const { claim, cwd, mode, workingDir } = await resolveSandboxSessionConfig({
@@ -554,7 +565,7 @@ export const sandboxStorageRouter = router({
         })
         .catch(async (error) => {
           await ctx.instanceModel.delete(created.id);
-          return mapWorkspaceError(error);
+          return mapStorageError(error);
         });
 
       // A copy starts life with everything the source had built, so it is
@@ -786,7 +797,7 @@ export const sandboxStorageRouter = router({
           name: input.id,
           topicId: input.topicId,
         })
-        .catch(mapWorkspaceError);
+        .catch(mapStorageError);
 
       if (status.state !== 'running') {
         // The id is cleared with the verdict: the runtime drops a finished
@@ -826,8 +837,8 @@ export const sandboxStorageRouter = router({
     .input(z.object({ id: idSchema }))
     .query(async ({ ctx, input }) => (await ctx.instanceModel.findById(input.id)) ?? null),
 
-  getWorkspace: entitledProcedure.query(async ({ ctx }) =>
-    ctx.client.getWorkspace().catch(mapWorkspaceError),
+  getStorage: entitledProcedure.query(async ({ ctx }) =>
+    ctx.client.getStorage().catch(mapStorageError),
   ),
 
   /**
@@ -839,8 +850,8 @@ export const sandboxStorageRouter = router({
    * button, so a page nobody asked to refresh cannot keep an idle workspace
    * looking busy.
    */
-  refreshWorkspaceUsage: entitledProcedure.mutation(async ({ ctx }) =>
-    ctx.client.refreshUsage().catch(mapWorkspaceError),
+  refreshStorageUsage: entitledProcedure.mutation(async ({ ctx }) =>
+    ctx.client.refreshUsage().catch(mapStorageError),
   ),
 
   /** Specifications only. Nothing here needs a sandbox session to answer. */
@@ -1020,7 +1031,7 @@ export const sandboxStorageRouter = router({
       const path = input.path ?? (root || undefined);
       if (path !== undefined) assertWithinRoot(path, root);
 
-      return ctx.client.listFiles({ ...input, path }).catch(mapWorkspaceError);
+      return ctx.client.listFiles({ ...input, path }).catch(mapStorageError);
     }),
 
   readFile: instanceProcedure
@@ -1033,7 +1044,7 @@ export const sandboxStorageRouter = router({
         await resolveFileRoot(ctx, { instanceId, topicId: input.topicId }, 'read'),
       );
 
-      return ctx.client.readFile(input).catch(mapWorkspaceError);
+      return ctx.client.readFile(input).catch(mapStorageError);
     }),
 
   /**
@@ -1056,7 +1067,7 @@ export const sandboxStorageRouter = router({
     .mutation(async ({ ctx, input: { instanceId, ...input } }) => {
       assertWithinRoot(input.path, await resolveFileRoot(ctx, { instanceId }, 'write'));
 
-      return ctx.client.writeFile(input).catch(mapWorkspaceError);
+      return ctx.client.writeFile(input).catch(mapStorageError);
     }),
 
   /** Refused while instances still reference it — those go first. */
@@ -1089,7 +1100,7 @@ export const sandboxStorageRouter = router({
           // it cannot be deleted either while an instance references it.
           if (error instanceof SandboxStorageFilesError && error.status === 404) return;
 
-          return mapWorkspaceError(error);
+          return mapStorageError(error);
         });
 
       return ctx.instanceModel.delete(input.id);
@@ -1172,7 +1183,7 @@ export const sandboxStorageRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'PATH_OUTSIDE_INSTANCE' });
       }
 
-      return ctx.client.deleteFile(input).catch(mapWorkspaceError);
+      return ctx.client.deleteFile(input).catch(mapStorageError);
     }),
 
   /**

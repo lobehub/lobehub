@@ -1,4 +1,4 @@
-import type { EnvironmentInstanceConfiguration } from '@lobechat/types';
+import type { EnvironmentConfiguration, EnvironmentInstanceConfiguration } from '@lobechat/types';
 import { and, asc, eq, getTableColumns, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import type { EnvironmentInstanceItem, NewEnvironmentInstance } from '../schemas';
@@ -159,6 +159,53 @@ export class EnvironmentInstanceModel {
       .where(and(eq(environmentInstances.workingDirectory, workingDirectory), this.visible()))
       .limit(1);
 
+    return row;
+  };
+
+  /**
+   * One device's instance at a path, by the pair the schema makes unique.
+   *
+   * Unlike {@link findByWorkingDirectory} this does not filter by what the
+   * caller can see: it answers inside `ProjectDirectoryRepository.bind`, which
+   * has already resolved the device through the caller's own scope, and a
+   * second filter there would only hide a row whose directory is about to be
+   * bound anyway — turning "already bound" into a duplicate insert.
+   */
+  findByDeviceAndDirectory = async (
+    deviceId: string,
+    workingDirectory: string,
+  ): Promise<EnvironmentInstanceItem | undefined> => {
+    const [row] = await this.db
+      .select()
+      .from(environmentInstances)
+      .where(
+        and(
+          eq(environmentInstances.deviceId, deviceId),
+          eq(environmentInstances.workingDirectory, workingDirectory),
+        ),
+      );
+    return row;
+  };
+
+  /**
+   * The insert `bind` makes, once it has decided there is one to make.
+   *
+   * Deliberately thinner than {@link create}: ownership of the environment and
+   * of the device are both settled by the caller, inside the transaction that
+   * locked the device row, so repeating those reads here would re-ask a
+   * question already answered under a weaker lock.
+   */
+  createForDeviceBinding = async (input: {
+    configurationSnapshot: EnvironmentConfiguration;
+    deviceId: string;
+    environmentId: string;
+    name: string;
+    workingDirectory: string;
+  }): Promise<EnvironmentInstanceItem> => {
+    const [row] = await this.db
+      .insert(environmentInstances)
+      .values({ ...input, kind: 'device' })
+      .returning();
     return row;
   };
 

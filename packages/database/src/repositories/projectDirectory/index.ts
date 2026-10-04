@@ -2,6 +2,7 @@ import { getWorkingDirSourcePath } from '@lobechat/types';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { EnvironmentModel, normalizeProjectRepository } from '../../models/environment';
+import { EnvironmentInstanceModel } from '../../models/environmentInstance';
 import { ProjectModel } from '../../models/project';
 import {
   normalizeProjectDirectory,
@@ -55,6 +56,7 @@ export class ProjectDirectoryRepository {
     return this.db.transaction(async (tx) => {
       const db = tx as LobeChatDatabase;
       const environmentModel = new EnvironmentModel(db, this.userId, this.workspaceId);
+      const instanceModel = new EnvironmentInstanceModel(db, this.userId, this.workspaceId);
       const projectModel = new ProjectModel(db, this.userId, this.workspaceId);
       const directoryModel = new ProjectWorkingDirectoryModel(db, this.userId, this.workspaceId);
       // Serialize bindings of the same device, including bindings from different projects.
@@ -70,7 +72,7 @@ export class ProjectDirectoryRepository {
       const repositoryUrl = input.repositoryUrl
         ? normalizeProjectRepository(input.repositoryUrl)
         : undefined;
-      const existing = await environmentModel.findDeviceInstance(device.id, path);
+      const existing = await instanceModel.findByDeviceAndDirectory(device.id, path);
       let instance = existing;
       let environment;
       // An environment is the definition; an instance is one materialization of
@@ -101,7 +103,7 @@ export class ProjectDirectoryRepository {
         });
       }
       if (!instance) {
-        instance = await environmentModel.createDeviceInstance({
+        instance = await instanceModel.createForDeviceBinding({
           configurationSnapshot: environment.configuration,
           deviceId: device.id,
           environmentId: environment.id,

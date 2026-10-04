@@ -97,9 +97,9 @@ export const useInstances = () => {
  * this is a paid feature, and an account without one simply has no meter.
  */
 export const useWorkspaceUsage = () => {
-  const swr = useClientDataSWR<Awaited<ReturnType<typeof sandboxStorageService.getWorkspace>>>(
+  const swr = useClientDataSWR<Awaited<ReturnType<typeof sandboxStorageService.getStorage>>>(
     [WORKSPACE_KEY],
-    () => sandboxStorageService.getWorkspace(),
+    () => sandboxStorageService.getStorage(),
     // The number moves when a session writes, not while someone reads the
     // page; refocusing the tab is not a reason to ask again.
     { revalidateOnFocus: false },
@@ -108,7 +108,7 @@ export const useWorkspaceUsage = () => {
   const refresh = useCallback(async () => {
     // Optimistically publish what the measurement returns, so the meter moves
     // with the click instead of after a second round trip.
-    await swr.mutate(() => sandboxStorageService.refreshWorkspaceUsage(), {
+    await swr.mutate(() => sandboxStorageService.refreshStorageUsage(), {
       revalidate: false,
     });
   }, [swr.mutate]);

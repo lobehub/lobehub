@@ -2,7 +2,7 @@ import type { EnvironmentConfiguration, EnvironmentVisibility } from '@lobechat/
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 
 import type { EnvironmentItem, NewEnvironment } from '../schemas';
-import { environmentInstances, environments, users } from '../schemas';
+import { environments, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -210,34 +210,6 @@ export class EnvironmentModel {
           eq(environments.enabled, true),
         ),
       );
-    return row;
-  }
-
-  /** Device instances are unique per (device, workingDirectory) — see the schema constraint. */
-  async findDeviceInstance(deviceId: string, workingDirectory: string) {
-    const [row] = await this.db
-      .select()
-      .from(environmentInstances)
-      .where(
-        and(
-          eq(environmentInstances.deviceId, deviceId),
-          eq(environmentInstances.workingDirectory, workingDirectory),
-        ),
-      );
-    return row;
-  }
-
-  async createDeviceInstance(input: {
-    configurationSnapshot: EnvironmentConfiguration;
-    deviceId: string;
-    environmentId: string;
-    name: string;
-    workingDirectory: string;
-  }) {
-    const [row] = await this.db
-      .insert(environmentInstances)
-      .values({ ...input, kind: 'device' })
-      .returning();
     return row;
   }
 
