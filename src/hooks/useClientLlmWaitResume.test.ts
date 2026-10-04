@@ -75,6 +75,23 @@ describe('useClientLlmWaitResume', () => {
     expect(continueClientLlmWait).toHaveBeenCalledWith(parked);
   });
 
+  it('keeps polling after a failed list, so a later wait is still picked up', async () => {
+    const parked = { operationId: 'op-3', provider: 'lmstudio', topicId: 'tpc-3' };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    listClientLlmWaits.mockRejectedValueOnce(new Error('502')).mockResolvedValue([parked]);
+
+    renderHook(() => useClientLlmWaitResume(), { wrapper });
+    await vi.advanceTimersByTimeAsync(0);
+    await flush();
+    expect(listClientLlmWaits).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(CLIENT_LLM_WAIT_POLL_MIN_MS);
+    await flush();
+
+    expect(listClientLlmWaits).toHaveBeenCalledTimes(2);
+    expect(continueClientLlmWait).toHaveBeenCalledWith(parked);
+  });
+
   it('leaves runs for providers this client cannot reach', async () => {
     listClientLlmWaits.mockResolvedValue([
       { operationId: 'op-2', provider: 'ollama', topicId: 'tpc-2' },

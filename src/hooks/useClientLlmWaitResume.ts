@@ -39,9 +39,17 @@ export const useClientLlmWaitResume = (): void => {
       : null,
     async () => {
       const providers = buildLlmExecutorDeclaration()?.providers ?? [];
-      const waits = (await aiAgentService.listClientLlmWaits(providers)).filter(
-        (wait) => !!getLlmExecutorDeclarationFor(wait.provider),
-      );
+      let listed: Awaited<ReturnType<typeof aiAgentService.listClientLlmWaits>>;
+      try {
+        listed = await aiAgentService.listClientLlmWaits(providers);
+      } catch (error) {
+        // Never surface it to SWR: an errored key stops its interval, and with
+        // retries off nothing would poll again. Count it as an idle poll.
+        console.error('[useClientLlmWaitResume] Failed to list waiting runs:', error);
+        idlePollsRef.current += 1;
+        return 0;
+      }
+      const waits = listed.filter((wait) => !!getLlmExecutorDeclarationFor(wait.provider));
 
       // One at a time: each pick-up subscribes to its run's stream first.
       for (const wait of waits) {
