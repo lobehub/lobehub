@@ -485,7 +485,14 @@ const ref = (schema: string): SchemaObject => ({ $ref: `#/components/schemas/${s
  * same policy as unnamed sub-operations: `additionalProperties` over a guessed
  * shape, so a generated client is never confidently mistyped.
  */
-const PERSONAL_AGENT_GROUPS = new Set(['goals', 'memories', 'notifications', 'signals', 'tasks']);
+const PERSONAL_AGENT_GROUPS = new Set([
+  'goals',
+  'human-requests',
+  'memories',
+  'notifications',
+  'signals',
+  'tasks',
+]);
 
 /**
  * Handlers whose success status is not 200. A controller's return code is not

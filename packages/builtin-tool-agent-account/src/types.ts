@@ -7,6 +7,12 @@ export const AgentAccountApiName = {
   listAccounts: 'listAccounts',
   /** Read messages from the agent's inbox, fenced as untrusted input. */
   readInbox: 'readInbox',
+  /**
+   * Send a message whose text needs a value only the user has (a verification
+   * code, a password): the user fills it in a secure card and the server
+   * sends the message. The value never reaches the agent.
+   */
+  requestSecureInput: 'requestSecureInput',
   /** Send a message from one of the agent's accounts. */
   sendMessage: 'sendMessage',
   /**
@@ -75,6 +81,30 @@ export interface ListAccountsResult {
   accounts: AgentAccountContextItem[];
 }
 
-export interface SendMessageResult {
-  providerMessageId: string;
+/**
+ * What `sendMessage` returns: either it went out (a reply on an existing
+ * thread), or it is parked as an approval card for the user.
+ */
+export type SendMessageResult =
+  | { from: string; providerMessageId: string; status: 'sent'; to: string }
+  | { expiresAt: string; requestId: string; status: 'awaiting_approval' };
+
+export interface RequestSecureInputArgs {
+  /** Which account to send from. Defaults to the agent's first send-capable one. */
+  accountId?: string;
+  /** What the user is asked for: a one-time code, a password, or an access token. */
+  kind: 'otp' | 'password' | 'token';
+  /** One sentence telling the user why it is needed. Shown as the agent's words. */
+  reason?: string;
+  subject?: string;
+  /** The message to send, with `{{secret}}` exactly once where the value goes. */
+  text: string;
+  threadKey?: string;
+  to: string;
+}
+
+export interface RequestSecureInputResult {
+  expiresAt: string;
+  requestId: string;
+  status: 'awaiting_user_input';
 }

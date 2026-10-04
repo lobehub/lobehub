@@ -1,0 +1,23 @@
+{
+  "name": "@lobechat/secret-channel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent Secret Channel (ASC/1) crypto core: signed single-use requests, canonical AAD, HPKE envelope seal/open, redaction placeholders",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hpke/core": "1.9.0",
+    "@hpke/dhkem-x25519": "1.8.0",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

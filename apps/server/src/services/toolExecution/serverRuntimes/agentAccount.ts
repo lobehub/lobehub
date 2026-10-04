@@ -1,14 +1,17 @@
 import type {
   ListAccountsArgs,
   ReadInboxArgs,
+  RequestSecureInputArgs,
   SendMessageArgs,
   WaitForMessageArgs,
 } from '@lobechat/builtin-tool-agent-account';
 import { AgentAccountApiName, AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
+import { AGENT_SECRET_KINDS, AGENT_SECRET_SLOT, type AgentHumanRequestItem } from '@lobechat/types';
 
-import { AgentAccountModel } from '@/database/models/agentAccount';
+import { AgentAccountModel, type AgentAccountView } from '@/database/models/agentAccount';
 import type { AgentInboxMessageItem } from '@/database/schemas';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { createAgentHumanRequestService } from '@/server/services/agentHumanRequest/factory';
 import { AgentAccountService } from '@/server/services/agentIdentity';
 import { AgentInboxService } from '@/server/services/agentIdentity/inbox';
 import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdentity/providers';
@@ -37,6 +40,18 @@ const CODE_RELAY_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const normalizeAddress = (value: string) => value.trim().toLowerCase();
 
+/**
+ * Which kind of account can reach `to`: an email address needs a `mail`
+ * account, a phone number a `phone` one. `undefined` when it is neither, so
+ * the provider gets to decide.
+ */
+const recipientKind = (to: string): 'mail' | 'phone' | undefined => {
+  const value = to.trim();
+  if (/^[^\s@]+@[^\s@]+$/.test(value)) return 'mail';
+  if (/^\+?[\d\s().-]{6,}$/.test(value)) return 'phone';
+  return undefined;
+};
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const asJson = (value: unknown) => JSON.stringify(value, null, 2);
@@ -50,10 +65,18 @@ const asJson = (value: unknown) => JSON.stringify(value, null, 2);
  * run's agent — an account id that belongs to someone else is refused, so the
  * tool cannot be used as a confused deputy.
  *
- * `sendMessage` is the exfiltration edge. Its manifest holds any send without a
- * thread for the user's approval; a send that names a thread is checked here:
- * the thread must exist in this account's inbox, `to` must be its sender, and
- * the text must not relay a code this agent received from someone else.
+ * `sendMessage` is the exfiltration edge, and the gate lives here rather than
+ * in the run's approval mode, so auto-run, headless and inbound-woken runs are
+ * held exactly like an interactive one. A send goes out unattended only when it
+ * answers an existing thread: the thread must be in this account's inbox, `to`
+ * must be its sender, and the text must not relay a code this agent received
+ * from someone else. Everything else is parked as an approval card the owner
+ * sends, edits or discards — the run does not wait for it; the outcome arrives
+ * as a later turn.
+ *
+ * `requestSecureInput` parks a message with a `{{secret}}` slot as a secure
+ * input card. The owner's value is sealed to the server (ASC/1 HPKE), which
+ * fills the slot and sends; the value never comes back through this tool.
  */
 export const agentAccountRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
@@ -81,15 +104,72 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
 
     const inbox = new AgentInboxService(db, userId, workspaceId);
 
+    const humanRequests = () => createAgentHumanRequestService(db, userId, { workspaceId });
+
+    const origin = () => ({
+      agentId: requireAgentId(),
+      operationId: context.operationId,
+      toolCallId: context.toolCallId,
+      topicId: context.topicId,
+    });
+
+    /**
+     * Resolve the account to send from: the named one, or the first
+     * send-capable one that can reach `to` — an email goes out from the mail
+     * address, a text from the number, never the other way round.
+     */
+    const resolveSender = async (
+      ref: string | undefined,
+      to: string,
+    ): Promise<{ account: AgentAccountView } | { refusal: string }> => {
+      const list = await accounts();
+      const kind = recipientKind(to);
+
+      if (ref) {
+        // Accept either the account id or the address the model sees in
+        // context — the model refers to accounts by address, so matching only
+        // on the uuid would refuse a perfectly valid send.
+        const account = findOwned(list, ref);
+        if (!account) return { refusal: `No account ${ref} is owned by this agent.` };
+        if (kind && account.kind !== kind) {
+          return {
+            refusal: `${account.identifier} is a ${account.kind} account and cannot send to ${to}.`,
+          };
+        }
+        return { account };
+      }
+
+      const account = list.find((item) => item.capabilities.send && (!kind || item.kind === kind));
+      if (!account) {
+        return {
+          refusal: kind
+            ? `This agent has no send-capable ${kind} account to reach ${to}.`
+            : 'This agent has no send-capable account yet.',
+        };
+      }
+      return { account };
+    };
+
+    const parkedContent = (item: AgentHumanRequestItem, note: string) =>
+      asJson({
+        expiresAt: item.expiresAt.toISOString(),
+        note,
+        requestId: item.id,
+        status: item.type === 'secret' ? 'awaiting_user_input' : 'awaiting_approval',
+      });
+
+    const describeError = (error: unknown) =>
+      error instanceof Error ? error.message : String(error);
+
     /** Accept either the account id or the address the model sees in context. */
     const findOwned = (list: Awaited<ReturnType<typeof accounts>>, ref: string) =>
       list.find((account) => account.id === ref || account.identifier === ref);
 
     /**
-     * Check an unattended thread reply. Only reached when the call named a
-     * thread — without one the send was already held for the user's approval
-     * by the manifest's outbound audit. Returns the refusal, or the newest
-     * message from the recipient on that thread, which the reply answers.
+     * Check an unattended thread reply. Returns why it cannot go out
+     * unattended (the send is then parked for approval instead), or the
+     * newest message from the recipient on that thread, which the reply
+     * answers.
      */
     const checkThreadReply = async (
       accountId: string,
@@ -107,7 +187,7 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
       const replyTo = thread.find((message) => normalizeAddress(message.from) === recipient);
       if (!replyTo) {
         return {
-          refusal: `Thread ${args.threadKey} has no message from ${args.to} in this inbox, so this is not a reply. Send it without \`threadKey\` to ask the user to approve it.`,
+          refusal: `Thread ${args.threadKey} has no message from ${args.to} in this inbox, so this is not a reply.`,
         };
       }
 
@@ -123,7 +203,7 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
       );
       if (relayed) {
         return {
-          refusal: `This reply contains a verification code that ${relayed.from} sent you. Codes are never relayed to another sender without the user's approval — send it without \`threadKey\` to ask the user.`,
+          refusal: `This reply contains a verification code that ${relayed.from} sent you. Codes are never relayed to another sender without the user's approval.`,
         };
       }
 
@@ -136,7 +216,10 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         if (args?.accountId) {
           const target = findOwned(await accounts(), args.accountId);
           if (!target) {
-            return { content: `No account ${args.accountId} is owned by this agent.`, success: false };
+            return {
+              content: `No account ${args.accountId} is owned by this agent.`,
+              success: false,
+            };
           }
           accountId = target.id;
         }
@@ -180,38 +263,114 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         };
       },
 
-      sendMessage: async (args: SendMessageArgs) => {
+      requestSecureInput: async (args: RequestSecureInputArgs) => {
         if (!args?.to || !args?.text) {
-          return { content: 'sendMessage requires both `to` and `text`.', success: false };
+          return { content: 'requestSecureInput requires both `to` and `text`.', success: false };
         }
-
-        const list = await accounts();
-        // Accept either the account id or the address the model sees in
-        // context — the model refers to accounts by address, so matching only
-        // on the uuid would refuse a perfectly valid `sendMessage`.
-        const target = args.accountId
-          ? list.find(
-              (account) => account.id === args.accountId || account.identifier === args.accountId,
-            )
-          : list.find((account) => account.capabilities.send);
-
-        if (!target) {
+        if (!(AGENT_SECRET_KINDS as readonly string[]).includes(args.kind)) {
           return {
-            content: args.accountId
-              ? `No account ${args.accountId} is owned by this agent.`
-              : 'This agent has no send-capable account yet.',
+            content: `\`kind\` must be one of ${AGENT_SECRET_KINDS.join(', ')}.`,
+            success: false,
+          };
+        }
+        if (args.text.split(AGENT_SECRET_SLOT).length !== 2) {
+          return {
+            content: `The text must contain ${AGENT_SECRET_SLOT} exactly once, where the user's value goes.`,
             success: false,
           };
         }
 
+        const resolved = await resolveSender(args.accountId, args.to);
+        if ('refusal' in resolved) return { content: resolved.refusal, success: false };
+        const { account } = resolved;
+
+        try {
+          const item = await (
+            await humanRequests()
+          ).requestSecret(origin(), {
+            accountId: account.id,
+            channel: account.kind,
+            from: account.identifier,
+            kind: args.kind,
+            reason: args.reason,
+            subject: args.subject,
+            text: args.text,
+            threadKey: args.threadKey,
+            to: args.to,
+          });
+
+          return {
+            content: parkedContent(
+              item,
+              'The user fills the value in a secure card; it is sent without passing through you. You will be told in a later turn whether the message went out. Do not ask for the value in chat.',
+            ),
+            state: { humanRequestId: item.id },
+            success: true,
+          };
+        } catch (error) {
+          return {
+            content: `Could not request secure input: ${describeError(error)}`,
+            success: false,
+          };
+        }
+      },
+
+      sendMessage: async (args: SendMessageArgs) => {
+        if (!args?.to || !args?.text) {
+          return { content: 'sendMessage requires both `to` and `text`.', success: false };
+        }
+        if (args.text.includes(AGENT_SECRET_SLOT)) {
+          return {
+            content: `${AGENT_SECRET_SLOT} is only filled by requestSecureInput. Use that for a message that needs a value only the user has.`,
+            success: false,
+          };
+        }
+
+        const resolved = await resolveSender(args.accountId, args.to);
+        if ('refusal' in resolved) return { content: resolved.refusal, success: false };
+        const target = resolved.account;
+
+        // Only a checked reply on an existing thread goes out unattended.
         let replyTo: AgentInboxMessageItem | undefined;
+        let heldBecause =
+          'It is not a reply on an existing thread, so the user decides whether it goes out.';
         if (args.threadKey) {
           const checked = await checkThreadReply(target.id, {
             ...args,
             threadKey: args.threadKey,
           });
-          if ('refusal' in checked) return { content: checked.refusal, success: false };
-          replyTo = checked.replyTo;
+          if ('refusal' in checked) heldBecause = checked.refusal;
+          else replyTo = checked.replyTo;
+        }
+
+        if (!replyTo) {
+          try {
+            const item = await (
+              await humanRequests()
+            ).requestApproval(origin(), {
+              accountId: target.id,
+              channel: target.kind,
+              from: target.identifier,
+              subject: args.subject,
+              text: args.text,
+              threadKey: args.threadKey,
+              to: args.to,
+            });
+
+            return {
+              content: parkedContent(
+                item,
+                `${heldBecause} It is now an approval card: the user can send it, edit it or discard it. You will be told the outcome in a later turn — do not send it again meanwhile.`,
+              ),
+              state: { humanRequestId: item.id },
+              success: true,
+            };
+          } catch (error) {
+            return {
+              content: `Could not ask the user to approve: ${describeError(error)}`,
+              success: false,
+            };
+          }
         }
 
         try {
@@ -222,21 +381,24 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
           });
 
           const { providerMessageId } = await service.send(target.id, {
-            replyToProviderMessageId: replyTo?.providerMessageId,
+            replyToProviderMessageId: replyTo.providerMessageId,
             subject: args.subject,
             text: args.text,
             threadKey: args.threadKey,
             to: args.to,
           });
           return {
-            content: asJson({ from: target.identifier, providerMessageId, to: args.to }),
+            content: asJson({
+              from: target.identifier,
+              providerMessageId,
+              status: 'sent',
+              to: args.to,
+            }),
             success: true,
           };
         } catch (error) {
           return {
-            content: `Failed to send from ${target.identifier}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+            content: `Failed to send from ${target.identifier}: ${describeError(error)}`,
             success: false,
           };
         }

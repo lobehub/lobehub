@@ -1,6 +1,5 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
-import { AGENT_ACCOUNT_OUTBOUND_AUDIT } from './outboundAudit';
 import { systemPrompt } from './systemRole';
 import { AgentAccountApiName, AgentAccountIdentifier } from './types';
 
@@ -46,10 +45,7 @@ export const AgentAccountManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Send a message from one of the agent's own addresses. To reply to a message you received, pass its `threadKey` and send to its sender — that runs directly. Sending to anyone else, or without a thread, waits for the user's approval.",
-      humanIntervention: {
-        dynamic: { default: 'never', policy: 'always', type: AGENT_ACCOUNT_OUTBOUND_AUDIT },
-      },
+        "Send a message from one of the agent's own addresses. To reply to a message you received, pass its `threadKey` and send to its sender — that is sent right away. Anything else (a new address, no thread) becomes an approval card: the user sends, edits or discards it, and you are told the outcome in a later turn. Never pass a password or code you were not given; use requestSecureInput for a value only the user has.",
       name: AgentAccountApiName.sendMessage,
       parameters: {
         properties: {
@@ -67,6 +63,40 @@ export const AgentAccountManifest: BuiltinToolManifest = {
           to: { description: 'The address to send to.', type: 'string' },
         },
         required: ['to', 'text'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Send a message that needs a value only the user has — a verification code texted to their phone, a password, an access token. Write the message with `{{secret}}` exactly once where the value goes. The user types the value into a secure card; it is encrypted to the server, inserted and sent without ever passing through you. You only learn whether it was sent. Never ask the user to paste such a value in chat.',
+      name: AgentAccountApiName.requestSecureInput,
+      parameters: {
+        properties: {
+          accountId: {
+            description: 'Which account to send from. Omit to use the first send-capable one.',
+            type: 'string',
+          },
+          kind: {
+            description: 'What the user is asked for.',
+            enum: ['otp', 'password', 'token'],
+            type: 'string',
+          },
+          reason: {
+            description: 'One short sentence telling the user why it is needed.',
+            type: 'string',
+          },
+          subject: { description: 'Subject line (email accounts).', type: 'string' },
+          text: {
+            description: 'The message, containing `{{secret}}` exactly once.',
+            type: 'string',
+          },
+          threadKey: {
+            description: 'The threadKey of the inbox message being replied to, if any.',
+            type: 'string',
+          },
+          to: { description: 'The address to send to.', type: 'string' },
+        },
+        required: ['kind', 'to', 'text'],
         type: 'object',
       },
     },
@@ -107,7 +137,7 @@ export const AgentAccountManifest: BuiltinToolManifest = {
   meta: {
     avatar: '📬',
     description:
-      "Act on the agent's own addresses: list them, send from them, or wait for the next message",
+      "Act on the agent's own email address and phone number: read the inbox, send from them (new recipients go to the user as an approval card), wait for the next message, or send a message carrying a value only the user has — a code texted to their phone, a password — through a secure input card whose value never reaches the agent.",
     title: 'Agent Accounts',
   },
   systemRole: systemPrompt,

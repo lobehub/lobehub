@@ -29,6 +29,7 @@ import { agentDocumentRouter } from './agentDocument';
 import { agentEvalRouter } from './agentEval';
 import { agentEvalExternalRouter } from './agentEvalExternal';
 import { agentGroupRouter } from './agentGroup';
+import { agentHumanRequestRouter } from './agentHumanRequest';
 import { agentLabelRouter } from './agentLabel';
 import { agentNotifyRouter } from './agentNotify';
 import { agentQuotaRouter } from './agentQuota';
@@ -112,6 +113,7 @@ export const lambdaRouter = router({
   acceptanceComment: acceptanceCommentRouter,
   agent: agentRouter,
   agentAccount: agentAccountRouter,
+  agentHumanRequest: agentHumanRequestRouter,
   agentBotProvider: agentBotProviderRouter,
   agentNotify: agentNotifyRouter,
   botMessage: botMessageRouter,

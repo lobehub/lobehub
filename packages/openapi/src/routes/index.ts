@@ -6,6 +6,7 @@ import ChatRoutes from './chat.route';
 import EvalRoutes from './eval.route';
 import FileRoutes from './files.route';
 import GoalsRoutes from './goals.route';
+import HumanRequestsRoutes from './human-requests.route';
 import KnowledgeBasesRoutes from './knowledge-bases.route';
 import McpServersRoutes from './mcp-servers.route';
 import MemoriesRoutes from './memories.route';
@@ -35,6 +36,7 @@ export default {
   'plugins': PluginsRoutes,
   'files': FileRoutes,
   'goals': GoalsRoutes,
+  'human-requests': HumanRequestsRoutes,
   'knowledge-bases': KnowledgeBasesRoutes,
   'mcp-servers': McpServersRoutes,
   'memories': MemoriesRoutes,

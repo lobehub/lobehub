@@ -41,6 +41,7 @@ const METHOD_NAME_OVERRIDES: Record<string, string> = {
   'GET /api/v1/memories/{category}': 'listCategory',
   'GET /api/v1/notifications/counts': 'getCounts',
   'POST /api/v1/goals/{id}/advance': 'advance',
+  'POST /api/v1/human-requests/{id}/decision': 'decide',
   'POST /api/v1/goals/{id}/pause': 'pause',
   'POST /api/v1/goals/{id}/restart': 'restart',
   'POST /api/v1/goals/{id}/resume': 'resume',

@@ -193,6 +193,10 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   agentDocument: rw('knowledge:read', 'knowledge:write'),
   agentEval: 'blocked',
   agentEvalExternal: 'blocked',
+  // approval / secure-input cards: a restricted key may read them, but never
+  // answer one — the answer is the human-in-the-loop, and a machine principal
+  // approving its own agent's outbound mail would remove exactly that.
+  agentHumanRequest: rw('agent:read', null),
   agentLabel: rw('agent:read', 'agent:write'),
   agentNotify: rw('agent:read', 'agent:write'),
   agentQuota: rw('agent:read', null),

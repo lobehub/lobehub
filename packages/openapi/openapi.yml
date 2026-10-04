@@ -13484,6 +13484,478 @@ paths:
                 agentId:
                   type: string
                   minLength: 1
+  /api/v1/human-requests:
+    get:
+      operationId: listHumanRequests
+      summary: List the approval and secure-input cards the caller's agents parked
+      tags:
+        - human-requests
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: query
+          name: agentId
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: topicId
+          schema:
+            type: string
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum:
+              - approval
+              - secret
+  /api/v1/human-requests/identity:
+    get:
+      operationId: getHumanRequestSecretChannelIdentity
+      summary: Get the server Secret Channel identity to pin before sealing secrets
+      tags:
+        - human-requests
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+  /api/v1/human-requests/{id}:
+    get:
+      operationId: getHumanRequest
+      summary: Get one approval or secure-input card
+      tags:
+        - human-requests
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+  /api/v1/human-requests/{id}/decision:
+    post:
+      operationId: decideHumanRequest
+      summary: Approve (optionally edited), decline, retry, or fulfil a card with a
+        sealed secret
+      tags:
+        - human-requests
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decision:
+                  oneOf:
+                    - type: object
+                      properties:
+                        action:
+                          type: string
+                          const: approve
+                        edits:
+                          type: object
+                          properties:
+                            subject:
+                              type: string
+                              maxLength: 998
+                            text:
+                              type: string
+                              minLength: 1
+                              maxLength: 20000
+                            to:
+                              type: string
+                              minLength: 1
+                              maxLength: 320
+                          additionalProperties: false
+                      required:
+                        - action
+                    - type: object
+                      properties:
+                        action:
+                          type: string
+                          const: decline
+                      required:
+                        - action
+                    - type: object
+                      properties:
+                        action:
+                          type: string
+                          const: retry
+                      required:
+                        - action
+                    - type: object
+                      properties:
+                        action:
+                          type: string
+                          const: fulfill
+                        envelope:
+                          type: object
+                          properties:
+                            ct:
+                              type: string
+                              minLength: 1
+                              maxLength: 8192
+                            enc:
+                              type: string
+                              minLength: 1
+                              maxLength: 64
+                            requestId:
+                              type: string
+                              minLength: 1
+                              maxLength: 64
+                            sender:
+                              type: string
+                              maxLength: 128
+                            suite:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            v:
+                              type: integer
+                              minimum: -9007199254740991
+                              maximum: 9007199254740991
+                          required:
+                            - ct
+                            - enc
+                            - requestId
+                            - suite
+                            - v
+                          additionalProperties: false
+                      required:
+                        - action
+                        - envelope
+                via:
+                  type: string
+                  enum:
+                    - web
+                    - desktop
+                    - ios
+                    - android
+                    - api
+              required:
+                - decision
   /api/v1/knowledge-bases:
     get:
       operationId: getApiV1KnowledgeBases

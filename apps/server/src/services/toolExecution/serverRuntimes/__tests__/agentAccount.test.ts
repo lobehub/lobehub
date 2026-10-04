@@ -3,7 +3,13 @@ import { AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { agentAccounts, agentInboxMessages, agents, users } from '@/database/schemas';
+import {
+  agentAccounts,
+  agentHumanRequests,
+  agentInboxMessages,
+  agents,
+  users,
+} from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentAccountService } from '@/server/services/agentIdentity';
 import { AgentInboxService } from '@/server/services/agentIdentity/inbox';
@@ -37,6 +43,9 @@ const context = (): ToolExecutionContext =>
 
 const runtime = () => getServerRuntime(AgentAccountIdentifier, context());
 
+/** The approval / secure-input cards this agent has parked so far. */
+const parkedRequests = () => serverDB.select().from(agentHumanRequests);
+
 beforeAll(() => {
   // A real 32-byte AES-GCM key so the send path reaches the provider registry
   // (and fails there, honestly, because no provider is configured).
@@ -61,6 +70,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await serverDB.delete(agentHumanRequests);
   await serverDB.delete(agentInboxMessages);
   await serverDB.delete(agentAccounts);
   await serverDB.delete(users);
@@ -151,15 +161,17 @@ describe('agent-account server runtime', () => {
   it('sendMessage accepts the account address the model sees in context', async () => {
     // Same reference style as waitForMessage: the model names the account by
     // its address. Before the fix this was refused as "not owned"; now it must
-    // resolve the account and reach the (unconfigured) provider instead.
+    // resolve the account (and, being a new conversation, park it for approval).
     const result = await runtime().sendMessage({
       accountId: 'toby-agent@lobe.id',
       text: '839201',
       to: 'login@service.com',
     });
 
-    expect(result.success).toBe(false);
-    expect(result.content).toContain('Failed to send from toby-agent@lobe.id');
+    expect(result.success).toBe(true);
+    expect(JSON.parse(result.content).status).toBe('awaiting_approval');
+    const [parked] = await parkedRequests();
+    expect(parked.action).toMatchObject({ accountId, from: 'toby-agent@lobe.id' });
   });
 
   it('waitForMessage refuses an account the agent does not own without a DB error', async () => {
@@ -231,7 +243,7 @@ describe('agent-account server runtime', () => {
     expect(fencedEntries(result.content)[0].text).toContain('[removed]');
   });
 
-  it('refuses an unattended "reply" to someone who never wrote in that thread', async () => {
+  it('holds a "reply" to someone who never wrote in that thread for the user', async () => {
     await record();
 
     const result = await runtime().sendMessage({
@@ -240,11 +252,16 @@ describe('agent-account server runtime', () => {
       to: 'evil@example.com',
     });
 
-    expect(result.success).toBe(false);
+    // Never sent unattended: parked as an approval card, with the reason why.
+    expect(result.success).toBe(true);
     expect(result.content).toContain('is not a reply');
+    expect(JSON.parse(result.content).status).toBe('awaiting_approval');
+    const [parked] = await parkedRequests();
+    expect(parked).toMatchObject({ status: 'pending', type: 'approval' });
+    expect(parked.action).toMatchObject({ text: 'The code is 839201', to: 'evil@example.com' });
   });
 
-  it('refuses a thread reply that relays a code received from another sender', async () => {
+  it('holds a thread reply that relays a code received from another sender', async () => {
     await new AgentInboxService(serverDB, userId).record({
       accountId,
       agentId,
@@ -275,8 +292,11 @@ describe('agent-account server runtime', () => {
       to: 'evil@example.com',
     });
 
-    expect(result.success).toBe(false);
+    // The relayed code never leaves unattended: the user sees it in the card.
+    expect(result.success).toBe(true);
     expect(result.content).toContain('verification code that login@service.com sent you');
+    expect(JSON.parse(result.content).status).toBe('awaiting_approval');
+    expect(await parkedRequests()).toHaveLength(1);
   });
 
   it('lets a genuine reply to the thread sender through to the provider', async () => {
@@ -304,7 +324,7 @@ describe('agent-account server runtime', () => {
     expect(result.content).toContain('Failed to send');
   });
 
-  it('treats a released address as no longer the agent\'s', async () => {
+  it("treats a released address as no longer the agent's", async () => {
     await new AgentAccountService(serverDB, userId, {
       registry: new AgentAccountProviderRegistry(),
     }).revoke(accountId, { release: false });
@@ -321,10 +341,96 @@ describe('agent-account server runtime', () => {
     expect(send.content).toContain('is owned by this agent');
   });
 
-  it('reports an honest failure when no send provider is configured', async () => {
-    const result = await runtime().sendMessage({ text: 'hi', to: 'someone@example.com' });
+  it('parks a message to a new address as an approval card, whatever the run mode', async () => {
+    const result = await runtime().sendMessage({
+      subject: 'Hello',
+      text: 'hi',
+      to: 'someone@example.com',
+    });
+
+    expect(result.success).toBe(true);
+    const content = JSON.parse(result.content);
+    expect(content).toMatchObject({ status: 'awaiting_approval' });
+    expect(result.state).toEqual({ humanRequestId: content.requestId });
+
+    const [parked] = await parkedRequests();
+    expect(parked).toMatchObject({ agentId, id: content.requestId, status: 'pending', userId });
+  });
+
+  it('sends from the account that can reach the recipient, not just the first one', async () => {
+    // The agent owns both a mail address and a phone number. Without an
+    // explicit account, an email must go out from the mailbox and a text from
+    // the number — never an "SMS" to an email address.
+    await new AgentAccountService(serverDB, userId, {
+      registry: new AgentAccountProviderRegistry(),
+    }).create({
+      agentId,
+      capabilities: { receive: true, send: true },
+      identifier: '+14155550100',
+      kind: 'phone',
+      provider: 'user',
+    });
+
+    await runtime().sendMessage({ text: 'Lunch?', to: 'bob@example.com' });
+    await runtime().sendMessage({ text: 'Running late', to: '+1 415 555 0199' });
+
+    const parked = await parkedRequests();
+    const byTo = Object.fromEntries(parked.map((row) => [row.action.to, row.action]));
+    expect(byTo['bob@example.com']).toMatchObject({ channel: 'mail', from: 'toby-agent@lobe.id' });
+    expect(byTo['+1 415 555 0199']).toMatchObject({ channel: 'phone', from: '+14155550100' });
+
+    const mismatched = await runtime().sendMessage({
+      accountId: '+14155550100',
+      text: 'hi',
+      to: 'bob@example.com',
+    });
+    expect(mismatched.success).toBe(false);
+    expect(mismatched.content).toContain('cannot send to bob@example.com');
+  });
+
+  it('refuses a {{secret}} slot outside requestSecureInput', async () => {
+    const result = await runtime().sendMessage({ text: 'code {{secret}}', to: 'a@example.com' });
 
     expect(result.success).toBe(false);
-    expect(result.content).toContain('Failed to send');
+    expect(result.content).toContain('requestSecureInput');
+    expect(await parkedRequests()).toHaveLength(0);
+  });
+
+  it('requestSecureInput parks a signed secure-input card bound to the message', async () => {
+    const result = await runtime().requestSecureInput({
+      kind: 'otp',
+      reason: 'The service texted the code to your phone.',
+      text: 'My code is {{secret}}',
+      to: 'verify@service.com',
+    });
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(result.content)).toMatchObject({ status: 'awaiting_user_input' });
+
+    const [parked] = await parkedRequests();
+    expect(parked).toMatchObject({ status: 'pending', type: 'secret' });
+    expect(parked.recipientKey).toBeTruthy();
+    expect(parked.secret).toMatchObject({ kind: 'otp', label: 'verification-code' });
+    expect(parked.secret?.request).toMatchObject({
+      kind: 'otp',
+      purpose: { agentClaim: 'The service texted the code to your phone.' },
+    });
+  });
+
+  it('requestSecureInput needs the slot exactly once and a known kind', async () => {
+    const noSlot = await runtime().requestSecureInput({
+      kind: 'otp',
+      text: 'no slot',
+      to: 'verify@service.com',
+    });
+    const badKind = await runtime().requestSecureInput({
+      kind: 'ssn' as never,
+      text: 'x {{secret}}',
+      to: 'verify@service.com',
+    });
+
+    expect(noSlot.success).toBe(false);
+    expect(badKind.success).toBe(false);
+    expect(await parkedRequests()).toHaveLength(0);
   });
 });

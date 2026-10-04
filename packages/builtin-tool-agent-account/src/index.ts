@@ -1,5 +1,4 @@
 export { AgentAccountManifest } from './manifest';
-export { AGENT_ACCOUNT_OUTBOUND_AUDIT, agentAccountOutboundAudit } from './outboundAudit';
 export { systemPrompt } from './systemRole';
 export {
   AgentAccountApiName,
@@ -7,6 +6,8 @@ export {
   type ListAccountsArgs,
   type ListAccountsResult,
   type ReadInboxArgs,
+  type RequestSecureInputArgs,
+  type RequestSecureInputResult,
   type SendMessageArgs,
   type SendMessageResult,
   type WaitedInboundMessage,
