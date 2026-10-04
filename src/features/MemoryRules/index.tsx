@@ -441,7 +441,10 @@ const MemoryRules = () => {
                     <span>{t('rules.columns.enforcement')}</span>
                     <span>{t('rules.columns.method')}</span>
                     <span
-                      className={cx(styles.sortHeader, runsSort && styles.sortHeaderActive)}
+                      className={cx(
+                        styles.sortHeader,
+                        runsSort !== null && styles.sortHeaderActive,
+                      )}
                       role={'button'}
                       title={t(`rules.columns.runsSort.${runsSort ?? 'off'}`)}
                       onClick={() => setRunsSort(nextRunsSort(runsSort))}

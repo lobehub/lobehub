@@ -68,9 +68,9 @@ const PartSwitcher = ({ onChange, sections, value }: PartSwitcherProps) => {
         <Select
           popupMatchSelectWidth={false}
           showSearch={agents.length >= SEARCH_FROM}
-          style={{ minWidth: 200 }}
+          style={{ minWidth: 200, width: 'auto' }}
           value={value}
-          variant={'borderless'}
+          variant={'filled'}
           options={agents.map((section) => ({
             label: <OwnerLabel count={liveCount(section)} owner={section.owner} />,
             // What the search box matches against, since the label is not plain text.
