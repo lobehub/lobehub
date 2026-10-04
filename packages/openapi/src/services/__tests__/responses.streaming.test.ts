@@ -77,6 +77,13 @@ describe('ResponsesService.createStreamingResponse', () => {
     // on a manager nothing mirrors left the DO holding a finished run as
     // `running` until its inactivity watchdog abandoned it.
     expect(createStreamEventManagerMock).toHaveBeenCalledTimes(1);
+    // Must match `AgentRuntimeService`'s own setup: `deferPushes` keeps a
+    // `stream_end` / `message_patch` step from blocking on its gateway HTTP
+    // push, and the generator's `finally` drains what was deferred.
+    expect(createStreamEventManagerMock).toHaveBeenCalledWith({
+      deferPushes: true,
+      inner: expect.any(InMemoryStreamEventManager),
+    });
     expect(subscribedManager()).toBeInstanceOf(InMemoryStreamEventManager);
 
     // Streaming still works end to end, from the in-process manager.

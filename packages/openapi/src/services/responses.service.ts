@@ -456,8 +456,16 @@ export class ResponsesService extends BaseService {
       // produces them: the subscription hangs off a private in-memory manager
       // rather than taking a second Redis subscriber's connection per streamed
       // request.
+      //
+      // `deferPushes` matches `AgentRuntimeService`'s own default: without it a
+      // `stream_end` / `message_patch` step would block on its gateway HTTP push
+      // (up to 5s whenever the gateway is slow). The `finally` below drains what
+      // this invocation deferred, which is what the option requires.
       const localStreamManager = new InMemoryStreamEventManager();
-      const streamEventManager = createStreamEventManager({ inner: localStreamManager });
+      const streamEventManager = createStreamEventManager({
+        deferPushes: true,
+        inner: localStreamManager,
+      });
       const agentRuntimeService = new AgentRuntimeService(this.db, this.userId, {
         queueService: null,
         streamEventManager,
