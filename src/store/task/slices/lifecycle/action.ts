@@ -13,20 +13,11 @@ import {
   appendOptimisticPropertyActivity,
   buildOptimisticPropertyActivity,
 } from '../detail/optimisticActivity';
+import { taskGroupKeyByStatus } from '../list/projection';
 
 const log = debug('lobe-store:task-lifecycle');
 
 type Setter = StoreSetter<TaskStore>;
-
-const taskGroupKeyByStatus: Record<TaskStatus, string> = {
-  backlog: 'backlog',
-  canceled: 'canceled',
-  completed: 'done',
-  failed: 'needsInput',
-  paused: 'needsInput',
-  running: 'running',
-  scheduled: 'running',
-};
 
 const isTaskStatus = (status: string | undefined): status is TaskStatus =>
   status !== undefined && status in taskGroupKeyByStatus;
@@ -142,11 +133,7 @@ export class TaskLifecycleSliceActionImpl {
     this.#statusTransitionVersions.set(id, transitionVersion);
 
     const previousStatusCandidate =
-      this.#get().taskDetailMap[id]?.status ??
-      this.#get().tasks.find((task) => task.identifier === id)?.status ??
-      this.#get()
-        .taskGroups.flatMap((group) => group.tasks)
-        .find((task) => task.identifier === id)?.status;
+      this.#get().taskDetailMap[id]?.status ?? this.#get().internal_findCollectionTask(id)?.status;
     const previousStatus = isTaskStatus(previousStatusCandidate)
       ? previousStatusCandidate
       : undefined;
@@ -250,43 +237,9 @@ export class TaskLifecycleSliceActionImpl {
     }
   };
 
+  /** Every loaded list and board shows the new status (a status board moves the card). */
   #patchTaskCollectionsStatus = (id: string, status: TaskStatus): void => {
-    const { listGroupBy, taskGroups, tasks } = this.#get();
-    const listTask = tasks.find((task) => task.identifier === id);
-    const groupedTask = taskGroups
-      .flatMap((group) => group.tasks)
-      .find((task) => task.identifier === id);
-    if (!listTask && !groupedTask) return;
-
-    const nextTasks = listTask
-      ? tasks.map((item) => (item.identifier === id ? { ...item, status } : item))
-      : tasks;
-    const nextTaskGroups = groupedTask
-      ? listGroupBy === 'status'
-        ? taskGroups.map((group) => {
-            const targetGroupKey = taskGroupKeyByStatus[status];
-            const containsTask = group.tasks.some((item) => item.identifier === id);
-            const belongsToTarget = group.key === targetGroupKey;
-            const filteredTasks = group.tasks.filter((item) => item.identifier !== id);
-            const patchedGroupedTask = { ...groupedTask, status };
-
-            return {
-              ...group,
-              tasks: belongsToTarget ? [...filteredTasks, patchedGroupedTask] : filteredTasks,
-              total: group.total - (containsTask ? 1 : 0) + (belongsToTarget ? 1 : 0),
-            };
-          })
-        : taskGroups.map((group) => ({
-            ...group,
-            tasks: group.tasks.map((item) => (item.identifier === id ? { ...item, status } : item)),
-          }))
-      : taskGroups;
-
-    this.#set(
-      { taskGroups: nextTaskGroups, tasks: nextTasks },
-      false,
-      'transitionStatus/patchTaskCollections',
-    );
+    this.#get().internal_patchCollectionTask(id, (task) => ({ ...task, status }));
   };
 }
 

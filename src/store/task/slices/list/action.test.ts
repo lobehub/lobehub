@@ -1,5 +1,7 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createReplicaState } from '@/libs/replica';
 
 import { useTaskStore } from '../../store';
 
@@ -14,206 +16,172 @@ vi.mock('@/services/task', () => ({
 // Mock SWR
 vi.mock('@/libs/swr', () => ({
   mutate: vi.fn(),
-  useClientDataSWR: vi.fn(),
+  useClientDataSWR: vi.fn(() => ({ isValidating: false, mutate: vi.fn() })),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   useTaskStore.setState({
-    groupListQueryAutomated: undefined,
-    isTaskGroupListInit: false,
-    isTaskListInit: false,
-    listAgentId: undefined,
-    listGroupBy: 'status',
-    listGroupExcludeStatuses: undefined,
-    listQueryAutomated: undefined,
-    listQueryComplete: false,
-    listQueryVisibility: 'all',
     listVisibility: 'all',
-    taskGroups: [],
-    tasks: [],
-    tasksTotal: 0,
+    taskGroupListMap: {},
+    taskGroupListReplica: createReplicaState(),
+    taskListMap: {},
+    taskListReplica: createReplicaState(),
   });
 });
 
+/** The replica network sync of a resource, as registered with the SWR driver. */
+const syncCalls = async (name: 'taskGroupList' | 'taskList') => {
+  const { useClientDataSWR } = await import('@/libs/swr');
+  return vi
+    .mocked(useClientDataSWR)
+    .mock.calls.filter(
+      ([key]) => Array.isArray(key) && key[0] === 'replica:sync' && key[1] === name,
+    )
+    .map(([key, fetcher]) => ({ fetcher: fetcher as () => Promise<any>, key: key as unknown[] }));
+};
+
 describe('TaskListSliceAction', () => {
-  describe('setListAgentId', () => {
-    it('should update listAgentId', () => {
-      useTaskStore.getState().setListAgentId('agt_1');
-      expect(useTaskStore.getState().listAgentId).toBe('agt_1');
-    });
-
-    it('should clear listAgentId with undefined', () => {
-      useTaskStore.getState().setListAgentId('agt_1');
-      useTaskStore.getState().setListAgentId(undefined);
-      expect(useTaskStore.getState().listAgentId).toBeUndefined();
-    });
-  });
-
   describe('refreshTaskList', () => {
     // An edit can move a task across every list boundary at once — reorder it
     // by `updatedAt`, change its visibility, attach a schedule that flips
-    // Home's automation filter — so refresh matches every `task:list` variant
-    // by key root instead of enumerating them.
-    it('invalidates every cached list variant by key root', async () => {
+    // Home's automation filter — so refresh revalidates every list and board.
+    it('revalidates every task list and board, plus the scheduled and mine roll-ups', async () => {
       const { mutate } = await import('@/libs/swr');
-      useTaskStore.setState({
-        listAgentId: 'agt_1',
-        listQueryVisibility: 'private',
-        listVisibility: 'private',
-      });
 
       await useTaskStore.getState().refreshTaskList();
 
-      const matcher = vi
+      const matchers = vi
         .mocked(mutate)
         .mock.calls.map(([arg]) => arg)
-        .find((arg): arg is (key: unknown) => boolean => typeof arg === 'function');
-      expect(matcher).toBeDefined();
-      // The Tasks page's entry, Home's activity-ordered filtered entry, and a
-      // project-scoped entry all match…
-      expect(matcher!(['task:list', 'agt_1', 'private', 'createdAt'])).toBe(true);
-      expect(matcher!(['task:list', '__all__', 'all', 'updatedAt', { automated: false }])).toBe(
-        true,
-      );
-      expect(matcher!(['task:list', '__project__:p1', 'all', 'createdAt', 'p1'])).toBe(true);
-      // …while other task caches are refreshed through their own keys.
-      expect(matcher!(['task:groupList', 'agt_1', 'private'])).toBe(false);
+        .filter((arg): arg is (key: unknown) => boolean => typeof arg === 'function');
+      const matches = (key: unknown[]) => matchers.some((matcher) => matcher(key));
+      const scope = (await import('@/libs/replica')).cacheScope.get();
+      expect(matches(['replica:sync', 'taskList', 1, scope, 'any-list', {}])).toBe(true);
+      expect(matches(['replica:sync', 'taskGroupList', 1, scope, 'any-board', {}])).toBe(true);
+      expect(matches(['task:scheduledList', '__all__', 'all'])).toBe(true);
+      expect(matches(['task:myList', 'assigned', 'all'])).toBe(true);
     });
   });
 
   describe('useFetchTaskGroupList', () => {
     it('keys and requests assignee groups independently from status groups', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
       const { taskService } = await import('@/services/task');
 
-      renderHook(() =>
+      const { result } = renderHook(() => [
         useTaskStore.getState().useFetchTaskGroupList({
           allAgents: true,
           automated: false,
           excludeStatuses: ['completed', 'canceled'],
           groupBy: 'assignee',
         }),
-      );
+        useTaskStore.getState().useFetchTaskGroupList({ allAgents: true, automated: false }),
+      ]);
 
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        [
-          'task:groupList',
-          '__all__',
-          'all',
-          'assignee',
-          'canceled,completed',
-          { automated: false },
-        ],
-        expect.any(Function),
-        expect.any(Object),
-      );
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => unknown;
-      await fetcher();
+      expect(result.current[0].queryKey).not.toBe(result.current[1].queryKey);
+      const [assignee] = await syncCalls('taskGroupList');
+      await assignee.fetcher();
       expect(taskService.groupList).toHaveBeenCalledWith({
         assigneeAgentId: undefined,
         automated: false,
-        excludeStatuses: ['completed', 'canceled'],
+        excludeStatuses: ['canceled', 'completed'],
         groupBy: 'assignee',
         projectId: undefined,
+        scope: undefined,
         visibility: undefined,
       });
     });
 
     it('keys and requests the "My tasks" board apart from the all-agents board', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
       const { taskService } = await import('@/services/task');
 
-      renderHook(() =>
-        useTaskStore.getState().useFetchTaskGroupList({
-          automated: false,
-          groupBy: 'status',
-          scope: 'assigned',
-        }),
-      );
+      const { result } = renderHook(() => [
+        useTaskStore.getState().useFetchTaskGroupList({ automated: false, scope: 'assigned' }),
+        useTaskStore.getState().useFetchTaskGroupList({ automated: false, scope: 'created' }),
+        useTaskStore.getState().useFetchTaskGroupList({ allAgents: true, automated: false }),
+      ]);
 
-      // Its own scope key, so the `assigned` / `created` sub-views and the
-      // all-agents board can never serve each other's groups.
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:groupList', '__mine__:assigned', 'all', { automated: false }],
-        expect.any(Function),
-        expect.any(Object),
-      );
-      expect(useTaskStore.getState().listAgentId).toBe('__mine__:assigned');
-
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => unknown;
-      await fetcher();
+      // The `assigned` / `created` sub-views and the all-agents board can never
+      // serve each other's groups.
+      expect(new Set(result.current.map((sync) => sync.queryKey)).size).toBe(3);
+      const [assigned] = await syncCalls('taskGroupList');
+      await assigned.fetcher();
       expect(taskService.groupList).toHaveBeenCalledWith(
         expect.objectContaining({ assigneeAgentId: undefined, scope: 'assigned' }),
       );
     });
 
     it('ignores the visibility chip on the "My tasks" board, like its list view does', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
       const { taskService } = await import('@/services/task');
       // The chip is not offered inside "My tasks"; a value left over from the
       // ordinary tab must not narrow the board, or the list ↔ board switch
       // would silently change the row set.
       useTaskStore.setState({ listVisibility: 'private' });
 
-      renderHook(() =>
-        useTaskStore.getState().useFetchTaskGroupList({ groupBy: 'status', scope: 'created' }),
-      );
+      renderHook(() => useTaskStore.getState().useFetchTaskGroupList({ scope: 'created' }));
 
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:groupList', '__mine__:created', 'all'],
-        expect.any(Function),
-        expect.any(Object),
-      );
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => unknown;
-      await fetcher();
+      const [board] = await syncCalls('taskGroupList');
+      await board.fetcher();
       expect(taskService.groupList).toHaveBeenCalledWith(
         expect.objectContaining({ scope: 'created', visibility: undefined }),
       );
     });
 
-    it('resets a changed group query scope after render and gates stale data meanwhile', () => {
-      useTaskStore.setState({
-        isTaskGroupListInit: true,
-        listAgentId: '__all__',
-        listGroupBy: 'status',
-        listGroupExcludeStatuses: undefined,
-        taskGroups: [{ key: 'backlog', tasks: [{ identifier: 'T-1' }], total: 1 }] as any,
-      });
-      let groupByObservedDuringRender: string | undefined;
+    it('passes the ordinary-task automation filter through the kanban query', async () => {
+      const { taskService } = await import('@/services/task');
 
-      const { result } = renderHook(() => {
-        const swr = useTaskStore
-          .getState()
-          .useFetchTaskGroupList({ allAgents: true, groupBy: 'assignee' });
-        groupByObservedDuringRender = useTaskStore.getState().listGroupBy;
-        return swr;
+      renderHook(() =>
+        useTaskStore.getState().useFetchTaskGroupList({ allAgents: true, automated: false }),
+      );
+
+      const [board] = await syncCalls('taskGroupList');
+      await board.fetcher();
+      expect(taskService.groupList).toHaveBeenCalledWith(
+        expect.objectContaining({ automated: false }),
+      );
+    });
+
+    it("never shows another board query's groups while its own loads", () => {
+      const { result } = renderHook(() =>
+        useTaskStore.getState().useFetchTaskGroupList({ allAgents: true, groupBy: 'status' }),
+      );
+      act(() => {
+        useTaskStore.setState({
+          taskGroupListMap: {
+            [result.current.queryKey!]: {
+              groupBy: 'status',
+              groups: [{ key: 'backlog', tasks: [{ identifier: 'T-1' }], total: 1 }] as any,
+            },
+          },
+        });
       });
 
-      expect(groupByObservedDuringRender).toBe('status');
-      expect(result.current.isQueryScopeCurrent).toBe(false);
-      expect(useTaskStore.getState()).toMatchObject({
-        isTaskGroupListInit: false,
-        listGroupBy: 'assignee',
-        taskGroups: [],
-      });
+      const assignee = renderHook(() =>
+        useTaskStore.getState().useFetchTaskGroupList({ allAgents: true, groupBy: 'assignee' }),
+      );
+
+      const { taskGroupListMap } = useTaskStore.getState();
+      expect(taskGroupListMap[assignee.result.current.queryKey!]).toBeUndefined();
+      // Switching back paints the status board from memory at once.
+      expect(taskGroupListMap[result.current.queryKey!].groups).toHaveLength(1);
     });
   });
 
   describe('useFetchTaskList', () => {
+    const listKey = (
+      options: Parameters<ReturnType<typeof useTaskStore.getState>['useFetchTaskList']>[0],
+    ) =>
+      renderHook(() => useTaskStore.getState().useFetchTaskList(options)).result.current.queryKey;
+
     it('requests only tasks from the selected project', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
       const { taskService } = await import('@/services/task');
 
-      useTaskStore.getState().useFetchTaskList({ projectId: 'project-1', visibility: 'all' });
-
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:list', '__project__:project-1', 'all', 'createdAt', 'project-1'],
-        expect.any(Function),
-        expect.any(Object),
+      renderHook(() =>
+        useTaskStore.getState().useFetchTaskList({ projectId: 'project-1', visibility: 'all' }),
       );
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (key: string[]) => unknown;
-      await fetcher(['task:list', '__project__:project-1', 'all', 'project-1']);
+
+      const [list] = await syncCalls('taskList');
+      await list.fetcher();
       expect(taskService.list).toHaveBeenCalledWith(
         expect.objectContaining({ projectId: 'project-1' }),
       );
@@ -223,205 +191,70 @@ describe('TaskListSliceAction', () => {
     });
 
     it('allows embedded overviews to ignore the Task page visibility filter', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
       useTaskStore.setState({ listVisibility: 'private' });
 
-      useTaskStore.getState().useFetchTaskList({ allAgents: true, visibility: 'all' });
-
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:list', '__all__', 'all', 'createdAt'],
-        expect.any(Function),
-        expect.any(Object),
+      renderHook(() =>
+        useTaskStore.getState().useFetchTaskList({ allAgents: true, visibility: 'all' }),
       );
-    });
 
-    // Without the ordering in the key, Home and the Tasks page share one cache
-    // entry and whichever mounts first decides the other's order.
-    it('keys the cache by ordering so two surfaces cannot serve each other stale order', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
-
-      useTaskStore
-        .getState()
-        .useFetchTaskList({ allAgents: true, orderBy: 'updatedAt', visibility: 'all' });
-
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:list', '__all__', 'all', 'updatedAt'],
-        expect.any(Function),
-        expect.any(Object),
+      const [list] = await syncCalls('taskList');
+      await list.fetcher();
+      expect(taskService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ visibility: undefined }),
       );
     });
 
     // Home's recent block excludes live schedules and finished statuses
-    // server-side. Both filters have to reach the request and the cache key, or
-    // Home and the Tasks page would serve each other's list from one shared
-    // entry.
-    it('passes the automation and status filters to the server and keys the cache by them', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
+    // server-side, ordered by activity; the Tasks page walks everything by
+    // creation. Every one of those has to be part of the list identity, or the
+    // two surfaces would serve each other's rows.
+    it('gives every ordering, filter and walk mode its own list entry', () => {
+      const base = { allAgents: true, visibility: 'all' } as const;
+      const keys = [
+        listKey(base),
+        listKey({ ...base, orderBy: 'updatedAt' }),
+        listKey({ ...base, automated: false }),
+        listKey({ ...base, statuses: ['running', 'backlog'] }),
+        listKey({ ...base, complete: true }),
+        listKey({ ...base, visibility: 'private' }),
+        listKey({ agentId: 'agent-1', visibility: 'all' }),
+        listKey({ projectId: 'project-1', visibility: 'all' }),
+      ];
+      expect(new Set(keys).size).toBe(keys.length);
+      // The status set is order-insensitive.
+      expect(listKey({ ...base, statuses: ['backlog', 'running'] })).toBe(keys[3]);
+    });
+
+    it('passes the automation and status filters to the server', async () => {
       const { taskService } = await import('@/services/task');
 
-      useTaskStore.getState().useFetchTaskList({
-        allAgents: true,
-        automated: false,
-        orderBy: 'updatedAt',
-        statuses: ['running', 'backlog'],
-        visibility: 'all',
-      });
-
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        // The key's status signature is order-insensitive.
-        [
-          'task:list',
-          '__all__',
-          'all',
-          'updatedAt',
-          { automated: false, statuses: 'backlog,running' },
-        ],
-        expect.any(Function),
-        expect.any(Object),
-      );
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
-        key: unknown[],
-      ) => Promise<unknown>;
-      await fetcher(['task:list', '__all__', 'all', 'updatedAt', {}]);
-      expect(taskService.list).toHaveBeenCalledWith(
-        expect.objectContaining({ automated: false, statuses: ['running', 'backlog'] }),
-      );
-    });
-
-    it('resets stale task data when the automation filter changes the query scope', () => {
-      useTaskStore.setState({
-        isTaskListInit: true,
-        listAgentId: '__all__',
-        listQueryAutomated: undefined,
-        listQueryVisibility: 'all',
-        listVisibility: 'all',
-        tasks: [{ id: 'cron-task' }] as any,
-        tasksTotal: 1,
-      });
-
-      useTaskStore
-        .getState()
-        .useFetchTaskList({ allAgents: true, automated: false, visibility: 'all' });
-
-      const state = useTaskStore.getState();
-      expect(state.listQueryAutomated).toBe(false);
-      expect(state.tasks).toEqual([]);
-      expect(state.tasksTotal).toBe(0);
-      expect(state.isTaskListInit).toBe(false);
-    });
-
-    // The list view walks every page while the kanban view (which fetches its
-    // own server groups) only needs one page for the empty decision. Neither
-    // may be served the other's rows from a shared cache entry or the shared
-    // store field.
-    it('keys the complete walk apart from the single page and resets when it flips', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
-      useTaskStore.setState({
-        isTaskListInit: true,
-        listAgentId: '__all__',
-        listQueryComplete: false,
-        tasks: [{ id: 'first-page-only' }] as any,
-        tasksTotal: 230,
-      });
-
-      useTaskStore
-        .getState()
-        .useFetchTaskList({ allAgents: true, complete: true, visibility: 'all' });
-
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:list', '__all__', 'all', 'createdAt', { complete: true }],
-        expect.any(Function),
-        expect.any(Object),
-      );
-      const state = useTaskStore.getState();
-      expect(state.listQueryComplete).toBe(true);
-      expect(state.tasks).toEqual([]);
-      expect(state.isTaskListInit).toBe(false);
-    });
-
-    it('resets stale task data when the status filter changes the query scope', () => {
-      useTaskStore.setState({
-        isTaskListInit: true,
-        listAgentId: '__all__',
-        listQueryStatuses: undefined,
-        listQueryVisibility: 'all',
-        listVisibility: 'all',
-        tasks: [{ id: 'completed-task' }] as any,
-        tasksTotal: 1,
-      });
-
-      useTaskStore
-        .getState()
-        .useFetchTaskList({ allAgents: true, statuses: ['running', 'backlog'], visibility: 'all' });
-
-      const state = useTaskStore.getState();
-      expect(state.listQueryStatuses).toBe('backlog,running');
-      expect(state.tasks).toEqual([]);
-      expect(state.tasksTotal).toBe(0);
-      expect(state.isTaskListInit).toBe(false);
-    });
-
-    it('leaves the shared scope alone while the list query is disabled', () => {
-      // The "My tasks" board keeps this page's all-agents list mounted but
-      // disabled. `listAgentId` is one shared slot that the board's group
-      // query owns while it is up — a disabled list query claiming it would
-      // wipe `taskGroups` on every render.
-      useTaskStore.setState({
-        isTaskGroupListInit: true,
-        listAgentId: '__mine__:assigned',
-        taskGroups: [{ key: 'backlog', tasks: [{ identifier: 'T-1' }], total: 1 }] as any,
-      });
-
       renderHook(() =>
+        useTaskStore.getState().useFetchTaskList({
+          allAgents: true,
+          automated: false,
+          orderBy: 'updatedAt',
+          statuses: ['running', 'backlog'],
+          visibility: 'all',
+        }),
+      );
+
+      const [list] = await syncCalls('taskList');
+      await list.fetcher();
+      expect(taskService.list).toHaveBeenCalledWith(
+        expect.objectContaining({
+          automated: false,
+          orderBy: 'updatedAt',
+          statuses: ['backlog', 'running'],
+        }),
+      );
+    });
+
+    it('has no query key while disabled, so it claims no rows', () => {
+      const { result } = renderHook(() =>
         useTaskStore.getState().useFetchTaskList({ allAgents: true, enabled: false }),
       );
-
-      expect(useTaskStore.getState()).toMatchObject({
-        isTaskGroupListInit: true,
-        listAgentId: '__mine__:assigned',
-      });
-      expect(useTaskStore.getState().taskGroups).toHaveLength(1);
-    });
-
-    it('resets stale task data when an embedded visibility override changes the query scope', () => {
-      useTaskStore.setState({
-        isTaskListInit: true,
-        listAgentId: '__all__',
-        listQueryVisibility: 'private',
-        listVisibility: 'private',
-        tasks: [{ id: 'private-task' }] as any,
-        tasksTotal: 1,
-      });
-
-      useTaskStore.getState().useFetchTaskList({ allAgents: true, visibility: 'all' });
-
-      const state = useTaskStore.getState();
-      expect(state.listQueryVisibility).toBe('all');
-      expect(state.tasks).toEqual([]);
-      expect(state.tasksTotal).toBe(0);
-      expect(state.isTaskListInit).toBe(false);
-    });
-  });
-
-  describe('useFetchTaskGroupList', () => {
-    it('passes the ordinary-task automation filter through the kanban query', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
-      const { taskService } = await import('@/services/task');
-
-      renderHook(() =>
-        useTaskStore.getState().useFetchTaskGroupList({ allAgents: true, automated: false }),
-      );
-
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:groupList', '__all__', 'all', { automated: false }],
-        expect.any(Function),
-        expect.any(Object),
-      );
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => Promise<unknown>;
-      await fetcher();
-      expect(taskService.groupList).toHaveBeenCalledWith(
-        expect.objectContaining({ automated: false }),
-      );
+      expect(result.current.queryKey).toBeUndefined();
     });
   });
 
@@ -430,7 +263,9 @@ describe('TaskListSliceAction', () => {
       const { useClientDataSWR } = await import('@/libs/swr');
       const { taskService } = await import('@/services/task');
 
-      useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, offset: 50 });
+      renderHook(() =>
+        useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, offset: 50 }),
+      );
 
       expect(useClientDataSWR).toHaveBeenCalledWith(
         ['task:scheduledList', '__all__', 'all', { limit: 50, offset: 50 }],
@@ -448,7 +283,9 @@ describe('TaskListSliceAction', () => {
       const { useClientDataSWR } = await import('@/libs/swr');
       const { taskService } = await import('@/services/task');
 
-      useTaskStore.getState().useFetchScheduledTaskList({ agentId: 'agent-1', limit: 50 });
+      renderHook(() =>
+        useTaskStore.getState().useFetchScheduledTaskList({ agentId: 'agent-1', limit: 50 }),
+      );
 
       expect(useClientDataSWR).toHaveBeenCalledWith(
         ['task:scheduledList', 'agent-1', 'all', { limit: 50, offset: undefined }],
@@ -466,7 +303,9 @@ describe('TaskListSliceAction', () => {
       const { useClientDataSWR } = await import('@/libs/swr');
       const { taskService } = await import('@/services/task');
 
-      useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, projectId: 'project-1' });
+      renderHook(() =>
+        useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, projectId: 'project-1' }),
+      );
 
       expect(useClientDataSWR).toHaveBeenCalledWith(
         ['task:scheduledList', '__project__:project-1', 'all', { limit: 50, offset: undefined }],
@@ -483,8 +322,10 @@ describe('TaskListSliceAction', () => {
     it('keeps concurrent consumers isolated by their SWR keys', async () => {
       const { useClientDataSWR } = await import('@/libs/swr');
 
-      useTaskStore.getState().useFetchScheduledTaskList({ limit: 5 });
-      useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, offset: 50 });
+      renderHook(() => useTaskStore.getState().useFetchScheduledTaskList({ limit: 5 }));
+      renderHook(() =>
+        useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, offset: 50 }),
+      );
 
       expect(vi.mocked(useClientDataSWR).mock.calls.map(([key]) => key)).toEqual([
         ['task:scheduledList', '__all__', 'all', { limit: 5, offset: undefined }],
@@ -494,40 +335,22 @@ describe('TaskListSliceAction', () => {
   });
 
   describe('setListVisibility', () => {
-    it('should update visibility filter and reset list state', async () => {
-      useTaskStore.setState({
-        isTaskListInit: true,
-        listVisibility: 'private',
-        tasks: [{ id: 't1' }] as any,
-        tasksTotal: 1,
-      });
-
+    it('updates the filter; each visibility reads its own list entry', () => {
       useTaskStore.getState().setListVisibility('workspace');
+      expect(useTaskStore.getState().listVisibility).toBe('workspace');
 
-      const state = useTaskStore.getState();
-      expect(state.listVisibility).toBe('workspace');
-      // Reset clears the previous-filter results so the chip flip doesn't
-      // briefly render stale entries from the old filter.
-      expect(state.tasks).toEqual([]);
-      expect(state.tasksTotal).toBe(0);
-      expect(state.isTaskListInit).toBe(false);
-    });
-
-    it('should no-op when the filter does not change', async () => {
-      useTaskStore.setState({
-        isTaskListInit: true,
-        listVisibility: 'private',
-        tasks: [{ id: 't1' }] as any,
-        tasksTotal: 1,
-      });
-
-      useTaskStore.getState().setListVisibility('private');
-
-      const state = useTaskStore.getState();
-      expect(state.tasks).toHaveLength(1);
-      expect(state.isTaskListInit).toBe(true);
+      const { result } = renderHook(() =>
+        useTaskStore.getState().useFetchTaskList({ allAgents: true }),
+      );
+      const workspaceKey = result.current.queryKey;
+      act(() => useTaskStore.getState().setListVisibility('private'));
+      const { result: privateList } = renderHook(() =>
+        useTaskStore.getState().useFetchTaskList({ allAgents: true }),
+      );
+      expect(privateList.current.queryKey).not.toBe(workspaceKey);
     });
   });
+
   // The Tasks page renders every task it receives, grouped client-side, and
   // has no pagination. Without `complete` it only ever saw the first server
   // page (50 newest by creation), so older tasks silently vanished once a
@@ -555,12 +378,13 @@ describe('TaskListSliceAction', () => {
       });
     let taskServiceList: (...args: any[]) => any;
     const runFetcher = async (options: Record<string, unknown>) => {
-      const { useClientDataSWR } = await import('@/libs/swr');
-      useTaskStore.getState().useFetchTaskList({ allAgents: true, visibility: 'all', ...options });
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as (
-        key: unknown[],
-      ) => Promise<{ data: Row[]; total: number }>;
-      return fetcher(['task:list', '__all__', 'all', 'createdAt']);
+      renderHook(() =>
+        useTaskStore
+          .getState()
+          .useFetchTaskList({ allAgents: true, visibility: 'all', ...options }),
+      );
+      const [list] = await syncCalls('taskList');
+      return list.fetcher() as Promise<{ data: Row[]; total: number }>;
     };
 
     beforeEach(async () => {

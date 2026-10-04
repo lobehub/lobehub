@@ -84,24 +84,15 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   const excludeStatuses = options.hideCompleted ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
-  // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
-  const { error, isLoading, isQueryScopeCurrent, mutate } = useFetchTaskGroupList(
+  // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
+  // `queryKey` the groups are read by.
+  const { error, isLoading, mutate, queryKey } = useFetchTaskGroupList(
     buildKanbanGroupQuery({ agentId, excludeStatuses, groupBy, myTaskScope, projectId }),
   );
-  // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
-  // per-key `data`. On a scope or visibility switch the store resets
-  // `taskGroups` + `isTaskGroupListInit` together (`scopeChangeResetState`)
-  // while SWR still holds cached `data` for the target key — keying `hasSettled`
-  // off SWR `data` flashed the "no tasks" empty board during the refetch.
-  // `isTaskGroupListInit` resets in lockstep with `taskGroups`, so the settled
-  // signal never disagrees with the emptiness signal.
-  const isTaskGroupListInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
-
-  const taskGroups = useTaskStore(taskListSelectors.taskGroups);
-  const currentTaskGroups = useMemo(
-    () => (isQueryScopeCurrent ? taskGroups : []),
-    [isQueryScopeCurrent, taskGroups],
-  );
+  // Each board query (scope, dimension, filters) is its own store entry, so the
+  // settled signal and the groups always describe the same board.
+  const isTaskGroupListInit = useTaskStore(taskListSelectors.isTaskGroupListInit(queryKey));
+  const currentTaskGroups = useTaskStore(taskListSelectors.taskGroups(queryKey));
   const updateTask = useTaskStore((s) => s.updateTask);
   const runTask = useTaskStore((s) => s.runTask);
   const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
@@ -142,7 +133,11 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
         const retry = () => {
           start().catch(() => {});
         };
-        const current = findKanbanTask(useTaskStore.getState().taskGroups, task.identifier) ?? task;
+        const current =
+          findKanbanTask(
+            taskListSelectors.taskGroups(queryKey)(useTaskStore.getState()),
+            task.identifier,
+          ) ?? task;
         if (!current.assigneeAgentId && !current.assigneeUserId && inboxAgentId) {
           await updateTask(current.identifier, { assigneeAgentId: inboxAgentId }, { retry });
           afterAssign?.();
@@ -156,7 +151,7 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
       };
       return start(onAssigned);
     },
-    [inboxAgentId, runTask, t, updateTask],
+    [inboxAgentId, queryKey, runTask, t, updateTask],
   );
 
   const handleDragEnd = useCallback(
@@ -184,47 +179,40 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
       if ((groupBy === 'assignee' || groupBy === 'member') && !assigneeUpdate) return;
       if (groupBy === 'priority' && (task.priority ?? 0) === (patch.priority ?? 0)) return;
 
-      const prevGroups = useTaskStore.getState().taskGroups;
-      const nextGroups = moveTaskBetweenKanbanGroups(prevGroups, task, targetColumnKey, patch);
-      useTaskStore.setState({ taskGroups: nextGroups }, false, 'kanban/optimisticMove');
+      if (!queryKey) return;
+      // The move is idempotent, so the overlay stays correct when the status
+      // change also patches the card underneath it.
+      const move = useTaskStore.getState().internal_beginTaskGroupOptimistic(queryKey, (value) => ({
+        ...value,
+        groups: moveTaskBetweenKanbanGroups(value.groups, task, targetColumnKey, patch),
+      }));
 
       try {
         if (groupBy === 'status' && column.targetStatus === 'running') {
-          // Dropping into "In progress" starts the task, same as "Run now".
-          await startTask(task, () => {
-            // The assignment refetches the groups, where the task is still in
-            // backlog until the run starts — keep the card in "In progress".
-            const refreshedGroups = useTaskStore.getState().taskGroups;
-            useTaskStore.setState(
-              {
-                taskGroups: moveTaskBetweenKanbanGroups(
-                  refreshedGroups,
-                  findKanbanTask(refreshedGroups, task.identifier) ?? task,
-                  targetColumnKey,
-                  patch,
-                ),
-              },
-              false,
-              'kanban/optimisticMove',
-            );
-          });
+          // Dropping into "In progress" starts the task, same as "Run now". The
+          // assignment refetches the groups (still backlog until the run
+          // starts); the overlay is rebased onto that refetch, so the card
+          // stays in "In progress".
+          await startTask(task);
         } else if (groupBy === 'status' && column.targetStatus) {
           const changed = await changeTaskStatus(task.identifier, column.targetStatus);
           if (!changed) {
-            useTaskStore.setState({ taskGroups: prevGroups }, false, 'kanban/cancelMove');
+            move.rollback();
+            return;
           }
         } else if ((groupBy === 'assignee' || groupBy === 'member') && assigneeUpdate) {
           await updateTask(task.identifier, assigneeUpdate);
         } else if (groupBy === 'priority') {
           await updateTask(task.identifier, { priority: patch.priority ?? 0 });
         }
+        move.commit();
       } catch {
-        useTaskStore.setState({ taskGroups: prevGroups }, false, 'kanban/revertMove');
+        move.rollback();
         // A failed start may already have persisted the fallback assignee.
         if (column.targetStatus === 'running') void refreshTaskList();
       }
     },
-    [canEditTask, changeTaskStatus, columns, groupBy, refreshTaskList, startTask, updateTask],
+    [canEditTask, changeTaskStatus, columns, groupBy, queryKey, refreshTaskList, startTask, updateTask],
   );
 
   const handleDragCancel = useCallback(() => {
@@ -393,12 +381,12 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   // undefined until the first fetch settles.
   return (
     <AsyncBoundary
-      data={(isQueryScopeCurrent && isTaskGroupListInit) || undefined}
+      data={isTaskGroupListInit || undefined}
       empty={emptyState}
       error={error}
       errorVariant={'block'}
       isEmpty={totalTasks === 0}
-      isLoading={isLoading || (!isQueryScopeCurrent && !error) || (!isTaskGroupListInit && !error)}
+      isLoading={isLoading || (!isTaskGroupListInit && !error)}
       loading={skeletonBoard}
       onRetry={() => mutate()}
     >

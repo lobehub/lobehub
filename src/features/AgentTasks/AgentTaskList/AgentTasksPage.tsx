@@ -196,8 +196,8 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const isBoardView = resolveTaskCollectionView(collection, viewMode) === 'board';
   const isMineBoard = isMineCollection && isBoardView;
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
-  // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
-  // Every scope splits automated work out of the ordinary tab — it is the
+  // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
+  // `queryKey` the rows are read by. Every scope splits automated work out of the ordinary tab — it is the
   // scheduled tab's content, and listing it twice makes the split meaningless.
   // `complete`: this tab groups and sorts client-side with no pagination, so
   // it needs the whole list — one server page would drop every task older
@@ -206,7 +206,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   // gated to the ordinary tab; and the kanban view fetches its own server
   // groups, so there only the single page behind the empty-hero decision runs.
   const isListView = !isBoardView;
-  const { error, isLoading, mutate } = useFetchTaskList(
+  const { error, isLoading, mutate, queryKey } = useFetchTaskList(
     projectId
       ? {
           automated: false,
@@ -224,17 +224,17 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
             enabled: isOrdinaryCollection,
           },
   );
-  // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
-  // per-key `data`. On a scope (agent ↔ all) or visibility switch the store
-  // resets `tasks` + `isTaskListInit` together (`scopeChangeResetState`), but
-  // SWR still holds cached `data` for the target key — so keying `hasSettled`
-  // off SWR `data` made it `true` while `tasks` was empty and flashed the "no
-  // tasks" empty during the refetch. `isTaskListInit` flips true only on the
-  // current scope's success and resets in lockstep with `tasks`, so the settled
-  // signal never disagrees with the emptiness signal. Still resets to false on a
-  // failed first load, so we surface loading only while there's no error (below).
-  const isTaskListInit = useTaskStore(taskListSelectors.isTaskListInit);
-  const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty);
+  // Drive the loading/empty boundary off the store entry of this exact query:
+  // each scope / visibility is its own entry, so the settled signal and the
+  // rows always describe the same list (a persisted entry paints at once).
+  const isTaskListInit = useTaskStore(taskListSelectors.isTaskListInit(queryKey));
+  const setActiveTaskListKey = useTaskStore((s) => s.setActiveTaskListKey);
+  // The task manager agent reads this page's list as "the viewed list".
+  useEffect(() => {
+    setActiveTaskListKey(queryKey);
+    return () => setActiveTaskListKey(undefined);
+  }, [queryKey, setActiveTaskListKey]);
+  const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty(queryKey));
   const useFetchScheduledTaskList = useTaskStore((s) => s.useFetchScheduledTaskList);
   const scheduledSWR = useFetchScheduledTaskList({
     agentId,
@@ -501,6 +501,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
             error={error}
             isLoading={isLoading || (!isTaskListInit && !error)}
             options={viewOptions}
+            queryKey={queryKey}
             routeScope={routeScope}
             onRetry={() => mutate()}
             onShowHiddenCompleted={handleShowHiddenCompleted}

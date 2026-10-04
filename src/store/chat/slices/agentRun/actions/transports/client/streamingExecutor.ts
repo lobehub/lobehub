@@ -423,10 +423,14 @@ export class StreamingExecutorActionImpl {
         let contextPrompt: string | undefined;
 
         if (viewedTask.type === 'list') {
+          const viewedList = taskState.activeTaskListKey
+            ? taskState.taskListMap[taskState.activeTaskListKey]
+            : undefined;
+          const tasks = viewedList?.items ?? [];
           contextPrompt = buildTaskListPrompt({
             defaultAssigneeAgentId: operation.context.defaultTaskAssigneeAgentId,
-            tasks: taskState.tasks,
-            total: taskState.tasksTotal || taskState.tasks.length,
+            tasks,
+            total: viewedList?.total || tasks.length,
           });
         } else {
           const detail = taskState.taskDetailMap[viewedTask.taskId];

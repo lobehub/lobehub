@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createReplicaState } from '@/libs/replica';
 import { taskService } from '@/services/task';
 import { useUserStore } from '@/store/user';
 
@@ -25,13 +26,22 @@ beforeEach(() => {
   vi.clearAllMocks();
   useTaskStore.setState({
     activeTaskId: 'T-1',
-    listGroupBy: 'status',
-    listGroupExcludeStatuses: undefined,
     taskDetailMap: { 'T-1': { ...mockDetail } },
-    taskGroups: [],
-    tasks: [],
+    taskGroupListMap: {},
+    taskGroupListReplica: createReplicaState(),
+    taskListMap: {},
+    taskListReplica: createReplicaState(),
   });
 });
+
+/** One loaded list (`list`) and one loaded board (`board`) holding the task. */
+const seedCollections = (groups: any[], tasks: any[], groupBy = 'status') =>
+  useTaskStore.setState({
+    taskGroupListMap: { board: { groupBy: groupBy as any, groups } },
+    taskListMap: { list: { items: tasks, total: tasks.length } },
+  });
+const listTasks = (state = useTaskStore.getState()) => state.taskListMap.list.items;
+const boardGroups = (state = useTaskStore.getState()) => state.taskGroupListMap.board.groups;
 
 describe('TaskLifecycleSliceAction', () => {
   describe('runTask', () => {
@@ -132,22 +142,24 @@ describe('TaskLifecycleSliceAction', () => {
     });
 
     it('should immediately synchronize list and kanban collections', async () => {
-      useTaskStore.setState({
-        taskGroups: [
+      seedCollections(
+        [
           { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
           { key: 'done', tasks: [], total: 0 },
-        ] as any,
-        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
-      });
+        ],
+        [{ identifier: 'T-1', status: 'backlog' }],
+      );
       vi.mocked(taskService.updateStatus).mockImplementation(async () => {
         const state = useTaskStore.getState();
 
-        expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('completed');
-        expect(state.taskGroups.find((group) => group.key === 'backlog')).toMatchObject({
+        expect(listTasks(state).find((task) => task.identifier === 'T-1')?.status).toBe(
+          'completed',
+        );
+        expect(boardGroups(state).find((group) => group.key === 'backlog')).toMatchObject({
           tasks: [],
           total: 0,
         });
-        expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+        expect(boardGroups(state).find((group) => group.key === 'done')).toMatchObject({
           tasks: [expect.objectContaining({ identifier: 'T-1', status: 'completed' })],
           total: 1,
         });
@@ -159,20 +171,20 @@ describe('TaskLifecycleSliceAction', () => {
     });
 
     it('should preserve assignee grouping when a task status changes', async () => {
-      useTaskStore.setState({
-        listGroupBy: 'assignee',
-        taskGroups: [
+      seedCollections(
+        [
           {
             assigneeAgentId: 'agent-1',
             key: 'assignee:agent-1',
             tasks: [{ assigneeAgentId: 'agent-1', identifier: 'T-1', status: 'backlog' }],
             total: 1,
           },
-        ] as any,
-        tasks: [{ assigneeAgentId: 'agent-1', identifier: 'T-1', status: 'backlog' }] as any,
-      });
+        ],
+        [{ assigneeAgentId: 'agent-1', identifier: 'T-1', status: 'backlog' }],
+        'assignee',
+      );
       vi.mocked(taskService.updateStatus).mockImplementation(async () => {
-        expect(useTaskStore.getState().taskGroups[0]).toMatchObject({
+        expect(boardGroups()[0]).toMatchObject({
           key: 'assignee:agent-1',
           tasks: [expect.objectContaining({ identifier: 'T-1', status: 'completed' })],
           total: 1,
@@ -184,13 +196,13 @@ describe('TaskLifecycleSliceAction', () => {
     });
 
     it('should roll list and kanban collections back when the status update fails', async () => {
-      useTaskStore.setState({
-        taskGroups: [
+      seedCollections(
+        [
           { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
           { key: 'done', tasks: [], total: 0 },
-        ] as any,
-        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
-      });
+        ],
+        [{ identifier: 'T-1', status: 'backlog' }],
+      );
       vi.mocked(taskService.updateStatus).mockRejectedValue(new Error('fail'));
 
       await expect(useTaskStore.getState().updateTaskStatus('T-1', 'completed')).rejects.toThrow(
@@ -198,12 +210,12 @@ describe('TaskLifecycleSliceAction', () => {
       );
 
       const state = useTaskStore.getState();
-      expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('backlog');
-      expect(state.taskGroups.find((group) => group.key === 'backlog')).toMatchObject({
+      expect(listTasks(state).find((task) => task.identifier === 'T-1')?.status).toBe('backlog');
+      expect(boardGroups(state).find((group) => group.key === 'backlog')).toMatchObject({
         tasks: [expect.objectContaining({ identifier: 'T-1', status: 'backlog' })],
         total: 1,
       });
-      expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+      expect(boardGroups(state).find((group) => group.key === 'done')).toMatchObject({
         tasks: [],
         total: 0,
       });
@@ -211,13 +223,13 @@ describe('TaskLifecycleSliceAction', () => {
 
     it('should preserve the committed status when cache refreshes fail', async () => {
       const { mutate } = await import('@/libs/swr');
-      useTaskStore.setState({
-        taskGroups: [
+      seedCollections(
+        [
           { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
           { key: 'done', tasks: [], total: 0 },
-        ] as any,
-        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
-      });
+        ],
+        [{ identifier: 'T-1', status: 'backlog' }],
+      );
       vi.mocked(taskService.updateStatus).mockResolvedValue({ success: true } as any);
       vi.mocked(mutate)
         .mockRejectedValueOnce(new Error('detail refresh failed'))
@@ -229,8 +241,8 @@ describe('TaskLifecycleSliceAction', () => {
       );
 
       const state = useTaskStore.getState();
-      expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('completed');
-      expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+      expect(listTasks(state).find((task) => task.identifier === 'T-1')?.status).toBe('completed');
+      expect(boardGroups(state).find((group) => group.key === 'done')).toMatchObject({
         tasks: [expect.objectContaining({ identifier: 'T-1', status: 'completed' })],
         total: 1,
       });
@@ -238,14 +250,14 @@ describe('TaskLifecycleSliceAction', () => {
 
     it('should not let an older failed request roll back a newer status', async () => {
       let rejectFirstRequest: (reason: Error) => void = () => {};
-      useTaskStore.setState({
-        taskGroups: [
+      seedCollections(
+        [
           { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
           { key: 'done', tasks: [], total: 0 },
           { key: 'canceled', tasks: [], total: 0 },
-        ] as any,
-        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
-      });
+        ],
+        [{ identifier: 'T-1', status: 'backlog' }],
+      );
       vi.mocked(taskService.updateStatus)
         .mockImplementationOnce(
           async () =>
@@ -263,12 +275,12 @@ describe('TaskLifecycleSliceAction', () => {
       await expect(firstRequest).rejects.toThrow('first request failed');
 
       const state = useTaskStore.getState();
-      expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('canceled');
-      expect(state.taskGroups.find((group) => group.key === 'canceled')).toMatchObject({
+      expect(listTasks(state).find((task) => task.identifier === 'T-1')?.status).toBe('canceled');
+      expect(boardGroups(state).find((group) => group.key === 'canceled')).toMatchObject({
         tasks: [expect.objectContaining({ identifier: 'T-1', status: 'canceled' })],
         total: 1,
       });
-      expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+      expect(boardGroups(state).find((group) => group.key === 'done')).toMatchObject({
         tasks: [],
         total: 0,
       });

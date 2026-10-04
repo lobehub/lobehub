@@ -367,9 +367,9 @@ const TaskContent = memo(() => {
     statuses: RECENT_TASK_STATUSES,
     visibility: 'all',
   });
-  const tasks = useTaskStore(taskListSelectors.taskList);
-  const tasksTotal = useTaskStore(taskListSelectors.taskListTotal);
-  const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
+  const tasks = useTaskStore(taskListSelectors.taskList(tasksSWR.queryKey));
+  const tasksTotal = useTaskStore(taskListSelectors.taskListTotal(tasksSWR.queryKey));
+  const tasksInit = useTaskStore(taskListSelectors.isTaskListInit(tasksSWR.queryKey));
   const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
   const shown = tasks.slice(0, taskCount);
 

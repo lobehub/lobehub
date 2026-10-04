@@ -315,16 +315,6 @@ export const recentKeys = {
 };
 
 // ---- task ---------------------------------------------------------------
-/**
- * SWR `mutate` matcher for every cached `task:list` variant — any agent scope,
- * visibility chip, ordering, or automation filter. A task edit can move a row
- * across each of those boundaries at once (reassigning, sharing, touching its
- * `updatedAt`, attaching a schedule), so refresh invalidates by key root
- * instead of enumerating variants.
- */
-export const isTaskListKey = (key: unknown): boolean =>
-  Array.isArray(key) && key[0] === 'task:list';
-
 export const isScheduledTaskListKey = (key: unknown): boolean =>
   Array.isArray(key) && key[0] === 'task:scheduledList';
 
@@ -346,73 +336,12 @@ export const goalKeys = {
 
 export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
-  groupList: def(
-    'task:groupList',
-    (
-      agentKey: string | undefined,
-      visibility: 'all' | 'private' | 'workspace' = 'all',
-      groupBy: 'assignee' | 'member' | 'priority' | 'status' = 'status',
-      excludeStatuses?: string,
-      projectId?: string,
-      automated?: boolean,
-    ) => {
-      const hasBoardFilter = groupBy !== 'status' || excludeStatuses !== undefined;
-      const key = hasBoardFilter
-        ? projectId
-          ? ['task:groupList', agentKey, visibility, groupBy, excludeStatuses, projectId]
-          : ['task:groupList', agentKey, visibility, groupBy, excludeStatuses]
-        : projectId
-          ? ['task:groupList', agentKey, visibility, projectId]
-          : ['task:groupList', agentKey, visibility];
-
-      return automated === undefined ? key : [...key, { automated }];
-    },
-  ),
   /**
    * The home rail's cross-agent goal roll-up. Scoped by cache scope like the
    * other home feeds — goals are workspace rows, so a list left over from the
    * previous workspace holds ids this one cannot open.
    */
   homeGoals: def('task:homeGoals', (scope: string) => ['task:homeGoals', scope]),
-  list: def(
-    'task:list',
-    (
-      agentKey: string | undefined,
-      visibility: 'all' | 'private' | 'workspace' = 'all',
-      // Part of the key, not a detail: Home orders by activity while the Tasks
-      // page orders by creation, and they read the same store field.
-      orderBy: 'createdAt' | 'updatedAt' = 'createdAt',
-      projectId?: string,
-      // Same reasoning as `orderBy`: Home's recent block excludes live
-      // automation and finished statuses server-side while the Tasks page
-      // fetches everything, and a shared entry would serve one surface the
-      // other's filter. Folded into one trailing slot (appended only when a
-      // filter is actually set) so unfiltered keys keep their shape.
-      // `complete` marks the every-page walk the Tasks list view does; the
-      // kanban view and Home read a single page and must not be served (or
-      // serve) the walked list from a shared entry.
-      filters?: { automated?: boolean; complete?: boolean; statuses?: readonly string[] },
-    ) => {
-      const key = projectId
-        ? ['task:list', agentKey, visibility, orderBy, projectId]
-        : ['task:list', agentKey, visibility, orderBy];
-      const automated = filters?.automated;
-      const complete = filters?.complete ? true : undefined;
-      // Order-insensitive: the same status set must hash to the same key.
-      const statuses = filters?.statuses?.length
-        ? [...filters.statuses].sort().join(',')
-        : undefined;
-      if (automated === undefined && complete === undefined && statuses === undefined) return key;
-      return [
-        ...key,
-        {
-          ...(automated === undefined ? {} : { automated }),
-          ...(complete === undefined ? {} : { complete }),
-          ...(statuses === undefined ? {} : { statuses }),
-        },
-      ];
-    },
-  ),
   /**
    * Home's automated-task roll-up: the tasks that fire on a schedule or a
    * heartbeat. Kept off `list` because it is a different result set entirely —
