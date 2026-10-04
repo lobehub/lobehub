@@ -3703,14 +3703,12 @@ export class AgentRuntimeService {
       return;
     }
 
-    if (assistantMessage) {
-      try {
-        await this.messageModel.update(assistantMessage.id, {
-          error: buildClientLlmWaitMessageError(wait),
-        });
-      } catch (error) {
-        log('[%s] Failed to mark the parked call on its assistant row: %O', operationId, error);
-      }
+    try {
+      await this.messageModel.update(assistantMessage.id, {
+        error: buildClientLlmWaitMessageError(wait),
+      });
+    } catch (error) {
+      log('[%s] Failed to mark the parked call on its assistant row: %O', operationId, error);
     }
 
     try {
