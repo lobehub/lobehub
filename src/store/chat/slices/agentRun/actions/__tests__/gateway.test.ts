@@ -3289,6 +3289,25 @@ describe('GatewayActionImpl', () => {
       );
     });
 
+    it('shares one attempt between concurrent reconnects to the same run', async () => {
+      const { action, startOperation } = createReconnectTestAction({ id: 'ast-1' });
+      const params = {
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      };
+
+      // E.g. the topic's own reconnect and a waiting_for_client card, both
+      // before the token refresh lands.
+      await Promise.all([
+        action.reconnectToGatewayOperation(params),
+        action.reconnectToGatewayOperation(params),
+      ]);
+
+      expect(startOperation).toHaveBeenCalledTimes(1);
+      expect(aiAgentService.refreshGatewayToken).toHaveBeenCalledTimes(1);
+    });
+
     it('omits startTime when createdAt is not a parseable date', async () => {
       const { action, startOperation } = createReconnectTestAction({
         createdAt: 'not-a-date',

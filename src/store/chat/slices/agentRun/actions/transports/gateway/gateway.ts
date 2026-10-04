@@ -323,6 +323,38 @@ const isSuccessfulGatewayCompletion = (params: {
 
 // ─── Action Implementation ───
 
+interface ReconnectToGatewayOperationParams {
+  /**
+   * Agent that owns the rendered conversation. Callers outside the agent route
+   * (task detail / home run drawer) MUST pass it: `activeAgentId` is whatever
+   * the last agent page left behind — `undefined` on the home surface — and the
+   * streamed messages would land in a `main_undefined_<topicId>` bucket nobody
+   * renders, leaving a connected-but-frozen panel.
+   */
+  agentId?: string;
+  /**
+   * Present on the agent-share visitor surface. Routes the token refresh and
+   * cancellation through the share-authorized `shareChat` procedures instead
+   * of the owner-scoped ones: a visitor has no owner-scoped access to the
+   * creator's topic/operation rows, and the Gateway channel is registered
+   * under the VISITOR's id, so only a visitor-signed token can reconnect it
+   * — see `shareChat.refreshGatewayToken`'s JSDoc.
+   */
+  agentShareId?: string;
+  assistantMessageId: string;
+  heteroType?: string | null;
+  operationId: string;
+  scope?: string;
+  /**
+   * Server-written ISO timestamp of when the run claimed the topic — carried
+   * on the topic's `runningOperation` marker so elapsed-time anchors survive
+   * a page refresh even when the messages list hasn't loaded yet.
+   */
+  startedAt?: string;
+  threadId?: string | null;
+  topicId: string;
+}
+
 export class GatewayActionImpl {
   readonly #get: () => ChatStore;
   readonly #set: Setter;
@@ -357,6 +389,9 @@ export class GatewayActionImpl {
    * only the failing one's operations move.
    */
   readonly #muxFallbacks = new Map<string, { mux: GatewayMuxClient; redial: () => void }>();
+
+  /** Reconnects still being established, by server operation id. */
+  readonly #reconnectsInFlight = new Map<string, Promise<void>>();
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
@@ -1580,37 +1615,25 @@ export class GatewayActionImpl {
    * Reads runningOperation from topic metadata, refreshes the JWT token,
    * and establishes a new WebSocket connection with event replay.
    */
-  reconnectToGatewayOperation = async (params: {
-    /**
-     * Agent that owns the rendered conversation. Callers outside the agent route
-     * (task detail / home run drawer) MUST pass it: `activeAgentId` is whatever
-     * the last agent page left behind — `undefined` on the home surface — and the
-     * streamed messages would land in a `main_undefined_<topicId>` bucket nobody
-     * renders, leaving a connected-but-frozen panel.
-     */
-    agentId?: string;
-    /**
-     * Present on the agent-share visitor surface. Routes the token refresh and
-     * cancellation through the share-authorized `shareChat` procedures instead
-     * of the owner-scoped ones: a visitor has no owner-scoped access to the
-     * creator's topic/operation rows, and the Gateway channel is registered
-     * under the VISITOR's id, so only a visitor-signed token can reconnect it
-     * — see `shareChat.refreshGatewayToken`'s JSDoc.
-     */
-    agentShareId?: string;
-    assistantMessageId: string;
-    heteroType?: string | null;
-    operationId: string;
-    scope?: string;
-    /**
-     * Server-written ISO timestamp of when the run claimed the topic — carried
-     * on the topic's `runningOperation` marker so elapsed-time anchors survive
-     * a page refresh even when the messages list hasn't loaded yet.
-     */
-    startedAt?: string;
-    threadId?: string | null;
-    topicId: string;
-  }): Promise<void> => {
+  reconnectToGatewayOperation = (params: ReconnectToGatewayOperationParams): Promise<void> => {
+    // Several surfaces ask for the same run's stream at once (the topic's own
+    // reconnect, a `waiting_for_client` card, the app-level wait pick-up). The
+    // connection guard below only sees a connection once the token refresh is
+    // done, so concurrent callers would each start a local operation and only
+    // the last connection would ever see the run end. Share one attempt.
+    const inFlight = this.#reconnectsInFlight.get(params.operationId);
+    if (inFlight) return inFlight;
+
+    const attempt = this.#reconnectToGatewayOperation(params).finally(() => {
+      this.#reconnectsInFlight.delete(params.operationId);
+    });
+    this.#reconnectsInFlight.set(params.operationId, attempt);
+    return attempt;
+  };
+
+  #reconnectToGatewayOperation = async (
+    params: ReconnectToGatewayOperationParams,
+  ): Promise<void> => {
     const { agentShareId, assistantMessageId, heteroType, operationId, topicId, scope, threadId } =
       params;
 
