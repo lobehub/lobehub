@@ -360,9 +360,26 @@ describe('normalizeGithubShellToolResult', () => {
     });
   });
 
-  it('leaves the command intact when a `<<` never reaches its delimiter', () => {
-    // A `<<` inside a quoted argument is not a heredoc; with no delimiter line
-    // nothing is stripped and the command parses as before.
+  it('keeps a heredoc example inside a quoted body verbatim', () => {
+    // A `<<` inside quotes is literal text, not a redirection — the body
+    // snapshot must still mirror what was sent to GitHub.
+    const body = ['Repro:', 'cat <<EOF', 'hello', 'EOF', 'Done.'].join('\n');
+    const operation = normalizeGithubShellToolResult({
+      data: {
+        command: `gh pr create --title "Fix w" --body "${body}"`,
+        output: 'https://github.com/lobehub/lobehub/pull/20365\n',
+      },
+      toolName: 'Bash',
+    });
+
+    expect(operation?.params).toMatchObject({
+      identifier: 'lobehub/lobehub#20365',
+      title: 'Fix w',
+    });
+    expect(operation?.params.content).toBe(body);
+  });
+
+  it('leaves a quoted `<<` without a delimiter line untouched', () => {
     const operation = normalizeGithubShellToolResult({
       data: {
         command: 'gh pr create --title "Shift a << b" --body "Details"',
