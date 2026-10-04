@@ -5,6 +5,7 @@ import {
   consumeLinkCode,
   issueLinkCode,
   peekLinkCodeStatus,
+  restoreLinkCode,
   settleLinkCode,
 } from './linkTokenStore';
 
@@ -135,5 +136,25 @@ describe('link codes', () => {
       reason: 'already_linked_to_other',
       status: 'failed',
     });
+  });
+
+  it('restores a consumed code so the same code links on a resend', async () => {
+    const { code, pollId } = await issue();
+    const payload = (await consumeLinkCode(code, 'linq'))!;
+    expect(await consumeLinkCode(code, 'linq')).toBeNull();
+
+    await restoreLinkCode(code, payload);
+
+    expect(await peekLinkCodeStatus(pollId, 'user_alice')).toEqual({ status: 'pending' });
+    expect(await consumeLinkCode(code, 'linq')).toMatchObject({ pollId, userId: 'user_alice' });
+  });
+
+  it('leaves an already-expired code gone', async () => {
+    const { code } = await issue();
+    const payload = (await consumeLinkCode(code, 'linq'))!;
+
+    await restoreLinkCode(code, { ...payload, createdAt: Date.now() - 3600 * 1000 });
+
+    expect(await consumeLinkCode(code, 'linq')).toBeNull();
   });
 });

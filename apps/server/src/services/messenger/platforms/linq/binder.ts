@@ -11,7 +11,12 @@ import {
 import { appEnv } from '@/envs/app';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 
-import { consumeLinkCode, settleLinkCode } from '../../linkTokenStore';
+import {
+  consumeLinkCode,
+  type LinkCodePayload,
+  restoreLinkCode,
+  settleLinkCode,
+} from '../../linkTokenStore';
 import type { MessengerPlatformBinder, UnlinkedMessageContext } from '../../types';
 import { LinqMessengerClient, sendLinqTextToHandle } from './client';
 
@@ -55,6 +60,22 @@ export const linkLinqSenderByCode = async (
   const payload = await consumeLinkCode(code, 'linq');
   if (!payload) return { status: 'invalid' };
 
+  try {
+    return await bindConsumedCode(payload, senderHandle);
+  } catch (error) {
+    // The code was taken atomically, but nothing got bound. Put it back so
+    // resending the same code (or the delivery retry) can still complete.
+    await restoreLinkCode(code, payload).catch((restoreError: unknown) => {
+      log('restoreLinkCode failed: %O', restoreError);
+    });
+    throw error;
+  }
+};
+
+const bindConsumedCode = async (
+  payload: LinkCodePayload,
+  senderHandle: string,
+): Promise<LinkOutcome> => {
   const serverDB = await getServerDB();
   const owner = await MessengerAccountLinkModel.findByPlatformUser(
     serverDB,

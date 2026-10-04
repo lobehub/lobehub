@@ -815,6 +815,7 @@ export const MESSENGER_PUSH_CONTENT_MAX_LENGTH = 2000;
 
 export const MessengerPushPlatform = {
   discord: 'discord',
+  linq: 'linq',
   slack: 'slack',
   telegram: 'telegram',
   wechat: 'wechat',

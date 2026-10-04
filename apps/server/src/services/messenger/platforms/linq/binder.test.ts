@@ -1,10 +1,11 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LINQ_REPLY, MessengerLinqBinder } from './binder';
+import { linkLinqSenderByCode, LINQ_REPLY, MessengerLinqBinder } from './binder';
 
 const mocks = vi.hoisted(() => ({
   consumeLinkCode: vi.fn(),
+  restoreLinkCode: vi.fn(),
   findByPlatformUser: vi.fn(),
   sendText: vi.fn(),
   sendToHandle: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock('@/database/models/messengerAccountLink', () => {
 
 vi.mock('../../linkTokenStore', () => ({
   consumeLinkCode: mocks.consumeLinkCode,
+  restoreLinkCode: mocks.restoreLinkCode,
   settleLinkCode: mocks.settleLinkCode,
 }));
 
@@ -136,6 +138,30 @@ describe('MessengerLinqBinder.handleUnlinkedMessage', () => {
       status: 'failed',
     });
     expect(mocks.sendText).toHaveBeenCalledWith('chat_1', LINQ_REPLY.alreadyLinkedToOther);
+  });
+});
+
+describe('linkLinqSenderByCode', () => {
+  it('puts the consumed code back when the bind fails unexpectedly', async () => {
+    mocks.consumeLinkCode.mockResolvedValue(pendingCode);
+    mocks.restoreLinkCode.mockResolvedValue(undefined);
+    mocks.upsertForPlatform.mockRejectedValue(new Error('connection reset'));
+
+    await expect(linkLinqSenderByCode('LH-7Q2M4XKP', SENDER)).rejects.toThrow('connection reset');
+
+    expect(mocks.restoreLinkCode).toHaveBeenCalledWith('LH-7Q2M4XKP', pendingCode);
+    // Nothing settled — the polling page stays pending, not failed or linked.
+    expect(mocks.settleLinkCode).not.toHaveBeenCalled();
+  });
+
+  it('does not restore a code whose outcome was a definitive conflict', async () => {
+    mocks.consumeLinkCode.mockResolvedValue(pendingCode);
+    mocks.findByPlatformUser.mockResolvedValue({ userId: 'user_bob' });
+
+    await expect(linkLinqSenderByCode('LH-7Q2M4XKP', SENDER)).resolves.toEqual({
+      status: 'already_linked_to_other',
+    });
+    expect(mocks.restoreLinkCode).not.toHaveBeenCalled();
   });
 });
 

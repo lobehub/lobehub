@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { MessageManifest } from './manifest';
-import { MessageApiName } from './types';
+import { MessageApiName, MessengerPushPlatform } from './types';
 
 const findApi = (name: string) => MessageManifest.api.find((api) => api.name === name);
 
@@ -28,5 +28,14 @@ describe('MessageManifest', () => {
     ]) {
       expect(findApi(name)?.ordered, name).toBeUndefined();
     }
+  });
+
+  // The schema is what the model is held to: a platform the server can push
+  // to but the enum omits is rejected before the call ever reaches it.
+  it('advertises every proactive push platform in the sendMessengerPush schema', () => {
+    const platform = (findApi(MessageApiName.sendMessengerPush)?.parameters as any).properties
+      .platform;
+    expect([...platform.enum].sort()).toEqual(Object.values(MessengerPushPlatform).sort());
+    expect(platform.enum).toContain('linq');
   });
 });

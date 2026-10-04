@@ -350,3 +350,35 @@ export const peekLinkCodeStatus = async (
   }
   return record.result;
 };
+
+/**
+ * Put a consumed code back after the bind it was consumed for failed for an
+ * unexpected reason (DB unreachable, …), so resending the same code works and
+ * the polling page stays `pending` instead of flipping to `expired`. Restores
+ * with whatever TTL the code had left; an already-expired code stays gone. NX
+ * keeps this from clobbering anything that claimed the key in the meantime.
+ */
+export const restoreLinkCode = async (code: LinkCode, payload: LinkCodePayload): Promise<void> => {
+  const redis = getAgentRuntimeRedisClient();
+  if (!redis) return;
+
+  const remaining =
+    getMessengerLinkTokenTtl() - Math.floor((Date.now() - payload.createdAt) / 1000);
+  if (remaining <= 0) return;
+
+  const restored = await redis.set(
+    linkCodeKey(code),
+    JSON.stringify(payload),
+    'EX',
+    remaining,
+    'NX',
+  );
+  if (restored !== 'OK') return;
+  await redis.set(
+    linkCodeReuseKey(payload.platform, payload.userId),
+    code.toUpperCase(),
+    'EX',
+    remaining,
+  );
+  log('restoreLinkCode: restored %s code for user=%s', payload.platform, payload.userId);
+};
