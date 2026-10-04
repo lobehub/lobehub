@@ -192,7 +192,7 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
               {t('messenger.linq.code.sendTo', { number: state.session.deepLink.number })}
             </Text>
             <Button
-              href={state.session.deepLink.imessage}
+              href={state.session.deepLink.sms}
               icon={<Icon icon={MessageCircleIcon} />}
               type="primary"
             >

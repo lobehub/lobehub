@@ -39,6 +39,13 @@ export interface MessengerPlatformWebhookGate {
     rawBody: string,
     ctx: MessengerWebhookContext,
   ) => Promise<Response | null>;
+  /**
+   * Called once the router has handled a delivery that passed `preprocess`.
+   * `response` is undefined when handling threw. Gates that claimed the
+   * delivery (replay dedupe) release the claim here on failure so the
+   * platform's retry is processed instead of answered as a duplicate.
+   */
+  settle?: (req: Request, response: Response | undefined) => Promise<void>;
 }
 
 /**

@@ -12,9 +12,17 @@ vi.mock('@/config/messenger', () => ({
   getMessengerLinqConfig: vi.fn(async () => config.value),
 }));
 
-// No Redis in unit tests — the gate falls back to its in-memory replay store.
+const redisStore = vi.hoisted(() => new Map<string, string>());
+
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
-  getAgentRuntimeRedisClient: vi.fn(() => null),
+  getAgentRuntimeRedisClient: vi.fn(() => ({
+    del: vi.fn(async (key: string) => (redisStore.delete(key) ? 1 : 0)),
+    set: vi.fn(async (key: string, value: string, ...args: unknown[]) => {
+      if (args.includes('NX') && redisStore.has(key)) return null;
+      redisStore.set(key, value);
+      return 'OK';
+    }),
+  })),
 }));
 
 const ctx = { invalidateBot: vi.fn() };
@@ -61,5 +69,28 @@ describe('linqWebhookGate', () => {
     config.value = null;
     const res = await linqWebhookGate.preprocess(signed(body, 'evt_x'), body, ctx);
     expect(res?.status).toBe(503);
+  });
+
+  it.each([
+    ['the router answered 503', new Response('bot unavailable', { status: 503 })],
+    ['the install was not found', new Response('install not found', { status: 404 })],
+    ['handling threw', undefined],
+  ])('releases the claim so a retry is processed when %s', async (_label, response) => {
+    const id = `evt_${Math.random()}`;
+    expect(await linqWebhookGate.preprocess(signed(body, id), body, ctx)).toBeNull();
+
+    await linqWebhookGate.settle!(signed(body, id), response);
+
+    expect(await linqWebhookGate.preprocess(signed(body, id), body, ctx)).toBeNull();
+  });
+
+  it('keeps the claim after a successful delivery', async () => {
+    const id = `evt_${Math.random()}`;
+    expect(await linqWebhookGate.preprocess(signed(body, id), body, ctx)).toBeNull();
+
+    await linqWebhookGate.settle!(signed(body, id), Response.json({ ok: true }));
+
+    const res = await linqWebhookGate.preprocess(signed(body, id), body, ctx);
+    expect(res?.status).toBe(409);
   });
 });

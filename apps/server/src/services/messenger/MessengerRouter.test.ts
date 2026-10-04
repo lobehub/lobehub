@@ -260,6 +260,18 @@ vi.mock('./platforms/wechat/binder', () => ({
   }),
 }));
 
+vi.mock('./platforms/linq/binder', () => ({
+  MessengerLinqBinder: vi.fn(function () {
+    return { createClient: vi.fn(), handleUnlinkedMessage: vi.fn(), sendDmText: vi.fn() };
+  }),
+}));
+
+const mockLinqGate = vi.hoisted(() => ({
+  preprocess: vi.fn(async (): Promise<Response | null> => null),
+  settle: vi.fn(async () => {}),
+}));
+vi.mock('./platforms/linq/webhook', () => ({ linqWebhookGate: mockLinqGate }));
+
 const buildSlackRequest = (body: string, headers: Record<string, string> = {}): Request =>
   new Request('https://app.example.com/api/agent/messenger/webhooks/slack', {
     body,
@@ -356,6 +368,26 @@ afterEach(() => {
 });
 
 describe('MessengerRouter.getWebhookHandler', () => {
+  it('lets the gate settle a delivery whose handling failed', async () => {
+    mockResolveByPayload.mockResolvedValueOnce(null);
+    const router = new MessengerRouter();
+    const req = new Request('https://e.com/x', { body: '{}', method: 'POST' });
+
+    const res = await router.getWebhookHandler('linq')(req);
+
+    expect(res.status).toBe(404);
+    expect(mockLinqGate.settle).toHaveBeenCalledWith(req, res);
+  });
+
+  it('lets the gate settle a delivery whose handling threw', async () => {
+    mockResolveByPayload.mockRejectedValueOnce(new Error('db down'));
+    const router = new MessengerRouter();
+    const req = new Request('https://e.com/x', { body: '{}', method: 'POST' });
+
+    await expect(router.getWebhookHandler('linq')(req)).rejects.toThrow('db down');
+    expect(mockLinqGate.settle).toHaveBeenCalledWith(req, undefined);
+  });
+
   it('rejects unknown platforms with 404', async () => {
     const router = new MessengerRouter();
     const handler = router.getWebhookHandler('discord');

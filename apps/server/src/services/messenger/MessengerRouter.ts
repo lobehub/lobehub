@@ -43,7 +43,7 @@ import { isResourceAuthorOrAdmin } from '@/server/services/resourcePermission';
 
 import { getInstallationStore } from './installations';
 import type { InstallationCredentials } from './installations/types';
-import { messengerPlatformRegistry } from './platforms';
+import { type MessengerPlatformDefinition, messengerPlatformRegistry } from './platforms';
 import { getMessengerSystemStrings } from './systemReply';
 import type {
   AgentPickerEntry,
@@ -306,60 +306,84 @@ export class MessengerRouter {
         if (early) return early;
       }
 
-      // ----- Resolve install + lazy-load bot -------------------------------
-      const store = getInstallationStore(definition.id);
-      if (!store) {
-        return new Response(`Messenger ${platform} has no installation store`, { status: 500 });
-      }
-
-      const creds = await store.resolveByPayload(reconstructRequest(req, rawBody), rawBody);
-      if (!creds) {
-        log('webhook: no install resolved for platform=%s', platform);
-        return new Response('install not found', { status: 404 });
-      }
-
-      const bot = await this.getOrCreateBot(creds);
-      if (!bot) {
-        return new Response(`Messenger ${platform} bot unavailable`, { status: 503 });
-      }
-
-      // ----- App Home `Messages` tab opener (Slack marketplace welcome) ---
-      // Slack requires a welcome message the first time a user opens the
-      // Messages tab. chat-sdk's slack adapter drops these events, so peek
-      // the raw body here and dispatch via the binder. Dedupe is handled
-      // inside `handleAppHomeOpened` so a per-user welcome fires once.
-      if (bot.binder.extractAppHomeOpened) {
-        try {
-          const opener = await bot.binder.extractAppHomeOpened(reconstructRequest(req, rawBody));
-          if (opener) {
-            await this.handleAppHomeOpened(bot, creds, opener);
-            return new Response('OK', { status: 200 });
-          }
-        } catch (error) {
-          log('extractAppHomeOpened failed for %s: %O', platform, error);
+      // The gate may have claimed this delivery (Linq replay dedupe); let it
+      // settle that claim once the outcome is known so a failed delivery
+      // stays retryable instead of being answered as a duplicate forever.
+      let response: Response | undefined;
+      try {
+        response = await this.dispatchVerifiedWebhook(definition, req, rawBody, options);
+        return response;
+      } finally {
+        if (definition.webhookGate?.settle) {
+          await definition.webhookGate.settle(req, response).catch((error: unknown) => {
+            log('webhook: gate settle failed for %s: %O', platform, error);
+          });
         }
       }
-
-      // ----- Tap-action callbacks (binder peeks raw body) -----------------
-      if (bot.binder.extractCallbackAction) {
-        try {
-          const action = await bot.binder.extractCallbackAction(reconstructRequest(req, rawBody));
-          if (action) {
-            await this.handleCallbackAction(bot.binder, creds, action, bot.chatBot);
-            return new Response('OK', { status: 200 });
-          }
-        } catch (error) {
-          log('extractCallbackAction failed for %s: %O', platform, error);
-        }
-      }
-
-      // ----- Normal message → chat-sdk handler ----------------------------
-      const handler = (bot.chatBot.webhooks as any)?.[platform];
-      if (!handler) {
-        return new Response(`Messenger ${platform} webhook unavailable`, { status: 500 });
-      }
-      return handler(reconstructRequest(req, rawBody), options);
     };
+  }
+
+  private async dispatchVerifiedWebhook(
+    definition: MessengerPlatformDefinition,
+    req: Request,
+    rawBody: string,
+    options?: WebhookOptions,
+  ): Promise<Response> {
+    const platform = definition.id;
+
+    // ----- Resolve install + lazy-load bot -------------------------------
+    const store = getInstallationStore(definition.id);
+    if (!store) {
+      return new Response(`Messenger ${platform} has no installation store`, { status: 500 });
+    }
+
+    const creds = await store.resolveByPayload(reconstructRequest(req, rawBody), rawBody);
+    if (!creds) {
+      log('webhook: no install resolved for platform=%s', platform);
+      return new Response('install not found', { status: 404 });
+    }
+
+    const bot = await this.getOrCreateBot(creds);
+    if (!bot) {
+      return new Response(`Messenger ${platform} bot unavailable`, { status: 503 });
+    }
+
+    // ----- App Home `Messages` tab opener (Slack marketplace welcome) ---
+    // Slack requires a welcome message the first time a user opens the
+    // Messages tab. chat-sdk's slack adapter drops these events, so peek
+    // the raw body here and dispatch via the binder. Dedupe is handled
+    // inside `handleAppHomeOpened` so a per-user welcome fires once.
+    if (bot.binder.extractAppHomeOpened) {
+      try {
+        const opener = await bot.binder.extractAppHomeOpened(reconstructRequest(req, rawBody));
+        if (opener) {
+          await this.handleAppHomeOpened(bot, creds, opener);
+          return new Response('OK', { status: 200 });
+        }
+      } catch (error) {
+        log('extractAppHomeOpened failed for %s: %O', platform, error);
+      }
+    }
+
+    // ----- Tap-action callbacks (binder peeks raw body) -----------------
+    if (bot.binder.extractCallbackAction) {
+      try {
+        const action = await bot.binder.extractCallbackAction(reconstructRequest(req, rawBody));
+        if (action) {
+          await this.handleCallbackAction(bot.binder, creds, action, bot.chatBot);
+          return new Response('OK', { status: 200 });
+        }
+      } catch (error) {
+        log('extractCallbackAction failed for %s: %O', platform, error);
+      }
+    }
+
+    // ----- Normal message → chat-sdk handler ----------------------------
+    const handler = (bot.chatBot.webhooks as any)?.[platform];
+    if (!handler) {
+      return new Response(`Messenger ${platform} webhook unavailable`, { status: 500 });
+    }
+    return handler(reconstructRequest(req, rawBody), options);
   }
 
   // -------------------------------------------------------------------------

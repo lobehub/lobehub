@@ -6,7 +6,7 @@ import {
   messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
-} from '@/server/services/bot/platforms';
+} from '@/server/services/bot/platforms/types';
 
 import { LinqChatAdapter } from './adapter';
 import { pickLinqPoolNumber } from './pool';
