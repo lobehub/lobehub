@@ -752,6 +752,32 @@ describe('waiting_for_client (U4c)', () => {
       );
     });
 
+    it('writes the expiry error onto the assistant row before ending the stream', async () => {
+      const t = createService();
+      t.setStored(waitingState());
+      // The end event's `uiMessages` snapshot is read from the DB inside this
+      // save; record what the assistant row held at that moment.
+      let rowErrorAtEnd: unknown;
+      t.coordinator.saveAgentState.mockImplementationOnce(async (_id: string, state: any) => {
+        const writes = t.messageModel.update.mock.calls.filter(
+          ([id]: any[]) => id === 'msg-assistant',
+        );
+        rowErrorAtEnd = writes.at(-1)?.[1]?.error;
+        t.setStored(state);
+      });
+
+      await t.service.executeStep({
+        clientLlmWaitExpired: new Date(NOW).toISOString(),
+        operationId: OPERATION_ID,
+        stepIndex: 2,
+      });
+
+      expect(rowErrorAtEnd).toMatchObject({
+        body: expect.objectContaining({ reason: 'wait_timeout' }),
+        type: AgentRuntimeErrorType.ClientLlmExecutorUnavailable,
+      });
+    });
+
     it('finishes on retry when an earlier delivery settled the row but failed to finish', async () => {
       const t = createService();
       t.setStored(waitingState());

@@ -3942,8 +3942,25 @@ export class AgentRuntimeService {
       status: 'error',
     };
 
-    // Ends the stream (`agent_runtime_end`), then writes the error onto the
-    // parked call's assistant row and finalizes the run like any failure.
+    // The row gets the terminal error first: the save below ends the stream
+    // with a `uiMessages` snapshot read from the DB, and an open tab adopts it,
+    // so writing it later would leave that tab on the waiting notice. The
+    // lifecycle writes the same error again when it finalizes the run.
+    const assistantMessageId = state.clientLlmWait.assistantMessageId;
+    if (assistantMessageId && finalState.error) {
+      const message = this.completionLifecycle.extractErrorMessage(finalState.error);
+      await this.messageModel
+        .update(assistantMessageId, {
+          error: {
+            ...finalState.error,
+            body: finalState.error.body ?? { message },
+            message,
+          },
+        })
+        .catch((error) => log('[%s] Failed to write the expiry error: %O', operationId, error));
+    }
+
+    // Ends the stream (`agent_runtime_end`) and finalizes the run like any failure.
     await this.coordinator.saveAgentState(operationId, finalState);
     await this.completionLifecycle.emitSignalEvents(operationId, finalState, 'error');
     await this.finishClientLlmWaitExpiry(operationId, finalState);
