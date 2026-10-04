@@ -688,6 +688,44 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
     });
   });
 
+  it("writes the error onto the run's own assistant row when a server run carries no assistantMessageId", async () => {
+    // A server `execAgent` turn leaves `metadata.assistantMessageId` unset; with
+    // no client online (a closed tab, a bot, a schedule) nothing else writes
+    // the error, so the reply row would stay an empty bubble.
+    const lifecycle = buildLifecycle();
+    const updateMessage = vi.fn().mockResolvedValue({ success: true });
+    const findLatestAssistantByOperationId = vi.fn().mockResolvedValue({ id: 'msg-run' });
+
+    (lifecycle as any).messageModel = { findLatestAssistantByOperationId, update: updateMessage };
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+    await lifecycle.dispatchHooks(
+      'op-1',
+      {
+        error: {
+          error: { reason: 'claim_timeout', recoverable: true },
+          errorType: 'ClientLlmExecutorUnavailable',
+          provider: 'lmstudio',
+        },
+        host: { hooks: [] },
+        metadata: {},
+        origin: { topicId: 'tpc-1' },
+        status: 'error',
+      },
+      'error',
+    );
+
+    expect(findLatestAssistantByOperationId).toHaveBeenCalledWith({
+      operationId: 'op-1',
+      topicId: 'tpc-1',
+    });
+    expect(updateMessage).toHaveBeenCalledWith('msg-run', {
+      error: expect.objectContaining({ type: 'ClientLlmExecutorUnavailable' }),
+    });
+  });
+
   it('rethrows critical webhook failures after terminal persistence', async () => {
     const lifecycle = buildLifecycle();
     const persistCompletion = vi
