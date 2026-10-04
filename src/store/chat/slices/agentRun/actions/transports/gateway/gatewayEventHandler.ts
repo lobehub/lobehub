@@ -17,6 +17,7 @@ import type {
 import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import type { BuiltinToolResult, ConversationContext, UIChatMessage } from '@lobechat/types';
+import { isClientLlmWaitableError } from '@lobechat/types';
 import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
 import { readConversationMessages } from '@/helpers/conversationMessageRead';
@@ -1429,6 +1430,20 @@ export const createGatewayEventHandler = (
           const messageError = normalizeHeterogeneousMessageError(
             normalizeChatMessageError(event.data),
           );
+
+          // A relayed LLM call no client took: the server parks the run in
+          // `waiting_for_client` (or, if it cannot, fails it and writes the
+          // error itself), so this is not the run's end and the row is not ours
+          // to write — persisting it here would replace the waiting notice, and
+          // a stream replay on reconnect would do so long after the park. Show
+          // what the server wrote instead.
+          if (isClientLlmWaitableError(messageError)) {
+            get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+            endReasoningIfNeeded();
+            await refreshMessagesFromDb().catch(console.error);
+            return;
+          }
+
           const errorMessage = messageError.message;
 
           void emitAgentSignal({

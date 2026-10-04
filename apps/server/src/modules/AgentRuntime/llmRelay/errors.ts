@@ -1,5 +1,5 @@
 import { AgentRuntimeError } from '@lobechat/model-runtime';
-import { AgentRuntimeErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType, CLIENT_LLM_WAITABLE_REASONS } from '@lobechat/types';
 
 /**
  * Errors of a relayed LLM attempt, shaped like every other provider error
@@ -25,11 +25,7 @@ export type ClientLlmUnavailableReason =
  * `waiting_for_client` for them instead of failing (U4c). `relay_unsupported`
  * is a deployment gap no client can close.
  */
-const CLIENT_WAITABLE_REASONS = new Set<ClientLlmUnavailableReason>([
-  'claim_timeout',
-  'no_executor',
-  'not_delivered',
-]);
+const CLIENT_WAITABLE_REASONS = new Set<string>(CLIENT_LLM_WAITABLE_REASONS);
 
 export type ClientLlmTimeoutStage = 'first_chunk' | 'total';
 
