@@ -60,7 +60,9 @@ describe('PLATFORM_UNSUPPORTED_MESSAGE_APIS', () => {
       .filter(([, apis]) => apis.includes('readMessages'))
       .map(([id]) => id)
       .sort();
-    expect(noHistory).toEqual(['qq', 'telegram', 'wechat']);
+    // `linq` is messenger-only (shared iMessage / SMS pool): it has no channel
+    // service behind the message tool at all, so history is pre-injected.
+    expect(noHistory).toEqual(['linq', 'qq', 'telegram', 'wechat']);
   });
 });
 

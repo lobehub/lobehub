@@ -15,6 +15,7 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import { GatewayService } from '@/server/services/gateway';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
+import { messengerPlatformRegistry } from '@/server/services/messenger/platforms';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
@@ -853,9 +854,12 @@ export class AgentBridgeService {
       trigger?: string;
     },
   ): Promise<{ reply: string; topicId: string }> {
-    // Resolve bot platform context from platform registry
+    // Resolve bot platform context from platform registry. Messenger-only
+    // platforms (Linq) have no bot-channel definition and carry the same reply
+    // traits on their messenger definition instead.
     const platformDef = opts.botContext?.platform
-      ? platformRegistry.getPlatform(opts.botContext.platform)
+      ? (platformRegistry.getPlatform(opts.botContext.platform) ??
+        messengerPlatformRegistry.getPlatform(opts.botContext.platform))
       : undefined;
     // Platforms whose runtime rejects `readMessages` (e.g. WeChat) can't fetch
     // history on demand. We flag that so the prompt stops telling the model to

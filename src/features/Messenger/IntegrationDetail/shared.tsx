@@ -488,7 +488,9 @@ export const useLinkActions = ({
       content:
         platform === 'wechat'
           ? t('messenger.unlinkConfirmWechat')
-          : t('messenger.unlinkConfirm', { platform: name }),
+          : platform === 'linq'
+            ? t('messenger.unlinkConfirmLinq')
+            : t('messenger.unlinkConfirm', { platform: name }),
       okButtonProps: { danger: true },
       onOk: async () => {
         try {

@@ -278,4 +278,27 @@ export default {
     'Your account is now connected to {{platform}}. Open {{platform}} and send your first message.',
   'verify.success.openBot': 'Open in {{platform}}',
   'verify.success.title': 'Linked successfully!',
+  'messenger.linq.accountLabel': 'Phone',
+  'messenger.linq.code.expired': 'This link code expired. Generate a new one to continue.',
+  'messenger.linq.code.label': 'Your one-time link code',
+  'messenger.linq.code.sendTo': 'Text it to {{number}}',
+  'messenger.linq.code.tip':
+    'Scan the QR code with your iPhone camera or tap Open in Messages on your phone, then send the prefilled message. The number is shared — LobeHub recognizes you by the phone you text from. The code is single-use and expires in 30 minutes.',
+  'messenger.linq.code.waiting': 'Waiting for your message…',
+  'messenger.linq.connectCta': 'Get link code',
+  'messenger.linq.connected': 'iMessage connected.',
+  'messenger.linq.error.alreadyLinkedToOther':
+    'This phone number is already connected to another LobeHub account.',
+  'messenger.linq.error.codeUnavailable': 'Could not create a link code. Please try again.',
+  'messenger.linq.error.pollFailed':
+    'Could not check the link status. Please generate a new code and try again.',
+  'messenger.linq.error.unlinkBeforeRelink':
+    'Disconnect the current phone number before connecting another one.',
+  'messenger.linq.openMessages': 'Open in Messages',
+  'messenger.linq.retry': 'Get a new code',
+  'messenger.linq.setupTitle': 'Connect iMessage',
+  'messenger.list.linq.description':
+    'Text your LobeHub agents from iMessage or SMS — no app to install, and /agents switches agents.',
+  'messenger.unlinkConfirmLinq':
+    'Messages from this phone number will no longer reach your agents. You can reconnect any time with a new link code.',
 };

@@ -85,6 +85,9 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
     MessageApiName.sendDirectMessage,
     MessageApiName.unpinMessage,
   ],
+  // The shared Linq pool (messenger iMessage / SMS) has no channel API behind
+  // the message tool — replies flow through the messenger, nothing else.
+  linq: [...CHANNEL_MESSAGE_APIS],
   // Lark shares Feishu's service, so it has the same limitations.
   lark: [
     MessageApiName.createPoll,

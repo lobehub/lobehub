@@ -30,6 +30,7 @@ const VALID_PLATFORMS: ReadonlySet<MessengerPlatform> = new Set([
   'telegram',
   'discord',
   'wechat',
+  'linq',
 ]);
 
 const isMessengerPlatform = (value: string | undefined): value is MessengerPlatform =>

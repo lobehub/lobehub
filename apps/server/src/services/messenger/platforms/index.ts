@@ -1,10 +1,12 @@
 import { discord } from './discord';
+import { linq } from './linq';
 import { MessengerPlatformRegistry } from './registry';
 import { slack } from './slack';
 import { telegram } from './telegram';
 import { wechat } from './wechat';
 
 export { MessengerDiscordBinder } from './discord';
+export { linqWebhookGate, MessengerLinqBinder } from './linq';
 export { MessengerPlatformRegistry } from './registry';
 export { MessengerSlackBinder, slackWebhookGate } from './slack';
 export { MessengerTelegramBinder } from './telegram';
@@ -24,4 +26,5 @@ export const messengerPlatformRegistry = new MessengerPlatformRegistry()
   .register(slack)
   .register(telegram)
   .register(discord)
-  .register(wechat);
+  .register(wechat)
+  .register(linq);

@@ -150,6 +150,14 @@ export interface MessengerPlatformDefinition {
    * Absent for global-bot platforms (Telegram).
    */
   oauth?: MessengerPlatformOAuthAdapter;
+  /**
+   * Reply traits for messenger-only platforms that have no per-agent bot
+   * channel definition in `bot/platforms` (Linq today). Platforms that do have
+   * one (Telegram, Slack, Discord, WeChat) leave these unset — the bridge reads
+   * the bot-channel definition for them.
+   */
+  supportsMarkdown?: boolean;
+  supportsMessageEdit?: boolean;
   webhookGate?: MessengerPlatformWebhookGate;
 }
 

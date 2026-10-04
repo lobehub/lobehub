@@ -71,13 +71,14 @@ afterEach(() => {
 
 describe('messenger proactive push', () => {
   it('exposes every currently supported System Bot platform', () => {
-    expect(MESSENGER_PUSH_PLATFORMS).toEqual(['telegram', 'slack', 'discord', 'wechat']);
+    expect(MESSENGER_PUSH_PLATFORMS).toEqual(['telegram', 'slack', 'discord', 'wechat', 'linq']);
   });
 
   it.each([
     ['telegram', 'telegram:singleton'],
     ['discord', 'discord:singleton'],
     ['slack', 'slack:T_ACME'],
+    ['linq', 'linq:singleton'],
   ] as const)(
     'sends an always-available %s DM with the resolved installation',
     async (platform, key) => {
