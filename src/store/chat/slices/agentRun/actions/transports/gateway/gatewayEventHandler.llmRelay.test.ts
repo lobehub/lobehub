@@ -196,6 +196,44 @@ describe('createGatewayEventHandler — LLM relay', () => {
     expect(contentUpdates(store).at(-1)).toEqual(['msg-1', 'early!']);
   });
 
+  it('puts output that raced ahead of a later step onto its message shell', async () => {
+    let emit!: (chunk: { data: unknown; type: string }) => void;
+    relay.execute.mockImplementation((data: LlmExecuteData, options) => {
+      relay.owned.add(data.callId);
+      emit = options.onOutput;
+      return Promise.resolve();
+    });
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'msg-1',
+      context,
+      operationId: 'op-1',
+    });
+
+    // Step 2's assistant row is not in the store when its relayed output lands.
+    handler(makeEvent('llm_execute', execute({ assistantMessageId: 'msg-2', stepIndex: 2 })));
+    emit({ data: 'early', type: 'text' });
+    emit({ data: 'hmm', type: 'reasoning' });
+    handler(
+      makeEvent('stream_start', { assistantMessage: { id: 'msg-2', role: 'assistant' } } as any),
+    );
+    await flush();
+
+    const actions = vi.mocked(store.internal_dispatchMessage).mock.calls.map(([a]) => a as any);
+    const created = actions.findIndex((a) => a.type === 'createMessage' && a.id === 'msg-2');
+    const after = actions.slice(created + 1).filter((a) => a.id === 'msg-2');
+    expect(created).toBeGreaterThanOrEqual(0);
+    expect(after).toContainEqual(
+      expect.objectContaining({ type: 'updateMessage', value: { content: 'early' } }),
+    );
+    expect(after).toContainEqual(
+      expect.objectContaining({
+        type: 'updateMessage',
+        value: { reasoning: { content: 'hmm' } },
+      }),
+    );
+  });
+
   it('forwards llm_cancel to the executor and ignores relays on share visitors', async () => {
     const store = createStore();
     const handler = createGatewayEventHandler(() => store, {

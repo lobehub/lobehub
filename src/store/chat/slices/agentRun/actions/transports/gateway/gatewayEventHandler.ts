@@ -698,6 +698,29 @@ export const createGatewayEventHandler = (
               : undefined;
           accumulatedContent = localRelay?.content ?? '';
           accumulatedReasoning = localRelay?.reasoning ?? '';
+          // Output that raced ahead of the shell inserted above was dispatched
+          // to a missing id (a no-op), and the server echo of it is skipped:
+          // put it on the message now.
+          if (localRelay?.content) {
+            get().internal_dispatchMessage(
+              {
+                id: localRelay.messageId,
+                type: 'updateMessage',
+                value: { content: localRelay.content },
+              },
+              dispatchContext,
+            );
+          }
+          if (localRelay?.reasoning) {
+            get().internal_dispatchMessage(
+              {
+                id: localRelay.messageId,
+                type: 'updateMessage',
+                value: { reasoning: { content: localRelay.reasoning } },
+              },
+              dispatchContext,
+            );
+          }
           get().updateOperationMetadata(operationId, { visibleLoadingDone: false });
 
           // Native gateway streams carry `assistantMessage.id` directly on
