@@ -30,14 +30,24 @@ export const resolveClientLlmWaitMs = (env: Record<string, string | undefined> =
 
 export const buildClientLlmWait = (params: {
   assistantMessage?: { id: string; parentId?: string | null } | null;
+  context?: AgentRuntimeContext;
   now?: number;
   provider: string;
   reason: ClientLlmUnavailableReason;
   waitMs?: number;
 }): AgentRunClientLlmWait => {
   const now = params.now ?? Date.now();
+  const context = params.context;
   return {
     assistantMessageId: params.assistantMessage?.id,
+    ...(context && {
+      context: {
+        initialContext: context.initialContext,
+        metadata: context.metadata,
+        payload: context.payload,
+        phase: context.phase,
+      },
+    }),
     expiresAt: new Date(now + (params.waitMs ?? resolveClientLlmWaitMs())).toISOString(),
     parentMessageId: params.assistantMessage?.parentId ?? undefined,
     parkedAt: new Date(now).toISOString(),
@@ -64,16 +74,25 @@ export const buildClientLlmWaitMessageError = (wait: AgentRunClientLlmWait): Cha
 });
 
 /**
- * Step context that replays the parked call: the same LLM turn, filling the
- * assistant row it already created.
+ * Step context that replays the parked call: the parked step's own context, so
+ * the agent rebuilds the same LLM request. The resumed state also seeds
+ * `pendingAssistantMessageId`, so the call fills the assistant row it already
+ * created; `user_input` carries that id in its payload instead.
  */
 export const buildClientLlmWaitResumeContext = (
   wait: AgentRunClientLlmWait | undefined,
-): AgentRuntimeContext =>
-  ({
+): AgentRuntimeContext => {
+  const context = wait?.context;
+  if (context && context.phase !== 'user_input') return { ...context };
+
+  const payload = context?.payload && typeof context.payload === 'object' ? context.payload : {};
+  return {
+    ...context,
     payload: {
+      ...payload,
       ...(wait?.assistantMessageId && { assistantMessageId: wait.assistantMessageId }),
       ...(wait?.parentMessageId && { parentMessageId: wait.parentMessageId }),
     },
     phase: 'user_input',
-  }) as AgentRuntimeContext;
+  } as AgentRuntimeContext;
+};

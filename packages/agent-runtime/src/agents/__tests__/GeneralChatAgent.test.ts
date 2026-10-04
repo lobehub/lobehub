@@ -2237,6 +2237,34 @@ describe('GeneralChatAgent', () => {
       });
     });
 
+    it('fills a resume-seeded assistant placeholder and keeps the summary prompt', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        messages: [{ role: 'user', content: 'Execute tasks' }] as any,
+        pendingAssistantMessageId: 'msg-parked',
+      });
+
+      const context = createMockContext('sub_agents_batch_result', {
+        parentMessageId: 'task-parent-msg',
+        results: [],
+      });
+
+      const result = (await agent.runner(context, state)) as any;
+
+      expect(result.type).toBe('call_llm');
+      expect(result.payload.assistantMessageId).toBe('msg-parked');
+      expect(result.payload.messages.at(-1)).toEqual({
+        content:
+          'All tasks above have been completed. Please summarize the results or continue with your response following user query language.',
+        role: 'user',
+      });
+    });
+
     it('should return call_llm even when some tasks failed', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },

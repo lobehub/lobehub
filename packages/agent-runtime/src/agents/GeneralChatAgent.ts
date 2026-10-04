@@ -589,6 +589,10 @@ export class GeneralChatAgent implements Agent {
   ): AgentInstruction {
     const payloadWithAllowedToolNames = {
       ...payload,
+      // A resume-seeded placeholder (tool-first resume, client-wait resume) is
+      // filled by the first LLM turn whichever phase plans it.
+      ...(!payload.assistantMessageId &&
+        state.pendingAssistantMessageId && { assistantMessageId: state.pendingAssistantMessageId }),
       ...this.getAllowedToolNamesPayload(),
     };
     const compressionEnabled = this.config.compressionConfig?.enabled ?? true;

@@ -29,7 +29,7 @@ import type {
   UserInterventionConfig,
 } from '@lobechat/types';
 
-import type { AgentInstructionRequestHumanApprove } from './instruction';
+import type { AgentInstructionRequestHumanApprove, AgentRuntimeContext } from './instruction';
 import type { Cost, CostLimit, Usage } from './usage';
 
 /**
@@ -207,6 +207,12 @@ export interface AgentRunHostEnvelope {
 export interface AgentRunClientLlmWait {
   /** The step's assistant row; the resumed call fills it instead of a new one. */
   assistantMessageId?: string;
+  /**
+   * The context the parked step ran with (minus per-step data), replayed on
+   * resume so the call is rebuilt exactly — some phases add prompt content the
+   * state does not hold. Absent on parks recorded before it existed.
+   */
+  context?: Pick<AgentRuntimeContext, 'initialContext' | 'metadata' | 'payload' | 'phase'>;
   expiresAt: string;
   /** Parent of the parked call's assistant row, for the replayed step. */
   parentMessageId?: string;

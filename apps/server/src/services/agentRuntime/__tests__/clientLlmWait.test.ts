@@ -130,6 +130,7 @@ const createService = () => {
   operationModel.touchRunning = vi.fn().mockResolvedValue(undefined);
   operationModel.tryResumeFromClientWait = vi.fn().mockResolvedValue(true);
   operationModel.settleClientWait = vi.fn().mockResolvedValue(true);
+  operationModel.recordCompletion = vi.fn().mockResolvedValue(true);
   vi.spyOn(completionLifecycle, 'emitSignalEvents').mockResolvedValue([]);
   const dispatchHooks = vi.spyOn(completionLifecycle, 'dispatchHooks').mockResolvedValue(undefined);
   vi.spyOn((service as any).traceRecorder, 'finalize').mockResolvedValue(undefined);
@@ -187,6 +188,7 @@ describe('waiting_for_client (U4c)', () => {
         expect(parked.error).toBeUndefined();
         expect(parked.clientLlmWait).toEqual({
           assistantMessageId: 'msg-assistant',
+          context: { phase: 'user_input' },
           expiresAt: new Date(NOW + 600_000).toISOString(),
           parentMessageId: 'msg-user',
           parkedAt: new Date(NOW).toISOString(),
@@ -194,6 +196,15 @@ describe('waiting_for_client (U4c)', () => {
           reason,
         });
         expect(result.nextStepScheduled).toBe(false);
+
+        // The durable row is parked before anything advertises the wait.
+        expect(t.operationModel.recordCompletion).toHaveBeenCalledWith(OPERATION_ID, {
+          completionReason: 'waiting_for_client',
+          status: 'waiting_for_client',
+        });
+        expect(t.operationModel.recordCompletion.mock.invocationCallOrder[0]).toBeLessThan(
+          t.messageModel.update.mock.invocationCallOrder[0],
+        );
 
         // The assistant row says why the run waits, flagged for the waiting card.
         expect(t.messageModel.update).toHaveBeenCalledWith('msg-assistant', {
@@ -226,6 +237,39 @@ describe('waiting_for_client (U4c)', () => {
         );
       },
     );
+
+    it.each([
+      ['the durable row cannot be written', () => Promise.reject(new Error('db down'))],
+      ['there is no durable row to park', () => Promise.resolve(false)],
+    ])('fails the step instead of parking when %s', async (_label, recordCompletion) => {
+      const t = createService();
+      t.setStored(runningState());
+      t.operationModel.recordCompletion = vi.fn(recordCompletion);
+      t.messageModel.findLatestAssistantByOperationId.mockResolvedValue({ id: 'msg-assistant' });
+      t.mockStep({
+        events: [],
+        newState: unavailableErrorState('no_executor'),
+        nextContext: undefined,
+      });
+
+      await t.service.executeStep({
+        context: { phase: 'user_input' } as any,
+        operationId: OPERATION_ID,
+        stepIndex: 1,
+      });
+
+      expect(t.getStored().status).toBe('error');
+      expect(t.getStored().clientLlmWait).toBeUndefined();
+      expect(t.messageModel.update).not.toHaveBeenCalledWith(
+        'msg-assistant',
+        expect.objectContaining({
+          error: expect.objectContaining({
+            body: expect.objectContaining({ waitingForClient: true }),
+          }),
+        }),
+      );
+      expect(t.scheduleMessage).not.toHaveBeenCalled();
+    });
 
     it('keeps failing a step a client cannot fix (relay_unsupported)', async () => {
       const t = createService();
@@ -369,10 +413,57 @@ describe('waiting_for_client (U4c)', () => {
       expect(state.status).toBe('running');
       expect(state.clientLlmWait).toBeUndefined();
       expect(state.messages).toEqual([{ content: 'hi', role: 'user' }]);
+      expect(state.pendingAssistantMessageId).toBe('msg-assistant');
       expect(context).toEqual({
         payload: { assistantMessageId: 'msg-assistant', parentMessageId: 'msg-user' },
         phase: 'user_input',
       });
+    });
+
+    it('replays the parked continuation context, not a generic user turn', async () => {
+      const t = createService();
+      t.setStored(runningState());
+      t.messageModel.findLatestAssistantByOperationId.mockResolvedValue({
+        id: 'msg-assistant',
+        parentId: 'msg-tool',
+      });
+      const parkedContext = {
+        payload: { parentMessageId: 'msg-tool' },
+        phase: 'sub_agents_batch_result',
+        stepContext: { hasQueuedMessages: false },
+      };
+      t.mockStep({
+        events: [],
+        newState: unavailableErrorState('no_executor'),
+        nextContext: undefined,
+      });
+      await t.service.executeStep({
+        context: parkedContext as any,
+        operationId: OPERATION_ID,
+        stepIndex: 1,
+      });
+      expect(t.getStored().clientLlmWait.context).toEqual({
+        payload: { parentMessageId: 'msg-tool' },
+        phase: 'sub_agents_batch_result',
+      });
+
+      const step = t.mockStep({
+        events: [],
+        newState: runningState({ status: 'done', stepCount: 3 }),
+        nextContext: undefined,
+      });
+      await t.service.executeStep({
+        operationId: OPERATION_ID,
+        resumeClientLlm: true,
+        stepIndex: 2,
+      });
+
+      const [state, context] = step.mock.calls[0];
+      expect(context).toMatchObject({
+        payload: { parentMessageId: 'msg-tool' },
+        phase: 'sub_agents_batch_result',
+      });
+      expect(state.pendingAssistantMessageId).toBe('msg-assistant');
     });
 
     it('ignores a plain step delivery while the run waits for a client', async () => {

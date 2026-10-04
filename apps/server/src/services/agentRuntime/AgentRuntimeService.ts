@@ -2311,6 +2311,8 @@ export class AgentRuntimeService {
           currentState.clientLlmWait = undefined;
           currentState.error = undefined;
           currentState.lastModified = new Date().toISOString();
+          if (wait?.assistantMessageId)
+            currentState.pendingAssistantMessageId = wait.assistantMessageId;
           currentContext = buildClientLlmWaitResumeContext(wait);
           log(
             '[%s][%d] Resuming from waiting_for_client (assistant=%s)',
@@ -2483,7 +2485,11 @@ export class AgentRuntimeService {
           // No client could run the step's LLM call: park for one instead of
           // failing (U4c). The parked state is what the step started from, so
           // a resume replays the same call.
-          const parkedState = await this.parkForClientLlm(operationId, stepResult.newState);
+          const parkedState = await this.parkForClientLlm(
+            operationId,
+            stepResult.newState,
+            currentContext,
+          );
           if (parkedState) {
             stepResult = { ...stepResult, newState: parkedState, nextContext: undefined };
           }
@@ -3598,6 +3604,7 @@ export class AgentRuntimeService {
   private async parkForClientLlm(
     operationId: string,
     errorState: AgentState,
+    context: AgentRuntimeContext | undefined,
   ): Promise<AgentState | undefined> {
     const reason = getClientLlmWaitableReason(errorState.error);
     if (!reason || !this.queueService) return;
@@ -3622,7 +3629,7 @@ export class AgentRuntimeService {
       }
     }
 
-    const wait = buildClientLlmWait({ assistantMessage, provider, reason });
+    const wait = buildClientLlmWait({ assistantMessage, context, provider, reason });
     const parkedState: AgentState = {
       ...errorState,
       clientLlmWait: wait,
@@ -3630,6 +3637,23 @@ export class AgentRuntimeService {
       lastModified: wait.parkedAt,
       status: 'waiting_for_client',
     };
+
+    // Resume, expiry and Stop all key off the durable row, so it must say
+    // `waiting_for_client` before anything advertises the wait. If it cannot,
+    // fail the step as before rather than park a run nothing could settle.
+    try {
+      const recorded = await this.agentOperationModel.recordCompletion(operationId, {
+        completionReason: 'waiting_for_client',
+        status: 'waiting_for_client',
+      });
+      if (!recorded) {
+        log('[%s] No durable row to park on, failing instead', operationId);
+        return;
+      }
+    } catch (error) {
+      log('[%s] Could not record the client wait, failing instead: %O', operationId, error);
+      return;
+    }
 
     try {
       await this.queueService.scheduleMessage({

@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import useSWR from 'swr';
 
 import { gatewayKeys } from '@/libs/swr/keys';
@@ -12,13 +13,21 @@ import { useUserStore } from '@/store/user';
  * Pick up runs parked in `waiting_for_client` when this client comes online
  * (U4c): a schedule, a bot or a CLI run whose next LLM call needs a provider
  * only the user's device can reach, started while no LobeHub client was open.
- * Once on entry, after the provider list this client can run is known; runs
- * for providers it cannot reach are left for another device.
- *
- * The conversation's own waiting card covers a run that parks while the app is
- * already open.
+ * Checked on entry, after the provider list this client can run is known, then
+ * polled while the app stays open — a run can park long after this client
+ * started. The poll backs off while nothing is waiting (30 s up to 2 min, well
+ * inside the 10 min wait window) and resets once a wait shows up. Runs for
+ * providers this client cannot reach are left for another device.
  */
+export const CLIENT_LLM_WAIT_POLL_MIN_MS = 30_000;
+export const CLIENT_LLM_WAIT_POLL_MAX_MS = 120_000;
+
+/** Next poll delay after `idlePolls` consecutive polls that found nothing. */
+export const clientLlmWaitPollInterval = (idlePolls: number) =>
+  Math.min(CLIENT_LLM_WAIT_POLL_MIN_MS * 2 ** Math.max(idlePolls, 0), CLIENT_LLM_WAIT_POLL_MAX_MS);
+
 export const useClientLlmWaitResume = (): void => {
+  const idlePollsRef = useRef(0);
   const isReady = useUserStore((s) => s.isUserStateInit && !!s.isSignedIn);
   const relayEnabled = useServerConfigStore((s) => !!s.featureFlags.enableLlmRelay);
   const agentGatewayUrl = useServerConfigStore((s) => s.serverConfig.agentGatewayUrl);
@@ -29,23 +38,26 @@ export const useClientLlmWaitResume = (): void => {
       ? gatewayKeys.clientLlmWaits()
       : null,
     async () => {
-      const waits = await aiAgentService.listClientLlmWaits();
+      const waits = (await aiAgentService.listClientLlmWaits()).filter(
+        (wait) => !!getLlmExecutorDeclarationFor(wait.provider),
+      );
 
       // One at a time: each pick-up subscribes to its run's stream first.
       for (const wait of waits) {
-        if (!getLlmExecutorDeclarationFor(wait.provider)) continue;
         try {
           await useChatStore.getState().continueClientLlmWait(wait);
         } catch (error) {
           console.error('[useClientLlmWaitResume] Failed to continue %s:', wait.operationId, error);
         }
       }
+      idlePollsRef.current = waits.length > 0 ? 0 : idlePollsRef.current + 1;
       return waits.length;
     },
     {
+      refreshInterval: () => clientLlmWaitPollInterval(idlePollsRef.current - 1),
       revalidateIfStale: false,
       revalidateOnFocus: false,
-      revalidateOnReconnect: false,
+      revalidateOnReconnect: true,
       shouldRetryOnError: false,
     },
   );
