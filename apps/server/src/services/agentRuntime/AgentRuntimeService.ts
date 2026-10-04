@@ -142,8 +142,8 @@ if (process.env.VERCEL) {
 
 const log = debug('lobe-server:agent-runtime-service');
 
-/** Tries for the expired wait's assistant-row error before the stream ends. */
-const EXPIRY_ROW_WRITE_ATTEMPTS = 3;
+/** Tries for a client wait's notice or expiry error on the assistant row. */
+const CLIENT_WAIT_ROW_WRITE_ATTEMPTS = 3;
 
 /**
  * Base delay before the first `verifyAsyncToolBarrier` re-check fires after a
@@ -3736,13 +3736,12 @@ export class AgentRuntimeService {
       return;
     }
 
-    try {
-      await this.messageModel.update(assistantMessage.id, {
-        error: buildClientLlmWaitMessageError(wait),
-      });
-    } catch (error) {
-      log('[%s] Failed to mark the parked call on its assistant row: %O', operationId, error);
-    }
+    // The notice is the only thing a client that cannot run the provider sees
+    // (its relay error handler re-reads the server-owned row), so a transient
+    // failure is retried rather than left as a silent park.
+    await this.updateAssistantRowWithRetry(operationId, assistantMessage.id, {
+      error: buildClientLlmWaitMessageError(wait),
+    });
 
     try {
       await this.queueService.scheduleMessage({
@@ -4044,23 +4043,35 @@ export class AgentRuntimeService {
     if (assistantMessageId && finalState.error) {
       const message = this.completionLifecycle.extractErrorMessage(finalState.error);
       const error = { ...finalState.error, body: finalState.error.body ?? { message }, message };
-      for (let attempt = 1; attempt <= EXPIRY_ROW_WRITE_ATTEMPTS; attempt += 1) {
-        try {
-          await this.messageModel.update(assistantMessageId, { error });
-          break;
-        } catch (writeError) {
-          log('[%s] Failed to write the expiry error (%d): %O', operationId, attempt, writeError);
-          if (attempt < EXPIRY_ROW_WRITE_ATTEMPTS) {
-            await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
-          }
-        }
-      }
+      await this.updateAssistantRowWithRetry(operationId, assistantMessageId, { error });
     }
 
     // Ends the stream (`agent_runtime_end`) and finalizes the run like any failure.
     await this.coordinator.saveAgentState(operationId, finalState);
     await this.completionLifecycle.emitSignalEvents(operationId, finalState, 'error');
     await this.finishClientLlmWaitExpiry(operationId, finalState);
+  }
+
+  /**
+   * Write a client-wait notice or error onto the assistant row, retrying a
+   * transient failure: what a connected tab shows next is read from this row.
+   */
+  private async updateAssistantRowWithRetry(
+    operationId: string,
+    messageId: string,
+    value: Parameters<MessageModel['update']>[1],
+  ) {
+    for (let attempt = 1; attempt <= CLIENT_WAIT_ROW_WRITE_ATTEMPTS; attempt += 1) {
+      try {
+        await this.messageModel.update(messageId, value);
+        return;
+      } catch (error) {
+        log('[%s] Failed to write the assistant row (%d): %O', operationId, attempt, error);
+        if (attempt < CLIENT_WAIT_ROW_WRITE_ATTEMPTS) {
+          await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
+        }
+      }
+    }
   }
 
   /** Lifecycle delivery of an expired client wait; safe to repeat on redelivery. */

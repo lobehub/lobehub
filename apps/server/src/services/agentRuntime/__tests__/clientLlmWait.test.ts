@@ -278,6 +278,33 @@ describe('waiting_for_client (U4c)', () => {
       },
     );
 
+    it('retries a failed waiting-notice write so the park is visible', async () => {
+      const t = createService();
+      t.setStored(runningState());
+      t.messageModel.findLatestAssistantByOperationId.mockResolvedValue({
+        id: 'msg-assistant',
+        parentId: 'msg-user',
+      });
+      t.messageModel.update.mockRejectedValueOnce(new Error('db blip'));
+      t.mockStep({
+        events: [],
+        newState: unavailableErrorState('no_executor'),
+        nextContext: undefined,
+      });
+
+      await t.service.executeStep({
+        context: { phase: 'user_input' } as any,
+        operationId: OPERATION_ID,
+        stepIndex: 1,
+      });
+
+      const noticeWrites = t.messageModel.update.mock.calls.filter(
+        ([id, value]: any[]) => id === 'msg-assistant' && value?.error?.body?.waitingForClient,
+      );
+      expect(noticeWrites).toHaveLength(2);
+      expect(t.getStored().status).toBe('waiting_for_client');
+    });
+
     it('parks on the step count the call started from, so the replay does not spend a step', async () => {
       const t = createService();
       // The parked call is the run's last allowed step.
