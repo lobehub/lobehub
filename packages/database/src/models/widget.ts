@@ -28,6 +28,7 @@ import type { LobeChatDatabase, Transaction } from '../type';
 import {
   assertScopeParents,
   buildDirectLevelWhere,
+  buildParentAccessibleToOwnerWhere,
   buildParentVisibilityWhere,
   buildProjectWhere,
   hasPrivateParent,
@@ -552,6 +553,10 @@ export class WidgetModel {
   /**
    * Live, published, scheduled widgets whose `next_run_at` has passed, with
    * the version to execute. Walks `widgets_due_idx`.
+   *
+   * Skips widgets their owner can no longer reach through the attached
+   * project / agent (trashed, or private to someone else). `next_run_at` is
+   * left as is, so the schedule resumes once access returns.
    */
   static async findDue(db: LobeChatDatabase, options: { limit?: number; now?: Date } = {}) {
     return db
@@ -565,6 +570,7 @@ export class WidgetModel {
           isNotNull(widgets.publishedVersionId),
           notTrashed(widgets.isDeleted),
           lte(widgets.nextRunAt, options.now ?? new Date()),
+          buildParentAccessibleToOwnerWhere(widgets),
         ),
       )
       .orderBy(asc(widgets.nextRunAt))

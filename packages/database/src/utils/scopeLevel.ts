@@ -191,3 +191,16 @@ export const buildParentVisibilityWhere = (
 
   return sql`NOT EXISTS (SELECT 1 FROM ${projects} WHERE ${projects.id} = ${cols.projectId} AND (${hiddenProject})) AND NOT EXISTS (SELECT 1 FROM ${agents} WHERE ${agents.id} = ${cols.agentId} AND (${hiddenAgent}))`;
 };
+
+/**
+ * Cross-user counterpart of {@link buildParentVisibilityWhere} for trusted
+ * jobs (the widget scheduler): keeps a row only while its *owner* could still
+ * read it through its parents — no attached project / agent is trashed, and
+ * none is private unless the row's owner created it.
+ */
+export const buildParentAccessibleToOwnerWhere = (cols: {
+  agentId: AnyPgColumn;
+  projectId: AnyPgColumn;
+  userId: AnyPgColumn;
+}): SQL =>
+  sql`NOT EXISTS (SELECT 1 FROM ${projects} WHERE ${projects.id} = ${cols.projectId} AND (${projects.isDeleted} IS TRUE OR (${projects.visibility} = 'private' AND ${projects.userId} <> ${cols.userId}))) AND NOT EXISTS (SELECT 1 FROM ${agents} WHERE ${agents.id} = ${cols.agentId} AND (${agents.isDeleted} IS TRUE OR (${agents.visibility} = 'private' AND ${agents.userId} <> ${cols.userId})))`;

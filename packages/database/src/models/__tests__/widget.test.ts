@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -775,6 +775,60 @@ describe('WidgetModel', () => {
       const [row] = await serverDB.select().from(widgets).where(eq(widgets.id, due.id));
       expect(row.nextRunAt).toEqual(future);
       expect(await serverDB.select().from(widgetRuns)).toHaveLength(0);
+    });
+
+    it('skips due widgets whose project or agent is trashed or private to someone else', async () => {
+      const now = new Date('2030-01-01T01:00:00Z');
+      const past = new Date('2030-01-01T00:00:00Z');
+      await seedProject('wgt-due-trash');
+      await serverDB.insert(agents).values({ id: 'wgt-due-agent', userId, workspaceId });
+      await seedProject('wgt-due-teammate', { owner: otherUserId });
+      await seedProject('wgt-due-own-private');
+
+      const make = async (title: string, scope: { agentId?: string; projectId?: string }) => {
+        const w = await ws.create({ ...scope, schedulePattern: '0 * * * *', title });
+        const v = await ws.createVersion(w.id, script(title.length));
+        await ws.publishVersion(w.id, v!.id);
+        await ws.update(w.id, { nextRunAt: past });
+        return w;
+      };
+      const inTrashedProject = await make('trashed-project', { projectId: 'wgt-due-trash' });
+      const inTrashedAgent = await make('trashed-agent', { agentId: 'wgt-due-agent' });
+      const inTeammateProject = await make('teammate', { projectId: 'wgt-due-teammate' });
+      const inOwnPrivate = await make('own-private', { projectId: 'wgt-due-own-private' });
+
+      const trashStampValue = { deletedAt: now, isDeleted: true };
+      await serverDB.update(projects).set(trashStampValue).where(eq(projects.id, 'wgt-due-trash'));
+      await serverDB.update(agents).set(trashStampValue).where(eq(agents.id, 'wgt-due-agent'));
+      await serverDB
+        .update(projects)
+        .set({ visibility: 'private' })
+        .where(inArray(projects.id, ['wgt-due-teammate', 'wgt-due-own-private']));
+
+      const dueIds = async () =>
+        (await WidgetModel.findDue(serverDB, { now })).map((r) => r.widget.id).sort();
+
+      // a private parent the widget's owner created does not block it
+      expect(await dueIds()).toEqual([inOwnPrivate.id]);
+      // skipped widgets keep their slot
+      const rows = await serverDB
+        .select()
+        .from(widgets)
+        .where(inArray(widgets.id, [inTrashedProject.id, inTrashedAgent.id, inTeammateProject.id]));
+      expect(rows.map((r) => r.nextRunAt)).toEqual([past, past, past]);
+
+      // restore the trashed parents and make the teammate's project public again
+      const restored = { deletedAt: null, isDeleted: null };
+      await serverDB.update(projects).set(restored).where(eq(projects.id, 'wgt-due-trash'));
+      await serverDB.update(agents).set(restored).where(eq(agents.id, 'wgt-due-agent'));
+      await serverDB
+        .update(projects)
+        .set({ visibility: 'public' })
+        .where(eq(projects.id, 'wgt-due-teammate'));
+
+      expect(await dueIds()).toEqual(
+        [inTrashedProject.id, inTrashedAgent.id, inTeammateProject.id, inOwnPrivate.id].sort(),
+      );
     });
   });
 });
