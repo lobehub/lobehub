@@ -293,17 +293,6 @@ export const AgentManagementManifest: BuiltinToolManifest = {
               'The instruction or task for the agent to execute. Be specific about expected deliverables.',
             type: 'string',
           },
-          taskTitle: {
-            description:
-              'Title for the delegated agent run (shown in UI). Defaults to `Call agent <agentId>`.',
-            type: 'string',
-          },
-          timeout: {
-            default: 1_800_000,
-            description:
-              'Maximum time in milliseconds to wait for the delegated agent run (default: 1800000 = 30 minutes).',
-            type: 'number',
-          },
           skipCallSupervisor: {
             default: false,
             description:

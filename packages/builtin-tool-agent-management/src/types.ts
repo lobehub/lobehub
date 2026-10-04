@@ -289,14 +289,6 @@ export interface CallAgentParams {
    * Only relevant when used within agent groups. Default: false
    */
   skipCallSupervisor?: boolean;
-  /**
-   * Title for the delegated agent run (shown in UI). Defaults to `Call agent <agentId>`.
-   */
-  taskTitle?: string;
-  /**
-   * Timeout in milliseconds for the delegated agent run (default: 1800000 = 30 minutes).
-   */
-  timeout?: number;
 }
 
 // ==================== Get Agent Detail ====================
