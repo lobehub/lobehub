@@ -14,6 +14,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
+import { qstashClient } from '@/libs/qstash';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import widgetWorkflowApp from '@/server/router-hono/workflows/widget';
 import { runWidgetSchedulerTick } from '@/server/services/widget/scheduler';
@@ -34,6 +35,18 @@ vi.mock('@/database/core/db-adaptor', () => ({
     return testDB;
   }),
 }));
+
+const queueMode = vi.hoisted(() => ({ enabled: false }));
+vi.mock('@/envs/app', async (importOriginal) => {
+  const mod = await importOriginal<{ appEnv: object }>();
+  return {
+    ...mod,
+    appEnv: new Proxy(mod.appEnv, {
+      get: (target, key) =>
+        key === 'enableQueueAgentRuntime' ? queueMode.enabled : Reflect.get(target, key),
+    }),
+  };
+});
 
 const runSandbox = vi.fn();
 vi.mock('@/server/services/widget/sandbox', async (importOriginal) => ({
@@ -85,6 +98,9 @@ describe('widget + dashboard routers integration', () => {
   });
 
   afterEach(async () => {
+    queueMode.enabled = false;
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     await Promise.all([ownerId, memberId, outsiderId].map((id) => cleanupTestUser(db, id)));
   });
@@ -689,6 +705,99 @@ describe('widget + dashboard routers integration', () => {
       // The slot moved forward, so an immediate second tick has nothing to do.
       const second = await widgetWorkflowApp.request('/tick', { body: '{}', method: 'POST' });
       expect(await second.json()).toMatchObject({ claimed: 0, due: 0 });
+    });
+
+    describe('queue mode', () => {
+      const post = async (path: string, body: unknown) =>
+        (
+          await widgetWorkflowApp.request(path, {
+            body: JSON.stringify(body),
+            headers: { 'content-type': 'application/json' },
+            method: 'POST',
+          })
+        ).json();
+
+      /** A published, scheduled widget whose slot is due. */
+      const dueWidget = async () => {
+        const owner = widgetRouter.createCaller(context(ownerId));
+        const widget = await createWidget(owner);
+        await owner.setSchedule({ id: widget.id, pattern: '*/5 * * * *' });
+        const draft = (await owner.saveDraft({ widgetId: widget.id, ...statScript }))!.data;
+        runSandbox.mockResolvedValue(ok({ type: 'stat', value: 5 }));
+        await owner.dryRun({ widgetId: widget.id });
+        await owner.publish({ versionId: draft.id, widgetId: widget.id });
+        runSandbox.mockClear();
+        const slot = new Date(Date.now() - 60_000);
+        await db.update(widgets).set({ nextRunAt: slot }).where(eq(widgets.id, widget.id));
+        return { slot, widget };
+      };
+
+      const scheduleRuns = (widgetId: string) =>
+        db
+          .select()
+          .from(widgetRuns)
+          .where(and(eq(widgetRuns.widgetId, widgetId), eq(widgetRuns.trigger, 'schedule')));
+
+      const nextRunAt = async (widgetId: string) =>
+        (await db.select().from(widgets).where(eq(widgets.id, widgetId)))[0].nextRunAt;
+
+      it('publishes each due slot with a per-slot dedup id and leaves the claim to the worker', async () => {
+        vi.stubEnv('APP_URL', 'https://app.test/');
+        queueMode.enabled = true;
+        const publish = vi
+          .spyOn(qstashClient, 'publishJSON')
+          .mockResolvedValue({ messageId: 'm1' } as never);
+        const { slot, widget } = await dueWidget();
+
+        expect(await post('/tick', {})).toMatchObject({ claimed: 0, dispatched: 1, due: 1 });
+        expect(publish).toHaveBeenCalledWith({
+          body: { slot: slot.toISOString(), widgetId: widget.id },
+          deduplicationId: `widget:${widget.id}:${slot.toISOString()}`,
+          url: 'https://app.test/api/workflows/widget/run-widget',
+        });
+        // Not claimed and nothing ran in the tick: the slot is still due.
+        expect(await nextRunAt(widget.id)).toEqual(slot);
+        expect(runSandbox).not.toHaveBeenCalled();
+
+        // A failed publish keeps the slot due, so the next tick retries it.
+        publish.mockRejectedValueOnce(new Error('qstash down'));
+        expect(await post('/tick', {})).toMatchObject({
+          dispatched: 0,
+          results: [{ error: expect.stringContaining('qstash down'), widgetId: widget.id }],
+        });
+        expect(await nextRunAt(widget.id)).toEqual(slot);
+      });
+
+      it('runs a redelivered slot exactly once', async () => {
+        const { slot, widget } = await dueWidget();
+        const message = { slot: slot.toISOString(), widgetId: widget.id };
+
+        expect(await post('/run-widget', message)).toMatchObject({
+          status: 'succeeded',
+          success: true,
+        });
+        // QStash redelivers the same message after a lost response.
+        expect(await post('/run-widget', message)).toEqual({
+          skipped: 'already-claimed',
+          success: true,
+        });
+
+        expect(runSandbox).toHaveBeenCalledTimes(1);
+        expect(await scheduleRuns(widget.id)).toHaveLength(1);
+        expect((await nextRunAt(widget.id))!.getTime()).toBeGreaterThan(Date.now());
+      });
+
+      it('acks a message without a slot without running or claiming', async () => {
+        const { slot, widget } = await dueWidget();
+
+        expect(await post('/run-widget', { widgetId: widget.id })).toEqual({
+          skipped: 'missing-slot',
+          success: true,
+        });
+        expect(runSandbox).not.toHaveBeenCalled();
+        expect(await scheduleRuns(widget.id)).toHaveLength(0);
+        expect(await nextRunAt(widget.id)).toEqual(slot);
+      });
     });
   });
 });

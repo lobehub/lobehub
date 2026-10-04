@@ -1,27 +1,42 @@
 import type { Context } from 'hono';
 
-import { WidgetModel } from '@/database/models/widget';
 import { getServerDB } from '@/database/server';
 import { createWidgetSandboxRunner } from '@/server/services/widget/sandbox';
-import { runScheduledWidget } from '@/server/services/widget/scheduler';
+import { runDispatchedWidget } from '@/server/services/widget/scheduler';
+
+interface RunWidgetPayload {
+  /** The `next_run_at` the widget was due at when the tick dispatched it (ISO). */
+  slot?: string;
+  widgetId?: string;
+}
 
 /**
- * Queued half of a scheduled widget run: the tick already claimed the slot,
- * this executes the widget's current published version.
+ * Queued half of a scheduled widget run. The tick dispatches `{ widgetId, slot }`
+ * without claiming; this handler claims the slot and runs the widget only when
+ * the claim wins. QStash delivers at least once, so a redelivered message for
+ * an already-claimed slot is acknowledged (2xx) without running anything.
  */
 export async function runWidget(c: Context) {
   try {
-    const { widgetId } = ((await c.req.json().catch(() => ({}))) ?? {}) as { widgetId?: string };
+    const { slot, widgetId } = ((await c.req.json().catch(() => ({}))) ?? {}) as RunWidgetPayload;
     if (!widgetId) return c.json({ error: 'widgetId is required' }, 400);
 
+    // Messages from before slot claiming moved here carry no slot. Their tick
+    // already claimed the slot, so running would be the duplicate; ack them.
+    const slotDate = typeof slot === 'string' ? new Date(slot) : undefined;
+    if (!slotDate || Number.isNaN(slotDate.getTime())) {
+      return c.json({ skipped: 'missing-slot', success: true });
+    }
+
     const db = await getServerDB();
-    const target = await WidgetModel.findLiveWithPublishedVersion(db, widgetId);
-    // Trashed or unpublished since the tick: nothing to run, and nothing to retry.
-    if (!target) return c.json({ skipped: true, success: true });
+    const result = await runDispatchedWidget(
+      db,
+      { slot: slotDate, widgetId },
+      { runner: createWidgetSandboxRunner() },
+    );
+    if (result.skipped) return c.json({ skipped: result.skipped, success: true });
 
-    const run = await runScheduledWidget(db, target, { runner: createWidgetSandboxRunner() });
-
-    return c.json({ runId: run?.id, status: run?.status, success: true });
+    return c.json({ runId: result.run?.id, status: result.run?.status, success: true });
   } catch (error) {
     console.error('[widget/run-widget] Error:', error);
     return c.json({ error: error instanceof Error ? error.message : 'Internal error' }, 500);

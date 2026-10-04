@@ -4,9 +4,15 @@ import { getServerDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { qstashClient } from '@/libs/qstash';
 import { createWidgetSandboxRunner } from '@/server/services/widget/sandbox';
-import { runWidgetSchedulerTick } from '@/server/services/widget/scheduler';
+import {
+  runWidgetSchedulerTick,
+  type WidgetDispatchTarget,
+} from '@/server/services/widget/scheduler';
 
 export const RUN_WIDGET_PATH = '/api/workflows/widget/run-widget';
+
+export const widgetRunDeduplicationId = (widgetId: string, slotIso: string) =>
+  `widget:${widgetId}:${slotIso}`;
 
 interface TickPayload {
   /** Only report how many widgets are due. */
@@ -16,9 +22,9 @@ interface TickPayload {
 
 /**
  * Widget scheduler tick. Registered as a QStash Schedule (`lobe-widget-tick`,
- * see `scripts/serverLauncher/startServer.js`). Claims every due widget slot,
- * then runs each claimed widget — fanned out through QStash in queue mode so
- * each gets its own invocation, inline otherwise.
+ * see `scripts/serverLauncher/startServer.js`). In queue mode each due slot is
+ * published to `run-widget` as `{ widgetId, slot }` (deduplicated per slot) and
+ * that handler claims it before running; inline, the tick claims and runs.
  *
  * Trigger a tick by hand against a local server (the script signs the
  * request when `QSTASH_CURRENT_SIGNING_KEY` is set, as `qstashAuth` then
@@ -32,12 +38,15 @@ export async function tick(c: Context) {
     const db = await getServerDB();
 
     const dispatch = appEnv.enableQueueAgentRuntime
-      ? async (widgetId: string) => {
+      ? async ({ slot, widgetId }: WidgetDispatchTarget) => {
           if (!process.env.APP_URL) {
             throw new Error('APP_URL is required to fan out widget runs via QStash');
           }
+          const slotIso = slot.toISOString();
           await qstashClient.publishJSON({
-            body: { widgetId },
+            body: { slot: slotIso, widgetId },
+            // Overlapping ticks see the same unclaimed slot; publish it once.
+            deduplicationId: widgetRunDeduplicationId(widgetId, slotIso),
             url: `${process.env.APP_URL.replace(/\/$/, '')}${RUN_WIDGET_PATH}`,
           });
         }
