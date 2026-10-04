@@ -41,6 +41,12 @@ export const dashboards = pgTable(
     icon: text('icon'),
     sortOrder: integer('sort_order').notNull().default(0),
 
+    /**
+     * Consumer-owned extras (UI state, integration wiring, …) that no query
+     * filters on. Keep typed, queried fields as real columns.
+     */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+
     visibility: text('visibility').$type<DashboardVisibility>().notNull().default('public'),
     /** Recycle bin — see `schemas/trash.ts`. */
     ...softDeleteColumns(),

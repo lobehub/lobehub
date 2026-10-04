@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "1ec22f99-e826-4ffd-8175-89b688547805",
+  "id": "51dba84e-fabb-4e2e-aa7e-beccb4cc8080",
   "policies": {},
   "prevId": "e4b7b254-1a41-4943-bd9a-f988c0a76a50",
   "roles": {},
@@ -10847,6 +10847,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "visibility": {
           "name": "visibility",
@@ -38182,6 +38188,12 @@
         "metric_id": {
           "name": "metric_id",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

@@ -1288,6 +1288,7 @@ table dashboards {
   description text
   icon text
   sort_order integer [not null, default: 0]
+  metadata jsonb
   visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean
@@ -4526,6 +4527,7 @@ table widgets {
   latest_output jsonb
   latest_output_at "timestamp with time zone"
   metric_id text
+  metadata jsonb
   visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean

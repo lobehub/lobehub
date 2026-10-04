@@ -100,6 +100,12 @@ export const widgets = pgTable(
     metricId: text('metric_id').references(() => metrics.id, { onDelete: 'set null' }),
 
     /**
+     * Consumer-owned extras (UI state, integration wiring, …) that no query
+     * filters on. Keep typed, queried fields as real columns.
+     */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+
+    /**
      * Workspace visibility. Forced to 'private' at creation when the attached
      * project or agent is private, so a widget never outshares its parent.
      */
