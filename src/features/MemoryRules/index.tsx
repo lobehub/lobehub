@@ -367,7 +367,9 @@ const MemoryRules = () => {
       <NavHeader />
       <Flexbox horizontal flex={1} height={'100%'} width={'100%'}>
         <Flexbox className={styles.body}>
-          <WideScreenContainer gap={18} paddingBlock={'24px 96px'}>
+          {/* Full width: with direction, effect, check and count columns the sheet needs the
+              room, and a centred reading column only squeezed the rule text. */}
+          <WideScreenContainer fullWidth gap={18} paddingBlock={'24px 96px'} paddingInline={32}>
             <Flexbox
               horizontal
               align={'flex-start'}
@@ -441,12 +443,12 @@ const MemoryRules = () => {
                     <span>{t('rules.columns.enforcement')}</span>
                     <span>{t('rules.columns.method')}</span>
                     <span
+                      role={'button'}
+                      title={t(`rules.columns.runsSort.${runsSort ?? 'off'}`)}
                       className={cx(
                         styles.sortHeader,
                         runsSort !== null && styles.sortHeaderActive,
                       )}
-                      role={'button'}
-                      title={t(`rules.columns.runsSort.${runsSort ?? 'off'}`)}
                       onClick={() => setRunsSort(nextRunsSort(runsSort))}
                     >
                       {t('rules.columns.runs')}
