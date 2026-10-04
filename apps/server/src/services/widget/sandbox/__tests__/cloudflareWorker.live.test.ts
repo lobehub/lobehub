@@ -21,7 +21,7 @@ const token = process.env.WIDGET_SANDBOX_TOKEN;
 describe.skipIf(!url || !token)('CloudflareWorkerSandboxRunner (live Worker)', () => {
   const runner = new CloudflareWorkerSandboxRunner({
     networkFormat:
-      process.env.WIDGET_SANDBOX_NETWORK_FORMAT === 'boolean' ? 'boolean' : 'allowlist',
+      process.env.WIDGET_SANDBOX_NETWORK_FORMAT === 'allowlist' ? 'allowlist' : 'boolean',
     token,
     url,
   });

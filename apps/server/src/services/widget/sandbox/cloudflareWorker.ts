@@ -60,7 +60,7 @@ export class CloudflareWorkerSandboxRunner implements WidgetSandboxRunner {
 
   constructor(options: CloudflareWorkerSandboxRunnerOptions = {}) {
     this.fetchImpl = options.fetch ?? fetch;
-    this.networkFormat = options.networkFormat ?? 'allowlist';
+    this.networkFormat = options.networkFormat ?? 'boolean';
     this.token = options.token;
     this.url = options.url?.replace(/\/+$/, '');
   }

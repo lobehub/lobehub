@@ -46,7 +46,7 @@ describe('CloudflareWorkerSandboxRunner', () => {
       stdout: '{"type":"stat","value":1}',
     });
 
-    const result = await runnerWith(fetchImpl).run(
+    const result = await runnerWith(fetchImpl, 'allowlist').run(
       request({
         env: { GITHUB_TOKEN: 'secret' },
         network: { allow: ['api.github.com', 'gitlab.com'] },
@@ -75,9 +75,9 @@ describe('CloudflareWorkerSandboxRunner', () => {
     });
   });
 
-  it('collapses the allowlist to a boolean for a Worker that only understands on/off', async () => {
+  it('collapses the allowlist to a boolean by default, the only shape the deployed Worker accepts', async () => {
     const fetchImpl = respond(200, { exitCode: 0, stderr: '', stdout: '' });
-    const runner = runnerWith(fetchImpl, 'boolean');
+    const runner = runnerWith(fetchImpl);
 
     await runner.run(request({ network: { allow: ['api.github.com'] } }));
     await runner.run(request());
@@ -94,7 +94,7 @@ describe('CloudflareWorkerSandboxRunner', () => {
     await runner.run(request({ timeoutMs: 10 * 60_000 }));
 
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toMatchObject({
-      network: { allow: [] },
+      network: false,
       timeoutMs: WIDGET_SANDBOX_DEFAULT_TIMEOUT_MS,
     });
     expect(JSON.parse(fetchImpl.mock.calls[1][1].body).timeoutMs).toBe(

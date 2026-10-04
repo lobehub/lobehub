@@ -33,9 +33,10 @@ export const getSandboxConfig = () => {
       ),
       /**
        * How the widget sandbox request encodes the manifest's network
-       * allowlist: `allowlist` (default) sends `network: { allow: [...] }`;
-       * `boolean` sends `network: allow.length > 0` for a Worker that only
-       * understands an on/off switch.
+       * allowlist: `boolean` (default) sends `network: allow.length > 0`, which is
+       * all the deployed Worker understands today (it rejects an object with 400);
+       * `allowlist` sends `network: { allow: [...] }` for a Worker that enforces
+       * per-run hosts.
        */
       WIDGET_SANDBOX_NETWORK_FORMAT: z.preprocess(
         emptyStringToUndefined,
