@@ -400,6 +400,57 @@ describe('waiting_for_client (U4c)', () => {
       });
     });
 
+    it('has the re-park in place before arming an expiry that fires at once', async () => {
+      const t = createService();
+      const deadline = new Date(NOW - 1000).toISOString();
+      t.setStored(
+        waitingState({
+          clientLlmWait: {
+            assistantMessageId: 'msg-assistant',
+            context: { phase: 'user_input' },
+            expiresAt: deadline,
+            parkedAt: new Date(NOW - 600_000).toISOString(),
+            provider: 'lmstudio',
+            reason: 'no_executor',
+          },
+        }),
+      );
+      t.messageModel.findLatestAssistantByOperationId.mockResolvedValue({ id: 'msg-assistant' });
+      t.mockStep({
+        events: [],
+        newState: unavailableErrorState('not_delivered'),
+        nextContext: undefined,
+      });
+      // What an immediately delivered expiry would see when it runs.
+      let seenByExpiry: any;
+      let noticeWritten = false;
+      t.messageModel.update.mockImplementation(async (_id: string, value: any) => {
+        if (value.error?.body?.waitingForClient) noticeWritten = true;
+      });
+      t.scheduleMessage.mockImplementation(async (message: any) => {
+        if (message.payload?.clientLlmWaitExpired) {
+          seenByExpiry = { noticeWritten, state: structuredClone(t.getStored()) };
+        }
+        return 'queued';
+      });
+
+      await t.service.executeStep({
+        operationId: OPERATION_ID,
+        resumeClientLlm: true,
+        stepIndex: 2,
+      });
+
+      expect(t.scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          delay: 0,
+          payload: { clientLlmWaitExpired: expect.any(String) },
+        }),
+      );
+      expect(seenByExpiry.state.status).toBe('waiting_for_client');
+      expect(seenByExpiry.state.clientLlmWait.parkedAt).toBe(new Date(NOW).toISOString());
+      expect(seenByExpiry.noticeWritten).toBe(true);
+    });
+
     it('keeps the original deadline when a resumed call finds no client again', async () => {
       const t = createService();
       const deadline = new Date(NOW + 120_000).toISOString();
@@ -607,6 +658,9 @@ describe('waiting_for_client (U4c)', () => {
     await expect(t.service.interruptOperation(OPERATION_ID)).resolves.toBe(true);
 
     expect(t.getStored().status).toBe('interrupted');
+    expect(t.getStored().clientLlmWait).toBeUndefined();
+    // The waiting card goes with the wait: nothing can continue a stopped run.
+    expect(t.messageModel.update).toHaveBeenCalledWith('msg-assistant', { error: null });
     expect(t.operationModel.settleClientWait).toHaveBeenCalledWith(OPERATION_ID, 'interrupted');
     expect(t.dispatchHooks).toHaveBeenCalledWith(
       OPERATION_ID,

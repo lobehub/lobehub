@@ -27,6 +27,7 @@ import type {
   TaskTopicHandoff,
   WorkVersionEventItem,
 } from '@lobechat/types';
+import { isAgentOperationInFlight } from '@lobechat/types';
 import { experimentOwner, provenanceParentId } from '@lobechat/utils/goalGraph';
 import { TRPCError } from '@trpc/server';
 import { sql } from 'drizzle-orm';
@@ -3708,14 +3709,6 @@ export class GoalService {
   };
 }
 
-/** Operation states that still own their run; the lease path reclaims them, not this. */
-const IN_FLIGHT_OPERATION_STATUSES = new Set([
-  'idle',
-  'running',
-  'waiting_for_async_tool',
-  'waiting_for_human',
-]);
-
 /**
  * Whether a Task topic is still `running` although its run has already ended.
  *
@@ -3735,7 +3728,9 @@ const isOrphanedRun = async (
   staleBefore: Date,
 ): Promise<boolean> => {
   const operation = await operationModel.findById(operationId);
-  if (!operation || IN_FLIGHT_OPERATION_STATUSES.has(operation.status)) return false;
+  // Still-owned states (including a run parked for a client) are the lease
+  // path's to reclaim, not this.
+  if (!operation || isAgentOperationInFlight(operation.status)) return false;
   const endedAt = operation.completedAt ?? operation.updatedAt;
   return new Date(endedAt) < staleBefore;
 };

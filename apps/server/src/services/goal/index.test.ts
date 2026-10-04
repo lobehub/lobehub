@@ -3433,6 +3433,25 @@ describe('GoalService', () => {
       });
     });
 
+    it('leaves a run parked for a client alone however long it has waited', async () => {
+      const { created, graph, runSpy, service, timeoutSpy } = await setup(
+        'Wait for a local-model client',
+        'op-waiting-client',
+        new Date('2026-01-01T00:10:00.000Z'),
+      );
+      // Parked in waiting_for_client (U4c): resumable until its own expiry.
+      await serverDB
+        .update(agentOperations)
+        .set({ completionReason: 'waiting_for_client', status: 'waiting_for_client' })
+        .where(eq(agentOperations.id, 'op-waiting-client'));
+
+      const waiting = await service.tick(graph.goal.id);
+
+      expect(timeoutSpy).not.toHaveBeenCalled();
+      expect(runSpy).not.toHaveBeenCalled();
+      expect(waiting).toMatchObject({ outcome: 'waiting_external', taskId: created.taskId });
+    });
+
     it('leaves a run that just ended to its own completion hook', async () => {
       const { created, graph, runSpy, service, timeoutSpy } = await setup(
         'Wait for the completion hook',

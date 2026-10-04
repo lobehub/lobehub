@@ -751,8 +751,10 @@ export class AgentRuntimeService {
     // shows — the step-boundary check then persists the interrupted state.
     await this.coordinator.markInterrupted(operationId);
 
+    const parkedWait = state.status === 'waiting_for_client' ? state.clientLlmWait : undefined;
     const interruptedState: AgentState = {
       ...state,
+      ...(state.status === 'waiting_for_client' && { clientLlmWait: undefined }),
       lastModified: new Date().toISOString(),
       status: 'interrupted',
     };
@@ -760,9 +762,13 @@ export class AgentRuntimeService {
 
     // A run parked for a client has no step that would reach a boundary and
     // settle it, so settle it here — otherwise the row and the topic stay live
-    // until the wait expires.
+    // until the wait expires. Its waiting card goes too: nothing can continue it.
     if (state.status === 'waiting_for_client') {
-      interruptedState.clientLlmWait = undefined;
+      if (parkedWait?.assistantMessageId) {
+        await this.messageModel
+          .update(parkedWait.assistantMessageId, { error: null })
+          .catch((error) => log('[%s] Failed to clear the waiting notice: %O', operationId, error));
+      }
       if (await this.agentOperationModel.settleClientWait(operationId, 'interrupted')) {
         await this.completionLifecycle.dispatchHooks(operationId, interruptedState, 'interrupted');
       }
@@ -3662,19 +3668,14 @@ export class AgentRuntimeService {
       return;
     }
 
+    // The expiry can fire at once (a re-park past its deadline), and it acts
+    // only on the park it names: the parked state and the waiting notice must
+    // already be in place, or it no-ops — or its terminal error is overwritten
+    // by the notice — and the run waits with nothing left to end it.
     try {
-      await this.queueService.scheduleMessage({
-        context: undefined,
-        delay: Math.max(Date.parse(wait.expiresAt) - Date.now(), 0),
-        endpoint: `${this.baseURL}/run`,
-        operationId,
-        payload: { clientLlmWaitExpired: wait.parkedAt },
-        priority: 'normal',
-        stepIndex: parkedState.stepCount,
-      });
+      await this.coordinator.saveAgentState(operationId, parkedState);
     } catch (error) {
-      // Without the expiry the run could wait forever: fail it now instead.
-      log('[%s] Could not arm the client wait expiry, failing instead: %O', operationId, error);
+      log('[%s] Could not save the parked state, failing instead: %O', operationId, error);
       return;
     }
 
@@ -3686,6 +3687,23 @@ export class AgentRuntimeService {
       } catch (error) {
         log('[%s] Failed to mark the parked call on its assistant row: %O', operationId, error);
       }
+    }
+
+    try {
+      await this.queueService.scheduleMessage({
+        context: undefined,
+        delay: Math.max(Date.parse(wait.expiresAt) - Date.now(), 0),
+        endpoint: `${this.baseURL}/run`,
+        operationId,
+        payload: { clientLlmWaitExpired: wait.parkedAt },
+        priority: 'normal',
+        stepIndex: parkedState.stepCount,
+      });
+    } catch (error) {
+      // Without the expiry the run could wait forever: fail it now instead
+      // (the run's error then replaces the waiting notice on its row).
+      log('[%s] Could not arm the client wait expiry, failing instead: %O', operationId, error);
+      return;
     }
 
     log(
