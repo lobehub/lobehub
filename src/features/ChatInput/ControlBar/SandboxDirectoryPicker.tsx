@@ -198,11 +198,14 @@ const SandboxDirectoryPicker = memo<SandboxDirectoryPickerProps>(({ onChange, to
                   if (event.key === 'Escape') setNewFolderName(undefined);
                 }}
               />
+              {/* Default, not primary: the popover's one primary weight belongs to
+                  its commit action below. This button sits in its own input row,
+                  where position already says what it does. */}
               <Button
                 disabled={!canCreateFolder}
                 loading={creating}
                 size={'small'}
-                type={'primary'}
+                type={'default'}
                 title={
                   canCreateFolder || !newFolderName
                     ? undefined
