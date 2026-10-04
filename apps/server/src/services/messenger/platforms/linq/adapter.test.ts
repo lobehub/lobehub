@@ -74,6 +74,14 @@ describe('LinqChatAdapter', () => {
     expect(raw.id).toBe('msg_out');
   });
 
+  it('keeps literal brackets and underscores instead of markdown-escaping them', async () => {
+    const { adapter, api, chat } = makeAdapter();
+    await adapter.initialize(chat as any);
+
+    await adapter.postMessage('linq:chat_1', { markdown: '[note] see snake_case and a*b' });
+    expect(api.sendText).toHaveBeenCalledWith('chat_1', '[note] see snake_case and a*b');
+  });
+
   it('never re-sends on edit (iMessage bubbles cannot be edited)', async () => {
     const { adapter, api, chat } = makeAdapter();
     await adapter.initialize(chat as any);

@@ -38,6 +38,25 @@ class LinqFormatConverter extends BaseFormatConverter {
   }
 }
 
+/** Undo the backslash escapes `stringifyMarkdown` adds for markdown punctuation. */
+const unescapeMarkdown = (text: string): string =>
+  text.replaceAll(/\\([!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~-])/g, '$1');
+
+/**
+ * The markdown source of a postable. Strings, `raw` and `markdown` are taken as
+ * written: routing them through chat-sdk's AST round-trip would backslash-escape
+ * every `[`, `*` and `_`, and Linq delivers those backslashes verbatim.
+ */
+const postableToMarkdown = (
+  message: AdapterPostableMessage,
+  converter: LinqFormatConverter,
+): string => {
+  if (typeof message === 'string') return message;
+  if ('raw' in message && typeof message.raw === 'string') return message.raw;
+  if ('markdown' in message && typeof message.markdown === 'string') return message.markdown;
+  return unescapeMarkdown(converter.renderPostable(message));
+};
+
 const partsToText = (parts: LinqMessagePart[] | undefined): string =>
   (parts ?? [])
     .filter((part): part is Extract<LinqMessagePart, { type: 'text' }> => part.type === 'text')
@@ -149,7 +168,7 @@ export class LinqChatAdapter implements Adapter<string, LinqInboundMessage> {
   ): Promise<RawMessage<LinqInboundMessage>> {
     const chatId = this.decodeThreadId(threadId);
     // Linq delivers text verbatim — degrade markdown before it leaves.
-    const text = markdownToPlainText(this.formatConverter.renderPostable(message));
+    const text = markdownToPlainText(postableToMarkdown(message, this.formatConverter));
     const sent = await this.api.sendText(chatId, text);
     return {
       id: sent.message?.id ?? `local_${Date.now()}`,
