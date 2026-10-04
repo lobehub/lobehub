@@ -36,10 +36,10 @@ vi.mock('@/database/models/rbac', () => ({
 
 const db = await getTestDB();
 const userId = 'goal-bind-test-user';
-const agentId = 'goal-bind-conversation-agent';
+const agentId = 'goal-bind-topic-agent';
 const otherAgentId = 'goal-bind-other-agent';
-const conversationTopicId = 'tpc_goal_bind_conversation';
-const conversationOpId = 'op_goal_bind_conversation';
+const boundTopicId = 'tpc_goal_bind_topic';
+const runOpId = 'op_goal_bind_topic';
 let seq = 0;
 
 const service = () => new GoalService(db, userId);
@@ -52,12 +52,12 @@ beforeEach(async () => {
     { id: agentId, userId },
     { id: otherAgentId, userId },
   ]);
-  await db.insert(topics).values({ agentId, id: conversationTopicId, userId });
+  await db.insert(topics).values({ agentId, id: boundTopicId, userId });
   await ops().recordStart({
     agentId,
     appContext: { sourceMessageId: 'msg_user_bind_request' },
-    operationId: conversationOpId,
-    topicId: conversationTopicId,
+    operationId: runOpId,
+    topicId: boundTopicId,
   });
   vi.spyOn(scheduler, 'scheduleGoalAdvance').mockResolvedValue();
   vi.spyOn(AiAgentService.prototype, 'execAgent').mockImplementation(async (params) => {
@@ -158,12 +158,12 @@ function operationCaller(operationId: string, capabilities: string[]) {
   });
 }
 
-describe('GoalService.bindConversation', () => {
-  it('gives a standalone goal the subject and supervision a conversation goal has, without touching its work', async () => {
+describe('GoalService.bindTopic', () => {
+  it('gives a standalone goal the subject and supervision a topic-created goal has, without touching its work', async () => {
     const { id, taskId } = await standaloneGoalMidRun();
     const before = await graphShape(id);
 
-    const result = await service().bindConversation(id, conversationOpId);
+    const result = await service().bindTopic(id, runOpId);
 
     expect(result.turnToken).toBeUndefined();
     expect(result.previousSubject).toEqual({ id: null, type: 'standalone' });
@@ -173,7 +173,7 @@ describe('GoalService.bindConversation', () => {
       maxRounds: 20,
       maxTotalCost: 15,
       status: 'running',
-      subjectId: conversationTopicId,
+      subjectId: boundTopicId,
       subjectType: 'topic',
     });
     // Same policy default as `createFromConversation`.
@@ -181,7 +181,7 @@ describe('GoalService.bindConversation', () => {
     // No turn in flight, nothing spent: the next turn is dispatched here.
     expect(goal.config?.managerState).toMatchObject({
       consumed: true,
-      topicId: conversationTopicId,
+      topicId: boundTopicId,
       turns: 0,
     });
     expect(await graphShape(id)).toEqual(before);
@@ -189,9 +189,9 @@ describe('GoalService.bindConversation', () => {
       assigneeAgentId: agentId,
       status: 'running',
     });
-    // The conversation finds the goal the way it finds one created there.
+    // The topic finds the goal the way it finds one created there.
     expect(
-      (await model().list({ topicId: conversationTopicId })).goals.map((item) => item.goal.id),
+      (await model().list({ topicId: boundTopicId })).goals.map((item) => item.goal.id),
     ).toEqual([id]);
     const [event] = await db
       .select()
@@ -201,23 +201,23 @@ describe('GoalService.bindConversation', () => {
       actorId: agentId,
       actorType: 'agent',
       eventType: 'updated',
-      operationId: conversationOpId,
+      operationId: runOpId,
     });
-    expect(event.reason).toContain(conversationTopicId);
+    expect(event.reason).toContain(boundTopicId);
   });
 
-  it('dispatches the next planning turn into the bound conversation', async () => {
+  it('dispatches the next planning turn into the bound topic', async () => {
     const { id } = await standaloneGoalMidRun();
-    await service().bindConversation(id, conversationOpId);
+    await service().bindTopic(id, runOpId);
 
     // The work in flight settles; with the graph quiet the main Agent plans.
     await db.update(goalNodes).set({ status: 'resolved' }).where(eq(goalNodes.goalId, id));
     expect((await service().tick(id)).outcome).toBe('waiting_external');
 
     const call = vi.mocked(AiAgentService.prototype.execAgent).mock.calls.at(-1)![0];
-    expect(call).toMatchObject({ agentId, appContext: { topicId: conversationTopicId } });
+    expect(call).toMatchObject({ agentId, appContext: { topicId: boundTopicId } });
     expect((await model().findById(id))!.config!.managerState).toMatchObject({
-      topicId: conversationTopicId,
+      topicId: boundTopicId,
       turns: 1,
     });
   });
@@ -225,35 +225,30 @@ describe('GoalService.bindConversation', () => {
   it('adopts the binding run as a planning turn when the goal has nothing in flight', async () => {
     const created = await service().create({ agentId, title: 'Unplanned goal' });
 
-    const { turnToken } = await service().bindConversation(created.goal.id, conversationOpId);
+    const { turnToken } = await service().bindTopic(created.goal.id, runOpId);
 
     expect(turnToken).toBeTruthy();
     const goal = (await model().findById(created.goal.id))!;
     expect(goal.status).toBe('running');
     expect(goal.config?.managerState).toMatchObject({
       adopted: true,
-      adoptedOperationId: conversationOpId,
+      adoptedOperationId: runOpId,
       token: turnToken,
-      topicId: conversationTopicId,
+      topicId: boundTopicId,
       turns: 1,
     });
     expect(
-      await new GoalManagerService(db, userId).submit(
-        created.goal.id,
-        turnToken!,
-        conversationOpId,
-        {
-          action: 'tasks',
-          reason: 'Start',
-          tasks: [{ description: 'Do the work', title: 'Work' }],
-        },
-      ),
+      await new GoalManagerService(db, userId).submit(created.goal.id, turnToken!, runOpId, {
+        action: 'tasks',
+        reason: 'Start',
+        tasks: [{ description: 'Do the work', title: 'Work' }],
+      }),
     ).toEqual({ action: 'tasks', recorded: true });
   });
 
-  it('refuses a goal bound to another conversation unless forced, and records the move', async () => {
+  it('refuses a goal bound to another topic unless forced, and records the move', async () => {
     const { id } = await standaloneGoalMidRun();
-    await db.insert(topics).values({ agentId, id: 'tpc_previous_conversation', userId });
+    await db.insert(topics).values({ agentId, id: 'tpc_previous_topic', userId });
     await db
       .update(goals)
       .set({
@@ -264,47 +259,47 @@ describe('GoalService.bindConversation', () => {
             snapshot: 's',
             startedAt: new Date().toISOString(),
             token: 't',
-            topicId: 'tpc_previous_conversation',
+            topicId: 'tpc_previous_topic',
             turns: 2,
           },
         },
-        subjectId: 'tpc_previous_conversation',
+        subjectId: 'tpc_previous_topic',
         subjectType: 'topic',
       })
       .where(eq(goals.id, id));
 
-    await expect(service().bindConversation(id, conversationOpId)).rejects.toMatchObject({
+    await expect(service().bindTopic(id, runOpId)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
-    expect((await model().findById(id))!.subjectId).toBe('tpc_previous_conversation');
+    expect((await model().findById(id))!.subjectId).toBe('tpc_previous_topic');
 
-    const result = await service().bindConversation(id, conversationOpId, { force: true });
+    const result = await service().bindTopic(id, runOpId, { force: true });
 
-    expect(result.previousSubject).toEqual({ id: 'tpc_previous_conversation', type: 'topic' });
+    expect(result.previousSubject).toEqual({ id: 'tpc_previous_topic', type: 'topic' });
     const goal = (await model().findById(id))!;
-    expect(goal.subjectId).toBe(conversationTopicId);
+    expect(goal.subjectId).toBe(boundTopicId);
     expect(goal.config?.managerState).toMatchObject({
-      previousTopicIds: ['tpc_previous_conversation'],
-      topicId: conversationTopicId,
+      previousTopicIds: ['tpc_previous_topic'],
+      topicId: boundTopicId,
       turns: 2,
     });
     const [event] = await db
       .select()
       .from(goalEvents)
       .where(and(eq(goalEvents.goalId, id), eq(goalEvents.entityType, 'goal')));
-    expect(event.reason).toContain('moved from topic tpc_previous_conversation');
+    expect(event.reason).toContain('moved from topic tpc_previous_topic');
   });
 
-  it('is a no-op re-bind to the conversation it is already bound to', async () => {
+  it('is a no-op re-bind to the topic it is already bound to', async () => {
     const { id } = await standaloneGoalMidRun();
-    await service().bindConversation(id, conversationOpId);
+    await service().bindTopic(id, runOpId);
 
-    await expect(service().bindConversation(id, conversationOpId)).resolves.toMatchObject({
-      previousSubject: { id: conversationTopicId, type: 'topic' },
+    await expect(service().bindTopic(id, runOpId)).resolves.toMatchObject({
+      previousSubject: { id: boundTopicId, type: 'topic' },
     });
   });
 
-  it('refuses while a planning turn is in flight in another conversation', async () => {
+  it('refuses while a planning turn is in flight in another topic', async () => {
     const { id } = await standaloneGoalMidRun();
     await db
       .update(goals)
@@ -322,7 +317,7 @@ describe('GoalService.bindConversation', () => {
       })
       .where(eq(goals.id, id));
 
-    await expect(service().bindConversation(id, conversationOpId)).rejects.toMatchObject({
+    await expect(service().bindTopic(id, runOpId)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
     expect((await model().findById(id))!.subjectType).toBe('standalone');
@@ -332,13 +327,13 @@ describe('GoalService.bindConversation', () => {
     const { id } = await standaloneGoalMidRun();
     await db.update(goals).set({ status }).where(eq(goals.id, id));
 
-    await expect(service().bindConversation(id, conversationOpId)).rejects.toMatchObject({
+    await expect(service().bindTopic(id, runOpId)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
     expect((await model().findById(id))!).toMatchObject({ status, subjectType: 'standalone' });
   });
 
-  it('refuses a run whose conversation belongs to another agent', async () => {
+  it('refuses a run whose topic belongs to another agent', async () => {
     const { id } = await standaloneGoalMidRun();
     await db.insert(topics).values({ agentId: otherAgentId, id: 'tpc_other_agent', userId });
     await ops().recordStart({
@@ -347,12 +342,12 @@ describe('GoalService.bindConversation', () => {
       topicId: 'tpc_other_agent',
     });
 
-    await expect(service().bindConversation(id, 'op_mismatched_topic')).rejects.toMatchObject({
+    await expect(service().bindTopic(id, 'op_mismatched_topic')).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
   });
 
-  it("refuses a local run naming another agent's or another user's conversation", async () => {
+  it("refuses a local run naming another agent's or another user's topic", async () => {
     const { id } = await standaloneGoalMidRun();
     await db.insert(topics).values({ agentId: otherAgentId, id: 'tpc_other_agent', userId });
     await db.insert(users).values({ id: 'goal-bind-stranger' });
@@ -365,38 +360,38 @@ describe('GoalService.bindConversation', () => {
       { agentId, topicId: 'tpc_other_agent' },
       { agentId: 'stranger-agent', topicId: 'tpc_stranger' },
     ])
-      await expect(
-        service().bindConversation(id, 'op_client_only', { localRun }),
-      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await expect(service().bindTopic(id, 'op_client_only', { localRun })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
     expect((await model().findById(id))!.subjectType).toBe('standalone');
   });
 
   it('binds a local desktop run that has no server operation row', async () => {
     const { id } = await standaloneGoalMidRun();
 
-    await service().bindConversation(id, 'op_client_only', {
-      localRun: { agentId, topicId: conversationTopicId },
+    await service().bindTopic(id, 'op_client_only', {
+      localRun: { agentId, topicId: boundTopicId },
     });
 
     expect((await model().findById(id))!).toMatchObject({
-      subjectId: conversationTopicId,
+      subjectId: boundTopicId,
       subjectType: 'topic',
     });
   });
 
-  it('refuses a conversation run that has already ended', async () => {
+  it('refuses a run that has already ended', async () => {
     const { id } = await standaloneGoalMidRun();
-    await ops().recordCompletion(conversationOpId, { status: 'done' });
+    await ops().recordCompletion(runOpId, { status: 'done' });
 
-    await expect(service().bindConversation(id, conversationOpId)).rejects.toMatchObject({
+    await expect(service().bindTopic(id, runOpId)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
   });
 
-  it('hands supervision to the conversation agent and moves unfinished tasks like setAgent', async () => {
+  it('hands supervision to the topic agent and moves unfinished tasks like setAgent', async () => {
     const { id, taskId } = await standaloneGoalMidRun(otherAgentId);
 
-    const result = await service().bindConversation(id, conversationOpId);
+    const result = await service().bindTopic(id, runOpId);
 
     expect(result.reassignedTaskIds).toEqual([taskId]);
     expect((await model().findById(id))!.agentId).toBe(agentId);
@@ -406,7 +401,7 @@ describe('GoalService.bindConversation', () => {
   it('keeps unfinished tasks with their agent when goalOnly is set', async () => {
     const { id, taskId } = await standaloneGoalMidRun(otherAgentId);
 
-    const result = await service().bindConversation(id, conversationOpId, { goalOnly: true });
+    const result = await service().bindTopic(id, runOpId, { goalOnly: true });
 
     expect(result.reassignedTaskIds).toEqual([]);
     expect((await model().findById(id))!.agentId).toBe(agentId);
@@ -414,25 +409,25 @@ describe('GoalService.bindConversation', () => {
   });
 });
 
-describe('goal.bindOperationConversation', () => {
+describe('goal.bindOperationTopic', () => {
   it('binds only with the goal capability an operation token gets from /goal', async () => {
     const { id } = await standaloneGoalMidRun();
 
     await expect(
-      operationCaller(conversationOpId, ['hetero:ingest']).bindOperationConversation({
+      operationCaller(runOpId, ['hetero:ingest']).bindOperationTopic({
         id,
-        operationId: conversationOpId,
+        operationId: runOpId,
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect((await model().findById(id))!.subjectType).toBe('standalone');
 
-    const result = await operationCaller(conversationOpId, [
+    const result = await operationCaller(runOpId, [
       'hetero:ingest',
       'goal:manage',
-    ]).bindOperationConversation({ id, operationId: conversationOpId });
+    ]).bindOperationTopic({ id, operationId: runOpId });
 
     expect(result?.data.goal).toMatchObject({
-      subjectId: conversationTopicId,
+      subjectId: boundTopicId,
       subjectType: 'topic',
     });
     expect(scheduler.scheduleGoalAdvance).toHaveBeenCalledWith(
@@ -445,9 +440,10 @@ describe('goal.bindOperationConversation', () => {
     const foreign = await new GoalService(db, 'goal-bind-stranger').create({ title: 'Not yours' });
 
     await expect(
-      operationCaller(conversationOpId, ['hetero:ingest', 'goal:manage']).bindOperationConversation(
-        { id: foreign.goal.id, operationId: conversationOpId },
-      ),
+      operationCaller(runOpId, ['hetero:ingest', 'goal:manage']).bindOperationTopic({
+        id: foreign.goal.id,
+        operationId: runOpId,
+      }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });

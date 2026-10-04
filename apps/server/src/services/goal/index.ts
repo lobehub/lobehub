@@ -261,10 +261,10 @@ export class GoalService {
      */
     localRun?: { agentId: string; topicId: string },
   ): Promise<{ graph: GoalGraphSnapshot; turnToken: string }> => {
-    const { agentId, topicId } = await this.resolveConversationRun(
+    const { agentId, topicId } = await this.resolveTopicRun(
       operationId,
       localRun,
-      'Only a conversation run with an agent can create a goal it supervises',
+      'Only a run in a topic with an agent can create a goal it supervises',
     );
 
     const created = await this.create({
@@ -290,12 +290,12 @@ export class GoalService {
   };
 
   /**
-   * The agent and conversation of the run with this id, taken from the server's
+   * The agent and topic of the run with this id, taken from the server's
    * operation row; never from the caller while that row exists. A local desktop
    * run has no row, so its env-provided topic and agent are accepted only when
    * the topic is the caller's and belongs to that agent.
    */
-  private resolveConversationRun = async (
+  private resolveTopicRun = async (
     operationId: string,
     localRun: { agentId: string; topicId: string } | undefined,
     noAgentMessage: string,
@@ -321,34 +321,34 @@ export class GoalService {
         )
       : undefined;
     if (!localRun || !topic || topic.agentId !== localRun.agentId)
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Conversation run not found' });
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
     return { agentId: localRun.agentId, topicId: topic.id };
   };
 
   /**
-   * Attach an existing goal to the conversation of the run with this id, so it
+   * Attach an existing goal to the topic of the run with this id, so it
    * is supervised from there exactly as if it had been created there with
-   * `/goal`: the conversation's agent becomes the goal agent, the conversation
-   * becomes its `topic` subject and management conversation. Graph, Tasks,
+   * `/goal`: the topic's agent becomes the goal agent, the topic
+   * becomes its `topic` subject and management topic. Graph, Tasks,
    * budgets and status are kept. A change of goal agent moves unfinished Tasks
    * the way `setAgent` does (unless `goalOnly`, or the goal has a dedicated
    * executor). Returns a `turnToken` when the binding run was adopted as a
    * planning turn.
    */
-  bindConversation = async (
+  bindTopic = async (
     goalId: string,
     operationId: string,
     options?: {
       force?: boolean;
       goalOnly?: boolean;
-      /** A local desktop run's conversation; see `resolveConversationRun`. */
+      /** A local desktop run's topic; see `resolveTopicRun`. */
       localRun?: { agentId: string; topicId: string };
     },
   ) => {
-    const { agentId, topicId } = await this.resolveConversationRun(
+    const { agentId, topicId } = await this.resolveTopicRun(
       operationId,
       options?.localRun,
-      'Only a conversation run with an agent can supervise a goal',
+      'Only a run in a topic with an agent can supervise a goal',
     );
     // A run row names its topic, but the topic must still be the caller's and
     // the run's agent's: the binding makes that agent plan into it.
@@ -356,17 +356,17 @@ export class GoalService {
       topicId,
     );
     if (!topic || topic.agentId !== agentId)
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Conversation not found' });
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
     await assertAgentUsableBy(this.db, agentId, {
       userId: this.userId,
       workspaceId: this.workspaceId,
     });
 
-    const bound = await new GoalManagerService(
-      this.db,
-      this.userId,
-      this.workspaceId,
-    ).bindConversation(goalId, { agentId, operationId, topicId }, { force: options?.force });
+    const bound = await new GoalManagerService(this.db, this.userId, this.workspaceId).bindTopic(
+      goalId,
+      { agentId, operationId, topicId },
+      { force: options?.force },
+    );
 
     const reassignedTaskIds =
       bound.previousAgentId === agentId

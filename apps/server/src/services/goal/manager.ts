@@ -296,16 +296,16 @@ export class GoalManagerService {
     });
 
   /**
-   * Attach an existing goal to a conversation so it ends up in the state
-   * `/goal` in that conversation would have left it: the conversation's agent is
-   * the goal agent, the conversation is the goal's `topic` subject, the goal
-   * has a main Agent policy, and its management conversation
-   * (`managerState.topicId`) is this conversation, so later planning turns land
+   * Attach an existing goal to a topic so it ends up in the state
+   * `/goal` in that topic would have left it: the topic's agent is
+   * the goal agent, the topic is the goal's `topic` subject, the goal
+   * has a main Agent policy, and its management topic
+   * (`managerState.topicId`) is this topic, so later planning turns land
    * there.
    *
    * The graph, Tasks, budgets and status are left alone. The binding run is
    * adopted as a planning turn only when the goal is where a freshly created
-   * conversation goal would be — no turn in flight and no unfinished Task to
+   * topic goal would be — no turn in flight and no unfinished Task to
    * preempt — because an adopted turn holds task coordination until it settles.
    * Otherwise the next turn the coordinator starts is dispatched here.
    *
@@ -313,7 +313,7 @@ export class GoalManagerService {
    * finds that turn's run through `state.topicId`, so moving it would strand
    * the turn and pause the goal.
    */
-  bindConversation = async (
+  bindTopic = async (
     goalId: string,
     run: { agentId: string; operationId: string; topicId: string },
     options?: { force?: boolean },
@@ -330,7 +330,7 @@ export class GoalManagerService {
       if (finishedGoalStatuses.has(goal.status))
         throw new TRPCError({
           code: 'CONFLICT',
-          message: `Goal is ${goal.status}; a finished goal cannot be bound to a conversation`,
+          message: `Goal is ${goal.status}; a finished goal cannot be bound to a topic`,
         });
 
       const previousSubject = { id: goal.subjectId, type: goal.subjectType };
@@ -338,7 +338,7 @@ export class GoalManagerService {
       if (!alreadyBound && goal.subjectId && !options?.force)
         throw new TRPCError({
           code: 'CONFLICT',
-          message: `Goal is already bound to ${goal.subjectType} ${goal.subjectId}; pass force to move it to this conversation`,
+          message: `Goal is already bound to ${goal.subjectType} ${goal.subjectId}; pass force to move it to this topic`,
         });
 
       const state = goal.config?.managerState;
@@ -352,7 +352,7 @@ export class GoalManagerService {
           message: `A planning turn of this goal is in flight in ${state.topicId}; wait for it to settle (or confirm its exit with lh goal resume ${goalId} --confirm-exit) before binding`,
         });
 
-      // Same default as `createFromConversation`: a conversation goal always
+      // Same default as `createFromConversation`: a topic goal always
       // has a main Agent; an existing policy (turn cap, instruction) is kept.
       await db
         .update(goals)
@@ -366,7 +366,7 @@ export class GoalManagerService {
         .where(eq(goals.id, goalId));
 
       let turnToken: string | undefined;
-      // An in-flight turn reaching here is already this conversation's.
+      // An in-flight turn reaching here is already this topic's.
       if (!state || state.consumed) {
         const graph = await this.graph(db).getGraph(goalId);
         if (!graph) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
@@ -403,7 +403,7 @@ export class GoalManagerService {
         } else {
           // No turn now: re-point the settled receipt (or record a settled
           // one with no turn spent) so the next turn the coordinator starts is
-          // dispatched into this conversation instead of a new topic.
+          // dispatched into this topic instead of a new topic.
           next = state
             ? {
                 ...state,
@@ -437,7 +437,7 @@ export class GoalManagerService {
           type: 'agent',
         }).recordGoalUpdate(goalId, {
           operationId: run.operationId,
-          reason: `bound to conversation ${run.topicId}${moved}${agentChange}`,
+          reason: `bound to topic ${run.topicId}${moved}${agentChange}`,
         });
       }
 

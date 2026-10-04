@@ -293,7 +293,7 @@ export class GoalGraphModel {
 
   /**
    * Record a change to the goal row itself that is not a status move, such as
-   * binding it to a conversation, so the goal's timeline says when and by whom
+   * binding it to a topic, so the goal's timeline says when and by whom
    * its carrier changed.
    */
   recordGoalUpdate = async (

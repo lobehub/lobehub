@@ -147,25 +147,25 @@ const createGoalInput = conversationGoalInput.extend({
   createdByAgentId: z.string().optional(),
 });
 
-const bindConversationInput = idInput.extend({
-  /** Move a goal already bound to another conversation or task. */
+const bindTopicInput = idInput.extend({
+  /** Move a goal already bound to another topic or task. */
   force: z.boolean().optional(),
   /** Keep unfinished Tasks with their current agent when the goal agent changes. */
   goalOnly: z.boolean().optional(),
-  /** The conversation run doing the binding; its agent and topic are used. */
+  /** The topic run doing the binding; its agent and topic are used. */
   operationId: z.string().min(1),
 });
 
-const bindConversationResponse = ({
+const bindTopicResponse = ({
   graph,
   previousSubject,
   reassignedTaskIds,
   topicId,
   turnToken,
-}: Awaited<ReturnType<GoalService['bindConversation']>>) => ({
+}: Awaited<ReturnType<GoalService['bindTopic']>>) => ({
   data: graph,
   message:
-    `Goal bound to conversation ${topicId}` +
+    `Goal bound to topic ${topicId}` +
     (previousSubject.id && previousSubject.id !== topicId
       ? ` (moved from ${previousSubject.type} ${previousSubject.id})`
       : '') +
@@ -420,13 +420,13 @@ export const goalRouter = router({
     }),
 
   /**
-   * Attach an existing goal to the conversation of a run authenticated by its
+   * Attach an existing goal to the topic of a run authenticated by its
    * operation token (device and gateway runs), as if the goal had been created
    * there with `/goal`. Takes the same `goal:manage` capability as creating one.
    */
-  bindOperationConversation: heteroAuthedProcedure
+  bindOperationTopic: heteroAuthedProcedure
     .use(serverDatabase)
-    .input(bindConversationInput)
+    .input(bindTopicInput)
     .mutation(async ({ ctx, input: { id, operationId, force, goalOnly } }) => {
       if (ctx.heteroAuthKind !== 'operation' || !ctx.heteroOperation) {
         throw new TRPCError({
@@ -465,27 +465,27 @@ export const goalRouter = router({
           ctx.serverDB,
           principal.userId,
           principal.workspaceId,
-        ).bindConversation(id, operationId, { force, goalOnly });
+        ).bindTopic(id, operationId, { force, goalOnly });
         await scheduleGoalAdvance({
           goalId: id,
           trigger: 'manual',
           userId: principal.userId,
           workspaceId: principal.workspaceId,
         });
-        return bindConversationResponse(result);
+        return bindTopicResponse(result);
       } catch (error) {
-        mapGoalError(error, 'bindConversation');
+        mapGoalError(error, 'bindTopic');
       }
     }),
 
   /**
-   * Attach an existing goal to the conversation run with this id (a desktop
-   * run signed in as the user). Agent and conversation come from the operation;
+   * Attach an existing goal to the topic run with this id (a desktop
+   * run signed in as the user). Agent and topic come from the operation;
    * a local run without a server row also names them, checked like `create`.
    */
-  bindConversation: goalWriteProcedure
+  bindTopic: goalWriteProcedure
     .input(
-      bindConversationInput.extend({
+      bindTopicInput.extend({
         agentId: z.string().min(1).optional(),
         topicId: z.string().min(1).optional(),
       }),
@@ -495,7 +495,7 @@ export const goalRouter = router({
         const goal = await ctx.goalModel.findById(id);
         if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
         assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
-        const result = await ctx.goalService.bindConversation(id, operationId, {
+        const result = await ctx.goalService.bindTopic(id, operationId, {
           force,
           goalOnly,
           localRun: agentId && topicId ? { agentId, topicId } : undefined,
@@ -506,9 +506,9 @@ export const goalRouter = router({
           userId: ctx.userId,
           workspaceId: ctx.workspaceId ?? undefined,
         });
-        return bindConversationResponse(result);
+        return bindTopicResponse(result);
       } catch (error) {
-        mapGoalError(error, 'bindConversation');
+        mapGoalError(error, 'bindTopic');
       }
     }),
 

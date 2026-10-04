@@ -20,12 +20,12 @@ vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async (importOrigina
 
 vi.mock('@/server/services/aiAgent', () => ({ AiAgentService: vi.fn() }));
 
-const mockBindConversation = vi.fn();
+const mockBindTopic = vi.fn();
 const mockFindById = vi.fn();
 
 vi.mock('@/server/services/goal', () => ({
   GoalService: vi.fn(function () {
-    return { bindConversation: mockBindConversation };
+    return { bindTopic: mockBindTopic };
   }),
 }));
 
@@ -42,13 +42,13 @@ vi.mock('@/server/services/goal/scheduler', () => ({
 
 const { goalRouter } = await import('../goal');
 
-describe('goalRouter.bindConversation', () => {
+describe('goalRouter.bindTopic', () => {
   const ctx: any = { serverDB: {}, userId: 'user-1', workspaceId: null };
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockFindById.mockResolvedValue({ id: 'goal_1', userId: 'user-1' });
-    mockBindConversation.mockResolvedValue({
+    mockBindTopic.mockResolvedValue({
       graph: { goal: { id: 'goal_1', subjectId: 'tpc_1', subjectType: 'topic' } },
       previousSubject: { id: 'tpc_0', type: 'topic' },
       reassignedTaskIds: ['task_1'],
@@ -60,9 +60,9 @@ describe('goalRouter.bindConversation', () => {
   it('binds from the run, wakes the coordinator and returns the planning token', async () => {
     const result = await goalRouter
       .createCaller(ctx)
-      .bindConversation({ force: true, id: 'goal_1', operationId: 'op_1' });
+      .bindTopic({ force: true, id: 'goal_1', operationId: 'op_1' });
 
-    expect(mockBindConversation).toHaveBeenCalledWith('goal_1', 'op_1', {
+    expect(mockBindTopic).toHaveBeenCalledWith('goal_1', 'op_1', {
       force: true,
       goalOnly: undefined,
       localRun: undefined,
@@ -71,28 +71,28 @@ describe('goalRouter.bindConversation', () => {
       expect.objectContaining({ goalId: 'goal_1', userId: 'user-1' }),
     );
     expect(result).toMatchObject({
-      message: 'Goal bound to conversation tpc_1 (moved from topic tpc_0); 1 task(s) reassigned',
+      message: 'Goal bound to topic tpc_1 (moved from topic tpc_0); 1 task(s) reassigned',
       turnToken: 'turn_1',
     });
   });
 
-  it('passes a local run only when it names both its conversation and agent', async () => {
+  it('passes a local run only when it names both its topic and agent', async () => {
     const caller = goalRouter.createCaller(ctx);
 
-    await caller.bindConversation({ agentId: 'agent_1', id: 'goal_1', operationId: 'op_1' });
-    expect(mockBindConversation).toHaveBeenLastCalledWith(
+    await caller.bindTopic({ agentId: 'agent_1', id: 'goal_1', operationId: 'op_1' });
+    expect(mockBindTopic).toHaveBeenLastCalledWith(
       'goal_1',
       'op_1',
       expect.objectContaining({ localRun: undefined }),
     );
 
-    await caller.bindConversation({
+    await caller.bindTopic({
       agentId: 'agent_1',
       id: 'goal_1',
       operationId: 'op_1',
       topicId: 'tpc_1',
     });
-    expect(mockBindConversation).toHaveBeenLastCalledWith(
+    expect(mockBindTopic).toHaveBeenLastCalledWith(
       'goal_1',
       'op_1',
       expect.objectContaining({ localRun: { agentId: 'agent_1', topicId: 'tpc_1' } }),
@@ -105,9 +105,9 @@ describe('goalRouter.bindConversation', () => {
     await expect(
       goalRouter
         .createCaller({ ...ctx, workspaceId: 'ws-1', workspaceRole: 'member' })
-        .bindConversation({ id: 'goal_1', operationId: 'op_1' }),
+        .bindTopic({ id: 'goal_1', operationId: 'op_1' }),
     ).rejects.toThrow(/Only the creator or a workspace owner/);
-    expect(mockBindConversation).not.toHaveBeenCalled();
+    expect(mockBindTopic).not.toHaveBeenCalled();
     expect(mockScheduleGoalAdvance).not.toHaveBeenCalled();
   });
 
@@ -115,7 +115,7 @@ describe('goalRouter.bindConversation', () => {
     mockFindById.mockResolvedValue(undefined);
 
     await expect(
-      goalRouter.createCaller(ctx).bindConversation({ id: 'goal_x', operationId: 'op_1' }),
+      goalRouter.createCaller(ctx).bindTopic({ id: 'goal_x', operationId: 'op_1' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });

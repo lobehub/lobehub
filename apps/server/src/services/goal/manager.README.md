@@ -11,19 +11,19 @@ creates to a dedicated executor; without it the goal agent does its own Tasks.
 `lh goal set-agent` hands supervision to another agent; `lh goal set-task-agent`
 changes the executor. Neither replaces the other.
 
-`lh goal bind-conversation <goal-id> [--force] [--goal-only]`, run inside an agent
-conversation, attaches an existing goal to that conversation and leaves it where
-`lh goal create --conversation` would have: the conversation's agent is the goal
-agent (unfinished Tasks follow as with `set-agent`), the conversation is the
+`lh goal bind-topic <goal-id> [--force] [--goal-only]`, run inside an agent
+topic, attaches an existing goal to that topic and leaves it where
+`lh goal create --topic` would have: the topic's agent is the goal
+agent (unfinished Tasks follow as with `set-agent`), the topic is the
 goal's `topic` subject, `config.manager` exists (an existing policy is kept), and
-`managerState.topicId` is the conversation, so later planning turns are
+`managerState.topicId` is the topic, so later planning turns are
 dispatched there. Graph, Tasks, budgets and status are untouched. The binding run
 is adopted as a planning turn (and prints its `--token`) only when nothing is in
 flight — no unsettled turn and no unfinished Task — because an adopted turn holds
-task coordination until it settles. A goal bound to another conversation or task
+task coordination until it settles. A goal bound to another topic or task
 needs `--force`; the previous topic joins `previousTopicIds`, and the move is
 recorded as a goal event. Finished goals and goals with a planning turn in flight
-elsewhere are refused. Like `create --conversation`, the conversation comes from
+elsewhere are refused. Like `create --topic`, the topic comes from
 the run's operation; an operation-token run (device or gateway) needs the
 `goal:manage` capability that `/goal` grants.
 
