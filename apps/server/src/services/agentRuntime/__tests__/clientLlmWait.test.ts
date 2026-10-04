@@ -380,6 +380,59 @@ describe('waiting_for_client (U4c)', () => {
       });
     });
 
+    it('stays parked when saving the claimed state fails, even if restoring it fails too', async () => {
+      const t = createService();
+      const parked = waitingState();
+      t.setStored(parked);
+      t.operationModel.revertClientWaitResume = vi.fn().mockResolvedValue(true);
+      t.coordinator.saveAgentState = vi.fn().mockRejectedValue(new Error('redis down'));
+
+      await expect(
+        t.service.resumeFromClientLlmWait({ llmExecutor, operationId: OPERATION_ID }),
+      ).rejects.toThrow('redis down');
+
+      expect(t.operationModel.revertClientWaitResume).toHaveBeenCalledWith(OPERATION_ID);
+      expect(t.scheduleMessage).not.toHaveBeenCalled();
+      expect(t.messageModel.update).toHaveBeenLastCalledWith('msg-assistant', {
+        error: expect.objectContaining({
+          body: expect.objectContaining({ waitingForClient: true }),
+        }),
+      });
+    });
+
+    it('keeps the original deadline when a resumed call finds no client again', async () => {
+      const t = createService();
+      const deadline = new Date(NOW + 120_000).toISOString();
+      t.setStored(
+        waitingState({
+          clientLlmWait: {
+            assistantMessageId: 'msg-assistant',
+            context: { phase: 'user_input' },
+            expiresAt: deadline,
+            parkedAt: new Date(NOW - 480_000).toISOString(),
+            provider: 'lmstudio',
+            reason: 'no_executor',
+          },
+        }),
+      );
+      t.messageModel.findLatestAssistantByOperationId.mockResolvedValue({ id: 'msg-assistant' });
+      t.mockStep({
+        events: [],
+        newState: unavailableErrorState('not_delivered'),
+        nextContext: undefined,
+      });
+
+      await t.service.executeStep({
+        operationId: OPERATION_ID,
+        resumeClientLlm: true,
+        stepIndex: 2,
+      });
+
+      expect(t.getStored().status).toBe('waiting_for_client');
+      expect(t.getStored().clientLlmWait.expiresAt).toBe(deadline);
+      expect(t.scheduleMessage).toHaveBeenCalledWith(expect.objectContaining({ delay: 120_000 }));
+    });
+
     it('does nothing for a run that is not parked', async () => {
       const t = createService();
       t.setStored(runningState());

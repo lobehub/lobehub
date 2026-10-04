@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type {
   Agent,
+  AgentRunClientLlmWait,
   AgentRunLlmExecutor,
   AgentRuntimeContext,
   AgentState,
@@ -2243,6 +2244,9 @@ export class AgentRuntimeService {
 
         // Handle human intervention
         let currentContext = context;
+        // The wait this step resumes, if any: a resumed call that finds no client
+        // again re-parks under the same deadline, so retries never extend it.
+        let resumedClientLlmWait: AgentRunClientLlmWait | undefined;
         let currentState = agentState;
 
         if (humanInput || approvedToolCall || rejectionReason) {
@@ -2306,6 +2310,7 @@ export class AgentRuntimeService {
         // it created, on the messages the parked step had.
         if (resumeClientLlm && currentState.status === 'waiting_for_client') {
           const wait = currentState.clientLlmWait;
+          resumedClientLlmWait = wait;
           currentState = structuredClone(currentState);
           currentState.status = 'running';
           currentState.clientLlmWait = undefined;
@@ -2489,6 +2494,7 @@ export class AgentRuntimeService {
             operationId,
             stepResult.newState,
             currentContext,
+            resumedClientLlmWait?.expiresAt,
           );
           if (parkedState) {
             stepResult = { ...stepResult, newState: parkedState, nextContext: undefined };
@@ -3605,6 +3611,7 @@ export class AgentRuntimeService {
     operationId: string,
     errorState: AgentState,
     context: AgentRuntimeContext | undefined,
+    notAfter?: string,
   ): Promise<AgentState | undefined> {
     const reason = getClientLlmWaitableReason(errorState.error);
     if (!reason || !this.queueService) return;
@@ -3629,7 +3636,7 @@ export class AgentRuntimeService {
       }
     }
 
-    const wait = buildClientLlmWait({ assistantMessage, context, provider, reason });
+    const wait = buildClientLlmWait({ assistantMessage, context, notAfter, provider, reason });
     const parkedState: AgentState = {
       ...errorState,
       clientLlmWait: wait,
@@ -3710,46 +3717,37 @@ export class AgentRuntimeService {
     if (!won) return { resumed: false };
 
     const wait = state.clientLlmWait;
-    await this.coordinator.saveAgentState(operationId, {
-      ...state,
-      host: { ...state.host, ...(llmExecutor && { llmExecutor }) },
-      lastModified: new Date().toISOString(),
-    });
+    // Past the claim, everything up to the queued step must land, or the run
+    // goes back to its wait: a `running` row with nothing queued is one that no
+    // resume, expiry or Stop can reach.
+    try {
+      await this.coordinator.saveAgentState(operationId, {
+        ...state,
+        host: { ...state.host, ...(llmExecutor && { llmExecutor }) },
+        lastModified: new Date().toISOString(),
+      });
 
-    if (wait?.assistantMessageId) {
-      try {
-        await this.messageModel.update(wait.assistantMessageId, { error: null });
-      } catch (error) {
-        log('[%s] Failed to clear the waiting notice: %O', operationId, error);
-      }
-    }
-
-    if (this.queueService) {
-      try {
-        await this.queueService.scheduleMessage({
-          context: undefined,
-          delay: 100,
-          endpoint: `${this.baseURL}/run`,
-          operationId,
-          payload: { resumeClientLlm: true },
-          priority: 'high',
-          stepIndex: state.stepCount,
-        });
-      } catch (error) {
-        // Nothing will run the parked step: put the wait back so the run can
-        // still be resumed, expire, or be stopped.
-        log('[%s] Could not enqueue the resume, staying parked: %O', operationId, error);
-        await this.coordinator.saveAgentState(operationId, state);
-        await this.agentOperationModel.revertClientWaitResume(operationId);
-        if (wait?.assistantMessageId) {
-          await this.messageModel
-            .update(wait.assistantMessageId, { error: buildClientLlmWaitMessageError(wait) })
-            .catch((restoreError) =>
-              log('[%s] Failed to restore the waiting notice: %O', operationId, restoreError),
-            );
+      if (wait?.assistantMessageId) {
+        try {
+          await this.messageModel.update(wait.assistantMessageId, { error: null });
+        } catch (error) {
+          log('[%s] Failed to clear the waiting notice: %O', operationId, error);
         }
-        throw error;
       }
+
+      await this.queueService?.scheduleMessage({
+        context: undefined,
+        delay: 100,
+        endpoint: `${this.baseURL}/run`,
+        operationId,
+        payload: { resumeClientLlm: true },
+        priority: 'high',
+        stepIndex: state.stepCount,
+      });
+    } catch (error) {
+      log('[%s] Could not hand the run to a client, staying parked: %O', operationId, error);
+      await this.restoreClientLlmWait(operationId, state);
+      throw error;
     }
 
     log('[%s] Resumed from waiting_for_client at step %d', operationId, state.stepCount);
@@ -3758,6 +3756,26 @@ export class AgentRuntimeService {
       resumed: true,
       topicId: state.origin?.topicId ?? undefined,
     };
+  }
+
+  /**
+   * Put a run whose resume claim could not be completed back into its wait.
+   * The durable row goes first — it is what resume, expiry and Stop key off —
+   * and each later step is best-effort so one failure does not skip the rest.
+   */
+  private async restoreClientLlmWait(operationId: string, parkedState: AgentState) {
+    await this.agentOperationModel
+      .revertClientWaitResume(operationId)
+      .catch((error) => log('[%s] Failed to re-park the durable row: %O', operationId, error));
+    await this.coordinator
+      .saveAgentState(operationId, parkedState)
+      .catch((error) => log('[%s] Failed to restore the parked state: %O', operationId, error));
+    const wait = parkedState.clientLlmWait;
+    if (wait?.assistantMessageId) {
+      await this.messageModel
+        .update(wait.assistantMessageId, { error: buildClientLlmWaitMessageError(wait) })
+        .catch((error) => log('[%s] Failed to restore the waiting notice: %O', operationId, error));
+    }
   }
 
   /**

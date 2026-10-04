@@ -1555,8 +1555,12 @@ export class GatewayActionImpl {
       });
     }
     // A socket still handshaking when the call goes out is not counted as a
-    // recipient, and the run would park again at once.
-    await waitForGatewayConnected(() => this.#get().gatewayConnections[operationId]?.status);
+    // recipient: claiming the wait then only re-parks the run. Leave it parked
+    // for a later attempt (or another client) instead.
+    const connected = await waitForGatewayConnected(
+      () => this.#get().gatewayConnections[operationId]?.status,
+    );
+    if (!connected) return false;
 
     const { resumed } = await aiAgentService.resumeClientLlmWait({ llmExecutor, operationId });
     return resumed;
@@ -2131,9 +2135,12 @@ export type GatewayAction = Pick<GatewayActionImpl, keyof GatewayActionImpl>;
 const GATEWAY_CONNECT_WAIT_MS = 5000;
 
 /** Resolve once the connection reads `connected`, or after a bounded wait. */
-const waitForGatewayConnected = async (readStatus: () => ConnectionStatus | undefined) => {
+const waitForGatewayConnected = async (
+  readStatus: () => ConnectionStatus | undefined,
+): Promise<boolean> => {
   const deadline = Date.now() + GATEWAY_CONNECT_WAIT_MS;
   while (readStatus() !== 'connected' && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
+  return readStatus() === 'connected';
 };

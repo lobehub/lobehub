@@ -31,6 +31,8 @@ export const resolveClientLlmWaitMs = (env: Record<string, string | undefined> =
 export const buildClientLlmWait = (params: {
   assistantMessage?: { id: string; parentId?: string | null } | null;
   context?: AgentRuntimeContext;
+  /** Deadline of the wait this park continues; the new one never runs past it. */
+  notAfter?: string;
   now?: number;
   provider: string;
   reason: ClientLlmUnavailableReason;
@@ -38,6 +40,9 @@ export const buildClientLlmWait = (params: {
 }): AgentRunClientLlmWait => {
   const now = params.now ?? Date.now();
   const context = params.context;
+  const windowEnd = now + (params.waitMs ?? resolveClientLlmWaitMs());
+  const notAfter = params.notAfter ? Date.parse(params.notAfter) : Number.NaN;
+  const expiresAt = Number.isFinite(notAfter) ? Math.min(windowEnd, notAfter) : windowEnd;
   return {
     assistantMessageId: params.assistantMessage?.id,
     ...(context && {
@@ -48,7 +53,7 @@ export const buildClientLlmWait = (params: {
         phase: context.phase,
       },
     }),
-    expiresAt: new Date(now + (params.waitMs ?? resolveClientLlmWaitMs())).toISOString(),
+    expiresAt: new Date(expiresAt).toISOString(),
     parentMessageId: params.assistantMessage?.parentId ?? undefined,
     parkedAt: new Date(now).toISOString(),
     provider: params.provider,

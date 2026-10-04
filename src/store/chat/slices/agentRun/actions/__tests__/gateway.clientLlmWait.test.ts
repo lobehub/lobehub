@@ -36,6 +36,7 @@ const createAction = (status?: string) => {
 
 describe('continueClientLlmWait', () => {
   beforeEach(() => {
+    vi.mocked(aiAgentService.resumeClientLlmWait).mockClear();
     vi.mocked(getLlmExecutorDeclarationFor).mockReturnValue(declaration);
     vi.mocked(aiAgentService.resumeClientLlmWait).mockResolvedValue({ resumed: true });
   });
@@ -64,6 +65,22 @@ describe('continueClientLlmWait', () => {
 
     expect(reconnect).not.toHaveBeenCalled();
     expect(aiAgentService.resumeClientLlmWait).toHaveBeenCalled();
+  });
+
+  it('does not claim the wait while the gateway socket never connects', async () => {
+    vi.useFakeTimers();
+    try {
+      // The socket stays handshaking and never reaches `connected`.
+      const { action } = createAction('connecting');
+
+      const pending = action.continueClientLlmWait(params);
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      await expect(pending).resolves.toBe(false);
+      expect(aiAgentService.resumeClientLlmWait).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('leaves the run alone when this client cannot reach the provider', async () => {

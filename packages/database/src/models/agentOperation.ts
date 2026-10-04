@@ -895,7 +895,7 @@ export class AgentOperationModel {
       .where(
         and(
           eq(agentOperations.id, operationId),
-          eq(agentOperations.userId, this.userId),
+          this.ownership(),
           eq(agentOperations.status, 'waiting_for_client'),
         ),
       )
@@ -915,7 +915,7 @@ export class AgentOperationModel {
       .where(
         and(
           eq(agentOperations.id, operationId),
-          eq(agentOperations.userId, this.userId),
+          this.ownership(),
           eq(agentOperations.status, 'running'),
         ),
       )
