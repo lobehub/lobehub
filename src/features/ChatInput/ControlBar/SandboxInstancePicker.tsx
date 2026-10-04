@@ -310,7 +310,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       // workspace, which a repository icon would misread.
       const repository = repositoryPath(environment?.configuration);
       // Somebody else's run. The execution plane allows one session per
-      // instance — the second writer meets a 409 ENVIRONMENT_IN_USE — so
+      // instance — the second writer meets a 409 INSTANCE_IN_USE — so
       // offering it would be offering a choice the next message refuses. Its
       // own topic's run is the opposite case: that conversation is the one
       // running, and taking its instance away mid-run is the last thing to do.

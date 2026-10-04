@@ -49,21 +49,21 @@ export interface SandboxStorageInfo {
 }
 
 /**
- * A snapshot the execution plane holds. Only environments that have actually
- * been captured appear — one created but never used has metadata here and no
+ * A snapshot the execution plane holds. Only instances that have actually been
+ * captured appear — one created but never used has metadata here and no
  * snapshot there, which is why the two are joined rather than assumed to match.
  */
-export interface SandboxEnvironmentSnapshot {
+export interface SandboxInstanceSnapshot {
   /** Size of the snapshot archive itself; exact, not a directory walk. */
   bytes: number;
   /** Files in the archive, or `null` when the sidecar metadata disagrees with it. */
   files: number | null;
-  /** The identifier, which is this platform's environment id. */
-  name: string;
+  /** This platform's `environment_instances` row id. */
+  id: string;
   updatedAt: string;
 }
 
-/** One run of an environment, as the execution plane's trail records it. */
+/** One run of an instance, as the execution plane's trail records it. */
 export interface SandboxSessionRecord {
   /** Set on builds: what the build status endpoint is polled with. */
   buildId: string | null;
@@ -80,9 +80,9 @@ export interface SandboxSessionRecord {
     | 'lost'
     | 'switched'
     | null;
-  /** The instance id, which is what the snapshot is stored under. */
-  environment: string | null;
   id: number;
+  /** The instance id, which is what the snapshot is stored under. */
+  instanceId: string | null;
   kind: 'build' | 'session';
   /**
    * Not a conversation's session. The file browser opens one, and so does a
@@ -110,14 +110,14 @@ export interface SandboxBuildStatus {
   buildId: string;
   /** Log since the requested offset; empty when nothing new has been written. */
   chunk: string;
-  environment: string;
   /** The process's exit status once it has one; null while running. */
   exitCode: number | null;
+  instanceId: string;
   /** Where to resume the log from on the next poll. */
   logOffset: number;
   seconds: number;
   /**
-   * Which revision of the specification the finished environment was built
+   * Which revision of the specification the finished instance was built
    * from, read back from the manifest the runtime published. Null while
    * running and on a failure: nothing is published on that path, so there is
    * no revision to record.
@@ -128,7 +128,7 @@ export interface SandboxBuildStatus {
 
 export interface SandboxOccupancy {
   /** Held right now. An instance nobody holds is absent. */
-  held: { name: string; own: boolean }[];
+  held: { id: string; own: boolean }[];
   /** The lease store did not answer, so `held` is empty for want of one. */
   unavailable: boolean;
 }
@@ -159,7 +159,7 @@ interface RequestContext {
  * names. Sending a literal key would be the only way for a caller to ask for
  * someone else's directory, so we never do.
  */
-const CURRENT_WORKSPACE = 'current';
+const CURRENT_STORAGE = 'current';
 
 export class SandboxStorageFilesError extends Error {
   /**
@@ -220,13 +220,13 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
      * the name is free.
      */
     createDirectory: async (params: RequestContext & { path: string }): Promise<{ path: string }> =>
-      request(`${CURRENT_WORKSPACE}/directory`, {
+      request(`${CURRENT_STORAGE}/directory`, {
         body: JSON.stringify({ path: params.path, topicId: params.topicId }),
         headers: { 'Content-Type': 'application/json' },
         method: 'POST',
       }),
 
-    copyEnvironment: async (
+    copyInstance: async (
       params: RequestContext & {
         from: string;
         /** The copy's own directory; the runtime writes its work tree there. */
@@ -234,7 +234,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
         to: string;
       },
     ): Promise<{ name: string }> =>
-      request(`${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.from)}/copy`, {
+      request(`${CURRENT_STORAGE}/instances/${encodeURIComponent(params.from)}/copy`, {
         body: JSON.stringify({
           instanceDir: params.instanceDir,
           to: params.to,
@@ -244,16 +244,15 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
         method: 'POST',
       }),
 
-    deleteEnvironment: async (
+    deleteInstance: async (
       params: RequestContext & { name: string },
     ): Promise<{ name: string }> => {
       const query = withTopic(new URLSearchParams(), params);
       const suffix = query.size > 0 ? `?${query.toString()}` : '';
 
-      return request(
-        `${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}${suffix}`,
-        { method: 'DELETE' },
-      );
+      return request(`${CURRENT_STORAGE}/instances/${encodeURIComponent(params.name)}${suffix}`, {
+        method: 'DELETE',
+      });
     },
 
     deleteFile: async (
@@ -262,14 +261,14 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
       const query = withTopic(new URLSearchParams({ path: params.path }), params);
       if (params.recursive) query.set('recursive', 'true');
 
-      return request(`${CURRENT_WORKSPACE}/file?${query.toString()}`, { method: 'DELETE' });
+      return request(`${CURRENT_STORAGE}/file?${query.toString()}`, { method: 'DELETE' });
     },
 
     getWorkspace: async (params: RequestContext = {}): Promise<SandboxStorageInfo> => {
       const query = withTopic(new URLSearchParams(), params);
       const suffix = query.size > 0 ? `?${query.toString()}` : '';
 
-      return request(`${CURRENT_WORKSPACE}${suffix}`);
+      return request(`${CURRENT_STORAGE}${suffix}`);
     },
 
     /**
@@ -282,7 +281,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
      * permanently young and hide the idle ones from any later sweep.
      */
     refreshUsage: async (params: RequestContext = {}): Promise<SandboxStorageInfo> =>
-      request(`${CURRENT_WORKSPACE}/usage`, {
+      request(`${CURRENT_STORAGE}/usage`, {
         body: JSON.stringify({ topicId: params.topicId }),
         headers: { 'Content-Type': 'application/json' },
         method: 'POST',
@@ -293,13 +292,13 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
      * a caller rendering this must show it is loading rather than treat it as
      * data it already has.
      */
-    listEnvironments: async (
+    listInstances: async (
       params: RequestContext = {},
-    ): Promise<{ environments: SandboxEnvironmentSnapshot[] }> => {
+    ): Promise<{ instances: SandboxInstanceSnapshot[] }> => {
       const query = withTopic(new URLSearchParams(), params);
       const suffix = query.size > 0 ? `?${query.toString()}` : '';
 
-      return request(`${CURRENT_WORKSPACE}/environments${suffix}`);
+      return request(`${CURRENT_STORAGE}/instances${suffix}`);
     },
 
     /**
@@ -318,7 +317,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
       const suffix = query.size > 0 ? `?${query.toString()}` : '';
 
       return request(
-        `${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}/sessions${suffix}`,
+        `${CURRENT_STORAGE}/instances/${encodeURIComponent(params.name)}/sessions${suffix}`,
       );
     },
 
@@ -333,7 +332,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
       const query = new URLSearchParams({ names: params.names.join(',') });
       if (params.topicId) query.set('topicId', params.topicId);
 
-      return request(`${CURRENT_WORKSPACE}/environments/occupancy?${query.toString()}`);
+      return request(`${CURRENT_STORAGE}/instances/occupancy?${query.toString()}`);
     },
 
     /**
@@ -353,7 +352,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
      *
      * Never log this argument.
      */
-    buildEnvironment: async (params: {
+    buildInstance: async (params: {
       credentials?: { header: string; urlPrefix: string }[];
       /**
        * The instance's directory, relative to the workspace. The runtime writes
@@ -365,7 +364,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
       specification: EnvironmentConfiguration;
       topicId?: string;
     }): Promise<{ buildId: string }> =>
-      request(`${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}/build`, {
+      request(`${CURRENT_STORAGE}/instances/${encodeURIComponent(params.name)}/build`, {
         body: JSON.stringify({
           credentials: params.credentials,
           instanceDir: params.instanceDir,
@@ -389,7 +388,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
       const suffix = query.size > 0 ? `?${query.toString()}` : '';
 
       return request(
-        `${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}` +
+        `${CURRENT_STORAGE}/instances/${encodeURIComponent(params.name)}` +
           `/build/${encodeURIComponent(params.buildId)}${suffix}`,
       );
     },
@@ -402,7 +401,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
       if (params.recursive) query.set('recursive', 'true');
       const suffix = query.size > 0 ? `?${query.toString()}` : '';
 
-      return request(`${CURRENT_WORKSPACE}/files${suffix}`);
+      return request(`${CURRENT_STORAGE}/files${suffix}`);
     },
 
     readFile: async (
@@ -410,7 +409,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
     ): Promise<{ content: string; mimeType?: string; path: string }> => {
       const query = withTopic(new URLSearchParams({ path: params.path }), params);
 
-      return request(`${CURRENT_WORKSPACE}/file?${query.toString()}`);
+      return request(`${CURRENT_STORAGE}/file?${query.toString()}`);
     },
 
     /**
@@ -424,7 +423,7 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
     writeFile: async (
       params: RequestContext & { content: string; path: string },
     ): Promise<{ path: string }> =>
-      request(`${CURRENT_WORKSPACE}/file`, {
+      request(`${CURRENT_STORAGE}/file`, {
         body: JSON.stringify({
           content: params.content,
           path: params.path,

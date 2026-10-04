@@ -6,7 +6,7 @@ const session = (overrides: Partial<any>): any => ({
   buildId: null,
   endedAt: null,
   endReason: null,
-  environment: 'inst-a',
+  instanceId: 'inst-a',
   id: 1,
   instanceId: 'inst-a',
   instanceName: 'Lobehub Dev',
@@ -118,9 +118,9 @@ describe('runningSessionIds', () => {
 
   it('picks the newest per instance, not one winner for the whole page', () => {
     const rows = [
-      session({ environment: 'inst-a', id: 1, startedAt: '2026-09-22T01:00:00.000Z' }),
-      session({ environment: 'inst-a', id: 2, startedAt: '2026-09-24T09:00:00.000Z' }),
-      session({ environment: 'inst-b', id: 3, startedAt: '2026-09-23T05:00:00.000Z' }),
+      session({ instanceId: 'inst-a', id: 1, startedAt: '2026-09-22T01:00:00.000Z' }),
+      session({ instanceId: 'inst-a', id: 2, startedAt: '2026-09-24T09:00:00.000Z' }),
+      session({ instanceId: 'inst-b', id: 3, startedAt: '2026-09-23T05:00:00.000Z' }),
     ];
 
     expect(running(rows, holding('inst-a', 'inst-b')).sort()).toEqual([2, 3]);
@@ -152,6 +152,6 @@ describe('runningSessionIds', () => {
   });
 
   it('does not match an instance it has no id for', () => {
-    expect(running([session({ environment: null })], holding('inst-a'))).toEqual([]);
+    expect(running([session({ instanceId: null })], holding('inst-a'))).toEqual([]);
   });
 });

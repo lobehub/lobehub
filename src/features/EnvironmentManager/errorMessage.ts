@@ -11,8 +11,9 @@
  */
 const CODE_KEYS: Record<string, string> = {
   ENVIRONMENT_HAS_INSTANCES: 'environments.hasInstances',
-  // The execution plane calls an instance's stored state an "environment", so
-  // its refusal arrives under that name for the row this UI calls an instance.
+  // The execution plane calls this an instance now too (LOBE-14539). The old
+  // code is kept until that rename is deployed everywhere, so a refusal from a
+  // server still on the previous build reads as a sentence rather than a code.
   ENVIRONMENT_IN_USE: 'environments.instances.inUse',
   INSTANCE_IN_USE: 'environments.instances.inUse',
   PATH_OUTSIDE_INSTANCE: 'environments.files.invalidPath',

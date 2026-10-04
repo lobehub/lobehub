@@ -69,7 +69,7 @@ const mockReadFile = vi.fn();
 const mockGetWorkspace = vi.fn();
 const mockRefreshUsage = vi.fn();
 const mockReadOccupancy = vi.fn();
-const mockBuildEnvironment = vi.fn();
+const mockBuildInstance = vi.fn();
 const mockBuildStatus = vi.fn();
 const mockListEnvironments = vi.fn();
 
@@ -77,13 +77,13 @@ vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(function () {
     return {
       getSandboxStorageClient: () => ({
-        buildEnvironment: mockBuildEnvironment,
+        buildInstance: mockBuildInstance,
         buildStatus: mockBuildStatus,
-        copyEnvironment: mockCopyEnvironment,
-        deleteEnvironment: mockDeleteEnvironment,
+        copyInstance: mockCopyEnvironment,
+        deleteInstance: mockDeleteEnvironment,
         getWorkspace: mockGetWorkspace,
         listEnvironmentSessions: mockListEnvironmentSessions,
-        listEnvironments: mockListEnvironments,
+        listInstances: mockListEnvironments,
         listFiles: mockListFiles,
         readFile: mockReadFile,
         readOccupancy: mockReadOccupancy,
@@ -375,7 +375,7 @@ describe('sandboxStorageRouter', () => {
         id: buildInstanceId,
         workingDirectory: 'atlas',
       });
-      mockBuildEnvironment.mockResolvedValue({ buildId: 'b-1' });
+      mockBuildInstance.mockResolvedValue({ buildId: 'b-1' });
 
       const result = await sandboxStorageRouter
         .createCaller(ctx)
@@ -383,7 +383,7 @@ describe('sandboxStorageRouter', () => {
 
       // The instance's own folder is where the checkout lands on the volume,
       // which is what its file browser opens (LOBE-14362).
-      expect(mockBuildEnvironment).toHaveBeenCalledWith({
+      expect(mockBuildInstance).toHaveBeenCalledWith({
         credentials: undefined,
         instanceDir: 'atlas',
         name: buildInstanceId,
@@ -401,7 +401,7 @@ describe('sandboxStorageRouter', () => {
         configurationSnapshot: spec,
         id: buildInstanceId,
       });
-      mockBuildEnvironment.mockResolvedValue({ buildId: 'b-2' });
+      mockBuildInstance.mockResolvedValue({ buildId: 'b-2' });
       const credential = { header: 'Authorization: Basic x', urlPrefix: 'https://github.com/' };
       mockResolveCloneCredential.mockResolvedValue(credential);
 
@@ -415,7 +415,7 @@ describe('sandboxStorageRouter', () => {
         userId: 'user-1',
         workspaceId: 'ws-1',
       });
-      expect(mockBuildEnvironment).toHaveBeenCalledWith(
+      expect(mockBuildInstance).toHaveBeenCalledWith(
         expect.objectContaining({ credentials: [credential] }),
       );
     });
@@ -427,14 +427,14 @@ describe('sandboxStorageRouter', () => {
         configurationSnapshot: spec,
         id: buildInstanceId,
       });
-      mockBuildEnvironment.mockResolvedValue({ buildId: 'b-3' });
+      mockBuildInstance.mockResolvedValue({ buildId: 'b-3' });
       mockResolveCloneCredential.mockResolvedValue(null);
 
       await sandboxStorageRouter
         .createCaller(ctx)
         .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
 
-      expect(mockBuildEnvironment).toHaveBeenCalledWith(
+      expect(mockBuildInstance).toHaveBeenCalledWith(
         expect.objectContaining({ credentials: undefined }),
       );
     });
@@ -451,7 +451,7 @@ describe('sandboxStorageRouter', () => {
         .createCaller(ctx)
         .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
 
-      expect(mockBuildEnvironment).not.toHaveBeenCalled();
+      expect(mockBuildInstance).not.toHaveBeenCalled();
       expect(result.buildId).toBeNull();
       expect(mockInstanceUpdate).toHaveBeenCalledWith(buildInstanceId, { status: 'ready' });
     });
@@ -463,7 +463,7 @@ describe('sandboxStorageRouter', () => {
         configurationSnapshot: spec,
         id: buildInstanceId,
       });
-      mockBuildEnvironment.mockRejectedValue(new Error('environment in use'));
+      mockBuildInstance.mockRejectedValue(new Error('environment in use'));
 
       await expect(
         sandboxStorageRouter
@@ -485,7 +485,7 @@ describe('sandboxStorageRouter', () => {
         status: 'ready',
       });
       mockReadOccupancy.mockResolvedValue({
-        held: [{ name: buildInstanceId, own: false }],
+        held: [{ id: buildInstanceId, own: false }],
         unavailable: false,
       });
 
@@ -495,7 +495,7 @@ describe('sandboxStorageRouter', () => {
           .startInstanceBuild({ id: buildInstanceId, topicId: 't' }),
       ).rejects.toThrow('INSTANCE_IN_USE');
 
-      expect(mockBuildEnvironment).not.toHaveBeenCalled();
+      expect(mockBuildInstance).not.toHaveBeenCalled();
       expect(mockInstanceUpdate).not.toHaveBeenCalled();
     });
 
@@ -507,7 +507,7 @@ describe('sandboxStorageRouter', () => {
         id: buildInstanceId,
         status: 'ready',
       });
-      mockBuildEnvironment.mockRejectedValue(new Error('environment in use'));
+      mockBuildInstance.mockRejectedValue(new Error('environment in use'));
 
       await expect(
         sandboxStorageRouter
@@ -607,8 +607,8 @@ describe('sandboxStorageRouter', () => {
       ]);
       mockReadOccupancy.mockResolvedValue({
         held: [
-          { name: 'inst-a', own: false },
-          { name: 'inst-b', own: true },
+          { id: 'inst-a', own: false },
+          { id: 'inst-b', own: true },
         ],
         unavailable: false,
       });

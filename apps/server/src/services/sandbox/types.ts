@@ -48,7 +48,7 @@ export interface SandboxSessionContext {
    * default. Like `sandboxMode`, every call for a topic must carry the same
    * value — the session binds to one environment on its first call.
    */
-  sandboxEnvironment?: string;
+  sandboxInstanceId?: string;
   /**
    * Whether this run wants its working directory to survive the session.
    * Absent means ephemeral. Half the decision — the execution plane also
@@ -62,7 +62,7 @@ export interface SandboxSessionContext {
    * variables, running the maintenance command once, cutting the network when
    * the environment asks for it, and routing the regenerable paths on capture.
    *
-   * Carried on every call for the same reason {@link sandboxEnvironment} is —
+   * Carried on every call for the same reason {@link sandboxInstanceId} is —
    * the runtime adopts it per invocation and a call that omitted it would run
    * with whatever the previous one happened to set.
    */

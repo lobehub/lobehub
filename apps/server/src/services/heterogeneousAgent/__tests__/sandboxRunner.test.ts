@@ -49,7 +49,7 @@ describe('spawnHeteroSandbox', () => {
     expect(mockCreateSandboxService).toHaveBeenCalledWith({
       marketService: {},
       sandboxCwd: undefined,
-      sandboxEnvironment: undefined,
+      sandboxInstanceId: undefined,
       sandboxMode: undefined,
       topicId: 'topic-1',
       userId: 'user-1',
@@ -76,7 +76,7 @@ describe('spawnHeteroSandbox', () => {
     expect(mockCreateSandboxService).toHaveBeenCalledWith(
       expect.objectContaining({
         sandboxCwd: 'lobehub-main',
-        sandboxEnvironment: 'inst-1',
+        sandboxInstanceId: 'inst-1',
         sandboxMode: 'persistent',
       }),
     );

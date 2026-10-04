@@ -48,14 +48,14 @@ describe('createSandboxStorageClient', () => {
     // every build with "specification: Required".
     respond(200, { data: { buildId: 'build-1' } });
 
-    await client.buildEnvironment({
+    await client.buildInstance({
       instanceDir: 'app-dev',
       name: 'env-1',
       specification: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
     });
 
     const [url, init] = (fetch as any).mock.calls[0];
-    expect(url).toBe('http://market.test/api/v1/sandbox/storages/current/environments/env-1/build');
+    expect(url).toBe('http://market.test/api/v1/sandbox/storages/current/instances/env-1/build');
     expect(init.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(init.body).specification.sources[0].url).toBe('https://github.com/a/b');
     expect(JSON.parse(init.body).instanceDir).toBe('app-dev');
@@ -74,7 +74,7 @@ describe('createSandboxStorageClient', () => {
     expect(result).toEqual(page);
     const [url] = (fetch as any).mock.calls[0];
     expect(url).toBe(
-      'http://market.test/api/v1/sandbox/storages/current/environments/env%20id/sessions?limit=5&before=2026-09-01T00%3A00%3A00.000Z',
+      'http://market.test/api/v1/sandbox/storages/current/instances/env%20id/sessions?limit=5&before=2026-09-01T00%3A00%3A00.000Z',
     );
   });
 });

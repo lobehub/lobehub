@@ -318,7 +318,7 @@ const execInSandboxHandler = async ({
       fileService: ctx.fileService,
       marketService,
       sandboxCwd: sandbox.cwd,
-      sandboxEnvironment: sandbox.environment,
+      sandboxInstanceId: sandbox.environment,
       sandboxMode: sandbox.mode,
       sandboxSpecification: sandbox.specification,
       sandboxWorkingDir: sandbox.workingDir,

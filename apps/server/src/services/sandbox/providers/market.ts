@@ -55,7 +55,7 @@ export class MarketSandboxProvider implements SandboxProvider {
     const {
       marketService,
       sandboxCwd,
-      sandboxEnvironment,
+      sandboxInstanceId,
       sandboxMode,
       sandboxSpecification,
       sandboxWorkingDir,
@@ -83,7 +83,7 @@ export class MarketSandboxProvider implements SandboxProvider {
           ...(sandboxMode && { sandboxMode }),
           ...(sandboxCwd && { sandboxCwd }),
           ...(sandboxWorkingDir && { sandboxWorkingDir }),
-          ...(sandboxEnvironment && { sandboxEnvironment }),
+          ...(sandboxInstanceId && { sandboxInstanceId }),
           ...(sandboxSpecification && { sandboxSpecification }),
           topicId,
           userId,

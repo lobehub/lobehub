@@ -138,7 +138,7 @@ describe('tools marketRouter', () => {
     expect(mockCreateSandboxService).toHaveBeenCalledWith(
       expect.objectContaining({
         sandboxCwd: 'lobehub-dev',
-        sandboxEnvironment: 'env-1',
+        sandboxInstanceId: 'env-1',
         sandboxMode: 'persistent',
       }),
     );

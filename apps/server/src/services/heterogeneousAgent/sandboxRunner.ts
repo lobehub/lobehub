@@ -248,7 +248,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   const sandboxService = createSandboxService({
     marketService,
     sandboxCwd: sandbox?.cwd,
-    sandboxEnvironment: sandbox?.environment,
+    sandboxInstanceId: sandbox?.environment,
     sandboxMode: sandbox?.mode,
     sandboxSpecification: sandbox?.specification,
     sandboxWorkingDir: sandbox?.workingDir,

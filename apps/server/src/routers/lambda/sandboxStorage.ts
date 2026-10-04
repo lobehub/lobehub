@@ -545,7 +545,7 @@ export const sandboxStorageRouter = router({
       if (!created) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
 
       await ctx.client
-        .copyEnvironment({
+        .copyInstance({
           from: source.id,
           // The copy's own folder. Sharing the source's would let either
           // instance's next save delete files the other still lists.
@@ -694,7 +694,7 @@ export const sandboxStorageRouter = router({
       const occupancy = await ctx.client
         .readOccupancy({ names: [input.id], topicId: input.topicId })
         .catch(() => ({ held: [], unavailable: true }));
-      if (occupancy.held.some((entry) => entry.name === input.id)) {
+      if (occupancy.held.some((entry) => entry.id === input.id)) {
         throw new TRPCError({ code: 'CONFLICT', message: 'INSTANCE_IN_USE' });
       }
 
@@ -721,7 +721,7 @@ export const sandboxStorageRouter = router({
       });
 
       try {
-        const { buildId } = await ctx.client.buildEnvironment({
+        const { buildId } = await ctx.client.buildInstance({
           credentials: credential ? [credential] : undefined,
           // Where the checkout lands on the volume: the instance's own folder,
           // which is what its file browser opens.
@@ -875,8 +875,8 @@ export const sandboxStorageRouter = router({
       const [snapshots, occupancy] = await Promise.all([
         input.withSizes
           ? ctx.client
-              .listEnvironments({ topicId: input.topicId })
-              .then((result) => result.environments)
+              .listInstances({ topicId: input.topicId })
+              .then((result) => result.instances)
               // If the store fails, the instances still exist and can still be
               // renamed or selected — only their sizes are unknown, so say so
               // rather than failing a settings page.
@@ -900,8 +900,8 @@ export const sandboxStorageRouter = router({
           : { held: [], unavailable: false },
       ]);
 
-      const byId = new Map((snapshots ?? []).map((snapshot) => [snapshot.name, snapshot]));
-      const heldBy = new Map(occupancy.held.map((entry) => [entry.name, entry.own]));
+      const byId = new Map((snapshots ?? []).map((snapshot) => [snapshot.id, snapshot]));
+      const heldBy = new Map(occupancy.held.map((entry) => [entry.id, entry.own]));
 
       return {
         instances: instances.map((instance) => ({
@@ -1080,7 +1080,7 @@ export const sandboxStorageRouter = router({
       // reclaim. The execution plane refuses while a session is using it, and
       // that refusal is the one the user needs to see.
       await ctx.client
-        .deleteEnvironment({ name: instance.id, topicId: input.topicId })
+        .deleteInstance({ name: instance.id, topicId: input.topicId })
         .catch((error: unknown) => {
           // No snapshot there is the state this call exists to reach, so a 404
           // is this step succeeding, not failing. An instance nothing has ever

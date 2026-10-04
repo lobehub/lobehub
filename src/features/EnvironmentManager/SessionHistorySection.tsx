@@ -252,7 +252,7 @@ export const runningSessionIds = (
 
   for (const session of sessions) {
     if (session.endedAt) continue;
-    const instance = session.environment ?? '';
+    const instance = session.instanceId ?? '';
     if (!occupancy.unknown && !occupancy.held.has(instance)) continue;
 
     const held = newestOpen.get(instance);

@@ -1373,7 +1373,7 @@ export default {
     'An environment describes what a run needs around it — repositories, setup, variables. An instance is one working copy of it, with its own folder and its own installed packages; conversations run inside an instance and keep what they leave there.',
   'sandboxStorage.environmentsUnavailable': 'Environments could not be loaded',
   // One conversation at a time per instance: the execution plane takes a
-  // lease and answers the second writer with 409 ENVIRONMENT_IN_USE, because
+  // lease and answers the second writer with 409 INSTANCE_IN_USE, because
   // two runs snapshotting one folder means whichever ends last silently
   // discards the other's work. The tag says which rows that applies to before
   // the first message meets the refusal.
