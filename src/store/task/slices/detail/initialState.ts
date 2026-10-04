@@ -1,5 +1,6 @@
 import type { TaskDetailData } from '@lobechat/types';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import { type SaveStatus } from '@/types/saveState';
 
 export interface TaskDetailSliceState {
@@ -15,6 +16,8 @@ export interface TaskDetailSliceState {
   isCreatingTask: boolean;
   isDeletingTask: boolean;
   taskDetailMap: Record<string, TaskDetailData>;
+  /** Replica bookkeeping of `taskDetailMap` (its view). */
+  taskDetailReplica: ReplicaState<TaskDetailData>;
   /**
    * Increments only when an authoritative source outside the mounted task editor
    * changes its persisted instruction snapshot. The editor uses this as an
@@ -31,6 +34,7 @@ export const initialTaskDetailSliceState: TaskDetailSliceState = {
   isCreatingTask: false,
   isDeletingTask: false,
   taskDetailMap: {},
+  taskDetailReplica: createReplicaState(),
   taskInstructionRevisionMap: {},
   taskSaveStatusMap: {},
 };

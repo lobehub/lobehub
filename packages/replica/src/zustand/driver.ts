@@ -1,4 +1,20 @@
-export interface ReplicaQueryOptions<T> {
+/**
+ * Scheduling knobs a sync can ask its driver for. Named after SWR's options;
+ * a driver maps them onto its own cache (or ignores what it cannot honor).
+ */
+export interface ReplicaSyncSchedule {
+  /** Collapse identical requests within this window (ms). */
+  dedupingInterval?: number;
+  /** Poll every N ms while mounted (0 = off). */
+  refreshInterval?: number;
+  /** Keep polling while the page is hidden. */
+  refreshWhenHidden?: boolean;
+  revalidateIfStale?: boolean;
+  revalidateOnFocus?: boolean;
+  revalidateOnReconnect?: boolean;
+}
+
+export interface ReplicaQueryOptions<T> extends ReplicaSyncSchedule {
   /** Run once per key: no refetch on focus, reconnect or remount (hydration reads). */
   once?: boolean;
   onError?: (error: unknown) => void;
@@ -46,8 +62,9 @@ export const createSWRDriver = ({
   useSWR: SWRLikeHook;
 }): ReplicaSyncDriver => ({
   revalidate: (match) => mutate(match),
-  useQuery: (key, fetcher, { once, onError, onSuccess }) =>
+  useQuery: (key, fetcher, { once, onError, onSuccess, ...schedule }) =>
     useSWR(key, fetcher, {
+      ...Object.fromEntries(Object.entries(schedule).filter(([, value]) => value !== undefined)),
       ...(once && {
         revalidateIfStale: false,
         revalidateOnFocus: false,

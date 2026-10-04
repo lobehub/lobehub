@@ -4,14 +4,19 @@ import {
   toTaskExecutionConfigPatch,
 } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cacheScope, createReplicaState } from '@/libs/replica';
+import { useClientDataSWR } from '@/libs/swr';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 
 import { useTaskStore } from '../../store';
+import { taskDetailResource } from './projection';
+import { taskDetailRefreshes } from './testUtils';
 
 vi.mock('@/services/task', () => ({
   taskService: {
@@ -51,12 +56,68 @@ beforeEach(() => {
     isCreatingTask: false,
     isDeletingTask: false,
     taskDetailMap: {},
+    taskDetailReplica: createReplicaState(),
     taskInstructionRevisionMap: {},
     taskSaveStatusMap: {},
   });
 });
 
 describe('TaskDetailSliceAction', () => {
+  describe('task detail replica', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const syncCall = () =>
+      vi
+        .mocked(useClientDataSWR)
+        .mock.calls.find(([key]) => Array.isArray(key) && key[0] === 'replica:sync');
+
+    it('polls while the task is in flight and stops once it settles', () => {
+      vi.mocked(useClientDataSWR).mockReturnValue({ isValidating: false, mutate: vi.fn() } as any);
+      useTaskStore.setState({
+        taskDetailMap: { 'T-1': { identifier: 'T-1', status: 'running' } as any },
+      });
+
+      const { rerender } = renderHook(() => useTaskStore.getState().useFetchTaskDetail('T-1'));
+      expect(syncCall()?.[2]).toMatchObject({ refreshInterval: 10_000 });
+
+      vi.mocked(useClientDataSWR).mockClear();
+      useTaskStore.setState({
+        taskDetailMap: { 'T-1': { identifier: 'T-1', status: 'completed' } as any },
+      });
+      rerender();
+      expect(syncCall()?.[2]).toMatchObject({ refreshInterval: 0 });
+    });
+
+    it('stores a raw-id lookup under both the raw id and the identifier', async () => {
+      vi.mocked(taskService.getDetail).mockResolvedValue({
+        data: { identifier: 'T-7', instruction: 'x' },
+      } as any);
+
+      await useTaskStore.getState().fetchTaskDetail('task_raw');
+
+      const { taskDetailMap } = useTaskStore.getState();
+      expect(taskDetailMap.task_raw).toMatchObject({ identifier: 'T-7' });
+      expect(taskDetailMap['T-7']).toMatchObject({ identifier: 'T-7' });
+    });
+
+    it('keeps optimistic detail edits out of the persisted row', async () => {
+      const scope = `task-detail-${crypto.randomUUID()}:personal`;
+      vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+
+      useTaskStore.getState().internal_dispatchTaskDetail({
+        id: 'T-1',
+        type: 'setTaskDetail',
+        value: { identifier: 'T-1', name: 'Draft' } as any,
+      });
+
+      expect(useTaskStore.getState().taskDetailMap['T-1']).toMatchObject({ name: 'Draft' });
+      expect(await taskDetailResource.storage!.get({ queryKey: 'T-1', scope })).toBeUndefined();
+    });
+  });
+
   describe('setActiveTaskId', () => {
     it('should set activeTaskId', () => {
       useTaskStore.getState().setActiveTaskId('T-1');
@@ -489,7 +550,6 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should propagate error, mark saveStatus failed, refresh, and toast on failure', async () => {
-      const { mutate } = await import('@/libs/swr');
       const { toast } = await import('@lobehub/ui/base-ui');
       useTaskStore.setState({
         taskDetailMap: {
@@ -506,7 +566,7 @@ describe('TaskDetailSliceAction', () => {
       // The failure must surface as `failed` (never `idle`) so the save hint
       // shows an error + Retry instead of masquerading as a clean state.
       expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
       expect(toast.error).toHaveBeenCalled();
     });
 
@@ -588,7 +648,6 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should refresh the cached parent on failure when updating from a subtask detail page', async () => {
-      const { mutate } = await import('@/libs/swr');
       useTaskStore.setState({
         activeTaskId: 'T-sub',
         taskDetailMap: {
@@ -608,8 +667,8 @@ describe('TaskDetailSliceAction', () => {
         useTaskStore.getState().updateTask('T-sub', { assigneeAgentId: 'agent-x' }),
       ).rejects.toThrow('fail');
 
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-sub']);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-parent']);
+      expect(taskDetailRefreshes('T-sub')).not.toHaveLength(0);
+      expect(taskDetailRefreshes('T-parent')).not.toHaveLength(0);
     });
 
     it('should not show error when update succeeds but cache refresh fails', async () => {
@@ -631,7 +690,6 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should refresh list and affected details when reparenting', async () => {
-      const { mutate } = await import('@/libs/swr');
       useTaskStore.setState({
         activeTaskId: 'T-sub',
         taskDetailMap: {
@@ -654,9 +712,9 @@ describe('TaskDetailSliceAction', () => {
       expect(taskService.update).toHaveBeenCalledWith('T-sub', { parentTaskId: 'T-new-parent' });
       expect(useTaskStore.getState().taskDetailMap['T-sub']).not.toHaveProperty('parentTaskId');
       expect(refreshTaskList).toHaveBeenCalled();
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-sub']);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-parent']);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-new-parent']);
+      expect(taskDetailRefreshes('T-sub')).not.toHaveLength(0);
+      expect(taskDetailRefreshes('T-parent')).not.toHaveLength(0);
+      expect(taskDetailRefreshes('T-new-parent')).not.toHaveLength(0);
     });
 
     it('should refresh the list after changing priority', async () => {
@@ -670,7 +728,6 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should refresh the parent that was patched even if activeTaskId changes mid-flight', async () => {
-      const { mutate } = await import('@/libs/swr');
       useTaskStore.setState({
         activeTaskId: 'T-parent',
         taskDetailMap: {
@@ -692,8 +749,8 @@ describe('TaskDetailSliceAction', () => {
         useTaskStore.getState().updateTask('T-sub', { assigneeAgentId: 'agent-x' }),
       ).rejects.toThrow('fail');
 
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-sub']);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-parent']);
+      expect(taskDetailRefreshes('T-sub')).not.toHaveLength(0);
+      expect(taskDetailRefreshes('T-parent')).not.toHaveLength(0);
     });
 
     it('should scope save status per task so a failure does not leak across navigation', async () => {
@@ -803,25 +860,23 @@ describe('TaskDetailSliceAction', () => {
 
   describe('addComment', () => {
     it('should call service and refresh detail', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.addComment).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().addComment('T-1', 'Nice work');
 
       expect(taskService.addComment).toHaveBeenCalledWith('T-1', 'Nice work', undefined);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
   });
 
   describe('addDependency', () => {
     it('should call service and refresh detail', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.addDependency).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().addDependency('T-1', 'T-2', 'blocks');
 
       expect(taskService.addDependency).toHaveBeenCalledWith('T-1', 'T-2', 'blocks');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
 
     it('should propagate error from service', async () => {
@@ -835,19 +890,17 @@ describe('TaskDetailSliceAction', () => {
 
   describe('removeDependency', () => {
     it('should call service and refresh detail', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.removeDependency).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().removeDependency('T-1', 'T-2');
 
       expect(taskService.removeDependency).toHaveBeenCalledWith('T-1', 'T-2');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
   });
 
   describe('unpinDocument', () => {
     it('should refresh source task and active task when they differ', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.unpinDocument).mockResolvedValue({ success: true } as any);
 
       // Detail page is open at parent identifier; doc is owned by a child DB id.
@@ -856,8 +909,8 @@ describe('TaskDetailSliceAction', () => {
       await useTaskStore.getState().unpinDocument('task_child', 'doc_1');
 
       expect(taskService.unpinDocument).toHaveBeenCalledWith('task_child', 'doc_1');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'task_child']);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('task_child')).not.toHaveLength(0);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
 
     it('should not double-refresh when source task equals active task', async () => {
@@ -869,7 +922,7 @@ describe('TaskDetailSliceAction', () => {
       await useTaskStore.getState().unpinDocument('T-1', 'doc_1');
 
       expect(mutate).toHaveBeenCalledTimes(1);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
   });
 

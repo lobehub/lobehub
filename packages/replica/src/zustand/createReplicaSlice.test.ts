@@ -141,6 +141,38 @@ describe('createReplicaSlice', () => {
       expect(failing.store.getState().lists.b).toBeUndefined();
     });
 
+    it('hands its schedule (polling, focus revalidation …) to the driver', () => {
+      const useQuery = vi.fn(() => ({ isValidating: false, mutate: vi.fn() }));
+      const resource = defineReplica<{ id: string }, string[]>({
+        fetcher: async () => ['server'],
+        key: ({ id }) => id,
+        name: 'scheduled',
+        scope,
+        version: 1,
+      });
+      const store = createStore<TestState>()(() => ({
+        lists: {},
+        listsReplica: createReplicaState(),
+      }));
+      const slice = createReplicaSlice<TestState, { id: string }, string[]>(resource, {
+        driver: { revalidate: vi.fn(), useQuery },
+        get: store.getState,
+        set: (partial) => store.setState(partial),
+        stateKey: 'listsReplica',
+        view: recordLens('lists'),
+      });
+
+      renderHook(() =>
+        slice.useSync({ id: 'a' }, { refreshInterval: 10_000, revalidateOnFocus: false }),
+      );
+
+      expect(useQuery).toHaveBeenCalledWith(
+        expect.arrayContaining(['replica:sync', 'scheduled']),
+        expect.any(Function),
+        expect.objectContaining({ refreshInterval: 10_000, revalidateOnFocus: false }),
+      );
+    });
+
     it('does not let a slow hydration overwrite a faster server response', async () => {
       const storage = createMemoryStorage();
       storage.rows.set('user-1:personal|a', { data: ['cached'], updatedAt: 1 });

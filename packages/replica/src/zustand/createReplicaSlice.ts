@@ -4,7 +4,7 @@ import { createReplicaEngine, type ReplicaEngineOptions } from '../core/engine';
 import { isReplicaSyncKey, replicaKeys } from '../core/keys';
 import type { ReplicaViewWrite } from '../core/reducer';
 import type { ReplicaResource, ReplicaState } from '../core/types';
-import type { ReplicaSyncDriver } from './driver';
+import type { ReplicaSyncDriver, ReplicaSyncSchedule } from './driver';
 
 /** Zustand `setState`, with the devtools action label. */
 type Setter<TStore> = (partial: Partial<TStore>, replace?: false, action?: any) => void;
@@ -35,7 +35,7 @@ export interface CreateReplicaSliceOptions<TStore, TParams, TData, TFetched> ext
   view: ReplicaLens<TStore, TData>;
 }
 
-export interface ReplicaSyncOptions<TFetched = unknown> {
+export interface ReplicaSyncOptions<TFetched = unknown> extends ReplicaSyncSchedule {
   enabled?: boolean;
   /** Side effects of a failed fetch (error side-maps); the store view is left as is. */
   onError?: (error: unknown) => void;
@@ -111,7 +111,7 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
    */
   const useSync = (
     params: TParams | null | undefined,
-    { enabled = true, onError, onSuccess }: ReplicaSyncOptions<TFetched> = {},
+    { enabled = true, onError, onSuccess, ...schedule }: ReplicaSyncOptions<TFetched> = {},
   ): ReplicaSyncResult => {
     const scope = resource.scope.use();
     const key = params ? resource.key(params) : undefined;
@@ -140,6 +140,7 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
         : null,
       () => fetcher!(params!, undefined),
       {
+        ...schedule,
         onError,
         onSuccess: (data) => {
           replace(params!, data, scope);

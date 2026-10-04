@@ -5,6 +5,7 @@ import { taskService } from '@/services/task';
 import { useUserStore } from '@/store/user';
 
 import { useTaskStore } from '../../store';
+import { taskDetailRefreshes } from '../detail/testUtils';
 
 vi.mock('@/services/task', () => ({
   taskService: {
@@ -69,12 +70,11 @@ describe('TaskLifecycleSliceAction', () => {
     });
 
     it('should refresh detail on error', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.run).mockRejectedValue(new Error('fail'));
 
       await useTaskStore.getState().runTask('T-1');
 
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
 
     it('should surface the run failure when the caller requires it', async () => {
@@ -313,13 +313,12 @@ describe('TaskLifecycleSliceAction', () => {
 
   describe('cancelTopic', () => {
     it('should call service and refresh active detail', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.cancelTopic).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().cancelTopic('tpc_1');
 
       expect(taskService.cancelTopic).toHaveBeenCalledWith('tpc_1');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
 
     it('should not refresh if no activeTaskId', async () => {
@@ -336,13 +335,12 @@ describe('TaskLifecycleSliceAction', () => {
 
   describe('deleteTopic', () => {
     it('should call service and refresh active detail', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.deleteTopic).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().deleteTopic('tpc_1');
 
       expect(taskService.deleteTopic).toHaveBeenCalledWith('tpc_1');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
   });
 });

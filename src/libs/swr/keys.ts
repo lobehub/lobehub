@@ -335,7 +335,6 @@ export const goalKeys = {
 };
 
 export const taskKeys = {
-  detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
   /**
    * The home rail's cross-agent goal roll-up. Scoped by cache scope like the
    * other home feeds — goals are workspace rows, so a list left over from the
