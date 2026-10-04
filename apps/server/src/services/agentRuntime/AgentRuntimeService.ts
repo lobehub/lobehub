@@ -3803,6 +3803,29 @@ export class AgentRuntimeService {
         lastModified: new Date().toISOString(),
       });
 
+      // A Stop that landed after the claim could not settle the `running` row,
+      // and the save above may have overwritten its `interrupted` state. It
+      // marks the interrupt before saving, so any such Stop shows here; a later
+      // one saves after this and the queued step stops on it.
+      if (await this.coordinator.isInterrupted(operationId)) {
+        log('[%s] Stopped while being resumed; settling as interrupted', operationId);
+        const interruptedState: AgentState = {
+          ...state,
+          clientLlmWait: undefined,
+          lastModified: new Date().toISOString(),
+          status: 'interrupted',
+        };
+        await this.coordinator.saveAgentState(operationId, interruptedState);
+        if (await this.agentOperationModel.settleRunning(operationId, 'interrupted')) {
+          await this.completionLifecycle.dispatchHooks(
+            operationId,
+            interruptedState,
+            'interrupted',
+          );
+        }
+        return { resumed: false };
+      }
+
       if (wait?.assistantMessageId) {
         try {
           await this.messageModel.update(wait.assistantMessageId, { error: null });

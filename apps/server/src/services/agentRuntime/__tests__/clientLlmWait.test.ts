@@ -702,6 +702,30 @@ describe('waiting_for_client (U4c)', () => {
       );
     });
 
+    it('does not replay the call when a Stop lands between the claim and its save', async () => {
+      const t = createService();
+      t.setStored(waitingState());
+      t.operationModel.settleRunning = vi.fn().mockResolvedValue(true);
+      // Stop ran after the claim: its sentinel is set, its settle missed the
+      // `running` row, and the claim's save overwrote its `interrupted` state.
+      t.coordinator.isInterrupted.mockResolvedValue(true);
+
+      await expect(
+        t.service.resumeFromClientLlmWait({ llmExecutor, operationId: OPERATION_ID }),
+      ).resolves.toEqual({ resumed: false });
+
+      expect(t.scheduleMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ payload: { resumeClientLlm: true } }),
+      );
+      expect(t.getStored().status).toBe('interrupted');
+      expect(t.operationModel.settleRunning).toHaveBeenCalledWith(OPERATION_ID, 'interrupted');
+      expect(t.dispatchHooks).toHaveBeenCalledWith(
+        OPERATION_ID,
+        expect.objectContaining({ status: 'interrupted' }),
+        'interrupted',
+      );
+    });
+
     it('settles a Stop that raced the claim instead of re-parking over it', async () => {
       const t = createService();
       t.setStored(waitingState());
