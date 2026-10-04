@@ -12,6 +12,11 @@ export const getSandboxConfig = () => {
       ONLYBOXES_JIT_TTL_SEC: process.env.ONLYBOXES_JIT_TTL_SEC,
       ONLYBOXES_LEASE_TTL_SEC: process.env.ONLYBOXES_LEASE_TTL_SEC,
       SANDBOX_PROVIDER: process.env.SANDBOX_PROVIDER,
+      WIDGET_SANDBOX_NETWORK_FORMAT: process.env.WIDGET_SANDBOX_NETWORK_FORMAT,
+      WIDGET_SANDBOX_PROVIDER: process.env.WIDGET_SANDBOX_PROVIDER,
+      // `DASHBOARD_SANDBOX_*` is the pre-rename name, still read as a fallback.
+      WIDGET_SANDBOX_TOKEN: process.env.WIDGET_SANDBOX_TOKEN || process.env.DASHBOARD_SANDBOX_TOKEN,
+      WIDGET_SANDBOX_URL: process.env.WIDGET_SANDBOX_URL || process.env.DASHBOARD_SANDBOX_URL,
     },
     server: {
       ONLYBOXES_BASE_URL: z.preprocess(emptyStringToUndefined, z.string().url().optional()),
@@ -26,6 +31,25 @@ export const getSandboxConfig = () => {
         emptyStringToUndefined,
         z.enum(['market', 'onlyboxes']).optional(),
       ),
+      /**
+       * How the widget sandbox request encodes the manifest's network
+       * allowlist: `allowlist` (default) sends `network: { allow: [...] }`;
+       * `boolean` sends `network: allow.length > 0` for a Worker that only
+       * understands an on/off switch.
+       */
+      WIDGET_SANDBOX_NETWORK_FORMAT: z.preprocess(
+        emptyStringToUndefined,
+        z.enum(['allowlist', 'boolean']).optional(),
+      ),
+      /** Widget script executor; only the Cloudflare Worker exists today. */
+      WIDGET_SANDBOX_PROVIDER: z.preprocess(
+        emptyStringToUndefined,
+        z.enum(['cloudflare-worker']).optional(),
+      ),
+      /** Bearer token for the widget sandbox (`POST /run`). Falls back to `DASHBOARD_SANDBOX_TOKEN`. */
+      WIDGET_SANDBOX_TOKEN: z.preprocess(emptyStringToUndefined, z.string().optional()),
+      /** Base URL of the widget sandbox. Falls back to `DASHBOARD_SANDBOX_URL`. */
+      WIDGET_SANDBOX_URL: z.preprocess(emptyStringToUndefined, z.string().url().optional()),
     },
   });
 };
