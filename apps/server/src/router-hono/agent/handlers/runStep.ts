@@ -209,6 +209,8 @@ export async function runStep(c: Context): Promise<Response> {
       toolMessageId,
       verifyAsyncToolBarrier,
       asyncToolVerifyAttempt,
+      resumeClientLlm,
+      clientLlmWaitExpired,
       lockRetryAttempt,
     } = { ...body, ...body.payload };
 
@@ -293,6 +295,8 @@ export async function runStep(c: Context): Promise<Response> {
       !resumeAsyncTool &&
       !finishAfterAsyncTool &&
       !verifyAsyncToolBarrier &&
+      !resumeClientLlm &&
+      !clientLlmWaitExpired &&
       !groupMemberTimeout;
 
     // A previous invocation may have died part-way through its own inline loop.
@@ -347,6 +351,7 @@ export async function runStep(c: Context): Promise<Response> {
             : await aiAgentService.executeStep({
                 approvedToolCall,
                 asyncToolVerifyAttempt,
+                clientLlmWaitExpired,
                 context,
                 externalRetryCount,
                 finishAfterAsyncTool,
@@ -358,6 +363,7 @@ export async function runStep(c: Context): Promise<Response> {
                 rejectAndContinue,
                 rejectionReason,
                 resumeAsyncTool,
+                resumeClientLlm,
                 retainStepLock: true,
                 stepIndex,
                 stepLockOwner,

@@ -49,3 +49,15 @@ export const buildLlmExecutorDeclaration = (): ExecAgentLlmExecutor | undefined 
     providers,
   };
 };
+
+/**
+ * This client's executor declaration when it covers `provider`, i.e. it can
+ * pick up a run parked in `waiting_for_client` for that provider.
+ */
+export const getLlmExecutorDeclarationFor = (
+  provider: string | undefined,
+): ExecAgentLlmExecutor | undefined => {
+  if (!provider) return;
+  const declaration = buildLlmExecutorDeclaration();
+  return declaration?.providers.includes(provider) ? declaration : undefined;
+};

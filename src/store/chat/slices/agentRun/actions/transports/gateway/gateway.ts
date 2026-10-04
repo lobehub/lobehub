@@ -43,7 +43,7 @@ import {
   type ResumeToolResultParam,
 } from '@/services/aiAgent';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
-import { getLlmRelayClientId } from '@/services/llmRelay';
+import { getLlmExecutorDeclarationFor, getLlmRelayClientId } from '@/services/llmRelay';
 import { messageService } from '@/services/message';
 import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
@@ -1520,6 +1520,49 @@ export class GatewayActionImpl {
   };
 
   /**
+   * Pick up a run parked in `waiting_for_client` on this client: its next LLM
+   * call needs a provider only the user's device can reach, and no client was
+   * there to run it. The replayed call is delivered only to clients subscribed
+   * to the run's stream, so subscribe first (unless this tab already is), then
+   * ask the server to continue with this client as the executor.
+   *
+   * Resolves `false` when this client cannot run the provider or the run is no
+   * longer parked (another client already took it, it expired or was stopped).
+   */
+  continueClientLlmWait = async (params: {
+    agentId?: string;
+    assistantMessageId?: string;
+    operationId: string;
+    provider: string;
+    threadId?: string | null;
+    topicId?: string;
+  }): Promise<boolean> => {
+    const { agentId, assistantMessageId, operationId, provider, threadId, topicId } = params;
+    const llmExecutor = getLlmExecutorDeclarationFor(provider);
+    if (!llmExecutor) return false;
+
+    const isConnected = () => {
+      const status = this.#get().gatewayConnections[operationId]?.status;
+      return !!status && status !== 'disconnected';
+    };
+    if (!isConnected() && assistantMessageId && topicId) {
+      await this.reconnectToGatewayOperation({
+        agentId,
+        assistantMessageId,
+        operationId,
+        threadId,
+        topicId,
+      });
+    }
+    // A socket still handshaking when the call goes out is not counted as a
+    // recipient, and the run would park again at once.
+    await waitForGatewayConnected(() => this.#get().gatewayConnections[operationId]?.status);
+
+    const { resumed } = await aiAgentService.resumeClientLlmWait({ llmExecutor, operationId });
+    return resumed;
+  };
+
+  /**
    * Reconnect to an existing Gateway operation after page reload.
    * Reads runningOperation from topic metadata, refreshes the JWT token,
    * and establishes a new WebSocket connection with event replay.
@@ -2084,3 +2127,13 @@ export class GatewayActionImpl {
 }
 
 export type GatewayAction = Pick<GatewayActionImpl, keyof GatewayActionImpl>;
+
+const GATEWAY_CONNECT_WAIT_MS = 5000;
+
+/** Resolve once the connection reads `connected`, or after a bounded wait. */
+const waitForGatewayConnected = async (readStatus: () => ConnectionStatus | undefined) => {
+  const deadline = Date.now() + GATEWAY_CONNECT_WAIT_MS;
+  while (readStatus() !== 'connected' && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+};

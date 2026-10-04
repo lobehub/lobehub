@@ -245,6 +245,30 @@ export interface ExecAgentLlmExecutor {
   providers: string[];
 }
 
+/**
+ * A run parked in `waiting_for_client`: its next LLM call needs the user's
+ * device and no client took it. What a client needs to pick it up.
+ */
+export interface ClientLlmWaitItem {
+  agentId?: string;
+  /** Assistant row the resumed call fills. */
+  assistantMessageId?: string;
+  /** When the run stops waiting and ends with an error. */
+  expiresAt: string;
+  operationId: string;
+  /** The provider the client must be able to reach. */
+  provider: string;
+  threadId?: string;
+  topicId?: string;
+}
+
+/** What `resumeClientLlmWait` did; `resumed: false` once the run is no longer parked. */
+export interface ResumeClientLlmWaitResult {
+  assistantMessageId?: string;
+  resumed: boolean;
+  topicId?: string;
+}
+
 export interface ExecAgentParams {
   /** The agent ID to run (either agentId or slug is required) */
   agentId?: string;

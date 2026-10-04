@@ -1461,6 +1461,7 @@ export const openInAppKeys = {
   detect: def('openInApp:detect', () => ['openInApp:detect']),
 };
 export const gatewayKeys = {
+  clientLlmWaits: def('gateway:clientLlmWaits', () => ['gateway:clientLlmWaits']),
   reconnect: def('gateway:reconnect', (operationId: string) => ['gateway:reconnect', operationId]),
 };
 export const userKeys = {

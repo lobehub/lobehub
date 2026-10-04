@@ -361,6 +361,18 @@ export class AiAgentService {
     return this.agentRuntimeService.executeStep(params);
   }
 
+  /** Continue a run parked in `waiting_for_client` (see AgentRuntimeService). */
+  resumeFromClientLlmWait(
+    params: Parameters<AgentRuntimeService['resumeFromClientLlmWait']>[0],
+  ): ReturnType<AgentRuntimeService['resumeFromClientLlmWait']> {
+    return this.agentRuntimeService.resumeFromClientLlmWait(params);
+  }
+
+  /** Runs of this user parked in `waiting_for_client`. */
+  listClientLlmWaits(): ReturnType<AgentRuntimeService['listClientLlmWaits']> {
+    return this.agentRuntimeService.listClientLlmWaits();
+  }
+
   /** Mint a lock owner that spans a whole inline step loop. */
   createOperationLockOwner(operationId: string): string {
     return this.agentRuntimeService.createOperationLockOwner(operationId);

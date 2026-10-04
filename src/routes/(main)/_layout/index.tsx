@@ -25,6 +25,7 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import DesktopHome from '../home';
 import DesktopHomeLayout from '../home/_layout';
+import ClientLlmWaitResume from './ClientLlmWaitResume';
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
 import GatewayMuxWarmup from './GatewayMuxWarmup';
 import RegisterHotkeys from './RegisterHotkeys';
@@ -68,6 +69,7 @@ const Layout: FC = () => {
         <Suspense fallback={null}>
           <HotkeyHelperPanel />
           <GatewayMuxWarmup />
+          <ClientLlmWaitResume />
           <RegisterHotkeys />
           <CmdkLazy />
           <GlobalApprovalNotification />

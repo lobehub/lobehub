@@ -45,6 +45,7 @@ vi.mock('@/features/HotkeyHelperPanel', nullComponent);
 vi.mock('@/features/NavPanel/Shell', nullComponent);
 vi.mock('@/layout/GlobalProvider/CmdkLazy', nullComponent);
 vi.mock('./GatewayMuxWarmup', nullComponent);
+vi.mock('./ClientLlmWaitResume', nullComponent);
 vi.mock('./RegisterHotkeys', nullComponent);
 vi.mock('../home', nullComponent);
 vi.mock('../home/_layout', passthrough);

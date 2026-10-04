@@ -331,7 +331,13 @@ export class CompletionLifecycle {
    */
   private statusForReason(
     reason: string,
-  ): 'done' | 'error' | 'interrupted' | 'waiting_for_human' | 'waiting_for_async_tool' {
+  ):
+    | 'done'
+    | 'error'
+    | 'interrupted'
+    | 'waiting_for_human'
+    | 'waiting_for_async_tool'
+    | 'waiting_for_client' {
     switch (reason) {
       case 'error': {
         return 'error';
@@ -344,6 +350,9 @@ export class CompletionLifecycle {
       }
       case 'waiting_for_async_tool': {
         return 'waiting_for_async_tool';
+      }
+      case 'waiting_for_client': {
+        return 'waiting_for_client';
       }
       default: {
         return 'done';
@@ -368,7 +377,8 @@ export class CompletionLifecycle {
           reason === 'cost_limit' ||
           reason === 'tool_call_repeat_limit' ||
           reason === 'waiting_for_human' ||
-          reason === 'waiting_for_async_tool'
+          reason === 'waiting_for_async_tool' ||
+          reason === 'waiting_for_client'
         ? reason
         : this.statusForReason(reason);
 
@@ -926,7 +936,9 @@ export class CompletionLifecycle {
     // schedules a fresh continuation operation and then retires this parked
     // segment; the continuation receives the serialized hooks through
     // `host.hooks`.
-    const isAsyncToolPark = reason === 'waiting_for_async_tool';
+    // `waiting_for_client` (no client to run the next LLM call) parks the same
+    // operation the same way: it resumes under this id or expires to `error`.
+    const isAsyncToolPark = reason === 'waiting_for_async_tool' || reason === 'waiting_for_client';
     let shouldRetainHooksForRetry = false;
 
     try {

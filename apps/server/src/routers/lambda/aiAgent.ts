@@ -1030,6 +1030,13 @@ const StartExecutionSchema = z.object({
 const acceptsMemberRuntimeEndOf = (streamFeatures: string[] | undefined): boolean =>
   streamFeatures?.includes('member_runtime_end') ?? false;
 
+/** A client's declaration that it can run relayed LLM attempts (`agent_llm_relay`). */
+const LlmExecutorSchema = z.object({
+  capabilities: z.array(z.string()).max(16),
+  clientId: z.string().min(1).max(128),
+  providers: z.array(z.string()).max(256),
+});
+
 const ExecAgentSchema = z
   .object({
     includeFinalState: z.boolean().optional(),
@@ -1052,13 +1059,7 @@ const ExecAgentSchema = z
      * it (`llm_execute`) for providers only this device can reach. Sent only
      * when the client is inside the `agent_llm_relay` rollout.
      */
-    llmExecutor: z
-      .object({
-        capabilities: z.array(z.string()).max(16),
-        clientId: z.string().min(1).max(128),
-        providers: z.array(z.string()).max(256),
-      })
-      .optional(),
+    llmExecutor: LlmExecutorSchema.optional(),
     /** The agent ID to run (either agentId or slug is required) */
     agentId: z.string().optional(),
     /** Application context for message storage */
@@ -3215,6 +3216,26 @@ export const aiAgentRouter = router({
         toolMessageIds: input.toolMessageIds,
         topicId: input.topicId,
       });
+    }),
+
+  /**
+   * Runs of the caller parked in `waiting_for_client`: their next LLM call needs
+   * the user's device and no client took it. A client that can run the provider
+   * continues them with `resumeClientLlmWait`.
+   */
+  listClientLlmWaits: aiAgentProcedure.query(async ({ ctx }) => {
+    return ctx.aiAgentService.listClientLlmWaits();
+  }),
+
+  /**
+   * Continue a run parked in `waiting_for_client` from the step it parked on,
+   * with the calling client as the run's relay executor. `resumed: false` when
+   * the run is no longer parked (already resumed, expired or stopped).
+   */
+  resumeClientLlmWait: aiAgentWriteProcedure
+    .input(z.object({ llmExecutor: LlmExecutorSchema, operationId: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.aiAgentService.resumeFromClientLlmWait(input);
     }),
 
   interruptTask: aiAgentWriteProcedure

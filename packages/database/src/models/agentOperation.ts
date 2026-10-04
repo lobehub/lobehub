@@ -5,7 +5,7 @@ import {
   type ServerDefaultHeterogeneousRelayInvocation,
   type VerifyRunStatus,
 } from '@lobechat/types';
-import { and, eq, gte, inArray, isNotNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
 
@@ -245,6 +245,7 @@ export class AgentOperationModel {
               'running',
               'waiting_for_human',
               'waiting_for_async_tool',
+              'waiting_for_client',
             ]),
             eq(agentOperations.status, params.status),
           ),
@@ -368,6 +369,7 @@ export class AgentOperationModel {
       'running',
       'waiting_for_human',
       'waiting_for_async_tool',
+      'waiting_for_client',
     ]);
   }
 
@@ -879,6 +881,52 @@ export class AgentOperationModel {
       )
       .returning({ id: agentOperations.id });
     return rows.length === 1;
+  }
+
+  /**
+   * Atomically flip an op parked in `waiting_for_client` back to `running`.
+   * True only for the single winner, so a manual "continue" racing an
+   * automatic one resumes the run once.
+   */
+  async tryResumeFromClientWait(operationId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(agentOperations)
+      .set({ status: 'running' })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.userId, this.userId),
+          eq(agentOperations.status, 'waiting_for_client'),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return rows.length === 1;
+  }
+
+  /**
+   * Retire an op still parked in `waiting_for_client` (its wait ran out or it
+   * was stopped while waiting). Only matches the parked row, so a run a client
+   * already resumed is never settled under it.
+   */
+  async settleClientWait(
+    operationId: string,
+    status: 'error' | 'interrupted' = 'error',
+  ): Promise<boolean> {
+    return this.settleFrom(operationId, status, ['waiting_for_client']);
+  }
+
+  /** Operations of this user parked in `waiting_for_client`, newest first. */
+  async listWaitingForClient(limit = 20) {
+    return this.db
+      .select({
+        id: agentOperations.id,
+        provider: agentOperations.provider,
+        topicId: agentOperations.topicId,
+      })
+      .from(agentOperations)
+      .where(and(eq(agentOperations.status, 'waiting_for_client'), this.ownership()))
+      .orderBy(desc(agentOperations.createdAt))
+      .limit(limit);
   }
 
   // ============================================

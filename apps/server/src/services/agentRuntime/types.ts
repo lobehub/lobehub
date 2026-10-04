@@ -135,7 +135,8 @@ export type StepCompletionReason =
   | 'cost_limit'
   | 'tool_call_repeat_limit'
   | 'waiting_for_human'
-  | 'waiting_for_async_tool';
+  | 'waiting_for_async_tool'
+  | 'waiting_for_client';
 
 // ==================== Execution Params ====================
 
@@ -147,6 +148,12 @@ export interface AgentExecutionParams {
    * (treated as attempt 1) on the first re-check armed by a completion bridge.
    */
   asyncToolVerifyAttempt?: number;
+  /**
+   * Expiry check of a `waiting_for_client` park, carrying the park's
+   * `parkedAt`. Scheduled when the run parks; ends the run with an actionable
+   * error if it is still parked on that same wait. Runs without the step lock.
+   */
+  clientLlmWaitExpired?: string;
   context?: AgentRuntimeContext;
   externalRetryCount?: number;
   /**
@@ -194,6 +201,11 @@ export interface AgentExecutionParams {
    * via `tryResumeParentFromAsyncTool`.
    */
   resumeAsyncTool?: boolean;
+  /**
+   * Continue a run parked in `waiting_for_client`: replay the parked LLM call
+   * now that a client asked to run it. Scheduled by `resumeFromClientLlmWait`.
+   */
+  resumeClientLlm?: boolean;
   /**
    * Keep the operation lock held after this step returns. Used by the inline
    * step loop so the lock spans the whole invocation rather than being dropped

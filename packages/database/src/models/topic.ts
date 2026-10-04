@@ -107,6 +107,7 @@ const LIVE_OPERATION_STATUSES = new Set([
   'running',
   'waiting_for_human',
   'waiting_for_async_tool',
+  'waiting_for_client',
 ]);
 /** Parked states are exempt from the abandoned-age backstop — see above. */
 const UNBOUNDED_OPERATION_STATUSES = new Set(['waiting_for_human', 'waiting_for_async_tool']);
@@ -120,6 +121,7 @@ const UNBOUNDED_OPERATION_STATUSES = new Set(['waiting_for_human', 'waiting_for_
 const CLIENT_UNSETTLEABLE_OPERATION_STATUSES = new Set<AgentOperationStatus>([
   'running',
   'waiting_for_async_tool',
+  'waiting_for_client',
 ]);
 
 export interface SettleRunningOperationOptions {

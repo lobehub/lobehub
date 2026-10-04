@@ -1,8 +1,11 @@
 import type { AgentStreamClientFeature } from '@lobechat/agent-gateway-client';
 import { CLIENT_PROTOCOL_VERSION } from '@lobechat/agent-gateway-client';
 import type {
+  ClientLlmWaitItem,
   ExecAgentAppContext,
+  ExecAgentLlmExecutor,
   ExecAgentResult,
+  ResumeClientLlmWaitResult,
   RuntimeMentionedAgent,
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
@@ -345,6 +348,19 @@ class AiAgentService {
    */
   async interruptTask(params: InterruptTaskParams) {
     return await lambdaClient.aiAgent.interruptTask.mutate(params);
+  }
+
+  /** Runs parked in `waiting_for_client`, waiting for a client to run their LLM call. */
+  async listClientLlmWaits(): Promise<ClientLlmWaitItem[]> {
+    return await lambdaClient.aiAgent.listClientLlmWaits.query();
+  }
+
+  /** Continue a run parked in `waiting_for_client`, with this client as its executor. */
+  async resumeClientLlmWait(params: {
+    llmExecutor: ExecAgentLlmExecutor;
+    operationId: string;
+  }): Promise<ResumeClientLlmWaitResult> {
+    return await lambdaClient.aiAgent.resumeClientLlmWait.mutate(params);
   }
 
   /**

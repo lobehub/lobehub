@@ -464,6 +464,44 @@ describe('RelayModelRuntime over a gateway with relay routes', () => {
     });
     expect(redis.peek(llmRelayKeys.payload(CALL_ID))).toBeUndefined();
   });
+
+  it('fails as not_delivered at once when the gateway reached no client, without waiting out the claim', async () => {
+    const { manager } = createGatewayManager();
+    manager.sendLlmExecute.mockResolvedValueOnce({ delivered: 0, routed: true });
+    // A claim window far longer than the test: only the fast path can settle it.
+    const runtime = createRuntime(manager, {
+      claimMs: 60_000,
+      firstChunkMs: 60_000,
+      idleMs: 60_000,
+      totalMs: 120_000,
+    });
+
+    const startedAt = Date.now();
+    await expect(runtime.chat(payload, {})).rejects.toMatchObject({
+      error: { reason: 'not_delivered', recoverable: true },
+      errorType: AgentRuntimeErrorType.ClientLlmExecutorUnavailable,
+    });
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(redis.peek(llmRelayKeys.payload(CALL_ID))).toBeUndefined();
+    expect(manager.closeLlmCall).toHaveBeenCalledWith('op_1', CALL_ID);
+  });
+
+  it('still waits for a claim when the gateway could not count recipients', async () => {
+    const { manager } = createGatewayManager();
+    // A broadcast fallback (self-hosted gateway) cannot tell who got the call.
+    manager.sendLlmExecute.mockResolvedValueOnce({ delivered: undefined, routed: false } as any);
+
+    const response = await createRuntime(manager, {
+      claimMs: 200,
+      firstChunkMs: 2000,
+      idleMs: 2000,
+      totalMs: 5000,
+    }).chat(payload, {});
+
+    await expect(consumeStreamUntilDone(response)).rejects.toMatchObject({
+      error: { reason: 'claim_timeout' },
+    });
+  });
 });
 
 describe('llm-relay upload handler', () => {

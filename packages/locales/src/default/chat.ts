@@ -856,6 +856,15 @@ export default {
   'messageAction.regenerate': 'Regenerate',
   'messageAction.select': 'Select',
   'messageLink.openInSideBrowser': 'Open in side browser',
+  'clientLlmWait.title': 'Waiting for a LobeHub client to run {{provider}}',
+  'clientLlmWait.descHere':
+    'This run needs {{provider}}, which only your own device can reach. Continue it on this device, or it stops waiting at {{time}}.',
+  'clientLlmWait.descElsewhere':
+    'This run needs {{provider}}, which only your own device can reach. Open LobeHub on the device running {{provider}} and the run continues on its own. It stops waiting at {{time}}.',
+  'clientLlmWait.continue': 'Continue on this device',
+  'clientLlmWait.notWaiting':
+    'This run is no longer waiting. It may have been picked up by another device, stopped, or timed out.',
+  'clientLlmWait.continueFailed': 'Could not continue the run on this device. Try again.',
   'heteroRateLimit.cancelFailed':
     'Could not cancel the scheduled continuation. It may already be claimed or running. Refresh the conversation to check its status.',
   'messageForward.bar.cancel': 'Cancel',
