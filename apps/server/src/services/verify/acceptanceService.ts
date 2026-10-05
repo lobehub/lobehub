@@ -565,6 +565,41 @@ export class AcceptanceService {
     });
   };
 
+  /**
+   * The ingest entry point (`lh acceptance run ingest`). An agent authoring its
+   * own report inside a Task run only knows its topic, so a topic subject that
+   * is a Task's run topic is folded onto that Task — otherwise the delivery
+   * lands on a topic aggregate no task surface reads, and the Task page shows
+   * no acceptance at all. A topic that already owns an acceptance keeps it, so
+   * its earlier rounds are not split across two aggregates; recurring
+   * (automation) tasks stay on their per-tick topic.
+   */
+  ensureForIngest = async (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+    defaults?: { requirement?: string; title?: string },
+  ): Promise<AcceptanceItem> => {
+    const taskId =
+      subjectType === 'topic' ? await this.resolveRunTopicTaskId(subjectId) : undefined;
+    if (taskId) return this.ensureForSubject('task', taskId, defaults);
+    return this.ensureForSubject(subjectType, subjectId, defaults);
+  };
+
+  private resolveRunTopicTaskId = async (topicId: string): Promise<string | undefined> => {
+    const taskTopic = await new TaskTopicModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findByTopicId(topicId);
+    if (!taskTopic) return;
+    if (await this.acceptanceModel.findBySubject('topic', topicId)) return;
+    const task = await new TaskModel(this.db, this.userId, this.workspaceId).findById(
+      taskTopic.taskId,
+    );
+    if (!task || task.automationMode) return;
+    return task.id;
+  };
+
   private resolveSubjectProjectId = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,

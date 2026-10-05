@@ -437,7 +437,7 @@ export const acceptanceRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ctx.acceptanceService.ensureForSubject(input.subjectType, input.subjectId, {
+        return await ctx.acceptanceService.ensureForIngest(input.subjectType, input.subjectId, {
           requirement: input.requirement,
           title: input.title,
         });

@@ -776,6 +776,11 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         ? { title: title || goal }
         : {}),
     });
+    // The server may fold the subject (a Task's run topic lands on the Task).
+    subject = {
+      ...subject!,
+      ref: { subjectId: acceptance.subjectId, subjectType: acceptance.subjectType },
+    };
     // A subject's acceptance may already hold rounds; this one has to line up
     // with them exactly as an explicit `--acceptance` round does.
     bundle = await client.acceptance.getBundle.query({ id: acceptance.id });
