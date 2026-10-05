@@ -41,8 +41,6 @@ const NAVIGATION_SETTLE_TIMEOUT_MS = 15_000;
 /** net::ERR_ABORTED — the navigation was superseded rather than failed. */
 const NAVIGATION_ABORTED_ERRNO = -3;
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 const DEFAULT_OVERLAY_LABELS: AgentOverlayLabels = {
   controlling: 'Agent is controlling this page',
   cursor: 'Agent',
@@ -304,14 +302,35 @@ export default class BrowserSidebarCtr extends ControllerModule {
 
     // `loadURL` only settles once every subresource has loaded, which never
     // happens on pages with a hanging request — the tool call then sat until
-    // the gateway timeout. Past the cap, report the page as still loading.
+    // the gateway timeout. Past the cap, report the page as still loading, but
+    // only once the requested document has committed: before that, getURL()
+    // and the main frame still belong to the previous page.
+    let committed = false;
+    const onNavigate = () => {
+      committed = true;
+    };
+    const onNavigateInPage = (_event: unknown, _url: string, isMainFrame: boolean) => {
+      if (isMainFrame) committed = true;
+    };
+    webContents.on('did-navigate', onNavigate);
+    webContents.on('did-navigate-in-page', onNavigateInPage);
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
     const outcome = await Promise.race([
       webContents.loadURL(url).then(
         () => ({ status: 'loaded' as const }),
         (error: Error & { errno?: number }) => ({ error, status: 'failed' as const }),
       ),
-      sleep(NAVIGATION_SETTLE_TIMEOUT_MS).then(() => ({ status: 'pending' as const })),
-    ]);
+      new Promise<{ status: 'pending' }>((resolve) => {
+        settleTimer = setTimeout(
+          () => resolve({ status: 'pending' }),
+          NAVIGATION_SETTLE_TIMEOUT_MS,
+        );
+      }),
+    ]).finally(() => {
+      clearTimeout(settleTimer);
+      webContents.removeListener('did-navigate', onNavigate);
+      webContents.removeListener('did-navigate-in-page', onNavigateInPage);
+    });
 
     this.updateSnapshot(params.sessionId);
 
@@ -327,6 +346,13 @@ export default class BrowserSidebarCtr extends ControllerModule {
         current === url ? 'showing its error page' : `still showing ${current || 'a blank page'}`;
       return {
         error: `Could not open ${url}: ${outcome.error.message}. The browser is ${showing}.`,
+        success: false,
+      };
+    }
+
+    if (outcome.status === 'pending' && !committed) {
+      return {
+        error: `${url} has not responded within ${NAVIGATION_SETTLE_TIMEOUT_MS / 1000}s, so the browser is still showing ${webContents.getURL() || 'a blank page'}. The load continues in the background — check with readPage or snapshot before acting on the page, or navigate again.`,
         success: false,
       };
     }

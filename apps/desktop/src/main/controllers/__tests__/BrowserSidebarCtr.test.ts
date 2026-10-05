@@ -131,8 +131,13 @@ describe('BrowserSidebarCtr retained webview registration', () => {
     it('stops waiting for a page whose load never finishes', async () => {
       vi.useFakeTimers();
       const guest = createWebContents(7);
-      // A page with a request that never completes: loadURL never settles.
-      guest.loadURL = vi.fn(() => new Promise(() => {}));
+      // The document commits, but a request on it never completes: loadURL
+      // never settles.
+      guest.loadURL = vi.fn((nextUrl: string) => {
+        guest.getURL.mockReturnValue(nextUrl);
+        guest.emit('did-navigate', {}, nextUrl);
+        return new Promise(() => {});
+      });
       await register(guest);
 
       const pending = invokeIpc('browserSidebar.navigate', {
@@ -142,6 +147,29 @@ describe('BrowserSidebarCtr retained webview registration', () => {
       await vi.advanceTimersByTimeAsync(15_000);
 
       await expect(pending).resolves.toEqual({ success: true });
+      vi.useRealTimers();
+    });
+
+    it('does not report success while the requested document has not committed', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      // The server has not answered yet: nothing commits, loadURL never settles.
+      guest.loadURL = vi.fn(() => new Promise(() => {}));
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'http://127.0.0.1:18748/',
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(pending).resolves.toEqual({
+        error:
+          'http://127.0.0.1:18748/ has not responded within 15s, so the browser is still showing http://127.0.0.1:16001/. The load continues in the background — check with readPage or snapshot before acting on the page, or navigate again.',
+        success: false,
+      });
+      expect(guest.listenerCount('did-navigate')).toBe(1);
       vi.useRealTimers();
     });
 
