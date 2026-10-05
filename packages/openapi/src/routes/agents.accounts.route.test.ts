@@ -71,6 +71,7 @@ const STRANGER_AGENT = 't594-control-stranger-agent';
 const CREDENTIAL_KEY = 'sk-lh-t594credfull0001';
 const AGENT_ONLY_KEY = 'sk-lh-t594crednone0001';
 const STRANGER_KEY = 'sk-lh-t594stranger0001';
+const CREDENTIAL_ONLY_KEY = 'sk-lh-t594credonly0001';
 
 const SECRET = 's3cret-passphrase-do-not-log';
 
@@ -118,6 +119,13 @@ beforeEach(async () => {
       keyHash: hashApiKey(AGENT_ONLY_KEY),
       name: 't594 agent writer without credential scope',
       scopes: ['agent:read', 'agent:write'],
+      userId: OWNER,
+    },
+    {
+      key: CREDENTIAL_ONLY_KEY,
+      keyHash: hashApiKey(CREDENTIAL_ONLY_KEY),
+      name: 't594 credential scope without agent write',
+      scopes: ['agent:read', 'agent:credential:write'],
       userId: OWNER,
     },
     {
@@ -287,6 +295,23 @@ describe('agent account control plane — end to end', () => {
     const second = await mountAccount();
     expect(second.res.status).toBe(409);
     expect(JSON.stringify(second.body)).toContain('already bound to another agent');
+  });
+
+  it('refuses a credential write from a key holding the credential scope but not agent:write', async () => {
+    const { body: created } = await mountAccount();
+
+    const res = await call(`/agents/${AGENT}/accounts/${created.data.id}/credential`, {
+      body: JSON.stringify({ credential: { password: SECRET } }),
+      key: CREDENTIAL_ONLY_KEY,
+      method: 'PUT',
+    });
+
+    expect(res.status).toBe(403);
+    const [row] = await serverDB
+      .select({ credentials: agentAccounts.credentials })
+      .from(agentAccounts)
+      .where(eq(agentAccounts.id, created.data.id));
+    expect(row.credentials).toBeNull();
   });
 
   it('rejects an unknown provider so a typo cannot silently create an empty account', async () => {

@@ -7,10 +7,7 @@ import { zValidator } from '../common/validator';
 import { AgentController } from '../controllers/agent.controller';
 import { AgentAccountController } from '../controllers/agent-account.controller';
 import { requireAuth } from '../middleware/auth';
-import {
-  requireAnyPermission,
-  requireAnyPermissionWithApiKeyScope,
-} from '../middleware/permission-check';
+import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
 import { PaginationQuerySchema } from '../types';
 import {
   AgentIdParamSchema,
@@ -151,15 +148,18 @@ const agentAccountWrite = requireAnyPermission(
   "You do not have permission to manage this agent's accounts",
 );
 /**
- * The issuer still needs `AGENT_UPDATE`, and a restricted API key must also
- * hold the dedicated `agent:credential:write` scope — "may manage this agent's
- * accounts" must not imply "may install a password into one".
+ * The issuer still needs `AGENT_UPDATE`, and a restricted API key must hold
+ * both the scope `AGENT_UPDATE` projects to (`agent:write`) and the dedicated
+ * `agent:credential:write` — "may manage this agent's accounts" must not imply
+ * "may install a password into one", and the credential scope alone must not
+ * stand in for agent write either. Applied as two gates: an explicit scope on
+ * the RBAC check would replace the `agent:write` projection, not add to it.
  */
-const agentAccountCredentialWrite = requireAnyPermissionWithApiKeyScope(
+const agentAccountCredentialIssuer = requireAnyPermission(
   getAllScopePermissions('AGENT_UPDATE'),
-  'agent:credential:write',
   "You do not have permission to write this agent account's credential",
 );
+const agentAccountCredentialScope = requireApiKeyScope('agent:credential:write');
 
 /** GET /api/v1/agents/:id/accounts — never returns a credential. */
 AgentRoutes.get(
@@ -214,7 +214,8 @@ AgentRoutes.put(
   '/:id/accounts/:accountId/credential',
   describeRoute({ operationId: 'setAgentAccountCredential', tags: ['agents'] }),
   requireAuth,
-  agentAccountCredentialWrite,
+  agentAccountCredentialIssuer,
+  agentAccountCredentialScope,
   zValidator('param', AgentAccountIdParamSchema),
   zValidator('json', SetAgentAccountCredentialRequestSchema),
   async (c) => new AgentAccountController().setCredential(c),
