@@ -130,7 +130,9 @@ export const fillScript = (ref: string, text: string) => `((ref, text) => {
       const names = options.map((o) => o.text.trim()).slice(0, 30).join(', ');
       return JSON.stringify({ error: 'no option matches "' + text + '"; options: ' + names });
     }
-    el.value = option.value;
+    // Assign by index: option values need not be unique (an empty placeholder
+    // and an empty "None"), and el.value would pick the first match.
+    el.selectedIndex = options.indexOf(option);
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
     return JSON.stringify({ ok: true });
