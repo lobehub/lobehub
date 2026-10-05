@@ -208,6 +208,34 @@ describe('agent command', () => {
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Test Agent'));
     });
 
+    it('should show name with the title as the supporting line', async () => {
+      mockTrpcClient.agent.getAgentConfigById.query.mockResolvedValue({
+        id: 'a1',
+        name: 'Sienna',
+        title: 'Lobe',
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'view', 'a1']);
+
+      expect(consoleSpy).toHaveBeenNthCalledWith(1, expect.stringContaining('Sienna'));
+      expect(consoleSpy).toHaveBeenNthCalledWith(2, expect.stringContaining('Lobe'));
+    });
+
+    it('should not append an Untitled placeholder for a named agent without a title', async () => {
+      mockTrpcClient.agent.getAgentConfigById.query.mockResolvedValue({
+        id: 'a1',
+        model: 'gpt-4',
+        name: 'Alice',
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'view', 'a1']);
+
+      expect(consoleSpy).toHaveBeenNthCalledWith(1, expect.stringContaining('Alice'));
+      expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining('Untitled'));
+    });
+
     it('should exit when not found', async () => {
       mockTrpcClient.agent.getAgentConfigById.query.mockResolvedValue(null);
 

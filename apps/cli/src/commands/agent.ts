@@ -127,13 +127,15 @@ export function registerAgentCommand(program: Command) {
         }
 
         const r = result as any;
-        const title = r.title || r.meta?.title || 'Untitled';
         // Same rule as the web UI (`agentDisplayName`): the personal `name` is the
-        // primary label and the role/title becomes the supporting line — so the
-        // inbox reads `Sienna · Lobe` instead of only one of the two.
-        console.log(pc.bold(r.name || title));
+        // primary label and a real (non-blank) title is the supporting line — so
+        // the inbox reads `Sienna · Lobe`, while a named agent without a title
+        // reads `Alice`, not `Alice · Untitled`.
+        const name = (r.name || r.meta?.name)?.trim();
+        const title = (r.title || r.meta?.title)?.trim();
+        console.log(pc.bold(name || title || 'Untitled'));
         const meta: string[] = [];
-        if (r.name) meta.push(title);
+        if (name && title && title !== name) meta.push(title);
         if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
         if (r.model) meta.push(`Model: ${r.model}`);
         if (r.provider) meta.push(`Provider: ${r.provider}`);
