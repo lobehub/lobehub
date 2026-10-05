@@ -48,7 +48,9 @@ export const useSaveDerivedImage = (operation: DerivedImageOperation) => {
         if (!result) return;
 
         void refreshFileList({ revalidateResources: true });
-        toast.success(t('imageViewer.saved', { name: fileName }));
+        if (result.libraryFailed)
+          toast.warning(t('imageViewer.savedNotInLibrary', { name: fileName }));
+        else toast.success(t('imageViewer.saved', { name: fileName }));
         addVersion({ fileId: result.id, name: fileName, operation, url: result.url });
         return { ...result, name: fileName };
       } catch (error) {

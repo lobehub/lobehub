@@ -11,6 +11,26 @@ export interface SaveDerivedFileParams {
 }
 
 /**
+ * Add a saved edit to the original's libraries. The file is already saved, so
+ * a failed link is reported (it only hides the file in that library) rather
+ * than thrown. Returns whether any link failed.
+ */
+export const fileIntoLibraries = async (
+  deps: Pick<SaveDerivedFileDeps, 'addToKnowledgeBase'>,
+  knowledgeBaseIds: string[] | undefined,
+  fileId: string,
+) => {
+  let failed = false;
+  for (const knowledgeBaseId of knowledgeBaseIds ?? []) {
+    await deps.addToKnowledgeBase(knowledgeBaseId, [fileId]).catch((error) => {
+      console.error('[ImageViewer] failed to add the edited image to its library', error);
+      failed = true;
+    });
+  }
+  return failed;
+};
+
+/**
  * Upload an edited image as a new file beside its original: same folder and
  * same libraries. The original file is only read, never written.
  */
@@ -35,12 +55,7 @@ export const saveDerivedFile = async (
   });
   if (!result) return;
 
-  for (const knowledgeBaseId of location?.knowledgeBaseIds ?? []) {
-    // The file is already saved; a library link that fails only hides it there.
-    await deps.addToKnowledgeBase(knowledgeBaseId, [result.id]).catch((error) => {
-      console.error('[ImageViewer] failed to add the edited image to its library', error);
-    });
-  }
+  const libraryFailed = await fileIntoLibraries(deps, location?.knowledgeBaseIds, result.id);
 
-  return result;
+  return { ...result, libraryFailed };
 };

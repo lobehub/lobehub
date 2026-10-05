@@ -84,6 +84,7 @@ describe('runAIImageEdit', () => {
     expect(result).toEqual({
       fileId: 'file_KWGzzbWzaunM',
       height: 843,
+      libraryFailed: false,
       name: 'scene-no-bg.png',
       url: 'https://app.lobehub.com/f/file_KWGzzbWzaunM',
       width: 1264,
@@ -123,6 +124,24 @@ describe('runAIImageEdit', () => {
 
     expect(deps.addToKnowledgeBase).toHaveBeenCalledWith('kb_photos', ['file_KWGzzbWzaunM']);
     expect(deps.addToKnowledgeBase).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a failed library link without failing the saved edit', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const deps = spyDeps({
+      addToKnowledgeBase: async () => {
+        throw new Error('forbidden');
+      },
+      getFile: async (id: string) =>
+        id === SOURCE.fileId
+          ? { knowledgeBaseIds: ['kb_1'], parentId: 'docs_folder' }
+          : { metadata: realResultFileMetadata, parentId: null },
+    });
+
+    const result = await run(deps);
+
+    expect(result.libraryFailed).toBe(true);
+    expect(result.fileId).toBe('file_KWGzzbWzaunM');
   });
 
   it('does not touch libraries when the original is in none', async () => {

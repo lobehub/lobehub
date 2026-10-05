@@ -118,10 +118,11 @@ export const resolveOutputSize = (
   if (!locked) return { height: safe(input.height), width: safe(input.width) };
 
   const aspect = crop.width / crop.height;
-  if (input.edited === 'width') {
-    const width = safe(input.width);
-    return { height: safe(width / aspect), width };
-  }
-  const height = safe(input.height);
-  return { height, width: safe(height * aspect) };
+  const raw =
+    input.edited === 'width'
+      ? { height: (Math.round(input.width) || 1) / aspect, width: Math.round(input.width) || 1 }
+      : { height: Math.round(input.height) || 1, width: (Math.round(input.height) || 1) * aspect };
+  // Scale both edges together at the cap so the locked ratio survives.
+  const fit = Math.min(1, MAX_OUTPUT_EDGE / Math.max(raw.height, raw.width));
+  return { height: safe(raw.height * fit), width: safe(raw.width * fit) };
 };

@@ -7,6 +7,7 @@ import {
   DERIVED_FILE_SUFFIX,
 } from '../../geometry';
 import { fileIdFromProxyUrl } from '../exportImage';
+import { fileIntoLibraries } from '../saveDerivedFile';
 import { type AIEditModel, type AIEditOperation, buildAIEditRequest } from './request';
 
 export type AIEditErrorKind = 'cancelled' | 'failed' | 'noModel' | 'noResult' | 'timeout';
@@ -106,6 +107,8 @@ export interface RunAIImageEditParams {
 export interface AIEditResult {
   fileId: string;
   height?: number;
+  /** Saved, but adding it to one of the original's libraries failed. */
+  libraryFailed?: boolean;
   name: string;
   url: string;
   width?: number;
@@ -346,14 +349,9 @@ export const runAIImageEdit = async ({
       url = uploaded.url;
     }
 
-    for (const knowledgeBaseId of location?.knowledgeBaseIds ?? []) {
-      // The file is already saved; a library link that fails only hides it there.
-      await deps.addToKnowledgeBase(knowledgeBaseId, [fileId]).catch((error) => {
-        console.error('[ImageViewer] failed to add the edited image to its library', error);
-      });
-    }
+    const libraryFailed = await fileIntoLibraries(deps, location?.knowledgeBaseIds, fileId);
 
-    return { fileId, height: asset.height, name, url, width: asset.width };
+    return { fileId, height: asset.height, libraryFailed, name, url, width: asset.width };
   } catch (error) {
     // Once submitted, only a terminal status ends the task; a status request
     // that fails leaves it running on the server.

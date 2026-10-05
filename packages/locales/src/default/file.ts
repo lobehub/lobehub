@@ -202,6 +202,8 @@ export default {
   'imageViewer.saveAsNew': 'Save as new image',
   'imageViewer.saveFailed': 'Failed to save the image',
   'imageViewer.saved': 'Saved as {{name}}',
+  'imageViewer.savedNotInLibrary':
+    "Saved as {{name}}, but it could not be added to the original's library. Add it from the file menu.",
   'imageViewer.saving': 'Saving…',
   'imageViewer.version.label': 'Versions',
   'imageViewer.version.original': 'Original',

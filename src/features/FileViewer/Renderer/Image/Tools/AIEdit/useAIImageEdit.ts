@@ -103,7 +103,9 @@ export const useAIImageEdit = (operation: AIEditOperation, deps: AIEditDeps = ai
 
         setState({ status: 'idle' });
         void useFileStore.getState().refreshFileList({ revalidateResources: true });
-        toast.success(t('imageViewer.saved', { name: result.name }));
+        if (result.libraryFailed)
+          toast.warning(t('imageViewer.savedNotInLibrary', { name: result.name }));
+        else toast.success(t('imageViewer.saved', { name: result.name }));
         addVersion({ fileId: result.fileId, name: result.name, operation, url: result.url });
         return result;
       } catch (error) {

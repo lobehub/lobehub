@@ -134,6 +134,7 @@
   "imageViewer.saveAsNew": "另存为新图片",
   "imageViewer.saveFailed": "图片保存失败",
   "imageViewer.saved": "已另存为 {{name}}",
+  "imageViewer.savedNotInLibrary": "已另存为 {{name}}，但未能加入原图所在的资源库，可在文件菜单中手动添加",
   "imageViewer.saving": "保存中…",
   "imageViewer.tool.annotate": "标注",
   "imageViewer.tool.comment": "评论",

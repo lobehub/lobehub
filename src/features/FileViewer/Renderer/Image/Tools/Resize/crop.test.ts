@@ -116,3 +116,16 @@ describe('dragCrop with a locked aspect', () => {
     expect(next.height).toBeCloseTo(0.3);
   });
 });
+
+describe('resolveOutputSize at the cap', () => {
+  // Regression: a locked 2:1 crop at height 8192 clamped to 8192x8192.
+  it('scales both edges together so the locked ratio survives', () => {
+    expect(
+      resolveOutputSize(
+        { height: 500, width: 1000 },
+        { edited: 'height', height: MAX_OUTPUT_EDGE, width: 0 },
+        true,
+      ),
+    ).toEqual({ height: MAX_OUTPUT_EDGE / 2, width: MAX_OUTPUT_EDGE });
+  });
+});

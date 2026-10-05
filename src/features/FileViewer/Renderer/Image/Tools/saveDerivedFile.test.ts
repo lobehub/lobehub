@@ -24,7 +24,7 @@ describe('saveDerivedFile', () => {
 
     const result = await saveDerivedFile(deps, params);
 
-    expect(result).toEqual({ id: 'file_new', url: 'files/new.png' });
+    expect(result).toEqual({ id: 'file_new', libraryFailed: false, url: 'files/new.png' });
     expect(deps.getFile).toHaveBeenCalledWith('file_src');
     expect(deps.addToKnowledgeBase).toHaveBeenCalledWith('kb_1', ['file_new']);
     expect(deps.addToKnowledgeBase).toHaveBeenCalledWith('kb_2', ['file_new']);
@@ -81,7 +81,8 @@ describe('saveDerivedFile', () => {
     );
   });
 
-  it('keeps the saved file when adding it to a library fails', async () => {
+  // Regression: the failed link used to be swallowed and reported as full success.
+  it('keeps the saved file and reports it when adding it to a library fails', async () => {
     const deps = createDeps({
       addToKnowledgeBase: vi.fn().mockRejectedValue(new Error('denied')),
       getFile: vi.fn().mockResolvedValue({ knowledgeBaseIds: ['kb_1'], parentId: null }),
@@ -90,6 +91,7 @@ describe('saveDerivedFile', () => {
 
     await expect(saveDerivedFile(deps, params)).resolves.toEqual({
       id: 'file_new',
+      libraryFailed: true,
       url: 'files/new.png',
     });
   });
