@@ -10,8 +10,14 @@ import { pluginService } from '@/services/plugin';
 import { globalHelpers } from '@/store/global/helpers';
 import { type CheckMcpInstallResult } from '@/types/plugins';
 import { MCPInstallStep } from '@/types/plugins';
+import type * as PlatformModule from '@/utils/platform';
 
 import { useToolStore } from '../../store';
+
+vi.mock('@/utils/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof PlatformModule>()),
+  getPlatform: () => 'Mac OS',
+}));
 
 vi.mock('@/libs/trpc/client', () => ({
   asyncClient: {},
@@ -1396,6 +1402,30 @@ describe('mcpStore actions', () => {
             platform: 'darwin',
             version: '1.0.0',
           }),
+        );
+      });
+
+      it('should fall back to the browser platform when the check result has none', async () => {
+        const { result } = renderHook(() => useToolStore());
+        const { platform: _, ...checkResultWithoutPlatform } = mockCheckResult;
+        vi.spyOn(mcpService, 'checkInstallation').mockResolvedValue(
+          checkResultWithoutPlatform as CheckMcpInstallResult,
+        );
+
+        act(() => {
+          useToolStore.setState({
+            mcpPluginItems: [mockPlugin],
+          });
+        });
+
+        let installResult;
+        await act(async () => {
+          installResult = await result.current.installMCPPlugin('test-plugin');
+        });
+
+        expect(installResult).toBe(true);
+        expect(discoverService.reportMcpInstallResult).toHaveBeenCalledWith(
+          expect.objectContaining({ platform: 'Mac OS', success: true }),
         );
       });
     });
