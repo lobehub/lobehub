@@ -348,7 +348,15 @@ export class AgentAccountService {
       return { accountId: resolved.view.id, outcome: 'ignored' };
     }
 
-    const message = await provider.normalizeInbound(event, ref);
+    let message: AgentAccountInboundMessage | null;
+    try {
+      message = await provider.normalizeInbound(event, ref);
+    } catch (error) {
+      // Verified and claimed but not processed: give the event id back so the
+      // provider's retry is handled instead of acknowledged as a duplicate.
+      await provider.releaseInbound?.(event.eventId)?.catch(() => undefined);
+      throw error;
+    }
     if (!message) return { accountId: resolved.view.id, outcome: 'ignored' };
 
     return { accountId: resolved.view.id, eventId: event.eventId, message, outcome: 'delivered' };

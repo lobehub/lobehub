@@ -68,7 +68,15 @@ export const createAgentInboundWaker = (db: LobeChatDatabase): AgentInboundWaker
       return { reason: 'start-failed', started: false };
     }
 
-    await AgentInboxModel.markWoken(db, message.id, result.topicId);
+    // The run exists from here on. A failure to record that must not be
+    // reported as a failed wake: that would hand the claim back and let the
+    // provider's retry start a second run for the same delivery. The row keeps
+    // its wake claim, so retries see it as already handled.
+    try {
+      await AgentInboxModel.markWoken(db, message.id, result.topicId);
+    } catch (error) {
+      console.error('[agentInbound] run started but marking message %s woken failed:', message.id, error);
+    }
 
     return { reason: 'started', started: true, topicId: result.topicId };
   },

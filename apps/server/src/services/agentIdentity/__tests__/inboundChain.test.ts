@@ -431,6 +431,52 @@ describe('Agent inbound webhook — end to end over the real route', () => {
     expect(results.map((r) => r.status)).toEqual([200, 200]);
   });
 
+  it('gives the replay claim back when delivery throws, so the retry is processed', async () => {
+    const { AgentInboundService } = await import('../inbound');
+    const releaseInbound = vi.fn(async () => undefined);
+    const service = new AgentInboundService(serverDB, {
+      accountService: {
+        handleInbound: async () => ({
+          // Not a uuid: the account lookup fails inside deliver().
+          accountId: 'not-a-uuid',
+          eventId: 'evt_throws',
+          message: {
+            from: 'a@example.com',
+            providerMessageId: 'msg_throws',
+            receivedAt: new Date(),
+            text: 'x',
+            to: 'toby-agent@lobe.id',
+          },
+          outcome: 'delivered',
+        }),
+        hasProvider: () => true,
+        releaseInbound,
+      } as any,
+    });
+
+    await expect(service.handle('agent-mail', { body: '{}', headers: {} })).rejects.toThrow();
+    expect(releaseInbound).toHaveBeenCalledWith('agent-mail', 'evt_throws');
+  });
+
+  it('does not start a second run when recording a started wake fails', async () => {
+    const { AgentInboxModel } = await import('@/database/models/agentInbox');
+    const markWoken = vi
+      .spyOn(AgentInboxModel, 'markWoken')
+      .mockRejectedValueOnce(new Error('db blip'));
+
+    const first = inboundBody({ eventId: 'evt_mark_1', messageId: 'msg_mark' });
+    const firstJson = await (await post('agent-mail', first, signedHeaders(first))).json();
+    expect(firstJson.wake).toEqual({ reason: 'started', started: true });
+
+    // The provider retries under a new event id; the stored row is still
+    // unread, but its wake claim is held, so no second run starts.
+    const retry = inboundBody({ eventId: 'evt_mark_2', messageId: 'msg_mark' });
+    await post('agent-mail', retry, signedHeaders(retry));
+
+    expect(agentCalls).toHaveLength(1);
+    markWoken.mockRestore();
+  });
+
   it('keeps the media a photo-only message carried', async () => {
     const { AgentInboundService } = await import('../inbound');
     const service = new AgentInboundService(serverDB, {

@@ -52,6 +52,20 @@ const codeCandidates = (text: string): string[] => [
   ...new Set(text.match(/[\dA-Za-z-]{4,32}/g)?.slice(0, 500) ?? []),
 ];
 
+/**
+ * Secret-shaped fragments of the outgoing text that the numeric code extractor
+ * never records: links (magic-login and reset URLs) and long or mixed
+ * letter/digit tokens (alphanumeric OTPs, API keys, passwords). Each is checked
+ * verbatim against other senders' mail, so ordinary words never match.
+ */
+const secretCandidates = (text: string): string[] => {
+  const urls = text.match(/https?:\/\/[^\s<>"')\]]+/g) ?? [];
+  const tokens = (text.match(/[\w+./=-]{6,}/g) ?? []).filter(
+    (token) => token.length >= 20 || (/\d/.test(token) && /[A-Za-z]/.test(token)),
+  );
+  return [...new Set([...urls, ...tokens])].slice(0, 100);
+};
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const asJson = (value: unknown) => JSON.stringify(value, null, 2);
@@ -148,6 +162,22 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         recipient,
         since: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
       });
+      // Codes are only one kind of secret. A link or token copied out of
+      // another sender's mail is held for the user just the same.
+      const copied = relayed
+        ? undefined
+        : await inbox.findTextFromOtherSender({
+            agentId: requireAgentId(),
+            candidates: secretCandidates(args.text),
+            recipient,
+            since: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
+          });
+      if (copied) {
+        return {
+          refusal: `This reply repeats a link or token from a message ${copied.from} sent you. Content from one sender's mail is never relayed to another without the user's approval — send it without \`threadKey\` to ask the user.`,
+        };
+      }
+
       if (relayed) {
         return {
           refusal: `This reply contains a verification code that ${relayed.from} sent you. Codes are never relayed to another sender without the user's approval — send it without \`threadKey\` to ask the user.`,

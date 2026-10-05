@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, gte, ilike, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import type { AgentInboxMessageItem, NewAgentInboxMessage } from '../schemas';
 import { agentInboxMessages } from '../schemas';
@@ -311,6 +311,42 @@ export class AgentInboxModel {
       .where(and(...conditions))
       .orderBy(asc(agentInboxMessages.createdAt))
       .limit(params.limit ?? 10);
+  };
+
+  /**
+   * The newest message from someone other than `recipient`, received at or
+   * after `since`, whose body contains any of `candidates` verbatim. The
+   * counterpart of {@link findCodeFromOtherSender} for secrets the code
+   * extractor does not recognise: links, alphanumeric tokens, credentials.
+   */
+  findTextFromOtherSender = async (params: {
+    agentId: string;
+    candidates: string[];
+    recipient: string;
+    since: Date;
+  }): Promise<AgentInboxMessageItem | undefined> => {
+    if (params.candidates.length === 0) return undefined;
+
+    const [row] = await this.db
+      .select()
+      .from(agentInboxMessages)
+      .where(
+        and(
+          this.ownership(),
+          eq(agentInboxMessages.agentId, params.agentId),
+          gte(agentInboxMessages.receivedAt, params.since),
+          sql`lower(trim(${agentInboxMessages.from})) <> ${params.recipient}`,
+          or(
+            ...params.candidates.map(
+              (candidate) => sql`strpos(${agentInboxMessages.text}, ${candidate}) > 0`,
+            ),
+          ),
+        ),
+      )
+      .orderBy(desc(agentInboxMessages.receivedAt))
+      .limit(1);
+
+    return row;
   };
 
   /**

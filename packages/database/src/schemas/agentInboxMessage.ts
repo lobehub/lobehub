@@ -92,6 +92,8 @@ export const agentInboxMessages = pgTable(
     ),
     // The inbox read: one agent's messages, newest first.
     index('agent_inbox_messages_agent_received_at_idx').on(t.agentId, t.receivedAt),
+    // Arrival polling (waitForMessage): one agent's messages by local ingestion time.
+    index('agent_inbox_messages_agent_created_at_idx').on(t.agentId, t.createdAt),
     // Thread lookups: the reply check and continuing a thread in its topic.
     index('agent_inbox_messages_account_thread_idx').on(t.accountId, t.threadKey),
     index('agent_inbox_messages_user_id_idx').on(t.userId),

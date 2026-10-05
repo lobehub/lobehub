@@ -544,6 +544,7 @@ table agent_inbox_messages {
   indexes {
     (account_id, provider_message_id) [name: 'agent_inbox_messages_account_provider_message_unique', unique]
     (agent_id, received_at) [name: 'agent_inbox_messages_agent_received_at_idx']
+    (agent_id, created_at) [name: 'agent_inbox_messages_agent_created_at_idx']
     (account_id, thread_key) [name: 'agent_inbox_messages_account_thread_idx']
     user_id [name: 'agent_inbox_messages_user_id_idx']
   }

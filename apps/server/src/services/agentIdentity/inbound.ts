@@ -142,7 +142,18 @@ export class AgentInboundService {
         return { outcome: decision.outcome, status: 404 };
       }
       default: {
-        const result = await this.deliver(decision.accountId, decision.message);
+        let result: AgentInboundResult;
+        try {
+          result = await this.deliver(decision.accountId, decision.message);
+        } catch (error) {
+          // The event id is already claimed: without giving it back, every
+          // retry during the claim's lifetime would be acknowledged as a
+          // duplicate and the message never stored.
+          await this.options.accountService
+            .releaseInbound(provider, decision.eventId)
+            .catch(() => undefined);
+          throw error;
+        }
         // Stored but not woken for a transient reason: forget the replay claim
         // so the provider's retry is processed and wakes the agent then.
         if (result.status === 503) {
