@@ -13,7 +13,7 @@ import type {
   BrowserGatewayToolResultParams,
   BrowserToolCallResult,
 } from '@lobechat/electron-client-ipc';
-import type { WebContents } from 'electron';
+import type { NativeImage, WebContents } from 'electron';
 
 import {
   OVERLAY_REMOVE_SCRIPT,
@@ -38,7 +38,56 @@ const READ_PAGE_MAX_CHARS = 12_000;
 // renderer executor generous headroom before giving up.
 const GATEWAY_CALL_TIMEOUT_MS = 60_000;
 
+/**
+ * A guest that was just shown or just navigated has no compositor frame yet, and
+ * Chromium rejects the copy with `UnknownVizError` until one is drawn. Retry a
+ * few frames; past that the surface is genuinely unavailable.
+ */
+const CAPTURE_RETRY_DELAYS_MS = [100, 250, 500];
+/** `capturePage` never settles for a guest Chromium is not drawing at all. */
+const CAPTURE_TIMEOUT_MS = 15_000;
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const captureOnce = (guest: WebContents) =>
+  new Promise<NativeImage>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`capturePage did not settle within ${CAPTURE_TIMEOUT_MS}ms`)),
+      CAPTURE_TIMEOUT_MS,
+    );
+    guest.capturePage().then(
+      (image) => {
+        clearTimeout(timer);
+        resolve(image);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+
+export const captureGuest = async (guest: WebContents): Promise<NativeImage> => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const image = await captureOnce(guest);
+      if (!image.isEmpty()) return image;
+      if (attempt >= CAPTURE_RETRY_DELAYS_MS.length) {
+        throw new Error('The page has not been drawn yet (empty capture)');
+      }
+    } catch (error) {
+      const retryable = (error as Error).message === 'UnknownVizError';
+      if (!retryable || attempt >= CAPTURE_RETRY_DELAYS_MS.length) {
+        throw new Error(
+          `Screenshot failed: the browser page could not be captured (${(error as Error).message}). ` +
+            'snapshot/readPage still work on this page; retrying the screenshot right away will not help.',
+          { cause: error },
+        );
+      }
+    }
+    await sleep(CAPTURE_RETRY_DELAYS_MS[attempt]);
+  }
+};
 
 /**
  * Runs inside the guest page. Builds a compact interactive-element snapshot and
@@ -305,7 +354,7 @@ export default class BrowserControlCtr extends ControllerModule {
       // overlay in the frame it just asked for.
       await guest.executeJavaScript(OVERLAY_REMOVE_SCRIPT).catch(() => {});
 
-      let image = await guest.capturePage();
+      let image = await captureGuest(guest);
       const size = image.getSize();
       if (size.width > SCREENSHOT_MAX_WIDTH) image = image.resize({ width: SCREENSHOT_MAX_WIDTH });
       const resized = image.getSize();
