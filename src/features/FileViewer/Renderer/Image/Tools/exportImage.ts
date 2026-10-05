@@ -77,12 +77,22 @@ export const loadReadableImage = async (
   }
 };
 
+/**
+ * Longest edge of an export without an explicit output size (annotations for
+ * chat, the erase guide). Large enough for a model to read, small enough that
+ * the canvas stays allocatable on any image.
+ */
+export const DEFAULT_EXPORT_MAX_EDGE = 4096;
+
 export interface RenderImageOptions {
   /** Numbered comment markers, in the source's normalized space. */
   comments?: MarkupComment[];
   /** Region of the source to keep; defaults to the whole image. */
   crop?: NormalizedRect;
-  /** Output pixel size; defaults to the cropped region at natural resolution. */
+  /**
+   * Output pixel size; defaults to the cropped region at natural resolution,
+   * scaled down to `DEFAULT_EXPORT_MAX_EDGE` on its longer side.
+   */
   output?: Size;
   /** Annotations drawn in the source's normalized space. */
   shapes?: AnnotationShape[];
@@ -111,9 +121,10 @@ export const renderImageToBlob = (
     x: crop.x * natural.width,
     y: crop.y * natural.height,
   };
+  const fit = Math.min(1, DEFAULT_EXPORT_MAX_EDGE / Math.max(source.height, source.width, 1));
   const size = output ?? {
-    height: Math.max(1, Math.round(source.height)),
-    width: Math.max(1, Math.round(source.width)),
+    height: Math.max(1, Math.round(source.height * fit)),
+    width: Math.max(1, Math.round(source.width * fit)),
   };
 
   const canvas = document.createElement('canvas');

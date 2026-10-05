@@ -62,6 +62,16 @@ describe('renderImageToBlob', () => {
     expect(ctx.strokeRect).not.toHaveBeenCalled();
   });
 
+  // Regression: annotate/erase exports allocated a full-resolution canvas,
+  // which a very large image can push past the browser's limits.
+  it('caps an export without an explicit size at the default max edge', async () => {
+    const huge = { naturalHeight: 6000, naturalWidth: 12_000 } as unknown as HTMLImageElement;
+    await renderImageToBlob(huge);
+
+    expect(canvases[0].width).toBe(4096);
+    expect(canvases[0].height).toBe(2048);
+  });
+
   it('crops and scales to the requested output size', async () => {
     await renderImageToBlob(source, {
       crop: { height: 0.5, width: 0.25, x: 0.5, y: 0.25 },

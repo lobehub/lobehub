@@ -129,6 +129,41 @@ const sleep = (ms: number, signal?: AbortSignal) =>
     signal?.addEventListener('abort', onAbort, { once: true });
   });
 
+/**
+ * Settle with `request`, unless cancel or the deadline comes first: a status
+ * request that hangs must not keep the tool locked.
+ */
+const raceRequest = <T>(request: Promise<T>, deadline: number, signal?: AbortSignal) =>
+  new Promise<T>((resolve, reject) => {
+    if (signal?.aborted) return reject(new AIImageEditError('cancelled'));
+    const finish = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    const onAbort = () => {
+      finish();
+      reject(new AIImageEditError('cancelled'));
+    };
+    const timer = setTimeout(
+      () => {
+        finish();
+        reject(new AIImageEditError('timeout', undefined, undefined, { taskRunning: true }));
+      },
+      Math.max(0, deadline - Date.now()),
+    );
+    signal?.addEventListener('abort', onAbort, { once: true });
+    request.then(
+      (value) => {
+        finish();
+        resolve(value);
+      },
+      (error) => {
+        finish();
+        reject(error);
+      },
+    );
+  });
+
 const throwIfAborted = (signal?: AbortSignal) => {
   if (signal?.aborted) throw new AIImageEditError('cancelled');
 };
@@ -249,7 +284,11 @@ export const runAIImageEdit = async ({
     let generation: Generation | null = null;
     while (!generation) {
       await sleep(pollInterval, signal);
-      const status = await deps.getStatus(pending.id, pending.asyncTaskId);
+      const status = await raceRequest(
+        deps.getStatus(pending.id, pending.asyncTaskId),
+        deadline,
+        signal,
+      );
       if (status.status === AsyncTaskStatus.Success || status.status === AsyncTaskStatus.Error)
         settled = true;
       throwIfAborted(signal);

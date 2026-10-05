@@ -390,6 +390,26 @@ describe('runAIImageEdit', () => {
     expect(deps.createImage).not.toHaveBeenCalled();
   });
 
+  // Regression: a hung status request kept the tool locked past cancel and the deadline.
+  it('cancels while a status request hangs', async () => {
+    const controller = new AbortController();
+    const deps = spyDeps({ getStatus: () => new Promise<never>(() => {}) });
+
+    const pending = run(deps, { signal: controller.signal });
+    setTimeout(() => controller.abort(), 20);
+
+    await expect(pending).rejects.toMatchObject({ kind: 'cancelled', taskRunning: true });
+  });
+
+  it('times out while a status request hangs', async () => {
+    const deps = spyDeps({ getStatus: () => new Promise<never>(() => {}) });
+
+    await expect(run(deps, { timeout: 20 })).rejects.toMatchObject({
+      kind: 'timeout',
+      taskRunning: true,
+    });
+  });
+
   it('stops waiting at the timeout and leaves the running task alone', async () => {
     const deps = spyDeps({ getStatus: async () => realProcessingStatus });
     await expect(run(deps, { timeout: 5 })).rejects.toMatchObject({
