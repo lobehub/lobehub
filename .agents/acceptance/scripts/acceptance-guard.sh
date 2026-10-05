@@ -12,7 +12,7 @@
 #   acceptance-guard.sh start                    start this run's sampler
 #   acceptance-guard.sh claim <pid>...           register a process this run started
 #   acceptance-guard.sh claim-browser [session]  claim the browser behind an agent-browser session
-#   acceptance-guard.sh check [--json]           one sample now; exit 0 green, 10 yellow, 20 red
+#   acceptance-guard.sh check [--json]           exit 0 green, 10 yellow, 20 red, 2 unknown/error
 #   acceptance-guard.sh status [--json]          this run's recorded guard state
 #   acceptance-guard.sh stop                     stop the sampler (teardown; always)
 #
@@ -27,8 +27,9 @@
 # The thresholds are host-level on purpose. The group patterns below also match other
 # worktrees' servers and other runs' browsers — five such processes held ~20 GB here
 # — so a group or total RSS cap would turn a merely busy machine red and stop a
-# healthy run. Swap exhaustion is what actually freezes the host, so that is what
-# this adapter tiers on; the groups exist so `stop-owned` has something it may stop.
+# healthy run. macOS tiers on kernel memory pressure (three consecutive red samples
+# before stop-owned); Linux uses the swap/free thresholds below. On macOS swap and
+# free percentages are diagnostic only. The groups select what stop-owned may stop.
 #
 # Contract: .agents/skills/acceptance/references/resource-guard.md
 set -uo pipefail
