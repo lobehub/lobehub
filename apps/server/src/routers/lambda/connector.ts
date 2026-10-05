@@ -629,6 +629,7 @@ export const connectorRouter = router({
         connectorId: input.id,
         lobeUserId: ctx.userId,
         returnTo: input.returnTo,
+        workspaceId: ctx.workspaceId ?? undefined,
       });
 
       return { authorizationUrl };
