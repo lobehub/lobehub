@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';
 import { ExplorerTree, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
+import { useClientDataSWR } from '@/libs/swr';
 import { projectFileService } from '@/services/projectFile';
 import { useGlobalStore } from '@/store/global';
 
@@ -225,8 +226,6 @@ const Files = memo<FilesProps>(
     const [hideIgnored, setHideIgnored] = useState(false);
     const [searchExpanded, setSearchExpanded] = useState(false);
     const [debouncedQuery, setDebouncedQuery] = useState('');
-    const [searchEntries, setSearchEntries] = useState<ProjectFileIndexEntry[] | undefined>();
-    const [isSearching, setIsSearching] = useState(false);
     const [expandedIds, setExpandedIds] = useState<string[]>([]);
     const projectRootName = getProjectRootName(projectRoot);
     const normalizedDebouncedQuery = debouncedQuery.trim();
@@ -250,6 +249,53 @@ const Files = memo<FilesProps>(
       expandedIds,
       projectRoot,
     });
+    // The sandbox index arrives whole, so matching it here costs one pass and
+    // needs no third search transport. Matching on the path, not the name,
+    // keeps `reports/q3` finding the file inside `reports`.
+    const sandboxMatches = useMemo(() => {
+      if (!isSandbox || !normalizedDebouncedQuery) return undefined;
+      const needle = normalizedDebouncedQuery.toLowerCase();
+
+      return entries
+        .filter((entry) => !entry.isDirectory && entry.relativePath.toLowerCase().includes(needle))
+        .slice(0, PROJECT_FILE_TREE_SEARCH_LIMIT);
+    }, [entries, isSandbox, normalizedDebouncedQuery]);
+
+    // Everything else searches over the wire. Through SWR rather than an
+    // effect, so the query is deduped and cached — and, more to the point, so
+    // it stops re-firing every time the file index refreshes, which an effect
+    // reading `entries` did on each poll.
+    const { data: remoteMatches, isLoading: isSearchingRemote } = useClientDataSWR(
+      isSandbox || !normalizedDebouncedQuery
+        ? null
+        : [
+            'project-file-search',
+            deviceId,
+            workingDirectory,
+            normalizedDebouncedQuery,
+            changedOnly,
+            hideIgnored,
+          ],
+      () =>
+        projectFileService
+          .searchProjectFiles({
+            changedOnly,
+            deviceId,
+            excludeIgnored: hideIgnored,
+            limit: PROJECT_FILE_TREE_SEARCH_LIMIT,
+            query: normalizedDebouncedQuery,
+            scope: workingDirectory,
+          })
+          .then((result) => result?.entries ?? [])
+          .catch((error) => {
+            console.error('[Files] Failed to search project files:', error);
+            return [] as ProjectFileIndexEntry[];
+          }),
+    );
+
+    const searchEntries = isSandbox ? sandboxMatches : remoteMatches;
+    const isSearching = !isSandbox && !!normalizedDebouncedQuery && isSearchingRemote;
+
     const displayEntries = useMemo(() => {
       const indexedEntries = isFiltering
         ? (searchEntries ?? [])
@@ -314,69 +360,6 @@ const Files = memo<FilesProps>(
     useEffect(() => {
       if (projectSource && projectSource !== 'git') setViewMode('project');
     }, [projectSource]);
-
-    useEffect(() => {
-      if (!normalizedDebouncedQuery) {
-        setIsSearching(false);
-        setSearchEntries(undefined);
-        return;
-      }
-
-      // The sandbox index arrives whole, so matching it here costs one pass and
-      // needs no third search transport. Matching on the path, not the name,
-      // keeps `reports/q3` finding the file inside `reports`.
-      if (isSandbox) {
-        const needle = normalizedDebouncedQuery.toLowerCase();
-        setSearchEntries(
-          entries
-            .filter(
-              (entry) => !entry.isDirectory && entry.relativePath.toLowerCase().includes(needle),
-            )
-            .slice(0, PROJECT_FILE_TREE_SEARCH_LIMIT),
-        );
-        setIsSearching(false);
-        return;
-      }
-
-      let cancelled = false;
-      setIsSearching(true);
-      setSearchEntries(undefined);
-
-      void Promise.resolve(
-        projectFileService.searchProjectFiles({
-          changedOnly,
-          deviceId,
-          excludeIgnored: hideIgnored,
-          limit: PROJECT_FILE_TREE_SEARCH_LIMIT,
-          query: normalizedDebouncedQuery,
-          scope: workingDirectory,
-        }),
-      )
-        .then((result) => {
-          if (cancelled) return;
-          setSearchEntries(result?.entries ?? []);
-        })
-        .catch((error) => {
-          if (cancelled) return;
-          console.error('[Files] Failed to search project files:', error);
-          setSearchEntries([]);
-        })
-        .finally(() => {
-          if (!cancelled) setIsSearching(false);
-        });
-
-      return () => {
-        cancelled = true;
-      };
-    }, [
-      changedOnly,
-      deviceId,
-      entries,
-      hideIgnored,
-      isSandbox,
-      normalizedDebouncedQuery,
-      workingDirectory,
-    ]);
 
     // Skip resyncs when defaultExpandedIds is structurally unchanged so the user's expansions survive re-renders.
     const prevDefaultRef = useRef<string[]>([]);

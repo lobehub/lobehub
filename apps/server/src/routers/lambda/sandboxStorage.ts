@@ -2,6 +2,7 @@ import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ConnectorDataError } from '@lobechat/connector-data';
 import { MAX_REPOSITORY_BRANCHES } from '@lobechat/connector-data/github';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
@@ -965,14 +966,18 @@ export const sandboxStorageRouter = router({
       const instances = await ctx.instanceModel.query({ environmentId: input.environmentId });
       if (instances.length === 0) return { sessions: [], unavailable: false };
 
-      const pages = await Promise.all(
-        instances.map((instance) =>
+      // Bounded: an environment's instance count is whatever the member made,
+      // and one request per instance all at once would put that number on the
+      // execution plane in a single burst.
+      const pages = await pMap(
+        instances,
+        (instance) =>
           ctx.client
             .listEnvironmentSessions({ limit: input.limit, name: instance.id })
             // One instance's history failing must not blank the others; the
             // caller is told the list is incomplete rather than shown "no runs".
             .catch(() => null),
-        ),
+        { concurrency: 5 },
       );
 
       const merged = instances
