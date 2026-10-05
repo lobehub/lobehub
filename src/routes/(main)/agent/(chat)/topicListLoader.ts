@@ -1,10 +1,12 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { LoaderFunctionArgs } from 'react-router';
 
+import { readPersistedTranscript } from '@/features/Conversation/store/slices/data/messageReplica';
 import { getSidebarTopicListParams } from '@/hooks/chatTopicListQuery';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 const builtinAgentSlugs = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
@@ -63,9 +65,47 @@ export const preHydrateTopicListForRoute = async (routeAgentId?: string): Promis
   );
 };
 
+/**
+ * Seed the persisted transcript of a route's topic into the chat store.
+ *
+ * The conversation is hosted on the chat store's bucket, so rows landing there
+ * before the route commits reach the Conversation as its first-frame messages:
+ * a topic opened before paints from local data and only revalidates in the
+ * background, instead of painting a skeleton until the network answers.
+ */
+export const preHydrateMessagesForRoute = async (
+  routeAgentId?: string,
+  topicId?: string,
+): Promise<void> => {
+  const agentId = resolveRouteAgentId(routeAgentId);
+  if (!agentId || !topicId) return;
+
+  const context = { agentId, scope: 'main' as const, topicId };
+  const seed = async () => {
+    const transcript = await readPersistedTranscript(context);
+    if (!transcript?.items.length) return;
+
+    const chat = useChatStore.getState();
+    // Rows already in memory (this session's, or streamed) are newer.
+    if (chat.dbMessagesMap[messageMapKey(context)]) return;
+    // `source: 'fetch'`: a stored server snapshot, not a local edit — it must
+    // not be written through as if it were fresh.
+    chat.replaceMessages(transcript.items, {
+      action: 'preHydrateMessages',
+      context,
+      source: 'fetch',
+    });
+  };
+
+  await settleWithin(seed(), PRE_PAINT_HYDRATE_TIMEOUT);
+};
+
 /** Loader for the agent chat routes (`/agent/:aid`, `/agent/:aid/:topicId`). */
 export const agentChatTopicListLoader = async ({ params }: LoaderFunctionArgs): Promise<null> => {
-  await preHydrateTopicListForRoute(params.aid);
+  await Promise.all([
+    preHydrateTopicListForRoute(params.aid),
+    preHydrateMessagesForRoute(params.aid, params.topicId),
+  ]);
 
   return null;
 };
