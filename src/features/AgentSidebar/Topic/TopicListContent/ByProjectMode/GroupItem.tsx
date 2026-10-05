@@ -22,6 +22,7 @@ import UnreadDot from '@/components/UnreadDot';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { AgentDirectoryActions } from '@/features/Projects/WorkingDirectories/AgentDirectoryActions';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
@@ -271,11 +272,24 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
             >
               {project && !scope ? (
                 <a
-                  href={`/project/${project.projectSlug ?? project.projectId}`}
                   style={{ color: 'inherit', textDecoration: 'none' }}
+                  href={buildWorkspaceAwarePath(
+                    `/project/${project.projectSlug ?? project.projectId}`,
+                    activeWorkspaceSlug,
+                  )}
                   onClick={(event) => {
-                    event.preventDefault();
+                    // Keep the accordion closed either way; leave modified clicks
+                    // (new tab / window) to the browser's native link handling.
                     event.stopPropagation();
+                    if (
+                      event.button !== 0 ||
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.altKey
+                    )
+                      return;
+                    event.preventDefault();
                     navigate(`/project/${project.projectSlug ?? project.projectId}`);
                   }}
                 >

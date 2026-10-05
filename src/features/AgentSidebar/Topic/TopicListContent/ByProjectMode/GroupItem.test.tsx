@@ -233,6 +233,46 @@ it('uses the bound project name and lets the user jump directly to that project'
   expect(routerPushMock).toHaveBeenCalledWith('/project/shared-project');
 });
 
+it('keeps the workspace scope in the project link and leaves modified clicks to the browser', () => {
+  activeWorkspaceSlugMock.value = 'lobehub';
+  routerPushMock.mockClear();
+  directoryRows.push({
+    id: 'binding-2',
+    projectName: 'Workspace Project',
+    projectSlug: 'workspace-project',
+    projectId: 'prj-2',
+    projectAvatar: '📦',
+  });
+  render(
+    <AccordionRoot defaultValue={['project:/repo-ws']}>
+      <GroupItem
+        expanded
+        group={{
+          id: 'project:/repo-ws',
+          title: 'repo-ws',
+          children: [
+            {
+              id: 'topic-ws',
+              title: 'Work',
+              createdAt: 1,
+              updatedAt: 1,
+              projectWorkingDirectoryId: 'binding-2',
+              metadata: { workingDirectory: '/repo-ws' },
+            },
+          ],
+        }}
+      />
+    </AccordionRoot>,
+  );
+  const link = screen.getByRole('link', { name: 'Workspace Project' });
+  expect(link).toHaveAttribute('href', '/lobehub/project/workspace-project');
+
+  // fireEvent returns false when the default action was prevented.
+  expect(fireEvent.click(link, { metaKey: true })).toBe(true);
+  expect(fireEvent.click(link, { ctrlKey: true })).toBe(true);
+  expect(routerPushMock).not.toHaveBeenCalled();
+});
+
 it('shows the directory title inside Project scope rather than repeating the project name', () => {
   directoryRows.push({
     id: 'binding-scoped',
