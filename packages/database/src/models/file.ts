@@ -610,6 +610,15 @@ export class FileModel {
     });
   };
 
+  /** Libraries (knowledge bases) a file is filed in. */
+  findKnowledgeBaseIds = async (fileId: string): Promise<string[]> => {
+    const rows = await this.db
+      .select({ id: knowledgeBaseFiles.knowledgeBaseId })
+      .from(knowledgeBaseFiles)
+      .where(eq(knowledgeBaseFiles.fileId, fileId));
+    return rows.map((row) => row.id);
+  };
+
   findById = async (
     id: string,
     options: { accessScope?: FileAccessScope; transaction?: Transaction } = {},

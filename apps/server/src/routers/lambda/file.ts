@@ -465,6 +465,7 @@ export const fileRouter = router({
         fileHash: item.fileHash,
         fileType: item.fileType,
         id: item.id,
+        knowledgeBaseIds: await ctx.fileModel.findKnowledgeBaseIds(item.id),
         metadata: item.metadata,
         name: item.name,
         parentId: item.parentId,

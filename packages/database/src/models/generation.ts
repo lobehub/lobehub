@@ -259,6 +259,7 @@ export class GenerationModel {
       asset,
       asyncTaskId: generation.asyncTaskId || null,
       createdAt: generation.createdAt,
+      ...(generation.fileId ? { fileId: generation.fileId } : {}),
       id: generation.id,
       ...(previousGenerationId ? { previousGenerationId } : {}),
       seed: generation.seed,

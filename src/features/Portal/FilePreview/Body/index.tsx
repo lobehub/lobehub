@@ -8,6 +8,7 @@ import AsyncError from '@/components/AsyncError';
 import Loading from '@/components/Loading/CircleLoading';
 import FileNotFound from '@/features/FileNotFound';
 import FileViewer from '@/features/FileViewer';
+import ImageEditTools from '@/features/FileViewer/ImageEditTools';
 import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -89,7 +90,7 @@ const FilePreview = () => {
         <Markdown style={{ overflow: 'scroll', paddingInline: 8 }}>{chunkText}</Markdown>
       ) : (
         <Flexbox flex={1} paddingBlock={8} style={{ overflow: 'scroll' }}>
-          <FileViewer {...data} />
+          <FileViewer {...data} imageTools={<ImageEditTools />} />
         </Flexbox>
       )}
     </Flexbox>

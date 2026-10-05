@@ -1,0 +1,38 @@
+import { lambdaClient } from '@/libs/trpc/client';
+import { fileService } from '@/services/file';
+import { generationService } from '@/services/generation';
+import { generationTopicService } from '@/services/generationTopic';
+import { imageService } from '@/services/image';
+import { knowledgeBaseService } from '@/services/knowledgeBase';
+import { useFileStore } from '@/store/file';
+
+import type { AIEditDeps } from './runAIImageEdit';
+
+/** The real pipeline: the same image generation services the image page uses. */
+export const aiEditDeps: AIEditDeps = {
+  addToKnowledgeBase: (knowledgeBaseId, fileIds) =>
+    knowledgeBaseService.addFilesToKnowledgeBase(knowledgeBaseId, fileIds),
+  createImage: (payload) => imageService.createImage(payload),
+  createTopic: (title) => generationTopicService.createTopic('image', undefined, title),
+  deleteTopic: (id) => generationTopicService.deleteTopic(id),
+  getFile: async (id) => {
+    const file = await lambdaClient.file.findById.query({ id });
+    return {
+      knowledgeBaseIds: file.knowledgeBaseIds,
+      metadata: file.metadata as Record<string, unknown> | null,
+      parentId: file.parentId,
+    };
+  },
+  getStatus: (generationId, asyncTaskId) =>
+    generationService.getGenerationStatus(generationId, asyncTaskId),
+  removeFile: (id) => fileService.removeFile(id),
+  updateFile: (id, data) => fileService.updateFile(id, data),
+  uploadFile: async ({ file, metadata, parentId }) => {
+    const result = await useFileStore.getState().uploadWithProgress({
+      file,
+      fileMetadata: metadata,
+      parentId,
+    });
+    return result && { id: result.id, url: result.url };
+  },
+};

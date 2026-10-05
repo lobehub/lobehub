@@ -1026,6 +1026,33 @@ describe('FileModel', () => {
     });
   });
 
+  describe('findKnowledgeBaseIds', () => {
+    it('lists the libraries a file is filed in', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'image/png',
+        name: 'photo.png',
+        size: 100,
+        url: 'files/photo.png',
+      });
+      await serverDB
+        .insert(knowledgeBaseFiles)
+        .values({ fileId: id, knowledgeBaseId: 'kb1', userId });
+
+      expect(await fileModel.findKnowledgeBaseIds(id)).toEqual(['kb1']);
+    });
+
+    it('returns an empty list for a file outside any library', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'image/png',
+        name: 'loose.png',
+        size: 100,
+        url: 'files/loose.png',
+      });
+
+      expect(await fileModel.findKnowledgeBaseIds(id)).toEqual([]);
+    });
+  });
+
   describe('findById', () => {
     it('should find a file by id', async () => {
       const { id } = await fileModel.create({

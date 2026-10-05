@@ -188,6 +188,7 @@ const mockFileModelDeleteUnreferenced = vi.fn();
 const mockFileModelDeleteMany = vi.fn();
 const mockFileModelFindById = vi.fn();
 const mockFileModelFindByIds = vi.fn();
+const mockFileModelFindKnowledgeBaseIds = vi.fn().mockResolvedValue([]);
 const mockFileModelQuery = vi.fn();
 const mockFileModelUpdate = vi.fn();
 const mockFileModelUpdateGlobalFile = vi.fn();
@@ -205,6 +206,7 @@ vi.mock('@/database/models/file', () => ({
       deleteMany: mockFileModelDeleteMany,
       findById: mockFileModelFindById,
       findByIds: mockFileModelFindByIds,
+      findKnowledgeBaseIds: mockFileModelFindKnowledgeBaseIds,
       query: mockFileModelQuery,
       update: mockFileModelUpdate,
       updateGlobalFile: mockFileModelUpdateGlobalFile,
@@ -1067,6 +1069,16 @@ describe('fileRouter', () => {
       const result = await caller.findById({ id: 'test-id' });
 
       expect(result.url).toBe('https://lobehub.com/f/test-id');
+    });
+
+    it('should expose the libraries the file belongs to', async () => {
+      mockFileModelFindById.mockResolvedValue(mockFile);
+      mockFileModelFindKnowledgeBaseIds.mockResolvedValueOnce(['kb-1']);
+
+      const result = await caller.findById({ id: 'test-id' });
+
+      expect(mockFileModelFindKnowledgeBaseIds).toHaveBeenCalledWith('test-id');
+      expect(result.knowledgeBaseIds).toEqual(['kb-1']);
     });
   });
 
