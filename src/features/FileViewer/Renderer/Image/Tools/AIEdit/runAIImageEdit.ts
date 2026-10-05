@@ -117,6 +117,7 @@ export interface AIEditResult {
 const DEFAULT_POLL_INTERVAL = 2000;
 const DEFAULT_TIMEOUT = 3 * 60 * 1000;
 const DEFAULT_SETTLE_WATCH = 30 * 60 * 1000;
+const SAVE_TIMEOUT = 60 * 1000;
 const MAX_SETTLE_WATCH_DELAY = 60 * 1000;
 
 const sleep = (ms: number, signal?: AbortSignal) =>
@@ -327,6 +328,10 @@ export const runAIImageEdit = async ({
     }
 
     onPhase?.('saving');
+    // Saving gets its own window (generation may have used most of the run's),
+    // and still answers to Cancel.
+    const saveDeadline = Date.now() + SAVE_TIMEOUT;
+    const save = <T>(request: Promise<T>) => raceRequest(request, saveDeadline, signal);
     const asset = generation.asset!;
     const assetUrl = asset.url!;
     const name = buildDerivedFileName(source.name, DERIVED_FILE_SUFFIX[operation]);
@@ -342,25 +347,34 @@ export const runAIImageEdit = async ({
     if (fileId) {
       // The generation already saved its output as a file; keep its storage
       // metadata and add the lineage, then file it beside the original.
-      const metadata = (await deps.getFile(fileId))?.metadata ?? {};
-      await deps.updateFile(fileId, { metadata: { ...metadata, ...lineage }, name, parentId });
+      const metadata = (await save(deps.getFile(fileId)))?.metadata ?? {};
+      await save(
+        deps.updateFile(fileId, { metadata: { ...metadata, ...lineage }, name, parentId }),
+      );
     } else {
       // Older servers do not report the file; copy the asset into a new one.
-      const response = await fetch(assetUrl);
+      const response = await save(fetch(assetUrl, { signal }));
       if (!response.ok) throw new AIImageEditError('noResult', `HTTP ${response.status}`);
-      const blob = await response.blob();
-      const uploaded = await deps.uploadFile({
-        file: new File([blob], name, { type: blob.type || 'image/png' }),
-        metadata: lineage,
-        parentId,
-        visibility: location?.visibility ?? undefined,
-      });
+      const blob = await save(response.blob());
+      const uploaded = await save(
+        deps.uploadFile({
+          file: new File([blob], name, { type: blob.type || 'image/png' }),
+          metadata: lineage,
+          parentId,
+          visibility: location?.visibility ?? undefined,
+        }),
+      );
       if (!uploaded) throw new AIImageEditError('failed', 'Failed to save the edited image');
       fileId = uploaded.id;
       url = uploaded.url;
     }
 
-    const libraryFailed = await fileIntoLibraries(deps, location?.knowledgeBaseIds, fileId);
+    const libraryFailed = await fileIntoLibraries(
+      { addToKnowledgeBase: (id, fileIds) => save(deps.addToKnowledgeBase(id, fileIds)) },
+      location?.knowledgeBaseIds,
+      fileId,
+    );
+    throwIfAborted(signal);
 
     return { fileId, height: asset.height, libraryFailed, name, url, width: asset.width };
   } catch (error) {

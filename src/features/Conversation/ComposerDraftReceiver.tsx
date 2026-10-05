@@ -2,6 +2,8 @@
 
 import { memo, useEffect } from 'react';
 
+import { readDocument } from '@/features/ChatInput/editorDocument';
+
 import { useComposerDraftBus } from './composerDraftBus';
 import { useConversationStore, useConversationStoreApi } from './store';
 
@@ -35,7 +37,10 @@ const ComposerDraftReceiver = memo(() => {
     if (draft.target && (draft.target.agentId !== agentId || topicId)) return;
     // Keep what the user typed as is (indentation, Markdown line breaks); only
     // an all-blank input counts as empty.
-    const current = storeApi.getState().inputMessage;
+    // Read the editor itself: `inputMessage` trails it behind a debounce, and
+    // the last few typed characters would be overwritten.
+    const live = draft.append ? readDocument(editor, 'markdown') : undefined;
+    const current = typeof live === 'string' ? live : storeApi.getState().inputMessage;
     const text = draft.append && current.trim() ? `${current}\n\n${draft.text}` : draft.text;
     // setDocument alone does not fire the change handler that keeps
     // inputMessage in sync — Send would stay disabled (see restoreToInput).

@@ -475,6 +475,18 @@ describe('runAIImageEdit', () => {
     expect(deps.createImage).not.toHaveBeenCalled();
   });
 
+  // Regression: the save steps after a successful generation ignored Cancel.
+  it('cancels while saving the result hangs', async () => {
+    const controller = new AbortController();
+    const deps = spyDeps({ updateFile: () => new Promise<never>(() => {}) });
+
+    const pending = run(deps, { signal: controller.signal });
+    await vi.waitFor(() => expect(deps.updateFile).toHaveBeenCalled());
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ kind: 'cancelled', taskRunning: false });
+  });
+
   it('times out while a status request hangs', async () => {
     const deps = spyDeps({ getStatus: () => new Promise<never>(() => {}) });
 
@@ -532,7 +544,10 @@ describe('runAIImageEdit', () => {
 
     const result = await run(deps);
 
-    expect(globalThis.fetch).toHaveBeenCalledWith('https://s3.example.com/result.png');
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://s3.example.com/result.png',
+      expect.anything(),
+    );
     const uploaded = deps.uploadFile.mock.calls[0][0];
     expect(uploaded.file.name).toBe('scene-no-bg.png');
     expect(uploaded.parentId).toBe('docs_folder');

@@ -9,7 +9,12 @@ import {
 import ComposerDraftReceiver from './ComposerDraftReceiver';
 
 const mocks = vi.hoisted(() => ({
-  editor: null as null | { focus: ReturnType<typeof vi.fn>; setDocument: ReturnType<typeof vi.fn> },
+  editor: null as null | {
+    focus: ReturnType<typeof vi.fn>;
+    getDocument?: ReturnType<typeof vi.fn>;
+    getLexicalEditor?: () => unknown;
+    setDocument: ReturnType<typeof vi.fn>;
+  },
   context: { agentId: 'agt_inbox', topicId: undefined as string | undefined },
   inputMessage: '',
   updateInputMessage: vi.fn(),
@@ -61,7 +66,8 @@ describe('ComposerDraftReceiver', () => {
   });
 
   it('appends after what the user already typed when asked to', () => {
-    mocks.editor = { focus: vi.fn(), setDocument: vi.fn() };
+    // No serializable editor here, so the receiver falls back to `inputMessage`.
+    mocks.editor = { focus: vi.fn(), getLexicalEditor: () => null, setDocument: vi.fn() };
     mocks.inputMessage = 'what is wrong here?';
     render(<ComposerDraftReceiver />);
 
@@ -76,7 +82,8 @@ describe('ComposerDraftReceiver', () => {
 
   // Regression: appending trimmed the typed text, losing a trailing Markdown break.
   it('keeps the whitespace of what the user typed when appending', () => {
-    mocks.editor = { focus: vi.fn(), setDocument: vi.fn() };
+    // No serializable editor here, so the receiver falls back to `inputMessage`.
+    mocks.editor = { focus: vi.fn(), getLexicalEditor: () => null, setDocument: vi.fn() };
     mocks.inputMessage = '  indented line  ';
     render(<ComposerDraftReceiver />);
 
@@ -88,6 +95,26 @@ describe('ComposerDraftReceiver', () => {
       'markdown',
       '  indented line  \n\n1. note',
     );
+  });
+
+  // Regression: `inputMessage` trails the editor behind a debounce; appending
+  // to it overwrote the characters typed just before Add to chat.
+  it('appends to the live editor content, not its delayed mirror', () => {
+    const editor = {
+      focus: vi.fn(),
+      getDocument: vi.fn(() => 'typed just now'),
+      getLexicalEditor: () => ({}),
+      setDocument: vi.fn(),
+    };
+    mocks.editor = editor;
+    mocks.inputMessage = 'typed';
+    render(<ComposerDraftReceiver />);
+
+    act(() => {
+      draftToMainComposer('1. note', { append: true });
+    });
+
+    expect(editor.setDocument).toHaveBeenCalledWith('markdown', 'typed just now\n\n1. note');
   });
 
   it('applies a queued draft once a composer mounts', () => {
