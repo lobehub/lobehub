@@ -153,7 +153,8 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
 
     const sync = driver.useQuery<TFetched>(
       active && fetcher
-        ? replicaKeys.sync(resource.name, resource.version, scope, key!, params)
+        ? (resource.syncKey?.(params!) ??
+            replicaKeys.sync(resource.name, resource.version, scope, key!, params))
         : null,
       () => fetcher!(params!, undefined),
       {

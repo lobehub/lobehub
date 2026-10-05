@@ -5,10 +5,12 @@
 export interface ReplicaSyncSchedule {
   /** Collapse identical requests within this window (ms). */
   dedupingInterval?: number;
-  /** Poll every N ms while mounted (0 = off). */
-  refreshInterval?: number;
+  /** Poll every N ms while mounted (0 = off); a function decides per tick from the latest data. */
+  refreshInterval?: number | ((latest: any) => number);
   /** Keep polling while the page is hidden. */
   refreshWhenHidden?: boolean;
+  /** Keep polling while the browser is offline. */
+  refreshWhenOffline?: boolean;
   revalidateIfStale?: boolean;
   revalidateOnFocus?: boolean;
   revalidateOnReconnect?: boolean;

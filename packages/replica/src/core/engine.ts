@@ -76,6 +76,17 @@ export interface ReplicaEngineOptions<TParams, TData, TFetched> {
   merge?: (incoming: TFetched, confirmed: TData | undefined, params: TParams) => TData | undefined;
   /** Where the engine reads and commits the view. */
   port: ReplicaStorePort<TData>;
+  /**
+   * Reconcile a server response with the value currently shown before it is
+   * folded in — e.g. keep a row the client knows is newer, or ignore a
+   * response that raced a newer local state. Return `undefined` to drop the
+   * response entirely.
+   */
+  prepareHead?: (
+    incoming: TFetched,
+    current: TData | undefined,
+    params: TParams,
+  ) => TFetched | undefined;
   /** Re-run the network sync of one entry (or all); wired by the fetch adapter. */
   revalidate?: (key?: string) => Promise<unknown>;
   /** Strip transient / client-only parts before persisting; `undefined` skips. */
@@ -278,8 +289,12 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     return confirmed !== undefined && isEqual(next, confirmed) ? undefined : next;
   };
 
-  const replace = (params: TParams, incoming: TFetched, scope = resource.scope.get()) => {
+  const replace = (params: TParams, fetched: TFetched, scope = resource.scope.get()) => {
     const key = resource.key(params);
+    const incoming = options.prepareHead
+      ? options.prepareHead(fetched, port.read(key), params)
+      : fetched;
+    if (incoming === undefined) return false;
     const query = resource.query(params);
     const entry = getSlot().entries[key];
     // A different query (filters, sort) must not merge with loaded pages. A

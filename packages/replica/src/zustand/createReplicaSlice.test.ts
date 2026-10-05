@@ -221,6 +221,37 @@ describe('createReplicaSlice', () => {
       expect(store.getState().lists.all).toEqual(['b-1']);
     });
 
+    it('syncs under a custom key when the resource adopts one', () => {
+      const useQuery = vi.fn(() => ({ isValidating: false, mutate: vi.fn() }));
+      const resource = defineReplica<{ id: string }, string[]>({
+        fetcher: async () => ['server'],
+        key: ({ id }) => id,
+        name: 'customKeyed',
+        scope,
+        syncKey: ({ id }) => ['legacy:list', id],
+        version: 1,
+      });
+      const store = createStore<TestState>()(() => ({
+        lists: {},
+        listsReplica: createReplicaState(),
+      }));
+      const slice = createReplicaSlice<TestState, { id: string }, string[]>(resource, {
+        driver: { revalidate: vi.fn(), useQuery },
+        get: store.getState,
+        set: (partial) => store.setState(partial),
+        stateKey: 'listsReplica',
+        view: recordLens('lists'),
+      });
+
+      renderHook(() => slice.useSync({ id: 'a' }));
+
+      expect(useQuery).toHaveBeenCalledWith(
+        ['legacy:list', 'a'],
+        expect.any(Function),
+        expect.any(Object),
+      );
+    });
+
     it('does not let a slow hydration overwrite a faster server response', async () => {
       const storage = createMemoryStorage();
       storage.rows.set('user-1:personal|a', { data: ['cached'], updatedAt: 1 });

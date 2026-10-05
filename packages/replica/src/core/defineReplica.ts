@@ -56,6 +56,13 @@ export interface DefineReplicaOptions<TParams, TData, TFetched = TData, TCursor 
   scope?: ReplicaScope;
   /** Persisted copy of the replica. Omit for a memory-only replica (no first-frame paint). */
   storage?: ReplicaStorage<TData> | ReplicaStorageFactory<TData>;
+  /**
+   * Query-cache key of the network sync, for a resource adopting an existing
+   * key that other code already revalidates by. Defaults to `replicaKeys.sync`.
+   * With a custom key, revalidate through that key — `slice.revalidate` only
+   * matches default keys.
+   */
+  syncKey?: (params: TParams) => readonly unknown[];
   /** Bump to invalidate every persisted row written by older shapes. */
   version: number;
 }
@@ -82,6 +89,7 @@ export const defineReplica = <TParams, TData, TFetched = TData, TCursor = any>(
         options.query ? stableQueryKey(options.query(params)) : undefined,
       ),
     scope: options.scope ?? DEFAULT_SCOPE,
+    syncKey: options.syncKey,
     storage,
     version: options.version,
   };

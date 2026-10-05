@@ -120,6 +120,56 @@ describe('splitPagedLens', () => {
   });
 });
 
+describe('prepareHead', () => {
+  it('reconciles a head page with the shown rows, or drops it', () => {
+    const resource = definePagedReplica<{ topic: string }, Message, number>({
+      key: ({ topic }) => topic,
+      name: 'preparedTranscript',
+      paging: { direction: 'backward', getId: (m) => m.id, mode: 'cursor' },
+      scope,
+      version: 1,
+    });
+    const store = createStore<TestState>()(() => ({
+      displayMap: {},
+      pagingMap: {},
+      replica: createReplicaState(),
+      rowsMap: {},
+    }));
+    let dropNext = false;
+    const slice = createReplicaSlice(resource, {
+      driver,
+      get: store.getState,
+      // Keep a locally newer row (higher createdAt) over the server's copy.
+      prepareHead: (page, current) => {
+        if (dropNext) return undefined;
+        const local = new Map(current?.items.map((m) => [m.id, m]));
+        return {
+          ...page,
+          items: page.items.map((m) => {
+            const mine = local.get(m.id);
+            return mine && mine.createdAt > m.createdAt ? mine : m;
+          }),
+        };
+      },
+      set: (partial) => store.setState(partial),
+      stateKey: 'replica',
+      view: splitPagedLens<TestState, Message, number>({
+        itemsField: 'rowsMap',
+        metaField: 'pagingMap',
+      }),
+    });
+
+    slice.replace({ topic: 't1' }, { items: [msg(1)], nextCursor: null });
+    slice.update('t1', (data) => data && { ...data, items: [{ createdAt: 9, id: 'm1' }] });
+    slice.replace({ topic: 't1' }, { items: [msg(1), msg(2)], nextCursor: null });
+    expect(store.getState().rowsMap.t1).toEqual([{ createdAt: 9, id: 'm1' }, msg(2)]);
+
+    dropNext = true;
+    expect(slice.replace({ topic: 't1' }, { items: [], nextCursor: null })).toBe(false);
+    expect(store.getState().rowsMap.t1).toHaveLength(2);
+  });
+});
+
 describe('persistKey and persist()', () => {
   it('never persists or hydrates a key the resource keeps in memory', async () => {
     const { rows, slice } = setup();
