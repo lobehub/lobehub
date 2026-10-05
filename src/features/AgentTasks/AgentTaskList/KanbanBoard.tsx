@@ -212,7 +212,16 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
         if (column.targetStatus === 'running') void refreshTaskList();
       }
     },
-    [canEditTask, changeTaskStatus, columns, groupBy, queryKey, refreshTaskList, startTask, updateTask],
+    [
+      canEditTask,
+      changeTaskStatus,
+      columns,
+      groupBy,
+      queryKey,
+      refreshTaskList,
+      startTask,
+      updateTask,
+    ],
   );
 
   const handleDragCancel = useCallback(() => {
