@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ExpertiseRuleDistillService } from './distill';
+import { DistillRulesInputSchema, ExpertiseRuleDistillService } from './distill';
 
 const { resolveExpertiseModelConfig, findDocument, findTopic, transcript, parseFile } = vi.hoisted(
   () => ({
@@ -175,6 +175,48 @@ describe('ExpertiseRuleDistillService', () => {
     });
 
     expect(result.material.truncated).toBe(true);
+  });
+
+  it('keeps a large catalog of existing rules to a bounded slice of the prompt', async () => {
+    generateObject.mockResolvedValue({ rules: [candidate({ duplicateOf: 'r-1999' })] });
+    const many = Array.from({ length: 2000 }, (_, index) => ({
+      id: `r-${index}`,
+      title: 'x'.repeat(400),
+    }));
+
+    const result = await service().distillRules({
+      groups,
+      rules: many,
+      source: { text: '一条规矩', type: 'text' },
+    });
+
+    const [params] = generateObject.mock.calls[0];
+    expect(params.messages[1].content.length).toBeLessThan(40_000);
+    expect(params.messages[1].content).toContain('r-0 · ');
+    // A rule the model was never shown cannot be what a candidate restates.
+    expect(result.candidates[0].duplicateOf).toBeNull();
+  });
+
+  it('refuses an oversized catalog before reading the material', () => {
+    const tooMany = Array.from({ length: 201 }, (_, index) => ({
+      gate: 'g',
+      id: `g-${index}`,
+      title: 't',
+    }));
+    expect(
+      DistillRulesInputSchema.safeParse({
+        groups: tooMany,
+        rules,
+        source: { text: 'x', type: 'text' },
+      }).success,
+    ).toBe(false);
+    expect(
+      DistillRulesInputSchema.safeParse({
+        groups,
+        rules: [{ id: 'r', title: 'x'.repeat(501) }],
+        source: { text: 'x', type: 'text' },
+      }).success,
+    ).toBe(false);
   });
 
   it('refuses a material with no readable text instead of asking the model', async () => {

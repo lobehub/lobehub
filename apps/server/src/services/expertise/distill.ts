@@ -41,13 +41,40 @@ export const DistillSourceSchema = z.discriminatedUnion('type', [
 
 export type DistillSource = z.infer<typeof DistillSourceSchema>;
 
+/**
+ * How much of the prompt the reviewer's existing groups and rules may take, so a large part (or a
+ * crafted request) cannot crowd out the material or run up the model bill. Groups go first, then
+ * rules in the order sent (the page's order); whatever does not fit is left out of the comparison.
+ */
+const CATALOG_MAX_CHARS = 30_000;
+
 export const DistillRulesInputSchema = z.object({
   /** The groups of the part the rules will be filed into, so candidates can be sorted there. */
-  groups: z.array(z.object({ gate: z.string(), id: z.string(), title: z.string() })),
+  groups: z
+    .array(
+      z.object({
+        gate: z.string().max(1000),
+        id: z.string().max(128),
+        title: z.string().max(200),
+      }),
+    )
+    .max(200),
   /** The rules already in that part, so a restatement is flagged instead of filed twice. */
-  rules: z.array(z.object({ id: z.string(), title: z.string() })),
+  rules: z.array(z.object({ id: z.string().max(128), title: z.string().max(500) })).max(2000),
   source: DistillSourceSchema,
 });
+
+/** The leading items whose rendered lines fit in `budget` characters. */
+const fitCatalog = <T>(items: T[], size: (item: T) => number, budget: number) => {
+  const kept: T[] = [];
+  let used = 0;
+  for (const item of items) {
+    used += size(item);
+    if (used > budget) break;
+    kept.push(item);
+  }
+  return { kept, used };
+};
 
 export type DistillRulesInput = z.infer<typeof DistillRulesInputSchema>;
 
@@ -183,6 +210,17 @@ export class ExpertiseRuleDistillService {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'The material has no readable text' });
     }
     const read = sliceHead(text, MATERIAL_MAX_CHARS);
+    const fittedGroups = fitCatalog(
+      input.groups,
+      (group) => group.id.length + group.title.length + group.gate.length + 10,
+      CATALOG_MAX_CHARS,
+    );
+    const { kept: rules } = fitCatalog(
+      input.rules,
+      (rule) => rule.id.length + rule.title.length + 6,
+      CATALOG_MAX_CHARS - fittedGroups.used,
+    );
+    const groups = fittedGroups.kept;
 
     const modelConfig = await resolveExpertiseModelConfig(this.db, this.userId);
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
@@ -190,9 +228,9 @@ export class ExpertiseRuleDistillService {
       await ai.generateObject(
         {
           ...chainExpertiseRuleDistill({
-            groups: input.groups,
+            groups,
             material: { kind: material.type, text: read, title: material.title },
-            rules: input.rules,
+            rules,
           }),
           ...modelConfig,
           schema: EXPERTISE_RULE_DISTILL_JSON_SCHEMA,
@@ -209,8 +247,8 @@ export class ExpertiseRuleDistillService {
     );
 
     // Ids the model names but the reviewer does not have are slips, not requests.
-    const groupIds = new Set(input.groups.map((group) => group.id));
-    const ruleIds = new Set(input.rules.map((rule) => rule.id));
+    const groupIds = new Set(groups.map((group) => group.id));
+    const ruleIds = new Set(rules.map((rule) => rule.id));
     return {
       candidates: result.rules.map((rule) => {
         const groupId = rule.groupId && groupIds.has(rule.groupId) ? rule.groupId : null;
