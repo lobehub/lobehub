@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FileListItem } from '@/types/files';
 
 import FileViewer from './index';
+import { useImageStage } from './Renderer/Image/context';
 
 const baseFile: FileListItem = {
   chunkCount: null,
@@ -23,7 +24,7 @@ const baseFile: FileListItem = {
   url: 'https://s3/sunset.png',
 };
 
-const Tools = () => <div data-testid={'tools'} />;
+const Tools = () => <div data-file-id={useImageStage().fileId} data-testid={'tools'} />;
 
 const loadImage = () => {
   const img = document.querySelector('img')!;
@@ -42,6 +43,34 @@ describe('FileViewer image entry', () => {
     expect(screen.getByTestId('tools')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'imageViewer.close' }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  // Regression: a document-coalesced item's `id` is `docs_*`; the tools must
+  // work on the persisted `file_*` behind it.
+  it('gives the tools the backing file id of a document item', () => {
+    render(
+      <FileViewer {...baseFile} fileId={'file_backing'} id={'docs_item'} imageTools={<Tools />} />,
+    );
+    loadImage();
+
+    expect(screen.getByTestId('tools')).toHaveAttribute('data-file-id', 'file_backing');
+  });
+
+  // Regression: the `/f/:id` proxy redirects to storage without CORS, so a
+  // blob download would only open the inline preview.
+  it('downloads a proxied file through the attachment route', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(<FileViewer {...baseFile} url={'https://app.lobehub.com/f/file_img'} />);
+    loadImage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'imageViewer.download' }));
+
+    expect(open).toHaveBeenCalledWith(
+      'https://app.lobehub.com/f/file_img?download=1',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    open.mockRestore();
   });
 
   it('keeps read-only hosts (no tools) free of editing UI', () => {

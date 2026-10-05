@@ -7,6 +7,7 @@ import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getFileDownloadUrl } from '@/features/EditorCanvas/fileDownload';
 import { downloadFile } from '@/utils/client/downloadFile';
 
 import { ImageStageContext, type ImageStageValue, type ImageVersion } from './context';
@@ -204,6 +205,18 @@ const ImageViewer = ({
     else void root.requestFullscreen?.();
   }, []);
 
+  const handleDownload = () => {
+    if (!url) return;
+    // The `/f/:id` proxy redirects to storage without CORS, so a blob download
+    // cannot read it; its `download=1` answer carries an attachment disposition.
+    const downloadUrl = getFileDownloadUrl(url, { appOrigin: window.location.origin });
+    if (downloadUrl !== url) {
+      window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    void downloadFile(url, name || 'image');
+  };
+
   const box = useMemo(() => {
     if (!naturalSize) return { height: 0, width: 0 };
     const fit = fitSize(
@@ -364,7 +377,6 @@ const ImageViewer = ({
           >
             <Text type={'secondary'}>{t('imageViewer.loadFailed')}</Text>
             <Button
-              size={'small'}
               onClick={() => {
                 setStatus('loading');
                 setAttempt((value) => value + 1);
@@ -379,7 +391,7 @@ const ImageViewer = ({
           isFullscreen={isFullscreen}
           zoom={zoom}
           onClose={onClose}
-          onDownload={() => void downloadFile(url, name || 'image')}
+          onDownload={handleDownload}
           onFit={fitToScreen}
           onRotate={() => setRotation(nextRotation)}
           onToggleFullscreen={toggleFullscreen}

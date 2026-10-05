@@ -55,6 +55,12 @@ export class FileService {
     };
   };
 
+  /** Storage URL a canvas can read (no `/f/:id` redirect); see the router for why. */
+  getReadableUrl = async (id: string): Promise<string> => {
+    const { url } = await lambdaClient.file.getReadableUrl.query({ id });
+    return url;
+  };
+
   removeFile = async (id: string): Promise<void> => {
     await lambdaClient.file.removeFile.mutate({ id });
   };

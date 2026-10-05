@@ -1,21 +1,32 @@
 'use client';
 
-import type { FileCommentAnchor } from '@lobechat/types';
-import { FILE_COMMENT_MAX_LENGTH } from '@lobechat/types';
-import { ActionIcon, Button, Spin, Text, TextArea, toast } from '@lobehub/ui/base-ui';
+import { nanoid } from '@lobechat/utils';
+import { ActionIcon, Button, Text, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import dayjs from 'dayjs';
 import { ListIcon, Trash2Icon } from 'lucide-react';
-import type { MouseEvent } from 'react';
-import { useState } from 'react';
+import type { PointerEvent } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useImageStage } from '../../context';
-import { imagePointToScreenFraction } from '../../geometry';
+import { imagePointToScreenFraction, type Point } from '../../geometry';
+import { rectFromPoints } from '../Annotate/shapes';
+import {
+  anchorOrigin,
+  describeAnchor,
+  type ImageMarkup,
+  MARKUP_COMMENT_MAX_LENGTH,
+  type MarkupAnchor,
+} from '../markup';
+import MarkupPreview from '../MarkupPreview';
+import SendToChatButton from '../SendToChatButton';
 import { toolStyles } from '../styles';
 import { useToolKeys } from '../useToolKeys';
-import { useFileComments } from './useFileComments';
+import CommentMarkers, { markerStyles } from './CommentMarkers';
+
+/** A drag shorter than this (in image fractions) is a click on a point. */
+const REGION_MIN_SIZE = 0.02;
 
 const styles = createStaticStyles(({ css }) => ({
   draft: css`
@@ -49,40 +60,6 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillTertiary};
     }
   `,
-  pin: css`
-    cursor: pointer;
-
-    position: absolute;
-    z-index: 1;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    margin-block-start: -24px;
-    margin-inline-start: -2px;
-    padding: 0;
-    border: 2px solid ${cssVar.colorBgContainer};
-    border-radius: 12px 12px 12px 2px;
-
-    font-size: 11px;
-    font-weight: 600;
-    color: #fff;
-
-    background: ${cssVar.colorInfo};
-    box-shadow: ${cssVar.boxShadowSecondary};
-
-    &[data-active='true'] {
-      background: ${cssVar.colorWarning};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 2px;
-    }
-  `,
   pinBadge: css`
     display: inline-flex;
     flex-shrink: 0;
@@ -102,28 +79,26 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface CommentModeProps {
+  markup: ImageMarkup;
+  onChange: (markup: ImageMarkup) => void;
   onExit: () => void;
+  onSent: () => void;
 }
 
 /**
- * Pin comments on a point of the image. Pins are stored as normalized
- * coordinates, so they stay on the same pixel through zoom and rotation.
+ * Pin comments on a point of the image, or drag to comment on a region. They
+ * stay in the viewer's memory until the user adds them to a chat message.
+ * Anchors are normalized, so they stay on the same pixels through zoom and
+ * rotation.
  */
-const CommentMode = ({ onExit }: CommentModeProps) => {
+const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => {
   const { t } = useTranslation('file');
-  const { fileId, overlayElement, rotation, toImagePoint } = useImageStage();
-  const {
-    comments,
-    createComment,
-    creating,
-    deleteComment,
-    deletingIds,
-    error,
-    isLoading,
-    reload,
-  } = useFileComments(fileId);
+  const { overlayElement, rotation, toImagePoint } = useImageStage();
+  const { comments } = markup;
 
-  const [draftAnchor, setDraftAnchor] = useState<FileCommentAnchor | null>(null);
+  const dragStart = useRef<Point | null>(null);
+  const [dragAnchor, setDragAnchor] = useState<MarkupAnchor | null>(null);
+  const [draftAnchor, setDraftAnchor] = useState<MarkupAnchor | null>(null);
   const [draftText, setDraftText] = useState('');
   const [activeId, setActiveId] = useState<string>();
   // In a narrow host (the resource detail dock) the list would cover the
@@ -139,104 +114,123 @@ const CommentMode = ({ onExit }: CommentModeProps) => {
 
   useToolKeys({ onEscape: () => (draftAnchor ? cancelDraft() : onExit()) });
 
-  const submitDraft = async () => {
-    const content = draftText.trim();
-    if (!draftAnchor || !content || creating) return;
-    try {
-      const comment = await createComment(draftAnchor, content);
-      cancelDraft();
-      if (comment) setActiveId(comment.id);
-    } catch (error) {
-      console.error('[ImageViewer] create comment failed', error);
-      toast.error(t('imageViewer.comment.saveFailed'));
-    }
+  const submitDraft = () => {
+    const text = draftText.trim();
+    if (!draftAnchor || !text) return;
+    const id = nanoid();
+    onChange({ ...markup, comments: [...comments, { anchor: draftAnchor, id, text }] });
+    setActiveId(id);
+    cancelDraft();
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteComment(id);
-    } catch (error) {
-      console.error('[ImageViewer] delete comment failed', error);
-      toast.error(t('imageViewer.comment.deleteFailed'));
-    }
+  const removeComment = (id: string) =>
+    onChange({ ...markup, comments: comments.filter((comment) => comment.id !== id) });
+
+  const toAnchor = (start: Point, end: Point): MarkupAnchor => {
+    const rect = rectFromPoints(start, end);
+    return rect.width < REGION_MIN_SIZE && rect.height < REGION_MIN_SIZE
+      ? { point: start, type: 'point' }
+      : { rect, type: 'region' };
   };
 
-  const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) return;
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    if (event.button !== 0 || event.target !== event.currentTarget) return;
     const point = toImagePoint({ x: event.clientX, y: event.clientY });
     if (!point) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragStart.current = point;
     setActiveId(undefined);
-    setDraftAnchor(point);
   };
 
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const start = dragStart.current;
+    if (!start) return;
+    const point = toImagePoint({ x: event.clientX, y: event.clientY });
+    if (point) setDragAnchor(toAnchor(start, point));
+  };
+
+  const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const start = dragStart.current;
+    dragStart.current = null;
+    setDragAnchor(null);
+    if (!start) return;
+    const point = toImagePoint({ x: event.clientX, y: event.clientY }) ?? start;
+    setDraftAnchor(toAnchor(start, point));
+  };
+
+  const pendingAnchor = dragAnchor ?? draftAnchor;
+  const draftOrigin = draftAnchor ? anchorOrigin(draftAnchor) : undefined;
   // Which way the draft card opens depends on where the point is on screen,
   // not in the image, once the image is turned.
-  const draftScreen = draftAnchor ? imagePointToScreenFraction(draftAnchor, rotation) : undefined;
-
-  // Pins and the draft card sit inside the rotated frame; turning them back
-  // keeps their labels upright.
-  const upright = { transform: `rotate(${-rotation}deg)`, transformOrigin: '0 100%' };
+  const draftScreen = draftOrigin ? imagePointToScreenFraction(draftOrigin, rotation) : undefined;
 
   return (
     <>
+      <MarkupPreview shapes={markup.shapes} />
       {overlayElement &&
         createPortal(
           <div
             aria-label={t('imageViewer.comment.hint')}
             className={toolStyles.overlayFill}
             data-testid={'image-comment-layer'}
-            style={{ cursor: 'crosshair' }}
-            onClick={handleOverlayClick}
-            onPointerDown={(event) => event.stopPropagation()}
+            style={{ cursor: 'crosshair', touchAction: 'none' }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={() => {
+              dragStart.current = null;
+              setDragAnchor(null);
+            }}
           >
-            {comments.map((comment, index) => (
-              <button
-                aria-label={t('imageViewer.comment.pin', { index: index + 1 })}
-                className={styles.pin}
-                data-active={activeId === comment.id}
-                key={comment.id}
-                title={comment.content}
-                type={'button'}
+            <CommentMarkers
+              activeId={activeId}
+              comments={comments}
+              rotation={rotation}
+              onSelect={setActiveId}
+            />
+            {pendingAnchor?.type === 'region' && (
+              <span
+                data-active
+                className={markerStyles.region}
                 style={{
-                  left: `${comment.anchor.x * 100}%`,
-                  top: `${comment.anchor.y * 100}%`,
-                  ...upright,
+                  height: `${pendingAnchor.rect.height * 100}%`,
+                  left: `${pendingAnchor.rect.x * 100}%`,
+                  top: `${pendingAnchor.rect.y * 100}%`,
+                  width: `${pendingAnchor.rect.width * 100}%`,
                 }}
-                onClick={() => setActiveId(comment.id)}
-              >
-                {index + 1}
-              </button>
-            ))}
-            {draftAnchor && (
+              />
+            )}
+            {draftAnchor && draftOrigin && (
               <>
                 <span
                   aria-hidden
                   data-active
-                  className={styles.pin}
+                  className={markerStyles.pin}
                   style={{
-                    left: `${draftAnchor.x * 100}%`,
-                    top: `${draftAnchor.y * 100}%`,
-                    ...upright,
+                    left: `${draftOrigin.x * 100}%`,
+                    top: `${draftOrigin.y * 100}%`,
+                    transform: `rotate(${-rotation}deg)`,
                   }}
                 >
-                  +
+                  {comments.length + 1}
                 </span>
                 <div
                   className={styles.draft}
                   data-testid={'image-comment-draft'}
                   style={{
-                    left: `${draftAnchor.x * 100}%`,
-                    top: `${draftAnchor.y * 100}%`,
-                    transform: `rotate(${-rotation}deg) translate(${draftScreen && draftScreen.x > 0.6 ? 'calc(-100% - 8px)' : '16px'}, ${draftScreen && draftScreen.y > 0.6 ? '-100%' : '0'})`,
+                    left: `${draftOrigin.x * 100}%`,
+                    top: `${draftOrigin.y * 100}%`,
+                    transform: `rotate(${-rotation}deg) translate(${draftScreen && draftScreen.x > 0.6 ? 'calc(-100% - 16px)' : '16px'}, ${draftScreen && draftScreen.y > 0.6 ? '-100%' : '0'})`,
                     transformOrigin: '0 0',
                   }}
-                  onClick={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
                 >
                   <TextArea
                     autoFocus
                     aria-label={t('imageViewer.comment.add')}
                     autoSize={{ maxRows: 6, minRows: 2 }}
-                    maxLength={FILE_COMMENT_MAX_LENGTH}
+                    maxLength={MARKUP_COMMENT_MAX_LENGTH}
                     placeholder={t('imageViewer.comment.placeholder')}
                     value={draftText}
                     onChange={(event) => setDraftText(event.target.value)}
@@ -250,7 +244,7 @@ const CommentMode = ({ onExit }: CommentModeProps) => {
                         !event.nativeEvent.isComposing
                       ) {
                         event.preventDefault();
-                        void submitDraft();
+                        submitDraft();
                       }
                     }}
                   />
@@ -260,10 +254,9 @@ const CommentMode = ({ onExit }: CommentModeProps) => {
                     </Button>
                     <Button
                       disabled={!draftText.trim()}
-                      loading={creating}
                       size={'small'}
                       type={'primary'}
-                      onClick={() => void submitDraft()}
+                      onClick={submitDraft}
                     >
                       {t('imageViewer.comment.post')}
                     </Button>
@@ -295,26 +288,7 @@ const CommentMode = ({ onExit }: CommentModeProps) => {
             {comments.length > 0 && <Text type={'secondary'}>{comments.length}</Text>}
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: 4 }}>
-            {isLoading ? (
-              <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
-                <Spin />
-              </div>
-            ) : error ? (
-              <div
-                style={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                  padding: 16,
-                }}
-              >
-                <Text type={'secondary'}>{t('imageViewer.comment.loadFailed')}</Text>
-                <Button size={'small'} onClick={() => void reload()}>
-                  {t('imageViewer.retry')}
-                </Button>
-              </div>
-            ) : comments.length === 0 ? (
+            {comments.length === 0 ? (
               <Text style={{ display: 'block', padding: 12 }} type={'secondary'}>
                 {t('imageViewer.comment.empty')}
               </Text>
@@ -330,21 +304,20 @@ const CommentMode = ({ onExit }: CommentModeProps) => {
                     <span className={styles.pinBadge}>{index + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                        {comment.content}
+                        {comment.text}
                       </div>
                       <Text style={{ fontSize: 12 }} type={'secondary'}>
-                        {dayjs(comment.createdAt).format('YYYY-MM-DD HH:mm')}
+                        {describeAnchor(comment.anchor, t)}
                       </Text>
                     </div>
                     <ActionIcon
                       aria-label={t('imageViewer.comment.delete')}
                       icon={Trash2Icon}
-                      loading={deletingIds.includes(comment.id)}
                       size={'small'}
                       title={t('imageViewer.comment.delete')}
                       onClick={(event) => {
                         event.stopPropagation();
-                        void handleDelete(comment.id);
+                        removeComment(comment.id);
                       }}
                     />
                   </li>
@@ -367,9 +340,11 @@ const CommentMode = ({ onExit }: CommentModeProps) => {
             title={t('imageViewer.comment.title')}
             onClick={() => setListOpen((value) => !value)}
           />
-          <Button shape={'round'} size={'small'} type={'primary'} onClick={onExit}>
+          <span className={toolStyles.divider} />
+          <Button shape={'round'} size={'small'} onClick={onExit}>
             {t('imageViewer.done')}
           </Button>
+          <SendToChatButton markup={markup} onSent={onSent} />
         </div>
       </div>
     </>

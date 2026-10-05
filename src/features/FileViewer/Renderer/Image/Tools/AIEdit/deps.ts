@@ -6,6 +6,7 @@ import { imageService } from '@/services/image';
 import { knowledgeBaseService } from '@/services/knowledgeBase';
 import { useFileStore } from '@/store/file';
 
+import { loadReadableImage } from '../exportImage';
 import type { AIEditDeps } from './runAIImageEdit';
 
 /** The real pipeline: the same image generation services the image page uses. */
@@ -36,3 +37,7 @@ export const aiEditDeps: AIEditDeps = {
     return result && { id: result.id, url: result.url };
   },
 };
+
+/** Load the image on stage for canvas export, reading `/f/:id` files from storage directly. */
+export const loadStageImage = (url: string) =>
+  loadReadableImage(url, { resolveProxyUrl: (id) => fileService.getReadableUrl(id) });

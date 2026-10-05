@@ -11,8 +11,8 @@ import {
   DERIVED_FILE_SUFFIX,
   type DerivedImageOperation,
 } from '../geometry';
-import { aiEditDeps } from './AIEdit/deps';
-import { ImagePixelsUnavailableError, loadReadableImage } from './exportImage';
+import { aiEditDeps, loadStageImage } from './AIEdit/deps';
+import { ImagePixelsUnavailableError } from './exportImage';
 import { saveDerivedFile } from './saveDerivedFile';
 
 /**
@@ -29,7 +29,7 @@ export const useSaveDerivedImage = (operation: DerivedImageOperation) => {
     async (render: (img: HTMLImageElement) => Promise<Blob>) => {
       setSaving(true);
       try {
-        const img = await loadReadableImage(url);
+        const img = await loadStageImage(url);
         const blob = await render(img);
         const fileName = buildDerivedFileName(name, DERIVED_FILE_SUFFIX[operation]);
         const { refreshFileList } = useFileStore.getState();

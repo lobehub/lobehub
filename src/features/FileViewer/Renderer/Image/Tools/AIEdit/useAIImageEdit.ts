@@ -21,7 +21,13 @@ import {
 export type AIEditState =
   | { status: 'idle' }
   | { phase: AIEditPhase; startedAt: number; status: 'running' }
-  | { kind: Exclude<AIEditErrorKind, 'cancelled'>; message?: string; status: 'error' };
+  | {
+      kind: Exclude<AIEditErrorKind, 'cancelled'>;
+      message?: string;
+      status: 'error';
+      /** The server task keeps running; its result shows up in image generation. */
+      taskRunning?: boolean;
+    };
 
 /**
  * Run one AI edit of the image on stage and track its progress. The result is
@@ -87,11 +93,18 @@ export const useAIImageEdit = (operation: AIEditOperation, deps: AIEditDeps = ai
           error instanceof AIImageEditError ? error : new AIImageEditError('failed', String(error));
         if (edit.kind === 'cancelled') {
           setState({ status: 'idle' });
-          toast.info(t('imageViewer.ai.cancelled'));
+          toast.info(
+            t(edit.taskRunning ? 'imageViewer.ai.stoppedWaiting' : 'imageViewer.ai.cancelled'),
+          );
           return;
         }
         console.error('[ImageViewer] AI edit failed', error);
-        setState({ kind: edit.kind, message: edit.message, status: 'error' });
+        setState({
+          kind: edit.kind,
+          message: edit.message,
+          status: 'error',
+          taskRunning: edit.taskRunning,
+        });
       } finally {
         if (controllerRef.current === controller) controllerRef.current = null;
       }

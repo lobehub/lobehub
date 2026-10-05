@@ -9,9 +9,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useImageStage } from '../../context';
 import type { Point } from '../../geometry';
-import { renderImageToBlob } from '../exportImage';
+import type { ImageMarkup } from '../markup';
+import MarkupPreview from '../MarkupPreview';
+import SendToChatButton from '../SendToChatButton';
 import { toolStyles as styles } from '../styles';
-import { useSaveDerivedImage } from '../useSaveDerivedImage';
 import { useToolKeys } from '../useToolKeys';
 import {
   ANNOTATION_COLOR_NAMES,
@@ -27,14 +28,17 @@ import {
 type SizeKey = keyof typeof ANNOTATION_SIZES;
 
 interface AnnotateModeProps {
+  markup: ImageMarkup;
+  onChange: (markup: ImageMarkup) => void;
   onExit: () => void;
+  onSent: () => void;
 }
 
 /**
- * Brush and box annotations drawn over the image, exported together with the
- * image pixels as a new PNG file.
+ * Brush and box annotations drawn over the image. They stay in the viewer's
+ * memory until the user adds the marked-up image to a chat message.
  */
-const AnnotateMode = ({ onExit }: AnnotateModeProps) => {
+const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) => {
   const { t } = useTranslation('file');
   const { overlayElement, toImagePoint } = useImageStage();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -43,14 +47,16 @@ const AnnotateMode = ({ onExit }: AnnotateModeProps) => {
   const [tool, setTool] = useState<AnnotationTool>('brush');
   const [color, setColor] = useState<string>(ANNOTATION_COLORS[0]);
   const [sizeKey, setSizeKey] = useState<SizeKey>('medium');
-  const [shapes, setShapes] = useState<AnnotationShape[]>([]);
+  const { shapes } = markup;
+  const setShapes = (update: (value: AnnotationShape[]) => AnnotationShape[]) =>
+    onChange({ ...markup, shapes: update(shapes) });
+  const [redrawKey, setRedrawKey] = useState(0);
   const [draft, setDraftState] = useState<AnnotationShape | null>(null);
   const draftRef = useRef<AnnotationShape | null>(null);
   const setDraft = (value: AnnotationShape | null) => {
     draftRef.current = value;
     setDraftState(value);
   };
-  const { save, saving } = useSaveDerivedImage('annotate');
 
   // Keep the canvas backing store matched to its displayed size so strokes stay crisp.
   useEffect(() => {
@@ -60,7 +66,7 @@ const AnnotateMode = ({ onExit }: AnnotateModeProps) => {
       const ratio = window.devicePixelRatio || 1;
       canvas.width = Math.max(1, Math.round(overlayElement.clientWidth * ratio));
       canvas.height = Math.max(1, Math.round(overlayElement.clientHeight * ratio));
-      setShapes((value) => [...value]);
+      setRedrawKey((value) => value + 1);
     };
     sync();
     if (!('ResizeObserver' in window)) return;
@@ -75,15 +81,9 @@ const AnnotateMode = ({ onExit }: AnnotateModeProps) => {
     if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawShapes(ctx, draft ? [...shapes, draft] : shapes, canvas.width, canvas.height);
-  }, [draft, shapes]);
+  }, [draft, shapes, redrawKey]);
 
   const undo = () => setShapes((value) => value.slice(0, -1));
-
-  const handleSave = async () => {
-    if (shapes.length === 0) return;
-    const result = await save((img) => renderImageToBlob(img, { shapes }));
-    if (result) onExit();
-  };
 
   useToolKeys({ onEscape: onExit, onUndo: undo });
 
@@ -125,6 +125,7 @@ const AnnotateMode = ({ onExit }: AnnotateModeProps) => {
 
   return (
     <>
+      <MarkupPreview comments={markup.comments} />
       {overlayElement &&
         createPortal(
           <canvas
@@ -222,23 +223,13 @@ const AnnotateMode = ({ onExit }: AnnotateModeProps) => {
             icon={Trash2Icon}
             size={'small'}
             title={t('imageViewer.annotate.clear')}
-            onClick={() => setShapes([])}
+            onClick={() => setShapes(() => [])}
           />
           <span className={styles.divider} />
-          <Button disabled={saving} shape={'round'} size={'small'} onClick={onExit}>
-            {t('imageViewer.cancel')}
+          <Button shape={'round'} size={'small'} onClick={onExit}>
+            {t('imageViewer.done')}
           </Button>
-          <Button
-            disabled={shapes.length === 0}
-            loading={saving}
-            shape={'round'}
-            size={'small'}
-            title={shapes.length === 0 ? t('imageViewer.annotate.empty') : undefined}
-            type={'primary'}
-            onClick={handleSave}
-          >
-            {saving ? t('imageViewer.saving') : t('imageViewer.saveAsNew')}
-          </Button>
+          <SendToChatButton markup={markup} onSent={onSent} />
         </div>
       </div>
     </>

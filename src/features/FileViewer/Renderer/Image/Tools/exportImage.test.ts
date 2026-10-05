@@ -6,13 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImagePixelsUnavailableError, loadReadableImage, renderImageToBlob } from './exportImage';
 
 const createCtx = () => ({
+  arc: vi.fn(),
   beginPath: vi.fn(),
+  fill: vi.fn(),
+  fillText: vi.fn(),
   drawImage: vi.fn(),
   imageSmoothingQuality: 'low',
   lineTo: vi.fn(),
   moveTo: vi.fn(),
   restore: vi.fn(),
   save: vi.fn(),
+  setLineDash: vi.fn(),
   setTransform: vi.fn(),
   stroke: vi.fn(),
   strokeRect: vi.fn(),
@@ -84,6 +88,24 @@ describe('renderImageToBlob', () => {
     expect(ctx.strokeRect).toHaveBeenCalledWith(200, 100, 200, 100);
   });
 
+  it('burns numbered comment markers into the exported pixels', async () => {
+    await renderImageToBlob(source, {
+      comments: [
+        { anchor: { point: { x: 0.5, y: 0.5 }, type: 'point' }, id: 'a', text: 'here' },
+        {
+          anchor: { rect: { height: 0.2, width: 0.1, x: 0.1, y: 0.1 }, type: 'region' },
+          id: 'b',
+          text: 'there',
+        },
+      ],
+    });
+
+    expect(ctx.fillText).toHaveBeenNthCalledWith(1, '1', 1000, 500);
+    expect(ctx.fillText).toHaveBeenNthCalledWith(2, '2', 200, 100);
+    // A region also gets its outline.
+    expect(ctx.strokeRect).toHaveBeenCalledWith(200, 100, 200, 200);
+  });
+
   it('reports unreadable pixels when the canvas is tainted', async () => {
     tainted = true;
 
@@ -130,6 +152,44 @@ describe('loadReadableImage', () => {
     });
     expect(img.loaded).toBe('blob:local/1');
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:local/1');
+  });
+
+  // Regression: production files are `/f/:id` proxy URLs that redirect to
+  // storage; a cross-origin redirect nulls the Origin so CORS always fails.
+  it('reads a /f/:id proxy file from the storage URL behind it', async () => {
+    const fetchMock = vi.fn(async () => new Response(new Blob(['png'], { type: 'image/png' })));
+    vi.stubGlobal('fetch', fetchMock);
+    const resolveProxyUrl = vi.fn(async () => 'https://s3/files/a.png?sig=2');
+
+    await loadReadableImage('https://app.lobehub.com/f/file_abc', { resolveProxyUrl });
+
+    expect(resolveProxyUrl).toHaveBeenCalledWith('file_abc');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://s3/files/a.png?sig=2',
+      expect.objectContaining({ mode: 'cors' }),
+    );
+  });
+
+  it('fetches other URLs as they are', async () => {
+    const fetchMock = vi.fn(async () => new Response(new Blob(['png'], { type: 'image/png' })));
+    vi.stubGlobal('fetch', fetchMock);
+    const resolveProxyUrl = vi.fn();
+
+    await loadReadableImage('https://s3/f/file_abc/a.png', { resolveProxyUrl });
+
+    expect(resolveProxyUrl).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith('https://s3/f/file_abc/a.png', expect.anything());
+  });
+
+  it('reports pixels as unavailable when the storage URL cannot be resolved', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const resolveProxyUrl = vi.fn(async () => {
+      throw new Error('NOT_FOUND');
+    });
+
+    await expect(loadReadableImage('/f/file_abc', { resolveProxyUrl })).rejects.toBeInstanceOf(
+      ImagePixelsUnavailableError,
+    );
   });
 
   it('reports unreadable pixels when storage refuses the CORS request', async () => {

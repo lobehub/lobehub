@@ -3,7 +3,7 @@
 import { memo, useEffect } from 'react';
 
 import { useComposerDraftBus } from './composerDraftBus';
-import { useConversationStore } from './store';
+import { useConversationStore, useConversationStoreApi } from './store';
 
 /**
  * Renders nothing — consumes composerDraftBus drafts into the live composer.
@@ -16,6 +16,7 @@ import { useConversationStore } from './store';
 const ComposerDraftReceiver = memo(() => {
   const editor = useConversationStore((s) => s.editor);
   const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
+  const storeApi = useConversationStoreApi();
   const draft = useComposerDraftBus((s) => s.draft);
 
   useEffect(() => {
@@ -27,13 +28,15 @@ const ComposerDraftReceiver = memo(() => {
 
   useEffect(() => {
     if (!draft || !editor) return;
+    const current = storeApi.getState().inputMessage.trim();
+    const text = draft.append && current ? `${current}\n\n${draft.text}` : draft.text;
     // setDocument alone does not fire the change handler that keeps
     // inputMessage in sync — Send would stay disabled (see restoreToInput).
-    editor.setDocument('markdown', draft.text);
-    updateInputMessage(draft.text);
+    editor.setDocument('markdown', text);
+    updateInputMessage(text);
     editor.focus();
     useComposerDraftBus.setState({ draft: null });
-  }, [draft, editor, updateInputMessage]);
+  }, [draft, editor, storeApi, updateInputMessage]);
 
   return null;
 });

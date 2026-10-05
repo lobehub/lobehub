@@ -10,9 +10,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useImageStage } from '../../context';
 import { type BrushShape, drawShapes, isMeaningfulShape } from '../Annotate/shapes';
-import { ImagePixelsUnavailableError, loadReadableImage, renderImageToBlob } from '../exportImage';
+import { ImagePixelsUnavailableError, renderImageToBlob } from '../exportImage';
 import { toolStyles } from '../styles';
 import { useToolKeys } from '../useToolKeys';
+import { loadStageImage } from './deps';
 import { type AIEditOperation, ERASE_MARK_COLOR } from './request';
 import type { AIEditDeps } from './runAIImageEdit';
 import { useAIImageEdit } from './useAIImageEdit';
@@ -152,7 +153,7 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
     let guide: Blob | undefined;
     if (isErase) {
       try {
-        const img = await loadReadableImage(url);
+        const img = await loadStageImage(url);
         guide = await renderImageToBlob(img, { shapes: strokes });
       } catch (error) {
         console.error('[ImageViewer] erase guide render failed', error);
@@ -220,11 +221,14 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
     }
     if (state.status === 'error') {
       return (
-        <span className={styles.error} role={'alert'}>
+        // The provider's raw message stays one hover away instead of in the line.
+        <span
+          className={styles.error}
+          role={'alert'}
+          title={state.kind === 'failed' ? state.message : undefined}
+        >
           <CircleAlertIcon size={14} style={{ flexShrink: 0 }} />
-          {state.kind === 'failed'
-            ? t('imageViewer.ai.error.failed', { message: state.message })
-            : t(`imageViewer.ai.error.${state.kind}`)}
+          {t(`imageViewer.ai.error.${state.kind}`)}
         </span>
       );
     }

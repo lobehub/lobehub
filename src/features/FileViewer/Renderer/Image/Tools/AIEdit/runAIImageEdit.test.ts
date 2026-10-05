@@ -214,7 +214,7 @@ describe('runAIImageEdit', () => {
     expect(deps.updateFile).not.toHaveBeenCalled();
   });
 
-  it('cancels while generating: stops polling, deletes the topic, saves nothing', async () => {
+  it('cancels while generating: stops waiting but keeps the running task and its topic', async () => {
     const controller = new AbortController();
     const getStatus = vi.fn(async () => {
       controller.abort();
@@ -226,10 +226,49 @@ describe('runAIImageEdit', () => {
 
     expect(error).toBeInstanceOf(AIImageEditError);
     expect(error.kind).toBe('cancelled');
+    expect(error.taskRunning).toBe(true);
     expect(getStatus).toHaveBeenCalledTimes(1);
-    expect(deps.deleteTopic).toHaveBeenCalledWith('gt_6p9nBZERtyWe');
+    // The server task cannot be aborted; deleting its topic would orphan its result.
+    expect(deps.deleteTopic).not.toHaveBeenCalled();
     expect(deps.updateFile).not.toHaveBeenCalled();
     expectSourceUntouched(deps);
+  });
+
+  it('keeps the erase guide for a task that is still running', async () => {
+    const controller = new AbortController();
+    const deps = spyDeps({
+      getStatus: async () => {
+        controller.abort();
+        return realProcessingStatus;
+      },
+    });
+
+    await expect(
+      run(deps, {
+        guide: new Blob(['png'], { type: 'image/png' }),
+        operation: 'erase',
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ kind: 'cancelled', taskRunning: true });
+    expect(deps.removeFile).not.toHaveBeenCalled();
+    expect(deps.deleteTopic).not.toHaveBeenCalled();
+  });
+
+  it('cleans up the topic when cancelled before the task is submitted', async () => {
+    const controller = new AbortController();
+    const deps = spyDeps({
+      createTopic: async () => {
+        controller.abort();
+        return 'gt_6p9nBZERtyWe';
+      },
+    });
+
+    await expect(run(deps, { signal: controller.signal })).rejects.toMatchObject({
+      kind: 'cancelled',
+      taskRunning: false,
+    });
+    expect(deps.createImage).not.toHaveBeenCalled();
+    expect(deps.deleteTopic).toHaveBeenCalledWith('gt_6p9nBZERtyWe');
   });
 
   it('discards a result that arrives after cancel', async () => {
@@ -247,10 +286,13 @@ describe('runAIImageEdit', () => {
     expect(deps.deleteTopic).toHaveBeenCalled();
   });
 
-  it('times out a task that never finishes', async () => {
+  it('stops waiting at the timeout and leaves the running task alone', async () => {
     const deps = spyDeps({ getStatus: async () => realProcessingStatus });
-    await expect(run(deps, { timeout: 5 })).rejects.toMatchObject({ kind: 'timeout' });
-    expect(deps.deleteTopic).toHaveBeenCalled();
+    await expect(run(deps, { timeout: 5 })).rejects.toMatchObject({
+      kind: 'timeout',
+      taskRunning: true,
+    });
+    expect(deps.deleteTopic).not.toHaveBeenCalled();
   });
 
   it('copies the asset into a new file when the server does not report the file', async () => {

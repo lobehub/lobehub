@@ -12,12 +12,23 @@ export type AIEditErrorKind = 'cancelled' | 'failed' | 'noModel' | 'noResult' | 
 
 export class AIImageEditError extends Error {
   kind: AIEditErrorKind;
+  /**
+   * The server task was submitted and had not finished when the client stopped
+   * waiting. Its result still lands in the generation topic.
+   */
+  taskRunning: boolean;
 
-  constructor(kind: AIEditErrorKind, message?: string, cause?: unknown) {
+  constructor(
+    kind: AIEditErrorKind,
+    message?: string,
+    cause?: unknown,
+    { taskRunning = false }: { taskRunning?: boolean } = {},
+  ) {
     super(message || kind);
     this.name = 'AIImageEditError';
     this.kind = kind;
     this.cause = cause;
+    this.taskRunning = taskRunning;
   }
 }
 
@@ -127,8 +138,10 @@ const errorDetail = (error: AsyncTaskError | null | undefined) => {
  * new library file next to the source. The source file is only ever read: the
  * result is the generation's own file, renamed and filed beside the original.
  *
- * Cancelling (or failing) deletes the generation topic, so a result that lands
- * after the user gave up is never saved.
+ * There is no way to abort a submitted generation task, so once it is running
+ * cancelling or timing out only stops the client from waiting: the topic and
+ * erase guide are kept for the task, and its result appears in the generation
+ * topic. Cleanup only happens when the task never started or has finished.
  */
 export const runAIImageEdit = async ({
   deps,
@@ -145,6 +158,8 @@ export const runAIImageEdit = async ({
   let guideFileId: string | undefined;
   let topicId: string | undefined;
   let kept = false;
+  let submitted = false;
+  let settled = false;
 
   try {
     let imageUrl = source.url;
@@ -173,12 +188,15 @@ export const runAIImageEdit = async ({
     const pending = created?.data?.generations?.[0];
     if (!created?.success || !pending?.id || !pending.asyncTaskId)
       throw new AIImageEditError('failed', 'The image task could not be started');
+    submitted = true;
 
     const deadline = Date.now() + timeout;
     let generation: Generation | null = null;
     while (!generation) {
       await sleep(pollInterval, signal);
       const status = await deps.getStatus(pending.id, pending.asyncTaskId);
+      if (status.status === AsyncTaskStatus.Success || status.status === AsyncTaskStatus.Error)
+        settled = true;
       throwIfAborted(signal);
 
       if (status.status === AsyncTaskStatus.Success) {
@@ -187,7 +205,7 @@ export const runAIImageEdit = async ({
       } else if (status.status === AsyncTaskStatus.Error) {
         throw new AIImageEditError('failed', errorDetail(status.error));
       } else if (Date.now() > deadline) {
-        throw new AIImageEditError('timeout');
+        throw new AIImageEditError('timeout', undefined, undefined, { taskRunning: true });
       }
     }
 
@@ -233,12 +251,18 @@ export const runAIImageEdit = async ({
     kept = true;
     return { fileId, height: asset.height, name, url, width: asset.width };
   } catch (error) {
-    if (signal?.aborted) throw new AIImageEditError('cancelled', undefined, error);
+    if (signal?.aborted)
+      throw new AIImageEditError('cancelled', undefined, error, {
+        taskRunning: submitted && !settled,
+      });
     if (error instanceof AIImageEditError) throw error;
     throw new AIImageEditError('failed', (error as Error)?.message, error);
   } finally {
+    // A task still running on the server needs its topic and its input image;
+    // removing them would orphan the result it is about to store.
+    const abandoned = submitted && !settled;
     // Cleanup is best effort and must never mask the outcome.
-    if (topicId && !kept) await deps.deleteTopic(topicId).catch(() => undefined);
-    if (guideFileId) await deps.removeFile(guideFileId).catch(() => undefined);
+    if (topicId && !kept && !abandoned) await deps.deleteTopic(topicId).catch(() => undefined);
+    if (guideFileId && !abandoned) await deps.removeFile(guideFileId).catch(() => undefined);
   }
 };

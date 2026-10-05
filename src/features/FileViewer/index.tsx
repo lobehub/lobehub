@@ -180,7 +180,9 @@ const FileViewer = memo<FileViewerProps>((props) => {
   if (matchesFileType(fileType, name, IMAGE_EXTENSIONS, IMAGE_MIME_TYPES)) {
     return (
       <ImageViewer
-        fileId={id}
+        // A document-coalesced item carries a `docs_*` id; the tools need the
+        // persisted file behind it.
+        fileId={props.fileId ?? id}
         key={url}
         name={name}
         tools={imageTools}

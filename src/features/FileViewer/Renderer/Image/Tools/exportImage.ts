@@ -1,5 +1,6 @@
 import type { NormalizedRect, Size } from '../geometry';
 import { type AnnotationShape, drawShapes } from './Annotate/shapes';
+import { drawCommentMarkers, type MarkupComment } from './markup';
 
 export class ImagePixelsUnavailableError extends Error {
   constructor(cause?: unknown) {
@@ -18,6 +19,27 @@ const loadImage = (src: string) =>
     img.src = src;
   });
 
+const FILE_PROXY_PATH = /^\/f\/([^/]+)$/;
+
+/** File id of a `/f/:id` proxy URL, whatever host serves it. */
+export const fileIdFromProxyUrl = (src: string): string | undefined => {
+  try {
+    const match = new URL(src, globalThis.location?.href).pathname.match(FILE_PROXY_PATH);
+    return match ? decodeURIComponent(match[1]) : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+export interface LoadReadableImageOptions {
+  /**
+   * Resolve a `/f/:id` proxy URL to the storage URL behind it. The proxy
+   * answers with a cross-origin redirect, which turns the request's Origin into
+   * `null`, so no bucket CORS rule can allow reading it.
+   */
+  resolveProxyUrl?: (fileId: string) => Promise<string>;
+}
+
 /**
  * Load an image whose pixels a canvas may read. Storage URLs are cross-origin
  * and the viewer has usually displayed them already without CORS, so the HTTP
@@ -25,12 +47,21 @@ const loadImage = (src: string) =>
  * bytes with `cache: 'no-store'` sidesteps that entry. Blob and data URLs are
  * same-origin and load directly.
  */
-export const loadReadableImage = async (src: string): Promise<HTMLImageElement> => {
+export const loadReadableImage = async (
+  src: string,
+  { resolveProxyUrl }: LoadReadableImageOptions = {},
+): Promise<HTMLImageElement> => {
   if (src.startsWith('blob:') || src.startsWith('data:')) return loadImage(src);
 
   let blob: Blob;
   try {
-    const response = await fetch(src, { cache: 'no-store', credentials: 'omit', mode: 'cors' });
+    const proxiedFileId = resolveProxyUrl ? fileIdFromProxyUrl(src) : undefined;
+    const readableUrl = proxiedFileId ? await resolveProxyUrl!(proxiedFileId) : src;
+    const response = await fetch(readableUrl, {
+      cache: 'no-store',
+      credentials: 'omit',
+      mode: 'cors',
+    });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     blob = await response.blob();
   } catch (error) {
@@ -47,6 +78,8 @@ export const loadReadableImage = async (src: string): Promise<HTMLImageElement> 
 };
 
 export interface RenderImageOptions {
+  /** Numbered comment markers, in the source's normalized space. */
+  comments?: MarkupComment[];
   /** Region of the source to keep; defaults to the whole image. */
   crop?: NormalizedRect;
   /** Output pixel size; defaults to the cropped region at natural resolution. */
@@ -57,12 +90,14 @@ export interface RenderImageOptions {
 }
 
 /**
- * Render the source image (optionally cropped, scaled, and annotated) into a
+ * Render the source image (optionally cropped, scaled, annotated and marked
+ * with numbered comments) into a
  * new PNG blob. The original file is never touched.
  */
 export const renderImageToBlob = (
   img: CanvasImageSource & { naturalHeight: number; naturalWidth: number },
   {
+    comments = [],
     crop = { height: 1, width: 1, x: 0, y: 0 },
     output,
     shapes = [],
@@ -100,7 +135,7 @@ export const renderImageToBlob = (
     size.height,
   );
 
-  if (shapes.length > 0) {
+  if (shapes.length > 0 || comments.length > 0) {
     // Shapes are normalized to the full image; draw them in full-image pixel
     // space and shift/scale so the crop window lands on the canvas.
     const scaleX = size.width / source.width;
@@ -108,6 +143,7 @@ export const renderImageToBlob = (
     ctx.save();
     ctx.setTransform(scaleX, 0, 0, scaleY, -source.x * scaleX, -source.y * scaleY);
     drawShapes(ctx, shapes, natural.width, natural.height);
+    drawCommentMarkers(ctx, comments, natural.width, natural.height);
     ctx.restore();
   }
 

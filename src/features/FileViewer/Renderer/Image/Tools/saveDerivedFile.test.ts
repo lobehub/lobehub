@@ -11,8 +11,8 @@ const createDeps = (overrides: Partial<SaveDerivedFileDeps> = {}) =>
   }) as SaveDerivedFileDeps & Record<keyof SaveDerivedFileDeps, ReturnType<typeof vi.fn>>;
 
 const params = {
-  file: new File(['x'], 'sunset-annotated.png', { type: 'image/png' }),
-  metadata: { derivedFrom: { fileId: 'file_src', operation: 'annotate' } },
+  file: new File(['x'], 'sunset-resized.png', { type: 'image/png' }),
+  metadata: { derivedFrom: { fileId: 'file_src', operation: 'resize' } },
   sourceId: 'file_src',
 };
 

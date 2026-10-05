@@ -127,10 +127,9 @@ export const buildDerivedFileName = (name: string | undefined, suffix: string, e
   return `${base}-${suffix}.${ext}`;
 };
 
-export type DerivedImageOperation = 'annotate' | 'erase' | 'removeBackground' | 'resize';
+export type DerivedImageOperation = 'erase' | 'removeBackground' | 'resize';
 
 export const DERIVED_FILE_SUFFIX: Record<DerivedImageOperation, string> = {
-  annotate: 'annotated',
   erase: 'erased',
   removeBackground: 'no-bg',
   resize: 'resized',

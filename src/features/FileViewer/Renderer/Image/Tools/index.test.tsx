@@ -1,25 +1,19 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { FileCommentItem } from '@lobechat/types';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ImageStageContext, type ImageStageValue } from '../context';
-import { clientToImagePoint } from '../geometry';
-import ImageEditTools from './index';
+import { useComposerDraftBus } from '@/features/Conversation/composerDraftBus';
 
-const service = vi.hoisted(() => ({
-  create: vi.fn(),
-  delete: vi.fn(),
-  list: vi.fn(),
-}));
-vi.mock('@/services/fileComment', () => ({ fileCommentService: service }));
+import { ImageStageContext, type ImageStageValue } from '../context';
+import { clientToImagePoint, type Point } from '../geometry';
+import ImageEditTools from './index';
 
 const fileStore = vi.hoisted(() => ({
   refreshFileList: vi.fn(),
+  uploadChatFiles: vi.fn(),
   uploadWithProgress: vi.fn(),
 }));
 vi.mock('@/store/file', () => ({
@@ -29,41 +23,44 @@ vi.mock('@/store/file', () => ({
   useFileStore: { getState: () => fileStore },
 }));
 
+vi.mock('@/store/chat', () => ({
+  useChatStore: { getState: () => ({ activeAgentId: 'agt_current' }) },
+}));
+vi.mock('@/store/agent', () => ({
+  useAgentStore: (selector: (s: unknown) => unknown) => selector({}),
+}));
+vi.mock('@/store/agent/selectors', () => ({
+  builtinAgentSelectors: { inboxAgentId: () => 'agt_inbox' },
+}));
+
+const navigate = vi.hoisted(() => vi.fn());
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => navigate,
+}));
+
+const exporter = vi.hoisted(() => ({
+  loadStageImage: vi.fn(),
+  renderImageToBlob: vi.fn(),
+}));
+vi.mock('./exportImage', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  renderImageToBlob: exporter.renderImageToBlob,
+}));
+
 const location = vi.hoisted(() => ({
   addToKnowledgeBase: vi.fn(),
   getFile: vi.fn(),
 }));
 vi.mock('./AIEdit/deps', async (importOriginal) => {
   const { aiEditDeps } = await importOriginal<{ aiEditDeps: object }>();
-  return { aiEditDeps: { ...aiEditDeps, ...location } };
+  return { aiEditDeps: { ...aiEditDeps, ...location }, loadStageImage: exporter.loadStageImage };
 });
-
-const exporter = vi.hoisted(() => ({
-  loadReadableImage: vi.fn(),
-  renderImageToBlob: vi.fn(),
-}));
-vi.mock('./exportImage', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  loadReadableImage: exporter.loadReadableImage,
-  renderImageToBlob: exporter.renderImageToBlob,
-}));
 
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast,
 }));
-
-const comment = (overrides: Partial<FileCommentItem>): FileCommentItem => ({
-  anchor: { x: 0.5, y: 0.5 },
-  content: 'Nice sky',
-  createdAt: new Date('2026-10-05T00:00:00Z'),
-  fileId: 'file_src',
-  id: 'fcm_1',
-  updatedAt: new Date('2026-10-05T00:00:00Z'),
-  userId: 'u1',
-  ...overrides,
-});
 
 // The displayed image box: 200×100 at the page origin.
 const RECT = { bottom: 100, height: 100, left: 0, right: 200, top: 0, width: 200, x: 0, y: 0 };
@@ -88,17 +85,15 @@ const renderTools = (stage: Partial<ImageStageValue> = {}) => {
     ...stage,
   };
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
-      <ImageStageContext value={value}>{children}</ImageStageContext>
-    </SWRConfig>
+    <ImageStageContext value={value}>{children}</ImageStageContext>
   );
   return { addVersion, fitToScreen, overlay, ...render(<ImageEditTools />, { wrapper }) };
 };
 
 describe('ImageEditTools', () => {
   beforeEach(() => {
-    service.list.mockResolvedValue({ data: [], success: true });
-    exporter.loadReadableImage.mockResolvedValue({ naturalHeight: 1000, naturalWidth: 2000 });
+    useComposerDraftBus.setState({ attached: true, draft: null });
+    exporter.loadStageImage.mockResolvedValue({ naturalHeight: 1000, naturalWidth: 2000 });
     exporter.renderImageToBlob.mockResolvedValue(new Blob(['png'], { type: 'image/png' }));
     fileStore.uploadWithProgress.mockResolvedValue({ id: 'file_new', url: 'files/new.png' });
     location.addToKnowledgeBase.mockResolvedValue(undefined);
@@ -110,92 +105,84 @@ describe('ImageEditTools', () => {
     document.body.innerHTML = '';
   });
 
-  it('shows annotate, comment and resize in the floating toolbar', async () => {
-    service.list.mockResolvedValue({ data: [comment({})], success: true });
+  it('shows annotate, comment and resize in the floating toolbar', () => {
     renderTools();
 
     const toolbar = screen.getByRole('toolbar', { name: 'imageViewer.editTools' });
     expect(within(toolbar).getByText('imageViewer.tool.annotate')).toBeInTheDocument();
     expect(within(toolbar).getByText('imageViewer.tool.comment')).toBeInTheDocument();
     expect(within(toolbar).getByText('imageViewer.tool.resize')).toBeInTheDocument();
-    // The existing comment count is visible before entering the mode.
-    expect(await within(toolbar).findByText('1')).toBeInTheDocument();
+    // Nothing to send until something is marked.
+    expect(screen.queryByTestId('image-markup-send')).not.toBeInTheDocument();
   });
 
+  const addComment = (overlay: HTMLElement, text: string, from: Point, to: Point = from) => {
+    const layer = within(overlay).getByTestId('image-comment-layer');
+    layer.setPointerCapture = vi.fn();
+    fireEvent.pointerDown(layer, { button: 0, clientX: from.x, clientY: from.y, pointerId: 1 });
+    fireEvent.pointerMove(layer, { clientX: to.x, clientY: to.y, pointerId: 1 });
+    fireEvent.pointerUp(layer, { clientX: to.x, clientY: to.y, pointerId: 1 });
+    const input = within(overlay).getByRole('textbox', { name: 'imageViewer.comment.add' });
+    fireEvent.change(input, { target: { value: text } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+  };
+
+  const drawBox = (overlay: HTMLElement) => {
+    fireEvent.click(screen.getByRole('button', { name: 'imageViewer.annotate.rect' }));
+    const canvas = within(overlay).getByTestId('image-annotate-canvas');
+    canvas.setPointerCapture = vi.fn();
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 20, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 120, clientY: 60, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { pointerId: 1 });
+  };
+
   describe('comments', () => {
-    it('lists persisted comments as pins and in the side panel', async () => {
-      service.list.mockResolvedValue({
-        data: [comment({}), comment({ anchor: { x: 0.1, y: 0.2 }, content: 'Crop', id: 'fcm_2' })],
-        success: true,
-      });
+    it('pins a comment at a clicked point and another on a dragged region', () => {
       const { overlay } = renderTools();
-
       fireEvent.click(screen.getByText('imageViewer.tool.comment'));
+      expect(screen.getByText('imageViewer.comment.empty')).toBeInTheDocument();
 
-      const panel = await screen.findByTestId('image-comment-panel');
-      expect(await within(panel).findByText('Nice sky')).toBeInTheDocument();
-      expect(within(panel).getByText('Crop')).toBeInTheDocument();
+      addComment(overlay, 'Too dark here', { x: 50, y: 75 });
+      addComment(overlay, 'Remove this', { x: 100, y: 20 }, { x: 160, y: 80 });
 
+      const panel = screen.getByTestId('image-comment-panel');
+      expect(within(panel).getByText('Too dark here')).toBeInTheDocument();
+      expect(within(panel).getByText('Remove this')).toBeInTheDocument();
       const pins = within(overlay).getAllByRole('button', { name: 'imageViewer.comment.pin' });
-      expect(pins[1]).toHaveStyle({ left: '10%', top: '20%' });
-    });
-
-    it('pins a new comment at the clicked point', async () => {
-      service.create.mockImplementation(async (input) => ({
-        data: comment({ ...input, id: 'fcm_new' }),
-        success: true,
-      }));
-      const { overlay } = renderTools();
-      fireEvent.click(screen.getByText('imageViewer.tool.comment'));
-      await screen.findByText('imageViewer.comment.empty');
-
-      const layer = within(overlay).getByTestId('image-comment-layer');
-      fireEvent.click(layer, { clientX: 50, clientY: 75 });
-
-      const input = within(overlay).getByRole('textbox', { name: 'imageViewer.comment.add' });
-      fireEvent.change(input, { target: { value: 'Too dark here' } });
-      fireEvent.keyDown(input, { key: 'Enter' });
-
-      await waitFor(() =>
-        expect(service.create).toHaveBeenCalledWith({
-          anchor: { x: 0.25, y: 0.75 },
-          content: 'Too dark here',
-          fileId: 'file_src',
-        }),
-      );
-      expect(await screen.findByText('Too dark here')).toBeInTheDocument();
+      expect(pins).toHaveLength(2);
+      expect(pins[0]).toHaveStyle({ left: '25%', top: '75%' });
+      // A region pins its number at the top-left corner and draws the area.
+      expect(pins[1]).toHaveStyle({ left: '50%', top: '20%' });
+      const region = within(overlay).getByTestId('image-comment-region');
+      expect(parseFloat(region.style.width)).toBeCloseTo(30);
+      expect(parseFloat(region.style.height)).toBeCloseTo(60);
       expect(within(overlay).queryByTestId('image-comment-draft')).not.toBeInTheDocument();
     });
 
-    it('cancels a draft with Escape without leaving the mode', async () => {
+    it('cancels a draft with Escape without leaving the mode', () => {
       const { overlay } = renderTools();
       fireEvent.click(screen.getByText('imageViewer.tool.comment'));
-      fireEvent.click(within(overlay).getByTestId('image-comment-layer'), {
-        clientX: 10,
-        clientY: 10,
-      });
+      const layer = within(overlay).getByTestId('image-comment-layer');
+      fireEvent.pointerDown(layer, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+      fireEvent.pointerUp(layer, { clientX: 10, clientY: 10, pointerId: 1 });
 
       const input = within(overlay).getByRole('textbox', { name: 'imageViewer.comment.add' });
       fireEvent.keyDown(input, { key: 'Escape' });
 
       expect(within(overlay).queryByTestId('image-comment-draft')).not.toBeInTheDocument();
       expect(screen.getByTestId('image-comment-panel')).toBeInTheDocument();
-      expect(service.create).not.toHaveBeenCalled();
     });
 
-    it('deletes a comment', async () => {
-      service.list.mockResolvedValueOnce({ data: [comment({})], success: true });
-      service.list.mockResolvedValue({ data: [], success: true });
-      service.delete.mockResolvedValue({ success: true });
-      renderTools();
+    it('removes a comment from the list', () => {
+      const { overlay } = renderTools();
       fireEvent.click(screen.getByText('imageViewer.tool.comment'));
+      addComment(overlay, 'Nice sky', { x: 100, y: 50 });
 
-      const panel = await screen.findByTestId('image-comment-panel');
-      await within(panel).findByText('Nice sky');
+      const panel = screen.getByTestId('image-comment-panel');
       fireEvent.click(within(panel).getByRole('button', { name: 'imageViewer.comment.delete' }));
 
-      await waitFor(() => expect(service.delete).toHaveBeenCalledWith('fcm_1'));
-      await waitFor(() => expect(within(panel).queryByText('Nice sky')).not.toBeInTheDocument());
+      expect(within(panel).queryByText('Nice sky')).not.toBeInTheDocument();
+      expect(within(panel).getByText('imageViewer.comment.empty')).toBeInTheDocument();
     });
 
     it('starts with the list collapsed in a narrow host and toggles it from the bar', async () => {
@@ -217,39 +204,42 @@ describe('ImageEditTools', () => {
       expect(await screen.findByTestId('image-comment-panel')).toBeInTheDocument();
     });
 
-    it('shows a load error with retry', async () => {
-      service.list.mockRejectedValue(Object.assign(new Error('boom'), { status: 400 }));
+    it('keeps comments in memory only: a new viewer starts empty', () => {
+      const first = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.comment'));
+      addComment(first.overlay, 'Nice sky', { x: 100, y: 50 });
+      first.unmount();
+      document.body.innerHTML = '';
+
       renderTools();
       fireEvent.click(screen.getByText('imageViewer.tool.comment'));
-
-      expect(await screen.findByText('imageViewer.comment.loadFailed')).toBeInTheDocument();
+      expect(screen.getByText('imageViewer.comment.empty')).toBeInTheDocument();
     });
   });
 
-  describe('annotate', () => {
-    it('draws a box and saves the annotated image as a new file', async () => {
-      const { addVersion, fitToScreen, overlay } = renderTools();
+  describe('add to chat', () => {
+    it('puts the marked-up image and numbered comments into the open chat input', async () => {
+      const { overlay } = renderTools();
       fireEvent.click(screen.getByText('imageViewer.tool.annotate'));
-      expect(fitToScreen).toHaveBeenCalled();
+      expect(screen.getByTestId('image-markup-send')).toBeDisabled();
+      drawBox(overlay);
+      fireEvent.click(screen.getByRole('button', { name: 'imageViewer.done' }));
 
-      const save = screen.getByRole('button', { name: 'imageViewer.saveAsNew' });
-      expect(save).toBeDisabled();
+      fireEvent.click(screen.getByText('imageViewer.tool.comment'));
+      // The drawing stays visible while commenting.
+      expect(within(overlay).getByTestId('image-markup-preview')).toBeInTheDocument();
+      addComment(overlay, 'Make this brighter', { x: 20, y: 20 });
+      addComment(overlay, 'Remove this', { x: 100, y: 20 }, { x: 160, y: 80 });
 
-      fireEvent.click(screen.getByRole('button', { name: 'imageViewer.annotate.rect' }));
-      const canvas = within(overlay).getByTestId('image-annotate-canvas');
-      canvas.setPointerCapture = vi.fn();
-      fireEvent.pointerDown(canvas, { button: 0, clientX: 20, clientY: 10, pointerId: 1 });
-      fireEvent.pointerMove(canvas, { clientX: 120, clientY: 60, pointerId: 1 });
-      fireEvent.pointerUp(canvas, { pointerId: 1 });
-
-      expect(save).toBeEnabled();
+      const send = screen.getByTestId('image-markup-send');
+      expect(send).toHaveTextContent('imageViewer.markup.addToChat');
       await act(async () => {
-        fireEvent.click(save);
+        fireEvent.click(send);
       });
 
-      await waitFor(() => expect(fileStore.uploadWithProgress).toHaveBeenCalled());
-      const [img, options] = exporter.renderImageToBlob.mock.calls[0];
-      expect(img).toMatchObject({ naturalWidth: 2000 });
+      await waitFor(() => expect(fileStore.uploadChatFiles).toHaveBeenCalled());
+      // One image carries both the drawing and the numbered comment markers.
+      const [, options] = exporter.renderImageToBlob.mock.calls[0];
       expect(options.shapes).toEqual([
         expect.objectContaining({
           rect: {
@@ -261,43 +251,73 @@ describe('ImageEditTools', () => {
           type: 'rect',
         }),
       ]);
+      expect(options.comments.map((c: { text: string }) => c.text)).toEqual([
+        'Make this brighter',
+        'Remove this',
+      ]);
 
-      const upload = fileStore.uploadWithProgress.mock.calls[0][0];
-      expect(upload.file.name).toBe('sunset-annotated.png');
-      expect(upload.fileMetadata).toEqual({
-        derivedFrom: { fileId: 'file_src', operation: 'annotate' },
-      });
-      expect(upload.parentId).toBe('docs_folder');
-      // Saved into the original's library too, so a library view lists it.
-      expect(location.getFile).toHaveBeenCalledWith('file_src');
-      expect(location.addToKnowledgeBase).toHaveBeenCalledWith('kb_1', ['file_new']);
-      expect(toast.success).toHaveBeenCalled();
-      // The saved image goes on stage as a version next to the original.
-      expect(addVersion).toHaveBeenCalledWith(
-        expect.objectContaining({
-          fileId: 'file_new',
-          name: 'sunset-annotated.png',
-          operation: 'annotate',
-        }),
-      );
-      // Back to the main toolbar after saving.
+      const [[file], agentId] = fileStore.uploadChatFiles.mock.calls[0];
+      expect(file.name).toBe('sunset-annotated.png');
+      expect(agentId).toBe('agt_current');
+      // Nothing is saved to the library.
+      expect(fileStore.uploadWithProgress).not.toHaveBeenCalled();
+
+      const draft = useComposerDraftBus.getState().draft!;
+      expect(draft.append).toBe(true);
+      expect(draft.text.split('\n')).toEqual([
+        'imageViewer.markup.message.headerWithDrawing',
+        '1. imageViewer.markup.location.point: Make this brighter',
+        '2. imageViewer.markup.location.region: Remove this',
+      ]);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith('imageViewer.markup.added');
+
+      // Sent marks are cleared, back to the main toolbar.
       expect(
         await screen.findByRole('toolbar', { name: 'imageViewer.editTools' }),
       ).toBeInTheDocument();
+      expect(within(overlay).queryByTestId('image-markup-preview')).not.toBeInTheDocument();
+    });
+
+    it('offers sending from the main toolbar once something is marked', async () => {
+      const { overlay } = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.annotate'));
+      drawBox(overlay);
+      fireEvent.keyDown(window, { key: 'Escape' });
+
+      const toolbar = screen.getByRole('toolbar', { name: 'imageViewer.editTools' });
+      expect(within(toolbar).getByTestId('image-markup-send')).toBeEnabled();
+
+      fireEvent.click(within(toolbar).getByRole('button', { name: 'imageViewer.markup.discard' }));
+      expect(screen.queryByTestId('image-markup-send')).not.toBeInTheDocument();
+    });
+
+    it('starts a chat with the inbox agent when no conversation is open', async () => {
+      useComposerDraftBus.setState({ attached: false, draft: null });
+      const { overlay } = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.comment'));
+      addComment(overlay, 'What is this?', { x: 100, y: 50 });
+
+      const send = screen.getByTestId('image-markup-send');
+      expect(send).toHaveTextContent('imageViewer.markup.askInNewChat');
+      await act(async () => {
+        fireEvent.click(send);
+      });
+
+      await waitFor(() => expect(navigate).toHaveBeenCalledWith('/agent/agt_inbox'));
+      expect(fileStore.uploadChatFiles.mock.calls[0][1]).toBe('agt_inbox');
+      // Queued for the composer that mounts after navigating.
+      expect(useComposerDraftBus.getState().draft?.text).toContain('What is this?');
     });
 
     it('undoes strokes and exits with Escape', () => {
       const { overlay } = renderTools();
       fireEvent.click(screen.getByText('imageViewer.tool.annotate'));
-      const canvas = within(overlay).getByTestId('image-annotate-canvas');
-      canvas.setPointerCapture = vi.fn();
-      fireEvent.pointerDown(canvas, { button: 0, clientX: 20, clientY: 10, pointerId: 1 });
-      fireEvent.pointerMove(canvas, { clientX: 60, clientY: 40, pointerId: 1 });
-      fireEvent.pointerUp(canvas, { pointerId: 1 });
+      drawBox(overlay);
 
-      expect(screen.getByRole('button', { name: 'imageViewer.saveAsNew' })).toBeEnabled();
+      expect(screen.getByTestId('image-markup-send')).toBeEnabled();
       fireEvent.keyDown(window, { ctrlKey: true, key: 'z' });
-      expect(screen.getByRole('button', { name: 'imageViewer.saveAsNew' })).toBeDisabled();
+      expect(screen.getByTestId('image-markup-send')).toBeDisabled();
 
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(screen.getByRole('toolbar', { name: 'imageViewer.editTools' })).toBeInTheDocument();
@@ -306,23 +326,19 @@ describe('ImageEditTools', () => {
 
     it('reports when the storage does not allow reading pixels', async () => {
       const { ImagePixelsUnavailableError } = await import('./exportImage');
-      exporter.loadReadableImage.mockRejectedValue(new ImagePixelsUnavailableError());
+      exporter.loadStageImage.mockRejectedValue(new ImagePixelsUnavailableError());
       const { overlay } = renderTools();
       fireEvent.click(screen.getByText('imageViewer.tool.annotate'));
-      const canvas = within(overlay).getByTestId('image-annotate-canvas');
-      canvas.setPointerCapture = vi.fn();
-      fireEvent.pointerDown(canvas, { button: 0, clientX: 20, clientY: 10, pointerId: 1 });
-      fireEvent.pointerMove(canvas, { clientX: 60, clientY: 40, pointerId: 1 });
-      fireEvent.pointerUp(canvas, { pointerId: 1 });
+      drawBox(overlay);
 
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'imageViewer.saveAsNew' }));
+        fireEvent.click(screen.getByTestId('image-markup-send'));
       });
 
       await waitFor(() =>
         expect(toast.error).toHaveBeenCalledWith('imageViewer.pixelsUnavailable'),
       );
-      expect(fileStore.uploadWithProgress).not.toHaveBeenCalled();
+      expect(fileStore.uploadChatFiles).not.toHaveBeenCalled();
       // Stay in the mode so the drawing is not lost.
       expect(within(overlay).getByTestId('image-annotate-canvas')).toBeInTheDocument();
     });

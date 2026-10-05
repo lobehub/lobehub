@@ -36,8 +36,11 @@ const exporter = vi.hoisted(() => ({
 }));
 vi.mock('../exportImage', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  loadReadableImage: exporter.loadReadableImage,
   renderImageToBlob: exporter.renderImageToBlob,
+}));
+vi.mock('./deps', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  loadStageImage: exporter.loadReadableImage,
 }));
 
 const toast = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn(), success: vi.fn() }));
@@ -145,7 +148,10 @@ describe('AIEditMode — remove background', () => {
     fireEvent.click(screen.getByRole('button', { name: 'imageViewer.ai.removeBackground.start' }));
     await nextPoll();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('imageViewer.ai.error.failed');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('imageViewer.ai.error.failed');
+    // The raw provider message is folded into the tooltip, not the status line.
+    expect(alert).toHaveAttribute('title', 'Content blocked by the provider safety filter');
     expect(screen.getByRole('button', { name: 'imageViewer.retry' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'imageViewer.close' })).toBeInTheDocument();
     expect(onExit).not.toHaveBeenCalled();
@@ -153,7 +159,7 @@ describe('AIEditMode — remove background', () => {
     expect(addVersion).not.toHaveBeenCalled();
   });
 
-  it('cancels a running edit and discards it', async () => {
+  it('stops waiting for a running edit without deleting the server task', async () => {
     const deleteTopic = vi.fn(async () => undefined);
     const deps = createMockDeps({
       deleteTopic,
@@ -165,8 +171,8 @@ describe('AIEditMode — remove background', () => {
     await screen.findByRole('status');
     fireEvent.click(screen.getByRole('button', { name: 'imageViewer.cancel' }));
 
-    await waitFor(() => expect(toast.info).toHaveBeenCalledWith('imageViewer.ai.cancelled'));
-    expect(deleteTopic).toHaveBeenCalledWith('gt_6p9nBZERtyWe');
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith('imageViewer.ai.stoppedWaiting'));
+    expect(deleteTopic).not.toHaveBeenCalled();
     expect(screen.queryByRole('status')).toBeNull();
     expect(
       screen.getByRole('button', { name: 'imageViewer.ai.removeBackground.start' }),

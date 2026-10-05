@@ -1,12 +1,13 @@
 'use client';
 
-import { Badge, Button } from '@lobehub/ui/base-ui';
+import { ActionIcon, Badge, Button } from '@lobehub/ui/base-ui';
 import {
   CropIcon,
   EraserIcon,
   MessageSquarePlusIcon,
   PencilLineIcon,
   WandSparklesIcon,
+  XIcon,
 } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,8 +15,10 @@ import { useTranslation } from 'react-i18next';
 import { useImageStage } from '../context';
 import AnnotateMode from './Annotate';
 import CommentMode from './Comment';
-import { useFileComments } from './Comment/useFileComments';
+import { EMPTY_MARKUP, type ImageMarkup, isMarkupEmpty } from './markup';
+import MarkupPreview from './MarkupPreview';
 import ResizeMode from './Resize';
+import SendToChatButton from './SendToChatButton';
 import { toolStyles as styles } from './styles';
 
 // AI editing pulls in the model and generation services; load it only when used.
@@ -26,14 +29,19 @@ type ToolMode = 'annotate' | 'comment' | 'erase' | 'removeBackground' | 'resize'
 /**
  * Editing tools for a persisted image file: the floating bottom toolbar and
  * the annotate / comment / remove background / erase / resize workflows it
- * opens. Mounted by hosts that
- * show a real library file; each workflow renders its own bar while active.
+ * opens. Mounted by hosts that show a real library file; each workflow
+ * renders its own bar while active.
+ *
+ * Annotations and comments are not saved with the file. They are marks for a
+ * follow-up chat message, kept in memory here (closing the viewer drops them)
+ * until the user adds them to the chat input.
  */
 const ImageEditTools = () => {
   const { t } = useTranslation('file');
-  const { fileId, fitToScreen } = useImageStage();
+  const { fitToScreen } = useImageStage();
   const [mode, setMode] = useState<ToolMode | null>(null);
-  const { comments } = useFileComments(fileId);
+  const [markup, setMarkup] = useState<ImageMarkup>(EMPTY_MARKUP);
+  const { comments } = markup;
 
   const enter = (next: ToolMode) => {
     // Edits start from the whole image on screen, so pointer mapping is predictable.
@@ -41,9 +49,14 @@ const ImageEditTools = () => {
     setMode(next);
   };
   const exit = () => setMode(null);
+  const clearAfterSend = () => {
+    setMarkup(EMPTY_MARKUP);
+    setMode(null);
+  };
 
-  if (mode === 'annotate') return <AnnotateMode onExit={exit} />;
-  if (mode === 'comment') return <CommentMode onExit={exit} />;
+  const markupProps = { markup, onChange: setMarkup, onExit: exit, onSent: clearAfterSend };
+  if (mode === 'annotate') return <AnnotateMode {...markupProps} />;
+  if (mode === 'comment') return <CommentMode {...markupProps} />;
   if (mode === 'removeBackground' || mode === 'erase')
     return (
       <Suspense fallback={null}>
@@ -52,8 +65,11 @@ const ImageEditTools = () => {
     );
   if (mode === 'resize') return <ResizeMode onExit={exit} />;
 
+  const hasMarkup = !isMarkupEmpty(markup);
+
   return (
     <div className={styles.dock}>
+      <MarkupPreview comments={markup.comments} shapes={markup.shapes} />
       <div
         aria-label={t('imageViewer.editTools')}
         className={styles.bar}
@@ -113,6 +129,19 @@ const ImageEditTools = () => {
         >
           {t('imageViewer.tool.resize')}
         </Button>
+        {hasMarkup && (
+          <>
+            <span className={styles.divider} />
+            <ActionIcon
+              aria-label={t('imageViewer.markup.discard')}
+              icon={XIcon}
+              size={'small'}
+              title={t('imageViewer.markup.discard')}
+              onClick={() => setMarkup(EMPTY_MARKUP)}
+            />
+            <SendToChatButton markup={markup} onSent={clearAfterSend} />
+          </>
+        )}
       </div>
     </div>
   );
