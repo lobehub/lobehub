@@ -357,7 +357,10 @@ export const createEntrySetLabeler = (entries: Record<string, string>) => {
   };
 
   return (id: string, ctx: ModuleGraph) => {
-    reach ??= Object.entries(entries).map(([label, entry]) => [label, collect(ctx, entry)]);
+    reach ??= Object.entries(entries).map(([label, entry]) => [
+      label,
+      collect(ctx, entry.replaceAll('\\', '/')),
+    ]);
     const labels = reach.filter(([, ids]) => ids.has(id)).map(([label]) => label);
     return labels.length > 0 ? labels.join('+') : null;
   };

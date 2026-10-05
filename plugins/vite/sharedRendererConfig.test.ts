@@ -316,6 +316,27 @@ describe('createEntrySetLabeler', () => {
     expect(label('/lazy.ts', fakeCtx)).toBeNull();
   });
 
+  it('matches Windows entry paths against normalized module graph IDs', () => {
+    const windowsLabel = createEntrySetLabeler({
+      main: 'C:\\repo\\main.tsx',
+      overlay: 'C:\\repo\\overlay.tsx',
+      popup: 'C:\\repo\\popup.tsx',
+    });
+    const graph = Object.fromEntries(
+      Object.entries(fakeGraph).map(([id, imports]) => [
+        `C:/repo${id}`,
+        { importedIds: imports.map((dependency) => `C:/repo${dependency}`) },
+      ]),
+    );
+    const ctx = { getModuleInfo: (id: string) => graph[id] ?? null };
+
+    expect(windowsLabel('C:/repo/main.tsx', ctx)).toBe('main');
+    expect(windowsLabel('C:/repo/leaf.ts', ctx)).toBe('main+overlay+popup');
+    expect(windowsLabel('C:/repo/main-only.ts', ctx)).toBe('main+popup');
+    expect(windowsLabel('C:/repo/overlay-only.ts', ctx)).toBe('overlay');
+    expect(windowsLabel('C:/repo/lazy.ts', ctx)).toBeNull();
+  });
+
   it('fails loudly when an entry module is not in the graph', () => {
     const broken = createEntrySetLabeler({ main: '/missing.tsx' });
     expect(() => broken('/leaf.ts', fakeCtx)).toThrow(/missing\.tsx/);
