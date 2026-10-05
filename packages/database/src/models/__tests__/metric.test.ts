@@ -102,6 +102,29 @@ describe('MetricModel', () => {
       expect((await model.latestPoint(series.id))!.value).toBe(3);
     });
 
+    it('appends only newer points, once, when two writers report the same window', async () => {
+      const series = (await seed())!;
+      const point = (day: number) => ({
+        actorType: 'system' as const,
+        observedAt: new Date(`2026-09-0${day}T00:00:00Z`),
+        sourceType: 'probe' as const,
+        value: day,
+      });
+      const window = [point(1), point(2)];
+
+      const written = await Promise.all([
+        model.appendNewerPoints(series.id, window),
+        model.appendNewerPoints(series.id, window),
+      ]);
+      expect(written.sort()).toEqual([0, 2]);
+
+      // a sliding window: only the new tail is appended
+      expect(await model.appendNewerPoints(series.id, [point(2), point(3)])).toBe(1);
+      expect(await model.appendNewerPoints(series.id, [])).toBe(0);
+      expect(await otherModel.appendNewerPoints(series.id, [point(4)])).toBe(0);
+      expect((await model.recentPoints(series.id, 10)).map((p) => p.value)).toEqual([1, 2, 3]);
+    });
+
     it('appends through the owned series and refuses foreign or missing series', async () => {
       const series = (await seed())!;
 

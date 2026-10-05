@@ -18,6 +18,7 @@ import { DashboardModel } from '@/database/models/dashboard';
 import { qstashClient } from '@/libs/qstash';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import widgetWorkflowApp from '@/server/router-hono/workflows/widget';
+import { recordWidgetMetrics } from '@/server/services/widget/metrics';
 import { runWidgetSchedulerTick } from '@/server/services/widget/scheduler';
 
 import { dashboardRouter } from '../../dashboard';
@@ -386,6 +387,42 @@ describe('widget + dashboard routers integration', () => {
         ['2026-09-01', 1],
         ['2026-09-02', 3],
         ['2026-09-03', 2],
+      ]);
+    });
+    it('writes an overlapping series batch once when two runs record it concurrently', async () => {
+      const owner = widgetRouter.createCaller(context(ownerId));
+      const widget = await createWidget(owner, { title: 'Deploys' });
+      const output = {
+        series: [
+          {
+            name: 'deploys',
+            points: [
+              { t: '2026-09-01', v: 1 },
+              { t: '2026-09-02', v: 3 },
+            ],
+          },
+        ],
+        type: 'series' as const,
+      };
+      const record = (runId: string) =>
+        recordWidgetMetrics(db, widget, { observedAt: new Date(), output, runId });
+
+      // a manual refresh and a scheduled run report the same window at once
+      const results = await Promise.all([record('run-a'), record('run-b')]);
+      expect(results.map((r) => r.pointsWritten).sort()).toEqual([0, 2]);
+
+      const [metric] = await db
+        .select()
+        .from(metrics)
+        .where(and(eq(metrics.subjectId, widget.id), eq(metrics.key, 'series:deploys')));
+      const points = await db
+        .select()
+        .from(metricPoints)
+        .where(eq(metricPoints.metricId, metric.id))
+        .orderBy(metricPoints.observedAt);
+      expect(points.map((p) => [p.observedAt.toISOString().slice(0, 10), p.value])).toEqual([
+        ['2026-09-01', 1],
+        ['2026-09-02', 3],
       ]);
     });
   });

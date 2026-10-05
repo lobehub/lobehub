@@ -240,6 +240,42 @@ export class MetricModel {
     return rows.length;
   };
 
+  /**
+   * Append only the points newer than the series' latest stored point — for
+   * samplers that re-report a sliding window. The read and the insert run
+   * under a row lock on the series, so two writers reporting the same window
+   * at once serialize and the second one finds nothing new (no unique key on
+   * `(metric_id, observed_at)` to lean on). Returns the inserted count, 0 when
+   * the series is not the caller's.
+   */
+  appendNewerPoints = async (
+    metricId: string,
+    points: (AddMetricPointParams & { observedAt: Date })[],
+  ): Promise<number> => {
+    if (points.length === 0) return 0;
+
+    return this.db.transaction(async (tx) => {
+      const [series] = await tx
+        .select({ id: metrics.id })
+        .from(metrics)
+        .where(and(eq(metrics.id, metricId), this.seriesOwnership()))
+        .limit(1)
+        .for('update');
+      if (!series) return 0;
+
+      const scoped = new MetricModel(
+        tx as unknown as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      );
+      const latest = await scoped.latestPoint(metricId);
+      const fresh = latest
+        ? points.filter((p) => p.observedAt.getTime() > latest.observedAt.getTime())
+        : points;
+      return scoped.addPoints(metricId, fresh);
+    });
+  };
+
   /** The most recent observation — what numeric acceptance criteria read. */
   latestPoint = async (metricId: string): Promise<MetricPointItem | undefined> => {
     const [row] = await this.db

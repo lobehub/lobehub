@@ -59,8 +59,9 @@ const parseTime = (t: string): Date | undefined => {
  * - `stat` — one point per run, the numeric `value` (or `manifest.metric.valuePath`)
  *   observed at the run's finish time. Non-numeric stats are skipped.
  * - `series` — one metric per series (`series:<name>`); only points with an
- *   ISO timestamp newer than the series' latest stored point are appended, so
- *   a script re-reporting a sliding window does not duplicate history.
+ *   ISO timestamp newer than the series' latest stored point are appended
+ *   (serialized per series), so a script re-reporting a sliding window — even
+ *   from two overlapping runs — does not duplicate history.
  *
  * list / table outputs carry no numbers to trend and write nothing.
  */
@@ -120,13 +121,11 @@ export const recordWidgetMetrics = async (
       if (!metric) continue;
       primaryMetricId ??= metric.id;
 
-      const latest = await metricModel.latestPoint(metric.id);
-      const fresh = latest
-        ? points.filter((p) => p.observedAt.getTime() > latest.observedAt.getTime())
-        : points;
-      pointsWritten += await metricModel.addPoints(
+      // Overlapping runs report the same window; the append is serialized
+      // per series so each timestamp is written once.
+      pointsWritten += await metricModel.appendNewerPoints(
         metric.id,
-        fresh.map((p) => ({ ...pointBase, ...p })),
+        points.map((p) => ({ ...pointBase, ...p })),
       );
     }
 
