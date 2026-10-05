@@ -120,7 +120,9 @@ export class WidgetService {
     }
     const version = await this.requireVersion(widgetId, widget.publishedVersionId);
 
-    const run = await this.model.startRun(widgetId, { trigger: 'manual' });
+    // Pin the run to the version read above: a publish landing in between must
+    // not relabel a run that executes this version's script.
+    const run = await this.model.startRun(widgetId, { trigger: 'manual', versionId: version.id });
     if (!run) throw new WidgetFlowError('NOT_FOUND', 'Widget not found');
 
     return this.execute(widget, version, run);

@@ -11,7 +11,7 @@ import {
   workspaces,
 } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
@@ -394,6 +394,48 @@ describe('widget + dashboard routers integration', () => {
       expect(await widgetRow()).toMatchObject({
         latestOutput: { type: 'stat', value: 10 },
         metricId: forksMetricId,
+      });
+    });
+
+    it('labels a manual run with the version it executes when a publish races it', async () => {
+      const owner = widgetRouter.createCaller(context(ownerId));
+      const widget = await publishStat(owner);
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 42 }));
+      await owner.run({ widgetId: widget.id });
+      const v1Id = (await db.select().from(widgets).where(eq(widgets.id, widget.id)))[0]
+        .publishedVersionId!;
+
+      const v2 = (await owner.saveDraft({
+        widgetId: widget.id,
+        ...statScript,
+        script: 'console.log(2)',
+      }))!.data;
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 1 }));
+      await owner.dryRun({ widgetId: widget.id });
+
+      // v2 goes live between runNow reading v1 and the run row being created
+      const startRun = WidgetModel.prototype.startRun;
+      vi.spyOn(WidgetModel.prototype, 'startRun').mockImplementationOnce(async function (
+        this: WidgetModel,
+        ...args: Parameters<WidgetModel['startRun']>
+      ) {
+        await new WidgetModel(db, ownerId).publishVersion(widget.id, v2.id);
+        return startRun.apply(this, args);
+      });
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 99 }));
+      await owner.run({ widgetId: widget.id });
+
+      // the run executed v1's script, so it is labeled v1 and does not become v2's result
+      const [latestRun] = await db
+        .select()
+        .from(widgetRuns)
+        .where(and(eq(widgetRuns.widgetId, widget.id), eq(widgetRuns.trigger, 'manual')))
+        .orderBy(desc(widgetRuns.startedAt))
+        .limit(1);
+      expect(latestRun.versionId).toBe(v1Id);
+      expect((await db.select().from(widgets).where(eq(widgets.id, widget.id)))[0]).toMatchObject({
+        latestOutput: { type: 'stat', value: 42 },
+        publishedVersionId: v2.id,
       });
     });
 
