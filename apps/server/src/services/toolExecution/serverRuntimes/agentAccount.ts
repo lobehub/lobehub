@@ -136,7 +136,10 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         if (args?.accountId) {
           const target = findOwned(await accounts(), args.accountId);
           if (!target) {
-            return { content: `No account ${args.accountId} is owned by this agent.`, success: false };
+            return {
+              content: `No account ${args.accountId} is owned by this agent.`,
+              success: false,
+            };
           }
           accountId = target.id;
         }
@@ -269,28 +272,18 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
           accountId = target.id;
         }
 
-        const matches = (row: { from: string; subject: string | null }): boolean => {
-          if (args?.from && row.from !== args.from) return false;
-          if (
-            args?.subjectIncludes &&
-            !(row.subject ?? '').toLowerCase().includes(args.subjectIncludes.toLowerCase())
-          ) {
-            return false;
-          }
-          return true;
-        };
-
         // Long-poll the inbox. The inbox is the single source of truth, so a
         // message delivered by the webhook while this waits is picked up here
         // with no coupling between the two paths.
         for (;;) {
-          const candidates = await inbox.listSince({
+          const [hit] = await inbox.listSince({
             accountId,
             agentId: requireAgentId(),
-            limit: 20,
+            from: args?.from,
+            limit: 1,
             since,
+            subjectIncludes: args?.subjectIncludes,
           });
-          const hit = candidates.find(matches);
 
           if (hit) {
             // The model now holds this message, so it no longer counts as

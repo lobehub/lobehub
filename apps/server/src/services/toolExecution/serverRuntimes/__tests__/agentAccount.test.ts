@@ -67,17 +67,23 @@ afterEach(async () => {
 });
 
 const record = (
-  overrides: Partial<{ receivedAt: Date; text: string; providerMessageId: string }> = {},
+  overrides: Partial<{
+    from: string;
+    providerMessageId: string;
+    receivedAt: Date;
+    subject: string;
+    text: string;
+  }> = {},
 ) =>
   new AgentInboxService(serverDB, userId).record({
     accountId,
     agentId,
-    from: 'login@service.com',
+    from: overrides.from ?? 'login@service.com',
     kind: 'mail',
     provider: 'user',
     providerMessageId: overrides.providerMessageId ?? 'msg_1',
     receivedAt: overrides.receivedAt ?? new Date('2026-10-02T12:00:00.000Z'),
-    subject: 'Your verification code',
+    subject: overrides.subject ?? 'Your verification code',
     text: overrides.text ?? 'Your verification code is 839201. It expires in 10 minutes.',
     to: 'toby-agent@lobe.id',
   });
@@ -122,6 +128,29 @@ describe('agent-account server runtime', () => {
     });
     // Handed to the model, so it is no longer announced as unread.
     expect(await AgentInboxService.summary(serverDB, agentId)).toEqual({ unreadCount: 0 });
+  });
+
+  it('waitForMessage finds a match behind more than a page of non-matching mail', async () => {
+    for (let i = 0; i < 25; i++) {
+      await record({
+        from: 'newsletter@example.com',
+        providerMessageId: `msg_noise_${i}`,
+        receivedAt: new Date(Date.UTC(2026, 9, 2, 11, 30, i)),
+        subject: 'Weekly digest',
+        text: 'nothing to see',
+      });
+    }
+    await record({ providerMessageId: 'msg_code' });
+
+    const result = await runtime().waitForMessage({
+      from: 'login@service.com',
+      since: '2026-10-02T11:00:00.000Z',
+      subjectIncludes: 'VERIFICATION',
+      timeoutMs: 1_500,
+    });
+
+    expect(result.content.startsWith('matched: true\n')).toBe(true);
+    expect(fencedEntries(result.content)[0]).toMatchObject({ from: 'login@service.com' });
   });
 
   it('waitForMessage reports a retryable timeout when nothing arrives', async () => {
@@ -304,7 +333,7 @@ describe('agent-account server runtime', () => {
     expect(result.content).toContain('Failed to send');
   });
 
-  it('treats a released address as no longer the agent\'s', async () => {
+  it("treats a released address as no longer the agent's", async () => {
     await new AgentAccountService(serverDB, userId, {
       registry: new AgentAccountProviderRegistry(),
     }).revoke(accountId, { release: false });

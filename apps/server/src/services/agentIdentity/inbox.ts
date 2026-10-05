@@ -54,8 +54,7 @@ export class AgentInboxService {
 
   markAllRead = (agentId: string) => this.model.markAllRead(agentId);
 
-  listSince = (params: { accountId?: string; agentId: string; limit?: number; since: Date }) =>
-    this.model.listSince(params);
+  listSince = (params: Parameters<AgentInboxModel['listSince']>[0]) => this.model.listSince(params);
 
   countForAccount = (accountId: string) => this.model.countForAccount(accountId);
 

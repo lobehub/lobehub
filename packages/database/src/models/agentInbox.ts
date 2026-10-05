@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, ilike, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { AgentInboxMessageItem, NewAgentInboxMessage } from '../schemas';
 import { agentInboxMessages } from '../schemas';
@@ -249,8 +249,12 @@ export class AgentInboxModel {
   listSince = async (params: {
     accountId?: string;
     agentId: string;
+    /** Exact sender address. */
+    from?: string;
     limit?: number;
     since: Date;
+    /** Case-insensitive substring of the subject. */
+    subjectIncludes?: string;
   }): Promise<AgentInboxMessageItem[]> => {
     const conditions = [
       eq(agentInboxMessages.agentId, params.agentId),
@@ -258,6 +262,13 @@ export class AgentInboxModel {
       this.ownership(),
     ];
     if (params.accountId) conditions.push(eq(agentInboxMessages.accountId, params.accountId));
+    // Filters run in the query, not on the fetched page: filtering after
+    // `limit` would keep re-reading the same oldest non-matching rows.
+    if (params.from) conditions.push(eq(agentInboxMessages.from, params.from));
+    if (params.subjectIncludes) {
+      const pattern = `%${params.subjectIncludes.replaceAll(/[%_\\]/g, '\\$&')}%`;
+      conditions.push(ilike(agentInboxMessages.subject, pattern));
+    }
 
     return this.db
       .select()
