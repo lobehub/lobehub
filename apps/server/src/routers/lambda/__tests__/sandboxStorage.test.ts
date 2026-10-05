@@ -257,6 +257,20 @@ describe('sandboxStorageRouter', () => {
       expect(mockWriteFile).not.toHaveBeenCalled();
     });
 
+    it('counts the size ceiling in UTF-8 bytes, not UTF-16 units', async () => {
+      // A megabyte of CJK is ~3 MiB on the wire. Measured as string length it
+      // would pass the guard it is supposed to fail.
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).writeFile({
+          content: '\u4E2D'.repeat(400_000),
+          instanceId,
+          path: 'work/cjk.txt',
+        }),
+      ).rejects.toThrow();
+
+      expect(mockWriteFile).not.toHaveBeenCalled();
+    });
+
     it('refuses a body past the size ceiling before it reaches the plane', async () => {
       await expect(
         sandboxStorageRouter.createCaller(ctx).writeFile({
@@ -710,6 +724,38 @@ describe('sandboxStorageRouter', () => {
 
       expect(mockReadOccupancy).not.toHaveBeenCalled();
       expect(result.occupancyUnavailable).toBe(false);
+    });
+  });
+
+  describe('environment source urls', () => {
+    it('stores a github checkout and refuses any other host', async () => {
+      // The picker only ever produces a github.com URL, but this is an RPC: a
+      // caller reaching it directly could otherwise name an internal address
+      // and have the build make the execution plane fetch it.
+      const caller = sandboxStorageRouter.createCaller(ctx);
+      mockCreate.mockResolvedValue({ id: 'env-allowed', name: 'Allowed' });
+
+      await caller.createEnvironment({
+        configuration: { sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub' }] },
+        name: 'Allowed',
+      });
+      expect(mockCreate).toHaveBeenCalled();
+
+      for (const url of [
+        'https://169.254.169.254/latest/meta-data',
+        'https://internal.corp/repo.git',
+        'https://github.com.attacker.test/a/b',
+        'http://github.com/a/b',
+      ]) {
+        mockCreate.mockClear();
+        await expect(
+          caller.createEnvironment({
+            configuration: { sources: [{ kind: 'git', url }] },
+            name: 'Refused',
+          }),
+        ).rejects.toThrow();
+        expect(mockCreate).not.toHaveBeenCalled();
+      }
     });
   });
 

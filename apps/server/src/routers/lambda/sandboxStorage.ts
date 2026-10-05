@@ -49,6 +49,17 @@ const topicIdSchema = z.string().min(1).max(255).optional();
 const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
 
 /**
+ * Checked in UTF-8 bytes, which is what the cap is denominated in and what the
+ * execution plane actually receives. `z.string().max()` counts UTF-16 code
+ * units, so a megabyte of CJK would pass it and send roughly three.
+ */
+const fileContentSchema = z
+  .string()
+  .refine((value) => Buffer.byteLength(value, 'utf8') <= MAX_FILE_CONTENT_BYTES, {
+    message: `File content exceeds ${MAX_FILE_CONTENT_BYTES} bytes`,
+  });
+
+/**
  * "You have not connected GitHub" travels as an error from the connector layer,
  * but for the picker it is an answer, not a failure — the one it is there to
  * help the user fix.
@@ -195,10 +206,28 @@ const ENVIRONMENT_NAME_CONSTRAINTS = new Set([
 const INSTANCE_DIRECTORY_CONSTRAINT = 'environment_instances_provider_path_unique';
 
 /**
+ * The hosts a checkout may name.
+ *
+ * An allowlist rather than an SSRF check on the resolved address, because the
+ * clone does not happen here: the stored specification is handed to the
+ * execution plane, which resolves and fetches it from its own network, so no
+ * validation at this layer can speak for what that resolution will return.
+ * Naming the hosts is the part this layer can be sure of — and every producer
+ * already names exactly one, since a source is chosen through the GitHub
+ * repository picker and the UI parses the URL back assuming that host.
+ */
+const ALLOWED_SOURCE_HOSTS = new Set(['github.com', 'www.github.com']);
+
+/**
  * Where source material comes from. Only `git` for now, and only over HTTPS:
  * the other transports authenticate with a key, and a specification that
  * carries no credentials cannot present one. Private repositories are a
  * separate problem, not a URL scheme.
+ *
+ * The host is checked because this schema guards an RPC, not the picker: an
+ * entitled caller reaching it directly could otherwise store any URL, and the
+ * build would then make the execution plane fetch it — an internal address
+ * included.
  */
 const environmentSourceSchema = z.object({
   kind: z.literal('git'),
@@ -208,9 +237,19 @@ const environmentSourceSchema = z.object({
   url: z
     .string()
     .url()
-    .refine((value) => value.startsWith('https://'), {
-      message: 'Only https:// git URLs are supported',
-    }),
+    .refine(
+      (value) => {
+        let parsed;
+        try {
+          parsed = new URL(value);
+        } catch {
+          return false;
+        }
+
+        return parsed.protocol === 'https:' && ALLOWED_SOURCE_HOSTS.has(parsed.hostname);
+      },
+      { message: 'Only https:// github.com git URLs are supported' },
+    ),
 });
 
 /**
@@ -1098,7 +1137,7 @@ export const sandboxStorageRouter = router({
   writeFile: instanceProcedure
     .input(
       z.object({
-        content: z.string().max(MAX_FILE_CONTENT_BYTES),
+        content: fileContentSchema,
         instanceId: instanceIdSchema,
         path: relativePathSchema,
         topicId: topicIdSchema,
