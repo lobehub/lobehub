@@ -889,6 +889,57 @@ describe('ExpertiseModel', () => {
     expect(rows.every((row) => row.status === 'active')).toBe(true);
   });
 
+  it('numbers a material run after a concurrent writer holding the same domain', async () => {
+    await seedRuleGroup();
+    let release!: () => void;
+    let reportLocked!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const locked = new Promise<void>((resolve) => {
+      reportLocked = resolve;
+    });
+    // Another writer (ingestion, a second distillation) takes the domain lock and numbers a run.
+    const other = serverDB.transaction(async (tx) => {
+      await tx
+        .select({ id: expertiseDomains.id })
+        .from(expertiseDomains)
+        .where(eq(expertiseDomains.id, 'rules-domain'))
+        .for('update');
+      reportLocked();
+      await released;
+      await new ExpertiseModel(tx as LobeChatDatabase, userId).insertMaterialRun({
+        domainId: 'rules-domain',
+        reflectionKey: 'material:text:other',
+        subjectId: 'other',
+        subjectType: 'standalone',
+      });
+    });
+    await locked;
+
+    const distilling = new ExpertiseRuleRepository(serverDB, userId).commitDistilled(
+      { subjectId: null, subjectType: 'standalone', title: 'notes', type: 'text' },
+      [
+        {
+          domainId: 'rules-domain',
+          kind: 'create',
+          quote: 'always rebase',
+          rule: { title: 'Rebase before delivering' },
+        },
+      ],
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    release();
+
+    const settled = await Promise.allSettled([other, distilling]);
+    expect(settled.map(({ status }) => status)).toEqual(['fulfilled', 'fulfilled']);
+    const runs = await serverDB
+      .select({ runIndex: expertiseRuns.runIndex })
+      .from(expertiseRuns)
+      .where(eq(expertiseRuns.domainId, 'rules-domain'));
+    expect(new Set(runs.map(({ runIndex }) => runIndex)).size).toBe(runs.length);
+  });
+
   it('files rules distilled from a document and records a restatement on the rule it repeats', async () => {
     const { first } = await seedRuleGroup();
     await serverDB.insert(documents).values({

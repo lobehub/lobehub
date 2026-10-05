@@ -1203,6 +1203,14 @@ export class ExpertiseModel {
     subjectId: string;
     subjectType: 'document' | 'standalone' | 'topic';
   }) => {
+    // The domain row lock queues this behind any other writer numbering runs in the same domain
+    // (another distillation, background ingestion); otherwise both read the same maximum and the
+    // unique `(domain_id, run_index)` index aborts one whole save. Held until the caller commits.
+    await this.db
+      .select({ id: expertiseDomains.id })
+      .from(expertiseDomains)
+      .where(eq(expertiseDomains.id, params.domainId))
+      .for('update');
     const [prior] = await this.db
       .select({ value: sql<number | null>`max(${expertiseRuns.runIndex})` })
       .from(expertiseRuns)
