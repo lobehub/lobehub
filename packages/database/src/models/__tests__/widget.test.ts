@@ -355,6 +355,21 @@ describe('WidgetModel', () => {
       expect(await model.findById(pub.id)).toBeUndefined();
     });
 
+    it('purge deletes only a widget that is still trashed', async () => {
+      const widget = await model.create({ title: 'w' });
+      await model.trash(widget.id);
+      // a restore commits before the purge reaches the row
+      await model.restore(widget.id);
+
+      expect(await model.purge(widget.id)).toBeUndefined();
+      expect(await model.findById(widget.id)).toMatchObject({ id: widget.id });
+
+      await model.trash(widget.id);
+      expect(await other.purge(widget.id)).toBeUndefined();
+      expect(await model.purge(widget.id)).toMatchObject({ id: widget.id });
+      expect(await serverDB.select().from(trashItems)).toHaveLength(0);
+    });
+
     it('trash / restore / delete go through the recycle bin', async () => {
       const widget = await model.create({ title: 'w' });
       await model.publishVersion(widget.id, (await model.createVersion(widget.id, script(1)))!.id);

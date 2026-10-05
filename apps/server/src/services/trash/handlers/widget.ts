@@ -15,7 +15,7 @@ const ownerModel = (
 
 export const widgetHandler: TrashHandler = {
   purge: async (ctx, root) => {
-    await ownerModel(ctx, root).delete(root.resourceId);
+    await ownerModel(ctx, root).purge(root.resourceId);
   },
   restore: async (ctx, root) => {
     const restored = await ownerModel(ctx, root).restore(root.resourceId);

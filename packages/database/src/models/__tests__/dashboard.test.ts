@@ -230,6 +230,23 @@ describe('DashboardModel', () => {
   });
 
   describe('recycle bin', () => {
+    it('purge deletes only a board that is still trashed', async () => {
+      const model = new DashboardModel(serverDB, userId, workspaceId);
+      const dashboard = await model.create({ title: 'Ops' });
+      await model.trash(dashboard.id);
+      // a restore commits before the purge reaches the row
+      await model.restore(dashboard.id);
+
+      expect(await model.purge(dashboard.id)).toBeUndefined();
+      expect(await model.findById(dashboard.id)).toMatchObject({ id: dashboard.id });
+
+      await model.trash(dashboard.id);
+      expect(await model.purge(dashboard.id)).toMatchObject({ id: dashboard.id });
+      expect(
+        await serverDB.select().from(trashItems).where(eq(trashItems.resourceId, dashboard.id)),
+      ).toHaveLength(0);
+    });
+
     it('trash hides the board and registers it; restore brings it back', async () => {
       const model = new DashboardModel(serverDB, userId, workspaceId);
       const dashboard = await model.create({ title: 'Ops' });

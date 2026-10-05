@@ -212,12 +212,31 @@ export class DashboardModel {
 
   /** Hard delete, live or trashed; items cascade, widgets are untouched. */
   async delete(id: string) {
+    return this.hardDelete(id, false);
+  }
+
+  /**
+   * Permanently delete a dashboard the recycle bin still holds. Gated on
+   * `is_deleted` so a restore that commits after the purge read the registry
+   * keeps the row instead of losing it.
+   */
+  async purge(id: string) {
+    return this.hardDelete(id, true);
+  }
+
+  private async hardDelete(id: string, onlyTrashed: boolean) {
     if (!isUuid(id)) return undefined;
 
     return this.db.transaction(async (tx) => {
       const [dashboard] = await tx
         .delete(dashboards)
-        .where(and(eq(dashboards.id, id), this.ownedIncludingTrashed()))
+        .where(
+          and(
+            eq(dashboards.id, id),
+            this.ownedIncludingTrashed(),
+            onlyTrashed ? isTrashed(dashboards.isDeleted) : undefined,
+          ),
+        )
         .returning();
       if (!dashboard) return undefined;
 
