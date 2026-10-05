@@ -7,6 +7,7 @@ import {
   projects,
   widgetRuns,
   widgets,
+  widgetVersions,
   workspaces,
 } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
@@ -15,9 +16,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
 import { DashboardModel } from '@/database/models/dashboard';
+import { WidgetModel } from '@/database/models/widget';
 import { qstashClient } from '@/libs/qstash';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import widgetWorkflowApp from '@/server/router-hono/workflows/widget';
+import { executeWidgetRun } from '@/server/services/widget/executeRun';
 import { recordWidgetMetrics } from '@/server/services/widget/metrics';
 import { runWidgetSchedulerTick } from '@/server/services/widget/scheduler';
 
@@ -318,6 +321,80 @@ describe('widget + dashboard routers integration', () => {
         'succeeded',
         'succeeded',
       ]);
+    });
+
+    it('records no metric and keeps the trend link for a stale run that finishes late', async () => {
+      const owner = widgetRouter.createCaller(context(ownerId));
+      const widget = await publishStat(owner);
+      const widgetRow = async () =>
+        (await db.select().from(widgets).where(eq(widgets.id, widget.id)))[0];
+      const versionRow = async (id: string) =>
+        (await db.select().from(widgetVersions).where(eq(widgetVersions.id, id)))[0];
+      const allPoints = async () =>
+        (
+          await db
+            .select({ value: metricPoints.value })
+            .from(metricPoints)
+            .innerJoin(metrics, eq(metricPoints.metricId, metrics.id))
+            .where(eq(metrics.subjectId, widget.id))
+        )
+          .map((p) => p.value)
+          .sort((a, b) => a - b);
+
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 42 }));
+      await owner.run({ widgetId: widget.id });
+      const v1Row = await widgetRow();
+      const v1 = await versionRow(v1Row.publishedVersionId!);
+
+      // a v1 run is in flight when v2 (a different metric key) goes live
+      const oldVersionRun = await WidgetModel.startRun(db, v1Row, { trigger: 'schedule' });
+      const v2 = (await owner.saveDraft({
+        manifest: { metric: { key: 'forks' } },
+        widgetId: widget.id,
+        ...statScript,
+        script: 'console.log(2)',
+      }))!.data;
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 1 }));
+      await owner.dryRun({ widgetId: widget.id });
+      await owner.publish({ versionId: v2.id, widgetId: widget.id });
+
+      // a v2 run starts, then a newer one finishes first and owns the snapshot
+      const startedEarly = await WidgetModel.startRun(db, await widgetRow(), {
+        trigger: 'schedule',
+      });
+      await db
+        .update(widgetRuns)
+        .set({ startedAt: new Date(Date.now() - 60_000) })
+        .where(eq(widgetRuns.id, startedEarly.id));
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 10 }));
+      await owner.run({ widgetId: widget.id });
+      const current = await widgetRow();
+      const forksMetricId = current.metricId;
+      expect(forksMetricId).not.toBe(v1Row.metricId);
+      expect(await allPoints()).toEqual([10, 42]);
+
+      const runner = { run: runSandbox };
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 99 }));
+      const lateOld = await executeWidgetRun(
+        db,
+        { run: oldVersionRun, version: v1, widget: current },
+        { runner },
+      );
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 98 }));
+      const lateEarly = await executeWidgetRun(
+        db,
+        { run: startedEarly, version: await versionRow(v2.id), widget: current },
+        { runner },
+      );
+
+      // both runs are closed, but neither enters the trend nor moves the link
+      expect(lateOld).toMatchObject({ id: oldVersionRun.id, status: 'succeeded' });
+      expect(lateEarly).toMatchObject({ id: startedEarly.id, status: 'succeeded' });
+      expect(await allPoints()).toEqual([10, 42]);
+      expect(await widgetRow()).toMatchObject({
+        latestOutput: { type: 'stat', value: 10 },
+        metricId: forksMetricId,
+      });
     });
 
     it('passes the manifest network allowlist to the sandbox', async () => {

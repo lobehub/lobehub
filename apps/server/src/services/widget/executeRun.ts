@@ -171,8 +171,9 @@ const runInSandbox = async (
  *    output with `meta.complete === false` → `partial`;
  * 5. finish the run. `WidgetModel.finishRun` folds a current, non-preview run
  *    into the widget snapshot (`succeeded` / `partial` replace `latestOutput`);
- * 6. a `succeeded` non-preview run appends its numbers to the widget's metric
- *    trend; `partial` runs never do.
+ * 6. a `succeeded` run that folded into the snapshot appends its numbers to
+ *    the widget's metric trend; previews, stale runs and `partial` runs never
+ *    do.
  *
  * Never throws for script or sandbox failures — they become the run's status.
  */
@@ -196,7 +197,10 @@ export const executeWidgetRun = async (
     stdout: outcome.stdout ? sanitizeStream(outcome.stdout, outcome.env) : null,
   });
 
-  if (finished && run.trigger !== 'preview' && outcome.status === 'succeeded' && outcome.output) {
+  // Same "current run" rule as the snapshot: a stale run (old version, or
+  // started before the snapshot's run) finishing late must not become the
+  // newest trend point nor move `widgets.metric_id`.
+  if (finished?.folded && outcome.status === 'succeeded' && outcome.output) {
     try {
       const { primaryMetricId } = await recordWidgetMetrics(db, widget, {
         manifest: version.manifest,
@@ -214,5 +218,5 @@ export const executeWidgetRun = async (
   }
 
   log('run=%s widget=%s status=%s', run.id, widget.id, outcome.status);
-  return finished;
+  return finished?.run;
 };

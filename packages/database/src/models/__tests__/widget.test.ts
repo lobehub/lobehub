@@ -674,6 +674,44 @@ describe('WidgetModel', () => {
       });
     });
 
+    it('reports whether a finished run folded into the snapshot', async () => {
+      const widget = await model.create({ title: 'w' });
+      const v1 = await model.createVersion(widget.id, script(1));
+      await model.publishVersion(widget.id, v1!.id);
+      const live = (await model.findById(widget.id))!;
+      const done = { output: { type: 'stat' as const, value: 1 }, status: 'succeeded' as const };
+
+      const preview = await WidgetModel.startRun(serverDB, live, { trigger: 'preview' });
+      expect(await WidgetModel.finishRun(serverDB, preview.id, done)).toMatchObject({
+        folded: false,
+        run: { id: preview.id },
+      });
+
+      const early = await WidgetModel.startRun(serverDB, live, { trigger: 'schedule' });
+      await serverDB
+        .update(widgetRuns)
+        .set({ startedAt: new Date(Date.now() - 60_000) })
+        .where(eq(widgetRuns.id, early.id));
+      const current = await WidgetModel.startRun(serverDB, live, { trigger: 'manual' });
+      expect(await WidgetModel.finishRun(serverDB, current.id, done)).toMatchObject({
+        folded: true,
+        run: { id: current.id, status: 'succeeded' },
+      });
+      // started before the snapshot's run: persisted, not folded
+      expect(await WidgetModel.finishRun(serverDB, early.id, done)).toMatchObject({
+        folded: false,
+        run: { id: early.id, status: 'succeeded' },
+      });
+
+      const stale = await WidgetModel.startRun(serverDB, live, { trigger: 'schedule' });
+      const v2 = await model.createVersion(widget.id, script(2));
+      await model.publishVersion(widget.id, v2!.id);
+      expect(await WidgetModel.finishRun(serverDB, stale.id, done)).toMatchObject({
+        folded: false,
+      });
+      expect(await WidgetModel.finishRun(serverDB, stale.id, done)).toBeUndefined();
+    });
+
     it('lets workspace readers run a public widget but not a private one', async () => {
       const pub = await ws.create({ title: 'pub' });
       const priv = await ws.create({ title: 'priv', visibility: 'private' });

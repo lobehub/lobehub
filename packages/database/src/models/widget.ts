@@ -454,7 +454,7 @@ export class WidgetModel {
       .limit(1);
     if (!run) return undefined;
 
-    return WidgetModel.finishRun(this.db, runId, input);
+    return (await WidgetModel.finishRun(this.db, runId, input))?.run;
   }
 
   async listRuns(widgetId: string, options: { limit?: number } = {}) {
@@ -676,8 +676,15 @@ export class WidgetModel {
    * its version is the widget's published version and it started no earlier
    * than the run that last updated the snapshot (`last_run_id`). The widget
    * row is locked for the decision so concurrent finishers serialize.
+   *
+   * `folded` reports that decision, so anything else derived from "the
+   * widget's current value" (the metric trend) follows the same rule.
    */
-  static async finishRun(db: LobeChatDatabase, runId: string, input: FinishWidgetRunInput) {
+  static async finishRun(
+    db: LobeChatDatabase,
+    runId: string,
+    input: FinishWidgetRunInput,
+  ): Promise<{ folded: boolean; run: WidgetRunRow } | undefined> {
     return db.transaction(async (tx) => {
       const finishedAt = input.finishedAt ?? new Date();
       const [run] = await tx
@@ -699,7 +706,7 @@ export class WidgetModel {
         .returning();
       if (!run) return undefined;
 
-      if (run.trigger === 'preview') return run;
+      if (run.trigger === 'preview') return { folded: false, run };
 
       const [widget] = await tx
         .select({
@@ -710,7 +717,9 @@ export class WidgetModel {
         .where(eq(widgets.id, run.widgetId))
         .limit(1)
         .for('update');
-      if (!widget || !(await WidgetModel.isCurrentRun(tx, widget, run))) return run;
+      if (!widget || !(await WidgetModel.isCurrentRun(tx, widget, run))) {
+        return { folded: false, run };
+      }
 
       const usable = producesOutput(input.status);
       await tx
@@ -725,7 +734,7 @@ export class WidgetModel {
         })
         .where(eq(widgets.id, run.widgetId));
 
-      return run;
+      return { folded: true, run };
     });
   }
 }
