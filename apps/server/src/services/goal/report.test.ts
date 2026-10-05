@@ -743,6 +743,49 @@ describe('buildGoalReportSkeleton', () => {
       expect(GoalReportMetadataSchema.safeParse(filled).success).toBe(true);
     });
 
+    /**
+     * Regression: a retired node's description may run to 8,000 characters (and
+     * a seeded title past 200), but a detour's reason / lesson / title are capped
+     * by `GoalReportDetourSchema`. Copying them verbatim made the store's second
+     * parse reject the whole otherwise-valid report, so the recovery produced no
+     * storyline at all.
+     */
+    it('clamps graph-derived detour text to the report schema limits', () => {
+      const verbose = withReportDispatched(
+        graph({
+          edges: [
+            edge('t2', 'depends_on', 't1'),
+            edge('acc', 'depends_on', 't2'),
+            edge('dead', 'depends_on', 't1'),
+          ],
+          nodes: [
+            node('problem', { kind: 'problem', status: 'resolved' }),
+            node('t1', { createdAt: new Date(1), status: 'resolved' }),
+            node('t2', { createdAt: new Date(4), status: 'resolved' }),
+            acceptance({ createdAt: new Date(5), status: 'resolved' }),
+            node('report', { title: GOAL_REPORT_TASK_TITLE }),
+            node('dead', {
+              createdAt: new Date(10),
+              description: 'why it failed. '.repeat(600),
+              status: 'retired',
+              title: 'A very long dead-end title '.repeat(20),
+            }),
+          ],
+        }),
+      );
+
+      const filled = reconcileGoalReport(verbose, detourless);
+      const [detour] = filled.chapters.flatMap((chapter) => chapter.detours);
+
+      expect(detour.nodeIds).toEqual(['dead']);
+      expect(detour.reason.length).toBeLessThanOrEqual(2000);
+      expect(detour.lesson.length).toBeLessThanOrEqual(2000);
+      expect(detour.title.length).toBeLessThanOrEqual(200);
+      expect(detour.reason.endsWith('…')).toBe(true);
+      // The version the store would persist is one it can read back.
+      expect(GoalReportMetadataSchema.safeParse(filled).success).toBe(true);
+    });
+
     it('leaves a report that already tells a detour untouched', () => {
       const told: GoalReportMetadata = {
         ...detourless,

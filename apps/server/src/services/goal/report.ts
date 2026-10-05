@@ -6,7 +6,11 @@ import type {
   GoalReportMetadata,
   GoalReportTrigger,
 } from '@lobechat/types';
-import { GOAL_REPORT_MAX_DETOURS_PER_CHAPTER } from '@lobechat/types';
+import {
+  GOAL_REPORT_MAX_DETOUR_TEXT_LENGTH,
+  GOAL_REPORT_MAX_DETOUR_TITLE_LENGTH,
+  GOAL_REPORT_MAX_DETOURS_PER_CHAPTER,
+} from '@lobechat/types';
 
 /**
  * The wrap-up branch of the Goal coordinator: once the Goal-level acceptance
@@ -462,6 +466,22 @@ export const buildGoalReportInstruction = (
 };
 
 /**
+ * Fit graph-derived text into a report field. Node titles and descriptions are
+ * bounded looser than `GoalReportDetourSchema`, and the store re-parses the
+ * reconciled report: one over-long description copied verbatim would reject the
+ * whole otherwise-valid storyline. Cuts on a code point boundary and marks the
+ * cut with an ellipsis.
+ */
+const clampReportText = (text: string, max: number): string => {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  let cut = trimmed.slice(0, max - 1);
+  // Never leave half of a surrogate pair at the end.
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
+  return `${cut.trimEnd()}…`;
+};
+
+/**
  * The requirement promises the storyline explains the exploration, detours
  * included, and the skeleton hands the wrap-up agent the dead ends it found.
  * A weak default model can narrate the whole path and still submit an empty
@@ -524,13 +544,16 @@ export const backfillGoalReportDetours = (
     room[target] -= 1;
     // The graph only carries the node's own description; it holds both why the
     // path was abandoned and what it taught, so it seeds both fields.
-    const detail = nodes.get(candidate.id)?.description?.trim() || candidate.signal;
+    const detail = clampReportText(
+      nodes.get(candidate.id)?.description?.trim() || candidate.signal,
+      GOAL_REPORT_MAX_DETOUR_TEXT_LENGTH,
+    );
     additions[target].push({
       kind: candidate.signal.startsWith('superseded') ? 'superseded' : 'dead_end',
       lesson: detail,
       nodeIds: [candidate.id],
       reason: detail,
-      title: candidate.title,
+      title: clampReportText(candidate.title, GOAL_REPORT_MAX_DETOUR_TITLE_LENGTH),
     });
   }
   if (additions.every((extra) => extra.length === 0)) return metadata;

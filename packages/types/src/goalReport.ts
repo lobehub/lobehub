@@ -37,13 +37,21 @@ const optionalId = z.preprocess((value) => {
 export const goalReportDetourKinds = ['dead_end', 'superseded', 'retry'] as const;
 export type GoalReportDetourKind = (typeof goalReportDetourKinds)[number];
 
+/**
+ * Length caps of a detour's text fields. Exported so the server-side backfill,
+ * which copies graph-derived text (node titles and descriptions are bounded
+ * looser than this), can clamp to exactly what the schema reads back.
+ */
+export const GOAL_REPORT_MAX_DETOUR_TITLE_LENGTH = 200;
+export const GOAL_REPORT_MAX_DETOUR_TEXT_LENGTH = 2000;
+
 export const GoalReportDetourSchema = z
   .object({
     kind: z.enum(goalReportDetourKinds),
-    lesson: z.string().trim().min(1).max(2000),
+    lesson: z.string().trim().min(1).max(GOAL_REPORT_MAX_DETOUR_TEXT_LENGTH),
     nodeIds: idList.min(1),
-    reason: z.string().trim().min(1).max(2000),
-    title: z.string().trim().min(1).max(200),
+    reason: z.string().trim().min(1).max(GOAL_REPORT_MAX_DETOUR_TEXT_LENGTH),
+    title: z.string().trim().min(1).max(GOAL_REPORT_MAX_DETOUR_TITLE_LENGTH),
   })
   .strict();
 export type GoalReportDetour = z.infer<typeof GoalReportDetourSchema>;
