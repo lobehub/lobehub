@@ -128,6 +128,13 @@ export interface WidgetEnvRequirement {
    */
   connector?: string;
   description?: string;
+  /**
+   * Header of a header-credential connector to read, matched
+   * case-insensitively, e.g. 'X-Api-Key'. Required when the connector holds
+   * more than one header; other credential types hold a single secret and
+   * ignore it.
+   */
+  field?: string;
   /** Environment variable name the script reads, e.g. 'GITHUB_TOKEN'. */
   name: string;
   required?: boolean;

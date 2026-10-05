@@ -509,6 +509,32 @@ describe('widget + dashboard routers integration', () => {
       expect(runSandbox.mock.calls[1][0].env).toEqual({ LINEAR_TOKEN: 'member-token-789' });
     });
 
+    it('reads the header a manifest names from a multi-header connector', async () => {
+      await (
+        await gateKeeperModel(ownerId, workspaceId)
+      ).create({
+        ...githubConnector(''),
+        credentials: JSON.stringify({
+          headers: { 'X-Api-Key': 'key-1', 'X-Tenant': 'tenant-1' },
+          type: 'header',
+        }),
+      } as any);
+      const owner = widgetRouter.createCaller(context(ownerId, workspaceId));
+      const widget = await createWidget(owner);
+      const draft = (await owner.saveDraft({
+        manifest: { env: [{ connector: 'github', field: 'X-Tenant', name: 'TENANT' }] },
+        widgetId: widget.id,
+        ...statScript,
+      }))!.data;
+      expect(draft.manifest?.env).toEqual([
+        { connector: 'github', field: 'X-Tenant', name: 'TENANT' },
+      ]);
+
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 1 }));
+      expect((await owner.dryRun({ widgetId: widget.id }))!.data?.status).toBe('succeeded');
+      expect(runSandbox.mock.calls[0][0].env).toEqual({ TENANT: 'tenant-1' });
+    });
+
     it('closes the run as failed when credential resolution itself errors', async () => {
       const owner = widgetRouter.createCaller(context(ownerId, workspaceId));
       const widget = await createWidget(owner);

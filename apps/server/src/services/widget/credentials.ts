@@ -23,8 +23,12 @@ export interface WidgetCredentialScope {
 
 export interface MissingWidgetEnv {
   connector?: string;
+  /** The header the requirement asked for. */
+  field?: string;
+  /** The connector's headers, for a requirement that did not pick exactly one. */
+  fields?: string[];
   name: string;
-  reason: 'connector_not_connected' | 'no_source';
+  reason: 'ambiguous_field' | 'connector_not_connected' | 'no_source' | 'unknown_field';
 }
 
 export class MissingWidgetEnvError extends Error {
@@ -52,33 +56,65 @@ export class ForbiddenWidgetCredentialsError extends Error {
   }
 }
 
-const formatMissing = (missing: MissingWidgetEnv[]) =>
-  `Missing required environment: ${missing
-    .map((m) =>
-      m.reason === 'no_source'
-        ? `${m.name} (no connector declared to provide it)`
-        : `${m.name} (connect "${m.connector}" for this widget's agent or workspace)`,
-    )
-    .join('; ')}`;
+const describeMissing = (m: MissingWidgetEnv) => {
+  switch (m.reason) {
+    case 'no_source': {
+      return `${m.name} (no connector declared to provide it)`;
+    }
+    case 'connector_not_connected': {
+      return `${m.name} (connect "${m.connector}" for this widget's agent or workspace)`;
+    }
+    case 'ambiguous_field': {
+      return `${m.name} (connector "${m.connector}" holds several headers; set "field" to one of: ${m.fields?.join(', ')})`;
+    }
+    case 'unknown_field': {
+      return `${m.name} (connector "${m.connector}" has no header "${m.field}"; it holds: ${m.fields?.join(', ')})`;
+    }
+  }
+};
 
-/** The single secret string a connector contributes to an env variable. */
-export const credentialToSecret = (
+const formatMissing = (missing: MissingWidgetEnv[]) =>
+  `Missing required environment: ${missing.map(describeMissing).join('; ')}`;
+
+export type ConnectorSecretSelection =
+  { secret: string | undefined } | { error: 'ambiguous_field' | 'unknown_field'; fields: string[] };
+
+/**
+ * The secret string a connector contributes to one env variable. Token and
+ * key credentials hold a single secret; a header credential may hold several
+ * values (e.g. `X-Api-Key` plus `X-Tenant`), so `field` names the header to
+ * read. Without it, only a single-header connector resolves — guessing would
+ * hand the script whichever value happens to come first.
+ */
+export const selectConnectorSecret = (
   credentials: ConnectorCredentials | null,
-): string | undefined => {
-  if (!credentials) return undefined;
+  field?: string,
+): ConnectorSecretSelection => {
+  if (!credentials) return { secret: undefined };
   switch (credentials.type) {
     case 'oauth2': {
-      return credentials.accessToken || undefined;
+      return { secret: credentials.accessToken || undefined };
     }
     case 'bearer': {
-      return credentials.token || undefined;
+      return { secret: credentials.token || undefined };
     }
     case 'apikey': {
-      return credentials.apiKey || undefined;
+      return { secret: credentials.apiKey || undefined };
     }
     case 'header': {
-      const [value] = Object.values(credentials.headers ?? {});
-      return value?.replace(/^Bearer\s+/i, '') || undefined;
+      const entries = Object.entries(credentials.headers ?? {});
+      const fields = entries.map(([name]) => name);
+      let value: string | undefined;
+      if (field) {
+        const wanted = field.toLowerCase();
+        const match = entries.find(([name]) => name.toLowerCase() === wanted);
+        if (!match) return { error: 'unknown_field', fields };
+        value = match[1];
+      } else {
+        if (entries.length > 1) return { error: 'ambiguous_field', fields };
+        value = entries[0]?.[1];
+      }
+      return { secret: value?.replace(/^Bearer\s+/i, '') || undefined };
     }
   }
 };
@@ -202,9 +238,19 @@ export const resolveWidgetEnv = async (
     if (connector) {
       connector = await ensureFreshConnectorToken(connector, connectorModel as ConnectorModel);
     }
-    const secret = credentialToSecret(connector?.credentials ?? null);
-    if (secret) {
-      env[requirement.name] = secret;
+    const selection = selectConnectorSecret(connector?.credentials ?? null, requirement.field);
+    if ('error' in selection) {
+      // A manifest that does not pick one header is wrong whether or not the
+      // variable is optional: report it rather than silently dropping it.
+      missing.push({
+        connector: requirement.connector,
+        field: requirement.field,
+        fields: selection.fields,
+        name: requirement.name,
+        reason: selection.error,
+      });
+    } else if (selection.secret) {
+      env[requirement.name] = selection.secret;
     } else if (required) {
       missing.push({
         connector: requirement.connector,

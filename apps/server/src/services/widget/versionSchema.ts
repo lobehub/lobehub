@@ -17,6 +17,7 @@ export const widgetManifestSchema = z.object({
       z.object({
         connector: z.string().min(1).optional(),
         description: z.string().max(500).optional(),
+        field: z.string().min(1).max(200).optional(),
         name: envName,
         required: z.boolean().optional(),
       }),

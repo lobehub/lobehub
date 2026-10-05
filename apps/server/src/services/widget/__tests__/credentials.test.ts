@@ -4,10 +4,10 @@ import type { DecryptedConnector } from '@/database/models/connector';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 
 import {
-  credentialToSecret,
   ForbiddenWidgetCredentialsError,
   MissingWidgetEnvError,
   resolveWidgetEnv,
+  selectConnectorSecret,
   type WidgetCredentialScope,
 } from '../credentials';
 
@@ -41,18 +41,42 @@ const personal: WidgetCredentialScope = {
 };
 const workspace: WidgetCredentialScope = { ...personal, workspaceId: 'ws1' };
 
-describe('credentialToSecret', () => {
+describe('selectConnectorSecret', () => {
   it.each([
     [{ accessToken: 'a', type: 'oauth2' }, 'a'],
     [{ token: 'b', type: 'bearer' }, 'b'],
     [{ apiKey: 'c', type: 'apikey' }, 'c'],
     [{ headers: { Authorization: 'Bearer d' }, type: 'header' }, 'd'],
   ] as const)('extracts the secret from %o', (credentials, expected) => {
-    expect(credentialToSecret(credentials as any)).toBe(expected);
+    expect(selectConnectorSecret(credentials as any)).toEqual({ secret: expected });
   });
 
-  it('returns undefined without credentials', () => {
-    expect(credentialToSecret(null)).toBeUndefined();
+  it('returns no secret without credentials', () => {
+    expect(selectConnectorSecret(null)).toEqual({ secret: undefined });
+  });
+
+  const multiHeader = {
+    headers: { 'X-Api-Key': 'key-1', 'X-Tenant': 'tenant-1' },
+    type: 'header',
+  } as const;
+
+  it('picks the named header, case-insensitively', () => {
+    expect(selectConnectorSecret(multiHeader, 'x-tenant')).toEqual({ secret: 'tenant-1' });
+    expect(selectConnectorSecret(multiHeader, 'X-Api-Key')).toEqual({ secret: 'key-1' });
+  });
+
+  it('refuses to guess between several headers', () => {
+    expect(selectConnectorSecret(multiHeader)).toEqual({
+      error: 'ambiguous_field',
+      fields: ['X-Api-Key', 'X-Tenant'],
+    });
+  });
+
+  it('reports a named header the connector does not hold', () => {
+    expect(selectConnectorSecret(multiHeader, 'X-Org')).toEqual({
+      error: 'unknown_field',
+      fields: ['X-Api-Key', 'X-Tenant'],
+    });
   });
 });
 
@@ -155,6 +179,49 @@ describe('resolveWidgetEnv', () => {
     );
 
     expect(env).toEqual({});
+  });
+
+  it('maps each header of a multi-header connector to the variable that names it', async () => {
+    const model = modelReturning([
+      connector({
+        credentials: { headers: { 'X-Api-Key': 'key-1', 'X-Tenant': 'tenant-1' }, type: 'header' },
+      }),
+    ]);
+
+    const env = await resolveWidgetEnv(
+      {} as any,
+      personal,
+      [
+        { connector: 'github', field: 'X-Api-Key', name: 'API_KEY' },
+        { connector: 'github', field: 'X-Tenant', name: 'TENANT' },
+      ],
+      { connectorModel: model as any },
+    );
+
+    expect(env).toEqual({ API_KEY: 'key-1', TENANT: 'tenant-1' });
+  });
+
+  it('fails with an explicit error when a multi-header connector is not narrowed', async () => {
+    const model = modelReturning([
+      connector({
+        credentials: { headers: { 'X-Api-Key': 'key-1', 'X-Tenant': 'tenant-1' }, type: 'header' },
+      }),
+    ]);
+
+    const error = await resolveWidgetEnv(
+      {} as any,
+      personal,
+      [
+        { connector: 'github', name: 'API_KEY', required: false },
+        { connector: 'github', field: 'X-Org', name: 'ORG' },
+      ],
+      { connectorModel: model as any },
+    ).catch((e) => e);
+
+    expect(error).toBeInstanceOf(MissingWidgetEnvError);
+    expect(error.message).toBe(
+      'Missing required environment: API_KEY (connector "github" holds several headers; set "field" to one of: X-Api-Key, X-Tenant); ORG (connector "github" has no header "X-Org"; it holds: X-Api-Key, X-Tenant)',
+    );
   });
 
   describe('who may receive a connector secret', () => {
