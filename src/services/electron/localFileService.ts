@@ -73,7 +73,9 @@ const TEXT_PREVIEW_MIME_TYPES = new Set([
 
 export interface BinaryLocalFilePreview {
   contentType: string;
-  type: 'binary' | 'pdf' | 'video';
+  /** The file has a previewable type but exceeds the in-app preview size cap. */
+  oversized?: boolean;
+  type: 'binary' | 'pdf';
 }
 
 /**
@@ -99,8 +101,18 @@ export interface TextLocalFilePreview {
   type: 'text';
 }
 
+export interface VideoLocalFilePreview {
+  blob: Blob;
+  contentType: string;
+  type: 'video';
+}
+
 export type LocalFilePreview =
-  BinaryLocalFilePreview | DocumentLocalFilePreview | ImageLocalFilePreview | TextLocalFilePreview;
+  | BinaryLocalFilePreview
+  | DocumentLocalFilePreview
+  | ImageLocalFilePreview
+  | TextLocalFilePreview
+  | VideoLocalFilePreview;
 
 /** Binary documents the in-app portal can preview (or offer to download). */
 const DOCUMENT_PREVIEW_MIME_TYPES = new Set([
@@ -119,6 +131,13 @@ const DOCUMENT_PREVIEW_MIME_TYPES = new Set([
  * back — identically on every transport.
  */
 const MAX_DOCUMENT_PREVIEW_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Videos above this size fall back to the `binary` placeholder: the desktop
+ * protocol serves the whole file in one response, so the blob lives in renderer
+ * memory for as long as the preview is open.
+ */
+const MAX_VIDEO_PREVIEW_BYTES = 200 * 1024 * 1024;
 
 const normalizeContentType = (contentType: string | null): string =>
   contentType?.split(';')[0].trim().toLowerCase() ?? '';
@@ -183,7 +202,18 @@ const fetchLocalFilePreview = async (
   }
 
   if (contentType.startsWith('video/')) {
-    return { contentType, type: 'video' };
+    const contentLength = Number(response.headers.get('content-length'));
+    const oversizedByHeader =
+      Number.isFinite(contentLength) && contentLength > MAX_VIDEO_PREVIEW_BYTES;
+
+    if (!oversizedByHeader) {
+      const blob = await response.blob();
+      if (blob.size <= MAX_VIDEO_PREVIEW_BYTES) {
+        return { blob, contentType, type: 'video' };
+      }
+    }
+
+    return { contentType, oversized: true, type: 'binary' };
   }
 
   return { contentType, type: 'binary' };

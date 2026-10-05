@@ -2812,6 +2812,7 @@
   "workingPanel.localFile.publish.uploadingProgress": "Uploading {{completed}} / {{total}} · {{percent}}%",
   "workingPanel.localFile.publish.version": "Publish this version",
   "workingPanel.localFile.sandboxUnavailable": "This file is no longer available — its sandbox environment has been recycled",
+  "workingPanel.localFile.tooLarge": "File too large to preview",
   "workingPanel.localFile.truncated": "File preview truncated to {{limit}} characters",
   "workingPanel.openMenu.configuration": "Configuration",
   "workingPanel.openMenu.terminal": "Terminal",

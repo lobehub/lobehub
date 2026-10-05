@@ -160,6 +160,65 @@ describe('localFileService', () => {
     expect(textMock).not.toHaveBeenCalled();
   });
 
+  it('returns a playable blob for local video previews', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/demo.mp4',
+    });
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'video/mp4' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            blob: vi.fn(async () => blob),
+            headers: {
+              get: vi.fn((name: string) => (name === 'content-type' ? 'video/mp4' : '3')),
+            },
+            ok: true,
+          }) as unknown as Response,
+      ),
+    );
+
+    const preview = await localFileService.getLocalFilePreview({
+      path: '/repo/demo.mp4',
+      workingDirectory: '/repo',
+    });
+
+    expect(preview).toEqual({ blob, contentType: 'video/mp4', type: 'video' });
+  });
+
+  it('falls back to the binary placeholder for oversized local videos without reading them', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/huge.mp4',
+    });
+    const blobMock = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            blob: blobMock,
+            headers: {
+              get: vi.fn((name: string) =>
+                name === 'content-type' ? 'video/mp4' : String(500 * 1024 * 1024),
+              ),
+            },
+            ok: true,
+          }) as unknown as Response,
+      ),
+    );
+
+    const preview = await localFileService.getLocalFilePreview({
+      path: '/repo/huge.mp4',
+      workingDirectory: '/repo',
+    });
+
+    expect(preview).toEqual({ contentType: 'video/mp4', oversized: true, type: 'binary' });
+    expect(blobMock).not.toHaveBeenCalled();
+  });
+
   it('reads local file bytes from the preview URL', async () => {
     mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
       success: true,

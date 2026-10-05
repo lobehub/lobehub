@@ -89,6 +89,21 @@ describe('projectFileService', () => {
     });
   });
 
+  it('maps a content-less remote video preview to the binary placeholder', async () => {
+    mockDeviceClient.getLocalFilePreview.query.mockResolvedValue({
+      preview: { contentType: 'video/mp4', type: 'video' },
+      success: true,
+    });
+
+    const preview = await projectFileService.getLocalFilePreview({
+      deviceId: 'device-1',
+      path: '/repo/demo.mp4',
+      workingDirectory: '/repo',
+    });
+
+    expect(preview).toEqual({ contentType: 'video/mp4', type: 'binary' });
+  });
+
   it('forwards image-only preview constraints to remote device RPC', async () => {
     mockDeviceClient.getLocalFilePreview.query.mockResolvedValue({
       preview: {

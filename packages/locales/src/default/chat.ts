@@ -3141,6 +3141,7 @@ export default {
   'workingPanel.localFile.publish.unresolvedLocals':
     'This page still points at local files that were not packed, so those assets would break after publish.',
   'workingPanel.localFile.publish.version': 'Publish this version',
+  'workingPanel.localFile.tooLarge': 'File too large to preview',
   'workingPanel.localFile.truncated': 'File preview truncated to {{limit}} characters',
   'workingPanel.skills.actions.comingSoon': 'Coming soon',
   'workingPanel.skills.actions.delete': 'Delete',

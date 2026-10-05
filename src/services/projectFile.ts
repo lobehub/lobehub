@@ -54,7 +54,11 @@ const deserializeLocalFilePreview = (preview: DeviceLocalFilePreview): LocalFile
     }
 
     default: {
-      return preview;
+      // Remote devices never ship video bytes over RPC, so there is nothing to play.
+      return {
+        contentType: preview.contentType,
+        type: preview.type === 'video' ? 'binary' : preview.type,
+      };
     }
   }
 };

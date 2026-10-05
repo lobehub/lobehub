@@ -2812,6 +2812,7 @@
   "workingPanel.localFile.publish.uploadingProgress": "正在上传 {{completed}} / {{total}} · {{percent}}%",
   "workingPanel.localFile.publish.version": "发布此版本",
   "workingPanel.localFile.sandboxUnavailable": "此文件已不可用——所在的沙盒环境已被回收",
+  "workingPanel.localFile.tooLarge": "文件过大，无法预览",
   "workingPanel.localFile.truncated": "文件预览被截断至 {{limit}} 个字符",
   "workingPanel.openMenu.configuration": "配置",
   "workingPanel.openMenu.terminal": "终端",
