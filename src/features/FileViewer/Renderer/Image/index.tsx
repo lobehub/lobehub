@@ -127,6 +127,7 @@ const ImageViewer = ({
   // Unsent marks per version, outside the tools so a version switch (which
   // remounts them while the new image loads) keeps them.
   const [markupByFile, setMarkupByFile] = useState<Record<string, ImageMarkup>>({});
+  const [busy, setBusy] = useState(false);
   const markup = markupByFile[fileId] ?? EMPTY_MARKUP;
   const setMarkup = useCallback(
     (next: ImageMarkup | ((current: ImageMarkup) => ImageMarkup)) =>
@@ -221,7 +222,7 @@ const ImageViewer = ({
 
   // Unsent marks exist only here, so closing would drop them; ask first.
   const handleClose = () => {
-    if (!onClose) return;
+    if (!onClose || busy) return;
     const hasMarks = Object.values(markupByFile).some((value) => !isMarkupEmpty(value));
     if (!hasMarks) return onClose();
     confirmModal({
@@ -279,6 +280,7 @@ const ImageViewer = ({
             naturalSize,
             overlayElement,
             rotation,
+            setBusy,
             setMarkup,
             toImagePoint,
             url,
@@ -421,6 +423,7 @@ const ImageViewer = ({
         )}
 
         <TopBar
+          closeDisabled={busy}
           isFullscreen={isFullscreen}
           zoom={zoom}
           onClose={onClose && handleClose}

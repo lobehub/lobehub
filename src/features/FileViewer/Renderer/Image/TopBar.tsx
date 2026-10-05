@@ -51,6 +51,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface TopBarProps {
+  /** A save is in flight; leaving now would lose its result, so Close waits. */
+  closeDisabled?: boolean;
   isFullscreen: boolean;
   onClose?: () => void;
   onDownload: () => void;
@@ -63,6 +65,7 @@ interface TopBarProps {
 }
 
 const TopBar = ({
+  closeDisabled,
   isFullscreen,
   onClose,
   onDownload,
@@ -131,6 +134,7 @@ const TopBar = ({
         {(onClose || isFullscreen) && (
           <ActionIcon
             aria-label={t('imageViewer.close')}
+            disabled={closeDisabled && !isFullscreen}
             icon={XIcon}
             size={'small'}
             title={t('imageViewer.close')}

@@ -137,7 +137,7 @@ const sleep = (ms: number, signal?: AbortSignal) =>
  * Settle with `request`, unless cancel or the deadline comes first: a status
  * request that hangs must not keep the tool locked.
  */
-const raceRequest = <T>(request: Promise<T>, deadline: number, signal?: AbortSignal) =>
+export const raceRequest = <T>(request: Promise<T>, deadline: number, signal?: AbortSignal) =>
   new Promise<T>((resolve, reject) => {
     if (signal?.aborted) return reject(new AIImageEditError('cancelled'));
     const finish = () => {
@@ -148,10 +148,12 @@ const raceRequest = <T>(request: Promise<T>, deadline: number, signal?: AbortSig
       finish();
       reject(new AIImageEditError('cancelled'));
     };
+    // Whether a task may be running is decided by the caller, which knows
+    // whether anything was submitted yet.
     const timer = setTimeout(
       () => {
         finish();
-        reject(new AIImageEditError('timeout', undefined, undefined, { taskRunning: true }));
+        reject(new AIImageEditError('timeout'));
       },
       Math.max(0, deadline - Date.now()),
     );
@@ -241,13 +243,19 @@ export const runAIImageEdit = async ({
   let submitted = false;
   let settled = false;
 
+  // One deadline for the whole run: every step before and after submitting
+  // races it and Cancel, so no hung request can keep the tool locked.
+  const deadline = Date.now() + timeout;
+  const step = <T>(request: Promise<T>) => raceRequest(request, deadline, signal);
+
   try {
     // The caller may have spent a while preparing the guide; honor a cancel from then.
     throwIfAborted(signal);
     let imageUrl = source.url;
     // Read before the topic exists: the result inherits the topic's visibility,
     // which should follow the original's, and the save step needs the location.
-    const location = await deps.getFile(source.fileId).catch((error) => {
+    const location = await step(deps.getFile(source.fileId)).catch((error) => {
+      if (error instanceof AIImageEditError) throw error;
       console.error('[ImageViewer] failed to read the original image location', error);
       return undefined;
     });
@@ -255,11 +263,13 @@ export const runAIImageEdit = async ({
     if (operation === 'erase') {
       if (!guide) throw new AIImageEditError('failed', 'Missing erase guide image');
       onPhase?.('uploading');
-      const uploaded = await deps.uploadFile({
-        file: new File([guide], buildDerivedFileName(source.name, 'erase-guide'), {
-          type: 'image/png',
+      const uploaded = await step(
+        deps.uploadFile({
+          file: new File([guide], buildDerivedFileName(source.name, 'erase-guide'), {
+            type: 'image/png',
+          }),
         }),
-      });
+      );
       if (!uploaded) throw new AIImageEditError('failed', 'Failed to upload the erase guide');
       guideFileId = uploaded.id;
       imageUrl = uploaded.url;
@@ -267,18 +277,23 @@ export const runAIImageEdit = async ({
     }
 
     onPhase?.('generating');
-    topicId = await deps.createTopic(topicTitle, location?.visibility ?? undefined);
+    const topicRequest = deps.createTopic(topicTitle, location?.visibility ?? undefined);
+    try {
+      topicId = await step(topicRequest);
+    } catch (error) {
+      // Cancelled or timed out while creating: nothing will ever use this
+      // topic, so drop it once it arrives.
+      void topicRequest.then((id) => deps.deleteTopic(id)).catch(() => undefined);
+      throw error;
+    }
     throwIfAborted(signal);
 
-    const deadline = Date.now() + timeout;
     let created: CreateImageResult;
     try {
-      created = await raceRequest(
+      created = await step(
         deps.createImage(
           buildAIEditRequest({ generationTopicId: topicId, imageUrl, model, operation }),
         ),
-        deadline,
-        signal,
       );
     } catch (error) {
       // The server starts the task before it answers, so a lost, failed or
@@ -296,11 +311,7 @@ export const runAIImageEdit = async ({
     let generation: Generation | null = null;
     while (!generation) {
       await sleep(pollInterval, signal);
-      const status = await raceRequest(
-        deps.getStatus(pending.id, pending.asyncTaskId),
-        deadline,
-        signal,
-      );
+      const status = await step(deps.getStatus(pending.id, pending.asyncTaskId));
       if (status.status === AsyncTaskStatus.Success || status.status === AsyncTaskStatus.Error)
         settled = true;
       throwIfAborted(signal);

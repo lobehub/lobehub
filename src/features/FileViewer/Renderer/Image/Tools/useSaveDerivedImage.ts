@@ -22,7 +22,7 @@ import { saveDerivedFile } from './saveDerivedFile';
  */
 export const useSaveDerivedImage = (operation: DerivedImageOperation) => {
   const { t } = useTranslation('file');
-  const { addVersion, fileId, name, url } = useImageStage();
+  const { addVersion, fileId, name, setBusy, url } = useImageStage();
   const [saving, setSaving] = useState(false);
   // One save at a time, even if a shortcut fires before the state re-renders.
   const savingRef = useRef(false);
@@ -32,6 +32,7 @@ export const useSaveDerivedImage = (operation: DerivedImageOperation) => {
       if (savingRef.current) return;
       savingRef.current = true;
       setSaving(true);
+      setBusy(true);
       try {
         const img = await loadStageImage(url);
         const blob = await render(img);
@@ -63,9 +64,10 @@ export const useSaveDerivedImage = (operation: DerivedImageOperation) => {
       } finally {
         savingRef.current = false;
         setSaving(false);
+        setBusy(false);
       }
     },
-    [addVersion, fileId, name, operation, t, url],
+    [addVersion, fileId, name, operation, setBusy, t, url],
   );
 
   return { save, saving };

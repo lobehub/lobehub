@@ -335,7 +335,7 @@ describe('runAIImageEdit', () => {
       taskRunning: false,
     });
     expect(deps.createImage).not.toHaveBeenCalled();
-    expect(deps.deleteTopic).toHaveBeenCalledWith('gt_6p9nBZERtyWe');
+    await vi.waitFor(() => expect(deps.deleteTopic).toHaveBeenCalledWith('gt_6p9nBZERtyWe'));
   });
 
   // Regression: deleting the topic of a finished run removed the stored asset
@@ -460,6 +460,19 @@ describe('runAIImageEdit', () => {
     // Doubling from 2ms within 200ms allows about 7 tries, not ~100.
     expect(calls).toBeLessThan(12);
     expect(deps.removeFile).not.toHaveBeenCalled();
+  });
+
+  // Regression: steps before submitting (location lookup, guide upload, topic)
+  // were not raced against Cancel, so a hung one kept the tool locked.
+  it('cancels while a pre-submit step hangs, with nothing submitted', async () => {
+    const controller = new AbortController();
+    const deps = spyDeps({ createTopic: () => new Promise<never>(() => {}) });
+
+    const pending = run(deps, { signal: controller.signal });
+    setTimeout(() => controller.abort(), 20);
+
+    await expect(pending).rejects.toMatchObject({ kind: 'cancelled', taskRunning: false });
+    expect(deps.createImage).not.toHaveBeenCalled();
   });
 
   it('times out while a status request hangs', async () => {

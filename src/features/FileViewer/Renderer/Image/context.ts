@@ -34,6 +34,8 @@ export interface ImageStageValue {
   /** Element covering the displayed (rotated, zoomed) image; tools portal overlays into it. */
   overlayElement: HTMLDivElement | null;
   rotation: Rotation;
+  /** A tool marks a save it cannot abort, so the viewer keeps Close disabled meanwhile. */
+  setBusy: (busy: boolean) => void;
   setMarkup: (markup: ImageMarkup | ((current: ImageMarkup) => ImageMarkup)) => void;
   /** Map a pointer position to a normalized point on the image. */
   toImagePoint: (client: Point) => Point | undefined;

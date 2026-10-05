@@ -88,6 +88,7 @@ const renderTools = (stage: Partial<ImageStageValue> = {}) => {
     naturalSize: { height: 1000, width: 2000 },
     overlayElement: overlay,
     rotation: 0,
+    setBusy: () => {},
     setMarkup: () => {},
     toImagePoint: (client) => clientToImagePoint(client, RECT, 0),
     url: 'https://s3/sunset.jpg',

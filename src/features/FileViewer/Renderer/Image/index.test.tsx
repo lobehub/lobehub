@@ -245,6 +245,30 @@ describe('ImageViewer', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  // Regression: the host Close stayed enabled during a save that cannot be
+  // aborted, so the result landed in a viewer that no longer existed.
+  it('disables Close while a tool reports a save in flight', () => {
+    const BusyProbe = () => {
+      const { setBusy } = useImageStage();
+      return <button onClick={() => setBusy(true)}>busy</button>;
+    };
+    const onClose = vi.fn();
+    render(
+      <ImageViewer
+        fileId={'file_1'}
+        tools={<BusyProbe />}
+        url={'https://s3/a.png'}
+        onClose={onClose}
+      />,
+    );
+    loadImage();
+    fireEvent.click(screen.getByText('busy'));
+
+    const close = screen.getByRole('button', { name: 'imageViewer.close' });
+    fireEvent.click(close);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('drops saved versions when another file opens', () => {
     const { rerender } = render(
       <ImageViewer fileId={'file_1'} tools={<AddVersionProbe />} url={'https://s3/a.png'} />,

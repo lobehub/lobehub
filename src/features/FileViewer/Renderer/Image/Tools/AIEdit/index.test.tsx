@@ -73,6 +73,7 @@ const renderMode = (operation: 'erase' | 'removeBackground', deps = createMockDe
     naturalSize: { height: 512, width: 768 },
     overlayElement: overlay,
     rotation: 0,
+    setBusy: vi.fn(),
     setMarkup: vi.fn(),
     toImagePoint: (client) => clientToImagePoint(client, RECT, 0),
     url: 'https://app.lobehub.com/f/file_src',

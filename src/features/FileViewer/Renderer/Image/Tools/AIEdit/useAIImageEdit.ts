@@ -16,8 +16,11 @@ import {
   type AIEditPhase,
   type AIEditResult,
   AIImageEditError,
+  raceRequest,
   runAIImageEdit,
 } from './runAIImageEdit';
+
+const GUIDE_PREPARE_TIMEOUT = 60 * 1000;
 
 export type AIEditState =
   | { status: 'idle' }
@@ -70,11 +73,20 @@ export const useAIImageEdit = (operation: AIEditOperation, deps: AIEditDeps = ai
       let guide: Blob | undefined;
       if (prepareGuide) {
         try {
-          guide = await prepareGuide();
+          // Reading and rendering the image can hang too; Cancel must still work.
+          guide = await raceRequest(
+            prepareGuide(),
+            Date.now() + GUIDE_PREPARE_TIMEOUT,
+            controller.signal,
+          );
         } catch (error) {
-          console.error('[ImageViewer] erase guide render failed', error);
           if (controllerRef.current === controller) controllerRef.current = null;
           setState({ status: 'idle' });
+          if (error instanceof AIImageEditError && error.kind === 'cancelled') {
+            toast.info(t('imageViewer.ai.cancelled'));
+            return;
+          }
+          console.error('[ImageViewer] erase guide render failed', error);
           toast.error(
             error instanceof ImagePixelsUnavailableError
               ? t('imageViewer.pixelsUnavailable')
