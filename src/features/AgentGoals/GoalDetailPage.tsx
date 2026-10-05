@@ -317,6 +317,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
             key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             topicId={chat.topicId}
             onCollapse={() => chat.setOpen(false)}
+            onInitialMessageSent={chat.consumeInitialMessage}
             // A question that should not land in the manager's own record.
             onOpenChat={() => chat.openConversation({ agentId: supervisingAgentId })}
           />
@@ -328,6 +329,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
             initialTopicId={chat.topicId}
             key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             onCollapse={() => chat.setOpen(false)}
+            onInitialMessageSent={chat.consumeInitialMessage}
           />
         ) : null}
       </RightPanel>

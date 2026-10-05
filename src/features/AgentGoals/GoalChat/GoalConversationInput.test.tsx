@@ -56,7 +56,8 @@ describe('GoalConversationInput', () => {
   });
 
   it('sends the handed-off message once, only after the history has loaded', () => {
-    render(<GoalConversationInput initialMessage={'what next?'} />);
+    const onSent = vi.fn();
+    render(<GoalConversationInput initialMessage={'what next?'} onInitialMessageSent={onSent} />);
     expect(state.sendMessage).not.toHaveBeenCalled();
 
     act(() => conversation.store.setState({ messagesInit: true }));
@@ -65,6 +66,8 @@ describe('GoalConversationInput', () => {
 
     expect(state.sendMessage).toHaveBeenCalledTimes(1);
     expect(state.sendMessage).toHaveBeenCalledWith({ message: 'what next?' });
+    // The host is told, so a later remount of the panel gets no message to resend.
+    expect(onSent).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('chat-input')).toBeTruthy();
   });
 });

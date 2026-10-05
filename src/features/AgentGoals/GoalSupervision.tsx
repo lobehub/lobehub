@@ -29,6 +29,7 @@ interface GoalSupervisionProps {
   /** Sent into the record once it loads — the result page's composer hands off this way. */
   initialMessage?: string;
   onCollapse: () => void;
+  onInitialMessageSent?: () => void;
   /** Hand the panel back to the agent's editable side conversation. */
   onOpenChat?: () => void;
   topicId: string;
@@ -62,6 +63,7 @@ export const GoalSupervision = ({
   goalId,
   initialMessage,
   onCollapse,
+  onInitialMessageSent,
   onOpenChat,
   topicId,
 }: GoalSupervisionProps) => {
@@ -138,7 +140,10 @@ export const GoalSupervision = ({
         <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
           <ChatList disableActionsBar itemContent={itemContent} welcome={<WaitingForFirstRun />} />
         </Flexbox>
-        <GoalConversationInput initialMessage={initialMessage} />
+        <GoalConversationInput
+          initialMessage={initialMessage}
+          onInitialMessageSent={onInitialMessageSent}
+        />
       </Flexbox>
     </GoalChatProvider>
   );

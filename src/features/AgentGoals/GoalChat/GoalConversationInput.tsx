@@ -17,6 +17,8 @@ interface GoalConversationInputProps {
    * page's composer hands its text to the panel this way.
    */
   initialMessage?: string;
+  /** Called once the handed-off message is dispatched, so the host can drop it. */
+  onInitialMessageSent?: () => void;
 }
 
 /**
@@ -26,35 +28,39 @@ interface GoalConversationInputProps {
  * device and working directory controls live in this bar — the same choice the
  * side-by-side topic portal makes.
  */
-const GoalConversationInput = memo<GoalConversationInputProps>(({ initialMessage }) => {
-  const agentId = useConversationStore(conversationSelectors.agentId);
-  const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-  const isConfigLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
-  const messagesInit = useConversationStore(conversationSelectors.messagesInit);
-  const sendMessage = useConversationStore((s) => s.sendMessage);
+const GoalConversationInput = memo<GoalConversationInputProps>(
+  ({ initialMessage, onInitialMessageSent }) => {
+    const agentId = useConversationStore(conversationSelectors.agentId);
+    const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
+    const isConfigLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
+    const messagesInit = useConversationStore(conversationSelectors.messagesInit);
+    const sendMessage = useConversationStore((s) => s.sendMessage);
 
-  // Waiting for the history keeps the hand-off from racing the first fetch: a
-  // send while the list is still loading would go out without the record it
-  // continues. The ref outlives StrictMode's replayed effect, so it sends once.
-  const sentRef = useRef(false);
-  useEffect(() => {
-    if (!initialMessage || !messagesInit || sentRef.current) return;
-    sentRef.current = true;
-    void sendMessage({ message: initialMessage });
-  }, [initialMessage, messagesInit, sendMessage]);
+    // Waiting for the history keeps the hand-off from racing the first fetch: a
+    // send while the list is still loading would go out without the record it
+    // continues. The ref covers StrictMode's replayed effect within one mount;
+    // across remounts the host has already dropped the message via the callback.
+    const sentRef = useRef(false);
+    useEffect(() => {
+      if (!initialMessage || !messagesInit || sentRef.current) return;
+      sentRef.current = true;
+      onInitialMessageSent?.();
+      void sendMessage({ message: initialMessage });
+    }, [initialMessage, messagesInit, onInitialMessageSent, sendMessage]);
 
-  if (isHeterogeneous) return <HeterogeneousChatInput />;
+    if (isHeterogeneous) return <HeterogeneousChatInput />;
 
-  return (
-    <ChatInput
-      skipScrollMarginWithList
-      isConfigLoading={isConfigLoading}
-      leftActions={LEFT_ACTIONS}
-      rightActions={RIGHT_ACTIONS}
-      sendButtonProps={{ shape: 'round' }}
-    />
-  );
-});
+    return (
+      <ChatInput
+        skipScrollMarginWithList
+        isConfigLoading={isConfigLoading}
+        leftActions={LEFT_ACTIONS}
+        rightActions={RIGHT_ACTIONS}
+        sendButtonProps={{ shape: 'round' }}
+      />
+    );
+  },
+);
 
 GoalConversationInput.displayName = 'GoalConversationInput';
 

@@ -30,32 +30,38 @@ Welcome.displayName = 'GoalChatWelcome';
 interface ConversationProps {
   initialMessage?: string;
   onCollapse: () => void;
+  onInitialMessageSent?: () => void;
 }
 
-const Conversation = memo<ConversationProps>(({ initialMessage, onCollapse }) => {
-  const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
-  const currentAgentId = useConversationStore(conversationSelectors.agentId);
+const Conversation = memo<ConversationProps>(
+  ({ initialMessage, onCollapse, onInitialMessageSent }) => {
+    const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
+    const currentAgentId = useConversationStore(conversationSelectors.agentId);
 
-  useFetchAgentConfig(true, currentAgentId);
+    useFetchAgentConfig(true, currentAgentId);
 
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(currentAgentId)(s));
-  const provider = useAgentStore((s) =>
-    agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
-  );
-  const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
+    const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(currentAgentId)(s));
+    const provider = useAgentStore((s) =>
+      agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
+    );
+    const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
 
-  return (
-    <DragUploadZone style={{ flex: 1, height: '100%' }} onUploadFiles={handleUploadFiles}>
-      <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
-        <Toolbar onCollapse={onCollapse} />
-        <Flexbox flex={1} style={{ overflow: 'hidden' }}>
-          <ChatList welcome={<Welcome />} />
+    return (
+      <DragUploadZone style={{ flex: 1, height: '100%' }} onUploadFiles={handleUploadFiles}>
+        <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
+          <Toolbar onCollapse={onCollapse} />
+          <Flexbox flex={1} style={{ overflow: 'hidden' }}>
+            <ChatList welcome={<Welcome />} />
+          </Flexbox>
+          <GoalConversationInput
+            initialMessage={initialMessage}
+            onInitialMessageSent={onInitialMessageSent}
+          />
         </Flexbox>
-        <GoalConversationInput initialMessage={initialMessage} />
-      </Flexbox>
-    </DragUploadZone>
-  );
-});
+      </DragUploadZone>
+    );
+  },
+);
 
 Conversation.displayName = 'GoalChatConversation';
 
@@ -66,6 +72,7 @@ interface GoalChatProps {
   initialMessage?: string;
   initialTopicId?: string;
   onCollapse: () => void;
+  onInitialMessageSent?: () => void;
 }
 
 /**
@@ -74,9 +81,13 @@ interface GoalChatProps {
  * with the current goal overview injected — "how is this going?" just works.
  */
 const GoalChat = memo<GoalChatProps>(
-  ({ agentId, goalId, initialMessage, initialTopicId, onCollapse }) => (
+  ({ agentId, goalId, initialMessage, initialTopicId, onCollapse, onInitialMessageSent }) => (
     <GoalChatProvider agentId={agentId} goalId={goalId} initialTopicId={initialTopicId}>
-      <Conversation initialMessage={initialMessage} onCollapse={onCollapse} />
+      <Conversation
+        initialMessage={initialMessage}
+        onCollapse={onCollapse}
+        onInitialMessageSent={onInitialMessageSent}
+      />
     </GoalChatProvider>
   ),
 );

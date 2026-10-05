@@ -25,6 +25,15 @@ export const useGoalChatPanel = (goalId: string, responsibleAgentId?: string) =>
   return {
     agentId: current.target?.agentId ?? responsibleAgentId,
     initialMessage: current.target?.initialMessage,
+    /**
+     * Acknowledge the handed-off message once it has been dispatched. The panel
+     * remounts whenever a drill-down replaces it, so a component-local "sent"
+     * flag would resend the message on the way back.
+     */
+    consumeInitialMessage: () => {
+      if (current.target?.initialMessage === undefined) return;
+      setState({ ...current, target: { ...current.target, initialMessage: undefined } });
+    },
     open: current.open,
     /**
      * Send the panel to one destination: the supervision record when the target

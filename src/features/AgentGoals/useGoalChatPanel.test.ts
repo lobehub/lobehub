@@ -47,6 +47,19 @@ describe('useGoalChatPanel', () => {
     expect(result.current.initialMessage).toBeUndefined();
   });
 
+  // The panel remounts whenever a drill-down replaces it; once the message has
+  // gone out, the host must stop handing it over, or the return trip resends it.
+  it('drops a dispatched message without remounting the panel', () => {
+    const { result } = renderHook(() => useGoalChatPanel('goal-a', 'worker'));
+
+    act(() => result.current.openConversation({ agentId: 'worker', initialMessage: 'next?' }));
+    const request = result.current.request;
+    act(() => result.current.consumeInitialMessage());
+
+    expect(result.current.initialMessage).toBeUndefined();
+    expect(result.current).toMatchObject({ agentId: 'worker', open: true, request });
+  });
+
   it('never carries another goal’s open panel or creator into the next goal', () => {
     const { result, rerender } = renderHook(({ id, agent }) => useGoalChatPanel(id, agent), {
       initialProps: { id: 'goal-a', agent: 'worker-a' },
