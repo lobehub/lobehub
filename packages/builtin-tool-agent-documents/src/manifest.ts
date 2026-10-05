@@ -20,7 +20,8 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           content: {
-            description: 'Document content in markdown or plain text.',
+            description:
+              'Document content in Markdown. Put JSON, code or any text that must stay byte-exact inside a fenced code block (```json … ```); outside code, Markdown syntax such as `\\`, `__` or `*` is interpreted.',
             type: 'string',
           },
           hintIsSkill: {
@@ -93,7 +94,8 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           content: {
-            description: 'New full document content.',
+            description:
+              'New full document content in Markdown. Put JSON, code or any text that must stay byte-exact inside a fenced code block (```json … ```).',
             type: 'string',
           },
           id: {

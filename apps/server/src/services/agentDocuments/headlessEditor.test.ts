@@ -5,6 +5,7 @@ import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 
 import {
   applyLiteXMLOperations,
+  createAgentMarkdownSnapshot,
   createMarkdownEditorSnapshot,
   exportEditorDataSnapshot,
 } from './headlessEditor';
@@ -252,6 +253,50 @@ describe('agent document headless editor', () => {
 
       expect(result.content).toContain('https://api.deepseek.com/v1');
       expect(result.content).toContain('<model>');
+    });
+  });
+
+  describe('raw JSON content', () => {
+    // Shape of a real createDocument body: a JSON lorebook whose strings hold
+    // escaped quotes, `\n` and a `__` placeholder.
+    const json = JSON.stringify(
+      {
+        entries: [
+          {
+            content: '维护"谁知道什么"的全表。\n压缩办法：压成"背景事件：__（影响已消化）"一行。',
+            key: ['曝光', '知道'],
+          },
+          { content: '其余在校人员：__（不知情）', key: [] },
+        ],
+      },
+      null,
+      2,
+    );
+
+    it('rejects raw JSON with a way to store it verbatim instead of rewriting it', async () => {
+      // Markdown alone drops the escapes and pairs the placeholders into bold.
+      const markdown = await createMarkdownEditorSnapshot(json);
+      expect(() => JSON.parse(markdown.content)).toThrow();
+
+      await expect(createAgentMarkdownSnapshot(json)).rejects.toThrow(
+        /raw JSON.*Nothing was saved\. Wrap the JSON in a fenced code block/,
+      );
+    });
+
+    it('stores the same JSON byte-exact inside a json code fence', async () => {
+      const fenced = `\`\`\`json\n${json}\n\`\`\``;
+      const snapshot = await createAgentMarkdownSnapshot(fenced);
+      const body = snapshot.content.match(/```json\n([\S\s]*?)\n```/)?.[1];
+
+      expect(body).toBe(json);
+      expect((await createAgentMarkdownSnapshot(snapshot.content)).content).toBe(snapshot.content);
+    });
+
+    it('keeps accepting Markdown that only starts like JSON', async () => {
+      await expect(
+        createAgentMarkdownSnapshot('[link](https://example.com) text'),
+      ).resolves.toBeDefined();
+      await expect(createAgentMarkdownSnapshot('{draft} notes')).resolves.toBeDefined();
     });
   });
 });
