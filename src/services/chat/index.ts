@@ -196,6 +196,12 @@ class ChatService {
       ? messages
       : stripAssistantReasoningForReplay(messages);
 
+    // The context builder reads the agent's knowledge files straight from the
+    // config and skips any whose parse has not run, so an unparsed file would be
+    // missing from the prompt without a trace. Hydrate those first; the call
+    // resolves even when an individual parse fails.
+    await getAgentStoreState().ensureAgentFileContents(targetAgentId, options?.signal);
+
     // Apply context engineering with preprocessing configuration
     // Note: agentConfig.systemRole is already resolved by resolveAgentConfig for builtin agents
     const modelMessages = await contextEngineering({
