@@ -207,6 +207,22 @@ describe('EditorRuntime - Real Cases', () => {
       expect(result.results[1]).toMatchObject({ action: 'insert', success: true });
     });
 
+    it('explains a fragment with a raw "<" instead of reporting a rejection', async () => {
+      const result = await runtime.modifyNodes({
+        operations: [
+          {
+            action: 'insert',
+            afterId: idOf('p', 'tail'),
+            litexml: '<p>lh provider test -m <model> https://api.deepseek.com/v1</p>',
+          },
+        ],
+      });
+
+      expect(result.successCount).toBe(0);
+      expect(result.results[0].error).toContain('<model> is never closed');
+      expect(result.results[0].error).not.toContain('rejected it');
+    });
+
     it('keeps array order for inserts sharing a beforeId', async () => {
       const anchor = idOf('p', 'tail');
       const result = await runtime.modifyNodes({

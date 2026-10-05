@@ -16,6 +16,7 @@ import {
   planLiteXMLEditSteps,
   touchesList,
 } from './liteXMLEditPlan';
+import { findMalformedLiteXML } from './liteXMLWellFormed';
 import type {
   EditTitleArgs,
   EditTitleRuntimeResult,
@@ -485,7 +486,9 @@ export class EditorRuntime {
 
         const before = readLiteXML();
         const document = indexLiteXMLDocument(before);
-        const problem = findLiteXMLEditStepProblem(operation, document);
+        const problem =
+          ('litexml' in operation && findMalformedLiteXML(operation.litexml)) ||
+          findLiteXMLEditStepProblem(operation, document);
         if (problem)
           throw new Error(`${describeLiteXMLEditStep(step, operations.length)}: ${problem}`);
 

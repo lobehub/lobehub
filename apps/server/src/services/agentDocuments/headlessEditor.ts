@@ -1,6 +1,7 @@
 import {
   describeLiteXMLEditStep,
   findLiteXMLEditStepProblem,
+  findMalformedLiteXML,
   indexLiteXMLDocument,
   normalizeLiteXMLFragment,
   planLiteXMLEditSteps,
@@ -263,6 +264,13 @@ export const applyLiteXMLOperations = async ({
         const { operation } = step;
         const label = describeLiteXMLEditStep(step, operations.length);
         const document = indexLiteXMLDocument(current.litexml ?? '');
+
+        const malformed = 'litexml' in operation && findMalformedLiteXML(operation.litexml);
+        if (malformed) {
+          throw new Error(
+            `${label} failed: ${malformed}. No operations were saved; fix the litexml and retry the whole batch.`,
+          );
+        }
 
         const problem = findLiteXMLEditStepProblem(operation, document);
         if (problem) throw new Error(`${label} failed: ${problem}. ${NOTHING_SAVED_HINT}`);

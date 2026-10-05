@@ -179,4 +179,50 @@ describe('agent document headless editor', () => {
       }),
     ).rejects.toThrow('Operation 1 of 1 (insert) failed: node "missing-node" not found');
   });
+
+  describe('LiteXML that is not well-formed', () => {
+    // Fragment from a real modifyNodes insert that was reported as
+    // "the editor rejected it": the text holds a raw `<model>`.
+    const fragment =
+      '<h2>404 真因</h2><ol><li>填成 https://api.deepseek.com/v1，请求打到 /v1/messages。</li><li>lh provider test -m <model> 能把“模型 ID 是否有效”变成回执。</li></ol>';
+
+    const lastParagraphId = async () => {
+      const initial = await exportEditorDataSnapshot({
+        fallbackContent: 'first\n\nlast',
+        litexml: true,
+      });
+      const ids = [...initial.litexml!.matchAll(/<p id="([^"]+)"/g)].map((match) => match[1]);
+
+      return { afterId: ids.at(-1)!, initial };
+    };
+
+    it('names the unclosed tag and how to escape it instead of "the editor rejected it"', async () => {
+      const { afterId, initial } = await lastParagraphId();
+
+      const attempt = applyLiteXMLOperations({
+        editorData: initial.editorData,
+        operations: [{ action: 'insert', afterId, litexml: fragment }],
+      });
+
+      await expect(attempt).rejects.toThrow(
+        'Operation 1 of 1 (insert) failed: litexml is not well-formed XML (<model> is never closed)',
+      );
+      await expect(attempt).rejects.toThrow('"&lt;"');
+      await expect(attempt).rejects.not.toThrow('the editor rejected it');
+    });
+
+    it('applies the same fragment once the text escapes "<", bare URL included', async () => {
+      const { afterId, initial } = await lastParagraphId();
+
+      const result = await applyLiteXMLOperations({
+        editorData: initial.editorData,
+        operations: [
+          { action: 'insert', afterId, litexml: fragment.replace('<model>', '&lt;model&gt;') },
+        ],
+      });
+
+      expect(result.content).toContain('https://api.deepseek.com/v1');
+      expect(result.content).toContain('<model>');
+    });
+  });
 });
