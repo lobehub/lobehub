@@ -12,6 +12,8 @@ import {
 import { lazy, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
+
 import { useImageStage } from '../context';
 import AnnotateMode from './Annotate';
 import CommentMode from './Comment';
@@ -40,6 +42,9 @@ const ImageEditTools = () => {
   const { t } = useTranslation('file');
   const { fitToScreen, markup, setMarkup } = useImageStage();
   const [mode, setMode] = useState<ToolMode | null>(null);
+  // Every workflow ends in a new upload (file or chat attachment) or an image
+  // generation, so members who cannot create content cannot start one.
+  const { allowed: canCreate, reason } = usePermission('create_content');
   const { comments } = markup;
 
   const enter = (next: ToolMode) => {
@@ -77,18 +82,22 @@ const ImageEditTools = () => {
         role={'toolbar'}
       >
         <Button
+          disabled={!canCreate}
           icon={PencilLineIcon}
           shape={'round'}
           size={'small'}
+          title={reason}
           type={'text'}
           onClick={() => enter('annotate')}
         >
           {t('imageViewer.tool.annotate')}
         </Button>
         <Button
+          disabled={!canCreate}
           icon={MessageSquarePlusIcon}
           shape={'round'}
           size={'small'}
+          title={reason}
           type={'text'}
           onClick={() => enter('comment')}
         >
@@ -103,27 +112,33 @@ const ImageEditTools = () => {
           )}
         </Button>
         <Button
+          disabled={!canCreate}
           icon={WandSparklesIcon}
           shape={'round'}
           size={'small'}
+          title={reason}
           type={'text'}
           onClick={() => enter('removeBackground')}
         >
           {t('imageViewer.tool.removeBackground')}
         </Button>
         <Button
+          disabled={!canCreate}
           icon={EraserIcon}
           shape={'round'}
           size={'small'}
+          title={reason}
           type={'text'}
           onClick={() => enter('erase')}
         >
           {t('imageViewer.tool.erase')}
         </Button>
         <Button
+          disabled={!canCreate}
           icon={CropIcon}
           shape={'round'}
           size={'small'}
+          title={reason}
           type={'text'}
           onClick={() => enter('resize')}
         >

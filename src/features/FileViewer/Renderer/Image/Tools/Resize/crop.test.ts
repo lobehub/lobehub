@@ -98,3 +98,21 @@ describe('cropPixelSize', () => {
     ).toEqual({ height: MAX_OUTPUT_EDGE / 2, width: MAX_OUTPUT_EDGE });
   });
 });
+
+describe('dragCrop with a locked aspect', () => {
+  const natural = { height: 1000, width: 1000 };
+  const start = { height: 0.5, width: 0.5, x: 0, y: 0 };
+
+  // Regression: a vertical drag on a corner did nothing once the ratio was locked.
+  it('follows a vertical corner drag', () => {
+    const next = dragCrop(start, 'se', { x: 0, y: 0.2 }, natural, 1);
+    expect(next.height).toBeCloseTo(0.7);
+    expect(next.width).toBeCloseTo(0.7);
+  });
+
+  it('follows a horizontal corner drag', () => {
+    const next = dragCrop(start, 'se', { x: -0.2, y: 0 }, natural, 1);
+    expect(next.width).toBeCloseTo(0.3);
+    expect(next.height).toBeCloseTo(0.3);
+  });
+});

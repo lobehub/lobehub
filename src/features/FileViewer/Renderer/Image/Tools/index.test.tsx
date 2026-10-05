@@ -38,6 +38,9 @@ vi.mock('@/store/agent/selectors', () => ({
   builtinAgentSelectors: { inboxAgentId: () => 'agt_inbox' },
 }));
 
+const permission = vi.hoisted(() => ({ allowed: true, reason: undefined as string | undefined }));
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => permission }));
+
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => navigate,
@@ -115,6 +118,8 @@ describe('ImageEditTools', () => {
     useComposerDraftBus.setState({ attached: true, draft: null });
     fileStore.chatUploadFileList = [];
     chatState.activeTopicId = 'tpc_1';
+    permission.allowed = true;
+    permission.reason = undefined;
     fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
       fileStore.chatUploadFileList = [{ file, id: 'file_chat', status: 'success' }];
     });
@@ -471,6 +476,18 @@ describe('ImageEditTools', () => {
       // Stay in the mode so the drawing is not lost.
       expect(within(overlay).getByTestId('image-annotate-canvas')).toBeInTheDocument();
     });
+  });
+
+  it('disables every edit for members who cannot create content', () => {
+    permission.allowed = false;
+    permission.reason = 'No permission to create content';
+    renderTools();
+
+    const toolbar = screen.getByRole('toolbar', { name: 'imageViewer.editTools' });
+    for (const button of within(toolbar).getAllByRole('button')) {
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', 'No permission to create content');
+    }
   });
 
   describe('shortcuts', () => {

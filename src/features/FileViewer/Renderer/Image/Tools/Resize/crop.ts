@@ -43,8 +43,9 @@ export type CropHandle = 'move' | 'nw' | 'ne' | 'sw' | 'se';
 
 /**
  * Apply a drag delta (normalized) to a crop rect. Corners resize against the
- * opposite, fixed corner; a locked aspect drives height from width. The result
- * always stays inside the image.
+ * opposite, fixed corner; with a locked aspect the axis the pointer moved
+ * more along (in pixels) drives the other. The result always stays inside the
+ * image.
  */
 export const dragCrop = (
   start: NormalizedRect,
@@ -75,6 +76,8 @@ export const dragCrop = (
   if (aspect) {
     // Normalized height for a normalized width at this pixel aspect.
     const ratio = natural.width / natural.height / aspect;
+    const vertical = Math.abs(delta.y * natural.height) > Math.abs(delta.x * natural.width);
+    if (vertical) width = clamp(height / ratio, MIN_CROP, maxWidth);
     height = width * ratio;
     if (height > maxHeight) {
       height = maxHeight;
