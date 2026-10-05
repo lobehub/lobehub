@@ -179,7 +179,9 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
     [agencyConfig, deviceDefaultCwd, deviceId, legacyAgentWorkingDirectory, workspaceScoped],
   );
 
-  const surface = resolveWorkspaceSurface({
+  // A list since the sandbox landed: more than one surface can apply to the
+  // same run, so membership rather than equality.
+  const surfaces = resolveWorkspaceSurface({
     agencyConfig,
     alwaysShowWorkspace: isHetero,
     clientExecutionAvailable: isDesktop,
@@ -196,7 +198,7 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   // a directory without one.
   const directoryKind: TaskDirectoryKind = deviceId
     ? 'device'
-    : surface === 'cloudRepo'
+    : surfaces.includes('cloudRepo')
       ? 'repo'
       : 'none';
 
