@@ -325,6 +325,33 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
     expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-live', topicId: 'topic-1' });
   });
 
+  // A task-result wakeup runs on the main spine with `agent_signal`. The client
+  // never started it, so it cannot queue the send behind it; leaving both live
+  // forked the conversation and hid the user's message on the losing branch.
+  it('interrupts a running agent_signal holder on the main spine', async () => {
+    mockFindOperationById.mockResolvedValue({
+      id: 'op-live',
+      status: 'running',
+      topicId: 'topic-1',
+      trigger: 'agent_signal',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      interactiveStart: true,
+      prompt: 'please hurry',
+    });
+
+    expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-live', topicId: 'topic-1' });
+    expect(mockMergeMetadata).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        supersede: expect.objectContaining({ supersededOperationId: 'op-live' }),
+      }),
+    );
+  });
+
   it('leaves a device-hosted heterogeneous holder to the replacement path', async () => {
     mockFindTopicById.mockResolvedValue({
       id: 'topic-1',

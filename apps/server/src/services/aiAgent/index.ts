@@ -46,7 +46,7 @@ import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
 // Imported from the module itself: tests mock the `agentRuntime` barrel.
 import {
-  isForegroundOperationTrigger,
+  isComposerSupersedableTrigger,
   type SupersedeKind,
   type SupersedeRecord,
 } from '@/server/services/agentRuntime/foregroundOperation';
@@ -692,7 +692,9 @@ export class AiAgentService {
    * keep the existing behavior:
    * - a parked run (`waiting_for_human` etc.) — the send may be its answer;
    * - a background producer's run (task, cron, bot, …), see
-   *   `BACKGROUND_OPERATION_TRIGGERS` in `agentRuntime/foregroundOperation`;
+   *   `isComposerSupersedableTrigger` in `agentRuntime/foregroundOperation`.
+   *   An Agent Signal run on the main spine (task-result wakeup) is retired
+   *   like a foreground run: the client never tracks it, so it cannot queue;
    * - a device-hosted Claude Code / Codex run: cancelling it waits up to 10s
    *   for the device, far past the reservation's ~3s retry budget, so a
    *   concurrent send would fail. Those settle through `replacesOperationId`
@@ -712,7 +714,7 @@ export class AiAgentService {
 
     const holder = await this.agentOperationModel.findById(holderId);
     if (holder?.status !== 'running') return;
-    if (!isForegroundOperationTrigger(holder.trigger)) return;
+    if (!isComposerSupersedableTrigger(holder.trigger)) return;
 
     // Read before interrupting: afterwards the sentinel is always set. The
     // read is diagnostic only, so a failure must not fail the send.

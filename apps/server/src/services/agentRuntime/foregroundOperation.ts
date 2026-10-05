@@ -26,6 +26,21 @@ export const isForegroundOperationTrigger = (trigger: string | null | undefined)
   !trigger || !BACKGROUND_OPERATION_TRIGGERS.has(trigger);
 
 /**
+ * Whether a composer send should retire this run when it still owns the
+ * topic's `runningOperation` marker.
+ *
+ * Foreground runs, plus Agent Signal runs: a run that holds the main-spine
+ * marker with that trigger (e.g. the creator wakeup that processes task
+ * results) continues the user's own conversation, yet the server started it,
+ * so the client has no local op to queue behind. Leaving it live next to the
+ * send forks the spine, and the user's message ends up on a branch the
+ * conversation never shows. Agent Signal runs on isolation threads never own
+ * the marker, so they are unaffected.
+ */
+export const isComposerSupersedableTrigger = (trigger: string | null | undefined): boolean =>
+  isForegroundOperationTrigger(trigger) || trigger === RequestTrigger.AgentSignal;
+
+/**
  * How a composer send found the topic's previous foreground run still `running`.
  *
  * - `already_stopping`: the client had already interrupted it (Stop / Send now)
