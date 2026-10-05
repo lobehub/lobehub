@@ -7,7 +7,7 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { serverDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { exchangeConnectorCode } from '@/server/services/connector/oauth';
+import { exchangeConnectorCode, toClientInformation } from '@/server/services/connector/oauth';
 import { consumeConnectorOAuthState } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import { tokensToCredentials } from '@/server/services/connector/tokens';
@@ -132,10 +132,10 @@ export const GET = async (req: NextRequest) => {
       return renderFailure('metadata_discovery_failed');
     }
 
-    const tokens = await exchangeConnectorCode({
+    const { authMethod, tokens } = await exchangeConnectorCode({
       authorizationCode: code,
       authorizationServerUrl: payload.authorizationServerUrl,
-      clientInformation: { client_id: oidc.clientId, client_secret: oidc.clientSecret },
+      clientInformation: toClientInformation(oidc),
       codeVerifier: payload.codeVerifier,
       metadata,
       redirectUri: oidc.redirectUri!,
@@ -148,6 +148,8 @@ export const GET = async (req: NextRequest) => {
 
     await connectorModel.update(payload.connectorId, {
       credentials: JSON.stringify(credentials),
+      // Remember the auth method that worked so refreshes don't fail the same way.
+      ...(authMethod && { oidcConfig: { ...oidc, tokenEndpointAuthMethod: authMethod } }),
       tokenExpiresAt,
     });
 

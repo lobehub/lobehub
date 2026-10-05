@@ -51,6 +51,13 @@ export interface OIDCConfig {
   scopes?: string[];
   tokenEndpoint?: string;
 
+  /**
+   * How the client authenticates at the token endpoint. DCR records the method
+   * the server registered; otherwise it is learned from the first successful
+   * exchange. Servers that enforce the registered method reject any other one.
+   */
+  tokenEndpointAuthMethod?: 'client_secret_basic' | 'client_secret_post' | 'none';
+
   /** Recommended for public clients */
   usePKCE?: boolean;
 }

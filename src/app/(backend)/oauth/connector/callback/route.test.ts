@@ -7,8 +7,9 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 
 import { GET } from './route';
 
-const { mockConsume, mockFindById, mockSync, mockUpdate } = vi.hoisted(() => ({
+const { mockConsume, mockExchange, mockFindById, mockSync, mockUpdate } = vi.hoisted(() => ({
   mockConsume: vi.fn(),
+  mockExchange: vi.fn(),
   mockFindById: vi.fn(),
   mockSync: vi.fn(),
   mockUpdate: vi.fn(),
@@ -25,7 +26,11 @@ vi.mock('@modelcontextprotocol/sdk/client/auth.js', () => ({
     .mockResolvedValue({ token_endpoint: 'https://as/token' }),
 }));
 vi.mock('@/server/services/connector/oauth', () => ({
-  exchangeConnectorCode: vi.fn().mockResolvedValue({ access_token: 'tok' }),
+  exchangeConnectorCode: mockExchange,
+  toClientInformation: (oidc: { clientId: string; clientSecret?: string }) => ({
+    client_id: oidc.clientId,
+    client_secret: oidc.clientSecret,
+  }),
 }));
 vi.mock('@/server/services/connector/tokens', () => ({
   tokensToCredentials: vi
@@ -65,6 +70,7 @@ beforeEach(() => {
     },
   });
   mockUpdate.mockResolvedValue(undefined);
+  mockExchange.mockResolvedValue({ tokens: { access_token: 'tok' } });
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -155,5 +161,33 @@ describe('connector OAuth callback', () => {
     expect(body).toContain('access_denied: &lt;img src=x&gt;');
     expect(body).not.toContain('<img');
     expect(mockConsume).not.toHaveBeenCalled();
+  });
+
+  it('remembers the client auth method that the token endpoint accepted', async () => {
+    mockSync.mockResolvedValue({ toolCount: 1 });
+    mockExchange.mockResolvedValue({
+      authMethod: 'client_secret_post',
+      tokens: { access_token: 'tok' },
+    });
+
+    await GET(makeReq());
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({
+        oidcConfig: expect.objectContaining({
+          clientId: 'cid',
+          tokenEndpointAuthMethod: 'client_secret_post',
+        }),
+      }),
+    );
+  });
+
+  it('leaves the OIDC config alone when the first auth method worked', async () => {
+    mockSync.mockResolvedValue({ toolCount: 1 });
+
+    await GET(makeReq());
+
+    expect(mockUpdate.mock.calls[0][1]).not.toHaveProperty('oidcConfig');
   });
 });
