@@ -605,7 +605,13 @@ export const setupTurn = async (
 
     /** A group topic pins its owning agent; member runs keep their own model and effort. */
     const canUseTopicPin = !existingTopic?.groupId || existingTopic.agentId === resolvedAgentId;
-    const pinnedModel = canUseTopicPin ? existingTopic?.model : undefined;
+    // The model pin belongs to the topic's own agent. A `callAgent` child runs
+    // in an isolation thread on the CALLER's topic; inheriting that pin would
+    // run the callee on the caller's model (#19542). Legacy topics without an
+    // owner keep the pin.
+    const canUseTopicModelPin =
+      canUseTopicPin && (!existingTopic?.agentId || existingTopic.agentId === resolvedAgentId);
+    const pinnedModel = canUseTopicModelPin ? existingTopic?.model : undefined;
     if (pinnedModel) {
       model = modelOverride || pinnedModel;
       provider = providerOverride || existingTopic?.provider || provider;
@@ -619,7 +625,9 @@ export const setupTurn = async (
     }
     // The heterogeneous effort pin lives in metadata and is independent of the
     // model pin (a runtime without a model selector can still pin an effort).
-    const pinnedHeteroEffort = canUseTopicPin ? existingTopic?.metadata?.heteroEffort : undefined;
+    const pinnedHeteroEffort = canUseTopicModelPin
+      ? existingTopic?.metadata?.heteroEffort
+      : undefined;
     if (pinnedHeteroEffort !== undefined) {
       pinnedHeterogeneousTopicModel = {
         ...pinnedHeterogeneousTopicModel,

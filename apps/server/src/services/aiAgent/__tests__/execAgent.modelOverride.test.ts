@@ -343,6 +343,53 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     });
   });
 
+  // #19542: `callAgent` runs the callee in an isolation thread on the caller's
+  // topic, so the caller's topic pin must not replace the callee's own model.
+  it("runs a callAgent callee on its own model instead of the caller's topic pin", async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'caller-agent',
+      metadata: { heteroEffort: 'high' },
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { isolationThread: true, threadId: 'thread-1', topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation.mock.calls[0][0].modelRuntimeConfig).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+  });
+
+  it("falls back to the topic pin when the run belongs to the topic's own agent", async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'agent-1',
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation.mock.calls[0][0].modelRuntimeConfig).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+  });
+
   it('keeps an explicit model override over the topic model', async () => {
     mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
     mockTopicFindById.mockResolvedValue({ model: 'gpt-5.6-terra', provider: 'openai' });
