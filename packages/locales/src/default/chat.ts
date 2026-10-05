@@ -3428,8 +3428,8 @@ export default {
   'verifyConfig.fromTemplate': 'Pick from template',
   'verifyConfig.generate': 'Generate acceptance plan',
   'verifyConfig.generateFailed': 'Failed to generate acceptance plan',
-  'verifyConfig.generateInvalidProviderAPIKey':
-    'The API key for {{provider}} is invalid or missing. Check the provider settings for {{model}} and try again.',
+  'verifyConfig.generateInvalidPlanModelKey':
+    'The model that drafts acceptance criteria has an invalid or missing API key. Check its provider settings and try again.',
   'verifyConfig.generating': 'Breaking down acceptance criteria…',
   'verifyConfig.manualAdd': 'Add manually',
   'verifyConfig.moreActions': 'More actions',

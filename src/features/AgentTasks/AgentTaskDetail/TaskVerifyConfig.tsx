@@ -1,6 +1,5 @@
 'use client';
 
-import { DEFAULT_VERIFY_PLAN_MODEL, DEFAULT_VERIFY_PLAN_PROVIDER } from '@lobechat/business-const';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { Block, Flexbox, Icon } from '@lobehub/ui';
 import {
@@ -361,10 +360,7 @@ const TaskVerifyConfig = memo(() => {
         console.error('[TaskVerifyConfig] generate failed:', error);
         toast.error(
           isInvalidProviderApiKeyError(error)
-            ? t('verifyConfig.generateInvalidProviderAPIKey', {
-                model: DEFAULT_VERIFY_PLAN_MODEL,
-                provider: DEFAULT_VERIFY_PLAN_PROVIDER,
-              })
+            ? t('verifyConfig.generateInvalidPlanModelKey')
             : t('verifyConfig.generateFailed'),
         );
       } finally {
