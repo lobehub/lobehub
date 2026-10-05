@@ -5,10 +5,17 @@ import type { ConnectorCredentials } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
 
 /** Ownership columns of the widget whose script needs credentials. */
 export interface WidgetCredentialScope {
   agentId: string | null;
+  /**
+   * Who wrote the script that will receive the secrets: the publisher of the
+   * version being run, or the author of a draft being dry-run. `null` when
+   * that user no longer exists — then no connector may be injected.
+   */
+  authorUserId: string | null;
   projectId: string | null;
   userId: string;
   workspaceId: string | null;
@@ -24,6 +31,24 @@ export class MissingWidgetEnvError extends Error {
   constructor(public readonly missing: MissingWidgetEnv[]) {
     super(formatMissing(missing));
     this.name = 'MissingWidgetEnvError';
+  }
+}
+
+/**
+ * The script's author may not read a connector they resolved: raised instead
+ * of running, so the secret never reaches a script its owner did not vouch for.
+ */
+export class ForbiddenWidgetCredentialsError extends Error {
+  constructor(public readonly connectors: string[]) {
+    super(
+      connectors
+        .map(
+          (c) =>
+            `Connector "${c}" was connected by another workspace member; only its creator or the workspace owner can author a widget that reads it`,
+        )
+        .join('; '),
+    );
+    this.name = 'ForbiddenWidgetCredentialsError';
   }
 }
 
@@ -61,7 +86,37 @@ export const credentialToSecret = (
 export interface ResolveWidgetEnvOptions {
   /** Injected for tests; defaults to a model on the widget's scope. */
   connectorModel?: Pick<ConnectorModel, 'resolveByIdentifiers' | 'update'>;
+  /** Injected for tests; defaults to the workspace's primary-owner check. */
+  isWorkspaceOwner?: (userId: string, workspaceId: string) => Promise<boolean>;
 }
+
+/**
+ * Whether the script's author may receive a connector's raw secret.
+ *
+ * A widget script is arbitrary code that can exfiltrate whatever it is given,
+ * so injecting a secret is equivalent to handing it to the script's author.
+ * Workspace connectors are visible to every member, but only their creator or
+ * the workspace owner may manage them (`assertWorkspaceRowManageable`); the
+ * same authority is required to read one from a script:
+ *
+ * - the author created the connector, or
+ * - the connector is workspace-level (incl. agent-scoped rows in the
+ *   workspace, and the workspace connectors a project widget resolves) and
+ *   the author is the workspace owner.
+ *
+ * Personal connectors are only ever resolved for personal widgets, whose
+ * author is their owner, so the creator rule covers them. A missing author
+ * (deleted user) may read nothing.
+ */
+const mayInject = async (
+  connector: DecryptedConnector,
+  scope: WidgetCredentialScope,
+  isOwner: () => Promise<boolean>,
+): Promise<boolean> => {
+  if (!scope.authorUserId) return false;
+  if (connector.userId === scope.authorUserId) return true;
+  return !!connector.workspaceId && isOwner();
+};
 
 /**
  * Resolve the environment a widget script declares in `manifest.env`.
@@ -75,10 +130,13 @@ export interface ResolveWidgetEnvOptions {
  *
  * The widget's scope, not the caller's, decides: a member refreshing a
  * teammate's widget gets the widget's credentials, and a non-personal widget
- * never falls back to its creator's personal connectors.
+ * never falls back to its creator's personal connectors. Whether a resolved
+ * connector may be injected is decided by the script's author (see
+ * {@link mayInject}), not by who triggers the run.
  *
- * Throws `MissingWidgetEnvError` listing every required variable it could not
- * fill; optional ones are left out.
+ * Throws `ForbiddenWidgetCredentialsError` when a declared connector resolves
+ * to one the author may not read, and `MissingWidgetEnvError` listing every
+ * required variable it could not fill; optional ones are left out.
  */
 export const resolveWidgetEnv = async (
   db: LobeChatDatabase,
@@ -116,6 +174,21 @@ export const resolveWidgetEnv = async (
     if (!connector.isEnabled) continue;
     byIdentifier.set(connector.identifier, connector);
   }
+
+  // Check before refreshing any token: a refused connector is never touched.
+  let ownerCheck: Promise<boolean> | undefined;
+  const isOwner = () => {
+    if (!scope.workspaceId || !scope.authorUserId) return Promise.resolve(false);
+    ownerCheck ??= options.isWorkspaceOwner
+      ? options.isWorkspaceOwner(scope.authorUserId, scope.workspaceId)
+      : isWorkspacePrimaryOwner({ db, userId: scope.authorUserId, workspaceId: scope.workspaceId });
+    return ownerCheck;
+  };
+  const forbidden: string[] = [];
+  for (const connector of byIdentifier.values()) {
+    if (!(await mayInject(connector, scope, isOwner))) forbidden.push(connector.identifier);
+  }
+  if (forbidden.length > 0) throw new ForbiddenWidgetCredentialsError(forbidden);
 
   const missing: MissingWidgetEnv[] = [];
   for (const requirement of requirements) {

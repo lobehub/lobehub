@@ -461,6 +461,53 @@ describe('widget + dashboard routers integration', () => {
       expect(runSandbox.mock.calls[0][0].env).toEqual({ GITHUB_TOKEN: 'workspace-token-456' });
     });
 
+    it('injects a workspace connector only into widgets its creator or the workspace owner authored', async () => {
+      // The owner's GitHub connector and a member's Linear connector, both workspace-wide.
+      await (
+        await gateKeeperModel(ownerId, workspaceId)
+      ).create(githubConnector('owner-token-456') as any);
+      await (
+        await gateKeeperModel(memberId, workspaceId)
+      ).create(
+        githubConnector('member-token-789', { identifier: 'linear', name: 'Linear' }) as any,
+      );
+      const member = widgetRouter.createCaller(context(memberId, workspaceId));
+      const owner = widgetRouter.createCaller(context(ownerId, workspaceId));
+      const linearDraft = (caller: WidgetCaller, widgetId: string) =>
+        caller.saveDraft({
+          manifest: { env: [{ connector: 'linear', name: 'LINEAR_TOKEN' }] },
+          widgetId,
+          ...statScript,
+        });
+
+      // A member's script must not receive a secret someone else connected.
+      const sneaky = await createWidget(member, { title: 'Sneaky' });
+      await draftWithEnv(member, sneaky.id);
+      const refused = (await member.dryRun({ widgetId: sneaky.id }))!.data;
+      expect(refused).toMatchObject({
+        error: {
+          code: 'CREDENTIALS_FORBIDDEN',
+          message:
+            'Connector "github" was connected by another workspace member; only its creator or the workspace owner can author a widget that reads it',
+        },
+        status: 'failed',
+      });
+      expect(runSandbox).not.toHaveBeenCalled();
+
+      // Their own workspace connector is fine.
+      runSandbox.mockResolvedValue(ok({ type: 'stat', value: 1 }));
+      const own = await createWidget(member, { title: 'Own' });
+      await linearDraft(member, own.id);
+      expect((await member.dryRun({ widgetId: own.id }))!.data?.status).toBe('succeeded');
+      expect(runSandbox.mock.calls[0][0].env).toEqual({ LINEAR_TOKEN: 'member-token-789' });
+
+      // The workspace owner may use any workspace connector.
+      const curated = await createWidget(owner, { title: 'Curated' });
+      await linearDraft(owner, curated.id);
+      expect((await owner.dryRun({ widgetId: curated.id }))!.data?.status).toBe('succeeded');
+      expect(runSandbox.mock.calls[1][0].env).toEqual({ LINEAR_TOKEN: 'member-token-789' });
+    });
+
     it('closes the run as failed when credential resolution itself errors', async () => {
       const owner = widgetRouter.createCaller(context(ownerId, workspaceId));
       const widget = await createWidget(owner);

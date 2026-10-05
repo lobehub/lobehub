@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DecryptedConnector } from '@/database/models/connector';
+import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 
 import {
   credentialToSecret,
+  ForbiddenWidgetCredentialsError,
   MissingWidgetEnvError,
   resolveWidgetEnv,
   type WidgetCredentialScope,
@@ -32,6 +34,7 @@ const modelReturning = (rows: DecryptedConnector[]) => ({
 
 const personal: WidgetCredentialScope = {
   agentId: null,
+  authorUserId: 'u1',
   projectId: null,
   userId: 'u1',
   workspaceId: null,
@@ -152,5 +155,55 @@ describe('resolveWidgetEnv', () => {
     );
 
     expect(env).toEqual({});
+  });
+
+  describe('who may receive a connector secret', () => {
+    const teammates = connector({ userId: 'u2', workspaceId: 'ws1' });
+    const requirement = [{ connector: 'github', name: 'GITHUB_TOKEN' }];
+
+    it('refuses a workspace connector another member created, before touching its token', async () => {
+      const isWorkspaceOwner = vi.fn().mockResolvedValue(false);
+      vi.mocked(ensureFreshConnectorToken).mockClear();
+
+      const error = await resolveWidgetEnv({} as any, workspace, requirement, {
+        connectorModel: modelReturning([teammates]) as any,
+        isWorkspaceOwner,
+      }).catch((e) => e);
+
+      expect(error).toBeInstanceOf(ForbiddenWidgetCredentialsError);
+      expect(error.connectors).toEqual(['github']);
+      expect(isWorkspaceOwner).toHaveBeenCalledWith('u1', 'ws1');
+      expect(ensureFreshConnectorToken).not.toHaveBeenCalled();
+    });
+
+    it('lets the workspace owner use any workspace connector', async () => {
+      const env = await resolveWidgetEnv({} as any, workspace, requirement, {
+        connectorModel: modelReturning([teammates]) as any,
+        isWorkspaceOwner: vi.fn().mockResolvedValue(true),
+      });
+
+      expect(env).toEqual({ GITHUB_TOKEN: 'tok' });
+    });
+
+    it('lets the creator use their own workspace connector without an owner lookup', async () => {
+      const isWorkspaceOwner = vi.fn();
+
+      const env = await resolveWidgetEnv({} as any, workspace, requirement, {
+        connectorModel: modelReturning([connector({ workspaceId: 'ws1' })]) as any,
+        isWorkspaceOwner,
+      });
+
+      expect(env).toEqual({ GITHUB_TOKEN: 'tok' });
+      expect(isWorkspaceOwner).not.toHaveBeenCalled();
+    });
+
+    it('injects nothing once the author no longer exists', async () => {
+      await expect(
+        resolveWidgetEnv({} as any, { ...workspace, authorUserId: null }, requirement, {
+          connectorModel: modelReturning([connector({ workspaceId: 'ws1' })]) as any,
+          isWorkspaceOwner: vi.fn().mockResolvedValue(true),
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenWidgetCredentialsError);
+    });
   });
 });

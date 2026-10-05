@@ -5,7 +5,12 @@ import { WidgetModel } from '@/database/models/widget';
 import type { WidgetRow, WidgetRunRow, WidgetVersionRow } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { MissingWidgetEnvError, resolveWidgetEnv, type WidgetCredentialScope } from './credentials';
+import {
+  ForbiddenWidgetCredentialsError,
+  MissingWidgetEnvError,
+  resolveWidgetEnv,
+  type WidgetCredentialScope,
+} from './credentials';
 import { recordWidgetMetrics } from './metrics';
 import { parseWidgetOutput } from './outputContract';
 import { redactSecrets, sanitizeStream } from './redact';
@@ -29,7 +34,10 @@ export interface ExecuteWidgetRunDeps {
 
 export interface ExecuteWidgetRunParams {
   run: Pick<WidgetRunRow, 'id' | 'trigger'>;
-  version: Pick<WidgetVersionRow, 'manifest' | 'outputType' | 'runtime' | 'script'>;
+  version: Pick<
+    WidgetVersionRow,
+    'manifest' | 'outputType' | 'publishedByUserId' | 'runtime' | 'script' | 'userId'
+  >;
   widget: Pick<
     WidgetRow,
     'agentId' | 'id' | 'metricId' | 'projectId' | 'title' | 'userId' | 'workspaceId'
@@ -61,10 +69,30 @@ const runInSandbox = async (
 
   let env: Record<string, string>;
   try {
-    env = await resolveEnv(db, widget, manifest?.env);
+    // Secrets go to whoever wrote the script: the publisher of a live
+    // version, the author of a draft.
+    const authorUserId = version.publishedByUserId ?? version.userId;
+    env = await resolveEnv(
+      db,
+      {
+        agentId: widget.agentId,
+        authorUserId,
+        projectId: widget.projectId,
+        userId: widget.userId,
+        workspaceId: widget.workspaceId,
+      },
+      manifest?.env,
+    );
   } catch (error) {
     if (error instanceof MissingWidgetEnvError) {
       return { env: {}, error: { code: 'MISSING_ENV', message: error.message }, status: 'failed' };
+    }
+    if (error instanceof ForbiddenWidgetCredentialsError) {
+      return {
+        env: {},
+        error: { code: 'CREDENTIALS_FORBIDDEN', message: error.message },
+        status: 'failed',
+      };
     }
     // Anything else (key vault misconfigured, DB hiccup) must still close the
     // run — an exception here would strand it in `running` forever.
@@ -131,7 +159,9 @@ const runInSandbox = async (
  * Execute one opened run end to end and close it:
  *
  * 1. resolve the declared env from the widget's connector scope — a missing
- *    required variable fails the run with `MISSING_ENV` before any sandbox call;
+ *    required variable fails the run with `MISSING_ENV`, a connector the
+ *    script's author may not read with `CREDENTIALS_FORBIDDEN`, both before
+ *    any sandbox call;
  * 2. execute the version's script on the sandbox with the manifest's network
  *    allowlist;
  * 3. redact injected secrets (and well-known token shapes) from stdout / stderr
