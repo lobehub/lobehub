@@ -67,6 +67,8 @@ const outcomeFromErrorEvent = (event: AgentStreamEvent): AgentRunOutcome => ({
  * Connect to the agent SSE stream and render events to the terminal.
  * Resolves with the run outcome once a terminal event arrives, or `undefined`
  * when the stream closed without one (the caller should check the status).
+ * Rejects when the stream cannot be opened — the run may still be executing
+ * server-side, so the caller falls back to polling rather than exiting here.
  */
 export async function streamAgentEvents(
   url: string,
@@ -77,13 +79,11 @@ export async function streamAgentEvents(
 
   if (!res.ok) {
     const text = await res.text();
-    log.error(`Agent stream failed: ${res.status} ${text}`);
-    process.exit(1);
+    throw new Error(`Agent stream failed: ${res.status} ${text}`);
   }
 
   if (!res.body) {
-    log.error('No response body received from agent stream');
-    process.exit(1);
+    throw new Error('No response body received from agent stream');
   }
 
   const reader = res.body.getReader();
@@ -174,12 +174,20 @@ export async function streamAgentEvents(
 
 /**
  * Replay previously saved JSON events (from --json output) to the terminal.
- * No network calls needed.
+ * No network calls needed. Returns the outcome carried by the recorded terminal
+ * event, or `undefined` when the recording has none (e.g. a truncated capture).
  */
-export function replayAgentEvents(events: AgentStreamEvent[], options: StreamOptions = {}): void {
+export function replayAgentEvents(
+  events: AgentStreamEvent[],
+  options: StreamOptions = {},
+): AgentRunOutcome | undefined {
   if (options.json) {
     console.log(JSON.stringify(events, null, 2));
-    return;
+    for (const event of events) {
+      if (event.type === 'agent_runtime_end') return outcomeFromEndEvent(event);
+      if (event.type === 'error') return outcomeFromErrorEvent(event);
+    }
+    return undefined;
   }
 
   const ctx = createRenderContext();
@@ -190,15 +198,19 @@ export function replayAgentEvents(events: AgentStreamEvent[], options: StreamOpt
     renderEvent(event, ctx, options);
 
     if (event.type === 'agent_runtime_end') {
-      renderEnd(event, outcomeFromEndEvent(event));
-      return;
+      const outcome = outcomeFromEndEvent(event);
+      renderEnd(event, outcome);
+      return outcome;
     }
 
     if (event.type === 'error') {
-      log.error(`Agent error: ${event.data?.message || event.data?.error || 'Unknown error'}`);
-      return;
+      const outcome = outcomeFromErrorEvent(event);
+      log.error(`Agent error: ${outcome.error}`);
+      return outcome;
     }
   }
+
+  return undefined;
 }
 
 const HEARTBEAT_INTERVAL = 30_000;

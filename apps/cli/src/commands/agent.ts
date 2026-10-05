@@ -401,7 +401,13 @@ Exit codes:
         if (options.replay) {
           const data = readFileSync(options.replay, 'utf8');
           const events = JSON.parse(data);
-          replayAgentEvents(events, { json: options.json, verbose: options.verbose });
+          const replayed = replayAgentEvents(events, {
+            json: options.json,
+            verbose: options.verbose,
+          });
+          // A recording without a terminal event cannot tell how the run ended.
+          const replayExitCode = AGENT_RUN_EXIT_CODES[(replayed ?? { kind: 'unknown' }).kind];
+          if (replayExitCode !== 0) process.exitCode = replayExitCode;
           return;
         }
 

@@ -176,20 +176,32 @@ describe('streamAgentEvents', () => {
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Agent finished'));
   });
 
-  it('should exit on HTTP error', async () => {
+  it('rejects on an HTTP error instead of exiting, so the caller can poll the run', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit');
     }) as any);
-    const { log } = await import('./logger');
 
     fetchSpy.mockResolvedValue(new Response('Not Found', { status: 404 }));
 
     await expect(streamAgentEvents('https://example.com/stream', {})).rejects.toThrow(
-      'process.exit',
+      'Agent stream failed: 404 Not Found',
     );
+    expect(exitSpy).not.toHaveBeenCalled();
 
-    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('404'));
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    exitSpy.mockRestore();
+  });
+
+  it('rejects on a response without a body instead of exiting', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit');
+    }) as any);
+
+    fetchSpy.mockResolvedValue(new Response(null, { status: 200 }));
+
+    await expect(streamAgentEvents('https://example.com/stream', {})).rejects.toThrow(
+      'No response body received from agent stream',
+    );
+    expect(exitSpy).not.toHaveBeenCalled();
 
     exitSpy.mockRestore();
   });
@@ -752,6 +764,35 @@ describe('run outcome of the live stream (#19543 #19613 #19615)', () => {
     });
 
     await expect(promise).resolves.toEqual({ error: 'boom', kind: 'failed', status: 'error' });
+  });
+
+  describe('replayAgentEvents outcome', () => {
+    it.each([
+      ['done', 'completed'],
+      ['error', 'failed'],
+      ['interrupted', 'interrupted'],
+      ['waiting_for_human', 'waiting_for_human'],
+    ])('returns %s → %s from the recorded end event, in --json mode too', (reason, kind) => {
+      const events = [endEvent(reason)] as any;
+      expect(replayAgentEvents(events)).toEqual(expect.objectContaining({ kind, status: reason }));
+      expect(replayAgentEvents(events, { json: true })).toEqual(
+        expect.objectContaining({ kind, status: reason }),
+      );
+    });
+
+    it('returns a failed outcome for a recorded error event', () => {
+      const events = [{ data: { message: 'boom' }, type: 'error' }] as any;
+      expect(replayAgentEvents(events)).toEqual({ error: 'boom', kind: 'failed', status: 'error' });
+      expect(replayAgentEvents(events, { json: true })).toEqual({
+        error: 'boom',
+        kind: 'failed',
+        status: 'error',
+      });
+    });
+
+    it('returns undefined for a recording without a terminal event', () => {
+      expect(replayAgentEvents([{ data: {}, type: 'stream_start' }] as any)).toBeUndefined();
+    });
   });
 
   it('SSE that closes without a terminal event resolves undefined, not success', async () => {

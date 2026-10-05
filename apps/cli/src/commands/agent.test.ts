@@ -1242,6 +1242,39 @@ describe('agent command', () => {
       expect(process.exitCode).toBe(2);
     });
 
+    it('an SSE stream that cannot be opened falls back to polling the run outcome', async () => {
+      mockStreamAgentEvents.mockRejectedValue(new Error('Agent stream failed: 502 Bad Gateway'));
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(envelope('done'));
+
+      await run('--sse');
+
+      expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalled();
+      expect(exitSpy).not.toHaveBeenCalled();
+      expect(process.exitCode).toBeUndefined();
+    });
+
+    it.each([
+      [{ kind: 'completed', status: 'done' }, undefined],
+      [{ kind: 'failed', status: 'error' }, 1],
+      [{ kind: 'interrupted', status: 'interrupted' }, 1],
+      [{ kind: 'waiting_for_human', status: 'waiting_for_human' }, 2],
+      [undefined, 3],
+    ] as const)('--replay of a recording ending in %o exits %s', async (outcome, code) => {
+      const dir = await mkdtemp(path.join(tmpdir(), 'lh-agent-replay-'));
+      const file = path.join(dir, 'events.json');
+      await writeFile(file, '[]');
+      mockReplayAgentEvents.mockReturnValue(outcome);
+
+      try {
+        const program = createProgram();
+        await program.parseAsync(['node', 'test', 'agent', 'run', '--replay', file, '--json']);
+      } finally {
+        await rm(dir, { force: true, recursive: true });
+      }
+
+      expect(process.exitCode).toBe(code);
+    });
+
     it('documents the exit status contract and the parked-run behaviour in --help', () => {
       const program = createProgram();
       const runCmd = program.commands
