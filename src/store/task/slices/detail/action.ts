@@ -335,13 +335,9 @@ export class TaskDetailSliceActionImpl {
       }
       return result.data ?? null;
     } catch (error) {
-      if (snapshot) {
-        this.internal_dispatchTaskDetail({
-          id: identifier,
-          type: 'setTaskDetail',
-          value: snapshot,
-        });
-      }
+      // The optimistic delete also dropped the persisted row; restore the
+      // confirmed snapshot through `replace` so it is persisted again.
+      if (snapshot) this.#detail.replace(identifier, snapshot);
       throw error;
     } finally {
       this.#set({ isDeletingTask: false }, false, 'deleteTask/end');

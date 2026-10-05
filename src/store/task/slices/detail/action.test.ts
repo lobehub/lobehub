@@ -135,6 +135,31 @@ describe('TaskDetailSliceAction', () => {
       expect(taskDetailMap['T-7']).toMatchObject({ identifier: 'T-7' });
     });
 
+    it('restores the persisted row when a delete fails', async () => {
+      const scope = `task-delete-${crypto.randomUUID()}:personal`;
+      vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+      const detail = { identifier: 'T-9', name: 'Keep me' } as any;
+      useTaskStore.getState().internal_dispatchTaskDetail({
+        id: 'T-9',
+        type: 'setTaskDetail',
+        value: detail,
+      });
+      await taskDetailResource.storage!.set(
+        { queryKey: 'T-9', scope },
+        { data: detail, updatedAt: 1 },
+      );
+      vi.mocked(taskService.delete).mockRejectedValue(new Error('offline'));
+
+      await expect(useTaskStore.getState().deleteTask('T-9')).rejects.toThrow('offline');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(useTaskStore.getState().taskDetailMap['T-9']).toMatchObject({ name: 'Keep me' });
+      expect(
+        (await taskDetailResource.storage!.get({ queryKey: 'T-9', scope }))?.data,
+      ).toMatchObject({ name: 'Keep me' });
+    });
+
     it('keeps optimistic detail edits out of the persisted row', async () => {
       const scope = `task-detail-${crypto.randomUUID()}:personal`;
       vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
