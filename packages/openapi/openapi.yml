@@ -2959,6 +2959,7 @@ paths:
                       minLength: 1
                   required:
                     - provider
+                  additionalProperties: false
   /api/v1/agents/{id}/accounts/{accountId}:
     get:
       operationId: getAgentAccount

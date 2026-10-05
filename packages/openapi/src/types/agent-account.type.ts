@@ -68,11 +68,18 @@ const MountAgentAccountSchema = z.object({
   provider: z.string().min(1),
 });
 
-/** Ask a provider to issue a new account; the handle is not the caller's to choose. */
-const ProvisionAgentAccountSchema = z.object({
-  displayName: z.string().min(1).optional(),
-  provider: z.string().min(1),
-});
+/**
+ * Ask a provider to issue a new account; the handle is not the caller's to
+ * choose. Strict, so a malformed mount (say, `identifier` without `kind`)
+ * fails validation instead of falling through to here with its mount-only
+ * fields stripped and provisioning an identity nobody asked for.
+ */
+const ProvisionAgentAccountSchema = z
+  .object({
+    displayName: z.string().min(1).optional(),
+    provider: z.string().min(1),
+  })
+  .strict();
 
 /**
  * `POST /agents/{id}/accounts` is one endpoint with two modes, discriminated by
