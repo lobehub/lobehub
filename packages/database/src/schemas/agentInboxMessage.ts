@@ -94,6 +94,14 @@ export const agentInboxMessages = pgTable(
     index('agent_inbox_messages_agent_received_at_idx').on(t.agentId, t.receivedAt),
     // Arrival polling (waitForMessage): one agent's messages by local ingestion time.
     index('agent_inbox_messages_agent_created_at_idx').on(t.agentId, t.createdAt),
+    // Inbound wake budget: per-account and per-(account, sender) counts over a
+    // recent createdAt window, run on every delivery.
+    index('agent_inbox_messages_account_created_at_idx').on(t.accountId, t.createdAt),
+    index('agent_inbox_messages_account_from_created_at_idx').on(
+      t.accountId,
+      t.from,
+      t.createdAt,
+    ),
     // Thread lookups: the reply check and continuing a thread in its topic.
     index('agent_inbox_messages_account_thread_idx').on(t.accountId, t.threadKey),
     index('agent_inbox_messages_user_id_idx').on(t.userId),

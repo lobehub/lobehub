@@ -316,7 +316,7 @@ export class AgentInboxModel {
   /**
    * The newest message from someone other than `recipient`, received at or
    * after `since`, whose body contains any of `candidates` verbatim. The
-   * counterpart of {@link findCodeFromOtherSender} for secrets the code
+   * counterpart of {@link listCodesFromOtherSenders} for secrets the code
    * extractor does not recognise: links, alphanumeric tokens, credentials.
    */
   findTextFromOtherSender = async (params: {
@@ -350,21 +350,20 @@ export class AgentInboxModel {
   };
 
   /**
-   * The newest message from someone other than `recipient`, received at or
-   * after `since`, whose extracted codes include any of `candidates`. Runs over
-   * the whole window in one query so a flood of later mail cannot push the
-   * message carrying the code out of a fetched page.
+   * Every distinct code extracted from mail sent by someone other than
+   * `recipient` at or after `since`, with its sender. The whole window is read
+   * in one query (codes only), so a flood of later mail cannot hide one, and
+   * the caller can compare them however the outgoing text reformats them.
    */
-  findCodeFromOtherSender = async (params: {
+  listCodesFromOtherSenders = async (params: {
     agentId: string;
-    candidates: string[];
     recipient: string;
     since: Date;
-  }): Promise<AgentInboxMessageItem | undefined> => {
-    if (params.candidates.length === 0) return undefined;
+  }): Promise<{ code: string; from: string }[]> => {
+    const code = sql<string>`jsonb_array_elements_text(coalesce(${agentInboxMessages.codes}, '[]'::jsonb))`;
 
-    const [row] = await this.db
-      .select()
+    const rows = await this.db
+      .selectDistinct({ code, from: agentInboxMessages.from })
       .from(agentInboxMessages)
       .where(
         and(
@@ -372,16 +371,10 @@ export class AgentInboxModel {
           eq(agentInboxMessages.agentId, params.agentId),
           gte(agentInboxMessages.receivedAt, params.since),
           sql`lower(trim(${agentInboxMessages.from})) <> ${params.recipient}`,
-          sql`coalesce(${agentInboxMessages.codes}, '[]'::jsonb) ?| ${sql.raw('ARRAY[')}${sql.join(
-            params.candidates.map((candidate) => sql`${candidate}`),
-            sql`, `,
-          )}${sql.raw(']::text[]')}`,
         ),
-      )
-      .orderBy(desc(agentInboxMessages.receivedAt))
-      .limit(1);
+      );
 
-    return row;
+    return rows;
   };
 
   static unreadCountForAgent = async (db: LobeChatDatabase, agentId: string): Promise<number> => {

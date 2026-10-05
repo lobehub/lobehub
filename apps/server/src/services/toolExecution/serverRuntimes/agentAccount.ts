@@ -43,14 +43,8 @@ const DEFAULT_WAIT_LOOKBACK_MS = 2 * 60 * 1000;
 /** A run that started longer ago than this does not widen the default cursor further. */
 const MAX_WAIT_LOOKBACK_MS = 30 * 60 * 1000;
 
-/**
- * Tokens of the outgoing text that could be a stored verification code. Codes
- * are matched whole against the extracted `codes` of inbox rows, so only
- * code-shaped tokens are worth sending to the query.
- */
-const codeCandidates = (text: string): string[] => [
-  ...new Set(text.match(/[\dA-Za-z-]{4,32}/g)?.slice(0, 500) ?? []),
-];
+/** Letters and digits only, lowercased: what is left of a code however it is reformatted. */
+const compact = (value: string) => value.replaceAll(/[^\da-z]/gi, '').toLowerCase();
 
 /**
  * Secret-shaped fragments of the outgoing text that the numeric code extractor
@@ -156,11 +150,18 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
       // One query over the whole lookback window: a page of recent mail would
       // let an outside sender flood the inbox until the message carrying the
       // code falls off it, and the relay would then go out unattended.
-      const relayed = await inbox.findCodeFromOtherSender({
-        agentId: requireAgentId(),
-        candidates: codeCandidates(args.text),
-        recipient,
-        since: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
+      // Compared with separators stripped on both sides, so a code reformatted
+      // on request (`839 201`, `839-201`, `8.3.9.2.0.1`) is still recognised.
+      const compactText = compact(args.text);
+      const relayed = (
+        await inbox.listCodesFromOtherSenders({
+          agentId: requireAgentId(),
+          recipient,
+          since: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
+        })
+      ).find(({ code }) => {
+        const compactCode = compact(code);
+        return compactCode.length > 0 && compactText.includes(compactCode);
       });
       // Codes are only one kind of secret. A link or token copied out of
       // another sender's mail is held for the user just the same.
@@ -254,6 +255,15 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
               (account) => account.id === args.accountId || account.identifier === args.accountId,
             )
           : list.find((account) => account.capabilities.send);
+
+        // An explicitly chosen account must be able to send too: a receive-only
+        // account is not an outbound channel just because the model named it.
+        if (target && !target.capabilities.send) {
+          return {
+            content: `Account ${target.identifier} is receive-only and cannot send messages.`,
+            success: false,
+          };
+        }
 
         if (!target) {
           return {

@@ -59,8 +59,9 @@ export class AgentInboxService {
   findTextFromOtherSender = (params: Parameters<AgentInboxModel['findTextFromOtherSender']>[0]) =>
     this.model.findTextFromOtherSender(params);
 
-  findCodeFromOtherSender = (params: Parameters<AgentInboxModel['findCodeFromOtherSender']>[0]) =>
-    this.model.findCodeFromOtherSender(params);
+  listCodesFromOtherSenders = (
+    params: Parameters<AgentInboxModel['listCodesFromOtherSenders']>[0],
+  ) => this.model.listCodesFromOtherSenders(params);
 
   countForAccount = (accountId: string) => this.model.countForAccount(accountId);
 

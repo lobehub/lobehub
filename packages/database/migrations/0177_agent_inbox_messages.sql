@@ -40,5 +40,7 @@ END $$;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "agent_inbox_messages_account_provider_message_unique" ON "agent_inbox_messages" USING btree ("account_id","provider_message_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_inbox_messages_agent_received_at_idx" ON "agent_inbox_messages" USING btree ("agent_id","received_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_inbox_messages_agent_created_at_idx" ON "agent_inbox_messages" USING btree ("agent_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_inbox_messages_account_created_at_idx" ON "agent_inbox_messages" USING btree ("account_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_inbox_messages_account_from_created_at_idx" ON "agent_inbox_messages" USING btree ("account_id","from","created_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_inbox_messages_account_thread_idx" ON "agent_inbox_messages" USING btree ("account_id","thread_key");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_inbox_messages_user_id_idx" ON "agent_inbox_messages" USING btree ("user_id");
