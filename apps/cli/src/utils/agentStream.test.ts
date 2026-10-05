@@ -672,3 +672,193 @@ describe('renderEvent tool_end', () => {
     expect(log.toolResult).toHaveBeenCalledWith('tc-1', true, ' 120ms');
   });
 });
+
+describe('run outcome of the live stream (#19543 #19613 #19615)', () => {
+  let stdoutSpy: ReturnType<typeof vi.spyOn>;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  const originalWebSocket = globalThis.WebSocket;
+  const flush = () => new Promise((r) => setTimeout(r, 20));
+  const printed = () => consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+
+  beforeEach(() => {
+    capturedWs = undefined;
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+    (globalThis as any).WebSocket = MockWebSocket;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    stdoutSpy.mockRestore();
+    consoleSpy.mockRestore();
+    fetchSpy.mockRestore();
+    globalThis.WebSocket = originalWebSocket;
+  });
+
+  const endEvent = (reason: string) => ({
+    data: { reason, stepCount: 2 },
+    operationId: 'op-1',
+    stepIndex: 1,
+    timestamp: Date.now(),
+    type: 'agent_runtime_end',
+  });
+
+  describe.each([
+    ['done', 'completed', 'Agent finished'],
+    ['waiting_for_human', 'waiting_for_human', 'Agent paused: waiting for human approval'],
+    ['error', 'failed', 'Agent failed'],
+    ['interrupted', 'interrupted', 'Agent interrupted'],
+  ])('agent_runtime_end reason=%s', (reason, kind, label) => {
+    it(`SSE resolves ${kind} and prints "${label}"`, async () => {
+      fetchSpy.mockResolvedValue(
+        new Response(createSSEStream([sseMessage('data', endEvent(reason))]), { status: 200 }),
+      );
+
+      const outcome = await streamAgentEvents('https://example.com/stream', {});
+
+      expect(outcome).toEqual(expect.objectContaining({ kind, status: reason }));
+      expect(printed()).toContain(label);
+      if (reason !== 'done') expect(printed()).not.toContain('Agent finished');
+    });
+
+    it(`WebSocket resolves ${kind} and prints "${label}"`, async () => {
+      const promise = streamAgentEventsViaWebSocket({
+        gatewayUrl: 'https://gw.test.com',
+        operationId: 'op-1',
+        token: 't',
+      });
+      await flush();
+      capturedWs!.simulateMessage({ event: endEvent(reason), id: '1', type: 'agent_event' });
+
+      await expect(promise).resolves.toEqual(expect.objectContaining({ kind, status: reason }));
+      expect(printed()).toContain(label);
+      if (reason !== 'done') expect(printed()).not.toContain('Agent finished');
+    });
+  });
+
+  it('resolves an error event as a failed outcome instead of exiting the process', async () => {
+    const promise = streamAgentEventsViaWebSocket({
+      gatewayUrl: 'https://gw.test.com',
+      operationId: 'op-1',
+      token: 't',
+    });
+    await flush();
+    capturedWs!.simulateMessage({
+      event: { data: { message: 'boom' }, type: 'error' },
+      id: '1',
+      type: 'agent_event',
+    });
+
+    await expect(promise).resolves.toEqual({ error: 'boom', kind: 'failed', status: 'error' });
+  });
+
+  it('SSE that closes without a terminal event resolves undefined, not success', async () => {
+    fetchSpy.mockResolvedValue(new Response(createSSEStream([]), { status: 200 }));
+    await expect(streamAgentEvents('https://example.com/stream', {})).resolves.toBeUndefined();
+  });
+
+  it('a gateway that only acks heartbeats can no longer hang the stream forever', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    const promise = streamAgentEventsViaWebSocket({
+      gatewayUrl: 'https://gw.test.com',
+      operationId: 'op-1',
+      stallTimeoutMs: 1000,
+      token: 't',
+    });
+    const settled = vi.fn();
+    promise.then(settled, settled);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // heartbeat acks keep arriving but never count as progress
+    for (let i = 0; i < 5; i++) {
+      capturedWs!.simulateMessage({ type: 'heartbeat_ack' });
+      await vi.advanceTimersByTimeAsync(300);
+    }
+
+    await expect(promise).rejects.toThrow('sent no progress for 1s');
+  });
+
+  it('a quiet stream asks onStall and keeps waiting while the run is still active', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    const onStall = vi
+      .fn()
+      .mockResolvedValueOnce(undefined) // still running → keep streaming
+      .mockResolvedValueOnce({ kind: 'completed', status: 'done' });
+
+    const promise = streamAgentEventsViaWebSocket({
+      gatewayUrl: 'https://gw.test.com',
+      onStall,
+      operationId: 'op-1',
+      stallTimeoutMs: 1000,
+      token: 't',
+    });
+    const settled = vi.fn();
+    promise.then(settled, settled);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(onStall).toHaveBeenCalledTimes(1);
+    expect(settled).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(promise).resolves.toEqual({ kind: 'completed', status: 'done' });
+    expect(onStall).toHaveBeenCalledTimes(2);
+    expect(printed()).toContain('Agent finished');
+  });
+
+  it('real stream progress restarts the quiet window, so a slow healthy run is not probed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    const onStall = vi.fn();
+    const promise = streamAgentEventsViaWebSocket({
+      gatewayUrl: 'https://gw.test.com',
+      onStall,
+      operationId: 'op-1',
+      stallTimeoutMs: 1000,
+      token: 't',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    for (let i = 0; i < 10; i++) {
+      await vi.advanceTimersByTimeAsync(700);
+      capturedWs!.simulateMessage({
+        event: { data: {}, stepIndex: 0, type: 'step_complete' },
+        id: String(i),
+        type: 'agent_event',
+      });
+    }
+    expect(onStall).not.toHaveBeenCalled();
+
+    capturedWs!.simulateMessage({ event: endEvent('done'), id: 'end', type: 'agent_event' });
+    await expect(promise).resolves.toEqual(expect.objectContaining({ kind: 'completed' }));
+  });
+
+  it('does not let the heartbeat interval hold the process open', async () => {
+    const unref = vi.fn();
+    const realSetInterval = globalThis.setInterval;
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval').mockImplementation(((
+      fn: any,
+      ms: any,
+    ) => {
+      const handle = realSetInterval(fn, ms);
+      const original = handle.unref.bind(handle);
+      handle.unref = () => {
+        unref();
+        return original();
+      };
+      return handle;
+    }) as any);
+
+    const promise = streamAgentEventsViaWebSocket({
+      gatewayUrl: 'https://gw.test.com',
+      operationId: 'op-1',
+      token: 't',
+    });
+    await flush();
+    expect(unref).toHaveBeenCalled();
+
+    capturedWs!.simulateMessage({ event: endEvent('done'), id: '1', type: 'agent_event' });
+    await promise;
+    intervalSpy.mockRestore();
+  });
+});
