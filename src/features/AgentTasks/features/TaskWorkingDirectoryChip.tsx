@@ -51,6 +51,11 @@ const TaskWorkingDirectoryChip = memo<TaskWorkingDirectoryChipProps>(
     const { t: tDevice } = useTranslation('device');
     const [open, setOpen] = useState(false);
 
+    // Populate the device store ourselves (SWR dedupes across callers): the
+    // recents below read it, and a task page may have nothing else that fetches
+    // devices, which left the list empty on a cold load.
+    useDeviceStore((s) => s.useFetchDevices)(true);
+
     const rawRecents = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(deviceId));
     const rawDeviceDefaultCwd = useDeviceStore(deviceSelectors.getDeviceDefaultCwd(deviceId));
     const deviceDefaultCwd = getWorkingDirectoryPathString(rawDeviceDefaultCwd);
