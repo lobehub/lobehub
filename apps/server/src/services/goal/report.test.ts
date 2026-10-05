@@ -702,6 +702,47 @@ describe('buildGoalReportSkeleton', () => {
       expect(validateGoalReport(snapshot, filled)).toEqual([]);
     });
 
+    /**
+     * Regression: `chapters[].detours` is capped by `GoalReportChapterSchema`.
+     * A Goal with more dead ends than one chapter may hold used to overflow that
+     * cap, and the stored version then failed the schema the next time it was
+     * read back — the report was persisted but never rendered, so the storyline
+     * disappeared even though the detours had been recovered.
+     */
+    it('keeps every chapter within the schema cap when the skeleton found more candidates', () => {
+      const deadEnds = Array.from({ length: 25 }, (_, index) => `dead_${index}`);
+      // Every dead end forks from t1, so they all prefer the chapter that
+      // narrates t1 — far more than that one chapter is allowed to tell.
+      const crowded = withReportDispatched(
+        graph({
+          edges: [
+            edge('t2', 'depends_on', 't1'),
+            edge('acc', 'depends_on', 't2'),
+            ...deadEnds.map((id) => edge(id, 'depends_on', 't1')),
+          ],
+          nodes: [
+            node('problem', { kind: 'problem', status: 'resolved' }),
+            node('t1', { createdAt: new Date(1), status: 'resolved' }),
+            node('t2', { createdAt: new Date(4), status: 'resolved' }),
+            acceptance({ createdAt: new Date(5), status: 'resolved' }),
+            node('report', { title: GOAL_REPORT_TASK_TITLE }),
+            ...deadEnds.map((id, index) =>
+              node(id, { createdAt: new Date(10 + index), status: 'retired' }),
+            ),
+          ],
+        }),
+      );
+
+      const filled = reconcileGoalReport(crowded, detourless);
+      const perChapter = filled.chapters.map((chapter) => chapter.detours.length);
+
+      // Every recovered detour is told, and no chapter spills past the cap.
+      expect(perChapter.reduce((total, count) => total + count, 0)).toBe(25);
+      expect(Math.max(...perChapter)).toBeLessThanOrEqual(20);
+      // The version the store would persist is one it can read back.
+      expect(GoalReportMetadataSchema.safeParse(filled).success).toBe(true);
+    });
+
     it('leaves a report that already tells a detour untouched', () => {
       const told: GoalReportMetadata = {
         ...detourless,

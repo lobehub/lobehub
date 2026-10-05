@@ -160,7 +160,20 @@ export class GoalReportStore {
     // detour off a chapter's own nodeIds, or mark a mainline node it never
     // narrates. Those are recovered deterministically (see reconcileGoalReport);
     // any remaining invalid reference is still the agent's to fix.
-    const metadata = reconcileGoalReport(graph, parsed.data);
+    //
+    // Reconciliation appends to `chapters[].detours`, so its result is parsed
+    // again rather than trusted: a version that no longer satisfies the schema
+    // is one `GoalReportStore.state` could never read back, and storing it would
+    // hide the whole storyline behind a report that silently never loads.
+    const reconciled = GoalReportMetadataSchema.safeParse(reconcileGoalReport(graph, parsed.data));
+    if (!reconciled.success)
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `Invalid report after reconciliation: ${reconciled.error.issues
+          .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+          .join('; ')}`,
+      });
+    const metadata = reconciled.data;
     const errors = validateGoalReport(graph, metadata, { eventIds });
     if (errors.length > 0)
       throw new TRPCError({

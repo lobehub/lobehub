@@ -48,9 +48,16 @@ export const GoalReportDetourSchema = z
   .strict();
 export type GoalReportDetour = z.infer<typeof GoalReportDetourSchema>;
 
+/**
+ * How many detours one chapter may tell. The cap is enforced by the schema and
+ * respected by the server-side backfill, so a recovered storyline can never
+ * exceed what the stored version can be read back as.
+ */
+export const GOAL_REPORT_MAX_DETOURS_PER_CHAPTER = 20;
+
 export const GoalReportChapterSchema = z
   .object({
-    detours: z.array(GoalReportDetourSchema).max(20).default([]),
+    detours: z.array(GoalReportDetourSchema).max(GOAL_REPORT_MAX_DETOURS_PER_CHAPTER).default([]),
     findingIds: idList.default([]),
     narrative: z.string().trim().min(1).max(8000),
     nodeIds: idList.default([]),

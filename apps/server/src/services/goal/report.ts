@@ -6,6 +6,7 @@ import type {
   GoalReportMetadata,
   GoalReportTrigger,
 } from '@lobechat/types';
+import { GOAL_REPORT_MAX_DETOURS_PER_CHAPTER } from '@lobechat/types';
 
 /**
  * The wrap-up branch of the Goal coordinator: once the Goal-level acceptance
@@ -471,14 +472,16 @@ export const buildGoalReportInstruction = (
  * node it forked from.
  *
  * Authored detours are never touched: a report that tells any detour is
- * returned unchanged, and the narrative stays exactly what the agent wrote.
+ * returned unchanged, and the narrative stays exactly what the agent wrote. The
+ * fill respects the schema's per-chapter cap, so what it recovers is always a
+ * version the store can read back.
  */
 export const backfillGoalReportDetours = (
   source: GoalGraphSnapshot,
   metadata: GoalReportMetadata,
 ): GoalReportMetadata => {
   const candidates = buildGoalReportSkeleton(source).detours;
-  if (candidates.length === 0) return metadata;
+  if (candidates.length === 0 || metadata.chapters.length === 0) return metadata;
 
   const told = new Set(
     metadata.chapters.flatMap((chapter) => chapter.detours.flatMap((detour) => detour.nodeIds)),
@@ -486,38 +489,59 @@ export const backfillGoalReportDetours = (
   if (candidates.some((candidate) => told.has(candidate.id))) return metadata;
 
   const nodes = new Map(withoutGoalReport(source).nodes.map((node) => [node.id, node]));
-  const chapterFor = (forkNodeId?: string) =>
-    metadata.chapters.find((chapter) => !!forkNodeId && chapter.nodeIds.includes(forkNodeId)) ??
-    metadata.chapters.find((chapter) => chapter.nodeIds.length > 0) ??
-    metadata.chapters[0];
+  const chapterIndexes = metadata.chapters.map((_, index) => index);
+  // The chapter that narrates the node a detour forked from, else the first
+  // chapter that narrates anything. A detour with no home of its own still
+  // belongs to this one report.
+  const preferredChapter = (forkNodeId?: string) => {
+    const exact = forkNodeId
+      ? metadata.chapters.findIndex((chapter) => chapter.nodeIds.includes(forkNodeId))
+      : -1;
+    if (exact >= 0) return exact;
+    const narrated = metadata.chapters.findIndex((chapter) => chapter.nodeIds.length > 0);
+    return narrated >= 0 ? narrated : 0;
+  };
 
-  const additions = new Map<number, GoalReportMetadata['chapters'][number]['detours']>();
+  // `GoalReportChapterSchema` caps a chapter's detours, and the store reads the
+  // persisted version back through that schema: spilling past the cap would
+  // store a version that can never be parsed again, hiding the very storyline
+  // this recovers. So each chapter takes at most its remaining room, and the
+  // overflow moves on to the next chapter that still has some.
+  const room = metadata.chapters.map(
+    (chapter) => GOAL_REPORT_MAX_DETOURS_PER_CHAPTER - chapter.detours.length,
+  );
+  const additions = metadata.chapters.map<GoalReportMetadata['chapters'][number]['detours']>(
+    () => [],
+  );
+
   for (const candidate of candidates) {
-    const chapter = chapterFor(candidate.forkNodeId);
-    if (!chapter) continue;
-    const index = metadata.chapters.indexOf(chapter);
+    const target = [preferredChapter(candidate.forkNodeId), ...chapterIndexes].find(
+      (index) => room[index] > 0,
+    );
+    // Every chapter is at the cap: the storyline keeps what it already tells
+    // rather than growing an unreadable chapter.
+    if (target === undefined) break;
+    room[target] -= 1;
     // The graph only carries the node's own description; it holds both why the
     // path was abandoned and what it taught, so it seeds both fields.
     const detail = nodes.get(candidate.id)?.description?.trim() || candidate.signal;
-    additions.set(index, [
-      ...(additions.get(index) ?? []),
-      {
-        kind: candidate.signal.startsWith('superseded') ? 'superseded' : 'dead_end',
-        lesson: detail,
-        nodeIds: [candidate.id],
-        reason: detail,
-        title: candidate.title,
-      },
-    ]);
+    additions[target].push({
+      kind: candidate.signal.startsWith('superseded') ? 'superseded' : 'dead_end',
+      lesson: detail,
+      nodeIds: [candidate.id],
+      reason: detail,
+      title: candidate.title,
+    });
   }
-  if (additions.size === 0) return metadata;
+  if (additions.every((extra) => extra.length === 0)) return metadata;
 
   return {
     ...metadata,
-    chapters: metadata.chapters.map((chapter, index) => {
-      const extra = additions.get(index);
-      return extra ? { ...chapter, detours: [...chapter.detours, ...extra] } : chapter;
-    }),
+    chapters: metadata.chapters.map((chapter, index) =>
+      additions[index].length > 0
+        ? { ...chapter, detours: [...chapter.detours, ...additions[index]] }
+        : chapter,
+    ),
   };
 };
 

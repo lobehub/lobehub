@@ -56,10 +56,23 @@ const PENDING_CLARIFICATIONS_POLL_INTERVAL = 30_000;
 
 /**
  * Acceptance states in which the Goal's own delivery has nothing left in
- * flight. Anything else (`rejected`, `repairing`, `verifying`, …) is a write
- * still on its way from the coordinator or from the verify run it dispatched.
+ * flight. `pending`, `planned`, `repairing` and `verifying` are writes still on
+ * their way from the coordinator or from the verify run it dispatched.
+ *
+ * `rejected` is terminal for this poll as well. Rejecting a Goal's delivery
+ * either reopens the Goal — `reopenForChanges` makes it `running`, which the
+ * advancing-status branch above already covers — or only records the decision
+ * (`acceptance.reject` with `dispatch: false`), after which nothing else is
+ * coming for that acceptance. Leaving it out polls that sticky state every five
+ * seconds for as long as the page stays open.
  */
-const SETTLED_ACCEPTANCE_STATUSES = new Set(['accepted', 'closed', 'delivered', 'errored']);
+const SETTLED_ACCEPTANCE_STATUSES = new Set([
+  'accepted',
+  'closed',
+  'delivered',
+  'errored',
+  'rejected',
+]);
 
 /**
  * Whether the Goal's own acceptance has a write still coming.

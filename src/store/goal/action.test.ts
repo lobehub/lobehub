@@ -100,12 +100,25 @@ describe('GoalAction', () => {
         nodes: [{ id: 'node-a', kind: 'task', status: 'active', taskId: 't-1', title }],
       });
 
-      expect(options.refreshInterval(withAcceptance('rejected'))).toBeGreaterThan(0);
       expect(options.refreshInterval(withAcceptance('repairing'))).toBeGreaterThan(0);
+      expect(options.refreshInterval(withAcceptance('verifying'))).toBeGreaterThan(0);
 
       // Settled: the page can rest on this snapshot.
       expect(options.refreshInterval(withAcceptance('delivered'))).toBe(0);
       expect(options.refreshInterval(withAcceptance('accepted'))).toBe(0);
+
+      /**
+       * Regression: rejecting a Goal's delivery with `dispatch: false` only
+       * records the decision, so the acceptance stays sticky on `rejected` while
+       * the Goal stays `achieved`. Nothing else is coming, and polling that state
+       * hammered the graph endpoint every five seconds for as long as the page
+       * stayed open.
+       */
+      expect(options.refreshInterval(withAcceptance('rejected'))).toBe(0);
+      // A rejection that reopens the Goal keeps polling: the Goal is running again.
+      expect(
+        options.refreshInterval({ ...withAcceptance('rejected'), goal: { status: 'running' } }),
+      ).toBeGreaterThan(0);
 
       // Another task's rejection never keeps a terminal Goal polling.
       expect(options.refreshInterval(withAcceptance('rejected', 'Ordinary work'))).toBe(0);
