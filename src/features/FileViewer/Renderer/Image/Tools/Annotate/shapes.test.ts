@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { type AnnotationShape, drawShapes, isMeaningfulShape, rectFromPoints } from './shapes';
+import {
+  type AnnotationShape,
+  drawBrushSegment,
+  drawShapes,
+  isMeaningfulShape,
+  rectFromPoints,
+} from './shapes';
 
 const createCtx = () => ({
   beginPath: vi.fn(),
@@ -66,5 +72,34 @@ describe('annotation shapes', () => {
     // Stroke width scales with the shorter side: 0.02 × 200.
     expect(ctx.lineWidth).toBe(4);
     expect(ctx.strokeStyle).toBe('#00ff00');
+  });
+});
+
+describe('drawBrushSegment', () => {
+  it('strokes only the newest segment in canvas pixels', () => {
+    const ctx = {
+      beginPath: vi.fn(),
+      lineCap: '',
+      lineJoin: '',
+      lineTo: vi.fn(),
+      lineWidth: 0,
+      moveTo: vi.fn(),
+      stroke: vi.fn(),
+      strokeStyle: '',
+    };
+    drawBrushSegment(
+      ctx as never,
+      { color: '#f00', size: 0.01 },
+      { x: 0.1, y: 0.2 },
+      { x: 0.3, y: 0.4 },
+      200,
+      100,
+    );
+
+    expect(ctx.moveTo).toHaveBeenCalledWith(20, 20);
+    expect(ctx.lineTo).toHaveBeenCalledTimes(1);
+    expect(ctx.lineTo).toHaveBeenCalledWith(60, 40);
+    expect(ctx.stroke).toHaveBeenCalledTimes(1);
+    expect(ctx.lineWidth).toBe(1);
   });
 });

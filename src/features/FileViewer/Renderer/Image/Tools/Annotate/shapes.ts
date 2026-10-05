@@ -67,6 +67,28 @@ type DrawingContext = Pick<
   | 'strokeStyle'
 >;
 
+/**
+ * Extend a brush stroke by its newest segment only, so a long freehand stroke
+ * costs one segment per pointer move instead of a full redraw.
+ */
+export const drawBrushSegment = (
+  ctx: DrawingContext,
+  shape: Pick<BrushShape, 'color' | 'size'>,
+  from: Point,
+  to: Point,
+  width: number,
+  height: number,
+) => {
+  ctx.strokeStyle = shape.color;
+  ctx.lineWidth = Math.max(1, shape.size * Math.min(width, height));
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(from.x * width, from.y * height);
+  ctx.lineTo(to.x * width, to.y * height);
+  ctx.stroke();
+};
+
 /** Paint shapes in pixel space of a `width × height` canvas. */
 export const drawShapes = (
   ctx: DrawingContext,

@@ -9,7 +9,12 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useImageStage } from '../../context';
-import { type BrushShape, drawShapes, isMeaningfulShape } from '../Annotate/shapes';
+import {
+  type BrushShape,
+  drawBrushSegment,
+  drawShapes,
+  isMeaningfulShape,
+} from '../Annotate/shapes';
 import { renderImageToBlob } from '../exportImage';
 import { toolStyles } from '../styles';
 import { useToolKeys } from '../useToolKeys';
@@ -106,12 +111,8 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [sizeKey, setSizeKey] = useState<BrushSizeKey>('medium');
   const [strokes, setStrokes] = useState<BrushShape[]>([]);
-  const [draft, setDraftState] = useState<BrushShape | null>(null);
+  // The stroke being painted; it grows in place and is drawn segment by segment.
   const draftRef = useRef<BrushShape | null>(null);
-  const setDraft = (value: BrushShape | null) => {
-    draftRef.current = value;
-    setDraftState(value);
-  };
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -143,8 +144,10 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawShapes(ctx, draft ? [...strokes, draft] : strokes, canvas.width, canvas.height);
-  }, [draft, strokes]);
+    // The live stroke lives in the ref (it grows without re-rendering).
+    const live = draftRef.current;
+    drawShapes(ctx, live ? [...strokes, live] : strokes, canvas.width, canvas.height);
+  }, [strokes]);
 
   const canSubmit = !running && (!isErase || strokes.length > 0);
 
@@ -174,12 +177,13 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
     if (!point) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     if (state.status === 'error') reset();
-    setDraft({
+    // The stroke grows in place on later moves, without re-rendering.
+    draftRef.current = {
       color: ERASE_MARK_COLOR,
       points: [point, point],
       size: ERASE_BRUSH_SIZES[sizeKey],
       type: 'brush',
-    });
+    };
   };
 
   const handlePointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
@@ -187,13 +191,18 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
     if (!value) return;
     const point = toImagePoint({ x: event.clientX, y: event.clientY });
     if (!point) return;
-    setDraft({ ...value, points: [...value.points, point] });
+    // Grow the stroke in place and paint only the new segment.
+    const last = value.points.at(-1)!;
+    value.points.push(point);
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (canvas && ctx) drawBrushSegment(ctx, value, last, point, canvas.width, canvas.height);
   };
 
   const handlePointerUp = () => {
     const value = draftRef.current;
     if (value && isMeaningfulShape(value)) setStrokes((list) => [...list, value]);
-    setDraft(null);
+    draftRef.current = null;
   };
 
   const label = t(`imageViewer.tool.${operation}`);

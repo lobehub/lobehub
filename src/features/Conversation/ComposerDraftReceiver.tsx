@@ -33,8 +33,10 @@ const ComposerDraftReceiver = memo(() => {
     // Right after navigating, the conversation still points at the previously
     // active topic; switching away clears the input. Wait for the new topic.
     if (draft.target && (draft.target.agentId !== agentId || topicId)) return;
-    const current = storeApi.getState().inputMessage.trim();
-    const text = draft.append && current ? `${current}\n\n${draft.text}` : draft.text;
+    // Keep what the user typed as is (indentation, Markdown line breaks); only
+    // an all-blank input counts as empty.
+    const current = storeApi.getState().inputMessage;
+    const text = draft.append && current.trim() ? `${current}\n\n${draft.text}` : draft.text;
     // setDocument alone does not fire the change handler that keeps
     // inputMessage in sync — Send would stay disabled (see restoreToInput).
     editor.setDocument('markdown', text);

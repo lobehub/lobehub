@@ -74,6 +74,22 @@ describe('ComposerDraftReceiver', () => {
     expect(mocks.updateInputMessage).toHaveBeenCalledWith(text);
   });
 
+  // Regression: appending trimmed the typed text, losing a trailing Markdown break.
+  it('keeps the whitespace of what the user typed when appending', () => {
+    mocks.editor = { focus: vi.fn(), setDocument: vi.fn() };
+    mocks.inputMessage = '  indented line  ';
+    render(<ComposerDraftReceiver />);
+
+    act(() => {
+      draftToMainComposer('1. note', { append: true });
+    });
+
+    expect(mocks.editor.setDocument).toHaveBeenCalledWith(
+      'markdown',
+      '  indented line  \n\n1. note',
+    );
+  });
+
   it('applies a queued draft once a composer mounts', () => {
     queueDraftForMainComposer('queued before navigation', { agentId: 'agt_inbox' });
     mocks.editor = { focus: vi.fn(), setDocument: vi.fn() };

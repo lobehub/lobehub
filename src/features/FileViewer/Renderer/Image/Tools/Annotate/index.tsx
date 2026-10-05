@@ -20,6 +20,7 @@ import {
   ANNOTATION_SIZES,
   type AnnotationShape,
   type AnnotationTool,
+  drawBrushSegment,
   drawShapes,
   isMeaningfulShape,
   rectFromPoints,
@@ -80,7 +81,9 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawShapes(ctx, draft ? [...shapes, draft] : shapes, canvas.width, canvas.height);
+    // The live brush stroke lives in the ref (it grows without re-rendering).
+    const live = draft ?? draftRef.current;
+    drawShapes(ctx, live ? [...shapes, live] : shapes, canvas.width, canvas.height);
   }, [draft, shapes, redrawKey]);
 
   const undo = () => setShapes((value) => value.slice(0, -1));
@@ -95,11 +98,8 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
     event.currentTarget.setPointerCapture(event.pointerId);
     dragStart.current = point;
     const style = { color, size: ANNOTATION_SIZES[sizeKey] };
-    setDraft(
-      tool === 'brush'
-        ? { ...style, points: [point], type: 'brush' }
-        : { ...style, rect: rectFromPoints(point, point), type: 'rect' },
-    );
+    if (tool === 'brush') draftRef.current = { ...style, points: [point], type: 'brush' };
+    else setDraft({ ...style, rect: rectFromPoints(point, point), type: 'rect' });
   };
 
   const handlePointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
@@ -109,11 +109,14 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
     if (!point) return;
     const value = draftRef.current;
     if (!value) return;
-    setDraft(
-      value.type === 'brush'
-        ? { ...value, points: [...value.points, point] }
-        : { ...value, rect: rectFromPoints(start, point) },
-    );
+    if (value.type === 'rect') return setDraft({ ...value, rect: rectFromPoints(start, point) });
+
+    // Brush: grow the stroke in place and paint only the new segment.
+    const last = value.points.at(-1)!;
+    value.points.push(point);
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (canvas && ctx) drawBrushSegment(ctx, value, last, point, canvas.width, canvas.height);
   };
 
   const handlePointerUp = () => {
