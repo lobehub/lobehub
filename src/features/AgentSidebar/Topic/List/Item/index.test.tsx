@@ -139,9 +139,11 @@ vi.mock('./Actions', () => ({
 vi.mock('./useDropdownMenu', () => ({
   useTopicItemDropdownMenu: () => ({ dropdownMenu: [] }),
 }));
+// The row only decides *whether* to mount the thread list; the list itself has
+// its own tests (`ThreadList/*.test.ts`), so stub it to a marker here.
 vi.mock('../../TopicListContent/ThreadList', () => ({
   default: ({ topicId }: { topicId: string }) => (
-    <div data-testid="topic-thread-list" data-topic-id={topicId} />
+    <div data-testid="thread-list" data-topic-id={topicId} />
   ),
 }));
 
@@ -168,7 +170,6 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'true');
-    expect(screen.getByTestId('topic-thread-list')).toHaveAttribute('data-topic-id', 'tpc_test');
   });
 
   it('does not highlight a stale topic while visiting non-topic agent sub-routes', () => {
@@ -183,7 +184,6 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'false');
-    expect(screen.queryByTestId('topic-thread-list')).not.toBeInTheDocument();
   });
 
   it('prefixes the cmd-click href with the active workspace slug', () => {
@@ -473,5 +473,52 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" status={status} title="Topic" />);
 
     expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-icon', icon);
+  });
+});
+
+// The mobile surface has no working sidebar (the desktop host of a topic's
+// threads), so the rows nest under the topic row there — but only under the
+// route's topic. Mounting them under an inactive topic opened its thread while
+// `activeTopicId` still pointed elsewhere, and fetched threads per topic.
+describe('TopicItem mobile thread list', () => {
+  const navigateTo = (urlTopicId?: string) => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+      urlTopicId,
+    });
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('nests the route topic threads on the mobile surface', () => {
+    vi.stubGlobal('__MOBILE__', true);
+    navigateTo('tpc_test');
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(screen.getByTestId('thread-list')).toHaveAttribute('data-topic-id', 'tpc_test');
+  });
+
+  it('does not nest an inactive topic threads on the mobile surface', () => {
+    vi.stubGlobal('__MOBILE__', true);
+    navigateTo('tpc_other');
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(screen.queryByTestId('thread-list')).not.toBeInTheDocument();
+  });
+
+  it('does not nest the thread list on the desktop surface', () => {
+    vi.stubGlobal('__MOBILE__', false);
+    navigateTo('tpc_test');
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(screen.queryByTestId('thread-list')).not.toBeInTheDocument();
   });
 });

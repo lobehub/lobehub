@@ -288,6 +288,25 @@ export class VerifyRunModel {
     );
   };
 
+  /**
+   * Every round of several acceptances at once, in round order — the batched
+   * form of `listByAcceptance`.
+   *
+   * Feeds a surface that summarises many acceptances on a poll: one statement
+   * regardless of how many it covers. A caller wanting each acceptance's
+   * standing counts it from the check union (`AcceptanceService`), so the
+   * summary and the list it expands to read the same rows.
+   */
+  listByAcceptances = async (acceptanceIds: string[]): Promise<VerifyRunItem[]> => {
+    const ids = [...new Set(acceptanceIds.filter(Boolean))];
+    if (ids.length === 0) return [];
+
+    return this.db.query.verifyRuns.findMany({
+      orderBy: [asc(verifyRuns.roundIndex)],
+      where: and(inArray(verifyRuns.acceptanceId, ids), this.ownership()),
+    });
+  };
+
   /** Every round chained onto an acceptance aggregate, in round order. */
   listByAcceptance = async (acceptanceId: string): Promise<VerifyRunItem[]> => {
     return this.db.query.verifyRuns.findMany({

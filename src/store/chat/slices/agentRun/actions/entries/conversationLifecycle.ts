@@ -140,7 +140,8 @@ export interface SendMessageWithContextParams extends SendMessageParams {
   /**
    * Editor owned by the calling ConversationProvider. Embedded conversations
    * must not fall back to ChatStore's global editor, which may belong to a
-   * sibling panel.
+   * sibling panel. Pass `null` when the send is not backed by a composer editor
+   * at all, so a failed send is not written into the global one.
    */
   inputEditor?: ChatInputEditor | null;
   /** Restore composer-owned context when sending fails before a message owns it. */
@@ -387,7 +388,12 @@ export class ConversationLifecycleActionImpl {
 
     let editorData = inputEditorData;
     const { executeClientAgent, mainInputEditor } = this.#get();
-    const targetInputEditor = inputEditor ?? mainInputEditor;
+    // `inputEditor` names the editor that owns this send. An explicit `null`
+    // means "this send has no composer editor": an embedded reply (a task run's
+    // inline follow-up) must not fall back to ChatStore's global editor, which
+    // belongs to a sibling surface and would be refilled with this send's text
+    // when it fails. Only an omitted editor falls back to the global one.
+    const targetInputEditor = inputEditor === undefined ? mainInputEditor : inputEditor;
     const ownerAgentId = context.agentId;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);

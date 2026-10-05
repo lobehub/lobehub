@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DraftRuleInputSchema, ExpertiseRuleDraftService } from './rules';
 
-const { resolveExpertiseModelConfig } = vi.hoisted(() => ({
+const { fillLessonDirections, listRules, resolveExpertiseModelConfig } = vi.hoisted(() => ({
+  fillLessonDirections: vi.fn(),
+  listRules: vi.fn(),
   resolveExpertiseModelConfig: vi.fn(),
 }));
 const generateObject = vi.fn();
@@ -14,6 +16,12 @@ vi.mock('@/server/services/aiGeneration', () => ({
   },
 }));
 vi.mock('./modelConfig', () => ({ resolveExpertiseModelConfig }));
+vi.mock('@/database/models/expertise', () => ({
+  ExpertiseModel: class {
+    fillLessonDirections = fillLessonDirections;
+    listRules = listRules;
+  },
+}));
 
 const groups = [
   { gate: '去掉页面名之后还成立吗？', id: 'g-taste', title: '我的交付审美' },
@@ -29,6 +37,7 @@ describe('ExpertiseRuleDraftService', () => {
   it('drafts one rule and keeps a group id only when the reviewer has that group', async () => {
     generateObject.mockResolvedValue({
       compilability: 'compilable',
+      direction: 'positive',
       enforcement: 'block',
       groupId: 'g-design',
       how: '  样式里出现 #fff 或 12px  ',
@@ -45,6 +54,7 @@ describe('ExpertiseRuleDraftService', () => {
 
     expect(draft).toEqual({
       compilability: 'compilable',
+      direction: 'positive',
       enforcement: 'block',
       groupId: 'g-design',
       how: '样式里出现 #fff 或 12px',
@@ -63,6 +73,7 @@ describe('ExpertiseRuleDraftService', () => {
   it('drops a group id the reviewer does not have and keeps the proposed group', async () => {
     generateObject.mockResolvedValue({
       compilability: 'not-compilable',
+      direction: 'negative',
       enforcement: 'remind',
       groupId: 'g-invented',
       how: null,
@@ -84,6 +95,7 @@ describe('ExpertiseRuleDraftService', () => {
   it('never hands back a draft that claims to be compiled already', async () => {
     generateObject.mockResolvedValue({
       compilability: 'compiled',
+      direction: 'positive',
       enforcement: 'remind',
       groupId: 'g-design',
       how: null,
@@ -126,5 +138,89 @@ describe('ExpertiseRuleDraftService', () => {
     expect(DraftRuleInputSchema.safeParse({ brief: '颜色取自变量', groups: many }).success).toBe(
       true,
     );
+  });
+});
+
+describe('ExpertiseRuleDraftService.judgeDirections', () => {
+  const rule = (id: string, extra: Record<string, unknown> = {}) => ({
+    direction: null,
+    id,
+    status: 'active',
+    title: `规矩 ${id}`,
+    ...extra,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolveExpertiseModelConfig.mockResolvedValue({ model: 'm', provider: 'p' });
+  });
+
+  it('judges only the named active rules without a direction and writes the answers', async () => {
+    listRules.mockResolvedValue([
+      {
+        rules: [
+          rule('a'),
+          rule('b', { direction: 'negative' }),
+          rule('c', { status: 'retired' }),
+          rule('d'),
+          // Unjudged but not in this batch: left for a later call.
+          rule('e'),
+        ],
+      },
+    ]);
+    generateObject.mockResolvedValue({
+      rules: [
+        { direction: 'positive', id: 'a' },
+        { direction: 'negative', id: 'd' },
+      ],
+    });
+
+    const result = await new ExpertiseRuleDraftService({} as never, 'user_1').judgeDirections([
+      'a',
+      'b',
+      'c',
+      'd',
+    ]);
+
+    const [params, options] = generateObject.mock.calls[0];
+    expect(params.schema.name).toBe('expertise_rule_direction');
+    expect(params.messages[1].content).toBe('- a · 规矩 a\n- d · 规矩 d');
+    expect(options.tracing.scenario).toBe('expertise_rule_direction');
+    expect(fillLessonDirections).toHaveBeenCalledWith([
+      { direction: 'positive', id: 'a' },
+      { direction: 'negative', id: 'd' },
+    ]);
+    expect(result).toEqual({ judged: 2 });
+  });
+
+  it('drops ids outside the batch and repeated answers', async () => {
+    listRules.mockResolvedValue([{ rules: [rule('a'), rule('b')] }]);
+    generateObject.mockResolvedValue({
+      rules: [
+        { direction: 'positive', id: 'a' },
+        { direction: 'negative', id: 'a' },
+        { direction: 'negative', id: 'someone-else' },
+      ],
+    });
+
+    const result = await new ExpertiseRuleDraftService({} as never, 'user_1').judgeDirections([
+      'a',
+      'b',
+    ]);
+
+    expect(fillLessonDirections).toHaveBeenCalledWith([{ direction: 'positive', id: 'a' }]);
+    expect(result).toEqual({ judged: 1 });
+  });
+
+  it('does not call the model when every rule already has a direction', async () => {
+    listRules.mockResolvedValue([{ rules: [rule('a', { direction: 'positive' })] }]);
+
+    const result = await new ExpertiseRuleDraftService({} as never, 'user_1').judgeDirections([
+      'a',
+      'not-on-this-page',
+    ]);
+
+    expect(generateObject).not.toHaveBeenCalled();
+    expect(result).toEqual({ judged: 0 });
   });
 });

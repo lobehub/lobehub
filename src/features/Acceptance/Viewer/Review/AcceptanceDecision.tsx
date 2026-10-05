@@ -24,6 +24,7 @@ import { formatAcceptanceCountsText, LIVE_ACCEPTANCE_STATUSES } from '../verdict
 import { canReviewAcceptance } from '../visibility';
 import DecisionBar from './DecisionBar';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
+import { draftRepairPromptInMobile } from './mobileBridge';
 import { openAcceptModal, openGroupFeedbackModal, openRejectModal } from './modals';
 import { rejectCopyOnly } from './rejectCopyOnly';
 
@@ -226,6 +227,7 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
           })
         }
         onCopyReview={async () => {
+          if (draftRepairPromptInMobile(acceptance.id, repairPrompt)) return;
           await copyToClipboard(repairPrompt);
           toast.success({
             placement: 'top',

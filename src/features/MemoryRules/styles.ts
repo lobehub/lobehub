@@ -25,6 +25,20 @@ export const styles = createStaticStyles(({ css }) => ({
   chevronOpen: css`
     transform: rotate(90deg);
   `,
+  directionNegative: css`
+    color: ${cssVar.colorTextSecondary};
+
+    & svg {
+      color: ${cssVar.colorError};
+    }
+  `,
+  directionPositive: css`
+    color: ${cssVar.colorTextSecondary};
+
+    & svg {
+      color: ${cssVar.colorSuccess};
+    }
+  `,
   divider: css`
     padding-block: 22px 6px;
     padding-inline: 8px;
@@ -35,7 +49,7 @@ export const styles = createStaticStyles(({ css }) => ({
   `,
   grid: css`
     display: grid;
-    grid-template-columns: 22px 40px minmax(220px, 2fr) 56px 64px 64px 28px;
+    grid-template-columns: 22px 40px minmax(220px, 2fr) 56px 56px 64px 64px 28px;
     column-gap: 8px;
     align-items: start;
   `,
@@ -160,6 +174,36 @@ export const styles = createStaticStyles(({ css }) => ({
   sectionTitle: css`
     font-size: 13px;
     font-weight: 600;
+  `,
+  sortHeader: css`
+    cursor: pointer;
+    user-select: none;
+
+    display: inline-flex;
+    gap: 2px;
+    align-items: center;
+
+    width: fit-content;
+    padding: 0;
+    border: 0;
+
+    font: inherit;
+    color: inherit;
+
+    background: none;
+
+    &:focus-visible {
+      border-radius: ${cssVar.borderRadiusSM};
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 2px;
+    }
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
+  sortHeaderActive: css`
+    color: ${cssVar.colorText};
   `,
   thead: css`
     position: sticky;

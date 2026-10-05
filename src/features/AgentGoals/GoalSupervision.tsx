@@ -2,7 +2,13 @@ import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { copyToClipboard, type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Text, toast } from '@lobehub/ui/base-ui';
-import { CopyIcon, ExternalLink, MoreHorizontal, PanelRightCloseIcon } from 'lucide-react';
+import {
+  CopyIcon,
+  ExternalLink,
+  MessagesSquareIcon,
+  MoreHorizontal,
+  PanelRightCloseIcon,
+} from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,11 +21,17 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { GoalChatProvider } from './GoalChat/GoalChatProvider';
+import GoalConversationInput from './GoalChat/GoalConversationInput';
 
 interface GoalSupervisionProps {
   agentId: string;
   goalId: string;
+  /** Sent into the record once it loads — the result page's composer hands off this way. */
+  initialMessage?: string;
   onCollapse: () => void;
+  onInitialMessageConsumed?: () => void;
+  /** Hand the panel back to the agent's editable side conversation. */
+  onOpenChat?: () => void;
   topicId: string;
 }
 
@@ -40,26 +52,50 @@ const WaitingForFirstRun = memo(() => {
 
 WaitingForFirstRun.displayName = 'GoalSupervisionWaiting';
 
-/** The manager's ongoing record is inspectable without sending or editing messages. */
-export const GoalSupervision = ({ agentId, goalId, onCollapse, topicId }: GoalSupervisionProps) => {
+/**
+ * The manager's ongoing record, and the place to talk to it. Past turns stay
+ * read-only — editing one would rewrite what the manager acted on — but the
+ * conversation itself continues here, so the reader never has to leave the goal
+ * to answer a question the manager asked in it.
+ */
+export const GoalSupervision = ({
+  agentId,
+  goalId,
+  initialMessage,
+  onCollapse,
+  onInitialMessageConsumed,
+  onOpenChat,
+  topicId,
+}: GoalSupervisionProps) => {
   const { t } = useTranslation('chat');
   const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
   useFetchAgentConfig(true, agentId);
   const agentTitle = useAgentStore((s) =>
     agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),
   );
-  // Stable renderer for the virtualized history; disable message editing too,
-  // rather than only removing the composer below the list.
+  // Stable renderer for the virtualized history; past turns are not editable.
   const itemContent = useCallback(
     (index: number, id: string) => <MessageItem disableEditing id={id} index={index} />,
     [],
   );
   const navigate = useWorkspaceAwareNavigate();
-  // This panel is a read-only view of the manager's conversation. Opening it in
-  // the agent's own chat is how you continue it; the id is one click away for
-  // referencing it elsewhere (`lh topic view`, a bug report), like a task run's.
+  // Opening the record in the agent's own chat gives it the full page; the id is
+  // one click away for referencing it elsewhere (`lh topic view`, a bug report),
+  // like a task run's.
   const menuItems = useMemo<DropdownItem[]>(
     () => [
+      // A fresh side conversation, for a question that should not land in the
+      // manager's own record.
+      ...(onOpenChat
+        ? [
+            {
+              icon: MessagesSquareIcon,
+              key: 'openChat',
+              label: t('goalChat.title'),
+              onClick: onOpenChat,
+            },
+          ]
+        : []),
       {
         icon: ExternalLink,
         key: 'openAgentTopic',
@@ -76,7 +112,7 @@ export const GoalSupervision = ({ agentId, goalId, onCollapse, topicId }: GoalSu
         },
       },
     ],
-    [agentId, navigate, t, topicId],
+    [agentId, navigate, onOpenChat, t, topicId],
   );
 
   return (
@@ -104,6 +140,10 @@ export const GoalSupervision = ({ agentId, goalId, onCollapse, topicId }: GoalSu
         <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
           <ChatList disableActionsBar itemContent={itemContent} welcome={<WaitingForFirstRun />} />
         </Flexbox>
+        <GoalConversationInput
+          initialMessage={initialMessage}
+          onInitialMessageConsumed={onInitialMessageConsumed}
+        />
       </Flexbox>
     </GoalChatProvider>
   );

@@ -10,6 +10,7 @@ import type {
   ExpertiseReasonKind,
   ExpertiseReasonSource,
   ExpertiseRevisionEvidence,
+  ExpertiseRuleDirection,
 } from '@lobechat/types';
 import { isNotNull, isNull, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
@@ -379,6 +380,11 @@ export const expertiseLessons = pgTable(
     enforcement: text('enforcement')
       .$type<ExpertiseEnforcement>()
       .$defaultFn(() => 'remind'),
+    /**
+     * Whether the rule guides toward something (`positive`) or names what gets a delivery sent back
+     * (`negative`). Null until judged; nullable without a default so adding it never rewrites rows.
+     */
+    direction: text('direction').$type<ExpertiseRuleDirection>(),
 
     /** Where a lesson ends up: compiled into a machine-runnable criterion. Mental-model-layer lessons are always not-compilable. */
     compilability: text('compilability', { enum: EXPERTISE_COMPILABILITIES })

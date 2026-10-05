@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { randomUUID } from 'node:crypto';
+
 import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -381,5 +383,62 @@ describe('VerifyRunModel.foldIntoRound', () => {
       title: 'chained',
     });
     await expect(model().foldIntoRound(chained.id, draft.id)).rejects.toThrow('detached');
+  });
+});
+
+describe('VerifyRunModel.listByAcceptances', () => {
+  const item = (id: string) => ({
+    id,
+    index: 0,
+    onFail: 'manual' as const,
+    required: true,
+    title: id,
+    verifierConfig: {},
+    verifierType: 'llm' as const,
+  });
+
+  const buildAcceptance = async (owner = userId) => {
+    const [row] = await serverDB
+      .insert(acceptances)
+      .values({ subjectId: randomUUID(), subjectType: 'standalone', userId: owner })
+      .returning();
+    return row.id;
+  };
+
+  it('returns the rounds of several acceptances in one read', async () => {
+    const first = await buildAcceptance();
+    const second = await buildAcceptance();
+    const model = new VerifyRunModel(serverDB, userId);
+    await model.create({ acceptanceId: first, plan: [item('c1')], roundIndex: 1, title: 'a1' });
+    await model.create({ acceptanceId: first, plan: [item('c1')], roundIndex: 2, title: 'a2' });
+    await model.create({ acceptanceId: second, plan: [item('c1')], roundIndex: 1, title: 'b1' });
+
+    const runs = await model.listByAcceptances([first, second]);
+
+    expect(runs.map((run) => `${run.acceptanceId}#${run.roundIndex}`).sort()).toEqual(
+      [`${first}#1`, `${first}#2`, `${second}#1`].sort(),
+    );
+  });
+
+  it('returns nothing for an empty id list', async () => {
+    const model = new VerifyRunModel(serverDB, userId);
+
+    expect(await model.listByAcceptances([])).toEqual([]);
+  });
+
+  it('never reads another user’s rounds', async () => {
+    const mine = await buildAcceptance();
+    const theirs = await buildAcceptance(otherUserId);
+    const theirsRun = await new VerifyRunModel(serverDB, otherUserId).create({
+      acceptanceId: theirs,
+      plan: [item('c1')],
+      roundIndex: 1,
+      title: 'theirs',
+    });
+
+    const runs = await new VerifyRunModel(serverDB, userId).listByAcceptances([mine, theirs]);
+
+    expect(runs.some((run) => run.id === theirsRun.id)).toBe(false);
+    expect(runs.every((run) => run.acceptanceId === mine)).toBe(true);
   });
 });

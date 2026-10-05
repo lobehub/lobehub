@@ -1,6 +1,10 @@
 'use client';
 
-import type { ExpertiseEnforcement } from '@lobechat/types';
+import {
+  EXPERTISE_RULE_DIRECTIONS,
+  type ExpertiseEnforcement,
+  type ExpertiseRuleDirection,
+} from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
@@ -33,6 +37,7 @@ import GeneratingBorder from '@/components/GeneratingBorder';
 import { expertiseService, type RuleDraft, type RuleGroup } from '@/services/expertise';
 import { shinyTextStyles } from '@/styles';
 
+import { DIRECTION_ICON } from './DirectionToggle';
 import { composeStyles, type CreatedGroup, createGroupModal } from './GroupModal';
 import { useScopeLabel } from './labels';
 
@@ -112,6 +117,8 @@ const ComposeContent = ({
   const [how, setHow] = useState('');
   const [limits, setLimits] = useState('');
   const [enforcement, setEnforcement] = useState<ExpertiseEnforcement>('remind');
+  // Left unset when writing by hand: the page judges it afterwards unless the reviewer picks.
+  const [direction, setDirection] = useState<ExpertiseRuleDirection>();
   const [compilability, setCompilability] = useState<Compilability>('not-compilable');
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
@@ -144,6 +151,7 @@ const ComposeContent = ({
       setHow(drafted.how ?? '');
       setLimits(drafted.limits ?? '');
       setEnforcement(drafted.enforcement);
+      setDirection(drafted.direction);
       setCompilability(drafted.compilability);
       if (drafted.groupId) {
         setGroupId(drafted.groupId);
@@ -184,6 +192,7 @@ const ComposeContent = ({
       if (!domainId) return;
       const created = await expertiseService.createRule({
         compilability,
+        direction,
         domainId,
         enforcement,
         how: how.trim() || undefined,
@@ -349,6 +358,19 @@ const ComposeContent = ({
                 <span className={styles.chip}>
                   <Icon icon={newGroup && !group ? FolderPlusIcon : FolderIcon} size={13} />
                   {groupLabel}
+                  <Icon icon={ChevronDownIcon} size={12} />
+                </span>
+              </DropdownMenu>
+              <DropdownMenu
+                items={EXPERTISE_RULE_DIRECTIONS.map((value) => ({
+                  key: value,
+                  label: t(`rules.direction.${value}`),
+                  onClick: () => setDirection(value),
+                }))}
+              >
+                <span className={styles.chip}>
+                  <Icon icon={DIRECTION_ICON[direction ?? 'unset']} size={13} />
+                  {direction ? t(`rules.direction.${direction}`) : t('rules.meta.direction')}
                   <Icon icon={ChevronDownIcon} size={12} />
                 </span>
               </DropdownMenu>

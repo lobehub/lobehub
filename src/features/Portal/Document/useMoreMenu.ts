@@ -1,16 +1,17 @@
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 
+import { openRenameModal } from '@/components/RenameModal';
 import { type PortalMoreMenuConfig } from '@/features/Portal/components/PortalMoreMenu/types';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useChatStore } from '@/store/chat';
 
 import { usePortalDocumentTitleState } from './titleContext';
-import { usePortalDocumentHeaderActions } from './usePortalDocumentHeader';
+import { TITLE_MAX_LENGTH, usePortalDocumentHeaderActions } from './usePortalDocumentHeader';
 
 export const useDocumentMoreMenu = (): PortalMoreMenuConfig | undefined => {
   const { t } = useTranslation(['chat', 'common']);
-  const { isLoading, metaLocked, startEdit } = usePortalDocumentTitleState();
+  const { isLoading, metaLocked, savedTitle, saveTitle } = usePortalDocumentTitleState();
   const { agentDocumentId, agentId, documentId, refresh, url } = usePortalDocumentHeaderActions();
   const closeDocument = useChatStore((s) => s.closeDocument);
 
@@ -53,6 +54,15 @@ export const useDocumentMoreMenu = (): PortalMoreMenuConfig | undefined => {
     copyLink: url,
     delete: agentDocumentId ? deleteDocument : undefined,
     refresh,
-    rename: metaLocked ? undefined : startEdit,
+    // A dialog, like every other portal's rename — flipping the header title
+    // into an input from a menu reads as a stray focused text field.
+    rename: metaLocked
+      ? undefined
+      : () =>
+          openRenameModal({
+            defaultValue: savedTitle,
+            maxLength: TITLE_MAX_LENGTH,
+            onSave: saveTitle,
+          }),
   };
 };

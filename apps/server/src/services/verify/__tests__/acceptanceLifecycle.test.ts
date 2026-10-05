@@ -253,7 +253,7 @@ describe('Verify acceptance lifecycle', () => {
       requirement: 'Deliver a runnable repro under ~/WikiSkill-Repro',
     });
     mocks.taskFindById.mockResolvedValue({ instruction: 'Build the repro', name: 'Repro' });
-    mocks.resolveModelConfig.mockResolvedValue({ model: 'model-1', provider: 'provider-1' });
+    mocks.resolveModelConfig.mockResolvedValue({ model: 'glm-slow', provider: 'zhipu' });
     mocks.runFindByOperation
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'run-1', plan });
@@ -263,20 +263,16 @@ describe('Verify acceptance lifecycle', () => {
       taskId: 'task-1',
     });
 
-    expect(mocks.resolveModelConfig).toHaveBeenCalledWith(
-      db,
-      'user-1',
-      { verifierAgentId: 'verifier-1' },
-      undefined,
-    );
+    // The split runs on the pinned plan model, never the verifier agent's model.
+    expect(mocks.resolveModelConfig).not.toHaveBeenCalled();
     expect(mocks.generateDraftPlan).toHaveBeenCalledWith(
       expect.objectContaining({
         context: 'Deliver a runnable repro under ~/WikiSkill-Repro',
         enableAiGeneration: true,
         holisticFallback: true,
-        modelConfig: { model: 'model-1', provider: 'provider-1' },
       }),
     );
+    expect(mocks.generateDraftPlan.mock.calls[0][0]).not.toHaveProperty('modelConfig');
   });
 
   it('does not spend an AI call when the task already picked its criteria', async () => {

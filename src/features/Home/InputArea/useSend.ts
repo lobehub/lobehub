@@ -1,11 +1,11 @@
 import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { toast } from '@lobehub/ui/base-ui';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { buildTaskHandoffPath } from '@/features/AgentTaskManager/taskHandoff';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
@@ -17,7 +17,6 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
-import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { useTaskStore } from '@/store/task';
 
@@ -47,15 +46,9 @@ const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
   if (config) agentState.internal_dispatchAgentMap(agentId, config);
 };
 
-interface PendingTaskRun {
-  agentId: string;
-  identifier: string;
-  instruction: string;
-  workspaceId: string | null;
-}
-
 export const useSend = (mode: HomeMode = 'chat') => {
   const { t } = useTranslation('home');
+  const { t: tChat } = useTranslation('chat');
   const router = useQueryRoute();
   const activeWorkspaceId = useActiveWorkspaceId();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -66,10 +59,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
   const homeInputLoading = useHomeStore((s) => s.homeInputLoading);
   const createTask = useTaskStore((s) => s.createTask);
-  const runTask = useTaskStore((s) => s.runTask);
-  const toggleTaskAgentPanel = useGlobalStore((s) => s.toggleTaskAgentPanel);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const pendingTaskRunRef = useRef<PendingTaskRun | null>(null);
 
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const { agentId: selectedAgentId } = useResolvedHomeAgentId();
@@ -142,44 +132,45 @@ export const useSend = (mode: HomeMode = 'chat') => {
       try {
         const { contextSelections, pageSelections } = buildMessageContextSelections(contextList);
 
-        // Task mode is a commitment, not a proposal: the row is written and the
-        // run is launched here. Routing it through the agent would leave both
-        // outcomes to a model that is told elsewhere not to start work on its
-        // own — pressing send in this mode IS the instruction to start.
+        // Task mode records a task; it does not start one. Pressing send here
+        // writes the row and keeps the user on the Home composer, where the new
+        // task shows up under Recent tasks. Starting the run stays an explicit
+        // action on the task itself, so a quick jot cannot launch an agent the
+        // user only meant to note down.
         if (mode === 'task') {
           if (!message || !selectedAgentId) return;
           setIsSubmitting(true);
-          const pendingTaskRun = pendingTaskRunRef.current;
-          const canRetryPendingTask =
-            pendingTaskRun?.agentId === selectedAgentId &&
-            pendingTaskRun.instruction === message &&
-            pendingTaskRun.workspaceId === (activeWorkspaceId ?? null);
-
-          let taskRun = canRetryPendingTask ? pendingTaskRun : null;
-          if (!taskRun) {
-            const created = await createTask({
-              assigneeAgentId: selectedAgentId,
-              editorData,
-              instruction: message,
-              name: taskNameFromMessage(message),
-              visibility: activeWorkspaceId ? 'private' : undefined,
-            });
-            if (!created?.identifier) throw new Error('Task creation returned no identifier');
-            taskRun = {
-              agentId: created.assigneeAgentId ?? selectedAgentId,
-              identifier: created.identifier,
-              instruction: message,
-              workspaceId: activeWorkspaceId ?? null,
-            };
-            pendingTaskRunRef.current = taskRun;
-          }
-
-          const result = await runTask(taskRun.identifier, undefined, { throwOnError: true });
-          if (!result?.topicId) throw new Error('Task run did not return a topic');
-          pendingTaskRunRef.current = null;
+          const name = taskNameFromMessage(message);
+          const created = await createTask({
+            assigneeAgentId: selectedAgentId,
+            editorData,
+            instruction: message,
+            name,
+            visibility: activeWorkspaceId ? 'private' : undefined,
+          });
+          if (!created?.identifier) throw new Error('Task creation returned no identifier');
           submitted = true;
-          toggleTaskAgentPanel(true);
-          router.push(buildTaskHandoffPath(taskRun.agentId, result.topicId));
+          // The task outlives the toast, so the toast is the only handle on the
+          // thing the user just wrote. Say where it went and give it a way in,
+          // mirroring the task list's own create toast.
+          toast.success({
+            actions: [
+              {
+                label: tChat('taskIntent.openCreated'),
+                onClick: () =>
+                  router.push(
+                    taskDetailPath(
+                      created.identifier,
+                      created.assigneeAgentId ?? selectedAgentId,
+                      name,
+                    ),
+                  ),
+                variant: 'text',
+              },
+            ],
+            description: t('dashboard.task.createdHint'),
+            title: t('dashboard.task.created'),
+          });
           return;
         }
 
@@ -281,13 +272,12 @@ export const useSend = (mode: HomeMode = 'chat') => {
       currentPair,
       mode,
       createTask,
-      runTask,
-      toggleTaskAgentPanel,
       inboxAgentId,
       selectedAgentId,
       canUseResource,
       canCreateContent,
       t,
+      tChat,
     ],
   );
 

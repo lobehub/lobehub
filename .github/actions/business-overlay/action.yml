@@ -89,47 +89,11 @@ runs:
           if (skip.has(entry)) continue;
           copy(path.join(source, entry), path.join(target, entry));
         }
-
-        const parseAllowBuilds = (text) => {
-          const map = {};
-          const lines = text.split('\n');
-          let inBlock = false;
-          for (const line of lines) {
-            if (!inBlock) {
-              if (/^allowBuilds:\s*$/.test(line)) inBlock = true;
-              continue;
-            }
-            const match = line.match(
-              /^(\s+)((?:'[^']+'|"[^"]+"|[A-Za-z0-9@._/-]+)):\s*(true|false)\s*$/,
-            );
-            if (!match) break;
-            map[match[2].replace(/^['"]|['"]$/g, '')] = match[3] === 'true';
-          }
-          return map;
-        };
-
-        const quoteKey = (key) => (/[@:]/.test(key) ? `'${key}'` : key);
-        const rootFile = path.join(target, 'pnpm-workspace.yaml');
-        const rootText = fs.readFileSync(rootFile, 'utf8');
-        const rootMap = parseAllowBuilds(rootText);
-        const extras = {};
-        for (const rel of ['pnpm-workspace.yaml', 'apps/desktop/pnpm-workspace.yaml']) {
-          const extraFile = path.join(process.env.GITHUB_WORKSPACE, rel);
-          if (!fs.existsSync(extraFile)) continue;
-          Object.assign(extras, parseAllowBuilds(fs.readFileSync(extraFile, 'utf8')));
-        }
-        const missing = Object.keys(extras)
-          .filter((key) => !(key in rootMap))
-          .sort();
-        if (missing.length > 0) {
-          const insert = missing
-            .map((key) => `  ${quoteKey(key)}: ${extras[key]}\n`)
-            .join('');
-          if (!/^allowBuilds:\n/m.test(rootText)) {
-            throw new Error('overlay pnpm-workspace.yaml is missing an allowBuilds block');
-          }
-          fs.writeFileSync(rootFile, rootText.replace(/^allowBuilds:\n/m, `allowBuilds:\n${insert}`));
-        }
         NODE
+
+        node "$GITHUB_ACTION_PATH/../../scripts/mergeAllowBuilds.mjs" \
+          "$overlay_root/pnpm-workspace.yaml" \
+          "$GITHUB_WORKSPACE/pnpm-workspace.yaml" \
+          "$GITHUB_WORKSPACE/apps/desktop/pnpm-workspace.yaml"
 
         echo "✅ Overlay repository $resolved_overlay_ref applied at $overlay_root"

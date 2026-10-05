@@ -501,6 +501,12 @@ export default class GatewayConnectionService extends ServiceModule {
       }
     });
 
+    client.on('replaced', () => {
+      logger.warn(
+        `Gateway connection${scope ? ` for workspace ${scope.workspaceId}` : ''} was taken over by another client with the same connection id; not reconnecting`,
+      );
+    });
+
     client.on('error', (error) => {
       logger.error('WebSocket error:', error.message);
     });

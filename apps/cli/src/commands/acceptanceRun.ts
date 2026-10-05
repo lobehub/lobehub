@@ -699,6 +699,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // An external repository has none of those, so create a first-class
   // standalone subject instead of making the caller manufacture a Task ID.
   let subject = subjectFromResult(result);
+  let foldTaskRunTopic = false;
   if (!requestedAcceptanceId && options.subject) {
     const ref = parseSubjectRef(options.subject);
     if (!ref) {
@@ -714,6 +715,8 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   } else if (!requestedAcceptanceId && !subject) {
     const ref = subjectFromEnv();
     if (ref) subject = { ref };
+    // Only the ambient topic may be folded onto its Task; an explicit subject stays exact.
+    foldTaskRunTopic = Boolean(ref);
   }
   if (!requestedAcceptanceId && !subject) {
     subject = {
@@ -772,10 +775,16 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
       requirement,
       subjectId: subject!.ref.subjectId,
       subjectType: subject!.ref.subjectType,
+      ...(foldTaskRunTopic ? { foldTaskRunTopic } : {}),
       ...(subject!.ref.subjectType === 'standalone' && (title || goal)
         ? { title: title || goal }
         : {}),
     });
+    // The server may fold the subject (a Task's run topic lands on the Task).
+    subject = {
+      ...subject!,
+      ref: { subjectId: acceptance.subjectId, subjectType: acceptance.subjectType },
+    };
     // A subject's acceptance may already hold rounds; this one has to line up
     // with them exactly as an explicit `--acceptance` round does.
     bundle = await client.acceptance.getBundle.query({ id: acceptance.id });

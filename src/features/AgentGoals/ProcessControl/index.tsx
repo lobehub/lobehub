@@ -39,11 +39,13 @@ interface ProcessControlProps {
   goalId: string;
   /** Owned by the page so it can swap its portal panel for the overlay's. */
   graphFullscreen: boolean;
+  /** Sends a question about the delivered result into the goal's conversation. */
+  onFollowUp?: (message: string) => void;
   onGraphFullscreenChange: (fullscreen: boolean) => void;
 }
 
 const ProcessControl = memo<ProcessControlProps>(
-  ({ goalId, graphFullscreen, onGraphFullscreenChange }) => {
+  ({ goalId, graphFullscreen, onFollowUp, onGraphFullscreenChange }) => {
     const { t } = useTranslation('chat');
     const { allowed: canEdit } = usePermission('create_content');
     const [lastSelectedId, setSelectedId] = useState<string>();
@@ -119,7 +121,7 @@ const ProcessControl = memo<ProcessControlProps>(
           defaultValue={['deliverables', 'findings', 'activity']}
           gap={0}
           indicatorPlacement="inline"
-          styles={{ header: { paddingBlock: 6, paddingInline: 0 } }}
+          styles={{ trigger: { paddingBlock: 6, paddingInline: 0 } }}
           items={
             [
               // The structured acceptance standard the terminal goal acceptance is
@@ -186,7 +188,15 @@ const ProcessControl = memo<ProcessControlProps>(
       </Flexbox>
     );
 
-    return <GoalResultTabs graph={graph} key={goalId} process={process} onSelect={select} />;
+    return (
+      <GoalResultTabs
+        graph={graph}
+        key={goalId}
+        process={process}
+        onFollowUp={onFollowUp}
+        onSelect={select}
+      />
+    );
   },
 );
 

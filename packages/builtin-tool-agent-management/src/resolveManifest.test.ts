@@ -21,6 +21,22 @@ describe('resolveAgentManagementManifest', () => {
     expect(resolveAgentManagementManifest({})).toBe(AgentManagementManifest);
   });
 
+  it('advertises only the callAgent params every runtime honors', () => {
+    const callAgent = AgentManagementManifest.api.find(
+      (api) => api.name === AgentManagementApiName.callAgent,
+    )!;
+
+    // The manifest is shared with the client runtime, whose inline `callAgent`
+    // path has no thread title or per-call timeout to honor. Advertising
+    // `taskTitle` / `timeout` would promise behavior only the server deferred
+    // path keeps, so they must not appear in the shared schema.
+    expect(Object.keys(callAgent.parameters.properties ?? {}).sort()).toEqual([
+      'agentId',
+      'instruction',
+      'skipCallSupervisor',
+    ]);
+  });
+
   it('hides callAgent in both api and systemRole inside a sub-agent run', () => {
     const result = resolveAgentManagementManifest({ isSubAgent: true, scope: 'main' })!;
 

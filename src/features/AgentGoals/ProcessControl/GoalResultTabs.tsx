@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import GoalFollowUpComposer from './GoalFollowUpComposer';
 import type { GoalGraphView } from './goalGraphViewModel';
 import GoalResult from './GoalResult';
 import { hasGoalResult } from './goalResultState';
@@ -22,12 +23,14 @@ type GoalTab = 'process' | 'result';
 
 interface GoalResultTabsProps {
   graph: GoalGraphView;
+  /** Hands a question about the result to the goal's conversation; absent hides the composer. */
+  onFollowUp?: (message: string) => void;
   onSelect: (nodeId: string) => void;
   /** The 执行过程 content — the whole process view the host already renders. */
   process: ReactNode;
 }
 
-const GoalResultTabs = ({ graph, onSelect, process }: GoalResultTabsProps) => {
+const GoalResultTabs = ({ graph, onFollowUp, onSelect, process }: GoalResultTabsProps) => {
   const { t } = useTranslation('chat');
   const [tab, setTab] = useState<GoalTab>('result');
 
@@ -48,6 +51,9 @@ const GoalResultTabs = ({ graph, onSelect, process }: GoalResultTabsProps) => {
       {/* Only the active tab mounts: the exploration map measures its box on
           mount and would lay out against a hidden panel. */}
       {tab === 'result' ? <GoalResult graph={graph} onSelect={onSelect} /> : process}
+      {/* Kept mounted across tabs so a half-written follow-up survives a look
+          at the process; it only shows under the result. */}
+      {onFollowUp && <GoalFollowUpComposer hidden={tab !== 'result'} onSend={onFollowUp} />}
     </Flexbox>
   );
 };

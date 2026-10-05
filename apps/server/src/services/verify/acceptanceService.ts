@@ -12,6 +12,7 @@ import type {
   VerifyAgentPlanConfig,
   VerifyCheckDecisionDetail,
   VerifyCheckItem,
+  VerifyCheckTally,
   VerifyRunDecisionDetail,
   VerifySurface,
 } from '@lobechat/types';
@@ -279,6 +280,30 @@ export const buildAcceptanceCheckUnion = (
   return [...grouped.values(), ...[...rows.values()].filter((row) => !grouped.has(row.id))];
 };
 
+/**
+ * The union's own three-way split, counted — the number a summary can show
+ * without opening the list.
+ *
+ * It counts UNION ROWS, not one round's result rows. A repair round re-runs the
+ * check it was asked to fix and carries the rest forward, so the current round's
+ * rows are a subset of the union: counting them would print "1 passed" beside a
+ * list that expands to the repaired check plus everything it carried, and the
+ * two readings of one acceptance would contradict each other.
+ */
+export const tallyCheckUnion = (checks: AcceptanceCheckRow[]): VerifyCheckTally => {
+  let failed = 0;
+  let passed = 0;
+  let unjudged = 0;
+  for (const check of checks) {
+    if (check.state === 'passed') passed++;
+    else if (check.state === 'failed') failed++;
+    // `uncertain` and `not_executed` are both "planned, never judged" — the same
+    // split the acceptance's criteria list draws.
+    else unjudged++;
+  }
+  return { failed, passed, total: checks.length, unjudged };
+};
+
 // ============================================
 // User review overlay — the per-check human verdict layered onto the union.
 // An accept or ignore is sticky across rounds; a reject binds to the round it
@@ -538,6 +563,41 @@ export class AcceptanceService {
         ? { metadata: { title: defaults.title } }
         : {}),
     });
+  };
+
+  /**
+   * The ingest entry point (`lh acceptance run ingest`). An agent authoring its
+   * own report inside a Task run only knows its topic, so a topic subject that
+   * is a Task's run topic is folded onto that Task — otherwise the delivery
+   * lands on a topic aggregate no task surface reads, and the Task page shows
+   * no acceptance at all. A topic that already owns an acceptance keeps it, so
+   * its earlier rounds are not split across two aggregates; recurring
+   * (automation) tasks stay on their per-tick topic.
+   */
+  ensureForIngest = async (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+    defaults?: { requirement?: string; title?: string },
+  ): Promise<AcceptanceItem> => {
+    const taskId =
+      subjectType === 'topic' ? await this.resolveRunTopicTaskId(subjectId) : undefined;
+    if (taskId) return this.ensureForSubject('task', taskId, defaults);
+    return this.ensureForSubject(subjectType, subjectId, defaults);
+  };
+
+  private resolveRunTopicTaskId = async (topicId: string): Promise<string | undefined> => {
+    const taskTopic = await new TaskTopicModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findByTopicId(topicId);
+    if (!taskTopic) return;
+    if (await this.acceptanceModel.findBySubject('topic', topicId)) return;
+    const task = await new TaskModel(this.db, this.userId, this.workspaceId).findById(
+      taskTopic.taskId,
+    );
+    if (!task || task.automationMode) return;
+    return task.id;
   };
 
   private resolveSubjectProjectId = async (
@@ -1465,5 +1525,51 @@ export class AcceptanceService {
       this.reportModel.findByRuns(runIds),
     ]);
     return { evidence, reports, results, runs };
+  };
+
+  /**
+   * The union tally of several acceptances at once, counted from the SAME check
+   * union each acceptance page renders (`tallyCheckUnion` over
+   * `buildAcceptanceCheckUnion`), so a summary row and the list it expands to
+   * can never disagree about what a round chain judged.
+   *
+   * Batched on purpose: a surface that summarises many acceptances runs on a
+   * poll, so this is two statements regardless of how many it covers. An
+   * acceptance with no round at all is ABSENT from the map — a caller must not
+   * read "absent" as "nothing passed".
+   */
+  getCheckTalliesByAcceptances = async (
+    acceptanceIds: string[],
+  ): Promise<Map<string, VerifyCheckTally>> => {
+    const ids = [...new Set(acceptanceIds.filter(Boolean))];
+    const tallies = new Map<string, VerifyCheckTally>();
+    if (ids.length === 0) return tallies;
+
+    const runs = await this.runModel.listByAcceptances(ids);
+    const results = await this.resultModel.listByRuns(runs.map((run) => run.id));
+
+    const resultsByRun = new Map<string, VerifyCheckResultItem[]>();
+    for (const result of results) {
+      if (!result.verifyRunId) continue;
+      const bucket = resultsByRun.get(result.verifyRunId) ?? [];
+      bucket.push(result);
+      resultsByRun.set(result.verifyRunId, bucket);
+    }
+
+    const runsByAcceptance = new Map<string, VerifyRunItem[]>();
+    for (const run of runs) {
+      if (!run.acceptanceId) continue;
+      const bucket = runsByAcceptance.get(run.acceptanceId) ?? [];
+      bucket.push(run);
+      runsByAcceptance.set(run.acceptanceId, bucket);
+    }
+
+    for (const [acceptanceId, acceptanceRuns] of runsByAcceptance) {
+      const checks = buildAcceptanceCheckUnion(
+        acceptanceRuns.map((run) => ({ results: resultsByRun.get(run.id) ?? [], run })),
+      );
+      tallies.set(acceptanceId, tallyCheckUnion(checks));
+    }
+    return tallies;
   };
 }

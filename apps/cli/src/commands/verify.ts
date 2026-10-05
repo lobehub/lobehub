@@ -258,8 +258,6 @@ export function registerVerifyCommand(program: Command) {
     .option('--criteria <ids>', 'Ad-hoc criterion ids (comma-separated)')
     .option('--ai', 'Let the LLM propose additional criteria')
     .option('--max-ai <n>', 'Max AI-proposed criteria')
-    .option('--model <model>', 'Model (required with --ai)')
-    .option('--provider <provider>', 'Provider (required with --ai)')
     .option('--context <text>', 'Extra context for the AI prompt')
     .option('--json [fields]', 'Output JSON')
     .action(
@@ -272,25 +270,15 @@ export function registerVerifyCommand(program: Command) {
           goal: string;
           json?: boolean | string;
           maxAi?: string;
-          model?: string;
-          provider?: string;
           rubric?: string;
         },
       ) => {
-        if (options.ai && (!options.model || !options.provider)) {
-          log.error('--ai requires --model and --provider');
-          process.exit(1);
-        }
         const client = await getTrpcClient();
         const items = await client.verify.generateDraftPlan.mutate({
           context: options.context,
           enableAiGeneration: options.ai,
           goal: options.goal,
           maxAiCriteria: options.maxAi ? Number.parseInt(options.maxAi, 10) : undefined,
-          modelConfig:
-            options.model && options.provider
-              ? { model: options.model, provider: options.provider }
-              : undefined,
           operationId,
           verifyCriteriaIds: options.criteria
             ?.split(',')

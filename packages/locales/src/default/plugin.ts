@@ -67,7 +67,6 @@ export default {
   'builtins.lobe-agent-management.apiName.updateAgent': 'Update agent',
   'builtins.lobe-agent-management.apiName.updatePrompt': 'Update prompt',
   'builtins.lobe-agent-management.inspector.callAgent.sync': 'Calling:',
-  'builtins.lobe-agent-management.inspector.callAgent.task': 'Assigning task to:',
   'builtins.lobe-agent-management.inspector.createAgent.title': 'Creating agent:',
   'builtins.lobe-agent-management.inspector.duplicateAgent.title': 'Duplicating agent:',
   'builtins.lobe-agent-management.inspector.getAgentDetail.title': 'Getting details:',

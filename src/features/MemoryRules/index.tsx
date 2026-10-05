@@ -1,9 +1,9 @@
 'use client';
 
 import { Block, Empty, Flexbox, Icon, SortableList } from '@lobehub/ui';
-import { Button, Segmented, Text, toast } from '@lobehub/ui/base-ui';
+import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
-import { FlaskConicalIcon, PencilIcon, PlusIcon } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, FlaskConicalIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,12 +21,20 @@ import DetailPanel from './DetailPanel';
 import { createGroupModal } from './GroupModal';
 import GroupSection from './GroupSection';
 import { useRules } from './hooks';
-import { findMove, mergedIntoId, sectionsByOwner } from './labels';
-import OwnerLabel from './OwnerLabel';
+import {
+  findMove,
+  mergedIntoId,
+  nextRunsSort,
+  type RunsSort,
+  sectionsByOwner,
+  sortByRuns,
+} from './labels';
+import PartSwitcher from './PartSwitcher';
 import { buildRuleMenu } from './ruleMenu';
 import RuleRow from './RuleRow';
 import RulesOnboarding, { type RulesOnboardingAgents } from './RulesOnboarding';
 import { styles } from './styles';
+import { useJudgeDirections } from './useJudgeDirections';
 
 const LabOff = () => {
   const { t } = useTranslation('memory');
@@ -68,6 +76,7 @@ const MemoryRules = () => {
   const [mergeFrom, setMergeFrom] = useState<string>();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [partKey, setPartKey] = useState('mine');
+  const [runsSort, setRunsSort] = useState<RunsSort>(null);
 
   const groups = useMemo(() => data?.groups ?? [], [data]);
   const sections = useMemo(() => sectionsByOwner(groups), [groups]);
@@ -118,6 +127,12 @@ const MemoryRules = () => {
         }
       : undefined;
 
+  useJudgeDirections(
+    enabled,
+    live.filter((rule) => !rule.direction).map((rule) => rule.id),
+    mutate,
+  );
+
   // A selection or a merge in progress belongs to the part it started in; switching drops both,
   // so a merge can only ever pick a target within its own part.
   const switchPart = (key: string) => {
@@ -153,6 +168,7 @@ const MemoryRules = () => {
   const updateRule = async (id: string, patch: UpdateRuleInput) => {
     try {
       if (patch.enforcement) await patchLocal(id, { enforcement: patch.enforcement });
+      if (patch.direction) await patchLocal(id, { direction: patch.direction });
       await expertiseService.updateRule(id, patch);
       await refresh();
       return true;
@@ -258,6 +274,7 @@ const MemoryRules = () => {
     <RuleRow
       active={rule.id === selectedId}
       code={codes.get(rule.id) ?? ''}
+      draggable={!runsSort}
       menu={buildRuleMenu(t, rule, sameSection(rule.domainId), handlers)}
       rule={rule}
       taughtToAgent={part.owner.kind === 'agent'}
@@ -265,6 +282,7 @@ const MemoryRules = () => {
         const into = mergedIntoId(rule);
         return into ? (all.find((r) => r.id === into)?.title ?? into) : null;
       })()}
+      onDirection={(direction) => void updateRule(rule.id, { direction })}
       onEnforcement={(enforcement) => void updateRule(rule.id, { enforcement })}
       onSelect={() => select(rule.id)}
     />
@@ -307,9 +325,12 @@ const MemoryRules = () => {
         ) : (
           <SortableList
             gap={0}
-            items={items}
+            items={sortByRuns(items, runsSort)}
             renderItem={renderRow}
-            onChange={(next) => void reorder(group.domain.id, next)}
+            // A sorted view is not the reviewer's order, so it cannot be dragged into one.
+            onChange={(next) => {
+              if (!runsSort) void reorder(group.domain.id, next);
+            }}
           />
         )}
       </div>
@@ -330,7 +351,9 @@ const MemoryRules = () => {
       <NavHeader />
       <Flexbox horizontal flex={1} height={'100%'} width={'100%'}>
         <Flexbox className={styles.body}>
-          <WideScreenContainer gap={18} paddingBlock={'24px 96px'}>
+          {/* Full width: with direction, effect, check and count columns the sheet needs the
+              room, and a centred reading column only squeezed the rule text. */}
+          <WideScreenContainer fullWidth gap={18} paddingBlock={'24px 96px'} paddingInline={32}>
             <Flexbox
               horizontal
               align={'flex-start'}
@@ -391,24 +414,8 @@ const MemoryRules = () => {
                 {/* Whose sheet this is: the reviewer's own rules, or one agent's lessons. Only
                     shown once some agent has learned something, so there is a choice to make. */}
                 {sections.length > 1 && (
-                  <Flexbox horizontal paddingBlock={'0 12px'} paddingInline={8}>
-                    <Segmented
-                      value={part.key}
-                      options={sections.map((section) => ({
-                        label: (
-                          <OwnerLabel
-                            owner={section.owner}
-                            count={
-                              section.groups
-                                .flatMap((group) => group.rules)
-                                .filter((rule) => rule.status === 'active').length
-                            }
-                          />
-                        ),
-                        value: section.key,
-                      }))}
-                      onChange={(value) => switchPart(String(value))}
-                    />
+                  <Flexbox paddingBlock={'0 12px'} paddingInline={8}>
+                    <PartSwitcher sections={sections} value={part.key} onChange={switchPart} />
                   </Flexbox>
                 )}
                 {!mineOnboarding && (
@@ -416,9 +423,24 @@ const MemoryRules = () => {
                     <span />
                     <span>{t('rules.columns.code')}</span>
                     <span>{t('rules.columns.rule')}</span>
+                    <span>{t('rules.columns.direction')}</span>
                     <span>{t('rules.columns.enforcement')}</span>
                     <span>{t('rules.columns.method')}</span>
-                    <span>{t('rules.columns.runs')}</span>
+                    <button
+                      aria-pressed={runsSort !== null}
+                      title={t(`rules.columns.runsSort.${runsSort ?? 'off'}`)}
+                      type={'button'}
+                      className={cx(
+                        styles.sortHeader,
+                        runsSort !== null && styles.sortHeaderActive,
+                      )}
+                      onClick={() => setRunsSort(nextRunsSort(runsSort))}
+                    >
+                      {t('rules.columns.runs')}
+                      {runsSort && (
+                        <Icon icon={runsSort === 'desc' ? ArrowDownIcon : ArrowUpIcon} size={12} />
+                      )}
+                    </button>
                     <span />
                   </div>
                 )}
@@ -441,7 +463,7 @@ const MemoryRules = () => {
                     </div>
                     <SortableList
                       gap={0}
-                      items={partArchived}
+                      items={sortByRuns(partArchived, runsSort)}
                       renderItem={renderRow}
                       onChange={() => {}}
                     />

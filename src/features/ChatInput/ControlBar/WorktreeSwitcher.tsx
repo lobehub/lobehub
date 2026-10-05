@@ -595,10 +595,18 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     const openCreateWorktree = useCallback(() => {
       setOpen(false);
       openCreateWorktreeModal({
+        // The modal reads the repo's full local branch list itself and draws the
+        // generated default from it, so a name is not handed out twice and does
+        // not collide with a ref on the `wt` namespace path (see
+        // `generateWorktreeBranchName`). It lives there rather than here so the
+        // list can be awaited: snapshotting an in-flight (empty) list would hand
+        // out a name git is guaranteed to refuse.
+        deviceId,
         onSubmit: handleCreateWorktree,
+        path,
         resolvePath: (branch) => deriveWorktreePath(sourcePath, branch),
       });
-    }, [handleCreateWorktree, sourcePath]);
+    }, [deviceId, handleCreateWorktree, path, sourcePath]);
 
     // Scroll the current worktree into view each time the dropdown opens — the
     // list mounts at scrollTop=0, so a current worktree below the fold would

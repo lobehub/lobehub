@@ -881,39 +881,7 @@ export class GeneralChatAgent implements Agent {
       }
 
       case 'tool_result': {
-        const { data, parentMessageId, stop } =
-          context.payload as GeneralAgentCallToolResultPayload;
-
-        // Legacy async agent invocation path. `callAgent({ runAsTask: true })`
-        // emits state.type=execSubAgent* with stop=true so the runtime can fork
-        // a background agent run after the tool call is persisted.
-        if (stop && data?.state) {
-          const stateType = data.state.type;
-
-          // Server-side legacy agent invocation (single)
-          if (stateType === 'execSubAgent') {
-            const { parentMessageId: execParentId, task } = data.state as {
-              parentMessageId: string;
-              task: any;
-            };
-            return {
-              payload: { parentMessageId: execParentId, task },
-              type: 'exec_sub_agent',
-            };
-          }
-
-          // Server-side legacy agent invocations (multiple)
-          if (stateType === 'execSubAgents') {
-            const { parentMessageId: execParentId, tasks } = data.state as {
-              parentMessageId: string;
-              tasks: any[];
-            };
-            return {
-              payload: { parentMessageId: execParentId, tasks },
-              type: 'exec_sub_agents',
-            };
-          }
-        }
+        const { parentMessageId } = context.payload as GeneralAgentCallToolResultPayload;
 
         // Scope pending check to the current assistant turn so stale
         // `pending` rows from prior turns can never block the loop.

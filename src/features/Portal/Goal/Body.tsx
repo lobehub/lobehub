@@ -119,7 +119,7 @@ const Body = memo(() => {
                 defaultValue={['deliverables', 'findings', 'activity']}
                 gap={0}
                 indicatorPlacement="inline"
-                styles={{ header: { paddingBlock: 6, paddingInline: 0 } }}
+                styles={{ trigger: { paddingBlock: 6, paddingInline: 0 } }}
                 items={[
                   {
                     children: (

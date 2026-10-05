@@ -515,6 +515,11 @@ export interface GatewayClientEvents {
   heartbeat_ack: () => void;
   message_api_request: (request: MessageApiRequestMessage) => void;
   reconnecting: (delay: number) => void;
+  /**
+   * The gateway closed this connection because another client with the same
+   * `connectionId` connected. The client does not reconnect after this.
+   */
+  replaced: () => void;
   rpc_request: (request: RpcRequestMessage) => void;
   status_changed: (status: ConnectionStatus) => void;
   system_info_request: (request: SystemInfoRequestMessage) => void;

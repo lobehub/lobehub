@@ -1,4 +1,4 @@
-import { EXPERTISE_ENFORCEMENTS } from '@lobechat/types';
+import { EXPERTISE_ENFORCEMENTS, EXPERTISE_RULE_DIRECTIONS } from '@lobechat/types';
 import { z } from 'zod';
 
 import {
@@ -15,7 +15,11 @@ import {
   ExpertiseDomainService,
 } from '@/server/services/expertise/domain';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
-import { DraftRuleInputSchema, ExpertiseRuleDraftService } from '@/server/services/expertise/rules';
+import {
+  DraftRuleInputSchema,
+  ExpertiseRuleDraftService,
+  RULE_DIRECTION_BATCH,
+} from '@/server/services/expertise/rules';
 import { ExpertiseHistoryWorkflow } from '@/server/workflows/expertiseHistory';
 
 /**
@@ -266,6 +270,17 @@ export const expertiseRouter = router({
     .input(DraftRuleInputSchema)
     .mutation(async ({ ctx, input }) => ctx.expertiseRuleDraftService.draftRule(input)),
 
+  /**
+   * Settles which way the named unjudged rules push the work, one bounded batch per call. The
+   * page names the batch from the list it read; a rule the reviewer already set is never
+   * overwritten.
+   */
+  judgeRuleDirections: expertiseWriteProcedure
+    .input(z.object({ lessonIds: z.array(z.string()).min(1).max(RULE_DIRECTION_BATCH) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.expertiseRuleDraftService.judgeDirections(input.lessonIds),
+    ),
+
   /** Drafts a group (name + gate question) from a sentence; `createRuleGroup` persists it. */
   draftRuleGroup: expertiseWriteProcedure
     .input(z.object({ brief: z.string().min(1).max(20_000) }))
@@ -278,6 +293,7 @@ export const expertiseRouter = router({
         // `compiled` is only true once the compiler links a criterion; nobody can claim it by hand.
         compilability: z.enum(['compilable', 'not-compilable']).optional(),
         domainId: z.string(),
+        direction: z.enum(EXPERTISE_RULE_DIRECTIONS).optional(),
         enforcement: z.enum(EXPERTISE_ENFORCEMENTS).optional(),
         how: z.string().max(8000).optional(),
         limits: z.string().max(4000).optional(),
@@ -293,6 +309,7 @@ export const expertiseRouter = router({
       z.object({
         // `compiled` is only true once the compiler links a criterion; nobody can claim it by hand.
         compilability: z.enum(['compilable', 'not-compilable']).optional(),
+        direction: z.enum(EXPERTISE_RULE_DIRECTIONS).optional(),
         enforcement: z.enum(EXPERTISE_ENFORCEMENTS).optional(),
         lessonId: z.string(),
         reasonKind: z.enum(['mechanism', 'taste']).optional(),

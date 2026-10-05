@@ -1,6 +1,10 @@
 'use client';
 
-import type { ExpertiseEnforcement, ExpertiseReasonKind } from '@lobechat/types';
+import {
+  EXPERTISE_RULE_DIRECTIONS,
+  type ExpertiseEnforcement,
+  type ExpertiseReasonKind,
+} from '@lobechat/types';
 import { Block, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
@@ -36,6 +40,7 @@ import RightPanel from '@/features/RightPanel';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import type { RuleGroup, RuleItem, UpdateRuleInput } from '@/services/expertise';
 
+import { DIRECTION_ICON } from './DirectionToggle';
 import Field from './Field';
 import { useRuleRevisions, useRuleSources } from './hooks';
 import {
@@ -375,6 +380,24 @@ const RuleDocument = ({
                   ? 'rules.enforcement.blockDesc'
                   : 'rules.enforcement.remindDesc',
               )}
+            </span>
+          </Property>
+          <Property
+            icon={DIRECTION_ICON[rule.direction ?? 'unset']}
+            label={t('rules.meta.direction')}
+            menu={
+              editable
+                ? choose(
+                    EXPERTISE_RULE_DIRECTIONS,
+                    (value) => t(`rules.direction.${value}`),
+                    (direction) => void save({ direction }),
+                  )
+                : undefined
+            }
+          >
+            <Text weight={500}>{t(`rules.direction.${rule.direction ?? 'unset'}`)}</Text>
+            <span className={styles.muted}>
+              {t(`rules.direction.${rule.direction ?? 'unset'}Desc`)}
             </span>
           </Property>
           <Property

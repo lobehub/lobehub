@@ -1,15 +1,19 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import {
+  chainExpertiseRuleDirection,
   chainExpertiseRuleDraft,
   chainExpertiseRuleGroupDraft,
+  EXPERTISE_RULE_DIRECTION_JSON_SCHEMA,
+  EXPERTISE_RULE_DIRECTION_PROMPT_VERSION,
   EXPERTISE_RULE_DRAFT_JSON_SCHEMA,
   EXPERTISE_RULE_DRAFT_PROMPT_VERSION,
   EXPERTISE_RULE_GROUP_DRAFT_JSON_SCHEMA,
   EXPERTISE_RULE_GROUP_DRAFT_PROMPT_VERSION,
 } from '@lobechat/prompts';
-import { RequestTrigger } from '@lobechat/types';
+import { EXPERTISE_RULE_DIRECTIONS, RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
 
+import { ExpertiseModel } from '@/database/models/expertise';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
@@ -26,6 +30,7 @@ export const RuleDraftSchema = z.object({
   compilability: z
     .enum(['compiled', 'compilable', 'not-compilable'])
     .transform((value) => (value === 'compiled' ? 'compilable' : value)),
+  direction: z.enum(EXPERTISE_RULE_DIRECTIONS),
   enforcement: z.enum(['block', 'remind']),
   groupId: z.string().nullable(),
   how: nullableText,
@@ -40,6 +45,16 @@ export const RuleGroupDraftSchema = z.object({
   outOfScope: nullableText,
   title: z.string().min(1).max(60),
 });
+
+const RuleDirectionsSchema = z.object({
+  rules: z.array(z.object({ direction: z.enum(EXPERTISE_RULE_DIRECTIONS), id: z.string() })),
+});
+
+/**
+ * How many unjudged rules one call settles. Titles are a sentence each, so a batch this size is
+ * one small request; the page asks again while any remain.
+ */
+export const RULE_DIRECTION_BATCH = 40;
 
 export type RuleDraft = z.infer<typeof RuleDraftSchema>;
 export type RuleGroupDraft = z.infer<typeof RuleGroupDraftSchema>;
@@ -97,6 +112,55 @@ export class ExpertiseRuleDraftService {
     const known = new Set(input.groups.map((group) => group.id));
     const groupId = draft.groupId && known.has(draft.groupId) ? draft.groupId : null;
     return { ...draft, groupId, newGroup: groupId ? null : draft.newGroup };
+  };
+
+  /**
+   * Judges the direction of the rules the page asked about and writes it. The caller names the
+   * batch so it decides what is asked and never sends a rule twice; of those ids, only active
+   * rules on this reviewer's page that still have no direction are judged, and ids the model
+   * returns outside the batch are dropped, so a slip can only touch rules this reviewer can see.
+   */
+  judgeDirections = async (lessonIds: string[]): Promise<{ judged: number }> => {
+    const model = new ExpertiseModel(this.db, this.userId, this.workspaceId);
+    const groups = await model.listRules();
+    const asked = new Set(lessonIds);
+    const batch = groups
+      .flatMap((group) => group.rules)
+      .filter((rule) => asked.has(rule.id) && rule.status === 'active' && !rule.direction)
+      .slice(0, RULE_DIRECTION_BATCH);
+    if (batch.length === 0) return { judged: 0 };
+
+    const modelConfig = await resolveExpertiseModelConfig(this.db, this.userId);
+    const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
+    const { rules } = RuleDirectionsSchema.parse(
+      await ai.generateObject(
+        {
+          ...chainExpertiseRuleDirection({
+            rules: batch.map((rule) => ({ id: rule.id, title: rule.title })),
+          }),
+          ...modelConfig,
+          schema: EXPERTISE_RULE_DIRECTION_JSON_SCHEMA,
+        },
+        {
+          metadata: { trigger: RequestTrigger.Expertise },
+          tracing: {
+            promptVersion: EXPERTISE_RULE_DIRECTION_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.ExpertiseRuleDirection,
+            schemaName: EXPERTISE_RULE_DIRECTION_JSON_SCHEMA.name,
+          },
+        },
+      ),
+    );
+
+    // First answer per id wins; ids outside the batch are dropped.
+    const judgedById = new Map<string, (typeof rules)[number]>();
+    for (const rule of rules) {
+      if (batch.some(({ id }) => id === rule.id) && !judgedById.has(rule.id))
+        judgedById.set(rule.id, rule);
+    }
+    const judged = [...judgedById.values()];
+    await model.fillLessonDirections(judged);
+    return { judged: judged.length };
   };
 
   draftRuleGroup = async (input: { brief: string }): Promise<RuleGroupDraft> => {

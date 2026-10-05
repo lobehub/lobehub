@@ -28,14 +28,14 @@ packages:
   - apps/workbench
 
 minimumReleaseAgeExclude:
-  - '@auv-js/api-client@0.0.22'
-  - '@auv-js/cli-darwin-arm64@0.0.22'
-  - '@auv-js/cli-darwin-x64@0.0.22'
-  - '@auv-js/cli-linux-arm64-gnu@0.0.22'
-  - '@auv-js/cli-linux-x64-gnu@0.0.22'
-  - '@auv-js/cli-win32-x64-msvc@0.0.22'
-  - '@auv-js/cli@0.0.22'
-  - '@auv-js/sdk@0.0.22'
+  - '@auv-js/api-client@0.0.25'
+  - '@auv-js/cli-darwin-arm64@0.0.25'
+  - '@auv-js/cli-darwin-x64@0.0.25'
+  - '@auv-js/cli-linux-arm64-gnu@0.0.25'
+  - '@auv-js/cli-linux-x64-gnu@0.0.25'
+  - '@auv-js/cli-win32-x64-msvc@0.0.25'
+  - '@auv-js/cli@0.0.25'
+  - '@auv-js/sdk@0.0.25'
   - '@lobehub/*'
 
 # Build scripts run one at a time. Several peer-variant copies of
@@ -78,7 +78,7 @@ overrides:
   stylelint-config-clean-order: 7.0.0
   typescript: 6.0.3
   vitest: 5.0.0
-  'zod@^4': 4.5.4
+  'zod@^4': 4.6.5
 
 patchedDependencies:
   '@upstash/qstash': patches/@upstash__qstash.patch

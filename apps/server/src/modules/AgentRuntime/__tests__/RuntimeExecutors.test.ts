@@ -6752,7 +6752,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             arguments: JSON.stringify({
               agentId: 'target-agent-id',
               instruction: 'Do something',
-              runAsTask: true,
             }),
             id: 'tool-call-1',
             identifier: 'lobe-agent-management',
@@ -6813,7 +6812,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             arguments: JSON.stringify({
               agentId: 'target-agent-id',
               instruction: 'Do something useful',
-              runAsTask: true,
             }),
             id: 'tool-call-1',
             identifier: 'lobe-agent-management',

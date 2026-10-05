@@ -16,11 +16,12 @@ import { useTranslation } from 'react-i18next';
 interface RenameModalContentProps {
   defaultValue: string;
   description?: string;
+  maxLength?: number;
   onSave: (newTitle: string) => void | Promise<void>;
 }
 
 const RenameModalContent = memo<RenameModalContentProps>(
-  ({ defaultValue, description, onSave }) => {
+  ({ defaultValue, description, maxLength, onSave }) => {
     const { t: tCommon } = useTranslation('common');
     const { close } = useModalContext();
     const [value, setValue] = useState(defaultValue);
@@ -45,6 +46,9 @@ const RenameModalContent = memo<RenameModalContentProps>(
       try {
         await onSave(next);
         close();
+      } catch {
+        // A rejected save keeps the dialog open so the typed title can be
+        // retried; `onSave` owns reporting the failure.
       } finally {
         setLoading(false);
       }
@@ -59,6 +63,7 @@ const RenameModalContent = memo<RenameModalContentProps>(
         ) : null}
         <Input
           autoFocus
+          maxLength={maxLength}
           ref={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -82,6 +87,7 @@ RenameModalContent.displayName = 'RenameModalContent';
 export interface OpenRenameModalProps {
   defaultValue: string;
   description?: string;
+  maxLength?: number;
   onSave: (newTitle: string) => void | Promise<void>;
   title?: string;
 }
@@ -89,12 +95,18 @@ export interface OpenRenameModalProps {
 export const openRenameModal = ({
   defaultValue,
   description,
+  maxLength,
   onSave,
   title,
 }: OpenRenameModalProps): ModalInstance =>
   createModal({
     content: (
-      <RenameModalContent defaultValue={defaultValue} description={description} onSave={onSave} />
+      <RenameModalContent
+        defaultValue={defaultValue}
+        description={description}
+        maxLength={maxLength}
+        onSave={onSave}
+      />
     ),
     footer: null,
     maskClosable: true,
