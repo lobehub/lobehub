@@ -7,10 +7,13 @@ import type {
   TerminalSessionStatus,
 } from '../types';
 import type {
+  DocumentChannel,
+  DocumentChannelHandler,
   GatewayMuxClientEvents,
   GatewayMuxClientOptions,
   GatewayMuxStatus,
   MuxClientMessage,
+  MuxDocServerMessage,
   MuxOperationMessage,
   MuxServerMessage,
   MuxToolResultMessage,
@@ -372,6 +375,7 @@ export class GatewayMuxClient {
   private browserListenersInstalled = false;
 
   private readonly subscriptions = new Map<string, Set<OperationSubscriptionImpl>>();
+  private readonly documentChannels = new Map<string, DocumentChannelHandler>();
   private toolResultQueue: Array<{
     at: number;
     message: MuxToolResultMessage;
@@ -474,6 +478,34 @@ export class GatewayMuxClient {
     return subscription;
   }
 
+  /**
+   * Join a page collaboration room over this socket. One channel per
+   * document; the handler re-subscribes from `onReady` after every reconnect.
+   */
+  openDocument(documentId: string, handler: DocumentChannelHandler): DocumentChannel {
+    this.clearIdleClose();
+    this.documentChannels.set(documentId, handler);
+
+    if (this.isReady()) {
+      queueMicrotask(() => {
+        if (this.documentChannels.get(documentId) === handler) handler.onReady();
+      });
+    } else {
+      this.connect().catch(() => {});
+    }
+
+    return {
+      close: () => {
+        if (this.documentChannels.get(documentId) !== handler) return;
+        this.documentChannels.delete(documentId);
+        this.sendMessage({ documentId, type: 'doc_unsubscribe' });
+        if (this.isIdle()) this.scheduleIdleClose();
+      },
+      isReady: () => this.isReady(),
+      send: (message) => this.sendMessage(message),
+    };
+  }
+
   // ─── Subscription callbacks (internal) ───
 
   /** @internal */
@@ -494,7 +526,12 @@ export class GatewayMuxClient {
 
   /** Nothing subscribed, nobody awaiting `connect()`, and not asked to stay up. */
   private isIdle(): boolean {
-    return !this.keepAlive && this.subscriptions.size === 0 && this.connectWaiters.length === 0;
+    return (
+      !this.keepAlive &&
+      this.subscriptions.size === 0 &&
+      this.documentChannels.size === 0 &&
+      this.connectWaiters.length === 0
+    );
   }
 
   /**
@@ -630,6 +667,7 @@ export class GatewayMuxClient {
           for (const subscription of set) this.sendSubscribe(subscription);
         }
         this.flushToolResults();
+        for (const handler of this.documentChannels.values()) handler.onReady();
         this.listeners.emit('connected');
         this.resolveWaiters();
         break;
@@ -656,7 +694,12 @@ export class GatewayMuxClient {
       }
 
       default: {
-        this.route(message);
+        if (message.type.startsWith('doc_')) {
+          const doc = message as MuxDocServerMessage;
+          this.documentChannels.get(doc.documentId)?.onMessage(doc);
+          break;
+        }
+        this.route(message as MuxOperationMessage);
       }
     }
   };
@@ -862,6 +905,7 @@ export class GatewayMuxClient {
     if (this._status === status) return;
     this._status = status;
     this.listeners.emit('status_changed', status);
+    for (const handler of this.documentChannels.values()) handler.onStatus?.(status);
   }
 
   private broadcastStatus(status: ConnectionStatus): void {

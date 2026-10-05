@@ -81,4 +81,5 @@ overrides:
   'zod@^4': 4.6.5
 
 patchedDependencies:
+  '@lobehub/editor@4.29.0': patches/@lobehub__editor.patch
   '@upstash/qstash': patches/@upstash__qstash.patch

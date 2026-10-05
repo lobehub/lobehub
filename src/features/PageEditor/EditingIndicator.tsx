@@ -3,7 +3,7 @@
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Spin, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { PencilIcon } from 'lucide-react';
+import { CloudOffIcon, PencilIcon } from 'lucide-react';
 import { type CSSProperties, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,8 +41,20 @@ const EditingIndicator = memo(() => {
     documentId ? editorSelectors.saveBlockedByLock(documentId)(s) : false,
   );
   const holder = useAuthorInfo(lockHolderId ?? undefined);
+  const collabStatus = usePageEditorStore((s) => s.collab?.status);
 
-  if (!isWorkspacePage) return null;
+  if (collabStatus === 'connecting' || collabStatus === 'offline') {
+    const offline = collabStatus === 'offline';
+    return (
+      <Flexbox horizontal align={'center'} gap={4} style={{ color: cssVar.colorTextTertiary }}>
+        {offline ? <Icon icon={CloudOffIcon} size={14} /> : <Spin size="small" />}
+        <Text ellipsis style={labelStyle}>
+          {t(offline ? 'pageEditor.collab.status.offline' : 'pageEditor.collab.status.connecting')}
+        </Text>
+      </Flexbox>
+    );
+  }
+  if (collabStatus || !isWorkspacePage) return null;
 
   const locked = isLockedByOther || isLockedBySelf || saveBlockedByLock;
 

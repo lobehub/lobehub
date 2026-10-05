@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
+import { documentAccess, documentProjection } from './handlers/documentCollab';
 import { execAgent } from './handlers/execAgent';
 import { finalizeAbandoned } from './handlers/finalizeAbandoned';
 import { gatewayCallback } from './handlers/gatewayCallback';
@@ -41,6 +42,9 @@ app.get('/run', runStepHealth);
 
 // POST /api/agent/tool-result — gateway-side tool result LPUSH'd to Redis
 app.post('/tool-result', serviceTokenAuth(), toolResult);
+
+app.get('/document-access', serviceTokenAuth(), documentAccess);
+app.post('/document-projection', serviceTokenAuth(), documentProjection);
 
 // POST /api/agent/finalize-abandoned — watchdog reverse-trigger finalize
 app.post('/finalize-abandoned', serviceTokenAuth(), finalizeAbandoned);

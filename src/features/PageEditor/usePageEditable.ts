@@ -38,6 +38,16 @@ export const usePageEditable = (): boolean => {
     isWorkspacePage && documentId ? documentId : undefined,
   );
 
+  const collab = usePageEditorStore((s) => s.collab);
+  if (collab) {
+    return (
+      hasEditPermission &&
+      canEditResource &&
+      collab.access === 'edit' &&
+      collab.status !== 'connecting'
+    );
+  }
+
   return (
     hasEditPermission && canEditResource && !isLockedByOther && !pendingLock && !saveBlockedByLock
   );

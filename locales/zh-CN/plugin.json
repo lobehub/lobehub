@@ -385,6 +385,7 @@
   "builtins.lobe-notebook.apiName.getDocument": "获取文档",
   "builtins.lobe-notebook.apiName.updateDocument": "更新文档",
   "builtins.lobe-notebook.title": "笔记本",
+  "builtins.lobe-page-agent.apiName.bash": "处理页面",
   "builtins.lobe-page-agent.apiName.batchUpdate": "批量更新节点",
   "builtins.lobe-page-agent.apiName.compareSnapshots": "比较快照",
   "builtins.lobe-page-agent.apiName.convertToList": "转换为列表",

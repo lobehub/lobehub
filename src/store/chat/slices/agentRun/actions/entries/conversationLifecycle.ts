@@ -101,11 +101,12 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { snapshotAgentModel, snapshotAgentReasoning } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { deviceSelectors, getDeviceStoreState } from '@/store/device';
+import { useDocumentStore } from '@/store/document';
+import { waitForPageSynced } from '@/store/document/collabRegistry';
 import { getElectronStoreState } from '@/store/electron';
 import { getFileStoreState } from '@/store/file/store';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 import { type StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -192,6 +193,8 @@ interface OptimisticTopicPlaceholder {
 type Setter = StoreSetter<ChatStore>;
 export const conversationLifecycle = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new ConversationLifecycleActionImpl(set, get, _api);
+
+const PAGE_SYNC_WAIT_MS = 3000;
 
 const isAbortError = (error: unknown, abortController?: AbortController) =>
   !!abortController?.signal.aborted ||
@@ -487,7 +490,11 @@ export class ConversationLifecycleActionImpl {
       ),
       getElectronStoreState().gatewayDeviceInfo?.deviceId,
     );
-    const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
+    // Page tools only run on the server runtime, so a page conversation ignores
+    // the user's Gateway Mode opt-out whenever a gateway exists.
+    const isGatewayMode =
+      this.#get().isGatewayModeEnabled(agentId) ||
+      (context.scope === 'page' && this.#get().isGatewayAvailable());
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
     // unchanged when it is available. Recover the provider when gateway mode is
     // off so desktop can still spawn locally and non-desktop (Android/web) still
@@ -569,22 +576,21 @@ export class ConversationLifecycleActionImpl {
     const hasMentionedAgents =
       !context.groupId && !directMentionRoute && mentionedAgents.length > 0;
 
-    // Page-scoped conversations: the page editor runtime tracks the currently
-    // open document. Inject its id at send time so the agent-runtime context
-    // (and downstream server-side PageAgent tool calls, which only receive that
-    // context) is scoped to the open document. Without this the server runtime
-    // throws "received a tool call without documentId in context".
-    //
-    // This fallback is only authoritative when the active page's editor is
-    // mounted (StoreUpdater has called setCurrentDocId for it). Callers that
-    // create a document and send before that editor mounts (e.g. sendAsWrite)
-    // MUST pass the new documentId in context explicitly — the `!context.documentId`
-    // guard preserves it, so the singleton (still bound to the previous page) is
-    // not consulted and a stale id is never injected.
+    // Callers that create a document and send before its editor mounts (e.g.
+    // sendAsWrite) pass the new documentId explicitly; the active document is
+    // only a fallback, since it may still be the previous page.
     const activePageDocumentId =
       context.scope === 'page' && !context.documentId
-        ? pageAgentRuntime.getCurrentDocId()
+        ? (useDocumentStore.getState().activeDocumentId ?? undefined)
         : undefined;
+
+    // Room edits merge either way; this only warns that the agent's first read
+    // may miss what the user typed while offline.
+    const pageDocumentId = context.documentId ?? activePageDocumentId;
+    if (context.scope === 'page' && pageDocumentId) {
+      const synced = await waitForPageSynced(pageDocumentId, PAGE_SYNC_WAIT_MS);
+      if (!synced) toast.warning(t('pageEditor.collab.notSynced', { ns: 'file' }));
+    }
 
     // Whether this send has to create the topic. From here on this flag — NOT
     // `!operationContext.topicId` — is the "new topic" test: the conversation

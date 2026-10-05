@@ -3,11 +3,7 @@
 import { memo, useEffect, useRef } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
-import { hasMeaningfulEditorContent } from '@/libs/editor/hasMeaningfulEditorContent';
-import { documentHistoryQueueService } from '@/services/documentHistoryQueue';
-import { useDocumentStore } from '@/store/document';
 import { pageSelectors, usePageStore } from '@/store/page';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 
 import { type PublicState } from './store';
 import { usePageEditorStore, useStoreApi } from './store';
@@ -15,14 +11,12 @@ import { useDocumentLock } from './useDocumentLock';
 import { usePageDraft } from './usePageDraft';
 import { useResourceEvents } from './useResourceEvents';
 
-type PageAgentEditor = NonNullable<Parameters<typeof pageAgentRuntime.setEditor>[0]>;
-
 export interface StoreUpdaterProps extends Partial<PublicState> {
   pageId?: string;
 }
 
 /**
- * StoreUpdater syncs PageEditorStore props and connects to page agent runtime.
+ * StoreUpdater syncs PageEditorStore props.
  *
  * Note: Document content loading is handled by EditorCanvas via DocumentStore.
  * Title/emoji are consumed from PageEditorStore (set via setCurrentTitle/setCurrentEmoji).
@@ -38,6 +32,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     onTitleChange,
     onDelete,
     onBack,
+    onCollabReset,
     parentId,
     title,
     emoji,
@@ -45,11 +40,9 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const storeApi = useStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
 
-    const editor = usePageEditorStore((s) => s.editor);
     const initMeta = usePageEditorStore((s) => s.initMeta);
     const setDocumentId = usePageEditorStore((s) => s.setDocumentId);
     const syncMeta = usePageEditorStore((s) => s.syncMeta);
-    const pageAgentEditor = editor as unknown as PageAgentEditor | undefined;
     // Workspace pages are view-first; resolve once here so the lock + gating read
     // a single source of truth. Private-visibility pages are creator-only —
     // no other member can open them — so they stay outside the lock lifecycle
@@ -93,6 +86,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('onTitleChange', onTitleChange);
     useStoreUpdater('onDelete', onDelete);
     useStoreUpdater('onBack', onBack);
+    useStoreUpdater('onCollabReset', onCollabReset);
     useStoreUpdater('parentId', parentId);
 
     // Initialize meta (title/emoji) with dirty tracking once per page. Later
@@ -109,57 +103,6 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
       syncMeta(title, emoji);
     }, [pageId, title, emoji, initMeta, syncMeta]);
-
-    // Connect editor to page agent runtime
-    useEffect(() => {
-      if (pageAgentEditor) {
-        pageAgentRuntime.setEditor(pageAgentEditor);
-      }
-      return () => {
-        pageAgentRuntime.setEditor(null);
-      };
-    }, [pageAgentEditor]);
-
-    // Connect title handlers and document ID to page agent runtime
-    useEffect(() => {
-      const titleGetter = () => {
-        return storeApi.getState().title || '';
-      };
-
-      pageAgentRuntime.setCurrentDocId(pageId);
-      pageAgentRuntime.setTitleHandlers(storeApi.getState().setTitle, titleGetter);
-      pageAgentRuntime.setBeforeMutateHandler(() => {
-        const editor = storeApi.getState().editor;
-        const editorData = editor?.getDocument('json');
-
-        if (!hasMeaningfulEditorContent(editorData)) {
-          return;
-        }
-
-        documentHistoryQueueService.enqueueEditorSnapshot({
-          documentId: pageId,
-          editor,
-          // Forward the page lock owner so the holder's pre-mutation snapshot
-          // isn't rejected by its own lease (see saveDocumentHistory guard).
-          lockOwnerId: pageId
-            ? useDocumentStore.getState().documents[pageId]?.lockOwnerId
-            : undefined,
-        });
-      });
-      pageAgentRuntime.setAfterMutateHandler(async () => {
-        if (!pageId) return;
-
-        await useDocumentStore.getState().commitEditorMutation(pageId, { saveSource: 'llm_call' });
-      });
-
-      return () => {
-        pageAgentRuntime.setCurrentDocId(undefined);
-        pageAgentRuntime.setAfterMutateHandler(null);
-        pageAgentRuntime.setTitleHandlers(null, null);
-        pageAgentRuntime.setBeforeMutateHandler(null);
-        void documentHistoryQueueService.flush();
-      };
-    }, [pageId, storeApi]);
 
     return null;
   },

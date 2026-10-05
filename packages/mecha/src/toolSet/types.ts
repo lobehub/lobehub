@@ -72,6 +72,8 @@ export interface ToolRuleRequest {
     /** The model produces images natively, so the fallback tool is never offered. */
     hasImageOutput?: boolean;
   };
+  /** The page agent edits the open page through the conversation sandbox. */
+  pageScope?: boolean;
   /**
    * Plugin identifiers the runtime resolved beyond the agent's own (sub-agent,
    * group or page scope); enabled like pinned plugins in agent mode.

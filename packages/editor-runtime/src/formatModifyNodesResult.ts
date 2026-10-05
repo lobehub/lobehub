@@ -1,7 +1,7 @@
 import type { ModifyNodesRuntimeResult } from './types';
 
 /**
- * Tool message for a page-agent `modifyNodes` call. Failed operations are listed
+ * Tool message for the page-agent edits applied from /doc.xml. Failed operations are listed
  * with their reason so the model retries them instead of assuming they applied;
  * one that failed after part of it was written is flagged so a retry does not
  * duplicate the applied part.
@@ -44,7 +44,7 @@ export const formatModifyNodesResult = ({
     }`,
     ...failures,
     hasPartial
-      ? 'Call getPageContent to get the current node ids and content before retrying; re-send only the parts of a partially applied operation that are still missing.'
-      : 'Call getPageContent to get the current node ids before retrying the failed operations.',
+      ? 'Re-read /doc.xml to get the current node ids and content before retrying; re-send only the parts of a partially applied edit that are still missing.'
+      : 'Re-read /doc.xml to get the current node ids before retrying the failed edits.',
   ].join('\n');
 };

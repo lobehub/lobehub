@@ -5,12 +5,12 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
-    "./client/executor": "./src/client/executor/index.ts",
     "./executionRuntime": "./src/ExecutionRuntime/index.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/editor-runtime": "workspace:*"
+    "@lobechat/editor-runtime": "workspace:*",
+    "@lobechat/shared-tool-ui": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

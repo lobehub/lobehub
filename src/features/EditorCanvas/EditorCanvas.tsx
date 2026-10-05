@@ -55,6 +55,12 @@ export interface EditorCanvasProps {
   className?: string;
 
   /**
+   * The body comes from a live collaboration room instead of the fetched row
+   * (documentId mode only).
+   */
+  collab?: boolean;
+
+  /**
    * Reload an already-mounted editor when an authoritative external content
    * revision changes. Keep this stable for local autosave echoes and unchanged
    * refetches so unsaved input is never replaced by prop identity churn.
@@ -203,12 +209,12 @@ export interface EditorCanvasWithEditorProps extends EditorCanvasProps {
  * - AutoSave hint display (documentId mode)
  */
 export const EditorCanvas = memo<EditorCanvasWithEditorProps>(
-  ({ editor, documentId, editorData, entityId, ...props }) => {
+  ({ editor, documentId, editorData, entityId, collab, ...props }) => {
     // documentId mode - fetch and render with loading/error states
     if (documentId) {
       return (
         <SafeBoundary alertTitle="Editor Error" variant="alert">
-          <DocumentIdMode documentId={documentId} editor={editor} {...props} />
+          <DocumentIdMode collab={collab} documentId={documentId} editor={editor} {...props} />
         </SafeBoundary>
       );
     }

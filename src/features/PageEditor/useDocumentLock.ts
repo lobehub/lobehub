@@ -11,6 +11,7 @@ import { documentSWRKeys } from '@/services/document/swrKeys';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
+import { usePageCollabEnabled } from './collab/usePageCollab';
 import { usePageEditorStore } from './store';
 import { usePageLockedByOther } from './usePageLockedByOther';
 
@@ -72,7 +73,11 @@ export const useDocumentLock = () => {
     'document',
     isWorkspacePage && documentId ? documentId : undefined,
   );
-  const workspacePage = Boolean(documentId && canEdit && canEditResource && isWorkspacePage);
+  // A collaboration room merges concurrent edits, so it never takes the lock.
+  const collabEnabled = usePageCollabEnabled();
+  const workspacePage = Boolean(
+    documentId && canEdit && canEditResource && isWorkspacePage && !collabEnabled,
+  );
   const ownerId = useMemo(
     () => (documentId ? createLockOwnerId(documentId) : undefined),
     [documentId],

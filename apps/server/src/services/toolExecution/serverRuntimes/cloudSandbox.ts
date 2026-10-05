@@ -13,6 +13,7 @@ import {
   SHARE_VISITOR_LH_BLOCKED_MESSAGE,
 } from '@/server/services/toolExecution/preprocessLhCommand';
 
+import { pageSandboxWrapper } from './pageSandboxSync';
 import { resolveContentWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
 
@@ -141,14 +142,15 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
 
     let workspaceIdPromise: Promise<string | undefined> | undefined;
 
-    return new CloudSandboxExecutionRuntime(
-      withLhPreprocessing(sandboxService, {
-        isShareVisitor: Boolean(context.agentShareVisitor),
-        userId: context.userId,
-        workspaceId: () => (workspaceIdPromise ??= resolveContentWorkspaceId(context)),
-        workspaceIdHint: context.workspaceId,
-      }),
-    );
+    const wrapPage = pageSandboxWrapper(context);
+    const preprocessed = withLhPreprocessing(sandboxService, {
+      isShareVisitor: Boolean(context.agentShareVisitor),
+      userId: context.userId,
+      workspaceId: () => (workspaceIdPromise ??= resolveContentWorkspaceId(context)),
+      workspaceIdHint: context.workspaceId,
+    });
+
+    return new CloudSandboxExecutionRuntime(wrapPage ? wrapPage(preprocessed) : preprocessed);
   },
   identifier: CloudSandboxIdentifier,
 };

@@ -44,8 +44,55 @@ export interface MuxUserInputMessage {
   type: 'user_input';
 }
 
+export type MuxDocClientMessage =
+  | { documentId: string; epoch?: string; stateVector?: string; type: 'doc_subscribe' }
+  | { documentId: string; type: 'doc_unsubscribe' }
+  | { documentId: string; seq: number; type: 'doc_update'; update: string }
+  | {
+      clientID: number;
+      documentId: string;
+      state: Record<string, unknown> | null;
+      type: 'doc_awareness';
+    };
+
+export interface MuxDocAwarenessEntry {
+  clientID: number;
+  state: Record<string, unknown> | null;
+}
+
+export type MuxDocServerMessage =
+  | {
+      access: 'edit' | 'view';
+      awareness?: MuxDocAwarenessEntry[];
+      bootstrap: boolean;
+      bootstrapped: boolean;
+      documentId: string;
+      epoch: string;
+      reset: boolean;
+      type: 'doc_synced';
+      update: string;
+    }
+  | { documentId: string; type: 'doc_update'; update: string }
+  | { documentId: string; seq: number; type: 'doc_ack' }
+  | ({ documentId: string; type: 'doc_awareness' } & MuxDocAwarenessEntry)
+  | { code: string; documentId: string; message: string; type: 'doc_error' };
+
+export interface DocumentChannelHandler {
+  onMessage: (message: MuxDocServerMessage) => void;
+  /** The socket (re)reached `ready`: the channel must subscribe again. */
+  onReady: () => void;
+  onStatus?: (status: GatewayMuxStatus) => void;
+}
+
+export interface DocumentChannel {
+  close: () => void;
+  isReady: () => boolean;
+  send: (message: MuxDocClientMessage) => boolean;
+}
+
 /** See `ClientMessage` in ../types for why `interrupt` is not sendable here. */
 export type MuxClientMessage =
+  | MuxDocClientMessage
   | MuxHeartbeatMessage
   | MuxSubscribeMessage
   | MuxToolConfirmationMessage
@@ -152,6 +199,7 @@ export interface MuxErrorMessage {
 }
 
 export type MuxServerMessage =
+  | MuxDocServerMessage
   | MuxAgentEventMessage
   | MuxErrorMessage
   | MuxHeartbeatAckMessage

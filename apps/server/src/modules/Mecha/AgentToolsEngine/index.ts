@@ -171,6 +171,7 @@ export const createServerAgentToolsEngine = (
       canUseFC: context.isModelSupportToolUse(model, provider),
       hasImageOutput: !!modelAbilities?.imageOutput,
     },
+    pageScope: manifestContext?.scope === 'page',
     useApplicationBuiltinSearchTool,
   });
 

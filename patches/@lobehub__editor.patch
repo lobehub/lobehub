@@ -1,0 +1,45 @@
+diff --git a/es/headless.js b/es/headless.js
+--- a/es/headless.js
++++ b/es/headless.js
+@@ -7630,7 +7630,7 @@
+ 	get height() {
+ 		return this.__height;
+ 	}
+-	constructor(opt) {
++	constructor(opt = {}) {
+ 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key);
+ 		this.__loading = true;
+ 		this.__status = "uploaded";
+@@ -7746,7 +7746,7 @@
+ 	static getType() {
+ 		return "image";
+ 	}
+-	constructor(opt) {
++	constructor(opt = {}) {
+ 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key);
+ 		this.__loading = true;
+ 		this.__status = "uploaded";
+diff --git a/es/plugins/image/node/block-image-node.js b/es/plugins/image/node/block-image-node.js
+--- a/es/plugins/image/node/block-image-node.js
++++ b/es/plugins/image/node/block-image-node.js
+@@ -35,7 +35,7 @@
+ 	get height() {
+ 		return this.__height;
+ 	}
+-	constructor(opt) {
++	constructor(opt = {}) {
+ 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key);
+ 		this.__loading = true;
+ 		this.__status = "uploaded";
+diff --git a/es/plugins/image/node/image-node.js b/es/plugins/image/node/image-node.js
+--- a/es/plugins/image/node/image-node.js
++++ b/es/plugins/image/node/image-node.js
+@@ -11,7 +11,7 @@
+ 	static getType() {
+ 		return "image";
+ 	}
+-	constructor(opt) {
++	constructor(opt = {}) {
+ 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key);
+ 		this.__loading = true;
+ 		this.__status = "uploaded";

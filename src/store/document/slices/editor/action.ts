@@ -97,6 +97,24 @@ export class EditorActionImpl {
       const markdown = this.getPersistedMarkdown(id, editorMarkdown);
       const editorData = editor.getDocument('json');
 
+      if (doc.collab) {
+        internal_dispatchDocument(
+          {
+            id,
+            type: 'updateDocument',
+            value: {
+              content: markdown,
+              editorData,
+              isDirty: false,
+              lastSavedContent: markdown,
+              lastSavedEditorData: editorData,
+            },
+          },
+          'handleContentChange/collab',
+        );
+        return false;
+      }
+
       const markdownChanged = markdown !== doc.lastSavedContent;
       const editorDataChanged = !isEqual(editorData, doc.lastSavedEditorData);
       const contentChanged = markdownChanged || editorDataChanged;
@@ -188,6 +206,17 @@ export class EditorActionImpl {
     );
   };
 
+  setDocumentCollab = (documentId: string, collab: boolean): void => {
+    const { documents, internal_dispatchDocument } = this.#get();
+    if (!documents[documentId] || documents[documentId].collab === collab) return;
+
+    if (collab) this.#get().cancelDebouncedSave(documentId);
+    internal_dispatchDocument(
+      { id: documentId, type: 'updateDocument', value: { collab, isDirty: false } },
+      n('setDocumentCollab'),
+    );
+  };
+
   markDirty = (documentId: string): void => {
     const { documents, internal_dispatchDocument } = this.#get();
     if (!documents[documentId]) return;
@@ -203,6 +232,15 @@ export class EditorActionImpl {
     const updatedAt = row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt);
     if (doc.lastUpdatedTime && updatedAt.getTime() <= doc.lastUpdatedTime.getTime()) {
       return 'unchanged';
+    }
+
+    // The live room owns the body; a projected row can lag behind it.
+    if (doc.collab) {
+      internal_dispatchDocument(
+        { id: documentId, type: 'updateDocument', value: { lastUpdatedTime: updatedAt } },
+        n('reconcileRemote/collab'),
+      );
+      return 'rebased';
     }
 
     const content = row.content ?? '';
@@ -341,6 +379,7 @@ export class EditorActionImpl {
 
     // Skip save if neither document content nor metadata changed
     if (!doc.isDirty && !hasMetadataChanges) return;
+    if (doc.collab && !hasMetadataChanges) return;
 
     // Update save status
     internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'saving' } });
@@ -349,7 +388,7 @@ export class EditorActionImpl {
       const currentContent = doc.content ?? '';
       const currentEditorData = doc.editorData;
 
-      if (!isValidEditorData(currentEditorData)) {
+      if (!doc.collab && !isValidEditorData(currentEditorData)) {
         console.warn('[DocumentStore] Refusing to save invalid editorData:', currentEditorData);
         internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'idle' } });
         return;
@@ -360,8 +399,9 @@ export class EditorActionImpl {
       // in DiffAllToolbar, which mutates editor state before calling performSave.
       const requestSave = (expectedUpdatedAt?: Date) =>
         documentService.updateDocument({
-          content: currentContent,
-          editorData: JSON.stringify(currentEditorData),
+          ...(doc.collab
+            ? {}
+            : { content: currentContent, editorData: JSON.stringify(currentEditorData) }),
           ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
           id,
           lockOwnerId: doc.lockOwnerId,

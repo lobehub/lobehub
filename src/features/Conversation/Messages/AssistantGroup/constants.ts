@@ -161,6 +161,7 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
   updateAgent: 'workflow.toolDisplayName.updateAgent',
 
   // Page agent
+  bash: 'workflow.toolDisplayName.runCommand',
   editTitle: 'workflow.toolDisplayName.editTitle',
   getPageContent: 'workflow.toolDisplayName.getPageContent',
   initPage: 'workflow.toolDisplayName.initPage',

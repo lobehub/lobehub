@@ -38,6 +38,7 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     editor,
     documentId,
     autoSave = true,
+    collab = false,
     sourceType = 'page',
     topicId,
     onContentChange,
@@ -70,11 +71,15 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
 
     const handleEditorInit = useCallback(
       (editorInstance: IEditor) => {
+        if (collab) {
+          onInit?.(editorInstance);
+          return;
+        }
         void onEditorInit(editorInstance).finally(() => {
           onInit?.(editorInstance);
         });
       },
-      [onEditorInit, onInit],
+      [collab, onEditorInit, onInit],
     );
 
     // Use SWR hook for document fetching (auto-initializes via onSuccess in DocumentStore)
@@ -139,6 +144,7 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     useEffect(() => {
       // Avoid duplicate calls: only invoke when documentId changes and editor is initialized
       if (
+        !collab &&
         editor &&
         isEditorInitialized &&
         !isLoading &&
@@ -161,6 +167,7 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
         });
       }
     }, [
+      collab,
       documentId,
       editor,
       isEditorInitialized,
@@ -171,6 +178,7 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     ]);
 
     useEffect(() => {
+      if (collab) return;
       if (!editor || !isEditorInitialized || isLoading || !remoteDocumentVersion) return;
       if (initializedDocIdRef.current !== documentId) return;
       if (hydratedVersionRef.current === remoteDocumentVersion) return;
@@ -189,6 +197,7 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
         });
       });
     }, [
+      collab,
       documentId,
       editor,
       isDirty,

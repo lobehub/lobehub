@@ -62,7 +62,6 @@ import { getElectronStoreState } from '@/store/electron';
 import { getGoalStoreState } from '@/store/goal';
 import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getTaskStoreState } from '@/store/task';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 import { type StoreSetter } from '@/store/types';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
@@ -294,10 +293,7 @@ export class StreamingExecutorActionImpl {
     });
 
     const { enabledToolIds, enabledManifests, tools } = composeEnabledTools({
-      context: {
-        isPageEditorReady: pageAgentRuntime.isReady(),
-        scope,
-      },
+      context: { scope },
       injectedManifests: initialContext?.initialContext?.injectedManifests,
       toolsDetailed,
     });
@@ -386,35 +382,7 @@ export class StreamingExecutorActionImpl {
       },
     };
 
-    // Build initialContext for page editor if lobe-page-agent is enabled
     let runtimeInitialContext: RuntimeInitialContext | undefined;
-
-    if (scope === 'page' && enabledToolIds.includes(PageAgentIdentifier)) {
-      try {
-        // Get page content context from page agent runtime
-        const pageContentContext = pageAgentRuntime.getPageContentContext('both');
-
-        runtimeInitialContext = {
-          pageEditor: {
-            markdown: pageContentContext.markdown || '',
-            xml: pageContentContext.xml || '',
-            metadata: {
-              title: pageContentContext.metadata.title,
-              charCount: pageContentContext.metadata.charCount,
-              lineCount: pageContentContext.metadata.lineCount,
-            },
-          },
-        };
-        log(
-          '[internal_createAgentState] Page Agent detected, injected initialContext.pageEditor with title: %s',
-          pageContentContext.metadata.title,
-        );
-      } catch (error) {
-        // Page agent runtime may not be initialized (e.g., editor not set)
-        // This is expected in some scenarios, so we just log and continue
-        log('[internal_createAgentState] Failed to get page content context: %o', error);
-      }
-    }
 
     const viewedTask = operation?.context.viewedTask;
     if (viewedTask) {
@@ -788,19 +756,6 @@ export class StreamingExecutorActionImpl {
         hasQueuedMessages,
         todos,
       });
-
-      // If page agent is enabled, get the latest XML for stepPageEditor
-      if (scope === 'page' && nextContext.initialContext?.pageEditor) {
-        try {
-          const pageContentContext = pageAgentRuntime.getPageContentContext('xml');
-          stepContext.stepPageEditor = {
-            xml: pageContentContext.xml || '',
-          };
-        } catch (error) {
-          // Page agent runtime may not be available, ignore errors
-          log('[executeClientAgent] Failed to get page XML for step: %o', error);
-        }
-      }
 
       // Inject stepContext into the runtime context for this step
       nextContext = { ...nextContext, stepContext };

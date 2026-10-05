@@ -30,7 +30,7 @@ describe('formatModifyNodesResult', () => {
     expect(content).toMatchInlineSnapshot(`
       "Only 1/2 operations succeeded (1 modify, 1 insert requested). Failed operations were not applied:
       - Operation 1 (modify): node "zzzz" not found in the document
-      Call getPageContent to get the current node ids before retrying the failed operations."
+      Re-read /doc.xml to get the current node ids before retrying the failed edits."
     `);
   });
 
@@ -50,5 +50,7 @@ describe('formatModifyNodesResult', () => {
 
     expect(content).toContain('except those marked PARTIALLY APPLIED');
     expect(content).toContain('- Operation 1 (modify): PARTIALLY APPLIED');
+    expect(content).toContain('Re-read /doc.xml');
+    expect(content).not.toContain('getPageContent');
   });
 });

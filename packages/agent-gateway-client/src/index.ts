@@ -13,11 +13,16 @@ export {
 } from './mux/createOperationClient';
 export { GatewayMuxClient } from './mux/GatewayMuxClient';
 export type {
+  DocumentChannel,
+  DocumentChannelHandler,
   GatewayMuxClientEvents,
   GatewayMuxClientOptions,
   GatewayMuxStatus,
   MuxAgentEventMessage,
   MuxClientMessage,
+  MuxDocAwarenessEntry,
+  MuxDocClientMessage,
+  MuxDocServerMessage,
   MuxErrorMessage,
   MuxHeartbeatAckMessage,
   MuxHeartbeatMessage,

@@ -721,6 +721,11 @@ export class GatewayActionImpl {
     });
   };
 
+  isGatewayAvailable = (): boolean => {
+    const serverConfig = getGatewayServerConfig();
+    return !!serverConfig?.agentGatewayUrl && !!serverConfig.enableGatewayMode;
+  };
+
   isGatewayModeEnabled = (agentId?: string): boolean => {
     const serverConfig = getGatewayServerConfig();
     const agentState = getAgentStoreState();

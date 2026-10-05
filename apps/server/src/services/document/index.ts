@@ -774,7 +774,11 @@ export class DocumentService {
       const contentChanged =
         historyAppended ||
         (params.content !== undefined && params.content !== currentDocument.content);
-      if (contentChanged && this.isCollaborativeDocument(currentDocument)) {
+      if (
+        contentChanged &&
+        !params.bypassEditLock &&
+        this.isCollaborativeDocument(currentDocument)
+      ) {
         const canWrite = await this.editLockService.canWrite('document', id, params.lockOwnerId);
         if (!canWrite) {
           throw new TRPCError({

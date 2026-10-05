@@ -8,7 +8,7 @@ export interface SnapshotToEventsOptions {
   targetChunkChars?: number;
 }
 
-const CLIENT_TOOL_IDENTIFIERS = new Set(['lobe-local-system', 'lobe-page-agent']);
+const CLIENT_TOOL_IDENTIFIERS = new Set(['lobe-local-system']);
 
 const isClientTool = (identifier: string) => CLIENT_TOOL_IDENTIFIERS.has(identifier);
 

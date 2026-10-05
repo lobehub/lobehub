@@ -56,6 +56,8 @@ export type DatabaseLike = LobeChatDatabase | Transaction;
 
 export interface UpdateDocumentParams {
   breakAutosaveWindow?: boolean;
+  /** Projection of a live collaboration room: the CRDT already merged concurrent edits. */
+  bypassEditLock?: boolean;
   content?: string;
   editorData?: Record<string, any>;
   /** See `updateDocumentInputSchema.expectedUpdatedAt` — atomic version predicate. */

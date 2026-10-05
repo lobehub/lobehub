@@ -14,7 +14,6 @@ import { messageService } from '@/services/message';
 import { workService } from '@/services/work';
 import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
@@ -1168,11 +1167,7 @@ describe('StreamingExecutor actions', () => {
 
       // Mock internal_createAgentState to include initialContext
       const mockInitialContext = {
-        pageEditor: {
-          markdown: '# Test Document',
-          xml: '<root><h1>Test</h1></root>',
-          metadata: { title: 'Test Doc', charCount: 15, lineCount: 1 },
-        },
+        selectedSkills: [{ identifier: 'user_memory', name: 'User Memory' }],
       };
 
       const originalCreateAgentState = result.current.internal_createAgentState;
@@ -1249,11 +1244,7 @@ describe('StreamingExecutor actions', () => {
       });
 
       const mockInitialContext = {
-        pageEditor: {
-          markdown: '# Preserved Context',
-          xml: '<doc>preserved</doc>',
-          metadata: { title: 'Preserved', charCount: 20, lineCount: 1 },
-        },
+        selectedTools: [{ identifier: 'lobe-notebook', name: 'Notebook' }],
       };
 
       const originalCreateAgentState = result.current.internal_createAgentState;
@@ -1287,7 +1278,7 @@ describe('StreamingExecutor actions', () => {
       streamSpy.mockRestore();
     });
 
-    it('should merge provided initialContext with runtime page editor context', () => {
+    it('should not put the page document into initialContext in page scope', () => {
       act(() => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
@@ -1314,12 +1305,6 @@ describe('StreamingExecutor actions', () => {
           tools: [],
         }),
       } as any);
-      vi.spyOn(pageAgentRuntime, 'isReady').mockReturnValue(true);
-      vi.spyOn(pageAgentRuntime, 'getPageContentContext').mockReturnValue({
-        markdown: '# Test Document',
-        xml: '<root><h1>Test</h1></root>',
-        metadata: { title: 'Test Doc', charCount: 15, lineCount: 1 },
-      });
       const { operationId } = result.current.startOperation({
         context: {
           agentId: TEST_IDS.SESSION_ID,
@@ -1345,11 +1330,6 @@ describe('StreamingExecutor actions', () => {
       });
 
       expect(context.initialContext).toEqual({
-        pageEditor: {
-          markdown: '# Test Document',
-          xml: '<root><h1>Test</h1></root>',
-          metadata: { title: 'Test Doc', charCount: 15, lineCount: 1 },
-        },
         selectedSkills: [{ identifier: 'user_memory', name: 'User Memory' }],
         selectedTools: [{ identifier: 'lobe-notebook', name: 'Notebook' }],
       });
@@ -1397,55 +1377,6 @@ describe('StreamingExecutor actions', () => {
 
       expect(readFile?.description).toContain('base64');
       expect(localSystem?.systemRole).toContain('Image files are uploaded as visual tool results');
-    });
-
-    it('should not inject page editor context outside page scope', () => {
-      act(() => {
-        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-      const userMessage = {
-        id: TEST_IDS.USER_MESSAGE_ID,
-        role: 'user',
-        content: TEST_CONTENT.USER_MESSAGE,
-        sessionId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      } as UIChatMessage;
-
-      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
-        agentConfig: createMockAgentConfig(),
-        chatConfig: createMockChatConfig(),
-        isBuiltinAgent: false,
-        plugins: ['lobe-page-agent'],
-      });
-      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
-        generateToolsDetailed: vi.fn().mockReturnValue({
-          enabledManifests: [],
-          enabledToolIds: ['lobe-page-agent'],
-          tools: [],
-        }),
-      } as any);
-      const pageContextSpy = vi.spyOn(pageAgentRuntime, 'getPageContentContext');
-      const { operationId } = result.current.startOperation({
-        context: {
-          agentId: TEST_IDS.SESSION_ID,
-          scope: 'main',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        type: 'execAgentRuntime',
-      });
-
-      const { context } = result.current.internal_createAgentState({
-        messages: [userMessage],
-        parentMessageId: userMessage.id,
-        agentId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-        operationId,
-      });
-
-      expect(context.initialContext?.pageEditor).toBeUndefined();
-      expect(pageContextSpy).not.toHaveBeenCalled();
     });
 
     it('should merge selectedTools into generated tools when provided', () => {

@@ -20,6 +20,11 @@ export interface EditorContentState {
    */
   autoSave?: boolean;
   /**
+   * The body syncs through a live collaboration room, which persists it; local
+   * saves only carry metadata.
+   */
+  collab?: boolean;
+  /**
    * Document content (markdown)
    */
   content: string;
@@ -27,11 +32,11 @@ export interface EditorContentState {
    * Content format used by the editor persistence pipeline.
    */
   contentFormat?: DocumentContentFormat;
+
   /**
    * Editor JSON data (BlockNote format)
    */
   editorData: any;
-
   /**
    * Whether there are unsaved changes
    */
