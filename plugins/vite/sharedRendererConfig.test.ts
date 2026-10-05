@@ -129,6 +129,32 @@ describe('sharedManualChunks', () => {
     );
   });
 
+  it('keeps the whole antd locale graph in the ui-runtime chunk so it cannot form a cycle', () => {
+    const pnpm = '/repo/node_modules/.pnpm/antd@6.3.5/node_modules';
+    for (const id of [
+      `${pnpm}/antd/locale/zh_CN.js`,
+      `${pnpm}/antd/es/calendar/locale/zh_CN.js`,
+      `${pnpm}/antd/es/date-picker/locale/zh_CN.js`,
+      `${pnpm}/antd/es/time-picker/locale/zh_CN.js`,
+      '/repo/node_modules/@rc-component/pagination/es/locale/zh_CN.js',
+      '/repo/node_modules/@rc-component/picker/es/locale/zh_CN.js',
+    ]) {
+      expect(__testing.sharedManualChunks(id)).toBe('i18n-zh-CN-ui-runtime');
+    }
+    expect(
+      __testing.sharedManualChunks('/repo/node_modules/@rc-component/picker/es/locale/ar_EG.js'),
+    ).toBe('i18n-ar-ui-runtime');
+  });
+
+  it('leaves antd default en_US component locales with the antd vendor graph', () => {
+    expect(
+      __testing.sharedManualChunks('/repo/node_modules/antd/es/date-picker/locale/en_US.js'),
+    ).toBe(undefined);
+    expect(
+      __testing.sharedManualChunks('/repo/node_modules/@rc-component/picker/es/locale/common.js'),
+    ).toBe(undefined);
+  });
+
   it('keeps locale runtime helpers out of the default locale chunk', () => {
     expect(__testing.sharedManualChunks('/repo/packages/locales/src/resources.ts')).toBe(undefined);
     expect(__testing.sharedManualChunks('/repo/packages/locales/src/create.ts')).toBe(undefined);
