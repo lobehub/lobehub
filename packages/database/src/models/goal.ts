@@ -363,8 +363,8 @@ export class GoalModel {
           // Quiet future waits must not crowd stranded Goals out of the scan.
           // Unsettled owners still need recovery, even after submitting wait.
           sql`(COALESCE(${goals.config} #>> '{managerState,consumed}', 'false') <> 'true'
-            OR ${goals.config} #>> '{managerState,wait,until}' IS NULL
-            OR ${goals.config} #>> '{managerState,wait,wake,at}' IS NOT NULL
+            OR COALESCE(${goals.config} #>> '{managerState,wait,until}', '') = ''
+            OR COALESCE(${goals.config} #>> '{managerState,wait,wake,at}', '') <> ''
             OR (${goals.config} #>> '{managerState,wait,until}')::timestamptz <= NOW())`,
           sql`NOT EXISTS (
             SELECT 1 FROM ${goalNodes}
