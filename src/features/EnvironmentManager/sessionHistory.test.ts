@@ -6,7 +6,6 @@ const session = (overrides: Partial<any>): any => ({
   buildId: null,
   endedAt: null,
   endReason: null,
-  instanceId: 'inst-a',
   id: 1,
   instanceId: 'inst-a',
   instanceName: 'Lobehub Dev',

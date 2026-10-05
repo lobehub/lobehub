@@ -19,7 +19,7 @@ const mockDeviceClient = vi.hoisted(() => ({
 }));
 
 const mockSandboxStorageService = vi.hoisted(() => ({
-  getWorkspace: vi.fn(),
+  getStorage: vi.fn(),
   listFiles: vi.fn(),
 }));
 
@@ -423,7 +423,7 @@ describe('projectFileService', () => {
   it('marks sandbox directories with a trailing slash so the tree can nest them', async () => {
     const { projectFileService } = await import('./projectFile');
 
-    mockSandboxStorageService.getWorkspace.mockResolvedValue({ dir: '/mnt/workspace/ws-1' });
+    mockSandboxStorageService.getStorage.mockResolvedValue({ dir: '/mnt/workspace/ws-1' });
     // One flat recursive listing, the way the workspace API answers: every
     // path relative to the workspace root, directories with no trailing slash.
     mockSandboxStorageService.listFiles.mockResolvedValue({

@@ -159,7 +159,7 @@ class ProjectFileService {
     topicId?: string;
   }): Promise<ProjectFileIndexResult | undefined> {
     const [workspace, listing] = await Promise.all([
-      sandboxStorageService.getWorkspace(),
+      sandboxStorageService.getStorage(),
       // The topic still travels: it names the warm session the read can go
       // through, and is what lets a listing be refreshed before it is served.
       // The instance is the address; the topic is the route.
