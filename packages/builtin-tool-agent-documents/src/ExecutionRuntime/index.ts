@@ -15,6 +15,7 @@ import type {
   CreateDocumentArgs,
   ListDocumentsArgs,
   ModifyDocumentNodesArgs,
+  ModifyDocumentOperation,
   ReadDocumentArgs,
   RemoveDocumentArgs,
   RenameDocumentArgs,
@@ -204,6 +205,83 @@ const resolveTargetId = <T extends { id: string }>(
       success: false,
     },
   };
+};
+
+const MODIFY_OPERATION_SHAPES =
+  '{"action":"insert","afterId"|"beforeId":"<node id>","litexml":"…"}, {"action":"modify","litexml":"<tag id=\\"<node id>\\">…</tag>"} or {"action":"remove","id":"<node id>"}';
+
+const nonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+/**
+ * Models send modifyNodes operations in several near-miss shapes: the array as a
+ * JSON string, `type` instead of `action`, `content` instead of `litexml`, or no
+ * `action` at all. Accept the unambiguous ones and reject the rest with the
+ * position and the expected shapes, instead of crashing on a missing `action`.
+ */
+const normalizeModifyOperations = (
+  raw: unknown,
+): { operations: ModifyDocumentOperation[] } | { error: string } => {
+  let list = raw;
+  if (typeof list === 'string') {
+    try {
+      list = JSON.parse(list);
+    } catch {
+      return {
+        error: `\`operations\` must be an array of operations: ${MODIFY_OPERATION_SHAPES}.`,
+      };
+    }
+  }
+  if (!Array.isArray(list) || list.length === 0) return { error: 'No operations provided.' };
+
+  const operations: ModifyDocumentOperation[] = [];
+  for (const [index, item] of list.entries()) {
+    const op = (item ?? {}) as Record<string, unknown>;
+    const litexml = op.litexml ?? op.content;
+    const declared = op.action ?? op.type;
+    const action =
+      declared ??
+      (nonEmptyString(op.afterId) || nonEmptyString(op.beforeId)
+        ? 'insert'
+        : litexml !== undefined
+          ? 'modify'
+          : nonEmptyString(op.id)
+            ? 'remove'
+            : undefined);
+    const invalid = `Operation ${index + 1} of ${list.length} is not a valid operation; nothing was saved. Use ${MODIFY_OPERATION_SHAPES}.`;
+
+    switch (action) {
+      case 'insert': {
+        if (!nonEmptyString(litexml)) return { error: invalid };
+        if (nonEmptyString(op.beforeId)) {
+          operations.push({ action: 'insert', beforeId: op.beforeId, litexml });
+        } else if (nonEmptyString(op.afterId)) {
+          operations.push({ action: 'insert', afterId: op.afterId, litexml });
+        } else {
+          return { error: invalid };
+        }
+        break;
+      }
+      case 'modify': {
+        const valid =
+          nonEmptyString(litexml) ||
+          (Array.isArray(litexml) && litexml.length > 0 && litexml.every(nonEmptyString));
+        if (!valid) return { error: invalid };
+        operations.push({ action: 'modify', litexml: litexml as string | string[] });
+        break;
+      }
+      case 'remove': {
+        if (!nonEmptyString(op.id)) return { error: invalid };
+        operations.push({ action: 'remove', id: op.id });
+        break;
+      }
+      default: {
+        return { error: invalid };
+      }
+    }
+  }
+
+  return { operations };
 };
 
 export class AgentDocumentsExecutionRuntime {
@@ -580,10 +658,9 @@ export class AgentDocumentsExecutionRuntime {
       return this.buildCurrentPageDocumentWriteBlockedResult('modifyNodes');
     }
 
-    const operations = Array.isArray(args.operations) ? args.operations : [];
-    if (operations.length === 0) {
-      return { content: 'No operations provided.', success: false };
-    }
+    const normalized = normalizeModifyOperations(args.operations);
+    if ('error' in normalized) return { content: normalized.error, success: false };
+    const { operations } = normalized;
 
     const updated = await this.service.modifyNodes({
       agentId,

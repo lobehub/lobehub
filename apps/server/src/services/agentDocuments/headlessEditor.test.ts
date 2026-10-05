@@ -63,12 +63,12 @@ describe('agent document headless editor', () => {
     });
   });
 
-  it('should apply LiteXML operations and persist diff nodes for later human review', async () => {
+  it('should keep a review diff for a replaced top-level block', async () => {
     const initial = await exportEditorDataSnapshot({
       fallbackContent: 'Original',
       litexml: true,
     });
-    const textId = getSpanId(initial.litexml!, 'Original');
+    const blockId = initial.litexml!.match(/<p id="(\w+)">/)![1];
 
     const snapshot = await applyLiteXMLOperations({
       editorData: initial.editorData,
@@ -76,7 +76,7 @@ describe('agent document headless editor', () => {
       operations: [
         {
           action: 'modify',
-          litexml: `<span id="${textId}">Updated</span>`,
+          litexml: `<p id="${blockId}"><span>Updated</span></p>`,
         },
       ],
     });
@@ -90,6 +90,25 @@ describe('agent document headless editor', () => {
     // editorData (the persisted form) retains the diff node so the page editor
     // can render a review UI when the user next opens the document.
     expect(hasNodeType(snapshot.editorData, 'diff')).toBe(true);
+  });
+
+  it('should apply an inline edit directly so the block keeps its id', async () => {
+    const initial = await exportEditorDataSnapshot({
+      fallbackContent: 'Original',
+      litexml: true,
+    });
+    const blockId = initial.litexml!.match(/<p id="(\w+)">/)![1];
+    const textId = getSpanId(initial.litexml!, 'Original');
+
+    const snapshot = await applyLiteXMLOperations({
+      editorData: initial.editorData,
+      fallbackContent: initial.content,
+      operations: [{ action: 'modify', litexml: `<span id="${textId}">Updated</span>` }],
+    });
+
+    expect(snapshot.content).toBe('Updated\n');
+    expect(snapshot.litexml).toContain(`<p id="${blockId}">`);
+    expect(hasNodeType(snapshot.editorData, 'diff')).toBe(false);
   });
 
   it('should fall back to Markdown when valid editor data hydrates to an empty document', async () => {

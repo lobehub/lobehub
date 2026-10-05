@@ -512,4 +512,65 @@ describe('AgentDocumentsExecutionRuntime', () => {
       expect.not.objectContaining({ limit: expect.anything() }),
     );
   });
+
+  describe('modifyNodes operation shapes', () => {
+    const existing = { documentId: 'docs_1', id: 'agent-doc-1', title: 'Doc' };
+    const setup = () => {
+      const modifyNodes = vi.fn().mockResolvedValue(existing);
+      const runtime = createRuntime({
+        modifyNodes,
+        readDocument: vi.fn().mockResolvedValue(existing),
+      });
+      return { modifyNodes, runtime };
+    };
+
+    it('infers the action and accepts type/content aliases and a JSON-string array', async () => {
+      const { modifyNodes, runtime } = setup();
+
+      const result = await runtime.modifyNodes(
+        {
+          id: 'agent-doc-1',
+          operations: JSON.stringify([
+            { beforeId: 'y0a9', litexml: '<h2><span>a</span></h2>' },
+            { afterId: 'y0a9', litexml: '<h2><span>b</span></h2>' },
+            { litexml: '<span id="ybev">c</span>' },
+            { content: '<p><span>d</span></p>', type: 'insert', afterId: 'y0a9' },
+            { id: 'old1' },
+          ]) as any,
+        },
+        { agentId: 'agent-1' },
+      );
+
+      expect(result.success).toBe(true);
+      expect(modifyNodes.mock.calls[0][0].operations).toEqual([
+        { action: 'insert', beforeId: 'y0a9', litexml: '<h2><span>a</span></h2>' },
+        { action: 'insert', afterId: 'y0a9', litexml: '<h2><span>b</span></h2>' },
+        { action: 'modify', litexml: '<span id="ybev">c</span>' },
+        { action: 'insert', afterId: 'y0a9', litexml: '<p><span>d</span></p>' },
+        { action: 'remove', id: 'old1' },
+      ]);
+    });
+
+    it('rejects an operation it cannot interpret with its position and the expected shapes', async () => {
+      const { modifyNodes, runtime } = setup();
+
+      const result = await runtime.modifyNodes(
+        {
+          id: 'agent-doc-1',
+          operations: [
+            { action: 'remove', id: 'a' },
+            { action: 'replace', litexml: '<p/>' },
+          ] as any,
+        },
+        { agentId: 'agent-1' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain(
+        'Operation 2 of 2 is not a valid operation; nothing was saved.',
+      );
+      expect(result.content).toContain('{"action":"remove","id":"<node id>"}');
+      expect(modifyNodes).not.toHaveBeenCalled();
+    });
+  });
 });

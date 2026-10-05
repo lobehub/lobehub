@@ -1,6 +1,7 @@
 // @vitest-environment node
 // Regression cases reproduced from agent vent reports about modifyNodes / createDocument.
 // Each case asserts the expected behaviour against the production headless editor path.
+import { createHeadlessEditor } from '@lobehub/editor/headless';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentDocumentLiteXMLOperation } from './headlessEditor';
@@ -227,10 +228,9 @@ describe('agent document markdown writes regressions', () => {
     ).rejects.toThrow(/LiteXML/);
   });
 
-  // Upstream @lobehub/editor markdown writer bug (table cell text ending in a
-  // backslash escapes the column separator). Kept as an expected failure so it
-  // flips to a hard failure once the editor dependency fixes it.
-  it.fails('R11 table cell text ending in a backslash keeps the column count', async () => {
+  // Table edits used to be stored as a pending review diff, and the cell diff
+  // broke the column layout; they are now applied directly.
+  it('R11 table cell text ending in a backslash keeps the column count', async () => {
     const base = await load('| a | b | c |\n| --- | --- | --- |\n| x | y | z |\n');
     const span = base.litexml!.match(/<span id="(\w+)">y<\/span>/)![1];
     const back = await editThenRead(base, [
@@ -238,5 +238,114 @@ describe('agent document markdown writes regressions', () => {
     ]);
     const header = back.content.split('\n')[0];
     expect(header.split('|').length - 2).toBe(3);
+  });
+
+  describe('node ids stay addressable after a write', () => {
+    const DOC =
+      '# T\n\n## Section\n\nversion **v1** and note\n\n| a | b |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n\ntail\n';
+    const spanId = (xml: string, text: string) =>
+      xml.match(new RegExp(`<span id="(\\w+)"[^>]*>${text}</span>`))![1];
+    const rowId = (xml: string, text: string) =>
+      xml.match(
+        new RegExp(`<tr id="(\\w+)">\\s*<td id="\\w+">\\s*<span id="\\w+">${text}</span>`),
+      )![1];
+    const parentId = (xml: string, tag: string, text: string) =>
+      xml.match(new RegExp(`<${tag} id="(\\w+)">(?:(?!</${tag}>)[\\s\\S])*>${text}</span>`))![1];
+
+    it('R12 modifying a span keeps the ids of its block and siblings for the next call', async () => {
+      const base = await load(DOC);
+      const x = base.litexml!;
+      const block = parentId(x, 'p', 'v1');
+      const sibling = spanId(x, ' and note');
+      const after = await editThenRead(base, [
+        { action: 'modify', litexml: `<span id="${spanId(x, 'v1')}" bold="true">v2</span>` },
+      ]);
+
+      // A later call still built from the first read's ids.
+      const back = await editThenRead(after, [
+        { action: 'modify', litexml: `<span id="${sibling}"> and a new note</span>` },
+        { action: 'insert', afterId: block, litexml: '<p><span>appended</span></p>' },
+      ]);
+      expect(back.content).toContain('version **v2** and a new note');
+      expect(back.content).toContain('appended');
+    });
+
+    it('R13 a modify inside a heading does not break a later insert anchored on it in the same batch', async () => {
+      const base = await load(DOC);
+      const x = base.litexml!;
+      const heading = parentId(x, 'h2', 'Section');
+      const back = await editThenRead(base, [
+        { action: 'modify', litexml: `<span id="${spanId(x, 'Section')}">Renamed</span>` },
+        { action: 'insert', beforeId: heading, litexml: '<p><span>before heading</span></p>' },
+      ]);
+      expect(back.content).toContain('before heading\n\n## Renamed');
+    });
+
+    it('R14 table rows created by insert can be modified, removed and anchored on later', async () => {
+      const base = await load(DOC);
+      const inserted = await editThenRead(base, [
+        {
+          action: 'insert',
+          afterId: rowId(base.litexml!, '1'),
+          litexml: '<tr><td><span>9 pass</span></td><td><span>x</span></td></tr>',
+        },
+      ]);
+      const x = inserted.litexml!;
+
+      const modified = await editThenRead(inserted, [
+        { action: 'modify', litexml: `<span id="${spanId(x, '9 pass')}">12 pass</span>` },
+      ]);
+      expect(modified.content).toMatch(/\| 12 pass \| x +\|/);
+
+      const anchored = await editThenRead(inserted, [
+        {
+          action: 'insert',
+          afterId: rowId(x, '9 pass'),
+          litexml: '<tr><td><span>z</span></td><td><span>z</span></td></tr>',
+        },
+      ]);
+      expect(anchored.content).toMatch(/9 pass[^\n]*\n\| z/);
+
+      const removed = await editThenRead(inserted, [{ action: 'remove', id: rowId(x, '9 pass') }]);
+      expect(removed.content).not.toContain('9 pass');
+    });
+
+    it('R15 editing a cell keeps the row shape', async () => {
+      const base = await load(DOC);
+      const back = await editThenRead(base, [
+        { action: 'modify', litexml: `<span id="${spanId(base.litexml!, '3')}">33</span>` },
+      ]);
+      expect(back.content).toMatch(/\| 33 +\| 4 +\|/);
+    });
+
+    it('R16 rows stored as a pending review diff by earlier writes can still be edited', async () => {
+      const base = await load(DOC);
+      // Documents written before this fix hold inserted rows as `table-row-diff`.
+      const editor = createHeadlessEditor();
+      editor.hydrateEditorData(base.editorData as any, { keepId: true });
+      await editor.applyLiteXML({
+        action: 'insert',
+        afterId: rowId(base.litexml!, '1'),
+        delay: true,
+        litexml: '<root><tr><td><span>9 pass</span></td><td><span>x</span></td></tr></root>',
+      });
+      const legacy = editor.export({ litexml: true });
+      editor.destroy();
+      expect(JSON.stringify(legacy.editorData)).toContain('table-row-diff');
+
+      const stored = await exportEditorDataSnapshot({
+        editorData: legacy.editorData as any,
+        fallbackContent: legacy.markdown,
+        litexml: true,
+      });
+      const x = stored.litexml!;
+      const modified = await editThenRead(stored, [
+        { action: 'modify', litexml: `<span id="${spanId(x, '9 pass')}">12 pass</span>` },
+      ]);
+      expect(modified.content).toContain('12 pass');
+
+      const removed = await editThenRead(stored, [{ action: 'remove', id: rowId(x, '9 pass') }]);
+      expect(removed.content).not.toContain('9 pass');
+    });
   });
 });

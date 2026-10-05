@@ -1,10 +1,10 @@
 import {
+  canApplyAsReviewDiff,
   describeLiteXMLEditStep,
   findLiteXMLEditStepProblem,
   indexLiteXMLDocument,
   normalizeLiteXMLFragment,
   planLiteXMLEditSteps,
-  touchesList,
 } from '@lobechat/editor-runtime';
 import type { HeadlessLiteXMLOperation } from '@lobehub/editor/headless';
 import { createHeadlessEditor } from '@lobehub/editor/headless';
@@ -268,7 +268,7 @@ export const applyLiteXMLOperations = async ({
         if (problem) throw new Error(`${label} failed: ${problem}. ${NOTHING_SAVED_HINT}`);
 
         await editor.applyLiteXML(
-          toHeadlessLiteXMLOperation(operation, !touchesList(operation, document)),
+          toHeadlessLiteXMLOperation(operation, canApplyAsReviewDiff(operation, document)),
         );
         const next = exportSnapshot(editor, true);
 
