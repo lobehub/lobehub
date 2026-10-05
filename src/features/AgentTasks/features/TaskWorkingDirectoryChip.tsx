@@ -11,13 +11,13 @@ import { useTranslation } from 'react-i18next';
 
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { formatLockedControlTooltip } from '@/features/ChatInput/utils/lockedControlTooltip';
+import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { openAddWorkingDirModal } from '@/features/WorkingDirectory';
 import {
   getWorkingDirectoryName,
   getWorkingDirectoryPathString,
 } from '@/helpers/workingDirectoryPath';
 import { deviceService } from '@/services/device';
-import { deviceSelectors, useDeviceStore } from '@/store/device';
 
 import { taskExecutionStyles as styles } from './taskExecutionStyles';
 import TaskPickerOption from './TaskPickerOption';
@@ -51,17 +51,16 @@ const TaskWorkingDirectoryChip = memo<TaskWorkingDirectoryChipProps>(
     const { t: tDevice } = useTranslation('device');
     const [open, setOpen] = useState(false);
 
-    // Populate the device store ourselves (SWR dedupes across callers): the
-    // recents below read it, and a task page may have nothing else that fetches
-    // devices, which left the list empty on a cold load.
-    useDeviceStore((s) => s.useFetchDevices)(true);
-
-    const rawRecents = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(deviceId));
-    const rawDeviceDefaultCwd = useDeviceStore(deviceSelectors.getDeviceDefaultCwd(deviceId));
-    const deviceDefaultCwd = getWorkingDirectoryPathString(rawDeviceDefaultCwd);
+    // Read the canonical device list (the same SWR entry `useTaskRunTarget`
+    // fetches), not the device store: a task page may render nothing that
+    // populates the store, which left the recents empty on a cold load.
+    const { data: devices } = useDeviceList();
+    const device = devices?.find((item) => item.deviceId === deviceId);
+    const deviceDefaultCwd = getWorkingDirectoryPathString(device?.defaultCwd ?? undefined);
+    const rawRecents = device?.workingDirs;
 
     const recents = useMemo(
-      () => rawRecents.filter((entry) => !!getWorkingDirectoryPathString(entry.path)),
+      () => (rawRecents ?? []).filter((entry) => !!getWorkingDirectoryPathString(entry.path)),
       [rawRecents],
     );
 

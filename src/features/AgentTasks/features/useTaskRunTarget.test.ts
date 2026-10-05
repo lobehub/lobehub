@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   activeTopicAgency: undefined as undefined | { agencyConfig: Record<string, unknown> },
   agentState: { agentMap: {} as Record<string, { workspaceId?: string }> },
   devices: [] as { deviceId: string; scope?: string; visibility?: string }[],
-  deviceState: { defaultCwd: {} as Record<string, string>, workingDirs: {} as Record<string, []> },
   electron: { currentDeviceId: undefined as string | undefined, isDesktop: false },
 }));
 
@@ -75,17 +74,6 @@ vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: { isAgentHeterogeneousById: () => () => true },
 }));
 
-vi.mock('@/store/device', () => ({
-  deviceSelectors: {
-    getDeviceDefaultCwd: (deviceId?: string) => (state: (typeof mocks)['deviceState']) =>
-      state.defaultCwd[deviceId ?? ''],
-    getDeviceWorkingDirs: (deviceId?: string) => (state: (typeof mocks)['deviceState']) =>
-      state.workingDirs[deviceId ?? ''] ?? [],
-  },
-  useDeviceStore: (selector: (state: (typeof mocks)['deviceState']) => unknown) =>
-    selector(mocks.deviceState),
-}));
-
 const deviceBoundAgent = {
   boundDeviceId: DEVICE_AGENT_BOUND,
   executionTarget: 'device',
@@ -99,7 +87,6 @@ beforeEach(() => {
   mocks.agency.isPreferenceLoading = false;
   mocks.agentState.agentMap = {};
   mocks.devices = [];
-  mocks.deviceState = { defaultCwd: {}, workingDirs: {} };
   mocks.electron = { currentDeviceId: undefined, isDesktop: false };
 });
 

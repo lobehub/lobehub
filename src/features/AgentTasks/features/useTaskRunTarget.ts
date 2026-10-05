@@ -15,7 +15,6 @@ import { getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
 export type DeviceLabelSource = Pick<DeviceListItem, 'deviceId' | 'friendlyName' | 'hostname'>;
@@ -147,8 +146,11 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
         ? agencyConfig?.boundDeviceId || currentDeviceId
         : undefined;
 
-  const rawDeviceDefaultCwd = useDeviceStore(deviceSelectors.getDeviceDefaultCwd(deviceId));
-  const deviceDefaultCwd = getWorkingDirectoryPathString(rawDeviceDefaultCwd);
+  // From the device list this hook already fetched, not the device store,
+  // which a task page may never populate.
+  const deviceDefaultCwd = getWorkingDirectoryPathString(
+    devices?.find((device) => device.deviceId === deviceId)?.defaultCwd ?? undefined,
+  );
 
   // Only a device run has a machine whose default could apply; asking for one
   // otherwise would describe a directory the cloud run never uses.
