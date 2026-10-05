@@ -113,6 +113,10 @@ describe('Agent identity as first-class runtime state', () => {
     expect(system).not.toContain('login@service.com');
     expect(system).not.toContain('Your verification code');
     expect(system).not.toContain('839201');
+    // The account tool is not in this step's tool set, so the block must not
+    // send the model looking for it.
+    expect(facts.step.agentAccountContext?.toolAvailable).toBe(false);
+    expect(system).not.toContain('account tool');
   });
 
   it('stops presenting an address once it has been released', async () => {

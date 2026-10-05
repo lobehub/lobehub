@@ -56,6 +56,9 @@ export class AgentInboxService {
 
   listSince = (params: Parameters<AgentInboxModel['listSince']>[0]) => this.model.listSince(params);
 
+  findCodeFromOtherSender = (params: Parameters<AgentInboxModel['findCodeFromOtherSender']>[0]) =>
+    this.model.findCodeFromOtherSender(params);
+
   countForAccount = (accountId: string) => this.model.countForAccount(accountId);
 
   /**

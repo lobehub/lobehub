@@ -55,6 +55,22 @@ describe('AgentAccountContextInjector', () => {
     expect(content).toContain('</agent_identity>');
   });
 
+  it('only points at the account tool when this step actually has it', async () => {
+    const render = async (toolAvailable: boolean) =>
+      String(
+        (
+          await new AgentAccountContextInjector({ context: { ...context, toolAvailable } }).process(
+            createContext(),
+          )
+        ).messages.find((m) => m.role === 'system')?.content ?? '',
+      );
+
+    expect(await render(true)).toContain('Read them with the account tool');
+    const withoutTool = await render(false);
+    expect(withoutTool).not.toContain('account tool');
+    expect(withoutTool).toContain('cannot read or send mail in this turn');
+  });
+
   it('injects nothing when the agent has no accounts and no unread mail', async () => {
     const result = await new AgentAccountContextInjector({
       context: { accounts: [], inbox: { unreadCount: 0 } },

@@ -1,4 +1,5 @@
 import { extractTodosFromMessages, normalizeTodosState } from '@lobechat/agent-runtime';
+import { AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import {
@@ -464,7 +465,18 @@ export const gatherContextFacts = async (
         docsAgentId ? providers.listAgentDocuments?.(docsAgentId) : undefined,
       ),
     () =>
-      attempt('agentAccountContext', () => providers.listAgentAccountContext?.(request.agentId)),
+      attempt('agentAccountContext', async () => {
+        const context = await providers.listAgentAccountContext?.(request.agentId);
+        // Whether this step can actually read or answer mail is decided by the
+        // final tool set (custom / goal / chat modes can exclude the account
+        // tool), so the identity block must not promise a tool that is absent.
+        return context
+          ? {
+              ...context,
+              toolAvailable: request.enabledToolIds.includes(AgentAccountIdentifier),
+            }
+          : context;
+      }),
     () => gatherAgentBuilderContext(request, providers),
     () => gatherAgentManagementContext(request, providers),
     () => gatherComposioServices(request, providers),

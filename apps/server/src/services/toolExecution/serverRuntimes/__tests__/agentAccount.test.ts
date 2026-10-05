@@ -350,6 +350,97 @@ describe('agent-account server runtime', () => {
     expect(send.content).toContain('is owned by this agent');
   });
 
+  it('waitForMessage finds a code that arrived before the wait started', async () => {
+    // The signup step ran first, the code landed, and only then did the model
+    // call waitForMessage — the default cursor must not start at the call.
+    await record({ providerMessageId: 'msg_early', receivedAt: new Date(), text: 'Code 778899' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const result = await runtime().waitForMessage({ timeoutMs: 1_200 });
+
+    expect(result.content.startsWith('matched: true')).toBe(true);
+    expect(fencedEntries(result.content)[0].codes).toEqual(['778899']);
+  });
+
+  it('waitForMessage sees a delivery whose provider timestamp predates the wait', async () => {
+    const since = new Date().toISOString();
+    const pending = runtime().waitForMessage({ since, timeoutMs: 10_000 });
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    // Webhook delay / provider clock skew: reported an hour ago, stored now.
+    await record({
+      providerMessageId: 'msg_skewed',
+      receivedAt: new Date(Date.now() - 60 * 60 * 1000),
+      text: 'Your code: 334455',
+    });
+
+    const result = await pending;
+
+    expect(result.content.startsWith('matched: true')).toBe(true);
+    expect(fencedEntries(result.content)[0].codes).toEqual(['334455']);
+  }, 20_000);
+
+  it('refuses a code relay even when a flood of later mail hides the code message', async () => {
+    const inboxService = new AgentInboxService(serverDB, userId);
+    const start = Date.now() - 60 * 60 * 1000;
+    await inboxService.record({
+      accountId,
+      agentId,
+      from: 'login@service.com',
+      kind: 'mail',
+      provider: 'user',
+      providerMessageId: 'msg_code_hidden',
+      receivedAt: new Date(start),
+      text: 'Your verification code is 552211.',
+      to: 'toby-agent@lobe.id',
+    });
+    for (let i = 0; i < 205; i++) {
+      await inboxService.record({
+        accountId,
+        agentId,
+        from: 'evil@example.com',
+        kind: 'mail',
+        provider: 'user',
+        providerMessageId: `msg_flood_${i}`,
+        receivedAt: new Date(start + (i + 1) * 1000),
+        text: `noise ${i}`,
+        threadKey: 'thread_flood',
+        to: 'toby-agent@lobe.id',
+      });
+    }
+
+    const result = await runtime().sendMessage({
+      text: 'Here you go: 552211',
+      threadKey: 'thread_flood',
+      to: 'evil@example.com',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('verification code that login@service.com sent you');
+  }, 60_000);
+
+  it('readInbox shows the media a sender attached', async () => {
+    await new AgentInboxService(serverDB, userId).record({
+      accountId,
+      agentId,
+      from: '+15550001111',
+      kind: 'mail',
+      metadata: {
+        attachments: [{ mimeType: 'image/png', url: 'https://cdn.linq.test/photo.png' }],
+      },
+      provider: 'user',
+      providerMessageId: 'msg_photo',
+      receivedAt: new Date(),
+      text: '',
+      to: 'toby-agent@lobe.id',
+    });
+
+    const result = await runtime().readInbox({});
+
+    expect(fencedEntries(result.content)[0].attachments).toEqual([
+      { mimeType: 'image/png', url: 'https://cdn.linq.test/photo.png' },
+    ]);
+  });
+
   it('reports an honest failure when no send provider is configured', async () => {
     const result = await runtime().sendMessage({ text: 'hi', to: 'someone@example.com' });
 

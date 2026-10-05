@@ -86,7 +86,7 @@ export const AgentAccountManifest: BuiltinToolManifest = {
           from: { description: 'Only match a message from this sender.', type: 'string' },
           since: {
             description:
-              'Only consider messages received strictly after this ISO timestamp. Defaults to when the wait starts.',
+              'Only consider messages that arrived strictly after this ISO timestamp. Defaults to the start of this run, so a code that arrived before the wait began is still found.',
             type: 'string',
           },
           subjectIncludes: {

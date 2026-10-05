@@ -149,6 +149,11 @@ export interface AgentAccountContextItem {
 export interface AgentAccountContext {
   accounts: AgentAccountContextItem[];
   inbox: AgentInboxSummary;
+  /**
+   * Whether the account tool is in this step's final tool set. Some modes
+   * leave it out; the identity block then must not tell the model to use it.
+   */
+  toolAvailable?: boolean;
 }
 
 /** A message the agent sends from one of its accounts. */

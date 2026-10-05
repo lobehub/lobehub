@@ -389,6 +389,81 @@ describe('Agent inbound webhook — end to end over the real route', () => {
     expect(agentCalls).toHaveLength(2);
   });
 
+  it('wakes once when two workers handle the same delivery concurrently', async () => {
+    const { AgentInboundService } = await import('../inbound');
+    let wakes = 0;
+    const waker = {
+      wake: async () => {
+        wakes += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { reason: 'started', started: true };
+      },
+    };
+    // Each worker has its own process-local replay store, so only the row-level
+    // wake claim stands between the two and a duplicate run.
+    const worker = () =>
+      new AgentInboundService(serverDB, {
+        accountService: {
+          handleInbound: async () => ({
+            accountId,
+            eventId: 'evt_race',
+            message: {
+              from: 'login@service.com',
+              providerMessageId: 'msg_race',
+              receivedAt: new Date(),
+              text: 'race',
+              to: 'toby-agent@lobe.id',
+            },
+            outcome: 'delivered',
+          }),
+          hasProvider: () => true,
+          releaseInbound: async () => undefined,
+        } as any,
+        waker,
+      });
+
+    const results = await Promise.all([
+      worker().handle('agent-mail', { body: '{}', headers: {} }),
+      worker().handle('agent-mail', { body: '{}', headers: {} }),
+    ]);
+
+    expect(wakes).toBe(1);
+    expect(results.map((r) => r.status)).toEqual([200, 200]);
+  });
+
+  it('keeps the media a photo-only message carried', async () => {
+    const { AgentInboundService } = await import('../inbound');
+    const service = new AgentInboundService(serverDB, {
+      accountService: {
+        handleInbound: async () => ({
+          accountId,
+          eventId: 'evt_photo',
+          message: {
+            attachments: [{ mimeType: 'image/jpeg', url: 'https://cdn.linq.test/p.jpg' }],
+            from: '+15550001111',
+            providerMessageId: 'msg_photo_only',
+            receivedAt: new Date(),
+            text: '',
+            to: 'toby-agent@lobe.id',
+          },
+          outcome: 'delivered',
+        }),
+        hasProvider: () => true,
+        releaseInbound: async () => undefined,
+      } as any,
+    });
+
+    await service.handle('agent-mail', { body: '{}', headers: {} });
+
+    const [row] = await serverDB
+      .select()
+      .from(agentInboxMessages)
+      .where(eq(agentInboxMessages.providerMessageId, 'msg_photo_only'));
+    expect(row.metadata).toMatchObject({
+      attachments: [{ mimeType: 'image/jpeg', url: 'https://cdn.linq.test/p.jpg' }],
+    });
+  });
+
   it('summarizes the inbox as an unread count and nothing a sender wrote', async () => {
     // A delivery whose wake did not start stays unread for the next turn.
     execAgentFailure.next = new Error('no run');

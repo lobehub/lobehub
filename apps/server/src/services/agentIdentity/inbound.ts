@@ -174,7 +174,9 @@ export class AgentInboundService {
       agentId: account.agentId,
       from: message.from,
       kind: account.kind,
-      metadata: {},
+      // Media the normalizer accepted (a photo-only iMessage carries nothing
+      // else) — dropping it here would leave the agent an empty message.
+      metadata: message.attachments?.length ? { attachments: message.attachments } : {},
       provider: account.provider,
       providerMessageId: message.providerMessageId,
       receivedAt: message.receivedAt,
@@ -199,9 +201,34 @@ export class AgentInboundService {
       };
     }
 
-    const wake = (await this.overWakeBudget(accountId, row.from))
-      ? { reason: 'rate-limited', started: false }
-      : await this.wake(account, row);
+    if (await this.overWakeBudget(accountId, row.from)) {
+      return {
+        accountId,
+        created,
+        messageId: row.id,
+        outcome: 'delivered',
+        status: 200,
+        wake: { reason: 'rate-limited', started: false },
+      };
+    }
+
+    // The unique insert only dedupes storage: two workers handling the same
+    // delivery can both see the row unread. The wake itself is claimed
+    // atomically on the row, so exactly one of them starts a run.
+    if (!(await AgentInboxModel.claimWake(this.db, row.id))) {
+      return {
+        accountId,
+        created,
+        messageId: row.id,
+        outcome: 'delivered',
+        status: 200,
+        wake: { reason: 'duplicate-delivery', started: false },
+      };
+    }
+
+    const wake = await this.wake(account, row);
+    // A transient failure gives the claim back so the provider's retry wakes it.
+    if (RETRYABLE_WAKE_REASONS.has(wake.reason)) await AgentInboxModel.releaseWake(this.db, row.id);
 
     return {
       accountId,

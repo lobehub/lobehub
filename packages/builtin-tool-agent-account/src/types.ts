@@ -46,7 +46,7 @@ export interface WaitForMessageArgs {
   accountId?: string;
   /** Only match a message from this sender. */
   from?: string;
-  /** Start looking at messages received after this ISO timestamp; defaults to now. */
+  /** Only messages that arrived after this ISO timestamp; defaults to the start of this run. */
   since?: string;
   /** Case-insensitive substring the subject must contain. */
   subjectIncludes?: string;

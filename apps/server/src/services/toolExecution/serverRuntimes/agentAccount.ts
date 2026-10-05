@@ -7,6 +7,7 @@ import type {
 import { AgentAccountApiName, AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
 
 import { AgentAccountModel } from '@/database/models/agentAccount';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import type { AgentInboxMessageItem } from '@/database/schemas';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentAccountService } from '@/server/services/agentIdentity';
@@ -36,6 +37,20 @@ const MAX_READ_LIMIT = 20;
 const CODE_RELAY_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const normalizeAddress = (value: string) => value.trim().toLowerCase();
+
+/** How far back a wait with no cursor and no known run start looks. */
+const DEFAULT_WAIT_LOOKBACK_MS = 2 * 60 * 1000;
+/** A run that started longer ago than this does not widen the default cursor further. */
+const MAX_WAIT_LOOKBACK_MS = 30 * 60 * 1000;
+
+/**
+ * Tokens of the outgoing text that could be a stored verification code. Codes
+ * are matched whole against the extracted `codes` of inbox rows, so only
+ * code-shaped tokens are worth sending to the query.
+ */
+const codeCandidates = (text: string): string[] => [
+  ...new Set(text.match(/[\dA-Za-z-]{4,32}/g)?.slice(0, 500) ?? []),
+];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -81,6 +96,19 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
 
     const inbox = new AgentInboxService(db, userId, workspaceId);
 
+    const defaultWaitCursor = async (): Promise<Date> => {
+      const now = Date.now();
+      const operation = context.operationId
+        ? await new AgentOperationModel(db, userId, workspaceId)
+            .findById(context.operationId)
+            .catch(() => null)
+        : null;
+      const startedAt = operation?.startedAt ?? operation?.createdAt;
+      if (!startedAt) return new Date(now - DEFAULT_WAIT_LOOKBACK_MS);
+
+      return new Date(Math.max(new Date(startedAt).getTime(), now - MAX_WAIT_LOOKBACK_MS));
+    };
+
     /** Accept either the account id or the address the model sees in context. */
     const findOwned = (list: Awaited<ReturnType<typeof accounts>>, ref: string) =>
       list.find((account) => account.id === ref || account.identifier === ref);
@@ -111,16 +139,15 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         };
       }
 
-      const recent = await inbox.list({
+      // One query over the whole lookback window: a page of recent mail would
+      // let an outside sender flood the inbox until the message carrying the
+      // code falls off it, and the relay would then go out unattended.
+      const relayed = await inbox.findCodeFromOtherSender({
         agentId: requireAgentId(),
-        limit: 200,
-        receivedAfter: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
+        candidates: codeCandidates(args.text),
+        recipient,
+        since: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
       });
-      const relayed = recent.find(
-        (message) =>
-          normalizeAddress(message.from) !== recipient &&
-          (message.codes ?? []).some((code) => args.text.includes(code)),
-      );
       if (relayed) {
         return {
           refusal: `This reply contains a verification code that ${relayed.from} sent you. Codes are never relayed to another sender without the user's approval — send it without \`threadKey\` to ask the user.`,
@@ -247,7 +274,11 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
 
       waitForMessage: async (args: WaitForMessageArgs) => {
         const waitMs = Math.min(Math.max(args?.timeoutMs ?? DEFAULT_WAIT_MS, 1_000), MAX_WAIT_MS);
-        const since = args?.since ? new Date(args.since) : new Date();
+        // Without an explicit cursor, look back to the start of this run: the
+        // code usually lands between the action that triggered it (a signup
+        // or login in an earlier step) and this call, and starting the wait
+        // "now" would miss exactly that message.
+        const since = args?.since ? new Date(args.since) : await defaultWaitCursor();
         const deadline = Date.now() + waitMs;
 
         // Resolve the requested account against the accounts this agent actually

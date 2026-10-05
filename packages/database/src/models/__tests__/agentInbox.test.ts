@@ -97,3 +97,25 @@ describe('AgentInboxModel workspace isolation by agent visibility', () => {
     expect(await member.unreadCount(publicAgentId)).toBe(1);
   });
 });
+
+describe('AgentInboxModel.claimWake', () => {
+  it('lets exactly one of several concurrent workers wake a delivery, and can be given back', async () => {
+    const message = await deliver(publicAgentId, 'claim@lobe.id', 'msg_claim');
+
+    const results = await Promise.all([
+      AgentInboxModel.claimWake(serverDB, message.id),
+      AgentInboxModel.claimWake(serverDB, message.id),
+      AgentInboxModel.claimWake(serverDB, message.id),
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+
+    // A failed wake hands the claim back so the provider's retry can wake it.
+    await AgentInboxModel.releaseWake(serverDB, message.id);
+    expect(await AgentInboxModel.claimWake(serverDB, message.id)).toBe(true);
+
+    // Once woken (read), it can never be claimed again.
+    await AgentInboxModel.markWoken(serverDB, message.id, undefined);
+    await AgentInboxModel.releaseWake(serverDB, message.id);
+    expect(await AgentInboxModel.claimWake(serverDB, message.id)).toBe(false);
+  });
+});

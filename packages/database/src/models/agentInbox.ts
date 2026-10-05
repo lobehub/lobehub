@@ -147,6 +147,38 @@ export class AgentInboxModel {
   };
 
   /**
+   * Take the right to wake this delivery. Atomic across instances: the row is
+   * stamped only while it is unread and unclaimed, so when two webhook workers
+   * process the same delivery concurrently exactly one of them starts a run.
+   * Returns whether this caller won.
+   */
+  static claimWake = async (db: LobeChatDatabase, id: string): Promise<boolean> => {
+    const rows = await db
+      .update(agentInboxMessages)
+      .set({
+        metadata: sql`coalesce(${agentInboxMessages.metadata}, '{}'::jsonb) || jsonb_build_object('wakeClaimedAt', now())`,
+      })
+      .where(
+        and(
+          eq(agentInboxMessages.id, id),
+          isNull(agentInboxMessages.readAt),
+          sql`not (coalesce(${agentInboxMessages.metadata}, '{}'::jsonb) ? 'wakeClaimedAt')`,
+        ),
+      )
+      .returning({ id: agentInboxMessages.id });
+
+    return rows.length > 0;
+  };
+
+  /** Give a wake claim back after the wake failed, so the provider's retry can wake it. */
+  static releaseWake = async (db: LobeChatDatabase, id: string): Promise<void> => {
+    await db
+      .update(agentInboxMessages)
+      .set({ metadata: sql`coalesce(${agentInboxMessages.metadata}, '{}'::jsonb) - 'wakeClaimedAt'` })
+      .where(eq(agentInboxMessages.id, id));
+  };
+
+  /**
    * Stamp a delivery whose wake started: the run received its content, so it is
    * read, and the topic it ran in is remembered so its thread can continue there.
    */
@@ -258,7 +290,10 @@ export class AgentInboxModel {
   }): Promise<AgentInboxMessageItem[]> => {
     const conditions = [
       eq(agentInboxMessages.agentId, params.agentId),
-      gt(agentInboxMessages.receivedAt, params.since),
+      // Local ingestion time, not the provider's clock: a delivery whose
+      // reported receivedAt predates the cursor (webhook delay, clock skew)
+      // still arrived after it and must be seen by the poll.
+      gt(agentInboxMessages.createdAt, params.since),
       this.ownership(),
     ];
     if (params.accountId) conditions.push(eq(agentInboxMessages.accountId, params.accountId));
@@ -274,8 +309,43 @@ export class AgentInboxModel {
       .select()
       .from(agentInboxMessages)
       .where(and(...conditions))
-      .orderBy(asc(agentInboxMessages.receivedAt))
+      .orderBy(asc(agentInboxMessages.createdAt))
       .limit(params.limit ?? 10);
+  };
+
+  /**
+   * The newest message from someone other than `recipient`, received at or
+   * after `since`, whose extracted codes include any of `candidates`. Runs over
+   * the whole window in one query so a flood of later mail cannot push the
+   * message carrying the code out of a fetched page.
+   */
+  findCodeFromOtherSender = async (params: {
+    agentId: string;
+    candidates: string[];
+    recipient: string;
+    since: Date;
+  }): Promise<AgentInboxMessageItem | undefined> => {
+    if (params.candidates.length === 0) return undefined;
+
+    const [row] = await this.db
+      .select()
+      .from(agentInboxMessages)
+      .where(
+        and(
+          this.ownership(),
+          eq(agentInboxMessages.agentId, params.agentId),
+          gte(agentInboxMessages.receivedAt, params.since),
+          sql`lower(trim(${agentInboxMessages.from})) <> ${params.recipient}`,
+          sql`coalesce(${agentInboxMessages.codes}, '[]'::jsonb) ?| ${sql.raw('ARRAY[')}${sql.join(
+            params.candidates.map((candidate) => sql`${candidate}`),
+            sql`, `,
+          )}${sql.raw(']::text[]')}`,
+        ),
+      )
+      .orderBy(desc(agentInboxMessages.receivedAt))
+      .limit(1);
+
+    return row;
   };
 
   static unreadCountForAgent = async (db: LobeChatDatabase, agentId: string): Promise<number> => {
