@@ -16,9 +16,11 @@ interface ComposerDraftBusState {
   attached: boolean;
   /**
    * The pending draft, cleared by the receiver once applied. `append` adds it
-   * after what the user already typed instead of replacing it.
+   * after what the user already typed instead of replacing it. A draft with a
+   * `target` waits until the conversation has settled on that agent's new
+   * topic, so the topic switch that follows a navigation cannot wipe it.
    */
-  draft: { append?: boolean; text: string } | null;
+  draft: { append?: boolean; target?: { agentId: string }; text: string } | null;
 }
 
 export const useComposerDraftBus = createWithEqualityFn<ComposerDraftBusState>()(() => ({
@@ -42,9 +44,9 @@ export const draftToMainComposer = (
 };
 
 /**
- * Leave a draft for the next main composer that mounts, for a surface that
- * navigates into a conversation right after posting.
+ * Leave a draft for a new topic of `agentId`, for a surface that navigates
+ * into that conversation right after posting.
  */
-export const queueDraftForMainComposer = (text: string) => {
-  useComposerDraftBus.setState({ draft: { text } });
+export const queueDraftForMainComposer = (text: string, target: { agentId: string }) => {
+  useComposerDraftBus.setState({ draft: { target, text } });
 };

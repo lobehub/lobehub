@@ -156,6 +156,7 @@ export default {
   'imageViewer.markup.location.point': '{{area}} (x {{x}}%, y {{y}}%)',
   'imageViewer.markup.location.region': 'area, {{area}} (x {{x1}}–{{x2}}%, y {{y1}}–{{y2}}%)',
   'imageViewer.markup.message.drawingOnly': 'See my annotations on the attached image "{{name}}".',
+  'imageViewer.markup.message.item': '{{index}}. {{location}}: {{text}}',
   'imageViewer.markup.message.header':
     'Comments on the attached image "{{name}}" (numbers match the markers on the image):',
   'imageViewer.markup.message.headerWithDrawing':

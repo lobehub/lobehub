@@ -16,6 +16,8 @@ import { useConversationStore, useConversationStoreApi } from './store';
 const ComposerDraftReceiver = memo(() => {
   const editor = useConversationStore((s) => s.editor);
   const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
+  const agentId = useConversationStore((s) => s.context.agentId);
+  const topicId = useConversationStore((s) => s.context.topicId);
   const storeApi = useConversationStoreApi();
   const draft = useComposerDraftBus((s) => s.draft);
 
@@ -28,6 +30,9 @@ const ComposerDraftReceiver = memo(() => {
 
   useEffect(() => {
     if (!draft || !editor) return;
+    // Right after navigating, the conversation still points at the previously
+    // active topic; switching away clears the input. Wait for the new topic.
+    if (draft.target && (draft.target.agentId !== agentId || topicId)) return;
     const current = storeApi.getState().inputMessage.trim();
     const text = draft.append && current ? `${current}\n\n${draft.text}` : draft.text;
     // setDocument alone does not fire the change handler that keeps
@@ -36,7 +41,7 @@ const ComposerDraftReceiver = memo(() => {
     updateInputMessage(text);
     editor.focus();
     useComposerDraftBus.setState({ draft: null });
-  }, [draft, editor, storeApi, updateInputMessage]);
+  }, [agentId, draft, editor, storeApi, topicId, updateInputMessage]);
 
   return null;
 });

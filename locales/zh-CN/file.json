@@ -116,6 +116,7 @@
   "imageViewer.markup.message.drawingOnly": "请看附图「{{name}}」上的标注。",
   "imageViewer.markup.message.header": "关于附图「{{name}}」的评论（编号对应图上的标记）：",
   "imageViewer.markup.message.headerWithDrawing": "请看附图「{{name}}」上的标注。评论（编号对应图上的标记）：",
+  "imageViewer.markup.message.item": "{{index}}. {{location}}：{{text}}",
   "imageViewer.markup.noConversation": "没有可以添加图片的对话",
   "imageViewer.pixelsUnavailable": "图片存储不允许读取像素，无法编辑",
   "imageViewer.resize.aspect.free": "自由",

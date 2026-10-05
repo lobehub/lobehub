@@ -53,13 +53,16 @@ describe('buildMarkupMessage', () => {
   const plain = ((key: string) => key) as unknown as TFunction<'file'>;
 
   it('numbers comments in the order they were added', () => {
-    expect(buildMarkupMessage({ comments, shapes: [] }, { name: 'a.png', t: plain })).toBe(
-      [
-        'imageViewer.markup.message.header',
-        '1. imageViewer.markup.location.point: Too dark',
-        '2. imageViewer.markup.location.region: Remove',
-      ].join('\n'),
-    );
+    const lines = buildMarkupMessage({ comments, shapes: [] }, { name: 'a.png', t }).split('\n');
+
+    expect(lines[0]).toBe('imageViewer.markup.message.header {"name":"a.png"}');
+    expect(lines).toHaveLength(3);
+    expect(lines[1]).toMatch(/^imageViewer\.markup\.message\.item \{"index":1,/);
+    expect(lines[1]).toContain('"text":"Too dark"');
+    expect(lines[1]).toContain('imageViewer.markup.location.point');
+    expect(lines[2]).toMatch(/^imageViewer\.markup\.message\.item \{"index":2,/);
+    expect(lines[2]).toContain('"text":"Remove"');
+    expect(lines[2]).toContain('imageViewer.markup.location.region');
   });
 
   it('mentions the drawing when there is one', () => {

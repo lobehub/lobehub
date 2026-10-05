@@ -116,6 +116,7 @@
   "imageViewer.markup.message.drawingOnly": "See my annotations on the attached image \"{{name}}\".",
   "imageViewer.markup.message.header": "Comments on the attached image \"{{name}}\" (numbers match the markers on the image):",
   "imageViewer.markup.message.headerWithDrawing": "See my annotations on the attached image \"{{name}}\". Comments (numbers match the markers on the image):",
+  "imageViewer.markup.message.item": "{{index}}. {{location}}: {{text}}",
   "imageViewer.markup.noConversation": "There is no chat to add the image to",
   "imageViewer.pixelsUnavailable": "This image cannot be edited because its storage does not allow reading pixels",
   "imageViewer.resize.aspect.free": "Free",

@@ -264,10 +264,11 @@ describe('ImageEditTools', () => {
 
       const draft = useComposerDraftBus.getState().draft!;
       expect(draft.append).toBe(true);
+      // Header plus one numbered line per comment (wording covered in markup.test.ts).
       expect(draft.text.split('\n')).toEqual([
         'imageViewer.markup.message.headerWithDrawing',
-        '1. imageViewer.markup.location.point: Make this brighter',
-        '2. imageViewer.markup.location.region: Remove this',
+        'imageViewer.markup.message.item',
+        'imageViewer.markup.message.item',
       ]);
       expect(navigate).not.toHaveBeenCalled();
       expect(toast.success).toHaveBeenCalledWith('imageViewer.markup.added');
@@ -307,7 +308,9 @@ describe('ImageEditTools', () => {
       await waitFor(() => expect(navigate).toHaveBeenCalledWith('/agent/agt_inbox'));
       expect(fileStore.uploadChatFiles.mock.calls[0][1]).toBe('agt_inbox');
       // Queued for the composer that mounts after navigating.
-      expect(useComposerDraftBus.getState().draft?.text).toContain('What is this?');
+      expect(useComposerDraftBus.getState().draft?.text).toContain(
+        'imageViewer.markup.message.item',
+      );
     });
 
     it('undoes strokes and exits with Escape', () => {

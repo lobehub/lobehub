@@ -67,7 +67,7 @@ export const useSendMarkupToChat = () => {
           draftToMainComposer(text, { append: true });
           toast.success(t('imageViewer.markup.added'));
         } else {
-          queueDraftForMainComposer(text);
+          queueDraftForMainComposer(text, { agentId });
           navigate(AGENT_CHAT_URL(agentId));
         }
         return true;

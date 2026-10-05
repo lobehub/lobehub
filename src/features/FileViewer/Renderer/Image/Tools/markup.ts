@@ -99,9 +99,12 @@ export const buildMarkupMessage = (
         : 'imageViewer.markup.message.header',
     { name: name || 'image' },
   );
-  const lines = markup.comments.map(
-    (comment, index) =>
-      `${index + 1}. ${describeAnchor(comment.anchor, t)}: ${comment.text.trim()}`,
+  const lines = markup.comments.map((comment, index) =>
+    t('imageViewer.markup.message.item', {
+      index: index + 1,
+      location: describeAnchor(comment.anchor, t),
+      text: comment.text.trim(),
+    }),
   );
   return [header, ...lines].join('\n');
 };
