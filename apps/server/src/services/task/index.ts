@@ -983,6 +983,7 @@ export class TaskService {
       activityLogs,
       workspace,
       acceptance,
+      goal,
     ] = await Promise.all([
       this.taskModel.findAllDescendants(task.id),
       this.taskModel.getDependencies(task.id),
@@ -991,6 +992,10 @@ export class TaskService {
       this.taskModel.getActivities(task.id, TASK_DETAIL_ACTIVITY_LIMIT).catch(() => []),
       this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
       resolveTaskAcceptance(this.db, this.userId, task.id, this.workspaceId).catch(() => undefined),
+      // The goal this task belongs to, so the page can link back to it
+      new GoalGraphModel(this.db, this.userId, this.workspaceId)
+        .findGoalByTaskId(task.id)
+        .catch(() => undefined),
     ]);
 
     // What the reader is shown, not what was written: a burst of edits to one
@@ -1153,11 +1158,6 @@ export class TaskService {
         };
       }
     }
-
-    // Resolve the goal this task belongs to, so the page can link back to it
-    const goal = await new GoalGraphModel(this.db, this.userId, this.workspaceId).findGoalByTaskId(
-      task.id,
-    );
 
     // Build workspace tree (recursive)
     const buildWorkspaceNodes = (treeNodes: typeof workspace.tree): TaskDetailWorkspaceNode[] =>

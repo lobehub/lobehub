@@ -30,7 +30,9 @@ vi.mock('@/database/models/task', () => ({
   }),
 }));
 
-const { findGoalByTaskId } = vi.hoisted(() => ({ findGoalByTaskId: vi.fn() }));
+const { findGoalByTaskId } = vi.hoisted(() => ({
+  findGoalByTaskId: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('@/database/models/goalGraph', () => ({
   GoalGraphModel: vi.fn().mockImplementation(function () {
     return { findGoalByTaskId };
