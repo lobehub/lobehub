@@ -37,6 +37,7 @@ import {
   generations,
   globalFiles,
   knowledgeBaseFiles,
+  knowledgeBases,
   messages,
   messagesFiles,
   messageTTS,
@@ -610,12 +611,25 @@ export class FileModel {
     });
   };
 
-  /** Libraries (knowledge bases) a file is filed in. */
+  /**
+   * Libraries (knowledge bases) a file is filed in that the caller can see. A
+   * collaborator may have filed it into their own private library, which the
+   * caller must neither learn about nor write to.
+   */
   findKnowledgeBaseIds = async (fileId: string): Promise<string[]> => {
     const rows = await this.db
       .select({ id: knowledgeBaseFiles.knowledgeBaseId })
       .from(knowledgeBaseFiles)
-      .where(eq(knowledgeBaseFiles.fileId, fileId));
+      .innerJoin(knowledgeBases, eq(knowledgeBases.id, knowledgeBaseFiles.knowledgeBaseId))
+      .where(
+        and(
+          eq(knowledgeBaseFiles.fileId, fileId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            knowledgeBases,
+          ),
+        ),
+      );
     return rows.map((row) => row.id);
   };
 

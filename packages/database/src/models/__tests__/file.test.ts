@@ -1041,6 +1041,26 @@ describe('FileModel', () => {
       expect(await fileModel.findKnowledgeBaseIds(id)).toEqual(['kb1']);
     });
 
+    // Regression: a collaborator's private library leaked into the caller's
+    // list, and saving an edit then tried to write to it.
+    it('omits libraries the caller cannot see', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'image/png',
+        name: 'shared.png',
+        size: 100,
+        url: 'files/shared.png',
+      });
+      await serverDB
+        .insert(knowledgeBases)
+        .values({ id: 'kb_other_private', name: 'theirs', userId: 'user2' });
+      await serverDB.insert(knowledgeBaseFiles).values([
+        { fileId: id, knowledgeBaseId: 'kb1', userId },
+        { fileId: id, knowledgeBaseId: 'kb_other_private', userId: 'user2' },
+      ]);
+
+      expect(await fileModel.findKnowledgeBaseIds(id)).toEqual(['kb1']);
+    });
+
     it('returns an empty list for a file outside any library', async () => {
       const { id } = await fileModel.create({
         fileType: 'image/png',
