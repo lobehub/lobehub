@@ -321,8 +321,12 @@ export default class BrowserSidebarCtr extends ControllerModule {
     // unopened, so say so instead of reporting whatever page is still showing.
     if (outcome.status === 'failed' && outcome.error.errno !== NAVIGATION_ABORTED_ERRNO) {
       logger.debug(`Navigation to ${url} failed: ${outcome.error.message}`);
+      const current = webContents.getURL();
+      // A refused connection commits Chromium's error page under the requested URL.
+      const showing =
+        current === url ? 'showing its error page' : `still showing ${current || 'a blank page'}`;
       return {
-        error: `Could not open ${url}: ${outcome.error.message}. The browser is still showing ${webContents.getURL() || 'a blank page'}.`,
+        error: `Could not open ${url}: ${outcome.error.message}. The browser is ${showing}.`,
         success: false,
       };
     }

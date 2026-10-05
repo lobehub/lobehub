@@ -168,6 +168,26 @@ describe('BrowserSidebarCtr retained webview registration', () => {
       });
     });
 
+    it('says an error page is showing when the failed URL committed', async () => {
+      const guest = createWebContents(7);
+      guest.loadURL = vi.fn(async (nextUrl: string) => {
+        guest.getURL.mockReturnValue(nextUrl);
+        throw Object.assign(new Error('ERR_CONNECTION_REFUSED (-102)'), { errno: -102 });
+      });
+      await register(guest);
+
+      await expect(
+        invokeIpc('browserSidebar.navigate', {
+          sessionId: 'topic:a',
+          url: 'http://127.0.0.1:18748/',
+        }),
+      ).resolves.toEqual({
+        error:
+          'Could not open http://127.0.0.1:18748/: ERR_CONNECTION_REFUSED (-102). The browser is showing its error page.',
+        success: false,
+      });
+    });
+
     it('treats a superseded navigation (ERR_ABORTED) as settled', async () => {
       const guest = createWebContents(7);
       guest.loadURL = vi.fn(async () => {
