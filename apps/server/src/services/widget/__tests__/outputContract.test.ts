@@ -41,6 +41,20 @@ describe('parseWidgetOutput', () => {
     expect(result).toMatchObject({ ok: true, output: { type: 'stat', value: 1 } });
   });
 
+  it('rejects a series output that repeats a series name', () => {
+    const stdout = JSON.stringify({
+      series: [
+        { name: 'stars', points: [{ t: '2026-10-01', v: 1 }] },
+        { name: 'stars', points: [{ t: '2026-10-02', v: 2 }] },
+      ],
+      type: 'series',
+    });
+    expect(parseWidgetOutput(stdout, 'series')).toMatchObject({
+      code: 'INVALID_OUTPUT',
+      ok: false,
+    });
+  });
+
   it('rejects empty stdout', () => {
     expect(parseWidgetOutput('  \n')).toMatchObject({ code: 'EMPTY_OUTPUT', ok: false });
   });

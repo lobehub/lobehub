@@ -48,21 +48,29 @@ const listSchema = z.object({
   type: z.literal('list'),
 });
 
-const seriesSchema = z.object({
-  meta: metaSchema,
-  series: z
-    .array(
-      z.object({
-        name: shortText,
-        points: z
-          .array(z.object({ t: shortText, v: z.number().finite() }))
-          .max(WIDGET_OUTPUT_LIMITS.pointsPerSeries),
-      }),
-    )
-    .max(WIDGET_OUTPUT_LIMITS.series),
-  type: z.literal('series'),
-  unit: shortText.optional(),
-});
+const seriesSchema = z
+  .object({
+    meta: metaSchema,
+    series: z
+      .array(
+        z.object({
+          name: shortText,
+          points: z
+            .array(z.object({ t: shortText, v: z.number().finite() }))
+            .max(WIDGET_OUTPUT_LIMITS.pointsPerSeries),
+        }),
+      )
+      .max(WIDGET_OUTPUT_LIMITS.series),
+    type: z.literal('series'),
+    unit: shortText.optional(),
+  })
+  .superRefine((value, ctx) => {
+    // Each name keys its own metric series; a repeat would merge two lines into one trend.
+    const names = new Set(value.series.map((s) => s.name));
+    if (names.size !== value.series.length) {
+      ctx.addIssue({ code: 'custom', message: 'series names must be unique', path: ['series'] });
+    }
+  });
 
 const cell = z.union([z.string().max(2000), z.number().finite(), z.boolean(), z.null()]);
 
