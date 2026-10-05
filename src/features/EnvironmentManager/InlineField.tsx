@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
-import { ActionIcon, Input, Select, Text, toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Input, Select, Text, TextArea, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, type ReactNode, useState } from 'react';

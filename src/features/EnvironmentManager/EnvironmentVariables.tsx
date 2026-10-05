@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, Input, Text, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Input, Text, TextArea, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { BracesIcon, CheckIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -288,7 +288,7 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
         <Flexbox gap={6}>
           <TextArea
             autoFocus
-            className={styles.editor}
+            classNames={{ input: styles.editor }}
             placeholder={'NODE_ENV=production\nAPI_URL=https://example.com'}
             rows={Math.min(16, Math.max(6, raw.split('\n').length + 1))}
             value={raw}
