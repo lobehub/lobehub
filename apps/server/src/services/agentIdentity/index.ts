@@ -292,8 +292,11 @@ export class AgentAccountService {
   private requireActiveAccount = async (accountId: string): Promise<AgentAccountView> => {
     const account = await this.model.findById(accountId);
     if (!account) throw new Error(`Agent account ${accountId} was not found in this scope`);
-    if (account.status === 'revoked') {
-      throw new Error(`Agent account ${accountId} is revoked and cannot be used`);
+    // Same liveness rule as inbound routing: `provisioning` is usable the
+    // moment the row exists, while `suspended` and `revoked` must stop the
+    // irreversible provider call, not just inbound delivery.
+    if (account.status !== 'active' && account.status !== 'provisioning') {
+      throw new Error(`Agent account ${accountId} is ${account.status} and cannot be used`);
     }
     return account;
   };

@@ -2,6 +2,7 @@
 import type { EmailMessageDetail } from '@lobechat/agent-address-mail';
 import { computeAgentMailSignature } from '@lobechat/agent-address-mail';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentAccounts, agents, users } from '@/database/schemas';
@@ -253,6 +254,24 @@ describe('AgentAccountService — actions', () => {
     );
   });
 
+  it('refuses to send from a suspended account', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    const created = await service.provision({ agentId, provider: 'agent-mail' });
+
+    await serverDB
+      .update(agentAccounts)
+      .set({ status: 'suspended' })
+      .where(eq(agentAccounts.id, created.id));
+
+    await expect(service.send(created.id, { text: 'hi', to: 'human@example.com' })).rejects.toThrow(
+      /suspended/,
+    );
+    expect(calls.some((call) => call.method === 'POST' && call.path.includes('/messages'))).toBe(
+      false,
+    );
+  });
+
   it('releases on the provider and purges the credential when revoking', async () => {
     const { calls, fetchImpl } = createMailFetch();
     const service = buildService(fetchImpl);
@@ -306,6 +325,31 @@ describe('AgentAccountService — inbound routing', () => {
     });
 
     expect(outcome.outcome).toBe('rejected');
+  });
+
+  it('does not route a delivery to a suspended account', async () => {
+    const { fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    const created = await service.provision({ agentId, provider: 'agent-mail' });
+
+    await serverDB
+      .update(agentAccounts)
+      .set({ status: 'suspended' })
+      .where(eq(agentAccounts.id, created.id));
+
+    const body = inboundBody();
+    const outcome = await service.handleInbound('agent-mail', {
+      body,
+      headers: {
+        'x-agentmail-signature': computeAgentMailSignature(
+          WEBHOOK_SECRET,
+          body,
+          Math.floor(Date.now() / 1000),
+        ),
+      },
+    });
+
+    expect(outcome.outcome).toBe('unknown-account');
   });
 
   it('reports an unmapped address as an unknown account', async () => {
