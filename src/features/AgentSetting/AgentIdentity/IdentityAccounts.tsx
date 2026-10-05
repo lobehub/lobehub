@@ -9,7 +9,7 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 import AccountCard from './AccountCard';
-import { IDENTITY_CHANNELS } from './const';
+import { IDENTITY_CHANNELS, isChannelAccount } from './const';
 import InlineError from './InlineError';
 import ProvisionCard from './ProvisionCard';
 import SectionHeader from './SectionHeader';
@@ -63,7 +63,7 @@ const IdentityAccounts = memo<IdentityAccountsProps>(({ agentId, disabled }) => 
     <Flexbox gap={10}>
       {header}
       {IDENTITY_CHANNELS.map((channel) => {
-        const owned = accounts.filter((account) => account.kind === channel.kind);
+        const owned = accounts.filter((account) => isChannelAccount(account, channel));
 
         if (owned.length === 0) {
           // An offer this deployment cannot fulfil would only fail on click.

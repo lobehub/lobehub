@@ -37,3 +37,13 @@ export const IDENTITY_CHANNELS: IdentityChannel[] = [
     titleKey: 'identity.phone.title',
   },
 ];
+
+/**
+ * Whether an account belongs to a channel. A channel is the (kind, provider)
+ * pair, so a mailbox mounted through another provider (say `user`) is not the
+ * Agent Mail channel and must not hide its provisioning card.
+ */
+export const isChannelAccount = (
+  account: { kind: AgentAccountKind; provider: string },
+  channel: Pick<IdentityChannel, 'kind' | 'provider'>,
+): boolean => account.kind === channel.kind && account.provider === channel.provider;
