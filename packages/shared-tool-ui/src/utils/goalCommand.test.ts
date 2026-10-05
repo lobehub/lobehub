@@ -28,6 +28,30 @@ describe('getGoalCommand', () => {
     });
   });
 
+  it('scans adversarial separator / env-assignment runs in linear time', () => {
+    const inputs = [
+      `x\nA${'=\nA'.repeat(20_000)}`,
+      `x\nA=${'\nA= '.repeat(20_000)}`,
+      `x\n${'&!'.repeat(20_000)}`,
+      `${'A=1 '.repeat(20_000)}echo`,
+    ];
+
+    const startedAt = performance.now();
+    for (const input of inputs) expect(getGoalCommand(input)).toBeUndefined();
+    expect(performance.now() - startedAt).toBeLessThan(1000);
+  });
+
+  it('reads a call behind env assignments and a path, after a separator', () => {
+    expect(
+      getGoalCommand('cd /tmp && FOO=1 BAR=x ./bin/lh goal create "Ship it" --conversation'),
+    ).toEqual({ conversation: true, criteriaCount: 0, kind: 'create', title: 'Ship it' });
+    expect(getGoalCommand('(lh goal plan goal_9 --file p.json)')).toEqual({
+      goalId: 'goal_9',
+      kind: 'plan',
+    });
+    expect(getGoalCommand('lh goal created x')).toBeUndefined();
+  });
+
   it('reads the goal id of a plan submission', () => {
     expect(
       getGoalCommand('lh goal plan goal_P0NhivSBktCf --token t --file /tmp/plan.json'),

@@ -18,15 +18,46 @@ export type GoalCommand =
 // `lh` must be in command position — the start of the command, or right after
 // a separator (`&&`, `||`, `;`, `|`, `(`, newline), optionally behind env
 // assignments or a path. As a mere argument (`echo lh goal create x`) it never ran.
-const LH_GOAL_PATTERN =
-  /(?:^|[;&|(\n])\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:\S*\/)?lh\s+goal\s+(create|plan)(?=\s|$)([\s\S]*)$/;
+// Scanned token by token rather than with one regex: a pattern that has to try
+// every separator, env assignment and path prefix backtracks polynomially.
+const COMMAND_SEPARATOR = /[;&|(\n]/g;
+const TOKEN_PATTERN = /\S+/g;
+const ENV_ASSIGNMENT_PATTERN = /^[A-Z_]\w*=/i;
+const GOAL_VERBS = new Set(['create', 'plan']);
 const FIRST_POSITIONAL_PATTERN = /^\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)'|([^\s"'-]\S*))/;
 
-export const getGoalCommand = (command?: string): GoalCommand | undefined => {
-  const match = getRunCommandDisplayCommand(command).match(LH_GOAL_PATTERN);
-  if (!match) return;
+const isLhBinary = (token: string) => token === 'lh' || token.endsWith('/lh');
 
-  const [, verb, rest] = match;
+/** The first `lh goal <verb>` in command position, and everything after its verb. */
+const findGoalCall = (command: string): { rest: string; verb: string } | undefined => {
+  let start = 0;
+  while (start <= command.length) {
+    COMMAND_SEPARATOR.lastIndex = start;
+    const end = COMMAND_SEPARATOR.exec(command)?.index ?? command.length;
+    const tokens = [...command.slice(start, end).matchAll(TOKEN_PATTERN)];
+
+    let index = 0;
+    while (index < tokens.length && ENV_ASSIGNMENT_PATTERN.test(tokens[index][0])) index += 1;
+
+    const verb = tokens[index + 2];
+    if (
+      verb &&
+      isLhBinary(tokens[index][0]) &&
+      tokens[index + 1][0] === 'goal' &&
+      GOAL_VERBS.has(verb[0])
+    ) {
+      return { rest: command.slice(start + verb.index + verb[0].length), verb: verb[0] };
+    }
+
+    start = end + 1;
+  }
+};
+
+export const getGoalCommand = (command?: string): GoalCommand | undefined => {
+  const call = findGoalCall(getRunCommandDisplayCommand(command));
+  if (!call) return;
+
+  const { rest, verb } = call;
   const positional = rest.match(FIRST_POSITIONAL_PATTERN);
   const value = positional
     ? (positional[1]?.replaceAll(/\\(.)/g, '$1') ?? positional[2] ?? positional[3])
