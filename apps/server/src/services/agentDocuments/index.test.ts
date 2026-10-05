@@ -65,6 +65,7 @@ vi.mock('../skill/resource', () => ({
 }));
 
 vi.mock('@lobehub/editor/headless', () => ({
+  DEFAULT_HEADLESS_EDITOR_PLUGINS: [],
   createHeadlessEditor: vi.fn(() => {
     let markdown = '';
     let litexml = '<p id="node-1">content</p>';

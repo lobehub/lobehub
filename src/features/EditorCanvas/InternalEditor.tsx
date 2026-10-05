@@ -6,6 +6,7 @@ import {
   ReactImagePlugin,
   ReactLinkPlugin,
   ReactLiteXmlPlugin,
+  ReactMathPlugin,
   ReactMentionPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
@@ -48,7 +49,7 @@ const fileNodeStyles = createStaticStyles(({ css }) => ({
  */
 const STATIC_PLUGINS = [
   ReactLiteXmlPlugin,
-  ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin }),
+  ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin, mathPlugin: false }),
   // The kernel reads a plugin's config once at init, and `mentionOption` can
   // arrive later (workspace pages resolve their member source asynchronously),
   // so pin the member chip's markdown form here rather than relying on
@@ -108,6 +109,7 @@ export interface InternalEditorProps extends EditorCanvasProps {
  */
 const InternalEditor = memo<InternalEditorProps>(
   ({
+    allowContentBleed,
     blockImageCaretGuard = false,
     className,
     contentChangeLockRef,
@@ -115,6 +117,7 @@ const InternalEditor = memo<InternalEditorProps>(
     disabled,
     editable = true,
     editor,
+    enableInlineMath = true,
     extraPlugins,
     floatingToolbar = true,
     getPopupContainer,
@@ -153,11 +156,11 @@ const InternalEditor = memo<InternalEditorProps>(
         maxWidth: '100%',
         minWidth: 0,
         opacity: disabled ? 0.65 : undefined,
-        overflow: 'hidden',
+        overflow: allowContentBleed ? 'visible' : 'hidden',
         pointerEvents: disabled ? 'none' : undefined,
         width: '100%',
       }),
-      [disabled],
+      [allowContentBleed, disabled],
     );
 
     // Build plugins array
@@ -179,10 +182,12 @@ const InternalEditor = memo<InternalEditorProps>(
         theme: { file: fileNodeStyles.fileWrapper as unknown as string },
       });
 
+      const mathPlugin = Editor.withProps(ReactMathPlugin, { enableInlineMath });
+
       // Build base plugins with optional extra plugins prepended
       const basePlugins = extraPlugins
-        ? [...extraPlugins, ...STATIC_PLUGINS, imagePlugin, filePlugin]
-        : [...STATIC_PLUGINS, imagePlugin, filePlugin];
+        ? [...extraPlugins, ...STATIC_PLUGINS, mathPlugin, imagePlugin, filePlugin]
+        : [...STATIC_PLUGINS, mathPlugin, imagePlugin, filePlugin];
 
       if (!floatingToolbar || disabled) return basePlugins;
 
@@ -232,6 +237,7 @@ const InternalEditor = memo<InternalEditorProps>(
       editable,
       editor,
       editorState,
+      enableInlineMath,
       extraPlugins,
       floatingToolbar,
       handleFileUpload,

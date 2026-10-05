@@ -38,6 +38,16 @@ describe('agent document headless editor', () => {
     expect(isValidEditorData(snapshot.editorData)).toBe(true);
   });
 
+  it('should keep inline dollar text as plain text while preserving block math', async () => {
+    const snapshot = await createMarkdownEditorSnapshot(
+      'Budget variable: $x$ and $100k\n\n$$\nE = mc^2\n$$',
+    );
+
+    expect(snapshot.content).toContain('Budget variable: $x$ and $100k');
+    expect(hasNodeType(snapshot.editorData, 'math')).toBe(false);
+    expect(hasNodeType(snapshot.editorData, 'mathBlock')).toBe(true);
+  });
+
   it('should safely serialize concurrent headless document lifecycles', async () => {
     const sources = await Promise.all(
       Array.from({ length: 6 }, (_, index) =>
