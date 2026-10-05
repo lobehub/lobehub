@@ -10,6 +10,12 @@ import ImageViewer from './index';
 const downloadFile = vi.hoisted(() => vi.fn());
 vi.mock('@/utils/client/downloadFile', () => ({ downloadFile }));
 
+const confirmModal = vi.hoisted(() => vi.fn());
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  confirmModal,
+}));
+
 const loadImage = (width = 2000, height = 1000) => {
   const img = document.querySelector('img') as HTMLImageElement;
   Object.defineProperty(img, 'naturalWidth', { configurable: true, value: width });
@@ -199,6 +205,44 @@ describe('ImageViewer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'imageViewer.version.original' }));
     loadImage();
     expect(screen.getByText('marks:1')).toBeInTheDocument();
+  });
+
+  // Unsent marks exist only in the viewer, so closing asks before dropping them.
+  it('confirms before closing with unsent marks', () => {
+    const MarkProbe = () => {
+      const { setMarkup } = useImageStage();
+      return (
+        <button
+          onClick={() =>
+            setMarkup({
+              comments: [],
+              shapes: [{ color: '#f00', points: [], size: 0.01, type: 'brush' }],
+            })
+          }
+        >
+          mark
+        </button>
+      );
+    };
+    const onClose = vi.fn();
+    render(
+      <ImageViewer
+        fileId={'file_1'}
+        tools={<MarkProbe />}
+        url={'https://s3/a.png'}
+        onClose={onClose}
+      />,
+    );
+    loadImage();
+    fireEvent.click(screen.getByText('mark'));
+    fireEvent.click(screen.getByRole('button', { name: 'imageViewer.close' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(confirmModal).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'imageViewer.markup.discardConfirm.title' }),
+    );
+    confirmModal.mock.calls[0][0].onOk();
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('drops saved versions when another file opens', () => {

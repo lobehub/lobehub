@@ -41,7 +41,8 @@ export const useSendMarkupToChat = () => {
     async (markup: ImageMarkup): Promise<boolean> => {
       if (isMarkupEmpty(markup)) return false;
       const attached = useComposerDraftBus.getState().attached;
-      const agentId = attached ? useChatStore.getState().activeAgentId : inboxAgentId;
+      const { activeAgentId, activeTopicId } = useChatStore.getState();
+      const agentId = attached ? activeAgentId : inboxAgentId;
       if (!agentId) {
         toast.error(t('imageViewer.markup.noConversation'));
         return false;
@@ -64,6 +65,19 @@ export const useSendMarkupToChat = () => {
         // never go out with the text alone.
         // Another annotation of the same image may already be in the input
         // under the same name; only the item this upload adds counts.
+        // The export and upload take a while; if the user moved to another
+        // conversation meanwhile, the marks must not land there.
+        const isStillTarget = () => {
+          const chat = useChatStore.getState();
+          return (
+            useComposerDraftBus.getState().attached === attached &&
+            (!attached ||
+              (chat.activeAgentId === activeAgentId && chat.activeTopicId === activeTopicId))
+          );
+        };
+        if (!isStillTarget())
+          throw new Error('The conversation changed before the image was ready');
+
         const before = new Set(useFileStore.getState().chatUploadFileList.map((item) => item.id));
         await useFileStore.getState().uploadChatFiles([file], agentId);
         const staged = useFileStore
@@ -77,9 +91,14 @@ export const useSendMarkupToChat = () => {
               .dispatchChatUploadFileList({ id: staged.id, type: 'removeFile' });
           throw new Error(staged?.error ?? 'The annotated image did not reach the input');
         }
+        if (!isStillTarget()) {
+          useFileStore.getState().dispatchChatUploadFileList({ id: staged.id, type: 'removeFile' });
+          throw new Error('The conversation changed while the image was uploading');
+        }
 
         if (attached) {
-          draftToMainComposer(text, { append: true });
+          if (!draftToMainComposer(text, { append: true }))
+            throw new Error('The chat input is no longer open');
           toast.success(t('imageViewer.markup.added'));
         } else {
           queueDraftForMainComposer(text, { agentId });

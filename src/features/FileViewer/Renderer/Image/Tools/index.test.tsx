@@ -27,8 +27,9 @@ vi.mock('@/store/file', () => ({
   useFileStore: { getState: () => fileStore },
 }));
 
+const chatState = vi.hoisted(() => ({ activeAgentId: 'agt_current', activeTopicId: 'tpc_1' }));
 vi.mock('@/store/chat', () => ({
-  useChatStore: { getState: () => ({ activeAgentId: 'agt_current' }) },
+  useChatStore: { getState: () => chatState },
 }));
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: unknown) => unknown) => selector({}),
@@ -104,6 +105,7 @@ describe('ImageEditTools', () => {
   beforeEach(() => {
     useComposerDraftBus.setState({ attached: true, draft: null });
     fileStore.chatUploadFileList = [];
+    chatState.activeTopicId = 'tpc_1';
     fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
       fileStore.chatUploadFileList = [{ file, id: 'file_chat', status: 'success' }];
     });
@@ -364,6 +366,30 @@ describe('ImageEditTools', () => {
       });
       expect(useComposerDraftBus.getState().draft).toBeNull();
       expect(toast.success).not.toHaveBeenCalled();
+      expect(screen.getByTestId('image-markup-send')).toBeEnabled();
+    });
+
+    // Regression: switching conversations during the upload sent the marks to
+    // whichever conversation was open when it finished.
+    it('does not hand the marks to another conversation opened meanwhile', async () => {
+      fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
+        chatState.activeTopicId = 'tpc_other';
+        fileStore.chatUploadFileList = [{ file, id: 'file_chat', status: 'success' }];
+      });
+      const { overlay } = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.annotate'));
+      drawBox(overlay);
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('image-markup-send'));
+      });
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('imageViewer.markup.failed'));
+      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith({
+        id: 'file_chat',
+        type: 'removeFile',
+      });
+      expect(useComposerDraftBus.getState().draft).toBeNull();
       expect(screen.getByTestId('image-markup-send')).toBeEnabled();
     });
 

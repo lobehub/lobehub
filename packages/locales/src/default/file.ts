@@ -153,6 +153,10 @@ export default {
   'imageViewer.markup.area.topRight': 'top right',
   'imageViewer.markup.askInNewChat': 'Ask in new chat',
   'imageViewer.markup.discard': 'Discard annotations and comments',
+  'imageViewer.markup.discardConfirm.content':
+    'Your annotations and comments have not been added to a chat yet. Closing the viewer discards them.',
+  'imageViewer.markup.discardConfirm.ok': 'Discard and close',
+  'imageViewer.markup.discardConfirm.title': 'Discard unsent annotations?',
   'imageViewer.markup.empty': 'Draw or comment on the image first',
   'imageViewer.markup.failed': 'Failed to add the image to the chat',
   'imageViewer.markup.location.point': '{{area}} (x {{x}}%, y {{y}}%)',

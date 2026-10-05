@@ -1,7 +1,7 @@
 'use client';
 
 import { Center } from '@lobehub/ui';
-import { Button, Spin, Text } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -22,7 +22,7 @@ import {
   zoomIn,
   zoomOut,
 } from './geometry';
-import { EMPTY_MARKUP, type ImageMarkup } from './Tools/markup';
+import { EMPTY_MARKUP, type ImageMarkup, isMarkupEmpty } from './Tools/markup';
 import TopBar from './TopBar';
 import VersionSwitcher from './VersionSwitcher';
 
@@ -215,6 +215,21 @@ const ImageViewer = ({
     else void root.requestFullscreen?.();
   }, []);
 
+  // Unsent marks exist only here, so closing would drop them; ask first.
+  const handleClose = () => {
+    if (!onClose) return;
+    const hasMarks = Object.values(markupByFile).some((value) => !isMarkupEmpty(value));
+    if (!hasMarks) return onClose();
+    confirmModal({
+      cancelText: t('imageViewer.cancel'),
+      content: t('imageViewer.markup.discardConfirm.content'),
+      okButtonProps: { danger: true },
+      okText: t('imageViewer.markup.discardConfirm.ok'),
+      onOk: onClose,
+      title: t('imageViewer.markup.discardConfirm.title'),
+    });
+  };
+
   const handleDownload = () => {
     if (!url) return;
     // The `/f/:id` proxy redirects to storage without CORS, so a blob download
@@ -404,7 +419,7 @@ const ImageViewer = ({
         <TopBar
           isFullscreen={isFullscreen}
           zoom={zoom}
-          onClose={onClose}
+          onClose={onClose && handleClose}
           onDownload={handleDownload}
           onFit={fitToScreen}
           onRotate={() => setRotation(nextRotation)}
