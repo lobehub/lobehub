@@ -186,14 +186,31 @@ describe('runAIImageEdit', () => {
   it('reports a request that is rejected up front', async () => {
     const deps = spyDeps({
       createImage: async () => {
-        throw new Error('Insufficient budget');
+        // Shape of a TRPCClientError for a 4xx answer.
+        throw Object.assign(new Error('Insufficient budget'), { data: { httpStatus: 403 } });
       },
     });
     await expect(run(deps)).rejects.toMatchObject({
       kind: 'failed',
       message: 'Insufficient budget',
+      taskRunning: false,
     });
     expect(deps.deleteTopic).toHaveBeenCalledWith('gt_6p9nBZERtyWe');
+  });
+
+  // Regression: the server starts the task before answering, so a lost
+  // response must not delete the topic and input of a job that may be running.
+  it('keeps the topic and guide when the create response is lost', async () => {
+    const deps = spyDeps({
+      createImage: async () => {
+        throw new TypeError('Failed to fetch');
+      },
+    });
+    await expect(
+      run(deps, { guide: new Blob(['png'], { type: 'image/png' }), operation: 'erase' }),
+    ).rejects.toMatchObject({ kind: 'failed', taskRunning: true });
+    expect(deps.deleteTopic).not.toHaveBeenCalled();
+    expect(deps.removeFile).not.toHaveBeenCalled();
   });
 
   it('treats a batch without a task as a failure', async () => {

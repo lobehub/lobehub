@@ -12,6 +12,8 @@ import { clientToImagePoint, type Point } from '../geometry';
 import ImageEditTools from './index';
 
 const fileStore = vi.hoisted(() => ({
+  chatUploadFileList: [] as { error?: string; file: File; id: string; status: string }[],
+  dispatchChatUploadFileList: vi.fn(),
   refreshFileList: vi.fn(),
   uploadChatFiles: vi.fn(),
   uploadWithProgress: vi.fn(),
@@ -93,6 +95,10 @@ const renderTools = (stage: Partial<ImageStageValue> = {}) => {
 describe('ImageEditTools', () => {
   beforeEach(() => {
     useComposerDraftBus.setState({ attached: true, draft: null });
+    fileStore.chatUploadFileList = [];
+    fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
+      fileStore.chatUploadFileList = [{ file, id: 'file_chat', status: 'success' }];
+    });
     exporter.loadStageImage.mockResolvedValue({ naturalHeight: 1000, naturalWidth: 2000 });
     exporter.renderImageToBlob.mockResolvedValue(new Blob(['png'], { type: 'image/png' }));
     fileStore.uploadWithProgress.mockResolvedValue({ id: 'file_new', url: 'files/new.png' });
@@ -325,6 +331,32 @@ describe('ImageEditTools', () => {
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(screen.getByRole('toolbar', { name: 'imageViewer.editTools' })).toBeInTheDocument();
       expect(within(overlay).queryByTestId('image-annotate-canvas')).not.toBeInTheDocument();
+    });
+
+    // Regression: the text and success used to land before the attachment was
+    // in the input, so Send could go out with the text alone.
+    it('keeps the marks and adds no text when the attachment does not reach the input', async () => {
+      fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
+        fileStore.chatUploadFileList = [
+          { error: 'Upload failed', file, id: 'sunset-annotated.png', status: 'error' },
+        ];
+      });
+      const { overlay } = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.annotate'));
+      drawBox(overlay);
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('image-markup-send'));
+      });
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('imageViewer.markup.failed'));
+      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith({
+        id: 'sunset-annotated.png',
+        type: 'removeFile',
+      });
+      expect(useComposerDraftBus.getState().draft).toBeNull();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(screen.getByTestId('image-markup-send')).toBeEnabled();
     });
 
     it('reports when the storage does not allow reading pixels', async () => {

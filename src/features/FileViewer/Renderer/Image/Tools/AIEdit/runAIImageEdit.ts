@@ -129,6 +129,12 @@ const throwIfAborted = (signal?: AbortSignal) => {
   if (signal?.aborted) throw new AIImageEditError('cancelled');
 };
 
+/** A request the server refused outright (4xx), so it started nothing. */
+const isRejectedRequest = (error: unknown) => {
+  const status = (error as { data?: { httpStatus?: number } } | undefined)?.data?.httpStatus;
+  return typeof status === 'number' && status >= 400 && status < 500;
+};
+
 const errorDetail = (error: AsyncTaskError | null | undefined) => {
   const detail = error?.body?.detail;
   if (typeof detail === 'string' && detail) return detail;
@@ -192,9 +198,18 @@ export const runAIImageEdit = async ({
     topicId = await deps.createTopic(topicTitle, location?.visibility ?? undefined);
     throwIfAborted(signal);
 
-    const created = await deps.createImage(
-      buildAIEditRequest({ generationTopicId: topicId, imageUrl, model, operation }),
-    );
+    let created: CreateImageResult;
+    try {
+      created = await deps.createImage(
+        buildAIEditRequest({ generationTopicId: topicId, imageUrl, model, operation }),
+      );
+    } catch (error) {
+      // The server starts the task before it answers, so a lost or failed
+      // response may hide a running job. Only an explicit rejection (4xx)
+      // proves nothing started.
+      if (!isRejectedRequest(error)) submitted = true;
+      throw error;
+    }
     const pending = created?.data?.generations?.[0];
     if (!created?.success || !pending?.id || !pending.asyncTaskId)
       throw new AIImageEditError('failed', 'The image task could not be started');

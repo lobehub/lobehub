@@ -59,9 +59,21 @@ export const useSendMarkupToChat = () => {
         });
         const text = buildMarkupMessage(markup, { name, t });
 
-        // The attachment shows in the input right away; the upload reports its
-        // own progress and errors there.
-        void useFileStore.getState().uploadChatFiles([file], agentId);
+        // Wait for the attachment to be in the input (compressed, read and
+        // uploaded) before adding the text and dropping the marks, so Send can
+        // never go out with the text alone.
+        await useFileStore.getState().uploadChatFiles([file], agentId);
+        const staged = useFileStore
+          .getState()
+          .chatUploadFileList.find((item) => item.file?.name === file.name);
+        if (!staged || staged.status === 'error') {
+          // Keep the marks for another try instead of a broken chip in the input.
+          if (staged)
+            useFileStore
+              .getState()
+              .dispatchChatUploadFileList({ id: staged.id, type: 'removeFile' });
+          throw new Error(staged?.error ?? 'The annotated image did not reach the input');
+        }
 
         if (attached) {
           draftToMainComposer(text, { append: true });
