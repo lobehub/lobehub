@@ -59,6 +59,16 @@ describe('saveDerivedFile', () => {
     expect(deps.uploadFile).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'public' }));
   });
 
+  it('saves at the top level when the server says the original moved there', async () => {
+    const deps = createDeps({
+      getFile: vi.fn().mockResolvedValue({ knowledgeBaseIds: [], parentId: null }),
+    });
+
+    await saveDerivedFile(deps, { ...params, parentId: 'docs_stale' });
+
+    expect(deps.uploadFile).toHaveBeenCalledWith(expect.objectContaining({ parentId: undefined }));
+  });
+
   it('still saves beside the client-known folder when the lookup fails', async () => {
     const deps = createDeps({ getFile: vi.fn().mockRejectedValue(new Error('offline')) });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);

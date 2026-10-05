@@ -28,7 +28,8 @@ export const saveDerivedFile = async (
   const result = await deps.uploadFile({
     file,
     metadata,
-    parentId: location?.parentId ?? parentId ?? undefined,
+    // A successful lookup wins even when it reports the top level (null).
+    parentId: (location ? location.parentId : parentId) ?? undefined,
     // Collaborators who can see the original should see the edit too.
     visibility: location?.visibility ?? undefined,
   });

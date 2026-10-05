@@ -98,7 +98,16 @@ const renderTools = (stage: Partial<ImageStageValue> = {}) => {
       <ImageStageContext value={{ ...value, markup, setMarkup }}>{children}</ImageStageContext>
     );
   };
-  return { addVersion, fitToScreen, overlay, ...render(<ImageEditTools />, { wrapper: Wrapper }) };
+  // Tool shortcuts only listen inside the viewer.
+  const viewer = document.createElement('div');
+  viewer.dataset.testid = 'image-viewer';
+  document.body.append(viewer);
+  return {
+    addVersion,
+    fitToScreen,
+    overlay,
+    ...render(<ImageEditTools />, { container: viewer, wrapper: Wrapper }),
+  };
 };
 
 describe('ImageEditTools', () => {
@@ -431,6 +440,26 @@ describe('ImageEditTools', () => {
       expect(fileStore.uploadChatFiles).not.toHaveBeenCalled();
       // Stay in the mode so the drawing is not lost.
       expect(within(overlay).getByTestId('image-annotate-canvas')).toBeInTheDocument();
+    });
+  });
+
+  describe('shortcuts', () => {
+    // Regression: a window-level Enter from a control elsewhere on the page
+    // (e.g. the chat beside a portal preview) triggered the tool's action.
+    it('ignores keys from outside the viewer and Enter on a focused control', () => {
+      renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.resize'));
+
+      const outside = document.createElement('button');
+      document.body.append(outside);
+      fireEvent.keyDown(outside, { key: 'Enter' });
+      fireEvent.keyDown(outside, { key: 'Escape' });
+      fireEvent.keyDown(screen.getByRole('button', { name: 'imageViewer.cancel' }), {
+        key: 'Enter',
+      });
+
+      expect(fileStore.uploadWithProgress).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('imageViewer.resize.width')).toBeInTheDocument();
     });
   });
 
