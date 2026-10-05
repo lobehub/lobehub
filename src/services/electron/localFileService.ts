@@ -108,6 +108,11 @@ export interface TextLocalFilePreview {
  */
 export interface VideoLocalFilePreview {
   contentType: string;
+  /**
+   * Identity of the file contents (size + mtime). Changes when the file at the
+   * same path is replaced, so a refreshed preview tells the player to re-read.
+   */
+  revision: string;
   type: 'video';
 }
 
@@ -218,7 +223,14 @@ const fetchLocalFilePreview = async (
 
     return isOversizedVideo(response)
       ? { contentType, oversized: true, type: 'binary' }
-      : { contentType, type: 'video' };
+      : {
+          contentType,
+          revision: [
+            response.headers.get('content-length') ?? '',
+            response.headers.get('x-preview-modified-at') ?? '',
+          ].join(':'),
+          type: 'video',
+        };
   }
 
   return { contentType, type: 'binary' };

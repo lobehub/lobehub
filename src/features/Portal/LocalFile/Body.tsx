@@ -503,6 +503,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
           allowExternalFile={allowExternalFilePreview}
           filePath={filePath}
           key={filePath}
+          revision={preview.revision}
           workingDirectory={workingDirectory}
         />
       );

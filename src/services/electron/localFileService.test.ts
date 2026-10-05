@@ -164,9 +164,11 @@ describe('localFileService', () => {
     ({
       blob,
       body: { cancel: vi.fn(async () => {}) },
-      headers: {
-        get: vi.fn((name: string) => (name === 'content-type' ? 'video/mp4' : String(size))),
-      },
+      headers: new Headers({
+        'content-length': String(size),
+        'content-type': 'video/mp4',
+        'x-preview-modified-at': '1700000000123',
+      }),
       ok: true,
     }) as unknown as Response;
 
@@ -186,7 +188,11 @@ describe('localFileService', () => {
       workingDirectory: '/repo',
     });
 
-    expect(preview).toEqual({ contentType: 'video/mp4', type: 'video' });
+    expect(preview).toEqual({
+      contentType: 'video/mp4',
+      revision: '3:1700000000123',
+      type: 'video',
+    });
     expect(blobMock).not.toHaveBeenCalled();
   });
 
