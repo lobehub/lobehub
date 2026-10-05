@@ -41,6 +41,14 @@ const GATEWAY_CALL_TIMEOUT_MS = 60_000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * `WebContents.executeJavaScript` defers the script until the main frame stops
+ * loading, so on a page that never finishes (a pending image, long-poll, dev
+ * proxy) every snapshot/readPage/click hung until the caller timed out. The
+ * main frame's own `executeJavaScript` runs against the current document now.
+ */
+const evaluate = (guest: WebContents, code: string) => guest.mainFrame.executeJavaScript(code);
+
+/**
  * Runs inside the guest page. Builds a compact interactive-element snapshot and
  * caches the elements on `window.__lobeBrowserRefs` so later actions can
  * resolve `ref` ids without re-querying.
@@ -222,7 +230,7 @@ export default class BrowserControlCtr extends ControllerModule {
   @IpcMethod()
   async snapshot(params: BrowserControlParams): Promise<BrowserControlSnapshotResult> {
     return this.withGuest(params.sessionId, async (guest) => {
-      const raw = await guest.executeJavaScript(SNAPSHOT_SCRIPT);
+      const raw = await evaluate(guest, SNAPSHOT_SCRIPT);
       const parsed = JSON.parse(raw);
       return { success: true, ...parsed };
     });
@@ -234,7 +242,7 @@ export default class BrowserControlCtr extends ControllerModule {
       let { x, y } = params;
 
       if (params.ref) {
-        const raw = await guest.executeJavaScript(resolveRefScript(params.ref));
+        const raw = await evaluate(guest, resolveRefScript(params.ref));
         const resolved = JSON.parse(raw);
         if (resolved.error) return { error: resolved.error, success: false };
         x = resolved.x;
@@ -264,7 +272,7 @@ export default class BrowserControlCtr extends ControllerModule {
   async fill(params: BrowserControlFillParams): Promise<BrowserControlResult> {
     return this.withGuest(params.sessionId, async (guest) => {
       this.markControlling(params.sessionId, guest);
-      const raw = await guest.executeJavaScript(fillScript(params.ref, params.text));
+      const raw = await evaluate(guest, fillScript(params.ref, params.text));
       const result = JSON.parse(raw);
       if (result.error) return { error: result.error, success: false };
 
@@ -290,7 +298,8 @@ export default class BrowserControlCtr extends ControllerModule {
   async scroll(params: BrowserControlScrollParams): Promise<BrowserControlResult> {
     return this.withGuest(params.sessionId, async (guest) => {
       this.markControlling(params.sessionId, guest);
-      await guest.executeJavaScript(
+      await evaluate(
+        guest,
         `window.scrollBy({ behavior: 'smooth', left: ${Number(params.dx) || 0}, top: ${Number(params.dy) || 0} })`,
       );
       await sleep(350);
@@ -303,7 +312,7 @@ export default class BrowserControlCtr extends ControllerModule {
     return this.withGuest(params.sessionId, async (guest) => {
       // Strip the agent cursor/chip first — otherwise the model sees its own
       // overlay in the frame it just asked for.
-      await guest.executeJavaScript(OVERLAY_REMOVE_SCRIPT).catch(() => {});
+      await evaluate(guest, OVERLAY_REMOVE_SCRIPT).catch(() => {});
 
       let image = await guest.capturePage();
       const size = image.getSize();
@@ -317,7 +326,7 @@ export default class BrowserControlCtr extends ControllerModule {
   @IpcMethod()
   async readPage(params: BrowserControlParams): Promise<BrowserControlReadPageResult> {
     return this.withGuest(params.sessionId, async (guest) => {
-      const raw = await guest.executeJavaScript(READ_PAGE_SCRIPT);
+      const raw = await evaluate(guest, READ_PAGE_SCRIPT);
       return { success: true, ...JSON.parse(raw) };
     });
   }
@@ -334,7 +343,7 @@ export default class BrowserControlCtr extends ControllerModule {
 
       while (Date.now() < deadline) {
         if (guest.isDestroyed()) return { error: 'Browser page was closed', success: false };
-        const found = await guest.executeJavaScript(containsTextScript(params.text));
+        const found = await evaluate(guest, containsTextScript(params.text));
         if (found) return { success: true };
         await sleep(250);
       }
@@ -378,7 +387,7 @@ export default class BrowserControlCtr extends ControllerModule {
    * The overlay is injected into the guest so it follows page scrolling and zoom.
    */
   private inject(guest: WebContents, script: string) {
-    guest.executeJavaScript(script).catch((error: Error) => {
+    evaluate(guest, script).catch((error: Error) => {
       logger.debug(`Agent overlay injection failed: ${error.message}`);
     });
   }

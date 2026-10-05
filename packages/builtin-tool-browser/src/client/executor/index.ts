@@ -50,10 +50,16 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
       // Let the page settle before reporting where we landed.
       await this.waitForLoad(sessionId);
       const next = await electronBrowserSidebarService.getState({ sessionId });
-      return this.success(`Opened ${next.url}${next.title ? ` — "${next.title}"` : ''}`, {
-        title: next.title,
-        url: next.url,
-      });
+      const loading = next.isLoading
+        ? ' The page is still loading (some requests have not finished); its content may be incomplete, but snapshot/readPage work now.'
+        : '';
+      return this.success(
+        `Opened ${next.url}${next.title ? ` — "${next.title}"` : ''}.${loading}`,
+        {
+          title: next.title,
+          url: next.url,
+        },
+      );
     } catch (error) {
       return this.errorResult(error);
     }

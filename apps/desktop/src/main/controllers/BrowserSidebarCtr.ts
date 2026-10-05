@@ -36,6 +36,12 @@ const DEFAULT_BROWSER_URL = 'about:blank';
 const HTTP_URL_PATTERN = /^https?:\/\//i;
 const LOCAL_URL_PATTERN = /^(?:localhost|127(?:\.\d{1,3}){3}|\[?::1\]?)(?::\d+)?(?:[/?#].*)?$/i;
 const SUPPORTED_PROTOCOLS = new Set(['about:', 'http:', 'https:']);
+/** How long `navigate` waits for the load to finish before reporting it as still loading. */
+const NAVIGATION_SETTLE_TIMEOUT_MS = 15_000;
+/** net::ERR_ABORTED — the navigation was superseded rather than failed. */
+const NAVIGATION_ABORTED_ERRNO = -3;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const DEFAULT_OVERLAY_LABELS: AgentOverlayLabels = {
   controlling: 'Agent is controlling this page',
@@ -296,13 +302,31 @@ export default class BrowserSidebarCtr extends ControllerModule {
     page.url = url;
     page.error = undefined;
 
-    await webContents.loadURL(url).catch((error: Error) => {
-      // A superseded navigation rejects here; the did-fail-load handler already
-      // records anything worth surfacing.
-      logger.debug(`Navigation to ${url} did not settle cleanly: ${error.message}`);
-    });
+    // `loadURL` only settles once every subresource has loaded, which never
+    // happens on pages with a hanging request — the tool call then sat until
+    // the gateway timeout. Past the cap, report the page as still loading.
+    const outcome = await Promise.race([
+      webContents.loadURL(url).then(
+        () => ({ status: 'loaded' as const }),
+        (error: Error & { errno?: number }) => ({ error, status: 'failed' as const }),
+      ),
+      sleep(NAVIGATION_SETTLE_TIMEOUT_MS).then(() => ({ status: 'pending' as const })),
+    ]);
 
     this.updateSnapshot(params.sessionId);
+
+    // ERR_ABORTED means another navigation took over (a redirect or a newer
+    // load); the page that replaced it is the real outcome. Anything else —
+    // connection refused, a 204 or a download — left the requested page
+    // unopened, so say so instead of reporting whatever page is still showing.
+    if (outcome.status === 'failed' && outcome.error.errno !== NAVIGATION_ABORTED_ERRNO) {
+      logger.debug(`Navigation to ${url} failed: ${outcome.error.message}`);
+      return {
+        error: `Could not open ${url}: ${outcome.error.message}. The browser is still showing ${webContents.getURL() || 'a blank page'}.`,
+        success: false,
+      };
+    }
+
     return { success: true };
   }
 

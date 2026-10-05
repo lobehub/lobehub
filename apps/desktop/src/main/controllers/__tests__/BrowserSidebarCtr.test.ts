@@ -119,6 +119,71 @@ describe('BrowserSidebarCtr retained webview registration', () => {
     );
   });
 
+  describe('navigate outcome', () => {
+    const register = async (guest: FakeWebContents) => {
+      fromIdMock.mockImplementation((id: number) => (id === guest.id ? guest : undefined));
+      await invokeIpc('browserSidebar.registerWebview', {
+        sessionId: 'topic:a',
+        webContentsId: guest.id,
+      });
+    };
+
+    it('stops waiting for a page whose load never finishes', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      // A page with a request that never completes: loadURL never settles.
+      guest.loadURL = vi.fn(() => new Promise(() => {}));
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'http://127.0.0.1:9876/',
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(pending).resolves.toEqual({ success: true });
+      vi.useRealTimers();
+    });
+
+    it('reports a navigation that left the requested page unopened', async () => {
+      const guest = createWebContents(7);
+      await guest.loadURL('http://127.0.0.1:16001/');
+      // A 204 / download / refused connection rejects without committing.
+      guest.loadURL = vi.fn(async () => {
+        throw Object.assign(new Error("ERR_FAILED (-2) loading 'http://127.0.0.1:18748/'"), {
+          errno: -2,
+        });
+      });
+      await register(guest);
+
+      await expect(
+        invokeIpc('browserSidebar.navigate', {
+          sessionId: 'topic:a',
+          url: 'http://127.0.0.1:18748/',
+        }),
+      ).resolves.toEqual({
+        error:
+          "Could not open http://127.0.0.1:18748/: ERR_FAILED (-2) loading 'http://127.0.0.1:18748/'. The browser is still showing http://127.0.0.1:16001/.",
+        success: false,
+      });
+    });
+
+    it('treats a superseded navigation (ERR_ABORTED) as settled', async () => {
+      const guest = createWebContents(7);
+      guest.loadURL = vi.fn(async () => {
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      await expect(
+        invokeIpc('browserSidebar.navigate', {
+          sessionId: 'topic:a',
+          url: 'https://example.com/redirects',
+        }),
+      ).resolves.toEqual({ success: true });
+    });
+  });
+
   it('keeps sessions isolated and activates the most recently registered host', async () => {
     const oldGuest = createWebContents(1);
     const newGuest = createWebContents(2);
