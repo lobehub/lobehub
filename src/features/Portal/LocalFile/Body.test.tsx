@@ -72,6 +72,7 @@ vi.mock('@/components/Loading/CircleLoading', () => ({
 }));
 
 const mockUseClientDataSWR = vi.hoisted(() => vi.fn());
+const mockMutateSWRCache = vi.hoisted(() => vi.fn());
 const mockProjectFileService = vi.hoisted(() => ({
   getLocalFilePreview: vi.fn(),
   // The toolbar breadcrumb reads the project index to offer sibling files.
@@ -79,6 +80,7 @@ const mockProjectFileService = vi.hoisted(() => ({
 }));
 
 vi.mock('@/libs/swr', () => ({
+  mutate: mockMutateSWRCache,
   useClientDataSWR: mockUseClientDataSWR,
 }));
 
@@ -89,6 +91,10 @@ vi.mock('@/services/projectFile', () => ({
 vi.mock('@/utils/skillMarkdown', () => ({
   parseSkillMarkdownFrontmatter: (content: string) => ({ body: content }),
   parseSkillMarkdownMetadata: () => [],
+}));
+
+vi.mock('./VideoPreview', () => ({
+  default: () => <video data-testid="video-preview" />,
 }));
 
 vi.mock('./MarkdownImage', () => ({
@@ -213,6 +219,7 @@ describe('LocalFile Body', () => {
     mockIsHtmlFile.mockReset();
     mockIsHtmlFile.mockReturnValue(false);
     mockUseClientDataSWR.mockClear();
+    mockMutateSWRCache.mockClear();
     mockUseClientDataSWR.mockReturnValue({
       isLoading: true,
       mutate: vi.fn(),
@@ -333,6 +340,40 @@ describe('LocalFile Body', () => {
     expect(screen.getByTitle('html-preview')).toHaveAttribute(
       'data-base-url',
       'localfile://preview-session/pages/',
+    );
+  });
+
+  it('drops a video preview from the SWR cache once the file stops being shown', () => {
+    const videoFileId = createLocalFileTabId({
+      filePath: '/project-a/demo.mp4',
+      workingDirectory: '/project-a',
+    });
+    mockChatState.current = {
+      ...createChatState('topic-a'),
+      activeLocalFileId: videoFileId,
+      activeLocalFilePath: '/project-a/demo.mp4',
+      openLocalFiles: [
+        { filePath: '/project-a/demo.mp4', id: videoFileId, workingDirectory: '/project-a' },
+      ],
+    };
+    mockUseClientDataSWR.mockReturnValue({
+      data: { blob: new Blob(), contentType: 'video/mp4', type: 'video' },
+      isLoading: false,
+      isValidating: false,
+      mutate: vi.fn(),
+    });
+
+    const { unmount } = render(<Body />);
+
+    expect(screen.getByTestId('video-preview')).toBeInTheDocument();
+    expect(mockMutateSWRCache).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(mockMutateSWRCache).toHaveBeenCalledWith(
+      localFileKeys.preview({ filePath: '/project-a/demo.mp4', workingDirectory: '/project-a' }),
+      undefined,
+      { revalidate: false },
     );
   });
 });
