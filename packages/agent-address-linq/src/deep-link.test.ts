@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import type * as NodeCrypto from 'node:crypto';
+import { randomInt } from 'node:crypto';
+
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildLinqDeepLink,
@@ -9,6 +12,11 @@ import {
   LINQ_LINK_CODE_PATTERN,
   normalizeLinqNumber,
 } from './deep-link';
+
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeCrypto>();
+  return { ...actual, randomInt: vi.fn(actual.randomInt) };
+});
 
 describe('normalizeLinqNumber', () => {
   it('strips the punctuation people paste around an international number', () => {
@@ -62,6 +70,18 @@ describe('link codes', () => {
         undefined,
       );
     }
+  });
+
+  it('draws each symbol uniformly over the alphabet', () => {
+    // A `byte % 31` mapping favours the first 8 symbols; drawing through
+    // `randomInt(alphabet.length)` rejection-samples instead.
+    vi.mocked(randomInt).mockReturnValue((LINQ_LINK_CODE_ALPHABET.length - 1) as never);
+
+    const code = createLinqLinkCode();
+
+    expect(randomInt).toHaveBeenCalledWith(LINQ_LINK_CODE_ALPHABET.length);
+    expect(code).toBe(`LH-${LINQ_LINK_CODE_ALPHABET.at(-1)!.repeat(LINQ_LINK_CODE_LENGTH)}`);
+    vi.mocked(randomInt).mockRestore();
   });
 
   it('does not repeat across a burst of mints', () => {

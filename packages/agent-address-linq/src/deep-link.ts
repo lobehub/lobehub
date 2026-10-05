@@ -22,7 +22,7 @@
  * a code. Issuing, storing and expiring a code is the binding flow's job.
  */
 
-import { randomBytes } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 
 /** Marker that makes a link code recognizable inside an arbitrary message body. */
 export const LINQ_LINK_CODE_PREFIX = 'LH-';
@@ -58,9 +58,12 @@ export const LINQ_LINK_CODE_PATTERN = new RegExp(
  * claim another person's link.
  */
 export const createLinqLinkCode = (): string => {
-  const bytes = randomBytes(LINQ_LINK_CODE_LENGTH);
+  // `randomInt` rejection-samples, so every symbol is equally likely; a
+  // `byte % 31` mapping would favour the first 8 symbols.
   let code = '';
-  for (const byte of bytes) code += LINQ_LINK_CODE_ALPHABET[byte % LINQ_LINK_CODE_ALPHABET.length];
+  for (let i = 0; i < LINQ_LINK_CODE_LENGTH; i++) {
+    code += LINQ_LINK_CODE_ALPHABET[randomInt(LINQ_LINK_CODE_ALPHABET.length)];
+  }
   return `${LINQ_LINK_CODE_PREFIX}${code}`;
 };
 
