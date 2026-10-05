@@ -15,15 +15,18 @@ export const DASHBOARD_GRID = {
 
 /**
  * Keep a layout on the grid: integer cells, a span of at least one cell, and
- * no item starting past the last column.
+ * the whole item inside the columns — the width is normalized first, then `x`
+ * is clamped so the item ends on the last column at the latest. Rows are
+ * unbounded, so only `y >= 0` applies there.
  */
 export const normalizeItemLayout = (layout: DashboardItemLayout): DashboardItemLayout => {
   const cell = (value: number, min: number, max: number) =>
     Math.min(max, Math.max(min, Math.round(value)));
+  const w = cell(layout.w, 1, Math.min(DASHBOARD_GRID.maxSpan, DASHBOARD_GRID.maxColumns));
   return {
     h: cell(layout.h, 1, DASHBOARD_GRID.maxSpan),
-    w: cell(layout.w, 1, DASHBOARD_GRID.maxSpan),
-    x: cell(layout.x, 0, DASHBOARD_GRID.maxColumns),
+    w,
+    x: cell(layout.x, 0, DASHBOARD_GRID.maxColumns - w),
     y: cell(layout.y, 0, Number.MAX_SAFE_INTEGER),
   };
 };
