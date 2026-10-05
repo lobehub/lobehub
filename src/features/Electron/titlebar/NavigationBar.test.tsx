@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import NavigationBar from './NavigationBar';
 
 const mocks = vi.hoisted(() => ({
+  isMac: false,
   handlers: new Map<string, () => void>(),
   leftPanelVisible: false,
   leftPanelWidth: 0,
@@ -42,7 +43,7 @@ vi.mock('@/store/electron', () => ({
     selector({ activeRecentScope: { slug: 'acme', type: 'workspace' } }),
 }));
 vi.mock('@/styles/electron', () => ({ electronStylish: { nodrag: 'nodrag' } }));
-vi.mock('@/utils/platform', () => ({ isMacOS: () => false }));
+vi.mock('@/utils/platform', () => ({ isMacOS: () => mocks.isMac }));
 vi.mock('../navigation/useNavigationHistory', () => ({
   useNavigationHistory: () => ({
     canGoBack: false,
@@ -57,6 +58,7 @@ vi.mock('./TrayMenu/useTrayMenuSync', () => ({ useTrayMenuSync: vi.fn() }));
 describe('NavigationBar tray broadcasts', () => {
   beforeEach(() => {
     mocks.handlers.clear();
+    mocks.isMac = false;
     mocks.leftPanelVisible = false;
     mocks.leftPanelWidth = 0;
     vi.clearAllMocks();
@@ -91,5 +93,15 @@ describe('NavigationBar tray broadcasts', () => {
     const expanded = render(<NavigationBar />);
 
     expect(expanded.container.querySelector('.root')).toHaveStyle({ width: '268px' });
+  });
+
+  it('reserves the traffic light inset on macOS when the sidebar is collapsed', async () => {
+    mocks.isMac = true;
+    vi.resetModules();
+    const { default: MacNavigationBar } = await import('./NavigationBar');
+
+    const { container } = render(<MacNavigationBar />);
+
+    expect(container.querySelector('.root')).toHaveStyle({ width: '184px' });
   });
 });

@@ -128,9 +128,9 @@ const NavigationBar = memo(() => {
 
   const isLeftPanelVisible = leftPanelWidth > 0;
   const macTrafficLightPadding = getMacTrafficLightPadding(isMac, isWindowFullScreen);
-  const collapsedWidth = isMac
-    ? MAC_COLLAPSED_NAVIGATION_BAR_WIDTH
-    : COLLAPSED_NAVIGATION_BAR_WIDTH;
+  const collapsedWidth =
+    (isMac ? MAC_COLLAPSED_NAVIGATION_BAR_WIDTH : COLLAPSED_NAVIGATION_BAR_WIDTH) +
+    macTrafficLightPadding;
   const navigationWidth = isLeftPanelVisible
     ? Math.max(leftPanelWidth - 12, collapsedWidth)
     : collapsedWidth;
