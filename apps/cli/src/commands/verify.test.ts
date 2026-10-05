@@ -765,7 +765,9 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
 
     expect(verify.updateRun.mutate).not.toHaveBeenCalled();
     expect(verify.createRun.mutate).toHaveBeenCalled();
+    // The ambient topic may be folded onto its Task by the server.
     expect(mockTrpcClient.acceptance.ensure.mutate).toHaveBeenCalledWith({
+      foldTaskRunTopic: true,
       requirement: undefined,
       subjectId: 'topic-1',
       subjectType: 'topic',
@@ -773,6 +775,16 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenCalledWith({
       acceptanceId: 'acceptance-1',
       verifyRunId: 'run-new',
+    });
+  });
+
+  it('keeps an explicit topic subject exact instead of folding it onto a Task', async () => {
+    await run(['ingest-report', dir, '--subject', 'topic:topic-explicit', '--json']);
+
+    expect(mockTrpcClient.acceptance.ensure.mutate).toHaveBeenCalledWith({
+      requirement: undefined,
+      subjectId: 'topic-explicit',
+      subjectType: 'topic',
     });
   });
 

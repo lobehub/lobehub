@@ -699,6 +699,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // An external repository has none of those, so create a first-class
   // standalone subject instead of making the caller manufacture a Task ID.
   let subject = subjectFromResult(result);
+  let foldTaskRunTopic = false;
   if (!requestedAcceptanceId && options.subject) {
     const ref = parseSubjectRef(options.subject);
     if (!ref) {
@@ -714,6 +715,8 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   } else if (!requestedAcceptanceId && !subject) {
     const ref = subjectFromEnv();
     if (ref) subject = { ref };
+    // Only the ambient topic may be folded onto its Task; an explicit subject stays exact.
+    foldTaskRunTopic = Boolean(ref);
   }
   if (!requestedAcceptanceId && !subject) {
     subject = {
@@ -772,6 +775,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
       requirement,
       subjectId: subject!.ref.subjectId,
       subjectType: subject!.ref.subjectType,
+      ...(foldTaskRunTopic ? { foldTaskRunTopic } : {}),
       ...(subject!.ref.subjectType === 'standalone' && (title || goal)
         ? { title: title || goal }
         : {}),
