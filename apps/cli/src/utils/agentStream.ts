@@ -108,20 +108,17 @@ export async function streamAgentEvents(
   // Progress window, restarted by real events only — SSE heartbeats keep the
   // response open even when the terminal event was missed, so they must not
   // count. When it expires, `onStall` decides; its verdict is handed back to
-  // the read loop by cancelling the pending read.
+  // the read loop by cancelling the pending read. Without `onStall` there is no
+  // window at all: silence is not evidence, and a quiet tool call is legitimate.
   let finished = false;
   let stallTimer: ReturnType<typeof setTimeout> | undefined;
   let stalled: { error: Error } | { outcome: AgentRunOutcome } | undefined;
   const armStallTimer = () => {
+    if (!onStall) return;
     if (stallTimer) clearTimeout(stallTimer);
     stallTimer = setTimeout(async () => {
       if (finished) return;
       const silence = `Agent stream sent no progress for ${Math.round(stallTimeoutMs / 1000)}s`;
-      if (!onStall) {
-        stalled = { error: new Error(`${silence} and never reported completion`) };
-        void reader.cancel();
-        return;
-      }
       log.debug(`${silence}; checking the run status`);
       try {
         const outcome = await onStall();

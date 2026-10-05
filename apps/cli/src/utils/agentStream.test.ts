@@ -1003,6 +1003,42 @@ describe('SSE quiet window (terminal event published before the subscription)', 
     await assertion;
   });
 
+  it('without onStall a quiet stream is never cut off (task --follow streams)', async () => {
+    const encoder = new TextEncoder();
+    let controllerRef!: ReadableStreamDefaultController<Uint8Array>;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    fetchSpy.mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          cancel() {
+            clearInterval(timer);
+          },
+          start(c) {
+            controllerRef = c;
+            timer = setInterval(
+              () => c.enqueue(encoder.encode(sseMessage('heartbeat', { type: 'heartbeat' }))),
+              300,
+            );
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const promise = streamAgentEvents('https://example.com/stream', {}, { stallTimeoutMs: 1000 });
+    const settled = settledFlag(promise);
+    await vi.advanceTimersByTimeAsync(10_000); // a long silent tool call
+    expect(settled).not.toHaveBeenCalled();
+
+    clearInterval(timer);
+    controllerRef.enqueue(
+      encoder.encode(
+        sseMessage('data', { data: { reason: 'done' }, stepIndex: 0, type: 'agent_runtime_end' }),
+      ),
+    );
+    await expect(promise).resolves.toEqual(expect.objectContaining({ kind: 'completed' }));
+  });
+
   it('real events restart the window, heartbeats do not', async () => {
     const encoder = new TextEncoder();
     let controllerRef!: ReadableStreamDefaultController<Uint8Array>;

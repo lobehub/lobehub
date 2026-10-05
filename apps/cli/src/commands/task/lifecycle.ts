@@ -74,10 +74,13 @@ export function registerLifecycleCommands(task: Command) {
         const { serverUrl, headers } = await getAuthInfo();
         const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(result.operationId)}`;
 
-        await streamAgentEvents(streamUrl, headers, {
+        const outcome = await streamAgentEvents(streamUrl, headers, {
           json: options.json,
           verbose: options.verbose,
         });
+        // The stream helper reports an `error` event as a failed outcome rather
+        // than exiting; keep this command's contract of failing on it.
+        if (outcome?.kind === 'failed') process.exit(1);
 
         // Send heartbeat after completion
         try {
@@ -169,10 +172,12 @@ export function registerLifecycleCommands(task: Command) {
           const { serverUrl, headers } = await getAuthInfo();
           const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
 
-          await streamAgentEvents(streamUrl, headers, {
+          const outcome = await streamAgentEvents(streamUrl, headers, {
             json: options.json,
             verbose: options.verbose,
           });
+          // A failed run stops the sequence, as the stream helper used to exit on it.
+          if (outcome?.kind === 'failed') process.exit(1);
 
           // Update heartbeat after each topic
           try {
