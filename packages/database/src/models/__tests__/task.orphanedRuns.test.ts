@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -190,6 +190,36 @@ describe('TaskTopicModel run claim', () => {
     expect((await readRun(topicId)).status).toBe('failed');
     // The run is over, so the topic gets its end stamp too.
     expect((await readTopic(topicId)).completedAt).toBeInstanceOf(Date);
+  });
+
+  it('leaves the run `running` when the topic end stamp fails', async () => {
+    // Regression: the claim committed before the topic stamp, so a failed stamp
+    // threw past the caller's rollback and left the run terminal while its Task
+    // stayed `running` — invisible to the next sweep, which only looks at
+    // `running` rows.
+    const { operationId, topicId } = await seed();
+    const model = new TaskTopicModel(serverDB, userId);
+    await serverDB.execute(sql`
+      CREATE OR REPLACE FUNCTION orphaned_runs_test_fail_topic_stamp() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'topic stamp failed'; END;
+      $$ LANGUAGE plpgsql
+    `);
+    await serverDB.execute(sql`
+      CREATE TRIGGER orphaned_runs_test_fail_topic_stamp BEFORE UPDATE ON topics
+      FOR EACH ROW EXECUTE FUNCTION orphaned_runs_test_fail_topic_stamp()
+    `);
+
+    try {
+      await expect(model.markEndedIfRunning(topicId, operationId, 'failed')).rejects.toThrow();
+    } finally {
+      await serverDB.execute(
+        sql`DROP TRIGGER IF EXISTS orphaned_runs_test_fail_topic_stamp ON topics`,
+      );
+      await serverDB.execute(sql`DROP FUNCTION IF EXISTS orphaned_runs_test_fail_topic_stamp()`);
+    }
+
+    expect((await readRun(topicId)).status).toBe('running');
+    expect((await readTopic(topicId)).completedAt).toBeNull();
   });
 
   it('refuses a run that has already settled', async () => {
