@@ -52,5 +52,5 @@ export const DEFAULT_VERIFY_PROVIDER = 'zhipu';
  * reasoning model burn its budget and return no parsable JSON, which silently
  * collapsed every checklist to the single holistic fallback row.
  */
-export const DEFAULT_VERIFY_PLAN_MODEL = 'deepseek-v4-flash';
+export const DEFAULT_VERIFY_PLAN_MODEL = 'deepseek-flash';
 export const DEFAULT_VERIFY_PLAN_PROVIDER = 'deepseek';
