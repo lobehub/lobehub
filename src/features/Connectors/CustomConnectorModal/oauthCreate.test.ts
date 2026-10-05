@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ConnectorOAuthError } from '@/utils/connectorOAuth';
+
 import { executeOAuthCreate } from './oauthCreate';
 
 const deps = {
   createConnector: vi.fn(),
   deleteConnector: vi.fn(),
+  isConnectorConnected: vi.fn(),
   startConnectorOAuth: vi.fn(),
   waitForConnectorOAuth: vi.fn(),
 };
@@ -14,6 +17,7 @@ describe('executeOAuthCreate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     deps.deleteConnector.mockResolvedValue(undefined);
+    deps.isConnectorConnected.mockResolvedValue(false);
   });
 
   it('opens the authorize URL for the created connector', async () => {
@@ -69,5 +73,50 @@ describe('executeOAuthCreate', () => {
     await expect(executeOAuthCreate({}, popup, deps)).rejects.toThrow('dismissed');
 
     expect(deps.deleteConnector).not.toHaveBeenCalled();
+  });
+
+  describe('when the popup closes without reporting a result', () => {
+    beforeEach(() => {
+      deps.startConnectorOAuth.mockResolvedValue('https://auth.example.com/authorize');
+      deps.waitForConnectorOAuth.mockRejectedValue(new ConnectorOAuthError('dismissed'));
+    });
+
+    it('succeeds when the callback already connected the new connector', async () => {
+      // Regression: a COOP provider severed window.opener, so a successful
+      // authorization was reported to the user as "canceled".
+      deps.createConnector.mockResolvedValue({ id: 'c1', isNew: true });
+      deps.isConnectorConnected.mockResolvedValue(true);
+
+      await expect(executeOAuthCreate({}, popup, deps)).resolves.toBeUndefined();
+
+      expect(deps.isConnectorConnected).toHaveBeenCalledWith('c1');
+    });
+
+    it('stays canceled when the new connector is still not connected', async () => {
+      deps.createConnector.mockResolvedValue({ id: 'c1', isNew: true });
+
+      await expect(executeOAuthCreate({}, popup, deps)).rejects.toMatchObject({
+        reason: 'dismissed',
+      });
+    });
+
+    it('stays canceled when the status check itself fails', async () => {
+      deps.createConnector.mockResolvedValue({ id: 'c1', isNew: true });
+      deps.isConnectorConnected.mockRejectedValue(new Error('network'));
+
+      await expect(executeOAuthCreate({}, popup, deps)).rejects.toMatchObject({
+        reason: 'dismissed',
+      });
+    });
+
+    it('does not trust the status of a connector that existed before', async () => {
+      deps.createConnector.mockResolvedValue({ id: 'c1', isNew: false });
+      deps.isConnectorConnected.mockResolvedValue(true);
+
+      await expect(executeOAuthCreate({}, popup, deps)).rejects.toMatchObject({
+        reason: 'dismissed',
+      });
+      expect(deps.isConnectorConnected).not.toHaveBeenCalled();
+    });
   });
 });

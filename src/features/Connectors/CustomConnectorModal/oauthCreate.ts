@@ -1,6 +1,10 @@
+import { ConnectorOAuthError } from '@/utils/connectorOAuth';
+
 export interface OAuthCreateDeps<TPayload> {
   createConnector: (payload: TPayload) => Promise<{ id: string; isNew: boolean }>;
   deleteConnector: (id: string) => Promise<void>;
+  /** Re-read the connector from the server and report whether it is connected. */
+  isConnectorConnected: (id: string) => Promise<boolean>;
   startConnectorOAuth: (id: string) => Promise<string>;
   waitForConnectorOAuth: (
     popup: Window | null | undefined,
@@ -18,7 +22,10 @@ export interface OAuthCreateDeps<TPayload> {
  * back instead of leaving a disconnected, tool-less connector behind — the same
  * `isNew` guard as the non-OAuth path, so a pre-existing connector is never
  * deleted. Once the popup is navigated the row is kept: a "dismissed" result may
- * still hide a successful callback whose status message was lost.
+ * still hide a successful callback whose status message was lost — providers
+ * whose COOP policy severs `window.opener` (e.g. Stripe) always lose it. For a
+ * fresh row only the callback can mark it connected, so the server state
+ * decides between success and a real cancel.
  */
 export const executeOAuthCreate = async <TPayload>(
   payload: TPayload,
@@ -35,5 +42,11 @@ export const executeOAuthCreate = async <TPayload>(
     throw error;
   }
 
-  await deps.waitForConnectorOAuth(popup, id, authorizationUrl);
+  try {
+    await deps.waitForConnectorOAuth(popup, id, authorizationUrl);
+  } catch (error) {
+    const dismissed = error instanceof ConnectorOAuthError && error.reason === 'dismissed';
+    if (!dismissed || !isNew) throw error;
+    if (!(await deps.isConnectorConnected(id).catch(() => false))) throw error;
+  }
 };

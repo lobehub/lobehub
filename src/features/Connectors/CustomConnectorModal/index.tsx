@@ -316,7 +316,17 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
               },
             },
             popup,
-            { createConnector, deleteConnector, startConnectorOAuth, waitForConnectorOAuth },
+            {
+              createConnector,
+              deleteConnector,
+              isConnectorConnected: async (id) => {
+                await fetchConnectors();
+                const latest = connectorSelectors.connectorById(id)(useToolStore.getState());
+                return latest?.status === 'connected';
+              },
+              startConnectorOAuth,
+              waitForConnectorOAuth,
+            },
           );
         } finally {
           // Close the blank/in-flight popup we opened so it isn't left dangling.
