@@ -170,7 +170,18 @@ export class TaskLifecycleSliceActionImpl {
           : {}),
       },
     });
-    this.#patchTaskCollectionsStatus(id, status);
+    // Every loaded list and board shows the new status now (a status board
+    // moves the card). A failed transition rolls them back exactly.
+    const collections = this.#get().internal_beginCollectionTaskOptimistic(id, (task) => ({
+      ...task,
+      status,
+    }));
+    let collectionsSettled = false;
+    const settleCollections = (action: 'commit' | 'rollback') => {
+      if (collectionsSettled) return;
+      collectionsSettled = true;
+      collections[action]();
+    };
 
     try {
       await runMutation(this.#set, this.#get, {
@@ -181,9 +192,10 @@ export class TaskLifecycleSliceActionImpl {
         name: 'transitionStatus',
         onError: async (err) => {
           console.error(`[TaskStore] Failed to transition task to ${status}:`, err);
+          // Only this transition's overlay goes: a newer one stays on top.
+          settleCollections('rollback');
           if (this.#statusTransitionVersions.get(id) !== transitionVersion) return;
 
-          if (previousStatus) this.#patchTaskCollectionsStatus(id, previousStatus);
           // The transition did not happen, so its row must go even when the
           // server-truth refetch below cannot run (offline).
           if (statusRow) {
@@ -214,6 +226,7 @@ export class TaskLifecycleSliceActionImpl {
           }
         },
       });
+      settleCollections('commit');
 
       if (this.#statusTransitionVersions.get(id) !== transitionVersion) return;
 
@@ -231,15 +244,11 @@ export class TaskLifecycleSliceActionImpl {
         }
       }
     } finally {
+      settleCollections('rollback');
       if (this.#statusTransitionVersions.get(id) === transitionVersion) {
         this.#statusTransitionVersions.delete(id);
       }
     }
-  };
-
-  /** Every loaded list and board shows the new status (a status board moves the card). */
-  #patchTaskCollectionsStatus = (id: string, status: TaskStatus): void => {
-    this.#get().internal_patchCollectionTask(id, (task) => ({ ...task, status }));
   };
 }
 

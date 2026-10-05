@@ -2,7 +2,6 @@ import type { TaskStatus } from '@lobechat/types';
 
 import {
   createReplicaSlice,
-  linkReplicaEntity,
   recordLens,
   type ReplicaSyncResult,
 } from '@/libs/replica';
@@ -90,7 +89,6 @@ export class TaskListSliceActionImpl {
   readonly #set: Setter;
   readonly #taskList;
   readonly #taskGroupList;
-  readonly #tasks;
 
   constructor(set: Setter, get: () => TaskStore, _api?: unknown) {
     void _api;
@@ -116,7 +114,6 @@ export class TaskListSliceActionImpl {
       stateKey: 'taskGroupListReplica',
       view: recordLens<TaskStore, TaskGroupListValue>('taskGroupListMap'),
     });
-    this.#tasks = linkReplicaEntity<CollectionTask>([this.#taskList, this.#taskGroupList]);
   }
 
   #fetchList = (query: TaskListQuery) => {
@@ -172,15 +169,22 @@ export class TaskListSliceActionImpl {
   };
 
   /**
-   * Patch a task in every loaded list and board (a status board moves the
-   * card). In memory only: the refresh that follows a mutation persists the
-   * server value.
+   * Optimistic patch of a task in every loaded list and board (a status board
+   * moves the card). `commit` keeps it as confirmed until the refresh lands;
+   * `rollback` restores every collection exactly, card order included.
    */
-  internal_patchCollectionTask = (
+  internal_beginCollectionTaskOptimistic = (
     identifier: string,
     fn: <T extends CollectionTask>(task: T) => T,
-  ): void => {
-    this.#tasks.update(identifier, fn, { persist: false });
+  ) => {
+    const tokens = [
+      ...this.#taskList.beginEntityOptimistic<CollectionTask>(identifier, fn),
+      ...this.#taskGroupList.beginEntityOptimistic<CollectionTask>(identifier, fn),
+    ];
+    return {
+      commit: () => tokens.forEach((token) => token.commit()),
+      rollback: () => tokens.forEach((token) => token.rollback()),
+    };
   };
 
   /**

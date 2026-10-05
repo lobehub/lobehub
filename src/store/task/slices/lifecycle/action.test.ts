@@ -221,6 +221,35 @@ describe('TaskLifecycleSliceAction', () => {
       });
     });
 
+    it('should put a card back in its original slot when the status update fails', async () => {
+      seedCollections(
+        [
+          {
+            key: 'backlog',
+            tasks: [
+              { identifier: 'T-4', status: 'backlog' },
+              { identifier: 'T-1', status: 'backlog' },
+              { identifier: 'T-2', status: 'backlog' },
+            ],
+            total: 3,
+          },
+          { key: 'done', tasks: [], total: 0 },
+        ],
+        [{ identifier: 'T-1', status: 'backlog' }],
+      );
+      vi.mocked(taskService.updateStatus).mockRejectedValue(new Error('fail'));
+
+      await expect(useTaskStore.getState().updateTaskStatus('T-1', 'completed')).rejects.toThrow(
+        'fail',
+      );
+
+      expect(boardGroups()[0].tasks.map((task: any) => task.identifier)).toEqual([
+        'T-4',
+        'T-1',
+        'T-2',
+      ]);
+    });
+
     it('should preserve the committed status when cache refreshes fail', async () => {
       const { mutate } = await import('@/libs/swr');
       seedCollections(
