@@ -30,11 +30,12 @@ export const aiEditDeps: AIEditDeps = {
     generationService.getGenerationStatus(generationId, asyncTaskId),
   removeFile: (id) => fileService.removeFile(id),
   updateFile: (id, data) => fileService.updateFile(id, data),
-  uploadFile: async ({ file, metadata, parentId }) => {
+  uploadFile: async ({ file, metadata, parentId, visibility }) => {
     const result = await useFileStore.getState().uploadWithProgress({
       file,
       fileMetadata: metadata,
       parentId,
+      visibility,
     });
     return result && { id: result.id, url: result.url };
   },

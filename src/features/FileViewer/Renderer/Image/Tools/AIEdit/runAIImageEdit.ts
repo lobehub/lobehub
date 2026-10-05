@@ -75,6 +75,7 @@ export interface AIEditDeps {
     file: File;
     metadata?: Record<string, unknown>;
     parentId?: string;
+    visibility?: 'private' | 'public';
   }) => Promise<{ id: string; url: string } | undefined>;
 }
 
@@ -260,6 +261,7 @@ export const runAIImageEdit = async ({
         file: new File([blob], name, { type: blob.type || 'image/png' }),
         metadata: lineage,
         parentId,
+        visibility: location?.visibility ?? undefined,
       });
       if (!uploaded) throw new AIImageEditError('failed', 'Failed to save the edited image');
       fileId = uploaded.id;

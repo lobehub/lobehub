@@ -45,6 +45,20 @@ describe('saveDerivedFile', () => {
     expect(deps.addToKnowledgeBase).not.toHaveBeenCalled();
   });
 
+  // Regression: a top-level upload defaults to private, hiding edits of a
+  // public workspace image from collaborators who can see the original.
+  it('keeps the visibility of the original', async () => {
+    const deps = createDeps({
+      getFile: vi
+        .fn()
+        .mockResolvedValue({ knowledgeBaseIds: [], parentId: null, visibility: 'public' }),
+    });
+
+    await saveDerivedFile(deps, params);
+
+    expect(deps.uploadFile).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'public' }));
+  });
+
   it('still saves beside the client-known folder when the lookup fails', async () => {
     const deps = createDeps({ getFile: vi.fn().mockRejectedValue(new Error('offline')) });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);

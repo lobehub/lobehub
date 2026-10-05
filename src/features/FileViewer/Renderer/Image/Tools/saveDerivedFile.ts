@@ -29,6 +29,8 @@ export const saveDerivedFile = async (
     file,
     metadata,
     parentId: location?.parentId ?? parentId ?? undefined,
+    // Collaborators who can see the original should see the edit too.
+    visibility: location?.visibility ?? undefined,
   });
   if (!result) return;
 
