@@ -160,24 +160,25 @@ describe('localFileService', () => {
     expect(textMock).not.toHaveBeenCalled();
   });
 
-  it('returns a playable blob for local video previews', async () => {
+  const videoResponse = (size: number, blob = vi.fn()) =>
+    ({
+      blob,
+      body: { cancel: vi.fn(async () => {}) },
+      headers: {
+        get: vi.fn((name: string) => (name === 'content-type' ? 'video/mp4' : String(size))),
+      },
+      ok: true,
+    }) as unknown as Response;
+
+  it('describes a local video without keeping its bytes in the preview result', async () => {
     mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
       success: true,
       url: 'localfile://preview/demo.mp4',
     });
-    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'video/mp4' });
+    const blobMock = vi.fn();
     vi.stubGlobal(
       'fetch',
-      vi.fn(
-        async () =>
-          ({
-            blob: vi.fn(async () => blob),
-            headers: {
-              get: vi.fn((name: string) => (name === 'content-type' ? 'video/mp4' : '3')),
-            },
-            ok: true,
-          }) as unknown as Response,
-      ),
+      vi.fn(async () => videoResponse(3, blobMock)),
     );
 
     const preview = await localFileService.getLocalFilePreview({
@@ -185,29 +186,18 @@ describe('localFileService', () => {
       workingDirectory: '/repo',
     });
 
-    expect(preview).toEqual({ blob, contentType: 'video/mp4', type: 'video' });
+    expect(preview).toEqual({ contentType: 'video/mp4', type: 'video' });
+    expect(blobMock).not.toHaveBeenCalled();
   });
 
-  it('falls back to the binary placeholder for oversized local videos without reading them', async () => {
+  it('marks an oversized local video as an unpreviewable binary', async () => {
     mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
       success: true,
       url: 'localfile://preview/huge.mp4',
     });
-    const blobMock = vi.fn();
     vi.stubGlobal(
       'fetch',
-      vi.fn(
-        async () =>
-          ({
-            blob: blobMock,
-            headers: {
-              get: vi.fn((name: string) =>
-                name === 'content-type' ? 'video/mp4' : String(500 * 1024 * 1024),
-              ),
-            },
-            ok: true,
-          }) as unknown as Response,
-      ),
+      vi.fn(async () => videoResponse(500 * 1024 * 1024)),
     );
 
     const preview = await localFileService.getLocalFilePreview({
@@ -216,6 +206,51 @@ describe('localFileService', () => {
     });
 
     expect(preview).toEqual({ contentType: 'video/mp4', oversized: true, type: 'binary' });
+  });
+
+  it('reads a local video for playback with the caller abort signal', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/demo.mp4',
+    });
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'video/mp4' });
+    const fetchMock = vi.fn(async () =>
+      videoResponse(
+        3,
+        vi.fn(async () => blob),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+
+    const result = await localFileService.readLocalVideo(
+      { path: '/repo/demo.mp4', workingDirectory: '/repo' },
+      controller.signal,
+    );
+
+    expect(result).toEqual({ blob, ok: true });
+    expect(fetchMock).toHaveBeenCalledWith('localfile://preview/demo.mp4', {
+      signal: controller.signal,
+    });
+  });
+
+  it('refuses to read an oversized local video for playback', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/huge.mp4',
+    });
+    const blobMock = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => videoResponse(500 * 1024 * 1024, blobMock)),
+    );
+
+    const result = await localFileService.readLocalVideo({
+      path: '/repo/huge.mp4',
+      workingDirectory: '/repo',
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'oversized' });
     expect(blobMock).not.toHaveBeenCalled();
   });
 

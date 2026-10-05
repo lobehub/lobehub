@@ -101,8 +101,12 @@ export interface TextLocalFilePreview {
   type: 'text';
 }
 
+/**
+ * A playable local video. Carries no bytes on purpose: the preview result is
+ * cached by SWR for the whole session, so the player reads the file itself
+ * (`readLocalVideo`) and releases it when it unmounts.
+ */
 export interface VideoLocalFilePreview {
-  blob: Blob;
   contentType: string;
   type: 'video';
 }
@@ -138,6 +142,13 @@ const MAX_DOCUMENT_PREVIEW_BYTES = 20 * 1024 * 1024;
  * memory for as long as the preview is open.
  */
 const MAX_VIDEO_PREVIEW_BYTES = 200 * 1024 * 1024;
+
+const isOversizedVideo = (response: Response): boolean => {
+  const contentLength = Number(response.headers.get('content-length'));
+  return Number.isFinite(contentLength) && contentLength > MAX_VIDEO_PREVIEW_BYTES;
+};
+
+export type ReadLocalVideoResult = { blob: Blob; ok: true } | { ok: false; reason: 'oversized' };
 
 const normalizeContentType = (contentType: string | null): string =>
   contentType?.split(';')[0].trim().toLowerCase() ?? '';
@@ -202,18 +213,12 @@ const fetchLocalFilePreview = async (
   }
 
   if (contentType.startsWith('video/')) {
-    const contentLength = Number(response.headers.get('content-length'));
-    const oversizedByHeader =
-      Number.isFinite(contentLength) && contentLength > MAX_VIDEO_PREVIEW_BYTES;
+    // The player reads the bytes on its own; don't hold them here.
+    void response.body?.cancel().catch(() => {});
 
-    if (!oversizedByHeader) {
-      const blob = await response.blob();
-      if (blob.size <= MAX_VIDEO_PREVIEW_BYTES) {
-        return { blob, contentType, type: 'video' };
-      }
-    }
-
-    return { contentType, oversized: true, type: 'binary' };
+    return isOversizedVideo(response)
+      ? { contentType, oversized: true, type: 'binary' }
+      : { contentType, type: 'video' };
   }
 
   return { contentType, type: 'binary' };
@@ -341,6 +346,33 @@ class LocalFileService {
     if (!result.success || !result.url) return;
 
     return fetchLocalFileBytes(result.url);
+  }
+
+  /**
+   * Read a local video for playback. Pass the player's abort signal so closing
+   * the preview mid-read drops the bytes instead of finishing the download.
+   */
+  async readLocalVideo(
+    params: LocalFilePreviewUrlParams,
+    signal?: AbortSignal,
+  ): Promise<ReadLocalVideoResult> {
+    const result = await ensureElectronIpc().localSystem.getLocalFilePreviewUrl(params);
+
+    if (!result.success || !result.url) {
+      throw new Error(result.error || 'Missing local file preview URL');
+    }
+
+    const response = await fetch(result.url, { signal });
+    if (!response.ok) throw new Error(`Failed to load local file: ${response.status}`);
+    if (isOversizedVideo(response)) {
+      void response.body?.cancel().catch(() => {});
+      return { ok: false, reason: 'oversized' };
+    }
+
+    const blob = await response.blob();
+    return blob.size > MAX_VIDEO_PREVIEW_BYTES
+      ? { ok: false, reason: 'oversized' }
+      : { blob, ok: true };
   }
 
   async readExternalAssetForPublish(params: {

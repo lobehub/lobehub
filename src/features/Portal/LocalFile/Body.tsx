@@ -15,7 +15,7 @@ import {
   PublishHtmlArtifactProvider,
   PublishHtmlArtifactTrigger,
 } from '@/features/Portal/LocalFile/PublishHtmlArtifactButton';
-import { mutate as mutateSWRCache, useClientDataSWR } from '@/libs/swr';
+import { useClientDataSWR } from '@/libs/swr';
 import { localFileKeys } from '@/libs/swr/keys';
 import { cloudSandboxService } from '@/services/cloudSandbox';
 import { localFileService } from '@/services/electron/localFileService';
@@ -436,28 +436,6 @@ const ActiveFileView = memo<ActiveFileViewProps>(
     const enabled = sandboxTopicId ? true : Boolean(workingDirectory) && (!!deviceId || isDesktop);
     const resourceScope =
       !sandboxTopicId && !deviceId && isHtmlFile({ path: filePath }) ? 'workspace' : undefined;
-    const previewKey = useMemo(
-      () =>
-        enabled
-          ? localFileKeys.preview({
-              allowExternalFile: allowExternalFilePreview,
-              deviceId,
-              filePath,
-              ...(resourceScope && { resourceScope }),
-              ...(sandboxTopicId && { sandboxTopicId }),
-              workingDirectory,
-            })
-          : null,
-      [
-        allowExternalFilePreview,
-        deviceId,
-        enabled,
-        filePath,
-        resourceScope,
-        sandboxTopicId,
-        workingDirectory,
-      ],
-    );
     const {
       data: preview,
       error,
@@ -465,7 +443,16 @@ const ActiveFileView = memo<ActiveFileViewProps>(
       isValidating,
       mutate,
     } = useClientDataSWR<LocalFilePreview>(
-      previewKey,
+      enabled
+        ? localFileKeys.preview({
+            allowExternalFile: allowExternalFilePreview,
+            deviceId,
+            filePath,
+            ...(resourceScope && { resourceScope }),
+            ...(sandboxTopicId && { sandboxTopicId }),
+            workingDirectory,
+          })
+        : null,
       () =>
         sandboxTopicId
           ? fetchSandboxFilePreview(filePath, sandboxTopicId)
@@ -478,18 +465,6 @@ const ActiveFileView = memo<ActiveFileViewProps>(
             }),
       { revalidateOnFocus: false },
     );
-
-    // A video preview holds up to 200 MB of bytes, and the SWR cache outlives
-    // this view — release the entry once the file is no longer shown so closed
-    // tabs don't pin their videos in renderer memory.
-    const isVideoPreview = preview?.type === 'video';
-    useEffect(() => {
-      if (!isVideoPreview || !previewKey) return;
-
-      return () => {
-        void mutateSWRCache(previewKey, undefined, { revalidate: false });
-      };
-    }, [isVideoPreview, previewKey]);
 
     const handleSavedContent = useCallback(
       (saved: string) => {
@@ -525,8 +500,10 @@ const ActiveFileView = memo<ActiveFileViewProps>(
     if (preview.type === 'video') {
       return (
         <VideoPreview
-          blob={preview.blob}
-          fallback={<UnsupportedPreview filePath={filePath} isLocalFile={!deviceId && isDesktop} />}
+          allowExternalFile={allowExternalFilePreview}
+          filePath={filePath}
+          key={filePath}
+          workingDirectory={workingDirectory}
         />
       );
     }
