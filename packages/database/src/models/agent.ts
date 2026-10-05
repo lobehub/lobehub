@@ -593,19 +593,19 @@ export class AgentModel {
    * user's agents, with optional keyword filter.
    *
    * Virtual rows are infrastructure (group-built members, supervisors) and stay
-   * excluded — except the inbox, which is the product-owned assistant (Lobe AI)
-   * and a real agent the user talks to. Excluding it made the one agent whose
-   * name the UI *does* show the only one no lookup could reach: it never
-   * appeared in an agent list or a name search, while its documents/name were
-   * still addressable everywhere else.
+   * excluded. That includes the inbox (Lobe AI): it is the product-owned
+   * assistant, so including it is a deliberate choice every caller makes with
+   * `includeInbox: true` — never something a generic agent lookup inherits. The
+   * default is therefore the long-standing behavior (real, user-created agents
+   * only), so callers that never asked for the inbox — older clients, the
+   * CRUD/management tool runtimes, group pickers — keep it out instead of
+   * discovering a row they cannot delete or add.
    *
-   * `includeInbox: false` restores the plain virtual-row rule for callers that
-   * must not offer the inbox — group membership and other surfaces whose write
-   * path refuses builtins. Excluding it here, rather than filtering the caller's
-   * page after the fact, keeps `limit` from hiding an addable agent behind an
-   * inbox the caller is about to drop.
+   * When a caller does opt in, the inbox joins the page inside the where clause
+   * rather than being filtered afterwards, so `limit` is never spent on an inbox
+   * the caller would drop.
    */
-  private buildQueryAgentsWhere = (keyword?: string, includeInbox = true) => {
+  private buildQueryAgentsWhere = (keyword?: string, includeInbox = false) => {
     // Include agents where virtual is false OR null (legacy data without virtual
     // field), plus the inbox when the caller opts into it.
     const baseConditions = and(
@@ -639,8 +639,8 @@ export class AgentModel {
    * are heterogeneous (external CLI/device) agents, and `isInbox` so callers can
    * recognize the product-owned inbox (Lobe AI) without re-deriving it from a
    * slug the row shape no longer carries.
-   * Excludes virtual agents (supervisors, group-built members) — but always
-   * includes the inbox unless `includeInbox` is false.
+   * Excludes virtual agents (supervisors, group-built members) and, unless the
+   * caller opts in with `includeInbox: true`, the product-owned inbox (Lobe AI).
    * See `buildQueryAgentsWhere`.
    */
   queryAgents = async (params?: {
@@ -649,7 +649,7 @@ export class AgentModel {
     limit?: number;
     offset?: number;
   }) => {
-    const { includeInbox = true, keyword, limit = 9999, offset = 0 } = params ?? {};
+    const { includeInbox = false, keyword, limit = 9999, offset = 0 } = params ?? {};
     const searchCondition = this.buildQueryAgentsWhere(keyword, includeInbox);
 
     const rows = await this.db
@@ -677,17 +677,18 @@ export class AgentModel {
         { ...row, heteroType: agencyConfig?.heterogeneousProvider?.type },
         { slug },
       ),
-      // The inbox is the only virtual row this query keeps, and `slug` is consumed
-      // above rather than returned — so the flag is what lets callers pin or
-      // annotate Lobe AI without re-deriving its identity.
+      // When the caller opted in, the inbox is the only virtual row this query
+      // keeps, and `slug` is consumed above rather than returned — so the flag
+      // is what lets callers pin or annotate Lobe AI without re-deriving it.
       isInbox: slug === INBOX_SESSION_ID,
     }));
   };
 
   /**
-   * Count the agents matching the same conditions as queryAgents — inbox
-   * included, other virtual rows excluded — so the count stays a faithful total
-   * for paginated callers and for the assistants stats.
+   * Count the agents matching the same conditions as queryAgents — the inbox is
+   * counted only when the caller opts in with `includeInbox: true`, other
+   * virtual rows always excluded — so the count stays a faithful total for
+   * paginated callers and for the assistants stats.
    * Used to report real totals (and pagination) when queryAgents is limited.
    * Accepts the same date filters as SessionModel.count so callers can compare
    * current vs. prior-period totals without falling back to the legacy
@@ -705,7 +706,7 @@ export class AgentModel {
       .from(agents)
       .where(
         genWhere([
-          this.buildQueryAgentsWhere(params?.keyword, params?.includeInbox ?? true),
+          this.buildQueryAgentsWhere(params?.keyword, params?.includeInbox ?? false),
           params?.range
             ? genRangeWhere(params.range, agents.createdAt, (date) => date.toDate())
             : undefined,

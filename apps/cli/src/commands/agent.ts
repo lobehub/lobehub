@@ -65,7 +65,16 @@ export function registerAgentCommand(program: Command) {
     .action(async (options: { json?: string | boolean; keyword?: string; limit?: string }) => {
       const client = await getTrpcClient();
 
-      const input: { keyword?: string; limit?: number; offset?: number } = {};
+      // The inbox (Lobe AI) is a real assistant the user can open, and this is
+      // exactly where they look for it — so opt in. `queryAgents` omits the
+      // product-owned inbox for callers that do not explicitly ask for it, so
+      // that older clients and CRUD/group surfaces keep their old behavior.
+      const input: {
+        includeInbox: boolean;
+        keyword?: string;
+        limit?: number;
+        offset?: number;
+      } = { includeInbox: true };
       if (options.keyword) input.keyword = options.keyword;
       if (options.limit) input.limit = Number.parseInt(options.limit, 10);
 

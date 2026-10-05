@@ -160,9 +160,9 @@ export const agentRouter = router({
     }),
 
   /**
-   * Count the agents matching the conditions of queryAgents — inbox (Lobe AI)
-   * included unless `includeInbox` is false, other virtual rows excluded. Lets
-   * paginated callers report real totals.
+   * Count the agents matching the conditions of queryAgents — other virtual
+   * rows excluded, and the inbox (Lobe AI) counted only when the caller passes
+   * `includeInbox: true`. Lets paginated callers report real totals.
    */
   countAgents: agentProcedure
     .input(
@@ -748,9 +748,9 @@ export const agentRouter = router({
     }),
 
   /**
-   * Query the user's agents with optional keyword filter — inbox (Lobe AI)
-   * included and flagged with `isInbox` unless `includeInbox` is false, other
-   * virtual rows excluded.
+   * Query the user's agents with optional keyword filter — other virtual rows
+   * excluded, and the inbox (Lobe AI) included and flagged with `isInbox` only
+   * when the caller passes `includeInbox: true`.
    * Returns agents with minimal info (id, name, title, description, avatar,
    * backgroundColor).
    * Used by AddGroupMemberModal and group-management tool to search/select agents.

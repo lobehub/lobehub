@@ -394,7 +394,21 @@ describe('AgentModel', () => {
   });
 
   describe('queryAgents', () => {
-    it('includes the inbox (Lobe AI) agent and flags it with isInbox', async () => {
+    it('excludes the inbox by default, so callers that never ask for it keep legacy behavior', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'default-inbox', slug: INBOX_SESSION_ID, userId, virtual: true },
+        { id: 'default-normal', userId },
+        { id: 'default-virtual', userId, virtual: true },
+      ]);
+
+      // The inbox is product-owned; a lookup that does not opt in must not
+      // inherit it, or older clients and CRUD/group surfaces start offering a
+      // row they cannot delete or add.
+      await expect(agentModel.queryAgents()).resolves.toHaveLength(1);
+      await expect(agentModel.countAgents()).resolves.toBe(1);
+    });
+
+    it('includes the inbox (Lobe AI) and flags it with isInbox when the caller opts in', async () => {
       await serverDB.insert(agents).values([
         {
           id: 'inbox-agent',
@@ -408,10 +422,10 @@ describe('AgentModel', () => {
         { id: 'group-built-agent', title: 'Group member', userId, virtual: true },
       ]);
 
-      const result = await agentModel.queryAgents();
+      const result = await agentModel.queryAgents({ includeInbox: true });
       const byId = new Map(result.map((agent) => [agent.id, agent] as const));
 
-      // The inbox is a real assistant the user talks to, so no lookup may hide it.
+      // The inbox is a real assistant the user talks to; the caller opted in.
       expect(byId.get('inbox-agent')?.isInbox).toBe(true);
       expect(byId.get('inbox-agent')?.name).toBe('Sienna');
       expect(byId.get('inbox-agent')?.title).toBe('Lobe');
@@ -431,30 +445,40 @@ describe('AgentModel', () => {
       expect(result.map((agent) => agent.id)).toEqual(['sienna-agent']);
     });
 
-    it('counts the inbox in the shared total so pagination stays honest', async () => {
+    it('counts the inbox in the shared total when the caller opts in, so pagination stays honest', async () => {
       await serverDB.insert(agents).values([
         { id: 'inbox-agent', slug: INBOX_SESSION_ID, userId, virtual: true },
         { id: 'normal-agent', userId },
         { id: 'group-built-agent', userId, virtual: true },
       ]);
 
-      await expect(agentModel.countAgents()).resolves.toBe(2);
+      await expect(agentModel.countAgents({ includeInbox: true })).resolves.toBe(2);
     });
 
-    it('excludes the inbox for callers that opt out, before the limit applies', async () => {
+    it('keeps the inbox out of a limited page unless the caller opts in', async () => {
+      // The addable agent is the *older* row: if the inbox were merely filtered
+      // after the page was built, `limit: 1` would return the (newer) inbox and
+      // then drop it, leaving nothing.
       await serverDB.insert(agents).values([
-        { id: 'optout-inbox', slug: INBOX_SESSION_ID, userId, virtual: true },
-        { id: 'optout-normal', userId },
+        { id: 'optin-normal', updatedAt: new Date('2024-01-01'), userId },
+        {
+          id: 'optin-inbox',
+          slug: INBOX_SESSION_ID,
+          updatedAt: new Date('2024-02-01'),
+          userId,
+          virtual: true,
+        },
       ]);
 
-      await expect(agentModel.queryAgents({ includeInbox: false })).resolves.toHaveLength(1);
-      await expect(agentModel.countAgents({ includeInbox: false })).resolves.toBe(1);
+      // Default (legacy) excludes it inside the where clause, before the limit.
+      const limited = await agentModel.queryAgents({ limit: 1 });
+      expect(limited.map((agent) => agent.id)).toEqual(['optin-normal']);
+      await expect(agentModel.countAgents()).resolves.toBe(1);
 
-      // The exclusion lives in the where clause, so a `limit` cannot be spent on
-      // an inbox the caller would have dropped after the page was built — a
-      // membership search with `limit: 1` must still return the addable agent.
-      const limited = await agentModel.queryAgents({ includeInbox: false, limit: 1 });
-      expect(limited.map((agent) => agent.id)).toEqual(['optout-normal']);
+      // Opting in brings it back, ordering included.
+      const withInbox = await agentModel.queryAgents({ includeInbox: true, limit: 1 });
+      expect(withInbox.map((agent) => agent.id)).toEqual(['optin-inbox']);
+      await expect(agentModel.countAgents({ includeInbox: true })).resolves.toBe(2);
     });
   });
 

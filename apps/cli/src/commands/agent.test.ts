@@ -183,6 +183,20 @@ describe('agent command', () => {
       );
     });
 
+    it('opts the inbox into the lookup, unlike callers that leave the default', async () => {
+      mockTrpcClient.agent.queryAgents.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'list']);
+
+      // `queryAgents` excludes the product-owned inbox unless a caller opts in,
+      // so `lh agent list` must ask for it explicitly — this is the surface the
+      // inbox is meant to appear on.
+      expect(mockTrpcClient.agent.queryAgents.query).toHaveBeenCalledWith(
+        expect.objectContaining({ includeInbox: true }),
+      );
+    });
+
     it('should output JSON', async () => {
       const agents = [{ id: 'a1', title: 'Test' }];
       mockTrpcClient.agent.queryAgents.query.mockResolvedValue(agents);
