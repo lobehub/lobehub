@@ -114,6 +114,7 @@ export interface AIEditResult {
 const DEFAULT_POLL_INTERVAL = 2000;
 const DEFAULT_TIMEOUT = 3 * 60 * 1000;
 const DEFAULT_SETTLE_WATCH = 30 * 60 * 1000;
+const MAX_SETTLE_WATCH_DELAY = 60 * 1000;
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -180,13 +181,17 @@ const removeGuideWhenSettled = async (
   limit: number,
 ) => {
   const deadline = Date.now() + limit;
+  let delay = interval;
   while (Date.now() < deadline) {
-    await sleep(interval);
+    await sleep(delay);
     const status = await deps.getStatus(task.id, task.asyncTaskId).catch(() => undefined);
     if (status?.status === AsyncTaskStatus.Success || status?.status === AsyncTaskStatus.Error) {
       await deps.removeFile(guideFileId).catch(() => undefined);
       return;
     }
+    // Back off while the status endpoint is failing, so an outage does not
+    // turn into a steady stream of requests.
+    delay = status ? interval : Math.min(delay * 2, MAX_SETTLE_WATCH_DELAY);
   }
 };
 
@@ -262,15 +267,20 @@ export const runAIImageEdit = async ({
     topicId = await deps.createTopic(topicTitle, location?.visibility ?? undefined);
     throwIfAborted(signal);
 
+    const deadline = Date.now() + timeout;
     let created: CreateImageResult;
     try {
-      created = await deps.createImage(
-        buildAIEditRequest({ generationTopicId: topicId, imageUrl, model, operation }),
+      created = await raceRequest(
+        deps.createImage(
+          buildAIEditRequest({ generationTopicId: topicId, imageUrl, model, operation }),
+        ),
+        deadline,
+        signal,
       );
     } catch (error) {
-      // The server starts the task before it answers, so a lost or failed
-      // response may hide a running job. Only an explicit rejection (4xx)
-      // proves nothing started.
+      // The server starts the task before it answers, so a lost, failed or
+      // abandoned (cancel/deadline) response may hide a running job. Only an
+      // explicit rejection (4xx) proves nothing started.
       if (!isRejectedRequest(error)) submitted = true;
       throw error;
     }
@@ -280,7 +290,6 @@ export const runAIImageEdit = async ({
     submitted = true;
     task = { asyncTaskId: pending.asyncTaskId, id: pending.id };
 
-    const deadline = Date.now() + timeout;
     let generation: Generation | null = null;
     while (!generation) {
       await sleep(pollInterval, signal);

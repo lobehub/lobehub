@@ -401,6 +401,48 @@ describe('runAIImageEdit', () => {
     await expect(pending).rejects.toMatchObject({ kind: 'cancelled', taskRunning: true });
   });
 
+  // Regression: a stalled create call ignored Cancel and the deadline.
+  it('cancels while the create call hangs, treating the task as possibly started', async () => {
+    const controller = new AbortController();
+    const deps = spyDeps({ createImage: () => new Promise<never>(() => {}) });
+
+    const pending = run(deps, { signal: controller.signal });
+    setTimeout(() => controller.abort(), 20);
+
+    await expect(pending).rejects.toMatchObject({ kind: 'cancelled', taskRunning: true });
+    expect(deps.deleteTopic).not.toHaveBeenCalled();
+  });
+
+  // Regression: a failing status endpoint was polled every interval for the
+  // whole watch window.
+  it('backs off the guide-cleanup watch while status requests fail', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const deps = spyDeps({
+      getStatus: async () => {
+        calls += 1;
+        if (calls === 1) {
+          controller.abort();
+          return realProcessingStatus;
+        }
+        throw new Error('outage');
+      },
+    });
+
+    await run(deps, {
+      guide: new Blob(['png'], { type: 'image/png' }),
+      operation: 'erase',
+      pollInterval: 2,
+      settleWatch: 200,
+      signal: controller.signal,
+    }).catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    // Doubling from 2ms within 200ms allows about 7 tries, not ~100.
+    expect(calls).toBeLessThan(12);
+    expect(deps.removeFile).not.toHaveBeenCalled();
+  });
+
   it('times out while a status request hangs', async () => {
     const deps = spyDeps({ getStatus: () => new Promise<never>(() => {}) });
 

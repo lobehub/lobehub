@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useImageStage } from '../context';
 import AnnotateMode from './Annotate';
 import CommentMode from './Comment';
-import { EMPTY_MARKUP, isMarkupEmpty } from './markup';
+import { EMPTY_MARKUP, type ImageMarkup, isMarkupEmpty } from './markup';
 import MarkupPreview from './MarkupPreview';
 import ResizeMode from './Resize';
 import SendToChatButton from './SendToChatButton';
@@ -48,8 +48,9 @@ const ImageEditTools = () => {
     setMode(next);
   };
   const exit = () => setMode(null);
-  const clearAfterSend = () => {
-    setMarkup(EMPTY_MARKUP);
+  // Marks added while the handoff was uploading were not sent; keep them.
+  const clearAfterSend = (sent: ImageMarkup) => {
+    setMarkup((current) => (current === sent ? EMPTY_MARKUP : current));
     setMode(null);
   };
 

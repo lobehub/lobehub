@@ -82,7 +82,7 @@ interface CommentModeProps {
   markup: ImageMarkup;
   onChange: (markup: ImageMarkup) => void;
   onExit: () => void;
-  onSent: () => void;
+  onSent: (sent: ImageMarkup) => void;
 }
 
 /**

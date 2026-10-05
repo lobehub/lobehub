@@ -129,7 +129,11 @@ const ImageViewer = ({
   const [markupByFile, setMarkupByFile] = useState<Record<string, ImageMarkup>>({});
   const markup = markupByFile[fileId] ?? EMPTY_MARKUP;
   const setMarkup = useCallback(
-    (next: ImageMarkup) => setMarkupByFile((state) => ({ ...state, [fileId]: next })),
+    (next: ImageMarkup | ((current: ImageMarkup) => ImageMarkup)) =>
+      setMarkupByFile((state) => ({
+        ...state,
+        [fileId]: typeof next === 'function' ? next(state[fileId] ?? EMPTY_MARKUP) : next,
+      })),
     [fileId],
   );
 

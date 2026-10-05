@@ -9,8 +9,8 @@ import { useSendMarkupToChat } from './useSendMarkupToChat';
 
 interface SendToChatButtonProps {
   markup: ImageMarkup;
-  /** Called once the marks are in the chat input; the viewer clears them. */
-  onSent: () => void;
+  /** Called with the marks that went into the chat input, so only those are cleared. */
+  onSent: (sent: ImageMarkup) => void;
 }
 
 /**
@@ -34,7 +34,7 @@ const SendToChatButton = ({ markup, onSent }: SendToChatButtonProps) => {
       title={empty ? t('imageViewer.markup.empty') : undefined}
       type={'primary'}
       onClick={async () => {
-        if (await send(markup)) onSent();
+        if (await send(markup)) onSent(markup);
       }}
     >
       {t(hasComposer ? 'imageViewer.markup.addToChat' : 'imageViewer.markup.askInNewChat')}

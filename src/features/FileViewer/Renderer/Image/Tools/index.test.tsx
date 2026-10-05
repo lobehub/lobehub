@@ -402,6 +402,36 @@ describe('ImageEditTools', () => {
       expect(screen.getByTestId('image-markup-send')).toBeEnabled();
     });
 
+    // Regression: marks added while the handoff uploaded were cleared unsent.
+    it('keeps marks added while the image was uploading', async () => {
+      let finishUpload!: () => void;
+      fileStore.uploadChatFiles.mockImplementation(
+        ([file]: File[]) =>
+          new Promise<void>((resolve) => {
+            finishUpload = () => {
+              fileStore.chatUploadFileList = [{ file, id: 'file_chat', status: 'success' }];
+              resolve();
+            };
+          }),
+      );
+      const { overlay } = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.annotate'));
+      drawBox(overlay);
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('image-markup-send'));
+      });
+      await waitFor(() => expect(fileStore.uploadChatFiles).toHaveBeenCalled());
+      // A second box while the first one is still uploading.
+      drawBox(overlay);
+      await act(async () => finishUpload());
+
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('imageViewer.markup.added'));
+      // Back on the main toolbar with the unsent box still pending.
+      const toolbar = await screen.findByRole('toolbar', { name: 'imageViewer.editTools' });
+      expect(within(toolbar).getByTestId('image-markup-send')).toBeEnabled();
+    });
+
     it('judges this upload, not an earlier attachment with the same name', async () => {
       const earlier = new File(['old'], 'sunset-annotated.png', { type: 'image/png' });
       fileStore.chatUploadFileList = [{ file: earlier, id: 'file_earlier', status: 'success' }];
