@@ -245,8 +245,9 @@ export class MetricModel {
    * samplers that re-report a sliding window. The read and the insert run
    * under a row lock on the series, so two writers reporting the same window
    * at once serialize and the second one finds nothing new (no unique key on
-   * `(metric_id, observed_at)` to lean on). Returns the inserted count, 0 when
-   * the series is not the caller's.
+   * `(metric_id, observed_at)` to lean on). A timestamp repeated inside the
+   * batch is written once, keeping the value reported last. Returns the
+   * inserted count, 0 when the series is not the caller's.
    */
   appendNewerPoints = async (
     metricId: string,
@@ -269,9 +270,11 @@ export class MetricModel {
         this.workspaceId,
       );
       const latest = await scoped.latestPoint(metricId);
-      const fresh = latest
-        ? points.filter((p) => p.observedAt.getTime() > latest.observedAt.getTime())
-        : points;
+      // Last value wins for a timestamp the batch reports more than once.
+      const byTime = new Map(points.map((p) => [p.observedAt.getTime(), p]));
+      const fresh = [...byTime.values()].filter(
+        (p) => !latest || p.observedAt.getTime() > latest.observedAt.getTime(),
+      );
       return scoped.addPoints(metricId, fresh);
     });
   };

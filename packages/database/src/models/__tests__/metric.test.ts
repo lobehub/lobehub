@@ -125,6 +125,19 @@ describe('MetricModel', () => {
       expect((await model.recentPoints(series.id, 10)).map((p) => p.value)).toEqual([1, 2, 3]);
     });
 
+    it('writes a timestamp repeated inside one batch once, keeping its last value', async () => {
+      const series = (await seed())!;
+      const at = (day: number, value: number) => ({
+        actorType: 'system' as const,
+        observedAt: new Date(`2026-09-0${day}T00:00:00Z`),
+        sourceType: 'probe' as const,
+        value,
+      });
+
+      expect(await model.appendNewerPoints(series.id, [at(1, 1), at(2, 5), at(2, 6)])).toBe(2);
+      expect((await model.recentPoints(series.id, 10)).map((p) => p.value)).toEqual([1, 6]);
+    });
+
     it('appends through the owned series and refuses foreign or missing series', async () => {
       const series = (await seed())!;
 
