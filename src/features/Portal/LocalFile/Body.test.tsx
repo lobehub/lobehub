@@ -160,6 +160,11 @@ vi.mock('@/store/chat/selectors', () => {
         (state.localFileBuffers as Record<string, string> | undefined)?.[tabId],
       openLocalFiles,
     },
+    // The HTML preview reaches the project-file index, which only keeps itself
+    // live while a run is writing to the tree. No run in these cases.
+    operationSelectors: {
+      isAgentRuntimeRunning: () => false,
+    },
   };
 });
 
