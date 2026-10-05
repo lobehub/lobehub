@@ -231,4 +231,50 @@ describe('AIEditMode — erase', () => {
       'https://app.lobehub.com/f/file_guide',
     ]);
   });
+
+  // Regression: rendering the guide happened before the run started, so Start
+  // stayed enabled and a cancel could not stop the job that followed.
+  it('locks Start while the guide renders, and a cancel then submits nothing', async () => {
+    let finishGuide!: (blob: Blob) => void;
+    exporter.renderImageToBlob.mockReturnValue(
+      new Promise<Blob>((resolve) => (finishGuide = resolve)),
+    );
+    const base = createMockDeps();
+    const deps = createMockDeps({
+      createImage: vi.fn(base.createImage),
+      uploadFile: vi.fn(base.uploadFile),
+    });
+    const { overlay } = renderMode('erase', deps);
+
+    paint(overlay.querySelector('[data-testid="image-erase-canvas"]')!);
+    fireEvent.click(screen.getByRole('button', { name: 'imageViewer.ai.erase.start' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('imageViewer.ai.phase.uploading');
+    expect(screen.queryByRole('button', { name: 'imageViewer.ai.erase.start' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'imageViewer.cancel' }));
+
+    await act(async () => finishGuide(new Blob(['guide'], { type: 'image/png' })));
+
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith('imageViewer.ai.cancelled'));
+    expect(deps.uploadFile).not.toHaveBeenCalled();
+    expect(deps.createImage).not.toHaveBeenCalled();
+  });
+});
+
+describe('AIEditMode — task still running', () => {
+  it('does not offer Retry when the status of a submitted job is unknown', async () => {
+    const deps = createMockDeps({
+      getStatus: async () => {
+        throw new Error('fetch failed');
+      },
+    });
+    renderMode('removeBackground', deps);
+
+    fireEvent.click(screen.getByRole('button', { name: 'imageViewer.ai.removeBackground.start' }));
+    await nextPoll();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('imageViewer.ai.error.lostTrack');
+    expect(screen.queryByRole('button', { name: 'imageViewer.retry' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'imageViewer.close' })).toBeInTheDocument();
+  });
 });

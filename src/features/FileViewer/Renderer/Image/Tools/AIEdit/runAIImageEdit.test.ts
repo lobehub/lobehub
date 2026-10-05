@@ -60,7 +60,7 @@ describe('runAIImageEdit', () => {
     const deps = spyDeps();
     await run(deps);
 
-    expect(deps.createTopic).toHaveBeenCalledWith('Remove background · scene.png');
+    expect(deps.createTopic).toHaveBeenCalledWith('Remove background · scene.png', undefined);
     expect(deps.createImage).toHaveBeenCalledWith({
       generationTopicId: 'gt_6p9nBZERtyWe',
       imageNum: 1,
@@ -286,6 +286,43 @@ describe('runAIImageEdit', () => {
     expect(deps.deleteTopic).toHaveBeenCalled();
   });
 
+  it('treats a failed status request as a task that may still be running', async () => {
+    const deps = spyDeps({
+      getStatus: async () => {
+        throw new Error('fetch failed');
+      },
+    });
+
+    await expect(run(deps)).rejects.toMatchObject({ kind: 'failed', taskRunning: true });
+    expect(deps.deleteTopic).not.toHaveBeenCalled();
+  });
+
+  it('gives the generation topic the original file visibility', async () => {
+    const deps = spyDeps({
+      getFile: async (id: string) =>
+        id === SOURCE.fileId
+          ? { knowledgeBaseIds: [], parentId: 'docs_folder', visibility: 'public' as const }
+          : { metadata: realResultFileMetadata, parentId: null },
+    });
+
+    await run(deps);
+
+    expect(deps.createTopic).toHaveBeenCalledWith('Remove background · scene.png', 'public');
+  });
+
+  it('does not submit anything when cancelled before starting', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const deps = spyDeps();
+
+    await expect(run(deps, { signal: controller.signal })).rejects.toMatchObject({
+      kind: 'cancelled',
+      taskRunning: false,
+    });
+    expect(deps.createTopic).not.toHaveBeenCalled();
+    expect(deps.createImage).not.toHaveBeenCalled();
+  });
+
   it('stops waiting at the timeout and leaves the running task alone', async () => {
     const deps = spyDeps({ getStatus: async () => realProcessingStatus });
     await expect(run(deps, { timeout: 5 })).rejects.toMatchObject({
@@ -295,20 +332,46 @@ describe('runAIImageEdit', () => {
     expect(deps.deleteTopic).not.toHaveBeenCalled();
   });
 
+  // Regression: an older server omits `fileId`, but the `/f/:id` asset URL
+  // still names the file. Fetching the proxy would fail CORS on its redirect.
+  it('uses the file behind a proxy asset URL when the server does not report the file', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const deps = spyDeps({
+      getStatus: async () => ({
+        ...realSuccessStatus,
+        generation: { ...realSuccessStatus.generation, fileId: undefined },
+      }),
+    });
+
+    const result = await run(deps);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(deps.uploadFile).not.toHaveBeenCalled();
+    expect(deps.updateFile.mock.calls[0][0]).toBe('file_KWGzzbWzaunM');
+    expect(result.fileId).toBe('file_KWGzzbWzaunM');
+  });
+
   it('copies the asset into a new file when the server does not report the file', async () => {
     const blob = new Blob(['png'], { type: 'image/png' });
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(blob, { status: 200 }));
     const deps = spyDeps({
       getStatus: async () => ({
         ...realSuccessStatus,
-        generation: { ...realSuccessStatus.generation, fileId: undefined },
+        generation: {
+          ...realSuccessStatus.generation,
+          asset: {
+            ...realSuccessStatus.generation.asset,
+            url: 'https://s3.example.com/result.png',
+          },
+          fileId: undefined,
+        },
       }),
       uploadFile: async () => ({ id: 'file_copy', url: 'https://app.lobehub.com/f/file_copy' }),
     });
 
     const result = await run(deps);
 
-    expect(globalThis.fetch).toHaveBeenCalledWith('https://app.lobehub.com/f/file_KWGzzbWzaunM');
+    expect(globalThis.fetch).toHaveBeenCalledWith('https://s3.example.com/result.png');
     const uploaded = deps.uploadFile.mock.calls[0][0];
     expect(uploaded.file.name).toBe('scene-no-bg.png');
     expect(uploaded.parentId).toBe('docs_folder');

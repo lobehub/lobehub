@@ -7,6 +7,7 @@ import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
 import { useImageStage } from '../../context';
+import { ImagePixelsUnavailableError } from '../exportImage';
 import { aiEditDeps } from './deps';
 import { type AIEditOperation, resolveAIEditModel } from './request';
 import {
@@ -43,7 +44,7 @@ export const useAIImageEdit = (operation: AIEditOperation, deps: AIEditDeps = ai
   useEffect(() => () => controllerRef.current?.abort(), []);
 
   const run = useCallback(
-    async (guide?: Blob): Promise<AIEditResult | undefined> => {
+    async (prepareGuide?: () => Promise<Blob>): Promise<AIEditResult | undefined> => {
       const { lastSelectedImageModel, lastSelectedImageProvider } =
         useGlobalStore.getState().status;
       const model = resolveAIEditModel(
@@ -65,6 +66,23 @@ export const useAIImageEdit = (operation: AIEditOperation, deps: AIEditDeps = ai
       });
 
       const source = fileManagerSelectors.getFileByChunkTargetId(fileId)(useFileStore.getState());
+
+      let guide: Blob | undefined;
+      if (prepareGuide) {
+        try {
+          guide = await prepareGuide();
+        } catch (error) {
+          console.error('[ImageViewer] erase guide render failed', error);
+          if (controllerRef.current === controller) controllerRef.current = null;
+          setState({ status: 'idle' });
+          toast.error(
+            error instanceof ImagePixelsUnavailableError
+              ? t('imageViewer.pixelsUnavailable')
+              : t('imageViewer.saveFailed'),
+          );
+          return;
+        }
+      }
 
       try {
         const result = await runAIImageEdit({

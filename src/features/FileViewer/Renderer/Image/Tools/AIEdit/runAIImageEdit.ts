@@ -6,6 +6,7 @@ import {
   buildDerivedFileName,
   DERIVED_FILE_SUFFIX,
 } from '../../geometry';
+import { fileIdFromProxyUrl } from '../exportImage';
 import { type AIEditModel, type AIEditOperation, buildAIEditRequest } from './request';
 
 export type AIEditErrorKind = 'cancelled' | 'failed' | 'noModel' | 'noResult' | 'timeout';
@@ -50,7 +51,7 @@ export interface AIEditDeps {
   /** File the result into the same library as the original. */
   addToKnowledgeBase: (knowledgeBaseId: string, fileIds: string[]) => Promise<unknown>;
   createImage: (payload: ReturnType<typeof buildAIEditRequest>) => Promise<CreateImageResult>;
-  createTopic: (title: string) => Promise<string>;
+  createTopic: (title: string, visibility?: 'private' | 'public') => Promise<string>;
   deleteTopic: (id: string) => Promise<unknown>;
   /** Read a file's location and metadata; never used to write. */
   getFile: (id: string) => Promise<
@@ -58,6 +59,7 @@ export interface AIEditDeps {
         knowledgeBaseIds?: string[];
         metadata?: Record<string, unknown> | null;
         parentId?: string | null;
+        visibility?: 'private' | 'public' | null;
       }
     | null
     | undefined
@@ -162,7 +164,15 @@ export const runAIImageEdit = async ({
   let settled = false;
 
   try {
+    // The caller may have spent a while preparing the guide; honor a cancel from then.
+    throwIfAborted(signal);
     let imageUrl = source.url;
+    // Read before the topic exists: the result inherits the topic's visibility,
+    // which should follow the original's, and the save step needs the location.
+    const location = await deps.getFile(source.fileId).catch((error) => {
+      console.error('[ImageViewer] failed to read the original image location', error);
+      return undefined;
+    });
 
     if (operation === 'erase') {
       if (!guide) throw new AIImageEditError('failed', 'Missing erase guide image');
@@ -179,7 +189,7 @@ export const runAIImageEdit = async ({
     }
 
     onPhase?.('generating');
-    topicId = await deps.createTopic(topicTitle);
+    topicId = await deps.createTopic(topicTitle, location?.visibility ?? undefined);
     throwIfAborted(signal);
 
     const created = await deps.createImage(
@@ -215,11 +225,11 @@ export const runAIImageEdit = async ({
     const name = buildDerivedFileName(source.name, DERIVED_FILE_SUFFIX[operation]);
     const lineage = buildDerivedFileMetadata(source.fileId, operation);
     // The viewer may be opened from a view (e.g. the image list) that does not
-    // know where the original lives, so ask the server for its folder and libraries.
-    const location = await deps.getFile(source.fileId);
+    // know where the original lives, so the server's folder and libraries win.
     const parentId = source.parentId ?? location?.parentId ?? undefined;
 
-    let fileId = generation.fileId ?? undefined;
+    // Older servers omit `fileId`, but a `/f/:id` asset URL still names the file.
+    let fileId = generation.fileId ?? fileIdFromProxyUrl(assetUrl);
     let url = assetUrl;
     if (fileId) {
       // The generation already saved its output as a file; keep its storage
@@ -251,12 +261,15 @@ export const runAIImageEdit = async ({
     kept = true;
     return { fileId, height: asset.height, name, url, width: asset.width };
   } catch (error) {
-    if (signal?.aborted)
-      throw new AIImageEditError('cancelled', undefined, error, {
-        taskRunning: submitted && !settled,
-      });
-    if (error instanceof AIImageEditError) throw error;
-    throw new AIImageEditError('failed', (error as Error)?.message, error);
+    // Once submitted, only a terminal status ends the task; a status request
+    // that fails leaves it running on the server.
+    const taskRunning = submitted && !settled;
+    if (signal?.aborted) throw new AIImageEditError('cancelled', undefined, error, { taskRunning });
+    if (error instanceof AIImageEditError) {
+      error.taskRunning ||= taskRunning;
+      throw error;
+    }
+    throw new AIImageEditError('failed', (error as Error)?.message, error, { taskRunning });
   } finally {
     // A task still running on the server needs its topic and its input image;
     // removing them would orphan the result it is about to store.

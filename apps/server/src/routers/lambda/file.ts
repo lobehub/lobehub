@@ -474,6 +474,7 @@ export const fileRouter = router({
         updatedAt: item.updatedAt,
         url: await ctx.fileService.getFileAccessUrl(item),
         userId: item.userId,
+        visibility: item.visibility,
       };
     }),
 

@@ -55,6 +55,7 @@
   "imageViewer.ai.erase.hint": "Paint over what you want to erase",
   "imageViewer.ai.erase.start": "Erase",
   "imageViewer.ai.error.failed": "Edit failed. Hover for details. The original image is unchanged.",
+  "imageViewer.ai.error.lostTrack": "Lost track of the edit. It may still be running in Image generation, where the result will appear.",
   "imageViewer.ai.error.noModel": "No image model that can edit images is enabled. Enable one under Settings → AI Service Provider.",
   "imageViewer.ai.error.noResult": "The model returned no image. Try again.",
   "imageViewer.ai.error.timeout": "Still running after 3 minutes. It keeps going in Image generation, where the result will appear.",

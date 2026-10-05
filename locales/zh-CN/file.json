@@ -55,6 +55,7 @@
   "imageViewer.ai.erase.hint": "涂抹要擦除的区域",
   "imageViewer.ai.erase.start": "擦除",
   "imageViewer.ai.error.failed": "编辑失败，悬停查看详情。原图未改动",
+  "imageViewer.ai.error.lostTrack": "暂时无法获取编辑进度，任务可能仍在「图片生成」中运行，结果会出现在那里",
   "imageViewer.ai.error.noModel": "没有可编辑图片的已启用模型，请在「设置 → AI 服务商」中启用一个图片模型",
   "imageViewer.ai.error.noResult": "模型没有返回图片，请重试",
   "imageViewer.ai.error.timeout": "已运行超过 3 分钟，任务仍在「图片生成」中继续，结果会出现在那里",

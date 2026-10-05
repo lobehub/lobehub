@@ -14,7 +14,8 @@ export const aiEditDeps: AIEditDeps = {
   addToKnowledgeBase: (knowledgeBaseId, fileIds) =>
     knowledgeBaseService.addFilesToKnowledgeBase(knowledgeBaseId, fileIds),
   createImage: (payload) => imageService.createImage(payload),
-  createTopic: (title) => generationTopicService.createTopic('image', undefined, title),
+  createTopic: (title, visibility) =>
+    generationTopicService.createTopic('image', visibility, title),
   deleteTopic: (id) => generationTopicService.deleteTopic(id),
   getFile: async (id) => {
     const file = await lambdaClient.file.findById.query({ id });
@@ -22,6 +23,7 @@ export const aiEditDeps: AIEditDeps = {
       knowledgeBaseIds: file.knowledgeBaseIds,
       metadata: file.metadata as Record<string, unknown> | null,
       parentId: file.parentId,
+      visibility: file.visibility,
     };
   },
   getStatus: (generationId, asyncTaskId) =>

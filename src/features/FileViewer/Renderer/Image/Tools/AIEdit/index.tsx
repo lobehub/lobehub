@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Button, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, keyframes } from 'antd-style';
 import { CircleAlertIcon, LoaderCircleIcon, Trash2Icon, Undo2Icon } from 'lucide-react';
 import type { PointerEvent } from 'react';
@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useImageStage } from '../../context';
 import { type BrushShape, drawShapes, isMeaningfulShape } from '../Annotate/shapes';
-import { ImagePixelsUnavailableError, renderImageToBlob } from '../exportImage';
+import { renderImageToBlob } from '../exportImage';
 import { toolStyles } from '../styles';
 import { useToolKeys } from '../useToolKeys';
 import { loadStageImage } from './deps';
@@ -150,23 +150,12 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
 
   const submit = async () => {
     if (!canSubmit) return;
-    let guide: Blob | undefined;
-    if (isErase) {
-      try {
-        const img = await loadStageImage(url);
-        guide = await renderImageToBlob(img, { shapes: strokes });
-      } catch (error) {
-        console.error('[ImageViewer] erase guide render failed', error);
-        reset();
-        toast.error(
-          error instanceof ImagePixelsUnavailableError
-            ? t('imageViewer.pixelsUnavailable')
-            : t('imageViewer.saveFailed'),
-        );
-        return;
-      }
-    }
-    const result = await run(guide);
+    // The guide is rendered inside the run, so Start is locked and Cancel or
+    // leaving the tool abort it before any job is submitted.
+    const prepareGuide = isErase
+      ? async () => renderImageToBlob(await loadStageImage(url), { shapes: strokes })
+      : undefined;
+    const result = await run(prepareGuide);
     if (result) onExit();
   };
 
@@ -228,7 +217,11 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
           title={state.kind === 'failed' ? state.message : undefined}
         >
           <CircleAlertIcon size={14} style={{ flexShrink: 0 }} />
-          {t(`imageViewer.ai.error.${state.kind}`)}
+          {t(
+            state.taskRunning && state.kind !== 'timeout'
+              ? 'imageViewer.ai.error.lostTrack'
+              : `imageViewer.ai.error.${state.kind}`,
+          )}
         </span>
       );
     }
@@ -328,24 +321,27 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
               <Button shape={'round'} size={'small'} onClick={onExit}>
                 {state.status === 'error' ? t('imageViewer.close') : t('imageViewer.cancel')}
               </Button>
-              <Button
-                disabled={!canSubmit}
-                shape={'round'}
-                size={'small'}
-                type={'primary'}
-                title={
-                  isErase && strokes.length === 0 ? t('imageViewer.ai.erase.empty') : undefined
-                }
-                onClick={() => void submit()}
-              >
-                {state.status === 'error'
-                  ? t('imageViewer.retry')
-                  : t(
-                      isErase
-                        ? 'imageViewer.ai.erase.start'
-                        : 'imageViewer.ai.removeBackground.start',
-                    )}
-              </Button>
+              {/* A job that may still be running must not be submitted twice. */}
+              {!(state.status === 'error' && state.taskRunning) && (
+                <Button
+                  disabled={!canSubmit}
+                  shape={'round'}
+                  size={'small'}
+                  type={'primary'}
+                  title={
+                    isErase && strokes.length === 0 ? t('imageViewer.ai.erase.empty') : undefined
+                  }
+                  onClick={() => void submit()}
+                >
+                  {state.status === 'error'
+                    ? t('imageViewer.retry')
+                    : t(
+                        isErase
+                          ? 'imageViewer.ai.erase.start'
+                          : 'imageViewer.ai.removeBackground.start',
+                      )}
+                </Button>
+              )}
             </>
           )}
         </div>
