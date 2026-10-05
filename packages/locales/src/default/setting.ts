@@ -1618,6 +1618,8 @@ When I am ___, I need ___
   'storageOverage.consent.rate':
     'About {{limitedMonthlyRate}}/GB/month for a limited time (regular {{regularMonthlyRate}}).',
   'storageOverage.consent.title': 'Enable Storage Pay-as-you-go',
+  'storageOverage.mobileManaged.desc':
+    'Your plan was purchased in an app store, so storage pay-as-you-go cannot be enabled here. Manage this subscription where you bought it.',
   'storageOverage.currentPlanLocked.desc':
     'Your current plan does not support storage pay-as-you-go. After it ends, subscribe to a plan to enable it.',
   'storageOverage.desc':

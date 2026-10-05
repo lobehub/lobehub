@@ -1565,6 +1565,7 @@
   "storageOverage.disabled": "存储按量付费已关闭。",
   "storageOverage.enableFailed": "存储按量付费启用失败。",
   "storageOverage.enabled": "存储按量付费已启用。",
+  "storageOverage.mobileManaged.desc": "你的套餐是在应用商店购买的，无法在这里开启存储按量付费。请到购买渠道管理该订阅。",
   "storageOverage.monthlyCap": "月度消费上限",
   "storageOverage.monthlyCapDesc": "留空表示无限制。当达到上限时，上传将被阻止。",
   "storageOverage.noPaymentMethod": "请先添加支付方式，再启用存储按量付费。",

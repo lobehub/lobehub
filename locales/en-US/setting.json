@@ -1565,6 +1565,7 @@
   "storageOverage.disabled": "Storage pay-as-you-go disabled.",
   "storageOverage.enableFailed": "Failed to enable storage pay-as-you-go.",
   "storageOverage.enabled": "Storage pay-as-you-go enabled.",
+  "storageOverage.mobileManaged.desc": "Your plan was purchased in an app store, so storage pay-as-you-go cannot be enabled here. Manage this subscription where you bought it.",
   "storageOverage.monthlyCap": "Monthly Spending Cap",
   "storageOverage.monthlyCapDesc": "Leave empty for unlimited. Uploads will be blocked when the cap is reached.",
   "storageOverage.noPaymentMethod": "Please add a payment method to enable storage pay-as-you-go.",

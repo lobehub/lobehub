@@ -364,25 +364,29 @@ export const useFileTreeActions = ({
           );
           return true;
         }
+        // Every mutating shortcut is off for a read-only tree, for the same
+        // reason the menu items are: these helpers reach the local or device
+        // filesystem, so Delete on a sandbox row would act on the wrong host
+        // rather than on the instance the row names.
         case 'delete': {
-          if (entries.length === 0) return false;
+          if (isSandbox || entries.length === 0) return false;
           ops.trash(entries);
           return true;
         }
         case 'copy':
         case 'cut': {
-          if (entries.length === 0) return false;
+          if (isSandbox || entries.length === 0) return false;
           ops.putOnClipboard(entries, shortcut);
           return true;
         }
         case 'paste': {
-          if (!ops.canPaste) return false;
+          if (isSandbox || !ops.canPaste) return false;
           void ops.paste(folderRel(targetFolderId(focusedNode)));
           return true;
         }
       }
     },
-    [deletedPaths, expandedIds, isMac, openNode, ops, treeRef],
+    [deletedPaths, expandedIds, isMac, isSandbox, openNode, ops, treeRef],
   );
 
   // Header "New" menu: into the selected folder, next to a selected file, or at the root.
