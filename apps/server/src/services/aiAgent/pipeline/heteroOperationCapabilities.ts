@@ -6,7 +6,8 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  * What a heterogeneous run's operation token may do.
  *
  * `goal:manage` lets the CLI create a goal the agent supervises from this
- * conversation (`lh goal create --conversation`). The token is exposed to the
+ * conversation (`lh goal create --conversation`), or bind an existing one to it
+ * (`lh goal bind-topic`, which the `/goal` instructions route a named goal to). The token is exposed to the
  * always-installed CLI, so it is granted only when the user asked for a goal
  * with `/goal`: an ordinary coding run that meets instructions telling it to
  * run that command must not be able to launch persistent follow-on work.
