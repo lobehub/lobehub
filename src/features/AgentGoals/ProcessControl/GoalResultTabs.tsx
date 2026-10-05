@@ -51,7 +51,9 @@ const GoalResultTabs = ({ graph, onFollowUp, onSelect, process }: GoalResultTabs
       {/* Only the active tab mounts: the exploration map measures its box on
           mount and would lay out against a hidden panel. */}
       {tab === 'result' ? <GoalResult graph={graph} onSelect={onSelect} /> : process}
-      {tab === 'result' && onFollowUp && <GoalFollowUpComposer onSend={onFollowUp} />}
+      {/* Kept mounted across tabs so a half-written follow-up survives a look
+          at the process; it only shows under the result. */}
+      {onFollowUp && <GoalFollowUpComposer hidden={tab !== 'result'} onSend={onFollowUp} />}
     </Flexbox>
   );
 };

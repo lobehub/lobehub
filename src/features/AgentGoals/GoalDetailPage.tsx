@@ -269,7 +269,9 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
               graphFullscreen={graphFullscreen}
               onGraphFullscreenChange={setGraphFullscreen}
               onFollowUp={
-                panelTarget
+                // Viewers can read the result but not talk to its agent; the
+                // backend would reject the turn, so they get no composer.
+                canEdit && panelTarget
                   ? (message) => {
                       // Same destination as the header entry — the supervision record
                       // when there is one — and it replaces any open drill-down.
@@ -317,7 +319,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
             key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             topicId={chat.topicId}
             onCollapse={() => chat.setOpen(false)}
-            onInitialMessageSent={chat.consumeInitialMessage}
+            onInitialMessageConsumed={chat.consumeInitialMessage}
             // A question that should not land in the manager's own record.
             onOpenChat={() => chat.openConversation({ agentId: supervisingAgentId })}
           />
@@ -329,7 +331,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
             initialTopicId={chat.topicId}
             key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             onCollapse={() => chat.setOpen(false)}
-            onInitialMessageSent={chat.consumeInitialMessage}
+            onInitialMessageConsumed={chat.consumeInitialMessage}
           />
         ) : null}
       </RightPanel>

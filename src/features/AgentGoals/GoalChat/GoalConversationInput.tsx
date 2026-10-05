@@ -13,12 +13,13 @@ const RIGHT_ACTIONS: ActionKeys[] = ['model', 'contextWindow'];
 
 interface GoalConversationInputProps {
   /**
-   * Sent once, as soon as the conversation's history has loaded — the result
-   * page's composer hands its text to the panel this way.
+   * Handed over once the conversation is ready — the result page's composer
+   * passes its text to the panel this way. A standard agent sends it right
+   * away; a heterogeneous one gets it filled into its composer instead.
    */
   initialMessage?: string;
-  /** Called once the handed-off message is dispatched, so the host can drop it. */
-  onInitialMessageSent?: () => void;
+  /** Called once the handed-off message is sent or filled in, so the host can drop it. */
+  onInitialMessageConsumed?: () => void;
 }
 
 /**
@@ -29,24 +30,49 @@ interface GoalConversationInputProps {
  * side-by-side topic portal makes.
  */
 const GoalConversationInput = memo<GoalConversationInputProps>(
-  ({ initialMessage, onInitialMessageSent }) => {
+  ({ initialMessage, onInitialMessageConsumed }) => {
     const agentId = useConversationStore(conversationSelectors.agentId);
     const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
     const isConfigLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
     const messagesInit = useConversationStore(conversationSelectors.messagesInit);
     const sendMessage = useConversationStore((s) => s.sendMessage);
+    const fillInputMessage = useConversationStore((s) => s.fillInputMessage);
+    const editor = useConversationStore((s) => s.editor);
 
     // Waiting for the history keeps the hand-off from racing the first fetch: a
     // send while the list is still loading would go out without the record it
-    // continues. The ref covers StrictMode's replayed effect within one mount;
-    // across remounts the host has already dropped the message via the callback.
-    const sentRef = useRef(false);
+    // continues. Waiting for the agent config keeps a heterogeneous agent from
+    // being mistaken for a standard one while it hydrates.
+    //
+    // A heterogeneous agent's composer gates sending on readiness it alone
+    // knows — API binding, execution target, device online — so the message is
+    // filled in for it to send rather than dispatched around those guards.
+    //
+    // The ref covers StrictMode's replayed effect within one mount; across
+    // remounts the host has already dropped the message via the callback.
+    const handedOffRef = useRef(false);
     useEffect(() => {
-      if (!initialMessage || !messagesInit || sentRef.current) return;
-      sentRef.current = true;
-      onInitialMessageSent?.();
+      if (!initialMessage || !messagesInit || isConfigLoading || handedOffRef.current) return;
+      if (isHeterogeneous) {
+        if (!editor) return;
+        handedOffRef.current = true;
+        onInitialMessageConsumed?.();
+        fillInputMessage(initialMessage);
+        return;
+      }
+      handedOffRef.current = true;
+      onInitialMessageConsumed?.();
       void sendMessage({ message: initialMessage });
-    }, [initialMessage, messagesInit, onInitialMessageSent, sendMessage]);
+    }, [
+      editor,
+      fillInputMessage,
+      initialMessage,
+      isConfigLoading,
+      isHeterogeneous,
+      messagesInit,
+      onInitialMessageConsumed,
+      sendMessage,
+    ]);
 
     if (isHeterogeneous) return <HeterogeneousChatInput />;
 

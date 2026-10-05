@@ -9,7 +9,7 @@ import { WorkspaceSidePanelProvider } from '@/features/RightPanel/WorkspaceSideP
 
 import GoalDetailPage from './GoalDetailPage';
 
-const mocks = vi.hoisted(() => ({ hasSupervision: true, showPortal: false }));
+const mocks = vi.hoisted(() => ({ canEdit: true, hasSupervision: true, showPortal: false }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
@@ -57,7 +57,7 @@ vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: { showLeftPanel: () => false },
 }));
 
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: true }) }));
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: mocks.canEdit }) }));
 
 vi.mock('@/features/Portal/usePortalPanelWidth', () => ({
   usePortalPanelWidth: () => ({ maxWidth: 800, minWidth: 300, updateWidth: vi.fn(), width: 400 }),
@@ -141,6 +141,7 @@ vi.mock('./GoalSupervision', () => ({
 
 describe('GoalDetailPage', () => {
   beforeEach(() => {
+    mocks.canEdit = true;
     mocks.hasSupervision = true;
     mocks.showPortal = false;
   });
@@ -199,6 +200,15 @@ describe('GoalDetailPage', () => {
     fireEvent.click(screen.getByTestId('goal-follow-up'));
 
     expect(screen.getByTestId('goal-chat')).toHaveAttribute('data-initial-message', 'what next?');
+  });
+
+  // A viewer can read the result but the backend would reject their turn, so
+  // the page offers no composer rather than one that fails on send.
+  it('offers no result follow-up to someone who cannot create content', () => {
+    mocks.canEdit = false;
+    render(<GoalDetailPage agentId={'agt_manager'} goalId={'goal_1'} />);
+
+    expect(screen.queryByTestId('goal-follow-up')).not.toBeInTheDocument();
   });
 
   // The side chat stays one menu item away, for a question that should not land

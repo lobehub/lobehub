@@ -36,7 +36,9 @@ describe('useGoalChatPanel', () => {
 
   // The result page's composer hands its text to the panel; a later reopen must
   // not replay it, so the message rides only the request that carried it.
-  it('carries a composed message only on the request that sent it', () => {
+  // Folding the panel before the history loads must not lose a message the
+  // result composer has already cleared from its own editor.
+  it('keeps a pending message across folding the panel until it is consumed', () => {
     const { result } = renderHook(() => useGoalChatPanel('goal-a', 'worker'));
 
     act(() => result.current.openConversation({ agentId: 'worker', initialMessage: 'next?' }));
@@ -44,6 +46,9 @@ describe('useGoalChatPanel', () => {
 
     act(() => result.current.setOpen(false));
     act(() => result.current.setOpen(true));
+    expect(result.current.initialMessage).toBe('next?');
+
+    act(() => result.current.consumeInitialMessage());
     expect(result.current.initialMessage).toBeUndefined();
   });
 

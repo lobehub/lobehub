@@ -32,10 +32,12 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface GoalFollowUpComposerProps {
+  /** Hidden rather than unmounted, so the draft outlives a tab switch. */
+  hidden?: boolean;
   onSend: (message: string) => void;
 }
 
-const GoalFollowUpComposer = memo<GoalFollowUpComposerProps>(({ onSend }) => {
+const GoalFollowUpComposer = memo<GoalFollowUpComposerProps>(({ hidden, onSend }) => {
   const { t } = useTranslation('chat');
   const editor = useEditor();
   const [hasContent, setHasContent] = useState(false);
@@ -57,7 +59,9 @@ const GoalFollowUpComposer = memo<GoalFollowUpComposerProps>(({ onSend }) => {
   }, [editor, onSend]);
 
   return (
-    <div className={styles.dock}>
+    // The dock itself carries `hidden`: a wrapper would become the sticky
+    // element's containing block and unpin it from the page bottom.
+    <div className={styles.dock} hidden={hidden}>
       <ChatInput
         maxHeight={200}
         minHeight={48}

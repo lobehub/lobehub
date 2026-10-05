@@ -30,11 +30,11 @@ Welcome.displayName = 'GoalChatWelcome';
 interface ConversationProps {
   initialMessage?: string;
   onCollapse: () => void;
-  onInitialMessageSent?: () => void;
+  onInitialMessageConsumed?: () => void;
 }
 
 const Conversation = memo<ConversationProps>(
-  ({ initialMessage, onCollapse, onInitialMessageSent }) => {
+  ({ initialMessage, onCollapse, onInitialMessageConsumed }) => {
     const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
     const currentAgentId = useConversationStore(conversationSelectors.agentId);
 
@@ -55,7 +55,7 @@ const Conversation = memo<ConversationProps>(
           </Flexbox>
           <GoalConversationInput
             initialMessage={initialMessage}
-            onInitialMessageSent={onInitialMessageSent}
+            onInitialMessageConsumed={onInitialMessageConsumed}
           />
         </Flexbox>
       </DragUploadZone>
@@ -72,7 +72,7 @@ interface GoalChatProps {
   initialMessage?: string;
   initialTopicId?: string;
   onCollapse: () => void;
-  onInitialMessageSent?: () => void;
+  onInitialMessageConsumed?: () => void;
 }
 
 /**
@@ -81,12 +81,12 @@ interface GoalChatProps {
  * with the current goal overview injected — "how is this going?" just works.
  */
 const GoalChat = memo<GoalChatProps>(
-  ({ agentId, goalId, initialMessage, initialTopicId, onCollapse, onInitialMessageSent }) => (
+  ({ agentId, goalId, initialMessage, initialTopicId, onCollapse, onInitialMessageConsumed }) => (
     <GoalChatProvider agentId={agentId} goalId={goalId} initialTopicId={initialTopicId}>
       <Conversation
         initialMessage={initialMessage}
         onCollapse={onCollapse}
-        onInitialMessageSent={onInitialMessageSent}
+        onInitialMessageConsumed={onInitialMessageConsumed}
       />
     </GoalChatProvider>
   ),

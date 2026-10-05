@@ -26,7 +26,7 @@ export const useGoalChatPanel = (goalId: string, responsibleAgentId?: string) =>
     agentId: current.target?.agentId ?? responsibleAgentId,
     initialMessage: current.target?.initialMessage,
     /**
-     * Acknowledge the handed-off message once it has been dispatched. The panel
+     * Acknowledge the handed-off message once the panel has sent or filled it in. The panel
      * remounts whenever a drill-down replaces it, so a component-local "sent"
      * flag would resend the message on the way back.
      */
@@ -44,13 +44,9 @@ export const useGoalChatPanel = (goalId: string, responsibleAgentId?: string) =>
       setState({ goalId, open: true, request: current.request + 1, target });
     },
     request: current.request,
-    // Folding or reopening the panel never replays a message that already went out.
-    setOpen: (open: boolean) =>
-      setState({
-        ...current,
-        open,
-        target: current.target && { ...current.target, initialMessage: undefined },
-      }),
+    // A pending message survives folding the panel; only `consumeInitialMessage`
+    // drops it, once the panel has actually handed it off.
+    setOpen: (open: boolean) => setState({ ...current, open }),
     topicId: current.target?.topicId,
   };
 };
