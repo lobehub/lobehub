@@ -191,6 +191,36 @@ describe('AgentAccountService — provisioning', () => {
     expect(await service.list()).toHaveLength(1);
   });
 
+  it('keeps the inbox and returns the account when the insert committed but its ack was lost', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    const model = (service as any).model;
+    const create = model.create;
+    model.create = async (...args: unknown[]) => {
+      await create(...args);
+      throw new Error('Connection terminated unexpectedly');
+    };
+
+    const account = await service.provision({ agentId, provider: 'agent-mail' });
+
+    expect(account).toMatchObject({ agentId, identifier: 'agent-7@lobe.id' });
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
+    expect(await service.list()).toHaveLength(1);
+  });
+
+  it('still releases the inbox when a failed write left no row behind', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    (service as any).model.create = async () => {
+      throw new Error('Connection refused');
+    };
+
+    await expect(service.provision({ agentId, provider: 'agent-mail' })).rejects.toThrow(
+      /Connection refused/,
+    );
+    expect(calls).toContainEqual({ method: 'DELETE', path: '/v1/inboxes/inb_1' });
+  });
+
   it('lets a released handle be bound again', async () => {
     const service = buildService(createMailFetch().fetchImpl);
     const first = await service.provision({ agentId, provider: 'agent-mail' });

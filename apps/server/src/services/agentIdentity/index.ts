@@ -163,8 +163,32 @@ export class AgentAccountService {
         provider: provider.provider,
       });
     } catch (error) {
-      // The provider already holds a resource (an inbox, a number binding) that
-      // no row points at. Hand it back so a failed write leaves nothing billable
+      const conflict = this.toConflictError(error, provider.provider, issued.identifier);
+
+      // Anything but a unique violation leaves the write's outcome unknown: the
+      // insert may have committed and only its acknowledgement been lost.
+      // Releasing then would leave a live account backed by a deleted inbox, so
+      // look first, and treat a committed row as the success it is. If even the
+      // lookup fails, keep the resource — an orphaned inbox can be reaped, a
+      // broken account cannot be repaired by the user.
+      if (!conflict) {
+        let committed: AgentAccountView | undefined;
+        try {
+          committed = await AgentAccountModel.findByRoutingKey(
+            this.db,
+            provider.provider,
+            issued.identifier,
+          );
+        } catch {
+          throw error;
+        }
+        if (committed && committed.agentId === params.agentId && committed.status !== 'revoked') {
+          return committed;
+        }
+      }
+
+      // The provider holds a resource (an inbox, a number binding) that no row
+      // points at. Hand it back so a failed write leaves nothing billable
       // behind; the release is best-effort because the original error is the
       // one worth surfacing.
       await provider
@@ -179,7 +203,7 @@ export class AgentAccountService {
         })
         .catch(() => undefined);
 
-      throw this.toConflictError(error, provider.provider, issued.identifier) ?? error;
+      throw conflict ?? error;
     }
   };
 
