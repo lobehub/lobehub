@@ -46,7 +46,8 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * proxy) every snapshot/readPage/click hung until the caller timed out. The
  * main frame's own `executeJavaScript` runs against the current document now.
  */
-const evaluate = (guest: WebContents, code: string) => guest.mainFrame.executeJavaScript(code);
+const evaluate = (guest: WebContents, code: string): Promise<any> =>
+  guest.mainFrame.executeJavaScript(code);
 
 /**
  * Runs inside the guest page. Builds a compact interactive-element snapshot and

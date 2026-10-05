@@ -147,7 +147,7 @@ describe('BrowserSidebarCtr retained webview registration', () => {
 
     it('reports a navigation that left the requested page unopened', async () => {
       const guest = createWebContents(7);
-      await guest.loadURL('http://127.0.0.1:16001/');
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
       // A 204 / download / refused connection rejects without committing.
       guest.loadURL = vi.fn(async () => {
         throw Object.assign(new Error("ERR_FAILED (-2) loading 'http://127.0.0.1:18748/'"), {
