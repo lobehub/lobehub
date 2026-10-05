@@ -259,15 +259,16 @@ export class AgentAccountModel {
     agentId?: string;
     kind?: AgentAccountKind;
     /**
-     * Leave out revoked rows. A released address is kept for audit, but it is
-     * no longer the agent's to use — the runtime must not present it as one.
+     * Only rows inbound still routes to ({@link INBOUND_ROUTABLE_STATUSES}). A
+     * revoked or suspended address is kept for audit, but mail sent to it no
+     * longer reaches the agent — the runtime must not present it as usable.
      */
     liveOnly?: boolean;
     provider?: string;
   }): Promise<AgentAccountView[]> => {
     const conditions = [this.ownership()];
 
-    if (params?.liveOnly) conditions.push(ne(agentAccounts.status, 'revoked'));
+    if (params?.liveOnly) conditions.push(inArray(agentAccounts.status, INBOUND_ROUTABLE_STATUSES));
 
     if (params?.agentId) conditions.push(eq(agentAccounts.agentId, params.agentId));
     if (params?.kind) conditions.push(eq(agentAccounts.kind, params.kind));
