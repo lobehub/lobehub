@@ -52,6 +52,17 @@ describe('getGoalCommand', () => {
     expect(getGoalCommand('lh goal created x')).toBeUndefined();
   });
 
+  it('ignores separators inside quoted or escaped arguments', () => {
+    expect(getGoalCommand("echo 'x; lh goal create demo'")).toBeUndefined();
+    expect(getGoalCommand('printf "x && lh goal plan goal_1"')).toBeUndefined();
+    expect(getGoalCommand('echo "say \\" ; lh goal create demo"')).toBeUndefined();
+    expect(getGoalCommand('echo x\\; lh goal create demo')).toBeUndefined();
+    expect(getGoalCommand("echo 'done' && lh goal create demo")).toMatchObject({
+      kind: 'create',
+      title: 'demo',
+    });
+  });
+
   it('reads the goal id of a plan submission', () => {
     expect(
       getGoalCommand('lh goal plan goal_P0NhivSBktCf --token t --file /tmp/plan.json'),

@@ -17,10 +17,11 @@ export type GoalCommand =
 
 // `lh` must be in command position — the start of the command, or right after
 // a separator (`&&`, `||`, `;`, `|`, `(`, newline), optionally behind env
-// assignments or a path. As a mere argument (`echo lh goal create x`) it never ran.
-// Scanned token by token rather than with one regex: a pattern that has to try
-// every separator, env assignment and path prefix backtracks polynomially.
-const COMMAND_SEPARATOR = /[;&|(\n]/g;
+// assignments or a path. As a mere argument (`echo lh goal create x`, or a
+// separator inside a quoted argument: `echo 'x; lh goal create y'`) it never ran.
+// Scanned in one linear pass rather than with one regex: a pattern that has to
+// try every separator, env assignment and path prefix backtracks polynomially.
+const COMMAND_SEPARATORS = new Set([';', '&', '|', '(', '\n']);
 const TOKEN_PATTERN = /\S+/g;
 const ENV_ASSIGNMENT_PATTERN = /^[A-Z_]\w*=/i;
 const GOAL_VERBS = new Set(['create', 'plan']);
@@ -28,12 +29,34 @@ const FIRST_POSITIONAL_PATTERN = /^\s+(?:"((?:[^"\\]|\\.)*)"|'([^']*)'|([^\s"'-]
 
 const isLhBinary = (token: string) => token === 'lh' || token.endsWith('/lh');
 
+/** `[start, end)` of each simple command, splitting only on unquoted, unescaped separators. */
+const getCommandSegments = (command: string): [number, number][] => {
+  const segments: [number, number][] = [];
+  let start = 0;
+  let quote: '"' | "'" | undefined;
+
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index];
+    if (quote) {
+      if (char === quote) quote = undefined;
+      else if (char === '\\' && quote === '"') index += 1;
+    } else if (char === '\\') {
+      index += 1;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (COMMAND_SEPARATORS.has(char)) {
+      segments.push([start, index]);
+      start = index + 1;
+    }
+  }
+  segments.push([start, command.length]);
+
+  return segments;
+};
+
 /** The first `lh goal <verb>` in command position, and everything after its verb. */
 const findGoalCall = (command: string): { rest: string; verb: string } | undefined => {
-  let start = 0;
-  while (start <= command.length) {
-    COMMAND_SEPARATOR.lastIndex = start;
-    const end = COMMAND_SEPARATOR.exec(command)?.index ?? command.length;
+  for (const [start, end] of getCommandSegments(command)) {
     const tokens = [...command.slice(start, end).matchAll(TOKEN_PATTERN)];
 
     let index = 0;
@@ -48,8 +71,6 @@ const findGoalCall = (command: string): { rest: string; verb: string } | undefin
     ) {
       return { rest: command.slice(start + verb.index + verb[0].length), verb: verb[0] };
     }
-
-    start = end + 1;
   }
 };
 
