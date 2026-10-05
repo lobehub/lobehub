@@ -198,6 +198,11 @@ export class LinqWebhookDeduplicator {
   async isDuplicate(id: string): Promise<boolean> {
     return !(await this.store.claim(id, this.ttlSeconds));
   }
+
+  /** Accept a retry of this `webhook-id` again (its handling failed). */
+  async release(id: string): Promise<void> {
+    await this.store.release?.(id);
+  }
 }
 
 // ---------------------------------------------------------------------------

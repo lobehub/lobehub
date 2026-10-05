@@ -47,7 +47,11 @@ export type AgentInboundResult =
       created: boolean;
       messageId: string;
       outcome: 'delivered';
-      status: 200;
+      /**
+       * 503 when the message is stored but its wake failed transiently: the
+       * replay claim is released so the provider's retry wakes it then.
+       */
+      status: 200 | 503;
       wake: AgentInboundWakeResult;
     }
   | { accountId?: string; outcome: 'ignored'; status: 200 }
@@ -76,6 +80,12 @@ export const INBOUND_WAKE_LIMITS = {
   windowMs: 60 * 60 * 1000,
 } as const;
 
+/**
+ * Wake outcomes worth a provider retry: the run pipeline failed, not a
+ * deliberate decision (rate limit, missing agent, no waker configured).
+ */
+const RETRYABLE_WAKE_REASONS = new Set(['start-failed', 'wake-failed']);
+
 const NOOP_WAKER: AgentInboundWaker = {
   wake: async () => ({ reason: 'waker-not-configured', started: false }),
 };
@@ -94,8 +104,10 @@ const NOOP_WAKER: AgentInboundWaker = {
  *    returns the same message with `created: false` instead of duplicating it
  *    or waking the agent twice.
  * 3. **Wake** — a genuinely new delivery wakes the agent through the injected
- *    waker, within {@link INBOUND_WAKE_LIMITS}. A duplicate never reaches this
- *    step.
+ *    waker, within {@link INBOUND_WAKE_LIMITS}. A duplicate of a message that
+ *    was already woken never reaches this step; a wake that failed transiently
+ *    answers 503 and releases the replay claim, so the provider's retry wakes
+ *    the still-unread message then.
  */
 export class AgentInboundService {
   private readonly db: LobeChatDatabase;
@@ -130,7 +142,13 @@ export class AgentInboundService {
         return { outcome: decision.outcome, status: 404 };
       }
       default: {
-        return this.deliver(decision.accountId, decision.message);
+        const result = await this.deliver(decision.accountId, decision.message);
+        // Stored but not woken for a transient reason: forget the replay claim
+        // so the provider's retry is processed and wakes the agent then.
+        if (result.status === 503) {
+          await this.options.accountService.releaseInbound(provider, decision.eventId);
+        }
+        return result;
       }
     }
   };
@@ -167,8 +185,10 @@ export class AgentInboundService {
     });
 
     // Idempotent ack: the provider retried a delivery we already handled, so
-    // there is nothing new to wake the agent about.
-    if (!created) {
+    // there is nothing new to wake the agent about. A stored row that is still
+    // unread was never woken (a started wake marks it read) — that is the retry
+    // of a failed wake, so it gets its wake now instead.
+    if (!created && row.readAt) {
       return {
         accountId,
         created: false,
@@ -185,10 +205,10 @@ export class AgentInboundService {
 
     return {
       accountId,
-      created: true,
+      created,
       messageId: row.id,
       outcome: 'delivered',
-      status: 200,
+      status: RETRYABLE_WAKE_REASONS.has(wake.reason) ? 503 : 200,
       wake,
     };
   };
@@ -209,8 +229,9 @@ export class AgentInboundService {
   };
 
   /**
-   * Best-effort wake: a failed wake must not fail the webhook, or the provider
-   * would retry a delivery we already stored and read as a duplicate forever.
+   * One wake attempt. A thrown waker becomes the fixed `wake-failed` reason,
+   * which {@link deliver} answers with a retryable status; the stored row stays
+   * unread, so the provider's retry wakes it instead of reading as a duplicate.
    */
   private wake = async (
     account: AgentAccountView,

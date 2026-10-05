@@ -62,7 +62,13 @@ export interface RevokeAgentAccountOptions {
 
 /** What `handleInbound` decided, so the webhook route can pick a status code. */
 export type AgentAccountInboundOutcome =
-  | { accountId: string; message: AgentAccountInboundMessage; outcome: 'delivered' }
+  | {
+      accountId: string;
+      /** Provider delivery id, so a failed handling can release its replay claim. */
+      eventId: string;
+      message: AgentAccountInboundMessage;
+      outcome: 'delivered';
+    }
   | { accountId?: string; outcome: 'ignored' | 'rejected' | 'unknown-account' | 'unroutable' };
 
 export interface AgentAccountServiceOptions {
@@ -345,7 +351,16 @@ export class AgentAccountService {
     const message = await provider.normalizeInbound(event, ref);
     if (!message) return { accountId: resolved.view.id, outcome: 'ignored' };
 
-    return { accountId: resolved.view.id, message, outcome: 'delivered' };
+    return { accountId: resolved.view.id, eventId: event.eventId, message, outcome: 'delivered' };
+  };
+
+  /**
+   * Release the replay claim of a delivery whose handling failed after
+   * {@link handleInbound} accepted it, so the provider's retry is processed
+   * instead of acknowledged as a duplicate.
+   */
+  releaseInbound = async (providerName: string, eventId: string): Promise<void> => {
+    await this.options.registry.get(providerName).releaseInbound?.(eventId);
   };
 
   // --------------- Internals ---------------

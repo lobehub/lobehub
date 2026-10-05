@@ -159,7 +159,10 @@ beforeAll(async () => {
       if (method === 'GET' && messageMatch)
         return json(
           200,
-          mailDetail('Your verification code is 839201. It expires in 10 minutes.', messageMatch[1]),
+          mailDetail(
+            'Your verification code is 839201. It expires in 10 minutes.',
+            messageMatch[1],
+          ),
         );
       if (method === 'GET' && /^\/v1\/messages\/[^/]+\/raw$/.test(pathname)) {
         res.writeHead(200, { 'content-type': 'message/rfc822' });
@@ -348,10 +351,42 @@ describe('Agent inbound webhook — end to end over the real route', () => {
     const response = await post('agent-mail', body, signedHeaders(body));
     const text = await response.text();
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503);
     expect(JSON.parse(text).wake).toEqual({ reason: 'wake-failed', started: false });
     expect(text).not.toContain('ECONNREFUSED');
     expect(text).not.toContain('secret-db-host');
+  });
+
+  it('answers a failed wake as retryable and wakes the stored message on the retry', async () => {
+    execAgentFailure.next = new Error('queue unavailable');
+    const body = inboundBody({ eventId: 'evt_retry', messageId: 'msg_retry' });
+
+    // 1. Stored, but the run did not start: the provider is asked to retry.
+    const failed = await post('agent-mail', body, signedHeaders(body));
+    expect(failed.status).toBe(503);
+    expect((await failed.json()).wake).toEqual({ reason: 'wake-failed', started: false });
+
+    // 2. The provider's retry of the same event is processed, not read as a
+    // replay, and wakes the message stored by the first attempt.
+    const retried = await post('agent-mail', body, signedHeaders(body));
+    expect(retried.status).toBe(200);
+    expect(await retried.json()).toMatchObject({
+      created: false,
+      wake: { reason: 'started', started: true },
+    });
+
+    const rows = await serverDB
+      .select()
+      .from(agentInboxMessages)
+      .where(eq(agentInboxMessages.accountId, accountId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].readAt).not.toBeNull();
+    expect(agentCalls).toHaveLength(2);
+
+    // 3. Once woken, a further retry is a plain duplicate and wakes nothing.
+    const again = await post('agent-mail', body, signedHeaders(body));
+    expect(again.status).toBe(200);
+    expect(agentCalls).toHaveLength(2);
   });
 
   it('summarizes the inbox as an unread count and nothing a sender wrote', async () => {

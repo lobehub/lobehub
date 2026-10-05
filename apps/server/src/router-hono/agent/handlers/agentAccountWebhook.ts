@@ -20,9 +20,9 @@ const log = debug('lobe-server:agent:account-webhook');
  * The raw body is what the signature covers, so it is read as text and handed
  * on unparsed — the provider parses it after verification.
  *
- * Status mapping (see `AgentInboundResult`): 200 delivered/ignored, 401 a
- * forged or replayed signature, 404 a delivery for an address this deployment
- * cannot route.
+ * Status mapping (see `AgentInboundResult`): 200 delivered/ignored, 503 stored
+ * but its wake failed transiently (retry it), 401 a forged signature, 404 a
+ * delivery for an address this deployment cannot route.
  */
 export async function agentAccountWebhook(c: Context): Promise<Response> {
   const provider = c.req.param('provider');

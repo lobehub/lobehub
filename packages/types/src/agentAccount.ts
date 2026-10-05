@@ -272,6 +272,15 @@ export interface AgentAccountProvider<K extends AgentAccountKind = AgentAccountK
   release: (ref: AgentAccountRef) => Promise<void>;
 
   /**
+   * Forget the replay claim {@link verifyInbound} took for a delivery, so the
+   * provider's retry of it is processed instead of acknowledged as a
+   * duplicate. Called when handling a verified delivery failed transiently and
+   * the webhook answers with a retryable status. Optional: a provider that
+   * keeps no claim has nothing to release.
+   */
+  releaseInbound?: (eventId: string) => Promise<void>;
+
+  /**
    * Extract the routing key (the account `identifier`) from an *untrusted*
    * delivery, so the account can be found and its credential used to verify.
    * Returning `undefined` means the delivery cannot be routed at all.

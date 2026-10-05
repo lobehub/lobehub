@@ -157,6 +157,10 @@ export const createAgentMailProvider = (
       }
     },
 
+    releaseInbound: async (eventId: string): Promise<void> => {
+      await dedupeStore.release?.(eventId);
+    },
+
     send: async (
       ref: AgentAccountRef,
       message: AgentAccountOutboundMessage,
