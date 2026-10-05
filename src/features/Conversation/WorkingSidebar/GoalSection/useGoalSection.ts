@@ -70,7 +70,9 @@ export interface GoalWorkflowView {
  * gates. The card only holds the goal id, so everything is fetched here,
  * polling while the coordinator advances the graph.
  */
-export const useGoalWorkflow = (goal: OperationGoal): GoalWorkflowView => {
+export const useGoalWorkflow = (
+  goal: Pick<OperationGoal, 'criteriaCount' | 'goalId' | 'name'>,
+): GoalWorkflowView => {
   const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
   const { error, isLoading, mutate } = useFetchGoalGraph(goal.goalId);
   const snapshot = useGoalStore(goalSelectors.goalGraph(goal.goalId));

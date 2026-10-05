@@ -18,10 +18,10 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import AssigneeProfileAvatar from '@/features/AgentGoals/ProcessControl/AssigneeProfileAvatar';
-import { buildGoalStepSegments } from '@/features/Conversation/Messages/GoalTaskCard/goalTaskProgress';
 import { useChatStore } from '@/store/chat';
 
 import {
+  buildGoalStepSegments,
   type GoalWorkflowRow,
   MAX_VISIBLE_WORKFLOW_ROWS,
   sliceVisibleWorkflowRows,
