@@ -1,5 +1,9 @@
 import { type UIChatMessage } from '@lobechat/types';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+
+import { type ConversationMessagePage } from './messageReplica';
+
 export interface DataState {
   /**
    * Raw messages from DB (before parsing)
@@ -27,6 +31,18 @@ export interface DataState {
   isLoadingEarlierMessages: boolean;
 
   /**
+   * Paging bookkeeping of the transcript in `dbMessages` (cursor of the next
+   * older page, loaded depth). Absent until a fetch or hydration lands.
+   */
+  messagePaging?: Omit<ConversationMessagePage, 'items'>;
+
+  /**
+   * Replica bookkeeping of this conversation's transcript (`dbMessages` +
+   * `messagePaging` are its view).
+   */
+  messageReplica: ReplicaState<ConversationMessagePage>;
+
+  /**
    * Whether messages have been initialized
    */
   messagesInit: boolean;
@@ -48,5 +64,6 @@ export const dataInitialState: DataState = {
   dbMessages: [],
   displayMessages: [],
   isLoadingEarlierMessages: false,
+  messageReplica: createReplicaState(),
   messagesInit: false,
 };

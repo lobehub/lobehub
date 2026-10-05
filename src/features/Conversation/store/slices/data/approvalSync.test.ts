@@ -5,11 +5,7 @@ import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
-import {
-  clearMessageListClientCacheState,
-  getEarlierHistoryStatus,
-  loadEarlierMessagePage,
-} from '@/services/message/cache';
+import { clearMessageListClientCacheState } from '@/services/message/cache';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
@@ -24,6 +20,7 @@ vi.mock('@/services/message', () => {
   const getMessages = vi.fn();
   return {
     messageService: {
+      getEarlierMessages: vi.fn(),
       getMessages,
       getMessageListPage: vi.fn(async (params: unknown) => ({
         messages: await getMessages(params),
@@ -103,12 +100,14 @@ describe('pending approval message polling', () => {
       createdAt: 0,
       updatedAt: 0,
     };
-    const history = await loadEarlierMessagePage(
-      context,
-      () => store.getState().dbMessages,
-      async () => ({ messages: [older], olderCursor: null }),
-    );
-    act(() => store.getState().replaceMessages(history!));
+    vi.mocked(messageService.getEarlierMessages).mockResolvedValue({
+      messages: [older],
+      olderCursor: null,
+    });
+    await act(async () => {
+      await store.getState().loadEarlierMessages();
+    });
+    expect(store.getState().dbMessages.map((m) => m.id)).toEqual(['older', 'question']);
     const answered = { ...pending, pluginIntervention: { status: 'approved' as const } };
     const reply: UIChatMessage = {
       id: 'reply',
@@ -122,7 +121,7 @@ describe('pending approval message polling', () => {
       await vi.advanceTimersByTimeAsync(2000);
     });
     expect(store.getState().dbMessages).toEqual([older, answered, reply]);
-    expect(getEarlierHistoryStatus(context).exhausted).toBe(true);
+    expect(store.getState().messagePaging?.hasMore).toBe(false);
     expect(messageService.getMessageListPage).toHaveBeenCalledTimes(3);
   });
 

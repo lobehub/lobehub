@@ -8,6 +8,8 @@ import { createStore } from '../../../index';
 const { chatStoreMock } = vi.hoisted(() => ({
   chatStoreMock: {
     cancelOperations: vi.fn(),
+    operations: {},
+    operationsByContext: {},
   },
 }));
 

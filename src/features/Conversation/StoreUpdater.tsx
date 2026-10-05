@@ -100,6 +100,9 @@ const StoreUpdater = memo<StoreUpdaterProps>(
         // when calling onMessagesChange (otherwise writes to the old topic key)
         storeApi.setState({
           ...createEphemeralResetState(),
+          // The store shows one conversation: the previous one's replica
+          // bookkeeping must not describe the next one's rows.
+          messageReplica: { entries: {}, scope: storeApi.getState().messageReplica.scope },
           context,
           dbMessages: messages ?? [],
           displayMessages: [],
