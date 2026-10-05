@@ -267,12 +267,16 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
 
         try {
           const results = await agentModel.queryAgents({ keyword: query, limit });
-          const agents = results.map((agent) => ({
-            avatar: agent.avatar ?? undefined,
-            description: agent.description ?? undefined,
-            id: agent.id,
-            title: agent.title ?? '',
-          }));
+          // The inbox is in queryAgents for general lookups, but a builtin can
+          // never join a group (addAgentsToGroup refuses it) — don't offer it.
+          const agents = results
+            .filter((agent) => !agent.isInbox)
+            .map((agent) => ({
+              avatar: agent.avatar ?? undefined,
+              description: agent.description ?? undefined,
+              id: agent.id,
+              title: agent.title ?? '',
+            }));
 
           if (agents.length === 0) {
             return {

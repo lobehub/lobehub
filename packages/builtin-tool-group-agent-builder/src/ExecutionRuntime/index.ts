@@ -79,12 +79,16 @@ export class GroupAgentBuilderExecutionRuntime {
     try {
       const results = await agentService.queryAgents({ keyword: query, limit });
 
-      const agents = results.map((agent) => ({
-        avatar: agent.avatar,
-        description: agent.description,
-        id: agent.id,
-        title: agent.title,
-      }));
+      // The inbox is in queryAgents for general lookups, but a builtin can never
+      // join a group (addAgentsToGroup refuses it) — don't offer it.
+      const agents = results
+        .filter((agent) => !agent.isInbox)
+        .map((agent) => ({
+          avatar: agent.avatar,
+          description: agent.description,
+          id: agent.id,
+          title: agent.title,
+        }));
 
       const total = agents.length;
 

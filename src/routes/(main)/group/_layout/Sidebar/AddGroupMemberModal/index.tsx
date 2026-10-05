@@ -13,6 +13,7 @@ import { agentService } from '@/services/agent';
 
 import { type AgentItemData } from './AgentItem';
 import AvailableAgentList from './AvailableAgentList';
+import { selectAddableAgents } from './selectAddableAgents';
 import SelectedAgentList from './SelectedAgentList';
 import { useAgentSelectionStore } from './store';
 
@@ -48,16 +49,17 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
     const selectedAgentIds = useAgentSelectionStore((s) => s.selectedAgentIds);
     const clearSelection = useAgentSelectionStore((s) => s.clearSelection);
 
-    // Fetch agents from the new API (non-virtual agents only)
+    // Fetch agents from the new API (non-virtual agents plus the inbox)
     const { data: allAgents = [], isLoading: isLoadingAgents } = useSWR(
       open ? groupKeys.queryAgents() : null,
       () => agentService.queryAgents(),
     );
 
-    // Filter out existing members
-    const availableAgents = useMemo<AgentItemData[]>(() => {
-      return allAgents.filter((agent) => !existingMembers.includes(agent.id));
-    }, [allAgents, existingMembers]);
+    // Filter out existing members and the inbox, which cannot join a group
+    const availableAgents = useMemo<AgentItemData[]>(
+      () => selectAddableAgents(allAgents, existingMembers),
+      [allAgents, existingMembers],
+    );
 
     // Clear selection when modal closes
     useEffect(() => {

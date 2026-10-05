@@ -14,6 +14,7 @@ const {
   mockGetAgentConfigById,
   mockGetGroupAgentsWithMeta,
   mockGetResourceConfigAccess,
+  mockQueryAgents,
   mockRemoveAgentsFromGroup,
   mockSetAccessLevel,
   mockUpdateAgent,
@@ -29,6 +30,7 @@ const {
   mockGetAgentConfigById: vi.fn(),
   mockGetGroupAgentsWithMeta: vi.fn(),
   mockGetResourceConfigAccess: vi.fn(),
+  mockQueryAgents: vi.fn(),
   mockRemoveAgentsFromGroup: vi.fn(),
   mockSetAccessLevel: vi.fn(),
   mockUpdateAgent: vi.fn(),
@@ -40,7 +42,7 @@ vi.mock('@/database/models/agent', () => ({
     return {
       batchCreate: mockBatchCreate,
       getAgentConfigById: mockGetAgentConfigById,
-      queryAgents: vi.fn(async () => []),
+      queryAgents: mockQueryAgents,
       update: mockUpdateAgent,
       updateConfig: vi.fn(),
     };
@@ -117,6 +119,7 @@ describe('groupAgentBuilderRuntime', () => {
     ]);
     mockGetResourceConfigAccess.mockResolvedValue('full');
     mockAssertCanPerformResourceAction.mockResolvedValue(undefined);
+    mockQueryAgents.mockResolvedValue([]);
   });
 
   // The bug: gateway mode executes every builtin tool server-side, and a missing
@@ -196,6 +199,20 @@ describe('groupAgentBuilderRuntime', () => {
         state: { failedCount: 0, successCount: 2 },
         success: true,
       });
+    });
+  });
+
+  describe('searchAgent', () => {
+    it('does not offer the inbox, which can never join a group', async () => {
+      mockQueryAgents.mockResolvedValue([
+        { description: null, id: 'agt_inbox', isInbox: true, title: 'Lobe AI' },
+        { description: null, id: 'agt_writer', isInbox: false, title: 'Writer' },
+      ]);
+
+      const result = await createRuntime().searchAgent({ query: '' }, groupCtx);
+
+      expect(result.success).toBe(true);
+      expect((result.state as any).agents.map((a: { id: string }) => a.id)).toEqual(['agt_writer']);
     });
   });
 
