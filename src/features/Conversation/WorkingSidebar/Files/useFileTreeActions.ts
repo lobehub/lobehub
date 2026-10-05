@@ -298,9 +298,10 @@ export const useFileTreeActions = ({
       canPublish,
       canUseTerminal: ops.canUseTerminal,
       isRemote,
+      readOnly: isSandbox,
       trashName: ops.trashName,
     }),
-    [isRemote, ops.canPaste, ops.canUseTerminal, ops.trashName],
+    [isRemote, isSandbox, ops.canPaste, ops.canUseTerminal, ops.trashName],
   );
 
   const getBlankContextMenuItems = useCallback(
@@ -393,10 +394,14 @@ export const useFileTreeActions = ({
     [nodeById, startCreate, treeRef],
   );
 
+  // A persistent sandbox instance's files live in the execution plane, and
+  // every mutation helper below speaks only to the local or device filesystem
+  // — so until they are routed, the tree reads rather than lies about where a
+  // rename or a delete would land.
   return {
-    canDrag: (node: Node) => !!node.data && !isDeletedNode(node, deletedPaths),
-    canDrop: ops.canDrop,
-    canRename: (node: Node) => !!node.data && !isDeletedNode(node, deletedPaths),
+    canDrag: (node: Node) => !isSandbox && !!node.data && !isDeletedNode(node, deletedPaths),
+    canDrop: (...args: Parameters<typeof ops.canDrop>) => !isSandbox && ops.canDrop(...args),
+    canRename: (node: Node) => !isSandbox && !!node.data && !isDeletedNode(node, deletedPaths),
     getBlankContextMenuItems,
     getContextMenuItems,
     handleNodeClick,
@@ -408,7 +413,7 @@ export const useFileTreeActions = ({
     pendingCreate: !!pendingCreate,
     refresh: ops.refresh,
     refreshing: ops.refreshing,
-    startCreateFromHeader,
+    startCreateFromHeader: isSandbox ? undefined : startCreateFromHeader,
     validateName: ops.validateName,
   };
 };

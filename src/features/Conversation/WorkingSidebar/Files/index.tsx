@@ -454,19 +454,25 @@ const Files = memo<FilesProps>(
     // the project root, refresh, then the ignored-files filter.
     const moreItems = useMemo(
       () => [
-        {
-          icon: <FilePlusIcon size={14} />,
-          key: 'new-file',
-          label: t('workingPanel.files.actions.newFile'),
-          onClick: () => actions.startCreateFromHeader('file'),
-        },
-        {
-          icon: <FolderPlusIcon size={14} />,
-          key: 'new-folder',
-          label: t('workingPanel.files.actions.newFolder'),
-          onClick: () => actions.startCreateFromHeader('folder'),
-        },
-        { key: 'divider-refresh', type: 'divider' as const },
+        // Absent for a read-only tree (a persistent sandbox instance), whose
+        // files the mutation helpers cannot reach.
+        ...(actions.startCreateFromHeader
+          ? [
+              {
+                icon: <FilePlusIcon size={14} />,
+                key: 'new-file',
+                label: t('workingPanel.files.actions.newFile'),
+                onClick: () => actions.startCreateFromHeader?.('file'),
+              },
+              {
+                icon: <FolderPlusIcon size={14} />,
+                key: 'new-folder',
+                label: t('workingPanel.files.actions.newFolder'),
+                onClick: () => actions.startCreateFromHeader?.('folder'),
+              },
+              { key: 'divider-refresh', type: 'divider' as const },
+            ]
+          : []),
         {
           disabled: actions.refreshing,
           icon: <RotateCwIcon size={14} />,

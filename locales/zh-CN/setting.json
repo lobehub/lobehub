@@ -642,7 +642,7 @@
   "environments.saveFailed": "无法保存这次修改",
   "environments.sessions.activeBuild": "{{instance}} 正在构建",
   "environments.sessions.activeSession": "沙箱正在 {{instance}} 中运行",
-  "environments.sessions.desc": "这些实例中运行过的所有会话和构建，按时间倒序排列，并显示每次的结束方式以及安装内容是否已保存。",
+  "environments.sessions.desc": "这些实例最近的运行会话和构建，最新的在前，含各自的结束方式，以及安装的内容是否被保存。",
   "environments.sessions.empty": "还没有运行过",
   "environments.sessions.emptyHint": "实例中运行过的对话和构建都会记录在这里。",
   "environments.sessions.history": "历史记录",

@@ -548,6 +548,10 @@ export const sandboxStorageRouter = router({
       const created = await ctx.instanceModel
         .create({
           ...sandboxBinding(ctx.claim.key),
+          // The copy's files are the source's, so its definition is too. Left
+          // to default, it would snapshot whatever the environment says now
+          // and describe a checkout the copied tree does not contain.
+          configurationSnapshot: source.configurationSnapshot,
           environmentId: source.environmentId,
           name: input.name,
           workingDirectory: input.workingDirectory,
@@ -913,17 +917,47 @@ export const sandboxStorageRouter = router({
           : { held: [], unavailable: false },
       ]);
 
+      // A build is polled by whoever has the Instances tab open, and nobody
+      // has it open most of the time — switch tabs mid-build and the verdict
+      // never lands, leaving the row `pending` against a build the runtime
+      // has since discarded and an instance the composer will not offer. So
+      // every listing settles the builds it finds already finished. Bounded
+      // by how many instances can be building at once, and never fatal: an
+      // unreachable execution plane just leaves the row as it was.
+      const settled = await pMap(
+        instances.filter((instance) => instance.buildId),
+        async (instance) => {
+          const status = await ctx.client
+            .buildStatus({ buildId: instance.buildId!, name: instance.id, topicId: input.topicId })
+            .catch(() => null);
+          if (!status || status.state === 'running') return null;
+
+          const next = {
+            buildError:
+              status.state === 'failed' ? status.chunk.slice(-2000) || 'Build failed' : null,
+            status: status.state === 'succeeded' ? ('ready' as const) : ('error' as const),
+          };
+          await ctx.instanceModel
+            .recordBuildResult(instance.id, instance.buildId!, next)
+            .catch(() => undefined);
+
+          return [instance.id, next] as const;
+        },
+        { concurrency: 5 },
+      );
+      const settledById = new Map(settled.filter((entry) => !!entry));
+
       const byId = new Map((snapshots ?? []).map((snapshot) => [snapshot.id, snapshot]));
       const heldBy = new Map(occupancy.held.map((entry) => [entry.id, entry.own]));
 
       return {
         instances: instances.map((instance) => ({
           /** Set only while a build is worth polling; cleared with its verdict. */
-          buildId: instance.buildId,
+          buildId: settledById.has(instance.id) ? null : instance.buildId,
           // From the definition the instance was made from, which is what a
           // build uses — the environment may have moved on since.
           buildable: isBuildable(instance.configurationSnapshot),
-          buildError: instance.buildError,
+          buildError: settledById.get(instance.id)?.buildError ?? instance.buildError,
           createdAt: instance.createdAt,
           environmentId: instance.environmentId,
           id: instance.id,
@@ -934,7 +968,7 @@ export const sandboxStorageRouter = router({
           inUseByThisTopic: heldBy.get(instance.id) === true,
           name: instance.name,
           snapshot: byId.get(instance.id) ?? null,
-          status: instance.status,
+          status: settledById.get(instance.id)?.status ?? instance.status,
           workingDirectory: instance.workingDirectory,
         })),
         occupancyUnavailable: occupancy.unavailable,

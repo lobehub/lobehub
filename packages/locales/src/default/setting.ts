@@ -4035,7 +4035,7 @@ When I am ___, I need ___
   'environments.detail.tabs.settings': 'Settings',
   'environments.sessions.title': 'Run history',
   'environments.sessions.desc':
-    'Every session that ran in one of these instances and every build of them, newest first, with how each ended and whether what it installed was saved.',
+    'The most recent sessions that ran in these instances and the builds of them, newest first, with how each ended and whether what it installed was saved.',
   'environments.sessions.empty': 'Nothing has run here yet',
   'environments.sessions.emptyHint':
     'Every conversation and build in one of its instances will show up here.',

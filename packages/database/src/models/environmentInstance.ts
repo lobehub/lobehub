@@ -14,6 +14,13 @@ export type EnvironmentInstanceBinding = Pick<
 
 export interface CreateEnvironmentInstanceParams extends EnvironmentInstanceBinding {
   configuration?: EnvironmentInstanceConfiguration;
+  /**
+   * The definition this instance was actually built from. Defaults to the
+   * environment's current one, which is right for a new instance; a copy
+   * passes the source's, because its files are the source's and the
+   * environment may have moved on since.
+   */
+  configurationSnapshot?: EnvironmentConfiguration;
   environmentId: string;
   name: string;
   workingDirectory: string;
@@ -217,7 +224,14 @@ export class EnvironmentInstanceModel {
   create = async (
     params: CreateEnvironmentInstanceParams,
   ): Promise<EnvironmentInstanceItem | undefined> => {
-    const { configuration, environmentId, name, workingDirectory, ...binding } = params;
+    const {
+      configuration,
+      configurationSnapshot,
+      environmentId,
+      name,
+      workingDirectory,
+      ...binding
+    } = params;
 
     const [environment] = await this.db
       .select()
@@ -283,7 +297,7 @@ export class EnvironmentInstanceModel {
           // this is the definition this instance was actually built from, and
           // keeping it is what lets a later comparison say "the specification
           // moved".
-          configurationSnapshot: environment.configuration,
+          configurationSnapshot: configurationSnapshot ?? environment.configuration,
           environmentId,
           name,
           workingDirectory,

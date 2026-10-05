@@ -140,6 +140,7 @@ describe('sandboxStorageRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockResolveClaim.mockResolvedValue({ key: 'ws-org-1', quotaBytes: 1024 });
+    mockInstanceRecordBuildResult.mockResolvedValue(undefined);
   });
 
   describe('createInstance', () => {
@@ -616,6 +617,40 @@ describe('sandboxStorageRouter', () => {
     beforeEach(() => {
       mockResolveSessionConfig.mockResolvedValue({ claim: { key: 'ws-org-1' } });
       mockReadOccupancy.mockResolvedValue({ held: [], unavailable: false });
+    });
+
+    it('settles a build that finished while nobody had the panel open', async () => {
+      // The per-build poll only runs while the Instances tab is mounted. Switch
+      // tabs mid-build and the verdict never lands, so the row stays pending
+      // against a build the runtime has discarded. The listing settles it.
+      mockInstanceQuery.mockResolvedValue([
+        { ...instance('inst-built'), buildId: 'b-9', status: 'pending' },
+      ]);
+      mockBuildStatus.mockResolvedValue({ chunk: 'ok', logOffset: 2, state: 'succeeded' });
+
+      const result = await sandboxStorageRouter
+        .createCaller(ctx)
+        .listInstances({ topicId: 'tpc-1', withSizes: false });
+
+      expect(mockInstanceRecordBuildResult).toHaveBeenCalledWith('inst-built', 'b-9', {
+        buildError: null,
+        status: 'ready',
+      });
+      expect(result.instances[0]).toMatchObject({ buildId: null, status: 'ready' });
+    });
+
+    it('leaves a still-running build alone', async () => {
+      mockInstanceQuery.mockResolvedValue([
+        { ...instance('inst-building'), buildId: 'b-10', status: 'pending' },
+      ]);
+      mockBuildStatus.mockResolvedValue({ chunk: '', logOffset: 0, state: 'running' });
+
+      const result = await sandboxStorageRouter
+        .createCaller(ctx)
+        .listInstances({ topicId: 'tpc-1', withSizes: false });
+
+      expect(mockInstanceRecordBuildResult).not.toHaveBeenCalled();
+      expect(result.instances[0]).toMatchObject({ buildId: 'b-10', status: 'pending' });
     });
 
     it('marks an instance another conversation holds, and tells its own run apart', async () => {
