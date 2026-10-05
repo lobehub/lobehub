@@ -76,6 +76,9 @@ interface CreateDecisionInput {
   requestedUserId?: string;
 }
 
+/** How far up the task tree a task still counts as part of its ancestor's goal. */
+const MAX_GOAL_ANCESTOR_DEPTH = 32;
+
 /** Persistence boundary for an owned Goal Graph and its append-only audit trail. */
 export class GoalGraphModel {
   /**
@@ -386,29 +389,62 @@ export class GoalGraphModel {
   };
 
   /**
-   * The goal a task belongs to — either as the responsible Task of one of its
-   * nodes, or as the goal's own execution carrier. Lets a Task page link back
-   * to the goal that owns it.
+   * The goal a task belongs to — as the responsible Task of one of its nodes,
+   * as the goal's own execution carrier, or through the nearest ancestor that is
+   * either (goal Tasks spawn their own subtasks). Lets a Task page link back to
+   * the goal that owns it.
    */
-  findGoalByTaskId = async (
-    taskId: string,
-  ): Promise<{ agentId: string | null; id: string; title: string } | undefined> => {
-    const [row] = await this.db
-      .select({ agentId: goals.agentId, id: goals.id, title: goals.title })
+  findGoalByTaskId = async (taskId: string): Promise<{ id: string; title: string } | undefined> => {
+    // Walk up `parent_task_id`, nearest first. Depth-capped so a corrupt cycle
+    // cannot run away.
+    const chain = await this.db.execute<{ depth: number; id: string }>(sql`
+      WITH RECURSIVE chain(id, depth) AS (
+        SELECT ${tasks.id}, 0 FROM ${tasks} WHERE ${tasks.id} = ${taskId}
+        UNION ALL
+        SELECT ${tasks.parentTaskId}, chain.depth + 1
+        FROM ${tasks} JOIN chain ON ${tasks.id} = chain.id
+        WHERE ${tasks.parentTaskId} IS NOT NULL AND chain.depth < ${MAX_GOAL_ANCESTOR_DEPTH}
+      )
+      SELECT id, depth FROM chain
+    `);
+    const depthOf = new Map(chain.rows.map((row) => [row.id, Number(row.depth)]));
+    if (depthOf.size === 0) return undefined;
+    const taskIds = [...depthOf.keys()];
+
+    const rows = await this.db
+      .select({
+        carrierTaskId: goals.subjectId,
+        createdAt: goals.createdAt,
+        id: goals.id,
+        nodeTaskId: goalNodes.taskId,
+        subjectType: goals.subjectType,
+        title: goals.title,
+      })
       .from(goals)
-      .leftJoin(goalNodes, and(eq(goalNodes.goalId, goals.id), eq(goalNodes.taskId, taskId)))
+      .leftJoin(goalNodes, and(eq(goalNodes.goalId, goals.id), inArray(goalNodes.taskId, taskIds)))
       .where(
         and(
           this.ownership(),
           or(
-            eq(goalNodes.taskId, taskId),
-            and(eq(goals.subjectType, 'task'), eq(goals.subjectId, taskId)),
+            inArray(goalNodes.taskId, taskIds),
+            and(eq(goals.subjectType, 'task'), inArray(goals.subjectId, taskIds)),
           ),
         ),
-      )
-      .orderBy(desc(goals.createdAt))
-      .limit(1);
-    return row;
+      );
+
+    const depthOfRow = (row: (typeof rows)[number]) =>
+      Math.min(
+        row.nodeTaskId ? (depthOf.get(row.nodeTaskId) ?? Infinity) : Infinity,
+        row.subjectType === 'task' && row.carrierTaskId
+          ? (depthOf.get(row.carrierTaskId) ?? Infinity)
+          : Infinity,
+      );
+    const [nearest] = rows.sort(
+      (a, b) =>
+        depthOfRow(a) - depthOfRow(b) ||
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    return nearest ? { id: nearest.id, title: nearest.title } : undefined;
   };
 
   createNode = async (goalId: string, input: CreateNodeInput) =>

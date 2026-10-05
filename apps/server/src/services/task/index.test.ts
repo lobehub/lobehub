@@ -269,9 +269,9 @@ describe('TaskService', () => {
       expect(result?.goal).toBeNull();
       expect(findGoalByTaskId).toHaveBeenCalledWith('task_001');
 
-      findGoalByTaskId.mockResolvedValueOnce({ agentId: 'agent-1', id: 'goal_1', title: 'G' });
+      findGoalByTaskId.mockResolvedValueOnce({ id: 'goal_1', title: 'G' });
       const withGoal = await service.getTaskDetail('TASK-1');
-      expect(withGoal?.goal).toEqual({ agentId: 'agent-1', id: 'goal_1', title: 'G' });
+      expect(withGoal?.goal).toEqual({ id: 'goal_1', title: 'G' });
     });
 
     it('surfaces the effective inherited Acceptance policy', async () => {

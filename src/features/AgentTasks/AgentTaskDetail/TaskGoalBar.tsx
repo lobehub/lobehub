@@ -8,8 +8,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import { goalDetailPath } from '../shared/goalDetailPath';
-
 /** "Part of goal" link back to the goal that drives this task, mirroring the parent-task bar. */
 const TaskGoalBar = memo(() => {
   const { t } = useTranslation('chat');
@@ -28,7 +26,9 @@ const TaskGoalBar = memo(() => {
         size={'small'}
         style={{ maxWidth: '100%', minWidth: 0 }}
         type={'text'}
-        onClick={() => navigate(goalDetailPath(goal.id, goal.agentId))}
+        // The agent-less route: the goal's supervising agent may be private to its
+        // creator or gated by Agent Lab, while the goal itself stays readable.
+        onClick={() => navigate(`/goal/${goal.id}`)}
       >
         <Text ellipsis style={{ minWidth: 0 }} weight={500}>
           {goal.title}

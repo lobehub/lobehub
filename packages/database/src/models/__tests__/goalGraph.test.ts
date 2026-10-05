@@ -178,7 +178,7 @@ describe('GoalGraphModel', () => {
     expect(graph?.events.filter((event) => event.entityType === 'task')).toHaveLength(1);
   });
 
-  it('finds the goal a task belongs to, as a node task or as the carrier', async () => {
+  it('finds the goal a task belongs to, as a node task, the carrier, or via an ancestor', async () => {
     const taskModel = new TaskModel(serverDB, userId);
     const [nodeTask, carrierTask, looseTask] = await Promise.all([
       taskModel.create({ instruction: 'Node task' }),
@@ -195,12 +195,27 @@ describe('GoalGraphModel', () => {
       title: 'Carrier goal',
     });
 
+    const child = await taskModel.create({ instruction: 'Child', parentTaskId: nodeTask.id });
+    const grandchild = await taskModel.create({
+      instruction: 'Grandchild',
+      parentTaskId: child.id,
+    });
+
     expect(await graphModel.findGoalByTaskId(nodeTask.id)).toEqual({
-      agentId: null,
       id: goal.id,
       title: 'Owning goal',
     });
+    // Subtasks a goal task spawns belong to the same goal.
+    expect((await graphModel.findGoalByTaskId(grandchild.id))?.id).toBe(goal.id);
     expect((await graphModel.findGoalByTaskId(carrierTask.id))?.id).toBe(carrierGoal.id);
+    // The nearest goal wins: a subtask carrying its own goal links to that one.
+    const nested = await taskModel.create({ instruction: 'Nested', parentTaskId: nodeTask.id });
+    const nestedGoal = await goalModel.create({
+      subjectId: nested.id,
+      subjectType: 'task',
+      title: 'Nested goal',
+    });
+    expect((await graphModel.findGoalByTaskId(nested.id))?.id).toBe(nestedGoal.id);
     expect(await graphModel.findGoalByTaskId(looseTask.id)).toBeUndefined();
     expect(
       await new GoalGraphModel(serverDB, otherUserId).findGoalByTaskId(nodeTask.id),
