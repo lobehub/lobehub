@@ -9,18 +9,29 @@ import type { OrphanedRunningTopic } from '@/database/models/task';
 
 import { ORPHANED_RUN_GRACE_MS, reconcileOrphanedTaskRuns } from './reconcile';
 
-const { findOrphanedRunningTopics, markEndedIfRunning, onTopicComplete, reopenEndedRun } =
-  vi.hoisted(() => ({
-    findOrphanedRunningTopics: vi.fn(),
-    markEndedIfRunning: vi.fn(),
-    onTopicComplete: vi.fn(),
-    reopenEndedRun: vi.fn(),
-  }));
+const {
+  findOrphanedRunningTopics,
+  findTaskById,
+  markEndedIfRunning,
+  onTopicComplete,
+  reopenEndedRun,
+} = vi.hoisted(() => ({
+  findOrphanedRunningTopics: vi.fn(),
+  findTaskById: vi.fn(),
+  markEndedIfRunning: vi.fn(),
+  onTopicComplete: vi.fn(),
+  reopenEndedRun: vi.fn(),
+}));
 
 vi.mock('@/database/models/task', () => ({
-  TaskModel: {
-    findOrphanedRunningTopics: (...args: unknown[]) => findOrphanedRunningTopics(...args),
-  },
+  TaskModel: Object.assign(
+    vi.fn(function () {
+      return { findById: findTaskById };
+    }),
+    {
+      findOrphanedRunningTopics: (...args: unknown[]) => findOrphanedRunningTopics(...args),
+    },
+  ),
 }));
 
 vi.mock('@/database/models/taskTopic', () => ({
@@ -57,6 +68,7 @@ describe('reconcileOrphanedTaskRuns', () => {
     markEndedIfRunning.mockReset().mockResolvedValue(true);
     onTopicComplete.mockReset().mockResolvedValue(undefined);
     reopenEndedRun.mockReset().mockResolvedValue(true);
+    findTaskById.mockReset().mockResolvedValue({ id: 'task-1', status: 'running' });
   });
 
   afterEach(() => {
@@ -143,6 +155,23 @@ describe('reconcileOrphanedTaskRuns', () => {
     // A claimed-but-unsettled row is the very shape this reconciliation exists
     // to remove, so it must not be left terminal with its Task still `running`.
     expect(reopenEndedRun).toHaveBeenCalledWith('tpc-1', 'op-1', 'failed');
+    expect(result).toMatchObject({ checked: 1, converged: [], failed: ['tpc-1'] });
+    expect(consoleError).toHaveBeenCalled();
+  });
+
+  it('keeps the run settled when the settle failed after the Task moved on', async () => {
+    // Regression: the lifecycle can throw after it already parked the Task
+    // (`paused` / `scheduled`). Re-opening the run then would strand it — the
+    // finder only picks runs whose Task is still `running`, so a `running` run
+    // under a paused Task would never be retried.
+    findOrphanedRunningTopics.mockResolvedValue([orphanedRun()]);
+    onTopicComplete.mockRejectedValue(new Error('final findById failed'));
+    findTaskById.mockResolvedValue({ id: 'task-1', status: 'paused' });
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const result = await reconcileOrphanedTaskRuns(db);
+
+    expect(reopenEndedRun).not.toHaveBeenCalled();
     expect(result).toMatchObject({ checked: 1, converged: [], failed: ['tpc-1'] });
     expect(consoleError).toHaveBeenCalled();
   });

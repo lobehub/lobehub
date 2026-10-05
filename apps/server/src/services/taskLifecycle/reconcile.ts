@@ -132,18 +132,47 @@ const settleOrphanedRun = async (
       topicId: row.topicId,
     });
   } catch (error) {
-    await taskTopicModel
-      .reopenEndedRun(row.topicId, row.operationId, runStatus)
-      .catch((rollbackError) =>
-        console.error('[task-reconcile] failed to re-open a claimed run: %O', {
-          error: rollbackError,
-          operationId: row.operationId,
-        }),
-      );
+    await handBackClaimedRun(db, row, runStatus, taskTopicModel).catch((rollbackError) =>
+      console.error('[task-reconcile] failed to re-open a claimed run: %O', {
+        error: rollbackError,
+        operationId: row.operationId,
+      }),
+    );
     throw error;
   }
 
   return true;
+};
+
+/**
+ * Undo the claim of a run whose settle failed — but only while that can still
+ * be retried.
+ *
+ * The finder only picks runs whose Task is still `running`. When the lifecycle
+ * threw *after* moving the Task on (to `paused` / `scheduled`, say), re-opening
+ * the run would strand it: a `running` run under a Task the sweep never looks at
+ * again. The Task transition is the settle's decisive write, so a run that got
+ * that far stays settled; only a Task still `running` gets its run handed back.
+ */
+const handBackClaimedRun = async (
+  db: LobeChatDatabase,
+  row: OrphanedRunningTopic,
+  runStatus: string,
+  taskTopicModel: TaskTopicModel,
+): Promise<void> => {
+  const task = await new TaskModel(db, row.userId, row.workspaceId ?? undefined).findById(
+    row.taskId,
+  );
+  if (task && task.status !== 'running') {
+    log(
+      'settle of %s failed after its Task moved to %s; keeping the run settled',
+      row.topicId,
+      task.status,
+    );
+    return;
+  }
+
+  await taskTopicModel.reopenEndedRun(row.topicId, row.operationId, runStatus);
 };
 
 /**
