@@ -343,6 +343,55 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     });
   });
 
+  it('keeps a callAgent child on its own model instead of the caller topic pin', async () => {
+    // `callAgent` spawns the callee in an isolation thread on the CALLER's
+    // topic and passes no model override, so the caller's pin used to decide
+    // the callee's model and the callee's own config never took part (#19542).
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'caller-agent',
+      metadata: { heteroEffort: 'high' },
+      model: 'caller-model',
+      provider: 'deepseek',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { isolationThread: true, threadId: 'thread-1', topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    // `modelRuntimeConfig` is where the resolved model lands; `agentConfig`
+    // still carries the raw agent row.
+    expect(mockCreateOperation.mock.calls[0][0].modelRuntimeConfig).toMatchObject({
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+  });
+
+  it('still honours the topic pin when the run belongs to the topic own agent', async () => {
+    // The accept control for the case above: a plain follow-up turn in the
+    // agent's own conversation must keep using the pinned model, including
+    // after the user switched model mid-topic.
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'agent-1',
+      model: 'gpt-5.6-terra',
+      provider: 'stepfun',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation.mock.calls[0][0].modelRuntimeConfig).toMatchObject({
+      model: 'gpt-5.6-terra',
+      provider: 'stepfun',
+    });
+  });
+
   it('keeps an explicit model override over the topic model', async () => {
     mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
     mockTopicFindById.mockResolvedValue({ model: 'gpt-5.6-terra', provider: 'openai' });
