@@ -165,6 +165,24 @@ describe('ResultTrail', () => {
     expect(chatState.openGoalReportChapter).toHaveBeenCalledWith('goal-1', 0);
   });
 
+  // A conclusion opens beside the page instead of unfolding into the trail, in
+  // both the storyline and the derived trail.
+  it('opens a finding in the side panel instead of expanding it inline', () => {
+    const finding = { ...graph().byId['Sources agree'] };
+    (finding.node as { description?: string }).description = 'Three sources agree on the date.';
+
+    for (const snapshot of [graph({ latest, status: 'completed' }), graph()]) {
+      const onSelect = vi.fn();
+      const { unmount } = render(<ResultTrail graph={snapshot} onSelect={onSelect} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Sources agree/ }));
+
+      expect(onSelect).toHaveBeenCalledWith('Sources agree');
+      expect(screen.queryByText('Three sources agree on the date.')).toBeNull();
+      unmount();
+    }
+  });
+
   it('opens the full report beside the page', () => {
     render(<ResultTrail graph={graph({ latest, status: 'completed' })} onSelect={vi.fn()} />);
 

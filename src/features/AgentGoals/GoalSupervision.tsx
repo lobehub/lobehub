@@ -21,10 +21,13 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { GoalChatProvider } from './GoalChat/GoalChatProvider';
+import GoalConversationInput from './GoalChat/GoalConversationInput';
 
 interface GoalSupervisionProps {
   agentId: string;
   goalId: string;
+  /** Sent into the record once it loads — the result page's composer hands off this way. */
+  initialMessage?: string;
   onCollapse: () => void;
   /** Hand the panel back to the agent's editable side conversation. */
   onOpenChat?: () => void;
@@ -48,10 +51,16 @@ const WaitingForFirstRun = memo(() => {
 
 WaitingForFirstRun.displayName = 'GoalSupervisionWaiting';
 
-/** The manager's ongoing record is inspectable without sending or editing messages. */
+/**
+ * The manager's ongoing record, and the place to talk to it. Past turns stay
+ * read-only — editing one would rewrite what the manager acted on — but the
+ * conversation itself continues here, so the reader never has to leave the goal
+ * to answer a question the manager asked in it.
+ */
 export const GoalSupervision = ({
   agentId,
   goalId,
+  initialMessage,
   onCollapse,
   onOpenChat,
   topicId,
@@ -62,21 +71,19 @@ export const GoalSupervision = ({
   const agentTitle = useAgentStore((s) =>
     agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),
   );
-  // Stable renderer for the virtualized history; disable message editing too,
-  // rather than only removing the composer below the list.
+  // Stable renderer for the virtualized history; past turns are not editable.
   const itemContent = useCallback(
     (index: number, id: string) => <MessageItem disableEditing id={id} index={index} />,
     [],
   );
   const navigate = useWorkspaceAwareNavigate();
-  // This panel is a read-only view of the manager's conversation. Opening it in
-  // the agent's own chat is how you continue it; the id is one click away for
-  // referencing it elsewhere (`lh topic view`, a bug report), like a task run's.
+  // Opening the record in the agent's own chat gives it the full page; the id is
+  // one click away for referencing it elsewhere (`lh topic view`, a bug report),
+  // like a task run's.
   const menuItems = useMemo<DropdownItem[]>(
     () => [
-      // The record is read-only and the avatar is the panel's only entry, so the
-      // way back to an editable conversation has to live here — otherwise a goal
-      // with a record would have no route to asking its agent anything.
+      // A fresh side conversation, for a question that should not land in the
+      // manager's own record.
       ...(onOpenChat
         ? [
             {
@@ -131,6 +138,7 @@ export const GoalSupervision = ({
         <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
           <ChatList disableActionsBar itemContent={itemContent} welcome={<WaitingForFirstRun />} />
         </Flexbox>
+        <GoalConversationInput initialMessage={initialMessage} />
       </Flexbox>
     </GoalChatProvider>
   );

@@ -6,23 +6,13 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
-import {
-  COMPACT_ACTION_BAR_STYLE,
-  COMPACT_SEND_BUTTON_PROPS,
-} from '@/features/ChatInput/compactPreset';
-import {
-  ChatInput,
-  ChatList,
-  conversationSelectors,
-  useConversationStore,
-} from '@/features/Conversation';
+import { ChatList, conversationSelectors, useConversationStore } from '@/features/Conversation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { GoalChatProvider } from './GoalChatProvider';
+import GoalConversationInput from './GoalConversationInput';
 import Toolbar from './Toolbar';
-
-const EMPTY_LEFT_ACTIONS: [] = [];
 
 const Welcome = memo(() => {
   const { t } = useTranslation('chat');
@@ -37,7 +27,12 @@ const Welcome = memo(() => {
 
 Welcome.displayName = 'GoalChatWelcome';
 
-const Conversation = memo<{ onCollapse: () => void }>(({ onCollapse }) => {
+interface ConversationProps {
+  initialMessage?: string;
+  onCollapse: () => void;
+}
+
+const Conversation = memo<ConversationProps>(({ initialMessage, onCollapse }) => {
   const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
   const currentAgentId = useConversationStore(conversationSelectors.agentId);
 
@@ -56,13 +51,7 @@ const Conversation = memo<{ onCollapse: () => void }>(({ onCollapse }) => {
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <ChatList welcome={<Welcome />} />
         </Flexbox>
-        <ChatInput
-          actionBarStyle={COMPACT_ACTION_BAR_STYLE}
-          allowExpand={false}
-          leftActions={EMPTY_LEFT_ACTIONS}
-          sendButtonProps={COMPACT_SEND_BUTTON_PROPS}
-          showControlBar={false}
-        />
+        <GoalConversationInput initialMessage={initialMessage} />
       </Flexbox>
     </DragUploadZone>
   );
@@ -73,6 +62,8 @@ Conversation.displayName = 'GoalChatConversation';
 interface GoalChatProps {
   agentId: string;
   goalId: string;
+  /** Sent on mount — the result page's composer hands its text over this way. */
+  initialMessage?: string;
   initialTopicId?: string;
   onCollapse: () => void;
 }
@@ -82,11 +73,13 @@ interface GoalChatProps {
  * provider tags the context with `viewedGoal`, so every question is answered
  * with the current goal overview injected — "how is this going?" just works.
  */
-const GoalChat = memo<GoalChatProps>(({ agentId, goalId, initialTopicId, onCollapse }) => (
-  <GoalChatProvider agentId={agentId} goalId={goalId} initialTopicId={initialTopicId}>
-    <Conversation onCollapse={onCollapse} />
-  </GoalChatProvider>
-));
+const GoalChat = memo<GoalChatProps>(
+  ({ agentId, goalId, initialMessage, initialTopicId, onCollapse }) => (
+    <GoalChatProvider agentId={agentId} goalId={goalId} initialTopicId={initialTopicId}>
+      <Conversation initialMessage={initialMessage} onCollapse={onCollapse} />
+    </GoalChatProvider>
+  ),
+);
 
 GoalChat.displayName = 'GoalChat';
 

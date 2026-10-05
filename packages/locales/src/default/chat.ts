@@ -2115,6 +2115,8 @@ export default {
   'goalProcess.planning.title': 'Planning the exploration',
   'goalProcess.planning.description':
     'The coordinator is breaking the goal into executable tasks — they will appear here shortly.',
+  'goalProcess.result.followUp.placeholder': 'Ask about this result, or what to do next…',
+  'goalProcess.result.followUp.send': 'Send to the goal conversation',
   'goalProcess.tag.needsDecision': 'Needs your decision',
   'goalProcess.acceptance.repairing': 'Repairing',
   'goalProcess.acceptance.verifying': 'Verifying',

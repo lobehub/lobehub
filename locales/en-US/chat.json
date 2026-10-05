@@ -866,6 +866,8 @@
   "goalProcess.result.deliverables.titleWithCount": "Deliverables · {{count}}",
   "goalProcess.result.deliverables.uncited": "Not cited by acceptance evidence",
   "goalProcess.result.deliverables.viewAll": "Review all {{count}}",
+  "goalProcess.result.followUp.placeholder": "Ask about this result, or what to do next…",
+  "goalProcess.result.followUp.send": "Send to the goal conversation",
   "goalProcess.result.gate.error": "Could not save the decision. Try again.",
   "goalProcess.result.gate.prompt": "Check which criteria were not met below, then retry or end the Goal.",
   "goalProcess.result.gate.revising": "You chose to retry. The Agent is revising the result; it will be accepted again when done.",

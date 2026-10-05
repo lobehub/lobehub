@@ -161,11 +161,15 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
    * Re-targeting only when the destination is not already the open one keeps a
    * reopen from bumping the request and remounting the panel.
    */
+  const panelTarget = managerConversation
+    ? { agentId: managerConversation.agentId, topicId: managerConversation.topicId }
+    : supervisingAgentId
+      ? { agentId: supervisingAgentId, topicId: undefined }
+      : undefined;
+
   const openPanel = () => {
-    if (!supervisingAgentId) return;
-    const target = managerConversation
-      ? { agentId: managerConversation.agentId, topicId: managerConversation.topicId }
-      : { agentId: supervisingAgentId, topicId: undefined };
+    const target = panelTarget;
+    if (!target) return;
     if (chat.topicId !== target.topicId) {
       clearPortalStack();
       chat.openConversation(target);
@@ -264,6 +268,16 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
               goalId={goal.id}
               graphFullscreen={graphFullscreen}
               onGraphFullscreenChange={setGraphFullscreen}
+              onFollowUp={
+                panelTarget
+                  ? (message) => {
+                      // Same destination as the header entry — the supervision record
+                      // when there is one — and it replaces any open drill-down.
+                      clearPortalStack();
+                      chat.openConversation({ ...panelTarget, initialMessage: message });
+                    }
+                  : undefined
+              }
             />
           </WideScreenContainer>
         </Flexbox>
@@ -299,17 +313,18 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
           <GoalSupervision
             agentId={supervisingAgentId}
             goalId={goalId}
+            initialMessage={chat.initialMessage}
             key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             topicId={chat.topicId}
             onCollapse={() => chat.setOpen(false)}
-            // The record is read-only and the avatar is the panel's only entry, so
-            // this is how a goal with a record gets back to an editable chat.
+            // A question that should not land in the manager's own record.
             onOpenChat={() => chat.openConversation({ agentId: supervisingAgentId })}
           />
         ) : supervisingAgentId ? (
           <GoalChat
             agentId={supervisingAgentId}
             goalId={goalId}
+            initialMessage={chat.initialMessage}
             initialTopicId={chat.topicId}
             key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             onCollapse={() => chat.setOpen(false)}

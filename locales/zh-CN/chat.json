@@ -866,6 +866,8 @@
   "goalProcess.result.deliverables.titleWithCount": "交付物 · {{count}}",
   "goalProcess.result.deliverables.uncited": "未被验收证据引用",
   "goalProcess.result.deliverables.viewAll": "逐一查看全部 {{count}} 项",
+  "goalProcess.result.followUp.placeholder": "就这个结果追问，或说说下一步想做什么…",
+  "goalProcess.result.followUp.send": "发送到目标对话",
   "goalProcess.result.gate.error": "决定没有保存成功，请重试。",
   "goalProcess.result.gate.prompt": "先看下方哪些标准没有达成，再决定重试还是结束目标。",
   "goalProcess.result.gate.revising": "你选择了重试，Agent 正在修改，改完后会重新验收。",

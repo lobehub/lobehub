@@ -2,6 +2,8 @@ import { useState } from 'react';
 
 interface ConversationTarget {
   agentId: string;
+  /** Sent once into the conversation as soon as the panel mounts on it. */
+  initialMessage?: string;
   /** Absent opens the agent's side conversation rather than a specific topic. */
   topicId?: string;
 }
@@ -22,6 +24,7 @@ export const useGoalChatPanel = (goalId: string, responsibleAgentId?: string) =>
 
   return {
     agentId: current.target?.agentId ?? responsibleAgentId,
+    initialMessage: current.target?.initialMessage,
     open: current.open,
     /**
      * Send the panel to one destination: the supervision record when the target
@@ -32,7 +35,13 @@ export const useGoalChatPanel = (goalId: string, responsibleAgentId?: string) =>
       setState({ goalId, open: true, request: current.request + 1, target });
     },
     request: current.request,
-    setOpen: (open: boolean) => setState({ ...current, open }),
+    // Folding or reopening the panel never replays a message that already went out.
+    setOpen: (open: boolean) =>
+      setState({
+        ...current,
+        open,
+        target: current.target && { ...current.target, initialMessage: undefined },
+      }),
     topicId: current.target?.topicId,
   };
 };

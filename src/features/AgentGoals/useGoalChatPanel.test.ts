@@ -34,6 +34,19 @@ describe('useGoalChatPanel', () => {
     expect(result.current.topicId).toBeUndefined();
   });
 
+  // The result page's composer hands its text to the panel; a later reopen must
+  // not replay it, so the message rides only the request that carried it.
+  it('carries a composed message only on the request that sent it', () => {
+    const { result } = renderHook(() => useGoalChatPanel('goal-a', 'worker'));
+
+    act(() => result.current.openConversation({ agentId: 'worker', initialMessage: 'next?' }));
+    expect(result.current).toMatchObject({ initialMessage: 'next?', open: true });
+
+    act(() => result.current.setOpen(false));
+    act(() => result.current.setOpen(true));
+    expect(result.current.initialMessage).toBeUndefined();
+  });
+
   it('never carries another goal’s open panel or creator into the next goal', () => {
     const { result, rerender } = renderHook(({ id, agent }) => useGoalChatPanel(id, agent), {
       initialProps: { id: 'goal-a', agent: 'worker-a' },
