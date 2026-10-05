@@ -903,3 +903,139 @@ describe('run outcome of the live stream (#19543 #19613 #19615)', () => {
     intervalSpy.mockRestore();
   });
 });
+
+describe('SSE quiet window (terminal event published before the subscription)', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let stdoutSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    fetchSpy.mockRestore();
+    consoleSpy.mockRestore();
+    stdoutSpy.mockRestore();
+  });
+
+  /**
+   * What the SSE route serves when `agent_runtime_end` fired before the
+   * subscription: heartbeats forever, never a terminal event, never EOF.
+   * `events` are emitted first, then one heartbeat every `everyMs`.
+   */
+  const heartbeatOnlyBody = (everyMs: number, events: string[] = []) => {
+    const encoder = new TextEncoder();
+    let timer: ReturnType<typeof setInterval> | undefined;
+    return new ReadableStream<Uint8Array>({
+      cancel() {
+        clearInterval(timer);
+      },
+      start(controller) {
+        for (const e of events) controller.enqueue(encoder.encode(e));
+        timer = setInterval(
+          () => controller.enqueue(encoder.encode(sseMessage('heartbeat', { type: 'heartbeat' }))),
+          everyMs,
+        );
+      },
+    });
+  };
+
+  const settledFlag = (p: Promise<unknown>) => {
+    const settled = vi.fn();
+    p.then(settled, settled);
+    return settled;
+  };
+
+  it('asks onStall instead of hanging on heartbeats, and returns the run outcome', async () => {
+    fetchSpy.mockResolvedValue(new Response(heartbeatOnlyBody(300), { status: 200 }));
+    const onStall = vi.fn().mockResolvedValue({ kind: 'completed', status: 'done' });
+
+    const promise = streamAgentEvents(
+      'https://example.com/stream',
+      {},
+      { onStall, stallTimeoutMs: 1000 },
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await expect(promise).resolves.toEqual({ kind: 'completed', status: 'done' });
+    expect(onStall).toHaveBeenCalledTimes(1);
+    expect(consoleSpy.mock.calls.flat().join('\n')).toContain('Agent finished');
+  });
+
+  it('keeps streaming while the run is still active', async () => {
+    fetchSpy.mockResolvedValue(new Response(heartbeatOnlyBody(300), { status: 200 }));
+    const onStall = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ kind: 'waiting_for_human', status: 'waiting_for_human' });
+
+    const promise = streamAgentEvents(
+      'https://example.com/stream',
+      {},
+      { onStall, stallTimeoutMs: 1000 },
+    );
+    const settled = settledFlag(promise);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(onStall).toHaveBeenCalledTimes(1);
+    expect(settled).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(promise).resolves.toEqual(expect.objectContaining({ kind: 'waiting_for_human' }));
+  });
+
+  it('rejects when the status check fails, so the caller falls back to polling', async () => {
+    fetchSpy.mockResolvedValue(new Response(heartbeatOnlyBody(300), { status: 200 }));
+    const onStall = vi.fn().mockRejectedValue(new Error('ECONNRESET'));
+
+    const promise = streamAgentEvents(
+      'https://example.com/stream',
+      {},
+      { onStall, stallTimeoutMs: 1000 },
+    );
+    const assertion = expect(promise).rejects.toThrow('status check failed: ECONNRESET');
+    await vi.advanceTimersByTimeAsync(1000);
+    await assertion;
+  });
+
+  it('real events restart the window, heartbeats do not', async () => {
+    const encoder = new TextEncoder();
+    let controllerRef!: ReadableStreamDefaultController<Uint8Array>;
+    fetchSpy.mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(c) {
+            controllerRef = c;
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    const onStall = vi.fn().mockResolvedValue(undefined);
+    const promise = streamAgentEvents(
+      'https://example.com/stream',
+      {},
+      { onStall, stallTimeoutMs: 1000 },
+    );
+
+    for (let i = 0; i < 10; i++) {
+      await vi.advanceTimersByTimeAsync(700);
+      controllerRef.enqueue(
+        encoder.encode(sseMessage('data', { data: {}, stepIndex: 0, type: 'step_complete' })),
+      );
+    }
+    expect(onStall).not.toHaveBeenCalled();
+
+    controllerRef.enqueue(
+      encoder.encode(
+        sseMessage('data', { data: { reason: 'done' }, stepIndex: 0, type: 'agent_runtime_end' }),
+      ),
+    );
+    await expect(promise).resolves.toEqual(expect.objectContaining({ kind: 'completed' }));
+  });
+});

@@ -13,16 +13,23 @@ interface StreamOptions {
   verbose?: boolean;
 }
 
-interface WebSocketStreamOptions extends StreamOptions {
-  gatewayUrl: string;
+interface LiveStreamOptions extends StreamOptions {
   /**
-   * Called when the stream has carried no progress for `stallTimeoutMs`. A
-   * gateway can keep acking heartbeats without ever forwarding the terminal
-   * event, so silence alone must not be read as either "finished" or "failed".
-   * Return the run's outcome to finish, `undefined` when the run is still
-   * active (keep streaming), or throw to give up on the stream.
+   * Called when the stream has carried no progress for `stallTimeoutMs`. Both
+   * transports can keep a connection alive with heartbeats while never
+   * delivering the terminal event (a gateway that does not forward it, or an
+   * SSE subscription opened after a fast run already ended), so silence alone
+   * must not be read as either "finished" or "failed". Return the run's
+   * outcome to finish, `undefined` when the run is still active (keep
+   * streaming), or throw to give up on the stream.
    */
   onStall?: () => Promise<AgentRunOutcome | undefined>;
+  /** Progress window before `onStall` is consulted. Defaults to 60s. */
+  stallTimeoutMs?: number;
+}
+
+interface WebSocketStreamOptions extends LiveStreamOptions {
+  gatewayUrl: string;
   operationId: string;
   /**
    * LobeHub server URL the gateway should call back to when verifying
@@ -30,8 +37,6 @@ interface WebSocketStreamOptions extends StreamOptions {
    * `tokenType === 'apiKey'`; ignored for JWT.
    */
   serverUrl?: string;
-  /** Progress window before `onStall` is consulted. Defaults to 60s. */
-  stallTimeoutMs?: number;
   token: string;
   /**
    * How the gateway should verify `token`. `jwt` is the default for
@@ -57,6 +62,8 @@ export const outcomeFromEndEvent = (event: AgentStreamEvent): AgentRunOutcome =>
   };
 };
 
+const STALL_TIMEOUT = 60_000;
+
 const outcomeFromErrorEvent = (event: AgentStreamEvent): AgentRunOutcome => ({
   error: event.data?.message || event.data?.error || 'Unknown error',
   kind: 'failed',
@@ -73,8 +80,9 @@ const outcomeFromErrorEvent = (event: AgentStreamEvent): AgentRunOutcome => ({
 export async function streamAgentEvents(
   url: string,
   headers: Record<string, string>,
-  options: StreamOptions = {},
+  options: LiveStreamOptions = {},
 ): Promise<AgentRunOutcome | undefined> {
+  const { onStall, stallTimeoutMs = STALL_TIMEOUT } = options;
   const res = await fetch(url, { headers });
 
   if (!res.ok) {
@@ -97,9 +105,58 @@ export async function streamAgentEvents(
   let eventType = '';
   let eventData = '';
 
+  // Progress window, restarted by real events only — SSE heartbeats keep the
+  // response open even when the terminal event was missed, so they must not
+  // count. When it expires, `onStall` decides; its verdict is handed back to
+  // the read loop by cancelling the pending read.
+  let finished = false;
+  let stallTimer: ReturnType<typeof setTimeout> | undefined;
+  let stalled: { error: Error } | { outcome: AgentRunOutcome } | undefined;
+  const armStallTimer = () => {
+    if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = setTimeout(async () => {
+      if (finished) return;
+      const silence = `Agent stream sent no progress for ${Math.round(stallTimeoutMs / 1000)}s`;
+      if (!onStall) {
+        stalled = { error: new Error(`${silence} and never reported completion`) };
+        void reader.cancel();
+        return;
+      }
+      log.debug(`${silence}; checking the run status`);
+      try {
+        const outcome = await onStall();
+        if (finished) return;
+        if (!outcome) {
+          armStallTimer();
+          return;
+        }
+        stalled = { outcome };
+      } catch (error) {
+        if (finished) return;
+        stalled = {
+          error: new Error(`${silence}; status check failed: ${(error as Error).message}`),
+        };
+      }
+      void reader.cancel();
+    }, stallTimeoutMs);
+  };
+  armStallTimer();
+
   try {
     while (true) {
       const { done, value } = await reader.read();
+      if (stalled) {
+        finished = true;
+        if ('error' in stalled) {
+          if (options.json && jsonEvents.length > 0) {
+            console.log(JSON.stringify(jsonEvents, null, 2));
+          }
+          throw stalled.error;
+        }
+        if (options.json) console.log(JSON.stringify(jsonEvents, null, 2));
+        else renderOutcome(stalled.outcome);
+        return stalled.outcome;
+      }
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -125,6 +182,7 @@ export async function streamAgentEvents(
             continue;
           }
 
+          armStallTimer();
           try {
             const event: AgentStreamEvent = JSON.parse(eventData);
 
@@ -168,6 +226,8 @@ export async function streamAgentEvents(
     }
     return undefined;
   } finally {
+    finished = true;
+    if (stallTimer) clearTimeout(stallTimer);
     reader.releaseLock();
   }
 }
@@ -214,7 +274,6 @@ export function replayAgentEvents(
 }
 
 const HEARTBEAT_INTERVAL = 30_000;
-const STALL_TIMEOUT = 60_000;
 
 /**
  * Connect to the Agent Gateway via WebSocket and render events to the terminal.

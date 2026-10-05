@@ -696,7 +696,12 @@ describe('agent command', () => {
       expect(mockStreamAgentEvents).toHaveBeenCalledWith(
         'https://example.com/api/agent/stream?operationId=op-sse',
         expect.objectContaining({ 'Oidc-Auth': 'test-token' }),
-        expect.objectContaining({ json: undefined, verbose: undefined }),
+        expect.objectContaining({
+          json: undefined,
+          // the SSE stream gets the same quiet-window status probe as WebSocket
+          onStall: expect.any(Function),
+          verbose: undefined,
+        }),
       );
       expect(mockStreamAgentEventsViaWebSocket).not.toHaveBeenCalled();
     });

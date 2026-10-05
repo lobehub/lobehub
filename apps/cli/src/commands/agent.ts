@@ -509,6 +509,10 @@ Exit codes:
               const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
               streamed = await streamAgentEvents(streamUrl, headers, {
                 json: options.json,
+                // SSE heartbeats keep the response open even when the terminal
+                // event was published before this subscription (in-memory event
+                // manager), so a quiet stream is checked against the run status.
+                onStall: () => probeRunOutcome(client, operationId, { json: options.json }),
                 verbose: options.verbose,
               });
             }
