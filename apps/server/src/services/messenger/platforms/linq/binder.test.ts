@@ -154,6 +154,19 @@ describe('linkLinqSenderByCode', () => {
     expect(mocks.settleLinkCode).not.toHaveBeenCalled();
   });
 
+  it('keeps a committed link when settling the poll status fails afterwards', async () => {
+    mocks.consumeLinkCode.mockResolvedValue(pendingCode);
+    mocks.settleLinkCode.mockRejectedValueOnce(new Error('redis timeout'));
+
+    await expect(linkLinqSenderByCode('LH-7Q2M4XKP', SENDER)).resolves.toEqual({
+      activeAgentId: 'agt_inbox',
+      status: 'linked',
+    });
+    expect(mocks.upsertForPlatform).toHaveBeenCalledTimes(1);
+    // The sender is linked now — resurrecting the code would strand it.
+    expect(mocks.restoreLinkCode).not.toHaveBeenCalled();
+  });
+
   it('does not restore a code whose outcome was a definitive conflict', async () => {
     mocks.consumeLinkCode.mockResolvedValue(pendingCode);
     mocks.findByPlatformUser.mockResolvedValue({ userId: 'user_bob' });

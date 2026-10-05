@@ -112,11 +112,18 @@ const bindConsumedCode = async (
     return { status: reason };
   }
 
-  await settleLinkCode(payload.pollId, {
-    linkedAt: Date.now(),
-    platformUserId: senderHandle,
-    status: 'linked',
-  });
+  // The link is committed. A failed poll-status write must not reach the
+  // caller's restore path — that would resurrect a code for a sender who now
+  // routes as linked, so the page would wait on it until expiry.
+  try {
+    await settleLinkCode(payload.pollId, {
+      linkedAt: Date.now(),
+      platformUserId: senderHandle,
+      status: 'linked',
+    });
+  } catch (error) {
+    log('settleLinkCode after link failed: %O', error);
+  }
   log('linked linq sender for user=%s', payload.userId);
   return { activeAgentId: payload.activeAgentId, status: 'linked' };
 };
