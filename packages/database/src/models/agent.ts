@@ -598,13 +598,21 @@ export class AgentModel {
    * name the UI *does* show the only one no lookup could reach: it never
    * appeared in an agent list or a name search, while its documents/name were
    * still addressable everywhere else.
+   *
+   * `includeInbox: false` restores the plain virtual-row rule for callers that
+   * must not offer the inbox — group membership and other surfaces whose write
+   * path refuses builtins. Excluding it here, rather than filtering the caller's
+   * page after the fact, keeps `limit` from hiding an addable agent behind an
+   * inbox the caller is about to drop.
    */
-  private buildQueryAgentsWhere = (keyword?: string) => {
-    // Include agents where virtual is false OR null (legacy data without virtual field),
-    // plus the inbox regardless of `virtual`.
+  private buildQueryAgentsWhere = (keyword?: string, includeInbox = true) => {
+    // Include agents where virtual is false OR null (legacy data without virtual
+    // field), plus the inbox when the caller opts into it.
     const baseConditions = and(
       this.ownership(),
-      or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID)),
+      includeInbox
+        ? or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID))
+        : or(eq(agents.virtual, false), isNull(agents.virtual)),
     );
 
     // `name` is the user-facing display name (see `agents.name`); resolving the
@@ -632,11 +640,17 @@ export class AgentModel {
    * recognize the product-owned inbox (Lobe AI) without re-deriving it from a
    * slug the row shape no longer carries.
    * Excludes virtual agents (supervisors, group-built members) — but always
-   * includes the inbox. See `buildQueryAgentsWhere`.
+   * includes the inbox unless `includeInbox` is false.
+   * See `buildQueryAgentsWhere`.
    */
-  queryAgents = async (params?: { keyword?: string; limit?: number; offset?: number }) => {
-    const { keyword, limit = 9999, offset = 0 } = params ?? {};
-    const searchCondition = this.buildQueryAgentsWhere(keyword);
+  queryAgents = async (params?: {
+    includeInbox?: boolean;
+    keyword?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const { includeInbox = true, keyword, limit = 9999, offset = 0 } = params ?? {};
+    const searchCondition = this.buildQueryAgentsWhere(keyword, includeInbox);
 
     const rows = await this.db
       .select({
@@ -681,6 +695,7 @@ export class AgentModel {
    */
   countAgents = async (params?: {
     endDate?: string;
+    includeInbox?: boolean;
     keyword?: string;
     range?: [string, string];
     startDate?: string;
@@ -690,7 +705,7 @@ export class AgentModel {
       .from(agents)
       .where(
         genWhere([
-          this.buildQueryAgentsWhere(params?.keyword),
+          this.buildQueryAgentsWhere(params?.keyword, params?.includeInbox ?? true),
           params?.range
             ? genRangeWhere(params.range, agents.createdAt, (date) => date.toDate())
             : undefined,
@@ -1029,11 +1044,23 @@ export class AgentModel {
       // lock-then-guard order as transferAgents. A concurrent copy enqueue
       // locks the same source rows, so the guard here cannot run in the window
       // where the enqueue's job row exists but is not yet committed.
-      await trx
-        .select({ id: agents.id })
+      const [locked] = await trx
+        .select({ id: agents.id, slug: agents.slug })
         .from(agents)
         .where(and(eq(agents.id, agentId), this.ownership()))
         .for('update');
+
+      // Builtins (the inbox, the agent builders) are provisioned per user and
+      // carry `virtual` exactly like a group's own members. Deleting one takes
+      // its linked session and every conversation with it, and nothing can
+      // recreate them — refuse here, the same way `addAgentsToGroup` refuses to
+      // seat one, so no CRUD surface can reach a reserved row by accident.
+      if (locked?.slug && RESERVED_AGENT_SLUGS.has(locked.slug)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'A builtin agent cannot be deleted',
+        });
+      }
 
       // The junction records every agent an unfinished job still maps, a
       // copy's TARGET included — and a group copy's drain writes those ids into

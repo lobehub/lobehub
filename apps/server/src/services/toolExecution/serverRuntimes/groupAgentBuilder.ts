@@ -266,17 +266,21 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         const { query, limit = 10 } = params;
 
         try {
-          const results = await agentModel.queryAgents({ keyword: query, limit });
-          // The inbox is in queryAgents for general lookups, but a builtin can
-          // never join a group (addAgentsToGroup refuses it) — don't offer it.
-          const agents = results
-            .filter((agent) => !agent.isInbox)
-            .map((agent) => ({
-              avatar: agent.avatar ?? undefined,
-              description: agent.description ?? undefined,
-              id: agent.id,
-              title: agent.title ?? '',
-            }));
+          // A builtin can never join a group (`addAgentsToGroup` refuses it), so
+          // the inbox has to be excluded by the query itself: filtering the page
+          // afterwards lets a recently updated inbox consume a `limit` slot and
+          // hide an addable agent behind it.
+          const results = await agentModel.queryAgents({
+            includeInbox: false,
+            keyword: query,
+            limit,
+          });
+          const agents = results.map((agent) => ({
+            avatar: agent.avatar ?? undefined,
+            description: agent.description ?? undefined,
+            id: agent.id,
+            title: agent.title ?? '',
+          }));
 
           if (agents.length === 0) {
             return {

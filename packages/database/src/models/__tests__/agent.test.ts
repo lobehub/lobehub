@@ -440,6 +440,22 @@ describe('AgentModel', () => {
 
       await expect(agentModel.countAgents()).resolves.toBe(2);
     });
+
+    it('excludes the inbox for callers that opt out, before the limit applies', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'optout-inbox', slug: INBOX_SESSION_ID, userId, virtual: true },
+        { id: 'optout-normal', userId },
+      ]);
+
+      await expect(agentModel.queryAgents({ includeInbox: false })).resolves.toHaveLength(1);
+      await expect(agentModel.countAgents({ includeInbox: false })).resolves.toBe(1);
+
+      // The exclusion lives in the where clause, so a `limit` cannot be spent on
+      // an inbox the caller would have dropped after the page was built — a
+      // membership search with `limit: 1` must still return the addable agent.
+      const limited = await agentModel.queryAgents({ includeInbox: false, limit: 1 });
+      expect(limited.map((agent) => agent.id)).toEqual(['optout-normal']);
+    });
   });
 
   describe('getAgentConfig', () => {
@@ -1110,6 +1126,35 @@ describe('AgentModel', () => {
   });
 
   describe('delete', () => {
+    it('refuses to delete a reserved builtin (the inbox) and keeps its session', async () => {
+      // The inbox is product-owned: nothing recreates it, and its session
+      // cascades every conversation with it. A CRUD surface — the
+      // agent-management tool forwards ids straight to `delete` — must not be
+      // able to take it down.
+      const [inbox] = await serverDB
+        .insert(agents)
+        .values({ id: 'reserved-inbox', slug: INBOX_SESSION_ID, title: 'Lobe AI', userId })
+        .returning();
+      const [session] = await serverDB
+        .insert(sessions)
+        .values({ userId, type: 'agent' })
+        .returning();
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId: inbox.id, sessionId: session.id, userId });
+
+      await expect(agentModel.delete(inbox.id)).rejects.toThrow(
+        'A builtin agent cannot be deleted',
+      );
+
+      expect(
+        await serverDB.query.agents.findFirst({ where: eq(agents.id, inbox.id) }),
+      ).toBeDefined();
+      expect(
+        await serverDB.query.sessions.findFirst({ where: eq(sessions.id, session.id) }),
+      ).toBeDefined();
+    });
+
     it('refuses to delete an agent a pending history job still maps', async () => {
       // A group copy's drain writes the TARGET agent id into `messages.agent_id`.
       // Deleting that agent leaves the queue rows behind, so the drain hits a

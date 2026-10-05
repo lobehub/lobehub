@@ -203,14 +203,22 @@ describe('groupAgentBuilderRuntime', () => {
   });
 
   describe('searchAgent', () => {
-    it('does not offer the inbox, which can never join a group', async () => {
+    it('asks the query to exclude the inbox, which can never join a group', async () => {
+      // The exclusion lives in the query: filtering the page here let a
+      // recently updated inbox spend a `limit` slot and hide an addable agent,
+      // so assert the contract instead of re-filtering a page that should no
+      // longer carry the inbox in the first place.
       mockQueryAgents.mockResolvedValue([
-        { description: null, id: 'agt_inbox', isInbox: true, title: 'Lobe AI' },
         { description: null, id: 'agt_writer', isInbox: false, title: 'Writer' },
       ]);
 
       const result = await createRuntime().searchAgent({ query: '' }, groupCtx);
 
+      expect(mockQueryAgents).toHaveBeenCalledWith({
+        includeInbox: false,
+        keyword: '',
+        limit: 10,
+      });
       expect(result.success).toBe(true);
       expect((result.state as any).agents.map((a: { id: string }) => a.id)).toEqual(['agt_writer']);
     });

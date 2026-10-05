@@ -161,14 +161,15 @@ export const agentRouter = router({
 
   /**
    * Count the agents matching the conditions of queryAgents — inbox (Lobe AI)
-   * included, other virtual rows excluded. Lets paginated callers report real
-   * totals.
+   * included unless `includeInbox` is false, other virtual rows excluded. Lets
+   * paginated callers report real totals.
    */
   countAgents: agentProcedure
     .input(
       z
         .object({
           endDate: z.string().optional(),
+          includeInbox: z.boolean().optional(),
           keyword: z.string().optional(),
           range: z.tuple([z.string(), z.string()]).optional(),
           startDate: z.string().optional(),
@@ -748,7 +749,8 @@ export const agentRouter = router({
 
   /**
    * Query the user's agents with optional keyword filter — inbox (Lobe AI)
-   * included and flagged with `isInbox`, other virtual rows excluded.
+   * included and flagged with `isInbox` unless `includeInbox` is false, other
+   * virtual rows excluded.
    * Returns agents with minimal info (id, name, title, description, avatar,
    * backgroundColor).
    * Used by AddGroupMemberModal and group-management tool to search/select agents.
@@ -757,6 +759,7 @@ export const agentRouter = router({
     .input(
       z
         .object({
+          includeInbox: z.boolean().optional(),
           keyword: z.string().optional(),
           limit: z.number().max(100).optional(),
           offset: z.number().optional(),
