@@ -117,6 +117,33 @@ describe('agent-mail provider — declaration', () => {
 });
 
 describe('agent-mail provider — provisioning', () => {
+  it('deletes the inbox it just opened when webhook registration fails', async () => {
+    const calls: Array<{ method: string; path: string }> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const { pathname } = new URL(typeof input === 'string' ? input : input.toString());
+      const method = init?.method ?? 'GET';
+      calls.push({ method, path: pathname });
+      if (method === 'POST' && pathname === '/v1/inboxes')
+        return json({ address: 'agent-7@lobe.id', clientId: 'cli_1', id: 'inb_1', metadata: {} });
+      if (method === 'POST' && pathname === '/v1/webhooks')
+        return json({ error: { message: 'upstream unavailable' } }, 503);
+      if (method === 'DELETE' && pathname === '/v1/inboxes/inb_1')
+        return new Response(null, { status: 204 });
+      throw new Error(`unexpected ${method} ${pathname}`);
+    };
+    const provider = createAgentMailProvider({
+      ...isolated(),
+      apiKey: 'am_test',
+      fetchImpl,
+      webhookUrl: 'https://app.lobehub.com/hook',
+    });
+
+    await expect(provider.provision({ agentId: 'agent_7', userId: 'user_1' })).rejects.toThrow(
+      /503/,
+    );
+    expect(calls).toContainEqual({ method: 'DELETE', path: '/v1/inboxes/inb_1' });
+  });
+
   it('opens an inbox and stores the returned handle as the identifier', async () => {
     const { calls, fetchImpl } = createMailFetch();
     const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });
@@ -263,6 +290,39 @@ describe('agent-mail provider — inbound', () => {
         ref({ credential: null }),
       ),
     ).resolves.toEqual(expect.objectContaining({ eventId: 'evt_1' }));
+  });
+
+  it('processes a retry after the message fetch failed instead of dropping it', async () => {
+    let detailAttempts = 0;
+    const { fetchImpl: base } = createMailFetch();
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const { pathname } = new URL(typeof input === 'string' ? input : input.toString());
+      if (pathname === '/v1/messages/msg_in_1' && ++detailAttempts === 1)
+        return json({ error: { message: 'temporarily unavailable' } }, 503);
+      return base(input, init);
+    };
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });
+    const body = inboundBody();
+    const request = {
+      body,
+      headers: {
+        'x-agentmail-signature': computeAgentMailSignature(
+          SECRET,
+          body,
+          Math.floor(Date.now() / 1000),
+        ),
+      },
+    };
+
+    const first = await provider.verifyInbound(request, ref());
+    await expect(provider.normalizeInbound(first!, ref())).rejects.toThrow(/503/);
+
+    // The provider retries the same event: it must be processed, not acked as a duplicate.
+    const retry = await provider.verifyInbound(request, ref());
+    expect(retry).not.toHaveProperty('duplicate', true);
+    await expect(provider.normalizeInbound(retry!, ref())).resolves.toMatchObject({
+      providerMessageId: 'msg_in_1',
+    });
   });
 
   it('normalizes a message, stripping the quoted history', async () => {

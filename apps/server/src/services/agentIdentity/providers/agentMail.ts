@@ -118,7 +118,16 @@ export const createAgentMailProvider = (
       let credentialHint: AgentAccountProvisionResult['credentialHint'];
 
       if (config.webhookUrl) {
-        const webhook = await client.createWebhook({ inboxId: inbox.id, url: config.webhookUrl });
+        let webhook: Awaited<ReturnType<typeof client.createWebhook>>;
+        try {
+          webhook = await client.createWebhook({ inboxId: inbox.id, url: config.webhookUrl });
+        } catch (error) {
+          // The inbox already exists but nothing will ever point at it: the
+          // service only learns about an account once provision returns. Hand
+          // it back here, or every retry during a webhook outage leaks one.
+          await client.deleteInbox(inbox.id).catch(() => undefined);
+          throw error;
+        }
         if (webhook.secret) {
           credential = { webhookSecret: webhook.secret };
           credentialHint = { masked: maskSecret(webhook.secret) };
@@ -199,7 +208,16 @@ export const createAgentMailProvider = (
 
       // The webhook carries only a summary; the body (and the raw source the
       // header-based loop guard needs) must be fetched back.
-      const detail = await client.getMessage(summaryId);
+      let detail: Awaited<ReturnType<typeof client.getMessage>>;
+      try {
+        detail = await client.getMessage(summaryId);
+      } catch (error) {
+        // The event id was claimed in verifyInbound. Give it back so the
+        // provider's retry is processed rather than acknowledged as a
+        // duplicate — otherwise one transient fetch failure drops the email.
+        await dedupeStore.release?.(event.eventId);
+        throw error;
+      }
       const raw = await client.getRawMessage(summaryId);
       const headers = raw ? parseRawHeaders(raw) : null;
 
