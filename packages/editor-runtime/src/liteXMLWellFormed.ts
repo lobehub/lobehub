@@ -1,6 +1,22 @@
 const MARKUP_TAG_PATTERN = /<(\/?)([a-z][\w.:-]*)(?:\s[^<>]*|\/)?>/gi;
 
+// `<` followed by a letter or `/` opens a tag for the XML parser; a raw `<`
+// before a digit, space or another `<` is accepted as text.
+const TAG_START_PATTERN = /<\/?[a-z]/gi;
+const COMPLETE_TAG_PATTERN = /<\/?[a-z][\w.:-]*(?:\s[^<>]*|\/)?>/iy;
+
 const describeMalformedMarkup = (litexml: string): string | undefined => {
+  for (const { index } of litexml.matchAll(TAG_START_PATTERN)) {
+    COMPLETE_TAG_PATTERN.lastIndex = index;
+    if (!COMPLETE_TAG_PATTERN.test(litexml)) {
+      const fragment = litexml
+        .slice(index)
+        .match(/^<[^<]{0,24}/)![0]
+        .trimEnd();
+      return `"${fragment}" starts a tag that is never closed with ">"`;
+    }
+  }
+
   const open: string[] = [];
 
   for (const [tag, closing, name] of litexml.matchAll(MARKUP_TAG_PATTERN)) {

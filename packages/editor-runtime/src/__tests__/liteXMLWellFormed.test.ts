@@ -20,6 +20,18 @@ describe('findMalformedLiteXML', () => {
     );
   });
 
+  it('reports a tag that is opened but never finished with ">"', () => {
+    expect(findMalformedLiteXML('<p>a <b c</p>')).toContain(
+      '"<b c" starts a tag that is never closed',
+    );
+  });
+
+  it('accepts a raw "<" or "&" the parser reads as text', () => {
+    for (const text of ['1 <2 and 3', 'if a < b then', 'x << y', 'A & B < C']) {
+      expect(findMalformedLiteXML(`<p>${text}</p>`)).toBeUndefined();
+    }
+  });
+
   it('reports a closing tag without an opening tag', () => {
     expect(findMalformedLiteXML('<p>x</span></p>')).toContain(
       '</span> has no matching opening tag',
@@ -31,7 +43,7 @@ describe('findMalformedLiteXML', () => {
   });
 
   it('checks every fragment of a multi-fragment modify', () => {
-    expect(findMalformedLiteXML(['<p id="ab">ok</p>', '<p id="cd">a <b c</p>'])).toBeUndefined();
+    expect(findMalformedLiteXML(['<p id="ab">ok</p>', '<p id="cd">a < b c</p>'])).toBeUndefined();
     expect(findMalformedLiteXML(['<p id="ab">ok</p>', '<p id="cd">-m <model></p>'])).toContain(
       '<model>',
     );
