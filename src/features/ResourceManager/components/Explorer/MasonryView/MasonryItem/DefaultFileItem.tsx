@@ -8,10 +8,10 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
 import { formatSize } from '@/utils/format';
-import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
 import ChunksBadge from '../../ListView/ListItem/ChunkTag';
 
@@ -77,7 +77,7 @@ const DefaultFileItem = memo<DefaultFileItemProps>(
     ]);
 
     const isFolder = fileType === CUSTOM_FOLDER_FILE_TYPE;
-    const isSupportedForChunking = !isChunkingUnsupported(fileType || '');
+    const isSupportedForChunking = isChunkingSupported({ fileType, name });
 
     return (
       <>

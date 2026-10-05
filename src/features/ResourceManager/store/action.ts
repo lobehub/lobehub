@@ -50,7 +50,7 @@ export class ResourceManagerStoreActionImpl {
     const { libraryId, resolveSelectedResourceIds, selectAllState, selectedFileIds } = this.#get();
     const { useFileStore } = await import('@/store/file');
     const { useKnowledgeBaseStore } = await import('@/store/library');
-    const { isChunkingUnsupported } = await import('@/utils/isChunkingUnsupported');
+    const { isChunkingSupported } = await import('@/libs/document-loaders/loaderType');
 
     const fileStore = useFileStore.getState();
     const kbStore = useKnowledgeBaseStore.getState();
@@ -115,7 +115,7 @@ export class ResourceManagerStoreActionImpl {
           // For server-resolved IDs not yet in the local map, include them
           // and let the server handle unsupported type filtering
           if (!resource) return selectAllState === 'all';
-          return !isChunkingUnsupported(resource.fileType);
+          return isChunkingSupported(resource);
         });
 
         await fileStore.parseFilesToChunks(chunkableFileIds, { skipExist: true });

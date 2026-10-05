@@ -591,6 +591,27 @@ describe('FileManagerActions', () => {
       expect(parseSpy).not.toHaveBeenCalled();
     });
 
+    // https://github.com/lobehub/lobehub/issues/19620
+    it('should skip auto-embed for formats no chunking loader can parse', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const dwgFile = new File(['dwg content'], 'floor-plan.dwg', { type: '' });
+      const binFile = new File(['bin content'], 'model.dxf', {
+        type: 'application/octet-stream',
+      });
+
+      vi.spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValueOnce({ id: 'file-1', url: 'http://example.com/file-1' })
+        .mockResolvedValueOnce({ id: 'file-2', url: 'http://example.com/file-2' });
+      const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([dwgFile, binFile]);
+      });
+
+      expect(parseSpy).not.toHaveBeenCalled();
+    });
+
     it('should auto-embed only supported files in mixed upload', async () => {
       const { result } = renderHook(() => useStore());
 
