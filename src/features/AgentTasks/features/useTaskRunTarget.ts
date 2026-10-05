@@ -131,6 +131,16 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   const pinApplies = !!pinnedDeviceId && canSelectExecutionTarget;
   const isDeviceTarget = pinApplies;
   const effectiveTarget: DeviceExecutionTarget = pinApplies ? 'device' : inheritedTarget;
+  // A workspace agent's `local` target is the member's own machine, which the
+  // task's automation and collaborators cannot resolve unless it is in the task
+  // pool (public workspace devices); offering it would pin an unreachable device.
+  const localCandidate = agencyConfig?.boundDeviceId || currentDeviceId;
+  const localDeviceId =
+    localCandidate &&
+    (!agentWorkspaceId || pool.some((device) => device.deviceId === localCandidate))
+      ? localCandidate
+      : undefined;
+
   // A `local` target is a machine too — this desktop. A task run carries no
   // `localDeviceId`, so the server routes it to the agent's bound device (the
   // desktop syncs its own id there); fall back to this desktop's id when the
@@ -143,7 +153,7 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
     : inheritedTarget === 'device'
       ? agencyConfig?.boundDeviceId
       : inheritedTarget === 'local'
-        ? agencyConfig?.boundDeviceId || currentDeviceId
+        ? localDeviceId
         : undefined;
 
   // From the device list this hook already fetched, not the device store,

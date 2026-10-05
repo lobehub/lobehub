@@ -148,6 +148,23 @@ describe('useTaskRunTarget', () => {
     expect(result.current.directoryKind).toBe('device');
   });
 
+  it('offers no directory control for a workspace agent whose local machine is outside the task pool', () => {
+    // A member's personal desktop cannot be resolved by the task's automation or
+    // collaborators, so pinning it through a directory pick would strand the task.
+    mocks.electron = { currentDeviceId: PERSONAL_DEVICE.deviceId, isDesktop: true };
+    mocks.agentState.agentMap = { 'agent-1': { workspaceId: 'ws-1' } };
+    mocks.devices = [PERSONAL_DEVICE, WORKSPACE_DEVICE];
+    mocks.agency.agencyConfig = {
+      executionTarget: 'local',
+      heterogeneousProvider: { type: 'claude-code' },
+    };
+
+    const { result } = renderHook(() => useTaskRunTarget('agent-1'));
+
+    expect(result.current.deviceId).toBeUndefined();
+    expect(result.current.directoryKind).not.toBe('device');
+  });
+
   it('ignores a task pin the run side would drop for a fixed selection policy', () => {
     // `resolveExecutionPlan` clears `requestedDeviceId` when the policy is
     // fixed, so showing that pin would name a machine the run never reaches —
