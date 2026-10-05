@@ -1,7 +1,7 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
+import type { ItemType } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
-import { type ItemType } from 'antd/es/menu/interface';
 import { FolderCogIcon, FolderPenIcon, Trash } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

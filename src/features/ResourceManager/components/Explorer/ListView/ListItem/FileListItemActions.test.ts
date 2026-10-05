@@ -1,5 +1,5 @@
+import type { ItemType } from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ItemType } from 'antd/es/menu/interface';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

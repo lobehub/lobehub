@@ -1,5 +1,5 @@
 import type { MetaData } from '@lobechat/types';
-import { type ItemType } from 'antd/es/menu/interface';
+import type { ItemType } from '@lobehub/ui';
 
 export interface AgentTransferScope {
   userId?: string | null;

@@ -1,8 +1,8 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
+import type { ItemType } from '@lobehub/ui';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Text, toast } from '@lobehub/ui/base-ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
-import type { ItemType } from 'antd/es/menu/interface';
 import {
   BotIcon,
   FileTextIcon,
