@@ -15,7 +15,11 @@ import {
   ExpertiseDomainService,
 } from '@/server/services/expertise/domain';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
-import { DraftRuleInputSchema, ExpertiseRuleDraftService } from '@/server/services/expertise/rules';
+import {
+  DraftRuleInputSchema,
+  ExpertiseRuleDraftService,
+  RULE_DIRECTION_BATCH,
+} from '@/server/services/expertise/rules';
 import { ExpertiseHistoryWorkflow } from '@/server/workflows/expertiseHistory';
 
 /**
@@ -267,13 +271,15 @@ export const expertiseRouter = router({
     .mutation(async ({ ctx, input }) => ctx.expertiseRuleDraftService.draftRule(input)),
 
   /**
-   * Settles which way unjudged rules push the work, one bounded batch per call. The page fires it
-   * when the list it read still holds rules without a direction; a rule the reviewer already set
-   * is never overwritten.
+   * Settles which way the named unjudged rules push the work, one bounded batch per call. The
+   * page names the batch from the list it read; a rule the reviewer already set is never
+   * overwritten.
    */
-  judgeRuleDirections: expertiseWriteProcedure.mutation(async ({ ctx }) =>
-    ctx.expertiseRuleDraftService.judgeDirections(),
-  ),
+  judgeRuleDirections: expertiseWriteProcedure
+    .input(z.object({ lessonIds: z.array(z.string()).min(1).max(RULE_DIRECTION_BATCH) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.expertiseRuleDraftService.judgeDirections(input.lessonIds),
+    ),
 
   /** Drafts a group (name + gate question) from a sentence; `createRuleGroup` persists it. */
   draftRuleGroup: expertiseWriteProcedure

@@ -155,7 +155,7 @@ describe('ExpertiseRuleDraftService.judgeDirections', () => {
     resolveExpertiseModelConfig.mockResolvedValue({ model: 'm', provider: 'p' });
   });
 
-  it('judges only active rules without a direction and writes what the model returned', async () => {
+  it('judges only the named active rules without a direction and writes the answers', async () => {
     listRules.mockResolvedValue([
       {
         rules: [
@@ -163,6 +163,8 @@ describe('ExpertiseRuleDraftService.judgeDirections', () => {
           rule('b', { direction: 'negative' }),
           rule('c', { status: 'retired' }),
           rule('d'),
+          // Unjudged but not in this batch: left for a later call.
+          rule('e'),
         ],
       },
     ]);
@@ -173,7 +175,12 @@ describe('ExpertiseRuleDraftService.judgeDirections', () => {
       ],
     });
 
-    const result = await new ExpertiseRuleDraftService({} as never, 'user_1').judgeDirections();
+    const result = await new ExpertiseRuleDraftService({} as never, 'user_1').judgeDirections([
+      'a',
+      'b',
+      'c',
+      'd',
+    ]);
 
     const [params, options] = generateObject.mock.calls[0];
     expect(params.schema.name).toBe('expertise_rule_direction');
@@ -183,10 +190,10 @@ describe('ExpertiseRuleDraftService.judgeDirections', () => {
       { direction: 'positive', id: 'a' },
       { direction: 'negative', id: 'd' },
     ]);
-    expect(result).toEqual({ judged: 2, remaining: 0 });
+    expect(result).toEqual({ judged: 2 });
   });
 
-  it('drops ids outside the batch and repeated answers, and reports what is left', async () => {
+  it('drops ids outside the batch and repeated answers', async () => {
     listRules.mockResolvedValue([{ rules: [rule('a'), rule('b')] }]);
     generateObject.mockResolvedValue({
       rules: [
@@ -196,18 +203,24 @@ describe('ExpertiseRuleDraftService.judgeDirections', () => {
       ],
     });
 
-    const result = await new ExpertiseRuleDraftService({} as never, 'user_1').judgeDirections();
+    const result = await new ExpertiseRuleDraftService({} as never, 'user_1').judgeDirections([
+      'a',
+      'b',
+    ]);
 
     expect(fillLessonDirections).toHaveBeenCalledWith([{ direction: 'positive', id: 'a' }]);
-    expect(result).toEqual({ judged: 1, remaining: 1 });
+    expect(result).toEqual({ judged: 1 });
   });
 
   it('does not call the model when every rule already has a direction', async () => {
     listRules.mockResolvedValue([{ rules: [rule('a', { direction: 'positive' })] }]);
 
-    const result = await new ExpertiseRuleDraftService({} as never, 'user_1').judgeDirections();
+    const result = await new ExpertiseRuleDraftService({} as never, 'user_1').judgeDirections([
+      'a',
+      'not-on-this-page',
+    ]);
 
     expect(generateObject).not.toHaveBeenCalled();
-    expect(result).toEqual({ judged: 0, remaining: 0 });
+    expect(result).toEqual({ judged: 0 });
   });
 });

@@ -115,19 +115,20 @@ export class ExpertiseRuleDraftService {
   };
 
   /**
-   * Judges the direction of the next batch of active rules on the reviewer's page that have none,
-   * and writes it. Ids the model returns that were not in the batch are dropped, so a slip can
-   * only ever touch rules this reviewer can see. Resolves to how many it settled and how many
-   * are still waiting, so the caller knows whether to ask again.
+   * Judges the direction of the rules the page asked about and writes it. The caller names the
+   * batch so it decides what is asked and never sends a rule twice; of those ids, only active
+   * rules on this reviewer's page that still have no direction are judged, and ids the model
+   * returns outside the batch are dropped, so a slip can only touch rules this reviewer can see.
    */
-  judgeDirections = async (): Promise<{ judged: number; remaining: number }> => {
+  judgeDirections = async (lessonIds: string[]): Promise<{ judged: number }> => {
     const model = new ExpertiseModel(this.db, this.userId, this.workspaceId);
     const groups = await model.listRules();
-    const unjudged = groups
+    const asked = new Set(lessonIds);
+    const batch = groups
       .flatMap((group) => group.rules)
-      .filter((rule) => rule.status === 'active' && !rule.direction);
-    const batch = unjudged.slice(0, RULE_DIRECTION_BATCH);
-    if (batch.length === 0) return { judged: 0, remaining: 0 };
+      .filter((rule) => asked.has(rule.id) && rule.status === 'active' && !rule.direction)
+      .slice(0, RULE_DIRECTION_BATCH);
+    if (batch.length === 0) return { judged: 0 };
 
     const modelConfig = await resolveExpertiseModelConfig(this.db, this.userId);
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
@@ -159,7 +160,7 @@ export class ExpertiseRuleDraftService {
     }
     const judged = [...judgedById.values()];
     await model.fillLessonDirections(judged);
-    return { judged: judged.length, remaining: unjudged.length - judged.length };
+    return { judged: judged.length };
   };
 
   draftRuleGroup = async (input: { brief: string }): Promise<RuleGroupDraft> => {

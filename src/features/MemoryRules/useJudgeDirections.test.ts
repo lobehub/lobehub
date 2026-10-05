@@ -7,41 +7,56 @@ const { judgeRuleDirections } = vi.hoisted(() => ({ judgeRuleDirections: vi.fn()
 vi.mock('@/services/expertise', () => ({ expertiseService: { judgeRuleDirections } }));
 
 const refresh = vi.fn(async () => {});
+const sleep = () => new Promise((resolve) => setTimeout(resolve, 20));
+const ids = (prefix: string, count: number) =>
+  Array.from({ length: count }, (_, index) => `${prefix}${index}`);
 
 describe('useJudgeDirections', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    judgeRuleDirections.mockResolvedValue({ judged: 1, remaining: 0 });
+    judgeRuleDirections.mockResolvedValue({ judged: 1 });
   });
 
-  it('starts another pass for a rule written after the first pass began', async () => {
-    const { rerender } = renderHook(({ ids }) => useJudgeDirections(true, ids, refresh), {
-      initialProps: { ids: ['old'] },
+  it('starts another call for a rule written after the first one began', async () => {
+    const { rerender } = renderHook(({ list }) => useJudgeDirections(true, list, refresh), {
+      initialProps: { list: ['old'] },
     });
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
 
     // A hand-written rule with no direction lands after the refresh.
-    rerender({ ids: ['new'] });
+    rerender({ list: ['new'] });
 
-    await waitFor(() => expect(judgeRuleDirections).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(judgeRuleDirections).toHaveBeenLastCalledWith(['new']));
   });
 
-  it('does not ask again about a rule the model keeps skipping', async () => {
-    judgeRuleDirections.mockResolvedValue({ judged: 0, remaining: 1 });
-    const { rerender } = renderHook(({ ids }) => useJudgeDirections(true, ids, refresh), {
-      initialProps: { ids: ['skipped'] },
+  it('works through every batch, however many rules there are', async () => {
+    // Nothing is judged, so the list never shrinks: progress comes only from batching.
+    judgeRuleDirections.mockResolvedValue({ judged: 0 });
+    const all = ids('r', 450);
+    renderHook(() => useJudgeDirections(true, all, refresh));
+
+    await waitFor(() => expect(judgeRuleDirections).toHaveBeenCalledTimes(12));
+    const sent = judgeRuleDirections.mock.calls.flatMap(([batch]) => batch);
+    expect(sent).toEqual(all);
+    expect(Math.max(...judgeRuleDirections.mock.calls.map(([batch]) => batch.length))).toBe(40);
+  });
+
+  it('never sends a rule the model skipped a second time', async () => {
+    judgeRuleDirections.mockResolvedValue({ judged: 0 });
+    const { rerender } = renderHook(({ list }) => useJudgeDirections(true, list, refresh), {
+      initialProps: { list: ['skipped'] },
     });
     await waitFor(() => expect(judgeRuleDirections).toHaveBeenCalledTimes(1));
 
-    rerender({ ids: ['skipped'] });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    rerender({ list: ['skipped'] });
+    await sleep();
 
     expect(judgeRuleDirections).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing while the lab is off', async () => {
     renderHook(() => useJudgeDirections(false, ['a'], refresh));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await sleep();
 
     expect(judgeRuleDirections).not.toHaveBeenCalled();
   });
