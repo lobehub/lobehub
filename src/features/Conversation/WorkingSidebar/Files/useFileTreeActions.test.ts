@@ -274,11 +274,11 @@ describe('useFileTreeActions — create', () => {
     expect(handle.startCreating).toHaveBeenLastCalledWith(PROJECT_ROOT_NODE_ID, 'folder');
 
     handle.getSelectedIds.mockReturnValue(['src/app.ts']);
-    act(() => view.result.current.startCreateFromHeader('file'));
+    act(() => view.result.current.startCreateFromHeader!('file'));
     expect(handle.startCreating).toHaveBeenLastCalledWith('src/', 'file');
 
     handle.getSelectedIds.mockReturnValue([]);
-    act(() => view.result.current.startCreateFromHeader('folder'));
+    act(() => view.result.current.startCreateFromHeader!('folder'));
     expect(handle.startCreating).toHaveBeenLastCalledWith(PROJECT_ROOT_NODE_ID, 'folder');
   });
 
