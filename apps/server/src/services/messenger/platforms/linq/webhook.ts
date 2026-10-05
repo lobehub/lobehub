@@ -73,6 +73,13 @@ export const linqWebhookGate: MessengerPlatformWebhookGate = {
    * dispatch. If processing then fails (install / bot unavailable, handler
    * threw), release it — otherwise the retry is answered 409 and the message,
    * possibly a one-time link code, is lost for good.
+   *
+   * A 2xx keeps the claim. The adapter acknowledges once the message is handed
+   * to chat-sdk's background task, and Linq never redelivers an acknowledged
+   * delivery — so the only retry the claim still sees is a timeout redelivery
+   * racing that background run, which must stay a 409. Background failures are
+   * recovered in-band instead: the router replies with an error the sender can
+   * resend against, and the binder restores a link code whose bind failed.
    */
   settle: async (req, response) => {
     if (response && response.status < 500 && response.status !== 404) return;

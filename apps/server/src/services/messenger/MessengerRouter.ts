@@ -578,14 +578,19 @@ export class MessengerRouter {
         }
         return binder.sendDmText(chatId, text);
       };
-      const link = await MessengerAccountLinkModel.findByPlatformUser(
-        serverDB,
-        platform,
-        senderId,
-        tenantId,
-      );
 
+      // Everything below runs after the webhook was already acknowledged
+      // (chat-sdk hands it to `waitUntil`), so the platform will not redeliver
+      // it. Any failure — including the link lookup — must therefore end in a
+      // reply the sender can act on (resend), never a silently dropped message.
       try {
+        const link = await MessengerAccountLinkModel.findByPlatformUser(
+          serverDB,
+          platform,
+          senderId,
+          tenantId,
+        );
+
         const parsed = parseCommand(message.text);
         if (parsed) {
           const command = commands.find((c) => c.name === parsed.name);

@@ -1058,6 +1058,24 @@ describe('MessengerRouter DM dispatch (regression)', () => {
     expect(mockHandleMention).not.toHaveBeenCalled();
   });
 
+  it('replies with an error instead of dropping the message when the link lookup fails', async () => {
+    // Handlers run after the webhook was acknowledged, so the platform never
+    // redelivers; a failure here has to reach the sender as a reply.
+    await loadSlackBot();
+    mockFindLink.mockRejectedValueOnce(new Error('db down'));
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    const thread = fakeDmThread();
+    await expect(handler(thread, fakeMessage({ isMention: true }))).resolves.toBeUndefined();
+
+    expect(thread.post).toHaveBeenCalledTimes(1);
+    expect(mockSlackBinder.handleUnlinkedMessage).not.toHaveBeenCalled();
+    expect(mockHandleMention).not.toHaveBeenCalled();
+  });
+
   it('routes an unlinked first-touch DM through handleUnlinkedMessage WITHOUT channelMentionThreadId', async () => {
     await loadSlackBot();
     mockFindLink.mockResolvedValue(null);
