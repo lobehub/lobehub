@@ -367,6 +367,27 @@ describe('ImageEditTools', () => {
       expect(screen.getByTestId('image-markup-send')).toBeEnabled();
     });
 
+    it('judges this upload, not an earlier attachment with the same name', async () => {
+      const earlier = new File(['old'], 'sunset-annotated.png', { type: 'image/png' });
+      fileStore.chatUploadFileList = [{ file: earlier, id: 'file_earlier', status: 'success' }];
+      fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
+        fileStore.chatUploadFileList = [
+          ...fileStore.chatUploadFileList,
+          { error: 'Upload failed', file, id: 'sunset-annotated.png', status: 'error' },
+        ];
+      });
+      const { overlay } = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.annotate'));
+      drawBox(overlay);
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('image-markup-send'));
+      });
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('imageViewer.markup.failed'));
+      expect(useComposerDraftBus.getState().draft).toBeNull();
+    });
+
     it('reports when the storage does not allow reading pixels', async () => {
       const { ImagePixelsUnavailableError } = await import('./exportImage');
       exporter.loadStageImage.mockRejectedValue(new ImagePixelsUnavailableError());

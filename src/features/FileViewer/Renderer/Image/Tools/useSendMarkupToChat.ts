@@ -62,10 +62,13 @@ export const useSendMarkupToChat = () => {
         // Wait for the attachment to be in the input (compressed, read and
         // uploaded) before adding the text and dropping the marks, so Send can
         // never go out with the text alone.
+        // Another annotation of the same image may already be in the input
+        // under the same name; only the item this upload adds counts.
+        const before = new Set(useFileStore.getState().chatUploadFileList.map((item) => item.id));
         await useFileStore.getState().uploadChatFiles([file], agentId);
         const staged = useFileStore
           .getState()
-          .chatUploadFileList.find((item) => item.file?.name === file.name);
+          .chatUploadFileList.find((item) => !before.has(item.id) && item.file?.name === file.name);
         if (!staged || staged.status === 'error') {
           // Keep the marks for another try instead of a broken chip in the input.
           if (staged)

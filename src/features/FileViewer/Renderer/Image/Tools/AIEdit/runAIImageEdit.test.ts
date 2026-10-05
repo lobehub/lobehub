@@ -170,14 +170,15 @@ describe('runAIImageEdit', () => {
     expectSourceUntouched(deps);
   });
 
-  it('fails with the task error, discards the topic and saves nothing', async () => {
+  it('fails with the task error, keeps its record and saves nothing', async () => {
     const deps = spyDeps({ getStatus: async () => errorStatus });
     const error = await run(deps, { guide: new Blob(['x']), operation: 'erase' }).catch((e) => e);
 
     expect(error).toBeInstanceOf(AIImageEditError);
     expect(error.kind).toBe('failed');
     expect(error.message).toBe('Content blocked by the provider safety filter');
-    expect(deps.deleteTopic).toHaveBeenCalledWith('gt_6p9nBZERtyWe');
+    // The failed generation stays under Image generation, like any other run.
+    expect(deps.deleteTopic).not.toHaveBeenCalled();
     expect(deps.removeFile).toHaveBeenCalledWith('file_guide');
     expect(deps.updateFile).not.toHaveBeenCalled();
     expectSourceUntouched(deps);
@@ -271,6 +272,36 @@ describe('runAIImageEdit', () => {
     expect(deps.deleteTopic).not.toHaveBeenCalled();
   });
 
+  // Regression: nothing removed the guide of an abandoned task once it settled.
+  it('removes the erase guide once an abandoned task settles', async () => {
+    const controller = new AbortController();
+    let polls = 0;
+    const deps = spyDeps({
+      getStatus: async () => {
+        polls += 1;
+        if (polls === 1) {
+          controller.abort();
+          return realProcessingStatus;
+        }
+        return polls < 3 ? realProcessingStatus : realSuccessStatus;
+      },
+    });
+
+    await expect(
+      run(deps, {
+        guide: new Blob(['png'], { type: 'image/png' }),
+        operation: 'erase',
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ kind: 'cancelled', taskRunning: true });
+    expect(deps.removeFile).not.toHaveBeenCalled();
+
+    await vi.waitFor(() => expect(deps.removeFile).toHaveBeenCalledWith('file_guide'));
+    // The result itself is left in the generation topic.
+    expect(deps.deleteTopic).not.toHaveBeenCalled();
+    expect(deps.updateFile).not.toHaveBeenCalled();
+  });
+
   it('cleans up the topic when cancelled before the task is submitted', async () => {
     const controller = new AbortController();
     const deps = spyDeps({
@@ -288,7 +319,9 @@ describe('runAIImageEdit', () => {
     expect(deps.deleteTopic).toHaveBeenCalledWith('gt_6p9nBZERtyWe');
   });
 
-  it('discards a result that arrives after cancel', async () => {
+  // Regression: deleting the topic of a finished run removed the stored asset
+  // while its file row survived, leaving a file without bytes.
+  it('leaves a result that arrives after cancel in its generation topic', async () => {
     const controller = new AbortController();
     const deps = spyDeps({
       getStatus: async () => {
@@ -300,7 +333,24 @@ describe('runAIImageEdit', () => {
       kind: 'cancelled',
     });
     expect(deps.updateFile).not.toHaveBeenCalled();
-    expect(deps.deleteTopic).toHaveBeenCalled();
+    expect(deps.deleteTopic).not.toHaveBeenCalled();
+  });
+
+  it('keeps a finished result when saving it beside the original fails', async () => {
+    const deps = spyDeps({
+      updateFile: async () => {
+        throw new Error('network');
+      },
+    });
+    await expect(run(deps)).rejects.toMatchObject({ kind: 'failed' });
+    expect(deps.deleteTopic).not.toHaveBeenCalled();
+  });
+
+  it('prefers the folder reported by the server over a stale client one', async () => {
+    const deps = spyDeps();
+    await run(deps, { source: { ...SOURCE, parentId: 'docs_stale' } });
+
+    expect(deps.updateFile.mock.calls[0][1].parentId).toBe('docs_folder');
   });
 
   it('treats a failed status request as a task that may still be running', async () => {
@@ -402,10 +452,12 @@ describe('runAIImageEdit', () => {
 
   it('never lets cleanup failures mask the outcome', async () => {
     const deps = spyDeps({
+      createImage: async () => {
+        throw Object.assign(new Error('Bad request'), { data: { httpStatus: 400 } });
+      },
       deleteTopic: async () => {
         throw new Error('network');
       },
-      getStatus: async () => errorStatus,
     });
     await expect(run(deps)).rejects.toMatchObject({ kind: 'failed' });
   });

@@ -94,6 +94,8 @@ export interface RunAIImageEditParams {
   onPhase?: (phase: AIEditPhase) => void;
   operation: AIEditOperation;
   pollInterval?: number;
+  /** How long to keep watching an abandoned task so its erase guide can be removed. */
+  settleWatch?: number;
   signal?: AbortSignal;
   source: AIEditSource;
   timeout?: number;
@@ -111,6 +113,7 @@ export interface AIEditResult {
 
 const DEFAULT_POLL_INTERVAL = 2000;
 const DEFAULT_TIMEOUT = 3 * 60 * 1000;
+const DEFAULT_SETTLE_WATCH = 30 * 60 * 1000;
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -128,6 +131,28 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 
 const throwIfAborted = (signal?: AbortSignal) => {
   if (signal?.aborted) throw new AIImageEditError('cancelled');
+};
+
+/**
+ * Remove the erase guide of a task the client stopped waiting for, once the
+ * task settles. Best effort: it lasts while the page stays open.
+ */
+const removeGuideWhenSettled = async (
+  deps: AIEditDeps,
+  task: { asyncTaskId: string; id: string },
+  guideFileId: string,
+  interval: number,
+  limit: number,
+) => {
+  const deadline = Date.now() + limit;
+  while (Date.now() < deadline) {
+    await sleep(interval);
+    const status = await deps.getStatus(task.id, task.asyncTaskId).catch(() => undefined);
+    if (status?.status === AsyncTaskStatus.Success || status?.status === AsyncTaskStatus.Error) {
+      await deps.removeFile(guideFileId).catch(() => undefined);
+      return;
+    }
+  }
 };
 
 /** A request the server refused outright (4xx), so it started nothing. */
@@ -148,9 +173,11 @@ const errorDetail = (error: AsyncTaskError | null | undefined) => {
  * result is the generation's own file, renamed and filed beside the original.
  *
  * There is no way to abort a submitted generation task, so once it is running
- * cancelling or timing out only stops the client from waiting: the topic and
- * erase guide are kept for the task, and its result appears in the generation
- * topic. Cleanup only happens when the task never started or has finished.
+ * cancelling or timing out only stops the client from waiting. Once anything
+ * may have been submitted, the generation topic is kept: it holds the task's
+ * record and output, which appear under Image generation. Only a topic that
+ * never got a task is deleted. The erase guide is removed once the task has
+ * settled, by a background watch when the client stopped waiting earlier.
  */
 export const runAIImageEdit = async ({
   deps,
@@ -161,12 +188,13 @@ export const runAIImageEdit = async ({
   pollInterval = DEFAULT_POLL_INTERVAL,
   signal,
   source,
+  settleWatch = DEFAULT_SETTLE_WATCH,
   timeout = DEFAULT_TIMEOUT,
   topicTitle,
 }: RunAIImageEditParams): Promise<AIEditResult> => {
   let guideFileId: string | undefined;
   let topicId: string | undefined;
-  let kept = false;
+  let task: { asyncTaskId: string; id: string } | undefined;
   let submitted = false;
   let settled = false;
 
@@ -215,6 +243,7 @@ export const runAIImageEdit = async ({
     if (!created?.success || !pending?.id || !pending.asyncTaskId)
       throw new AIImageEditError('failed', 'The image task could not be started');
     submitted = true;
+    task = { asyncTaskId: pending.asyncTaskId, id: pending.id };
 
     const deadline = Date.now() + timeout;
     let generation: Generation | null = null;
@@ -242,7 +271,8 @@ export const runAIImageEdit = async ({
     const lineage = buildDerivedFileMetadata(source.fileId, operation);
     // The viewer may be opened from a view (e.g. the image list) that does not
     // know where the original lives, so the server's folder and libraries win.
-    const parentId = source.parentId ?? location?.parentId ?? undefined;
+    // The client's folder is only a fallback for when the lookup failed.
+    const parentId = (location ? location.parentId : source.parentId) ?? undefined;
 
     // Older servers omit `fileId`, but a `/f/:id` asset URL still names the file.
     let fileId = generation.fileId ?? fileIdFromProxyUrl(assetUrl);
@@ -275,7 +305,6 @@ export const runAIImageEdit = async ({
       });
     }
 
-    kept = true;
     return { fileId, height: asset.height, name, url, width: asset.width };
   } catch (error) {
     // Once submitted, only a terminal status ends the task; a status request
@@ -288,11 +317,13 @@ export const runAIImageEdit = async ({
     }
     throw new AIImageEditError('failed', (error as Error)?.message, error, { taskRunning });
   } finally {
-    // A task still running on the server needs its topic and its input image;
-    // removing them would orphan the result it is about to store.
-    const abandoned = submitted && !settled;
     // Cleanup is best effort and must never mask the outcome.
-    if (topicId && !kept && !abandoned) await deps.deleteTopic(topicId).catch(() => undefined);
-    if (guideFileId && !abandoned) await deps.removeFile(guideFileId).catch(() => undefined);
+    if (topicId && !submitted) await deps.deleteTopic(topicId).catch(() => undefined);
+    if (guideFileId) {
+      // A task still running needs its input image until it settles.
+      if (!submitted || settled) await deps.removeFile(guideFileId).catch(() => undefined);
+      else if (task)
+        void removeGuideWhenSettled(deps, task, guideFileId, pollInterval, settleWatch);
+    }
   }
 };
