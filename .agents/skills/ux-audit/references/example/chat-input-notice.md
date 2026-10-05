@@ -6,13 +6,13 @@
 
 ## Patterns in use
 
-| Pattern                        | Rating | Evidence                                                                                                                                                       |
-| ------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Contextual capability feedback | ✅     | Notices stay beside the controls they affect; unresolved runtime state remains silent (`useChatInputNotice.ts:87-109,254-263`).                                |
-| Progressive disclosure         | ✅     | Any non-empty notice set collapses to one consistent count entry, then expands on demand (`Content.tsx`).                                                      |
-| Status summary + detail        | ✅     | Compact warning count opens an ordered list of full Alert rows (`Content.tsx:165-195`).                                                                        |
-| Responsive disclosure          | ✅     | Desktop accepts hover/click; mobile uses click, and the list width/height are viewport-bounded (`Content.tsx:53-58,173-175`).                                  |
-| Recovery action                | ✅     | Existing per-notice action, permission-disabled reason, loading state, and error toast remain intact (`Content.tsx:105-140`; `useChatInputNotice.ts:265-324`). |
+| Pattern                        | Rating | Evidence                                                                                                                                                      |
+| ------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contextual capability feedback | ✅     | Notices stay beside the controls they affect; unresolved runtime state remains silent (`useChatInputNotice.ts:87-109,254-263`).                               |
+| Progressive disclosure         | ✅     | Any non-empty notice set collapses to one consistent count entry, then expands on demand (`Content.tsx`).                                                     |
+| Status summary + detail        | ✅     | Compact warning count opens an ordered list of full Alert rows (`Content.tsx:146-175`).                                                                       |
+| Responsive disclosure          | ✅     | Desktop accepts hover/click; mobile uses click, and the list width/height are viewport-bounded (`Content.tsx:44-48,154`).                                     |
+| Recovery action                | ✅     | Existing per-notice action, permission-disabled reason, loading state, and error toast remain intact (`Content.tsx:87-124`; `useChatInputNotice.ts:265-324`). |
 
 ## Strengths / good cases
 
