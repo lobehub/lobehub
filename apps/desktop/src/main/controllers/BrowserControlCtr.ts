@@ -114,11 +114,27 @@ const resolveRefScript = (ref: string) => `((ref) => {
   return JSON.stringify({ x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) });
 })(${JSON.stringify(ref)})`;
 
-const fillScript = (ref: string, text: string) => `((ref, text) => {
+export const fillScript = (ref: string, text: string) => `((ref, text) => {
   const el = window.__lobeBrowserRefs && window.__lobeBrowserRefs[ref];
   if (!el || !el.isConnected) return JSON.stringify({ error: 'ref not found — take a new snapshot first' });
   el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
   el.focus();
+  // A native <select> has no text to type into, and calling the input value
+  // setter on it throws. Pick the option by value, then by visible label.
+  if (el.tagName === 'SELECT') {
+    const options = Array.from(el.options);
+    const label = (option) => option.text.trim().replaceAll(/\\s+/g, ' ').toLowerCase();
+    const wanted = String(text).trim().replaceAll(/\\s+/g, ' ').toLowerCase();
+    const option = options.find((o) => o.value === text) || options.find((o) => label(o) === wanted);
+    if (!option) {
+      const names = options.map((o) => o.text.trim()).slice(0, 30).join(', ');
+      return JSON.stringify({ error: 'no option matches "' + text + '"; options: ' + names });
+    }
+    el.value = option.value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return JSON.stringify({ ok: true });
+  }
   if (el.isContentEditable) {
     el.textContent = text;
     el.dispatchEvent(new InputEvent('input', { bubbles: true }));
