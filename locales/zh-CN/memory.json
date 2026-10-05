@@ -145,6 +145,7 @@
   "rules.direction.unsetDesc": "正在判定，也可以自己选",
   "rules.distill.description": "选一份现成的材料，它讲到的规矩会逐条列出来，你勾选要留下的。",
   "rules.distill.duplicate": "已有这条规矩，勾选会把这段原文记到它上面",
+  "rules.distill.loadFailed": "列表没能加载出来。",
   "rules.distill.newGroup": "新建一组：{{title}}",
   "rules.distill.noDocuments": "还没有文稿。",
   "rules.distill.noTopics": "没有找到对话。",

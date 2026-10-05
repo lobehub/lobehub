@@ -145,6 +145,7 @@
   "rules.direction.unsetDesc": "Being judged — or pick one yourself",
   "rules.distill.description": "Pick a material you already have; every rule it states is listed for you to tick.",
   "rules.distill.duplicate": "Already a rule; tick to record this passage on it",
+  "rules.distill.loadFailed": "Could not load the list.",
   "rules.distill.newGroup": "New group: {{title}}",
   "rules.distill.noDocuments": "No documents yet.",
   "rules.distill.noTopics": "No matching conversations.",

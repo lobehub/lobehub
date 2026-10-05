@@ -31,7 +31,7 @@ import {
   UploadIcon,
   XIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
@@ -43,12 +43,11 @@ import {
   expertiseService,
   type RuleGroup,
 } from '@/services/expertise';
-import { fileService } from '@/services/file';
-import { topicService } from '@/services/topic';
 import { useFileStore } from '@/store/file';
 import { shinyTextStyles } from '@/styles';
 
 import { composeStyles } from './GroupModal';
+import { useRecentPages, useTopics } from './useDistillSources';
 
 const styles = createStaticStyles(({ css }) => ({
   candidate: css`
@@ -169,50 +168,6 @@ interface DistillContentProps {
   onDone: (ids: string[]) => void;
 }
 
-const useRecentPages = (enabled: boolean) => {
-  const [pages, setPages] = useState<{ id: string; name: string; updatedAt: Date | string }[]>();
-  useEffect(() => {
-    if (!enabled || pages) return;
-    fileService
-      .getRecentPages(30)
-      .then((items) => setPages(items.map(({ id, name, updatedAt }) => ({ id, name, updatedAt }))))
-      .catch(() => setPages([]));
-  }, [enabled, pages]);
-  return pages;
-};
-
-const useTopics = (enabled: boolean, keywords: string) => {
-  const [topics, setTopics] = useState<{ agent?: string; id: string; title: string }[]>();
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    const timer = window.setTimeout(
-      () => {
-        const request = keywords.trim()
-          ? topicService
-              .searchTopics(keywords.trim())
-              .then((items) => items.map(({ id, title }) => ({ id, title: title ?? '' })))
-          : topicService.getRecentTopics(30).then((items) =>
-              items.map(({ agent, id, title }) => ({
-                agent: agent?.title ?? undefined,
-                id,
-                title: title ?? '',
-              })),
-            );
-        request
-          .then((items) => !cancelled && setTopics(items))
-          .catch(() => !cancelled && setTopics([]));
-      },
-      keywords ? 300 : 0,
-    );
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [enabled, keywords]);
-  return topics;
-};
-
 /**
  * Distilling rules from a material the reviewer already has: pick it (paste or upload, a
  * document, a library file, or a conversation), let the model read it, then tick the candidates
@@ -235,8 +190,10 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const pages = useRecentPages(tab === 'document');
-  const topics = useTopics(tab === 'topic', keywords);
+  const recentPages = useRecentPages(tab === 'document');
+  const pages = recentPages.items;
+  const topicList = useTopics(tab === 'topic', keywords);
+  const topics = topicList.items;
   const rules = useMemo(
     () =>
       groups.flatMap((group) =>
@@ -357,6 +314,15 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
     }
   };
 
+  const loadFailed = (retry: () => void) => (
+    <Flexbox horizontal align={'center'} gap={8}>
+      <Text type={'secondary'}>{t('rules.distill.loadFailed')}</Text>
+      <Button size={'small'} onClick={retry}>
+        {t('retry', { ns: 'common' })}
+      </Button>
+    </Flexbox>
+  );
+
   const optionRow = (key: string, title: string, meta: string | undefined, onPick: () => void) => (
     <div
       key={key}
@@ -458,7 +424,9 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
             ))}
           {tab === 'document' && (
             <div className={styles.options}>
-              {!pages ? (
+              {recentPages.error ? (
+                loadFailed(recentPages.retry)
+              ) : !pages ? (
                 <Spin size={'small'} />
               ) : pages.length === 0 ? (
                 <Text type={'secondary'}>{t('rules.distill.noDocuments')}</Text>
@@ -502,7 +470,9 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
                 onChange={(e) => setKeywords(e.target.value)}
               />
               <div className={styles.options}>
-                {!topics ? (
+                {topicList.error ? (
+                  loadFailed(topicList.retry)
+                ) : !topics ? (
                   <Spin size={'small'} />
                 ) : topics.length === 0 ? (
                   <Text type={'secondary'}>{t('rules.distill.noTopics')}</Text>
