@@ -230,6 +230,11 @@ export interface GoalManagerPolicy {
 
 /** Bounded wait on time or one correlated external result. */
 export interface GoalManagerWait {
+  /**
+   * When the currently scheduled wake check fires. Ticks before this moment
+   * leave the queue alone, so polling a wait does not enqueue duplicate wakes.
+   */
+  armedUntil?: string;
   event?: { key: string; type: string };
   /** Fallback check even when an external event is lost. */
   until: string;

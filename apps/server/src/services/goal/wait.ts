@@ -37,14 +37,20 @@ export class GoalWaitService {
     private readonly workspaceId?: string,
   ) {}
 
-  // Bound queue delays; the sweep also recovers lost callbacks after the deadline.
-  schedule = (goalId: string, until: string) =>
+  /** Queue delays are bounded; a longer wait re-arms once each armed check fires. */
+  static arm = (until: string, now = Date.now()) => {
+    const delay = Math.max(1, Math.min(86400, Math.ceil((Date.parse(until) - now) / 1000)));
+    return { armedUntil: new Date(now + delay * 1000).toISOString(), delay };
+  };
+
+  // The sweep also recovers lost callbacks after the deadline.
+  schedule = (goalId: string, delay: number) =>
     scheduleGoalAdvance({
       goalId,
       userId: this.userId,
       workspaceId: this.workspaceId,
       trigger: 'wake',
-      delay: Math.max(1, Math.min(86400, Math.ceil((Date.parse(until) - Date.now()) / 1000))),
+      delay,
     });
 
   private save = async (db: LobeChatDatabase, goalId: string, state: GoalManagerState) => {
@@ -62,7 +68,7 @@ export class GoalWaitService {
     const wait = state?.wait;
     if (!state?.consumed || !wait || wait.wake) return null;
     if (Date.parse(wait.until) > Date.now()) {
-      await this.schedule(graph.goal.id, wait.until);
+      await this.rearm(graph.goal.id, state.token);
       return {
         goalId: graph.goal.id,
         outcome: 'waiting_external',
@@ -95,6 +101,24 @@ export class GoalWaitService {
       outcome: 'advanced',
       message: 'Wait elapsed; reconsider the Goal using current evidence',
     };
+  };
+
+  /**
+   * Re-arm only when no scheduled check is still pending. Polling an unchanged
+   * wait (e.g. `lh goal run` every few seconds) must not enqueue a wake per read.
+   */
+  private rearm = async (goalId: string, token: string) => {
+    const delay = await this.db.transaction(async (db) => {
+      const goal = await new GoalModel(db, this.userId, this.workspaceId).lockById(goalId);
+      const current = goal?.config?.managerState;
+      const wait = current?.wait;
+      if (!goal || current?.token !== token || !wait || wait.wake) return;
+      if (wait.armedUntil && Date.parse(wait.armedUntil) > Date.now()) return;
+      const armed = GoalWaitService.arm(wait.until);
+      await this.save(db, goalId, { ...current, wait: { ...wait, armedUntil: armed.armedUntil } });
+      return armed.delay;
+    });
+    if (delay) await this.schedule(goalId, delay);
   };
 
   /** First matching delivery wins; old turn tokens cannot wake subsequent waits. */

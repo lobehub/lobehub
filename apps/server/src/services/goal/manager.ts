@@ -801,6 +801,7 @@ export class GoalManagerService {
 
   submit = async (goalId: string, token: string, operationId: string, input: GoalPlan) => {
     const plan = goalPlanSchema.parse(input);
+    const armed = plan.action === 'wait' ? GoalWaitService.arm(plan.until) : undefined;
     const result = await this.db.transaction(async (db) => {
       const model = new GoalModel(db, this.userId, this.workspaceId);
       const goal = await model.lockById(goalId);
@@ -1019,14 +1020,17 @@ export class GoalManagerService {
         },
         readyForAcceptance: plan.action === 'verify',
         replanReason: undefined,
-        wait: plan.action === 'wait' ? { until: plan.until, event: plan.event } : undefined,
+        wait:
+          plan.action === 'wait' && armed
+            ? { until: plan.until, event: plan.event, armedUntil: armed.armedUntil }
+            : undefined,
       });
       return { recorded: true, action: plan.action };
     });
-    if (plan.action === 'wait' && !('duplicate' in result))
+    if (armed && !('duplicate' in result))
       await new GoalWaitService(this.db, this.userId, this.workspaceId).schedule(
         goalId,
-        plan.until,
+        armed.delay,
       );
     return result;
   };

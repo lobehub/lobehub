@@ -1675,6 +1675,27 @@ describe('durable manager continuation', () => {
     ).not.toContain(id);
   });
 
+  it('arms one wake per scheduled check instead of one per poll', async () => {
+    const wakes = () =>
+      vi
+        .mocked(scheduler.scheduleGoalAdvance)
+        .mock.calls.filter(([input]) => input.goalId === id && input.trigger === 'wake');
+    const { id, state, op } = await start();
+    await manager().submit(id, state.token, op.id, {
+      action: 'wait',
+      reason: 'Await a slow external result',
+      until: new Date(Date.now() + 3 * 86400_000).toISOString(),
+    });
+    await finish(id, op.id);
+    for (let i = 0; i < 5; i++) expect((await service().tick(id)).outcome).toBe('waiting_external');
+    expect(wakes()).toHaveLength(1);
+    // The armed check fires after the 24h queue bound; the wait re-arms once.
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 86400_000 + 1000);
+    for (let i = 0; i < 5; i++) expect((await service().tick(id)).outcome).toBe('waiting_external');
+    expect(wakes()).toHaveLength(2);
+    expect(wakes()[1][0].delay).toBeGreaterThan(86000);
+  });
+
   it('retains an early event, rejects duplicates and fences later waits', async () => {
     const { id, state, op } = await begin();
     expect(await waits().deliver(id, { ...event, waitToken: 'stale' })).toMatchObject({
