@@ -198,7 +198,12 @@ export class EnvironmentModel {
    * binding that meant to create its own. The indexes let both exist precisely
    * because the name belongs to the member, not to the workspace.
    */
-  async findEnabledByName(name: string) {
+  /**
+   * Looks a name up over the exact scope the (user, scope, name) unique indexes
+   * cover — disabled rows included. Filtering them out here would report a free
+   * name that the index still refuses to let anyone insert.
+   */
+  async findByName(name: string) {
     const [row] = await this.db
       .select()
       .from(environments)
@@ -207,7 +212,6 @@ export class EnvironmentModel {
           eq(environments.name, name.trim()),
           eq(environments.userId, this.userId),
           buildWorkspaceWhere(this.scope(), environments),
-          eq(environments.enabled, true),
         ),
       );
     return row;

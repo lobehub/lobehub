@@ -81,12 +81,15 @@ export class ProjectDirectoryRepository {
       // second environment under the same name — which is both what the
       // (user, scope, name) unique indexes require and what the two concepts
       // already meant.
-      const environmentId =
-        existing?.environmentId ??
-        input.environmentId ??
-        (await environmentModel.findEnabledByName(input.name))?.id;
+      const knownId = existing?.environmentId ?? input.environmentId;
+      const named = knownId ? undefined : await environmentModel.findByName(input.name);
+      const environmentId = knownId ?? named?.id;
       if (environmentId) {
         environment = await environmentModel.findEnabledById(environmentId);
+        // The name lookup deliberately sees disabled rows, because the unique
+        // indexes do: a disabled environment of this name still owns the name,
+        // so minting a replacement would only hit the constraint.
+        if (!environment && named) throw new Error('Environment is disabled');
         if (!environment || (input.environmentId && input.environmentId !== environment.id))
           throw new Error('This directory belongs to another environment');
         if (
