@@ -23,6 +23,13 @@ import type {
 } from './types';
 
 const BRANCH_PAGE_SIZE = 100;
+const REPOSITORY_PAGE_SIZE = 100;
+
+/**
+ * The most repositories {@link GitHubConnectorClient.listAccessibleRepositories}
+ * returns. A list of exactly this length may be partial.
+ */
+export const MAX_ACCESSIBLE_REPOSITORIES = 1000;
 
 /**
  * The most branches {@link GitHubConnectorClient.listRepositoryBranches}
@@ -136,7 +143,19 @@ export function createGitHubConnectorClient({
     },
     listRepositoryContributors: (repository) => loadRepositoryContributors(transport, repository),
     listAccessibleRepositories: async () => {
-      const repositories = await transport.listAccessibleRepositories({ perPage: 100 });
+      // Walked the same way the branch listing is: GitHub pages at 100, and a
+      // single page silently hides every repository past the first hundred
+      // from a picker that only filters what it was handed. The ceiling keeps
+      // an account with thousands of them from becoming thousands of requests.
+      const repositories: Awaited<ReturnType<typeof transport.listAccessibleRepositories>> = [];
+      for (let page = 1; page <= MAX_ACCESSIBLE_REPOSITORIES / REPOSITORY_PAGE_SIZE; page += 1) {
+        const batch = await transport.listAccessibleRepositories({
+          page,
+          perPage: REPOSITORY_PAGE_SIZE,
+        });
+        repositories.push(...batch);
+        if (batch.length < REPOSITORY_PAGE_SIZE) break;
+      }
 
       // A repository the caller cannot address — missing either half of
       // `owner/name` — is dropped rather than rendered as a row that cannot be

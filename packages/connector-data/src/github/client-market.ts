@@ -114,7 +114,7 @@ export const createGitHubMarketTransport = ({
         };
       });
     },
-    listAccessibleRepositories: async ({ perPage }) => {
+    listAccessibleRepositories: async ({ page, perPage }) => {
       // `/user/repos` already spans the organizations the token belongs to, so
       // one call answers the whole picker. Listing per organization would be
       // one request per organization for the same set.
@@ -122,6 +122,7 @@ export const createGitHubMarketTransport = ({
         endpoint: '/user/repos',
         method: 'GET',
         parameters: [
+          { in: 'query', name: 'page', value: page },
           { in: 'query', name: 'per_page', value: perPage },
           { in: 'query', name: 'sort', value: 'updated' },
         ],

@@ -42,7 +42,7 @@ export interface GitHubConnectorTransport {
    * above, which rank by evidence of work and would hide a repository the
    * person has never touched but wants to build in.
    */
-  listAccessibleRepositories: (input: { perPage: number }) => Promise<
+  listAccessibleRepositories: (input: { page: number; perPage: number }) => Promise<
     Array<{
       defaultBranch?: string | null;
       isPrivate?: boolean;
@@ -219,8 +219,9 @@ export const createOctokitTransport = (accessToken: string): GitHubConnectorTran
 
       return response.data.map(({ name }) => ({ name }));
     },
-    listAccessibleRepositories: async ({ perPage }) => {
+    listAccessibleRepositories: async ({ page, perPage }) => {
       const response = await octokit.rest.repos.listForAuthenticatedUser({
+        page,
         per_page: perPage,
         sort: 'updated',
       });

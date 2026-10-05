@@ -239,7 +239,13 @@ export class AiAgentService {
     if (options) {
       return new MarketService({
         accessToken,
-        userInfo: { sandboxStorage: options.sandboxStorage, userId: this.userId },
+        userInfo: {
+          sandboxStorage: options.sandboxStorage,
+          userId: this.userId,
+          // The claim resolves against the workspace's mirrored organization,
+          // not the member's personal account, so the scope has to travel with it.
+          workspaceId: this.workspaceId,
+        },
       });
     }
 

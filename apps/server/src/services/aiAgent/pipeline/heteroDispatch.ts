@@ -1193,6 +1193,10 @@ export const dispatchHeteroAgent = async (
           cwd: sandbox.cwd,
           environment: sandbox.environment,
           mode: sandbox.mode,
+          // The environment's variables, network access, maintenance command
+          // and sources all ride here; dropping it starts the run with none
+          // of them, and nothing reports that they were ignored.
+          specification: sandbox.specification,
           workingDir: sandbox.workingDir,
         },
         workspaceId: deps.workspaceId,

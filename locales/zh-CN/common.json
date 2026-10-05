@@ -518,6 +518,7 @@
   "visibilityConfirm.makePrivate.itemLibrary": "它仍会留在你放入的资料库中，只是其他成员不再看得到",
   "visibilityConfirm.makePrivate.itemLoaded": "对方已加载过的内容无法收回",
   "visibilityConfirm.makePrivate.itemReferences": "已存在的消息附件、引用位置会显示为「已失效」",
+  "visibilityConfirm.publish.itemCapturedState": "成员可以运行它的实例，并访问其中捕获的一切 —— 文件、CLI 登录态、你的登录身份",
   "visibilityConfirm.publish.itemLoaded": "改回私人后对方已加载的内容无法收回",
   "visibilityConfirm.publish.itemReversible": "之后可以在同一菜单里改回私人",
   "visibilityConfirm.publish.itemVisible": "工作区所有成员会立即可以看到",

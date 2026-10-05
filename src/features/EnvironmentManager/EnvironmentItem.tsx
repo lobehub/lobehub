@@ -148,8 +148,10 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
     const publish = () =>
       confirmModal({
         // The shared dialog, because this is the same decision a shared device
-        // asks about and an answer learned once should transfer.
-        content: <VisibilityConfirmContent variant={'publish'} />,
+        // asks about and an answer learned once should transfer — plus the
+        // bullet only an environment needs, since publishing one delegates the
+        // captured home directory and its logins, not just the row.
+        content: <VisibilityConfirmContent capturedState variant={'publish'} />,
         okText: t('environments.visibility.publish'),
         onOk: () => setVisibility('public'),
         title: t('environments.visibility.publishConfirmTitle'),
