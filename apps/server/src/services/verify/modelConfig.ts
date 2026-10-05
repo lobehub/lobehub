@@ -3,6 +3,8 @@ import {
   DEFAULT_REVIEW_PREDICT_MODEL,
   DEFAULT_REVIEW_PREDICT_PROVIDER,
   DEFAULT_VERIFY_MODEL,
+  DEFAULT_VERIFY_PLAN_MODEL,
+  DEFAULT_VERIFY_PLAN_PROVIDER,
   DEFAULT_VERIFY_PROVIDER,
 } from '@lobechat/business-const';
 import {
@@ -50,6 +52,21 @@ export const isHeterogeneousVerifyProvider = (provider?: string | null): boolean
 export const REVIEW_PREDICT_MODEL_CONFIG: VerifyModelConfig = {
   model: DEFAULT_REVIEW_PREDICT_MODEL,
   provider: DEFAULT_REVIEW_PREDICT_PROVIDER,
+};
+
+/**
+ * The model every verify plan generation (requirement → named criteria) runs on.
+ *
+ * Deliberately NOT `resolveVerifyModelConfig`: that chain follows the verifier
+ * agent's chat model, which may be a slow reasoning model that returns no
+ * parsable structured output. A failed split is silent — the plan falls back
+ * to one holistic "Task delivery acceptance" row — so the split runs on one
+ * pinned model instead of whatever the user's verifier happens to use. The
+ * values live in `@lobechat/business-const` so the cloud build can override them.
+ */
+export const VERIFY_PLAN_MODEL_CONFIG: VerifyModelConfig = {
+  model: DEFAULT_VERIFY_PLAN_MODEL,
+  provider: DEFAULT_VERIFY_PLAN_PROVIDER,
 };
 
 const isUsableVerifyModelConfig = (

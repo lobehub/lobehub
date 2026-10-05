@@ -215,7 +215,6 @@ describe('verifyRouter', () => {
       const error = await createCaller()
         .generateCriteria({
           goal: 'Ship a responsive task board',
-          modelConfig: { model: 'claude-sonnet-4-6', provider: 'anthropic' },
         })
         .catch((error) => error);
 
@@ -243,7 +242,6 @@ describe('verifyRouter', () => {
       await expect(
         createCaller().generateCriteria({
           goal: 'Ship a responsive task board',
-          modelConfig: { model: 'claude-sonnet-4-6', provider: 'anthropic' },
         }),
       ).rejects.toThrow('Provider timed out');
     });

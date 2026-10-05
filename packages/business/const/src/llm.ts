@@ -43,3 +43,14 @@ export const DEFAULT_REVIEW_PREDICT_PROVIDER = 'google';
  */
 export const DEFAULT_VERIFY_MODEL = 'glm-5.3-flash';
 export const DEFAULT_VERIFY_PROVIDER = 'zhipu';
+
+/**
+ * The model that splits an acceptance requirement into named verify criteria
+ * (run-start plan instantiation and the task "generate criteria" action). A
+ * text-only structured-output call, so it is pinned separately from the
+ * vision-capable judge above: inheriting the verifier's chat model let a
+ * reasoning model burn its budget and return no parsable JSON, which silently
+ * collapsed every checklist to the single holistic fallback row.
+ */
+export const DEFAULT_VERIFY_PLAN_MODEL = 'deepseek-v4-flash';
+export const DEFAULT_VERIFY_PLAN_PROVIDER = 'deepseek';
