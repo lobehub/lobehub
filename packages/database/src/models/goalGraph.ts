@@ -76,9 +76,6 @@ interface CreateDecisionInput {
   requestedUserId?: string;
 }
 
-/** How far up the task tree a task still counts as part of its ancestor's goal. */
-const MAX_GOAL_ANCESTOR_DEPTH = 32;
-
 /** Persistence boundary for an owned Goal Graph and its append-only audit trail. */
 export class GoalGraphModel {
   /**
@@ -395,15 +392,17 @@ export class GoalGraphModel {
    * the goal that owns it.
    */
   findGoalByTaskId = async (taskId: string): Promise<{ id: string; title: string } | undefined> => {
-    // Walk up `parent_task_id`, nearest first. Depth-capped so a corrupt cycle
-    // cannot run away.
+    // Walk up `parent_task_id`, nearest first. The task tree has no depth limit,
+    // so stop on a revisited id instead of a fixed depth: a corrupt cycle ends
+    // without truncating a valid deep chain.
     const chain = await this.db.execute<{ depth: number; id: string }>(sql`
-      WITH RECURSIVE chain(id, depth) AS (
-        SELECT ${tasks.id}, 0 FROM ${tasks} WHERE ${tasks.id} = ${taskId}
+      WITH RECURSIVE chain(id, depth, visited) AS (
+        SELECT ${tasks.id}, 0, ARRAY[${tasks.id}] FROM ${tasks} WHERE ${tasks.id} = ${taskId}
         UNION ALL
-        SELECT ${tasks.parentTaskId}, chain.depth + 1
+        SELECT ${tasks.parentTaskId}, chain.depth + 1, chain.visited || ${tasks.parentTaskId}
         FROM ${tasks} JOIN chain ON ${tasks.id} = chain.id
-        WHERE ${tasks.parentTaskId} IS NOT NULL AND chain.depth < ${MAX_GOAL_ANCESTOR_DEPTH}
+        WHERE ${tasks.parentTaskId} IS NOT NULL
+          AND NOT (${tasks.parentTaskId} = ANY(chain.visited))
       )
       SELECT id, depth FROM chain
     `);

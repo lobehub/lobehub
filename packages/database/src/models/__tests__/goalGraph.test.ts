@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, goalNodes, goals, topics, users, workspaces } from '../../schemas';
+import { agents, goalNodes, goals, tasks, topics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
 import { GoalGraphModel } from '../goalGraph';
@@ -220,6 +220,27 @@ describe('GoalGraphModel', () => {
     expect(
       await new GoalGraphModel(serverDB, otherUserId).findGoalByTaskId(nodeTask.id),
     ).toBeUndefined();
+  });
+
+  it('finds the goal through a task chain deeper than 32 levels and stops on a cycle', async () => {
+    const taskModel = new TaskModel(serverDB, userId);
+    const root = await taskModel.create({ instruction: 'Root' });
+    const goal = await goalModel.create({
+      subjectId: root.id,
+      subjectType: 'task',
+      title: 'Deep goal',
+    });
+    let leaf = root;
+    for (let i = 0; i < 40; i++) {
+      leaf = await taskModel.create({ instruction: `Level ${i}`, parentTaskId: leaf.id });
+    }
+    expect((await graphModel.findGoalByTaskId(leaf.id))?.id).toBe(goal.id);
+
+    // A corrupt cycle (a -> b -> a) must terminate instead of recursing forever.
+    const a = await taskModel.create({ instruction: 'Cycle A' });
+    const b = await taskModel.create({ instruction: 'Cycle B', parentTaskId: a.id });
+    await serverDB.update(tasks).set({ parentTaskId: b.id }).where(eq(tasks.id, a.id));
+    expect(await graphModel.findGoalByTaskId(b.id)).toBeUndefined();
   });
 
   it('refuses to bind a task to a node retired while the task was being created', async () => {
