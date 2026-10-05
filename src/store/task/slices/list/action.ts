@@ -1,16 +1,13 @@
 import type { TaskStatus } from '@lobechat/types';
 
-import {
-  createReplicaSlice,
-  recordLens,
-  type ReplicaSyncResult,
-} from '@/libs/replica';
+import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { isMyTaskListKey, isScheduledTaskListKey, taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
 import type { TaskStore } from '../../store';
+import { useTaskStore } from '../../store';
 import type { TaskKanbanGroupBy, TaskListVisibilityFilter } from './initialState';
 import {
   type CollectionTask,
@@ -285,6 +282,8 @@ export class TaskListSliceActionImpl {
       projectId,
       scope,
     } = options;
+    // Subscribed, so flipping the visibility chip re-keys the board query.
+    const listVisibility = useTaskStore((s) => s.listVisibility);
     const hasScope = !!(scope || projectId || allAgents || agentId);
     const query: TaskGroupListQuery | undefined = hasScope
       ? {
@@ -298,11 +297,12 @@ export class TaskListSliceActionImpl {
           // (`useFetchMyTaskList`) sends no visibility at all, so its board
           // ignores the chip too — otherwise a value left over from the
           // ordinary tab would change the row set on the list ↔ board switch.
-          visibility: scope ? 'all' : this.#get().listVisibility,
+          visibility: scope ? 'all' : listVisibility,
         }
       : undefined;
     const queryKey = query ? taskGroupListQueryKey(query) : undefined;
-    const sync = this.#taskGroupList.useSync(query, { enabled });
+    // A board is a deliberate view, not a live feed: no refetch on focus.
+    const sync = this.#taskGroupList.useSync(query, { enabled, revalidateOnFocus: false });
     return this.#toSyncResult(
       sync,
       enabled ? queryKey : undefined,
@@ -423,6 +423,8 @@ export class TaskListSliceActionImpl {
       statuses,
       visibility,
     } = options;
+    // Subscribed, so flipping the visibility chip re-keys the list query.
+    const listVisibility = useTaskStore((s) => s.listVisibility);
     const hasScope = !!(projectId || allAgents || agentId);
     const query: TaskListQuery | undefined = hasScope
       ? {
@@ -432,11 +434,12 @@ export class TaskListSliceActionImpl {
           orderBy,
           projectId,
           statuses: statuses?.length ? [...statuses].sort() : undefined,
-          visibility: visibility ?? this.#get().listVisibility,
+          visibility: visibility ?? listVisibility,
         }
       : undefined;
     const queryKey = query ? taskListQueryKey(query) : undefined;
-    const sync = this.#taskList.useSync(query, { enabled });
+    // No refetch on focus: a `complete` list walks up to ten pages per sync.
+    const sync = this.#taskList.useSync(query, { enabled, revalidateOnFocus: false });
     return this.#toSyncResult(
       sync,
       enabled ? queryKey : undefined,

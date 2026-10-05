@@ -90,6 +90,39 @@ describe('TaskDetailSliceAction', () => {
       expect(syncCall()?.[2]).toMatchObject({ refreshInterval: 0 });
     });
 
+    it('drops a cached detail once the server confirms the task is gone', () => {
+      vi.mocked(useClientDataSWR).mockReturnValue({ isValidating: false, mutate: vi.fn() } as any);
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': { identifier: 'T-1', status: 'backlog' } as any,
+          'T-2': { identifier: 'T-2', status: 'backlog' } as any,
+        },
+      });
+      renderHook(() => {
+        useTaskStore.getState().useFetchTaskDetail('T-1');
+        useTaskStore.getState().useFetchTaskDetail('T-2');
+      });
+      const onErrorFor = (id: string) =>
+        (
+          vi
+            .mocked(useClientDataSWR)
+            .mock.calls.find(
+              ([key]) => Array.isArray(key) && key[0] === 'replica:sync' && key[4] === id,
+            )?.[2] as {
+            onError: (error: unknown) => void;
+          }
+        ).onError;
+
+      onErrorFor('T-1')(
+        Object.assign(new Error('Task not found: T-1'), { code: 'TASK_NOT_FOUND' }),
+      );
+      onErrorFor('T-2')(new Error('Failed to fetch'));
+
+      // Deleted elsewhere → the cached copy goes; a transient failure keeps it.
+      expect(useTaskStore.getState().taskDetailMap['T-1']).toBeUndefined();
+      expect(useTaskStore.getState().taskDetailMap['T-2']).toBeDefined();
+    });
+
     it('stores a raw-id lookup under both the raw id and the identifier', async () => {
       vi.mocked(taskService.getDetail).mockResolvedValue({
         data: { identifier: 'T-7', instruction: 'x' },

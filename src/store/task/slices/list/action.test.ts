@@ -334,6 +334,36 @@ describe('TaskListSliceAction', () => {
     });
   });
 
+  describe('reactive query inputs', () => {
+    it('re-keys a mounted list and board when the visibility chip changes', () => {
+      const { result } = renderHook(() => ({
+        board: useTaskStore.getState().useFetchTaskGroupList({ allAgents: true }),
+        list: useTaskStore.getState().useFetchTaskList({ allAgents: true }),
+      }));
+      const before = { ...result.current };
+
+      act(() => useTaskStore.getState().setListVisibility('private'));
+
+      expect(result.current.list.queryKey).not.toBe(before.list.queryKey);
+      expect(result.current.board.queryKey).not.toBe(before.board.queryKey);
+    });
+
+    it('does not refetch lists or boards on window focus', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      renderHook(() => {
+        useTaskStore.getState().useFetchTaskList({ allAgents: true, complete: true });
+        useTaskStore.getState().useFetchTaskGroupList({ allAgents: true });
+      });
+
+      const syncConfigs = vi
+        .mocked(useClientDataSWR)
+        .mock.calls.filter(([key]) => Array.isArray(key) && key[0] === 'replica:sync')
+        .map(([, , config]) => config as { revalidateOnFocus?: boolean });
+      expect(syncConfigs).toHaveLength(2);
+      for (const config of syncConfigs) expect(config.revalidateOnFocus).toBe(false);
+    });
+  });
+
   describe('setListVisibility', () => {
     it('updates the filter; each visibility reads its own list entry', () => {
       useTaskStore.getState().setListVisibility('workspace');

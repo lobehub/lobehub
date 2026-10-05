@@ -602,6 +602,13 @@ export class TaskDetailSliceActionImpl {
     });
 
     const sync = this.#detail.useSync(taskId, {
+      // A resolved not-found is definitive (the task was deleted elsewhere):
+      // drop the cached copy so the page can settle on its 404. Transient
+      // failures keep the cached detail on screen.
+      onError: (error) => {
+        if (taskId && (error as { code?: string } | undefined)?.code === 'TASK_NOT_FOUND')
+          this.internal_dispatchTaskDetail({ id: taskId, type: 'deleteTaskDetail' });
+      },
       refreshInterval: shouldPoll ? TASK_DETAIL_POLL_INTERVAL : 0,
     });
     return { ...sync, mutate: sync.revalidate };
