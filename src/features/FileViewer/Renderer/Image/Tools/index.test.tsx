@@ -3,6 +3,7 @@
  */
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useComposerDraftBus } from '@/features/Conversation/composerDraftBus';
@@ -10,6 +11,7 @@ import { useComposerDraftBus } from '@/features/Conversation/composerDraftBus';
 import { ImageStageContext, type ImageStageValue } from '../context';
 import { clientToImagePoint, type Point } from '../geometry';
 import ImageEditTools from './index';
+import { EMPTY_MARKUP, type ImageMarkup } from './markup';
 
 const fileStore = vi.hoisted(() => ({
   chatUploadFileList: [] as { error?: string; file: File; id: string; status: string }[],
@@ -77,19 +79,25 @@ const renderTools = (stage: Partial<ImageStageValue> = {}) => {
     addVersion,
     fileId: 'file_src',
     fitToScreen,
+    markup: EMPTY_MARKUP,
     name: 'sunset.jpg',
     naturalSize: { height: 1000, width: 2000 },
     overlayElement: overlay,
     rotation: 0,
+    setMarkup: () => {},
     toImagePoint: (client) => clientToImagePoint(client, RECT, 0),
     url: 'https://s3/sunset.jpg',
     zoom: 1,
     ...stage,
   };
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <ImageStageContext value={value}>{children}</ImageStageContext>
-  );
-  return { addVersion, fitToScreen, overlay, ...render(<ImageEditTools />, { wrapper }) };
+  // Marks live in the viewer; this stands in for it.
+  const Wrapper = ({ children }: { children: ReactNode }) => {
+    const [markup, setMarkup] = useState<ImageMarkup>(EMPTY_MARKUP);
+    return (
+      <ImageStageContext value={{ ...value, markup, setMarkup }}>{children}</ImageStageContext>
+    );
+  };
+  return { addVersion, fitToScreen, overlay, ...render(<ImageEditTools />, { wrapper: Wrapper }) };
 };
 
 describe('ImageEditTools', () => {

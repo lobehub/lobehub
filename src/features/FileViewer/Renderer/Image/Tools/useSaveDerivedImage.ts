@@ -1,5 +1,5 @@
 import { toast } from '@lobehub/ui/base-ui';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { fileManagerSelectors, useFileStore } from '@/store/file';
@@ -24,9 +24,13 @@ export const useSaveDerivedImage = (operation: DerivedImageOperation) => {
   const { t } = useTranslation('file');
   const { addVersion, fileId, name, url } = useImageStage();
   const [saving, setSaving] = useState(false);
+  // One save at a time, even if a shortcut fires before the state re-renders.
+  const savingRef = useRef(false);
 
   const save = useCallback(
     async (render: (img: HTMLImageElement) => Promise<Blob>) => {
+      if (savingRef.current) return;
+      savingRef.current = true;
       setSaving(true);
       try {
         const img = await loadStageImage(url);
@@ -55,6 +59,7 @@ export const useSaveDerivedImage = (operation: DerivedImageOperation) => {
             : t('imageViewer.saveFailed'),
         );
       } finally {
+        savingRef.current = false;
         setSaving(false);
       }
     },

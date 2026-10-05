@@ -91,10 +91,16 @@ export const dragCrop = (
 };
 
 /** Pixel size of a crop at the image's natural resolution. */
-export const cropPixelSize = (crop: NormalizedRect, natural: Size): Size => ({
-  height: Math.max(1, Math.round(crop.height * natural.height)),
-  width: Math.max(1, Math.round(crop.width * natural.width)),
-});
+export const cropPixelSize = (crop: NormalizedRect, natural: Size): Size => {
+  const height = crop.height * natural.height;
+  const width = crop.width * natural.width;
+  // Scale a huge crop down to the output cap so the export canvas stays allocatable.
+  const scale = Math.min(1, MAX_OUTPUT_EDGE / Math.max(height, width, 1));
+  return {
+    height: Math.max(1, Math.round(height * scale)),
+    width: Math.max(1, Math.round(width * scale)),
+  };
+};
 
 /**
  * Resolve the output size from the user's width/height entry. With the ratio

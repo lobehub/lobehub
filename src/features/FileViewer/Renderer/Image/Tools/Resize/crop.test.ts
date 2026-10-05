@@ -82,3 +82,19 @@ describe('resolveOutputSize', () => {
     });
   });
 });
+
+describe('cropPixelSize', () => {
+  it('is the crop at natural resolution', () => {
+    expect(
+      cropPixelSize({ height: 0.5, width: 0.5, x: 0, y: 0 }, { height: 1000, width: 2000 }),
+    ).toEqual({ height: 500, width: 1000 });
+  });
+
+  // Regression: a huge source started the output above the cap, so Save
+  // allocated a canvas the browser could refuse.
+  it('scales a crop larger than the output cap down to it, keeping the ratio', () => {
+    expect(
+      cropPixelSize({ height: 1, width: 1, x: 0, y: 0 }, { height: 10_000, width: 20_000 }),
+    ).toEqual({ height: MAX_OUTPUT_EDGE / 2, width: MAX_OUTPUT_EDGE });
+  });
+});

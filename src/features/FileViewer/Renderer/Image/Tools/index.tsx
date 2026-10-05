@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useImageStage } from '../context';
 import AnnotateMode from './Annotate';
 import CommentMode from './Comment';
-import { EMPTY_MARKUP, type ImageMarkup, isMarkupEmpty } from './markup';
+import { EMPTY_MARKUP, isMarkupEmpty } from './markup';
 import MarkupPreview from './MarkupPreview';
 import ResizeMode from './Resize';
 import SendToChatButton from './SendToChatButton';
@@ -33,14 +33,13 @@ type ToolMode = 'annotate' | 'comment' | 'erase' | 'removeBackground' | 'resize'
  * renders its own bar while active.
  *
  * Annotations and comments are not saved with the file. They are marks for a
- * follow-up chat message, kept in memory here (closing the viewer drops them)
- * until the user adds them to the chat input.
+ * follow-up chat message, kept in the viewer's memory per version (closing the
+ * viewer drops them) until the user adds them to the chat input.
  */
 const ImageEditTools = () => {
   const { t } = useTranslation('file');
-  const { fitToScreen } = useImageStage();
+  const { fitToScreen, markup, setMarkup } = useImageStage();
   const [mode, setMode] = useState<ToolMode | null>(null);
-  const [markup, setMarkup] = useState<ImageMarkup>(EMPTY_MARKUP);
   const { comments } = markup;
 
   const enter = (next: ToolMode) => {

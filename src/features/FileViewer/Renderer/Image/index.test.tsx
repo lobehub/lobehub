@@ -153,6 +153,54 @@ describe('ImageViewer', () => {
     expect(downloadFile).toHaveBeenCalledWith('https://s3/sunset-no-bg.png', 'sunset-no-bg.png');
   });
 
+  // Regression: the tools remount while a version loads, which dropped the
+  // unsent annotations and comments kept inside them.
+  it('keeps unsent marks per version across version switches', () => {
+    const MarkupProbe = () => {
+      const { markup, setMarkup } = useImageStage();
+      return (
+        <button
+          onClick={() =>
+            setMarkup({
+              ...markup,
+              comments: [
+                ...markup.comments,
+                { anchor: { point: { x: 0.5, y: 0.5 }, type: 'point' }, id: 'c1', text: 'hi' },
+              ],
+            })
+          }
+        >
+          {`marks:${markup.comments.length}`}
+        </button>
+      );
+    };
+    render(
+      <ImageViewer
+        fileId={'file_1'}
+        url={'https://s3/sunset.png'}
+        tools={
+          <>
+            <AddVersionProbe />
+            <MarkupProbe />
+          </>
+        }
+      />,
+    );
+    loadImage();
+    fireEvent.click(screen.getByText('marks:0'));
+    expect(screen.getByText('marks:1')).toBeInTheDocument();
+
+    // A saved edit goes on stage: its own marks start empty.
+    fireEvent.click(screen.getByText('add-version'));
+    loadImage();
+    expect(screen.getByText('marks:0')).toBeInTheDocument();
+
+    // Back on the original, its marks are still there.
+    fireEvent.click(screen.getByRole('button', { name: 'imageViewer.version.original' }));
+    loadImage();
+    expect(screen.getByText('marks:1')).toBeInTheDocument();
+  });
+
   it('drops saved versions when another file opens', () => {
     const { rerender } = render(
       <ImageViewer fileId={'file_1'} tools={<AddVersionProbe />} url={'https://s3/a.png'} />,

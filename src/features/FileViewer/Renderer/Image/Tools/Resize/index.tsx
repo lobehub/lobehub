@@ -119,7 +119,12 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
     if (result) onExit();
   };
 
-  useToolKeys({ onEnter: () => void handleSave(), onEscape: onExit });
+  // While saving, Enter would start a duplicate upload and Escape would hide
+  // an upload that still lands; the shortcuts wait for the save to finish.
+  useToolKeys({
+    onEnter: saving ? undefined : () => void handleSave(),
+    onEscape: saving ? undefined : onExit,
+  });
 
   const startDrag = (handle: CropHandle) => (event: PointerEvent<HTMLElement>) => {
     if (event.button !== 0) return;

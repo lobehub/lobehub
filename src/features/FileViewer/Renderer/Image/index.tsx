@@ -22,6 +22,7 @@ import {
   zoomIn,
   zoomOut,
 } from './geometry';
+import { EMPTY_MARKUP, type ImageMarkup } from './Tools/markup';
 import TopBar from './TopBar';
 import VersionSwitcher from './VersionSwitcher';
 
@@ -122,6 +123,15 @@ const ImageViewer = ({
   const fileId = active?.fileId ?? sourceId;
   const name = active?.name ?? sourceName;
   const url = active?.url ?? sourceUrl;
+
+  // Unsent marks per version, outside the tools so a version switch (which
+  // remounts them while the new image loads) keeps them.
+  const [markupByFile, setMarkupByFile] = useState<Record<string, ImageMarkup>>({});
+  const markup = markupByFile[fileId] ?? EMPTY_MARKUP;
+  const setMarkup = useCallback(
+    (next: ImageMarkup) => setMarkupByFile((state) => ({ ...state, [fileId]: next })),
+    [fileId],
+  );
 
   const selectVersion = (id?: string) => {
     if (id === active?.fileId) return;
@@ -245,10 +255,12 @@ const ImageViewer = ({
             addVersion,
             fileId,
             fitToScreen,
+            markup,
             name,
             naturalSize,
             overlayElement,
             rotation,
+            setMarkup,
             toImagePoint,
             url,
             zoom,
@@ -258,10 +270,12 @@ const ImageViewer = ({
       addVersion,
       fileId,
       fitToScreen,
+      markup,
       name,
       naturalSize,
       overlayElement,
       rotation,
+      setMarkup,
       toImagePoint,
       url,
       zoom,
