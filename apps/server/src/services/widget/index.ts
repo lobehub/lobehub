@@ -185,23 +185,22 @@ export class WidgetService {
   async setSchedule(widgetId: string, pattern: string | null, timezone?: string | null) {
     await this.requireManageable(widgetId);
 
-    if (!pattern) {
-      return this.model.update(widgetId, {
-        nextRunAt: null,
-        schedulePattern: null,
-        scheduleTimezone: null,
-      });
+    let nextRunAt: Date | null = null;
+    if (pattern) {
+      const validation = validateCronPattern(pattern, timezone ?? null, { count: 1 });
+      if (!validation.valid) {
+        throw new WidgetFlowError('INVALID_SCHEDULE', `Invalid schedule: ${validation.error}`);
+      }
+      nextRunAt = validation.nextRuns[0];
     }
 
-    const validation = validateCronPattern(pattern, timezone ?? null, { count: 1 });
-    if (!validation.valid) {
-      throw new WidgetFlowError('INVALID_SCHEDULE', `Invalid schedule: ${validation.error}`);
-    }
+    // Reservations belong to the old schedule; never let them resume under the new one.
+    await this.model.cancelScheduledRuns(widgetId);
 
     return this.model.update(widgetId, {
-      nextRunAt: validation.nextRuns[0],
-      schedulePattern: pattern.trim(),
-      scheduleTimezone: timezone ?? null,
+      nextRunAt,
+      schedulePattern: pattern ? pattern.trim() : null,
+      scheduleTimezone: pattern ? (timezone ?? null) : null,
     });
   }
 

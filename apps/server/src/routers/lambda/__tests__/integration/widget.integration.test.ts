@@ -1164,6 +1164,26 @@ describe('widget + dashboard routers integration', () => {
         ]);
       });
 
+      it('cancels a dead reservation when the schedule is cleared, so re-enabling never resumes it', async () => {
+        const owner = widgetRouter.createCaller(context(ownerId));
+        const { widget } = await dueWidget();
+
+        vi.spyOn(WidgetModel, 'finishRun').mockRejectedValueOnce(new Error('worker killed'));
+        await post('/tick', {});
+        const [reserved] = await scheduleRuns(widget.id);
+        expect(reserved).toMatchObject({ status: 'running' });
+
+        await owner.setSchedule({ id: widget.id, pattern: null });
+        await owner.setSchedule({ id: widget.id, pattern: '*/5 * * * *' });
+        await expireLease(reserved.id);
+
+        expect(await post('/tick', {})).toMatchObject({ resumed: 0 });
+        expect(runSandbox).toHaveBeenCalledTimes(1);
+        expect(await scheduleRuns(widget.id)).toMatchObject([
+          { error: { code: 'SCHEDULE_CHANGED' }, id: reserved.id, status: 'failed' },
+        ]);
+      });
+
       it('acks a message without a slot without running or claiming', async () => {
         const { slot, widget } = await dueWidget();
 

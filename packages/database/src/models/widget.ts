@@ -317,6 +317,42 @@ export class WidgetModel {
     });
   }
 
+  /**
+   * Close every scheduled run still reserved (`running`) for a widget the caller
+   * manages, as failed with `SCHEDULE_CHANGED`. Called when the schedule is
+   * cleared or replaced, so a reservation from the old schedule can never be
+   * resumed later. The widget snapshot is left alone. Returns the closed count.
+   */
+  async cancelScheduledRuns(widgetId: string) {
+    if (!isUuid(widgetId)) return 0;
+    const [widget] = await this.db
+      .select({ id: widgets.id })
+      .from(widgets)
+      .where(and(eq(widgets.id, widgetId), this.manageable()))
+      .limit(1);
+    if (!widget) return 0;
+
+    const closed = await this.db
+      .update(widgetRuns)
+      .set({
+        error: {
+          code: 'SCHEDULE_CHANGED',
+          message: 'The schedule changed before this run finished',
+        },
+        finishedAt: new Date(),
+        status: 'failed',
+      })
+      .where(
+        and(
+          eq(widgetRuns.widgetId, widgetId),
+          eq(widgetRuns.trigger, 'schedule'),
+          eq(widgetRuns.status, 'running'),
+        ),
+      )
+      .returning({ id: widgetRuns.id });
+    return closed.length;
+  }
+
   // ── Versions ──
 
   /**
