@@ -32,6 +32,8 @@ const PartSwitcher = ({ onChange, sections, value }: PartSwitcherProps) => {
   const [lastAgent, setLastAgent] = useState<string>();
 
   const onAgent = value !== 'mine';
+  // An agent opened from elsewhere (the onboarding link) counts as the one last viewed too.
+  if (onAgent && value !== lastAgent) setLastAgent(value);
   const agentTotal = agents.reduce((sum, section) => sum + liveCount(section), 0);
 
   const openAgent = (key: string) => {

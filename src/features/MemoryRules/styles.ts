@@ -184,6 +184,19 @@ export const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     width: fit-content;
+    padding: 0;
+    border: 0;
+
+    font: inherit;
+    color: inherit;
+
+    background: none;
+
+    &:focus-visible {
+      border-radius: ${cssVar.borderRadiusSM};
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 2px;
+    }
 
     &:hover {
       color: ${cssVar.colorText};

@@ -30,8 +30,11 @@ interface DirectionToggleProps {
 const DirectionToggle = ({ disabled, onChange, value }: DirectionToggleProps) => {
   const { t } = useTranslation('memory');
   const key = value ?? 'unset';
+  // Archived rules are never judged and cannot be switched, so do not promise either.
+  const hint =
+    disabled && !value ? t('rules.direction.unsetArchivedDesc') : t(`rules.direction.${key}Desc`);
   return (
-    <Tooltip title={t(`rules.direction.${key}Desc`)}>
+    <Tooltip title={hint}>
       <span
         className={cx(
           styles.modeBtn,

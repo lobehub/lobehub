@@ -442,9 +442,10 @@ const MemoryRules = () => {
                     <span>{t('rules.columns.direction')}</span>
                     <span>{t('rules.columns.enforcement')}</span>
                     <span>{t('rules.columns.method')}</span>
-                    <span
-                      role={'button'}
+                    <button
+                      aria-pressed={runsSort !== null}
                       title={t(`rules.columns.runsSort.${runsSort ?? 'off'}`)}
+                      type={'button'}
                       className={cx(
                         styles.sortHeader,
                         runsSort !== null && styles.sortHeaderActive,
@@ -455,7 +456,7 @@ const MemoryRules = () => {
                       {runsSort && (
                         <Icon icon={runsSort === 'desc' ? ArrowDownIcon : ArrowUpIcon} size={12} />
                       )}
-                    </span>
+                    </button>
                     <span />
                   </div>
                 )}

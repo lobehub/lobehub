@@ -140,6 +140,7 @@
   "rules.direction.positive": "正向",
   "rules.direction.positiveDesc": "往好的方向引导",
   "rules.direction.unset": "还没判定",
+  "rules.direction.unsetArchivedDesc": "归档时还没有记录方向",
   "rules.direction.unsetDesc": "正在判定，也可以自己选",
   "rules.enforcement.block": "拦",
   "rules.enforcement.blockDesc": "将拦下交付，直到你放行。尚未生效，目前仍只提醒",

@@ -151,6 +151,7 @@ export default {
   'rules.direction.positive': 'Positive',
   'rules.direction.positiveDesc': 'Guides the work toward something good',
   'rules.direction.unset': 'Not judged yet',
+  'rules.direction.unsetArchivedDesc': 'Archived before its direction was recorded',
   'rules.direction.unsetDesc': 'Being judged — or pick one yourself',
   'rules.enforcement.block': 'Block',
   'rules.enforcement.blockDesc':
