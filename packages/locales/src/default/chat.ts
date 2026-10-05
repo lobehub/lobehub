@@ -775,6 +775,7 @@ export default {
   'input.viewOnlyGroup': 'You can only view this group',
   'input.heteroPlus.tooltip': 'Formatting and scheduling',
   'input.more': 'More',
+  'input.notice.summary': '{{count}} input notices',
   'input.schedule.cancel': 'Cancel',
   'input.schedule.clear': 'Cancel scheduled send',
   'input.schedule.failed': 'Could not schedule this message. Try again.',

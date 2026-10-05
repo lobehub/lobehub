@@ -1300,6 +1300,7 @@
   "input.modelFixedTip": "The model is fixed in the Agent Profile and cannot be switched while chatting.",
   "input.modelUnavailable": "The current model is no longer available. Choose another model to continue.",
   "input.more": "More",
+  "input.notice.summary": "{{count}} input notices",
   "input.schedule.cancel": "Cancel",
   "input.schedule.clear": "Cancel scheduled send",
   "input.schedule.failed": "Could not schedule this message. Try again.",
