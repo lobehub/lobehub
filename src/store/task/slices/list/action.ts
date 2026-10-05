@@ -96,7 +96,11 @@ export class TaskListSliceActionImpl {
       entity: taskListEntity,
       fetcher: (query) => this.#fetchList(query),
       get,
-      merge: (incoming) => ({ items: incoming.data, total: incoming.total }),
+      merge: (incoming, _confirmed, query) => ({
+        items: incoming.data,
+        ...(query.statuses && { statuses: query.statuses }),
+        total: incoming.total,
+      }),
       set,
       stateKey: 'taskListReplica',
       view: recordLens<TaskStore, TaskListValue>('taskListMap'),

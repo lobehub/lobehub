@@ -152,12 +152,34 @@ describe('TaskDetailSliceAction', () => {
       vi.mocked(taskService.delete).mockRejectedValue(new Error('offline'));
 
       await expect(useTaskStore.getState().deleteTask('T-9')).rejects.toThrow('offline');
-      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(useTaskStore.getState().taskDetailMap['T-9']).toMatchObject({ name: 'Keep me' });
-      expect(
-        (await taskDetailResource.storage!.get({ queryKey: 'T-9', scope }))?.data,
-      ).toMatchObject({ name: 'Keep me' });
+      // Storage writes are queued; wait for the restored row to land.
+      await vi.waitFor(async () =>
+        expect(
+          (await taskDetailResource.storage!.get({ queryKey: 'T-9', scope }))?.data,
+        ).toMatchObject({ name: 'Keep me' }),
+      );
+    });
+
+    it('persists a detail edit once the server saved it', async () => {
+      const scope = `task-update-${crypto.randomUUID()}:personal`;
+      vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+      useTaskStore.getState().internal_dispatchTaskDetail({
+        id: 'T-3',
+        type: 'setTaskDetail',
+        value: { identifier: 'T-3', name: 'Before' } as any,
+      });
+      vi.mocked(taskService.update).mockResolvedValue({} as any);
+
+      await useTaskStore.getState().updateTask('T-3', { name: 'After' });
+
+      await vi.waitFor(async () =>
+        expect(
+          (await taskDetailResource.storage!.get({ queryKey: 'T-3', scope }))?.data,
+        ).toMatchObject({ name: 'After' }),
+      );
     });
 
     it('keeps optimistic detail edits out of the persisted row', async () => {

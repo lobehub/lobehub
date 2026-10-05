@@ -277,6 +277,32 @@ describe('TaskLifecycleSliceAction', () => {
       });
     });
 
+    it('drops a task from a status-filtered list once it no longer matches, even if refresh fails', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        taskListMap: {
+          recent: {
+            items: [
+              { identifier: 'T-1', status: 'running' },
+              { identifier: 'T-2', status: 'running' },
+            ] as any,
+            statuses: ['running', 'paused'],
+            total: 2,
+          },
+        },
+      });
+      vi.mocked(taskService.updateStatus).mockResolvedValue({ success: true } as any);
+      vi.mocked(mutate).mockRejectedValue(new Error('refresh failed'));
+
+      await useTaskStore.getState().updateTaskStatus('T-1', 'completed');
+
+      expect(useTaskStore.getState().taskListMap.recent).toMatchObject({
+        items: [{ identifier: 'T-2' }],
+        total: 1,
+      });
+      vi.mocked(mutate).mockReset();
+    });
+
     it('should not let an older failed request roll back a newer status', async () => {
       let rejectFirstRequest: (reason: Error) => void = () => {};
       seedCollections(

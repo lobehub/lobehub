@@ -567,6 +567,11 @@ export class TaskDetailSliceActionImpl {
       setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
     });
 
+    // Saved: the edited detail is now the server's value, so a reload must
+    // paint it rather than the pre-edit snapshot.
+    for (const target of patchedParentId ? [id, patchedParentId] : [id])
+      this.#detail.update(target, (detail) => detail && { ...detail });
+
     if (
       assigneeAgentId !== undefined ||
       assigneeUserId !== undefined ||

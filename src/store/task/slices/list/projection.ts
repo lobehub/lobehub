@@ -37,6 +37,8 @@ export interface TaskListQuery {
 
 export interface TaskListValue {
   items: TaskListItem[];
+  /** The query's status filter, so a status change can drop a row it no longer matches. */
+  statuses?: TaskStatus[];
   total: number;
 }
 
@@ -101,12 +103,15 @@ export const taskListEntity: ReplicaEntityAdapter<TaskListValue, TaskListItem> =
         items.push(task);
         continue;
       }
-      const next = fn(task);
+      let next = fn(task);
+      // A row whose new status falls outside the query's filter leaves the list.
+      if (next && data.statuses && !data.statuses.includes(next.status as TaskStatus))
+        next = undefined;
       if (next !== task) changed = true;
       if (next === undefined) removed++;
       else items.push(next);
     }
-    return changed ? { items, total: data.total - removed } : data;
+    return changed ? { ...data, items, total: data.total - removed } : data;
   },
 };
 
