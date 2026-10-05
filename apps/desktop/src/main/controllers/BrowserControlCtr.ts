@@ -45,16 +45,29 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * caches the elements on `window.__lobeBrowserRefs` so later actions can
  * resolve `ref` ids without re-querying.
  */
-const SNAPSHOT_SCRIPT = `(() => {
+export const SNAPSHOT_SCRIPT = `(() => {
   const MAX = 250;
   const refs = {};
   let counter = 0;
   const lines = [];
+  // Closed modals are commonly kept in the DOM under a wrapper faded to
+  // opacity 0, or marked aria-hidden / inert. Their own box still has a size,
+  // so checking only the element listed every closed dialog as if it were open.
+  // The element's own opacity is not checked: styled checkboxes and file
+  // inputs are often a transparent native control over a visible label.
+  const hiddenByAncestor = (el) => {
+    for (let node = el; node && node !== document.documentElement; node = node.parentElement) {
+      if (node.getAttribute('aria-hidden') === 'true' || node.hasAttribute('inert')) return true;
+      if (node !== el && getComputedStyle(node).opacity === '0') return true;
+    }
+    return false;
+  };
   const isVisible = (el) => {
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return false;
     const s = getComputedStyle(el);
-    return s.visibility !== 'hidden' && s.display !== 'none';
+    if (s.visibility === 'hidden' || s.display === 'none') return false;
+    return !hiddenByAncestor(el);
   };
   const tagRoles = { A: 'link', BUTTON: 'button', H1: 'heading', H2: 'heading', H3: 'heading', SELECT: 'combobox', SUMMARY: 'button', TEXTAREA: 'textbox' };
   const roleOf = (el) => {
