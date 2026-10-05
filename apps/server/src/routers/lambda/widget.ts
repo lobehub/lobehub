@@ -7,6 +7,7 @@ import {
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { DashboardModel } from '@/database/models/dashboard';
 import { WidgetModel } from '@/database/models/widget';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DashboardService } from '@/server/services/dashboard';
@@ -64,8 +65,9 @@ const fail = (error: unknown, operation: string): never =>
 export const widgetRouter = router({
   /**
    * Create a widget; with `dashboardId`, place it on that board right away.
-   * The board is checked first so a refused placement never leaves an
-   * orphan widget behind.
+   * Creation and placement share one transaction: when the board cannot take
+   * the widget — refused up front, or gone by the time it is placed — the
+   * request fails and no orphan widget is left behind.
    */
   create: widgetWriteProcedure
     .input(
@@ -83,20 +85,30 @@ export const widgetRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         const { dashboardId, layout, ...widgetInput } = input;
-        if (dashboardId && !(await ctx.dashboardService.findManageable(dashboardId))) {
+        if (!dashboardId) {
+          const widget = await ctx.widgetModel.create(widgetInput);
+          return { data: { ...widget, item: null }, message: 'Widget created', success: true };
+        }
+
+        if (!(await ctx.dashboardService.findManageable(dashboardId))) {
           throw notFound('Dashboard');
         }
 
-        const widget = await ctx.widgetModel.create(widgetInput);
-        const item = dashboardId
-          ? await ctx.dashboardService.placeWidget(dashboardId, widget.id, { layout })
-          : undefined;
+        const workspaceId = ctx.workspaceId ?? undefined;
+        const data = await ctx.serverDB.transaction(async (tx) => {
+          const txDB = tx as LobeChatDatabase;
+          const widget = await new WidgetModel(txDB, ctx.userId, workspaceId).create(widgetInput);
+          const item = await new DashboardService(txDB, ctx.userId, workspaceId).placeWidget(
+            dashboardId,
+            widget.id,
+            { layout },
+          );
+          // The board vanished after the check: roll the widget back with it.
+          if (!item) throw notFound('Dashboard');
+          return { ...widget, item };
+        });
 
-        return {
-          data: { ...widget, item: item ?? null },
-          message: 'Widget created',
-          success: true,
-        };
+        return { data, message: 'Widget created', success: true };
       } catch (error) {
         fail(error, 'create widget');
       }

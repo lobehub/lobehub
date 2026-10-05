@@ -14,6 +14,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
+import { DashboardModel } from '@/database/models/dashboard';
 import { qstashClient } from '@/libs/qstash';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import widgetWorkflowApp from '@/server/router-hono/workflows/widget';
@@ -681,6 +682,32 @@ describe('widget + dashboard routers integration', () => {
       expect(await db.select().from(widgets).where(eq(widgets.workspaceId, workspaceId))).toEqual(
         [],
       );
+    });
+
+    it('fails and keeps no widget when the board cannot take it after the check', async () => {
+      const { board: ownerBoard, widget: owner } = callers(ownerId, workspaceId);
+      const board = (await ownerBoard.create({ title: 'Team board' }))!.data;
+      const workspaceWidgets = () =>
+        db.select().from(widgets).where(eq(widgets.workspaceId, workspaceId));
+
+      // The board is gone by the time the widget is placed.
+      vi.spyOn(DashboardModel.prototype, 'addItem').mockResolvedValueOnce(undefined);
+      await expect(
+        createWidget(owner, { dashboardId: board.id, title: 'Vanished board' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(await workspaceWidgets()).toEqual([]);
+
+      // The placement insert itself fails.
+      vi.spyOn(DashboardModel.prototype, 'addItem').mockRejectedValueOnce(
+        new Error('FK violation'),
+      );
+      await expect(
+        createWidget(owner, { dashboardId: board.id, title: 'Failed placement' }),
+      ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+      expect(await workspaceWidgets()).toEqual([]);
+
+      const placed = await createWidget(owner, { dashboardId: board.id, title: 'Placed' });
+      expect(placed.item).toMatchObject({ dashboardId: board.id, widgetId: placed.id });
     });
 
     it('rejects malformed ids before they reach the database', async () => {
