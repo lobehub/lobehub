@@ -108,6 +108,32 @@ export class EnvironmentModel {
     return row;
   }
 
+  /**
+   * Enabled lookup by the name a person gave it, scoped to the caller as its
+   * creator — the same `(user, scope, name)` the unique indexes identify an
+   * environment by.
+   *
+   * The caller's own id is spelled out rather than left to the scope filter: in
+   * a workspace that filter admits every member's published rows, and matching
+   * a colleague's same-named environment would hand their definition to a
+   * binding that meant to create its own. The indexes let both exist precisely
+   * because the name belongs to the member, not to the workspace.
+   */
+  async findEnabledByName(name: string) {
+    const [row] = await this.db
+      .select()
+      .from(environments)
+      .where(
+        and(
+          eq(environments.name, name.trim()),
+          eq(environments.userId, this.userId),
+          buildWorkspaceWhere(this.scope(), environments),
+          eq(environments.enabled, true),
+        ),
+      );
+    return row;
+  }
+
   /** Device instances are unique per (device, workingDirectory) — see the schema constraint. */
   async findDeviceInstance(deviceId: string, workingDirectory: string) {
     const [row] = await this.db

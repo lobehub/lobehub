@@ -1,6 +1,7 @@
 import type { VerifyCheckItem } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { VERIFY_PLAN_MODEL_CONFIG } from '../modelConfig';
 import { VerifyPlanGeneratorService } from '../planGenerator';
 
 // Mock the model modules the generator constructs (holistic fallback).
@@ -162,20 +163,40 @@ describe('generateDraftPlan — holistic fallback', () => {
   });
 });
 
-describe('generateCriteria tracing', () => {
-  it('keeps generic task criteria generation on the verify-plan scenario', async () => {
+describe('verify plan generation model', () => {
+  beforeEach(() => {
+    generateObjectMock.mockReset();
+  });
+
+  it('keeps generic task criteria generation on the verify-plan scenario and pinned model', async () => {
     generateObjectMock.mockResolvedValue({ criteria: [] });
 
     await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({
       goal: 'Ship the feature',
-      modelConfig: { model: 'test-model', provider: 'test-provider' },
     });
 
     expect(generateObjectMock).toHaveBeenCalledWith(
-      expect.any(Object),
+      expect.objectContaining(VERIFY_PLAN_MODEL_CONFIG),
       expect.objectContaining({
         tracing: expect.objectContaining({ scenario: 'verify_plan_gen' }),
       }),
+    );
+  });
+
+  it('splits an undecomposed requirement on the pinned model without a caller model', async () => {
+    generateObjectMock.mockResolvedValue({ criteria: [] });
+
+    await new VerifyPlanGeneratorService(db, 'user-1').generateDraftPlan({
+      enableAiGeneration: true,
+      goal: 'Ship the feature',
+      holisticFallback: true,
+      operationId: 'op-1',
+    });
+
+    expect(generateObjectMock).toHaveBeenCalledTimes(1);
+    expect(generateObjectMock).toHaveBeenCalledWith(
+      expect.objectContaining(VERIFY_PLAN_MODEL_CONFIG),
+      expect.any(Object),
     );
   });
 });

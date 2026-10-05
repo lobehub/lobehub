@@ -20,6 +20,10 @@ instructions merely to learn how to submit an artifact.
 The declared `requiredEvidence` type is binding. Do not replace a required video
 with a final screenshot or a required DOM snapshot with prose.
 
+Every `video` you capture carries chapters — your steps, the claims you verified
+on specific frames, and the anomalies you noticed — so the reviewer can seek to
+each one instead of watching the whole clip: [video-chapters.md](./video-chapters.md).
+
 ## Audio deliverables
 
 A sound cannot be verified in prose, and a waveform screenshot proves only that

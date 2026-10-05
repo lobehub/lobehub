@@ -32,6 +32,13 @@ export interface DataState {
   messagesInit: boolean;
 
   /**
+   * While cached rows are on screen and the conversation's first server fetch
+   * is still in flight, the id of the rendered row that shows the "fetching
+   * latest messages" hint (the latest assistant reply's row).
+   */
+  refreshingRowId?: string;
+
+  /**
    * Skip internal message fetching (when external messages are provided)
    */
   skipFetch?: boolean;

@@ -369,6 +369,28 @@ export class GoalService {
         manager: { instruction: managerOptions?.instruction, maxTurns: managerOptions?.maxTurns },
       };
     }
+    // Supervision is a creation invariant, not a creation option: every Goal
+    // recovers its own dropped dispatches, so a caller may tune the incident cap
+    // but never opt out. This is the single choke point — the CLI, the `/goal`
+    // tool, tRPC and REST all land here — so no client can create an
+    // unsupervised Goal. A legacy `enabled: false` is rejected rather than
+    // silently rewritten: the caller asked for the opposite of what it would
+    // get, and hiding that would make the surprise surface later, mid-run.
+    const requestedSupervision = config?.supervision;
+    if (requestedSupervision?.enabled === false)
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Supervision is required for every goal and cannot be disabled',
+      });
+    config = {
+      ...config,
+      supervision: {
+        enabled: true,
+        ...(requestedSupervision?.maxIncidents === undefined
+          ? {}
+          : { maxIncidents: requestedSupervision.maxIncidents }),
+      },
+    };
     // A supplied requirement is the user-reviewed goal document. Criteria live
     // separately; only synthesize a document when the caller omitted one.
     const requirement =
@@ -747,6 +769,11 @@ export class GoalService {
    * against — never the judgment. A reader could see that a task finished and
    * still have no idea whether it held up, which is the gap that made the page
    * feel unverifiable.
+   *
+   * Each level's tally rides along so the page can show its standing without
+   * opening it. That tally is counted from the same check union the level
+   * expands to (so a summary row can never contradict its own list), and it is
+   * one batched read, never one per acceptance — this runs on every graph poll.
    */
   private collectAcceptances = async (
     graph: GoalGraphSnapshot,
@@ -762,11 +789,18 @@ export class GoalService {
       taskNodes.map((node) => node.taskId),
     );
 
+    // An acceptance with no round yet is absent from the tally map, not zero —
+    // keep "no round" and "judged nothing" apart on the page.
+    const tallies = await this.acceptanceService.getCheckTalliesByAcceptances(
+      rows.map((row) => row.id),
+    );
+
     const result: Record<string, GoalNodeAcceptance> = {};
     for (const row of rows) {
       const nodeId = nodeByTaskId.get(row.subjectId);
       if (!nodeId) continue;
-      result[nodeId] = { id: row.id, status: row.status };
+      const checks = tallies.get(row.id);
+      result[nodeId] = { id: row.id, status: row.status, ...(checks ? { checks } : {}) };
     }
     return Object.keys(result).length > 0 ? result : undefined;
   };

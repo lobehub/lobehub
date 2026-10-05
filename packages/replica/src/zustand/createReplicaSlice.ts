@@ -1,0 +1,166 @@
+import { useLayoutEffect } from 'react';
+
+import { createReplicaEngine, type ReplicaEngineOptions } from '../core/engine';
+import { isReplicaSyncKey, replicaKeys } from '../core/keys';
+import type { ReplicaViewWrite } from '../core/reducer';
+import type { ReplicaResource, ReplicaState } from '../core/types';
+import type { ReplicaSyncDriver } from './driver';
+
+/** Zustand `setState`, with the devtools action label. */
+type Setter<TStore> = (partial: Partial<TStore>, replace?: false, action?: any) => void;
+
+/**
+ * Where the materialized value lives in the domain store. Selectors keep
+ * reading this location; the slice is the only writer.
+ */
+export interface ReplicaLens<TStore, TData> {
+  clear: (state: TStore) => Partial<TStore>;
+  get: (state: TStore, key: string) => TData | undefined;
+  /** Enumerate loaded keys (needed for entity propagation). */
+  keys?: (state: TStore) => string[];
+  set: (state: TStore, key: string, data: TData | undefined) => Partial<TStore>;
+}
+
+export interface CreateReplicaSliceOptions<TStore, TParams, TData, TFetched> extends Omit<
+  ReplicaEngineOptions<TParams, TData, TFetched>,
+  'port' | 'revalidate'
+> {
+  /** Query cache that schedules fetches (see `createSWRDriver`). */
+  driver: ReplicaSyncDriver;
+  get: () => TStore;
+  set: Setter<TStore>;
+  /** Store field holding the {@link ReplicaState} bookkeeping slot. */
+  stateKey: keyof TStore & string;
+  /** Where the view lives in the store; `recordLens(field)` covers `Record<key, TData>`. */
+  view: ReplicaLens<TStore, TData>;
+}
+
+export interface ReplicaSyncOptions {
+  enabled?: boolean;
+}
+
+export interface ReplicaSyncResult {
+  error: unknown;
+  /** The persisted row has been read (or there is nothing to read). */
+  isHydrated: boolean;
+  /** A network request is in flight. Never a reason to hide store data. */
+  isValidating: boolean;
+  /** Re-run the network sync for this entry. */
+  revalidate: () => Promise<unknown>;
+}
+
+/**
+ * Bind a replica to a domain Zustand store.
+ *
+ * The domain store stays the only UI source of truth: components read the
+ * `view` location through their usual selectors. The engine owns every
+ * transition of that location; this slice adds the Zustand port and a
+ * `useSync` hook that only orchestrates fetching — data never flows through
+ * its return value.
+ */
+export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
+  resource: ReplicaResource<TParams, TData, TFetched>,
+  {
+    driver,
+    get,
+    set,
+    stateKey,
+    view,
+    ...options
+  }: CreateReplicaSliceOptions<TStore, TParams, TData, TFetched>,
+) => {
+  const applyWrites = (state: TStore, writes: ReplicaViewWrite<TData>[]) => {
+    let patch: Partial<TStore> = {};
+    let current = state;
+    for (const write of writes) {
+      const next = 'type' in write ? view.clear(current) : view.set(current, write.key, write.data);
+      patch = { ...patch, ...next };
+      current = { ...current, ...next };
+    }
+    return patch;
+  };
+
+  const revalidate = (key?: string) =>
+    driver.revalidate((queryKey) =>
+      isReplicaSyncKey(queryKey, resource.name, { key, scope: resource.scope.get() }),
+    );
+
+  const engine = createReplicaEngine(resource, {
+    ...options,
+    port: {
+      commit: (writes, state, label) =>
+        set({ ...applyWrites(get(), writes), [stateKey]: state } as Partial<TStore>, false, label),
+      getState: () => get()[stateKey] as unknown as ReplicaState<TData>,
+      keys: view.keys && (() => view.keys!(get())),
+      read: (key) => view.get(get(), key),
+    },
+    revalidate,
+  });
+  const { ensureScope, fetcher, hydrate, replace } = engine;
+
+  /**
+   * Hydrates the persisted row once per scope/key/query, then lets the driver
+   * fetch and revalidate the head. Read the data from the store.
+   */
+  const useSync = (
+    params: TParams | null | undefined,
+    { enabled = true }: ReplicaSyncOptions = {},
+  ): ReplicaSyncResult => {
+    const scope = resource.scope.use();
+    const key = params ? resource.key(params) : undefined;
+    const active = enabled && !!params && key !== undefined;
+
+    // Layout effect: runs before paint, so a scope switch never shows a frame
+    // of the previous identity's data.
+    useLayoutEffect(() => {
+      if (active) ensureScope(scope);
+    }, [active, scope]);
+
+    const hydration = driver.useQuery<boolean>(
+      active && resource.persisted
+        ? replicaKeys.hydrate(resource.name, resource.version, scope, resource.storageKey(params!))
+        : null,
+      async () => {
+        await hydrate(params!, scope);
+        return true;
+      },
+      { once: true },
+    );
+
+    const sync = driver.useQuery<TFetched>(
+      active && fetcher
+        ? replicaKeys.sync(resource.name, resource.version, scope, key!, params)
+        : null,
+      () => fetcher!(params!, undefined),
+      { onSuccess: (data) => replace(params!, data, scope) },
+    );
+
+    return {
+      error: sync.error,
+      isHydrated: !resource.persisted || hydration.data === true,
+      isValidating: sync.isValidating,
+      revalidate: () => sync.mutate(),
+    };
+  };
+
+  return { ...engine, useSync };
+};
+
+export type ReplicaSlice<TStore, TParams, TData, TFetched = TData> = ReturnType<
+  typeof createReplicaSlice<TStore, TParams, TData, TFetched>
+>;
+
+/** Lens for the common case: a `Record<key, TData>` field on the store. */
+export const recordLens = <TStore, TData>(
+  field: keyof TStore & string,
+): ReplicaLens<TStore, TData> => ({
+  clear: () => ({ [field]: {} }) as Partial<TStore>,
+  get: (state, key) => (state[field] as Record<string, TData> | undefined)?.[key],
+  keys: (state) => Object.keys((state[field] as Record<string, TData> | undefined) ?? {}),
+  set: (state, key, data) => {
+    const next = { ...(state[field] as Record<string, TData> | undefined) };
+    if (data === undefined) delete next[key];
+    else next[key] = data;
+    return { [field]: next } as Partial<TStore>;
+  },
+});

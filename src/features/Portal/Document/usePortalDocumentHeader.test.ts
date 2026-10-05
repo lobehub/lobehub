@@ -90,6 +90,9 @@ vi.mock('@/hooks/useAppOrigin', () => ({
   useAppOrigin: () => 'https://app.lobehub.com',
 }));
 
+/** Title the SWR cache holds after the most recent optimistic write/rollback. */
+const lastCachedTitle = () => mockMutate.mock.lastCall?.[0]({ title: '' }).title;
+
 describe('usePortalDocumentTitle', () => {
   beforeEach(() => {
     mockDocumentMeta.current = { filename: '开营筹备清单.md', title: '开营筹备清单' };
@@ -100,7 +103,7 @@ describe('usePortalDocumentTitle', () => {
     toastError.mockClear();
   });
 
-  it('exposes the saved title (title before filename) and unlocks editing', () => {
+  it('exposes the saved title (title before filename) and unlocks renaming', () => {
     const { result } = renderHook(() => usePortalDocumentTitle());
 
     expect(result.current.savedTitle).toBe('开营筹备清单');
@@ -108,34 +111,43 @@ describe('usePortalDocumentTitle', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
-  it('commits a renamed title through the document service', async () => {
+  it('saves a trimmed title through the document service', async () => {
     const { result } = renderHook(() => usePortalDocumentTitle());
 
-    act(() => result.current.startEdit());
-    act(() => result.current.setDraft('开营筹备清单 V2'));
     await act(async () => {
-      await result.current.commitEdit();
+      await result.current.saveTitle('  开营筹备清单 V2  ');
     });
 
     expect(mockUpdateDocument).toHaveBeenCalledWith({
       id: 'document-1',
       title: '开营筹备清单 V2',
     });
-    expect(result.current.editing).toBe(false);
+    expect(lastCachedTitle()).toBe('开营筹备清单 V2');
+  });
+
+  it('skips the write for an empty or unchanged title', async () => {
+    const { result } = renderHook(() => usePortalDocumentTitle());
+
+    await act(async () => {
+      await result.current.saveTitle('   ');
+      await result.current.saveTitle('开营筹备清单');
+    });
+
+    expect(mockUpdateDocument).not.toHaveBeenCalled();
+    expect(mockMutate).not.toHaveBeenCalled();
   });
 
   it('rolls the optimistic title back when the write fails', async () => {
     mockUpdateDocument.mockRejectedValueOnce(new Error('network'));
     const { result } = renderHook(() => usePortalDocumentTitle());
 
-    act(() => result.current.startEdit());
-    act(() => result.current.setDraft('开营筹备清单 V2'));
+    // Rejects after rolling back, so the rename dialog stays open for a retry.
     await act(async () => {
-      await result.current.commitEdit();
+      await expect(result.current.saveTitle('开营筹备清单 V2')).rejects.toThrow('network');
     });
 
     expect(toastError).toHaveBeenCalled();
-    expect(result.current.draft).toBe('开营筹备清单');
+    expect(lastCachedTitle()).toBe('开营筹备清单');
   });
 
   it('serializes overlapping saves: a stale rejected rename cannot roll back a newer one', async () => {
@@ -150,16 +162,10 @@ describe('usePortalDocumentTitle', () => {
       .mockResolvedValueOnce(undefined);
     const { result } = renderHook(() => usePortalDocumentTitle());
 
-    // First (slow) rename — its promise never resolves until the stale reject
-    // below, so fire it without awaiting.
-    act(() => result.current.startEdit());
-    act(() => result.current.setDraft('重命名一'));
-    void result.current.commitEdit();
-
-    // A newer rename lands first (fast server response).
-    act(() => result.current.startEdit());
-    act(() => result.current.setDraft('重命名二'));
-    const secondCommit = result.current.commitEdit();
+    // First (slow) rename — fire it without awaiting.
+    void result.current.saveTitle('重命名一');
+    // A newer rename is submitted while the first is in flight.
+    const secondSave = result.current.saveTitle('重命名二');
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -170,17 +176,18 @@ describe('usePortalDocumentTitle', () => {
     expect(mockUpdateDocument).toHaveBeenCalledTimes(1);
     expect(mockUpdateDocument).toHaveBeenCalledWith({ id: 'document-1', title: '重命名一' });
 
-    // The older request now REJECTS — it must not touch draft or cache,
-    // because a newer save already claimed the latest ticket.
+    // The older request now REJECTS — it must not touch the cache, because a
+    // newer save already claimed the latest ticket.
     await act(async () => {
       rejectFirst(new Error('late failure'));
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
     await act(async () => {
-      await secondCommit;
+      await secondSave;
     });
 
-    expect(result.current.draft).toBe('重命名二');
+    expect(mockUpdateDocument).toHaveBeenLastCalledWith({ id: 'document-1', title: '重命名二' });
+    expect(lastCachedTitle()).toBe('重命名二');
     expect(toastError).not.toHaveBeenCalled();
   });
 
@@ -196,15 +203,8 @@ describe('usePortalDocumentTitle', () => {
       .mockResolvedValueOnce(undefined);
     const { result } = renderHook(() => usePortalDocumentTitle());
 
-    // First rename — held in flight by the server mock.
-    act(() => result.current.startEdit());
-    act(() => result.current.setDraft('重命名一'));
-    void result.current.commitEdit();
-
-    // Second rename submitted while the first is pending.
-    act(() => result.current.startEdit());
-    act(() => result.current.setDraft('重命名二'));
-    const secondCommit = result.current.commitEdit();
+    void result.current.saveTitle('重命名一');
+    const secondSave = result.current.saveTitle('重命名二');
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -215,22 +215,19 @@ describe('usePortalDocumentTitle', () => {
 
     await act(async () => {
       releaseFirst(undefined);
-      await secondCommit;
+      await secondSave;
     });
 
     // The second write fires only after the first settles, in submit order.
     expect(mockUpdateDocument).toHaveBeenCalledTimes(2);
     expect(mockUpdateDocument).toHaveBeenLastCalledWith({ id: 'document-1', title: '重命名二' });
-    expect(result.current.draft).toBe('重命名二');
   });
 
   it('revalidates the agent-document list after a successful rename', async () => {
     const { result } = renderHook(() => usePortalDocumentTitle());
 
-    act(() => result.current.startEdit());
-    act(() => result.current.setDraft('开营筹备清单 V2'));
     await act(async () => {
-      await result.current.commitEdit();
+      await result.current.saveTitle('开营筹备清单 V2');
     });
 
     expect(mockInvalidate).toHaveBeenCalledWith(
@@ -238,69 +235,7 @@ describe('usePortalDocumentTitle', () => {
     );
   });
 
-  it('does not persist a cancelled title when Escape triggers the blur commit', async () => {
-    const { result } = renderHook(() => usePortalDocumentTitle());
-
-    act(() => result.current.startEdit());
-    act(() => result.current.setDraft('被取消的名字'));
-
-    // Escape path: cancelEdit runs first, then the input blur fires
-    // `commitEdit` synchronously with the still-edited draft.
-    act(() => result.current.cancelEdit());
-    await act(async () => {
-      await result.current.commitEdit();
-    });
-
-    expect(mockUpdateDocument).not.toHaveBeenCalled();
-    expect(result.current.draft).toBe('开营筹备清单');
-    expect(result.current.editing).toBe(false);
-  });
-
-  it('re-arms the cancel flag so the next real commit still writes', async () => {
-    const { result } = renderHook(() => usePortalDocumentTitle());
-
-    // Cancel one edit...
-    act(() => result.current.startEdit());
-    act(() => result.current.setDraft('被取消的名字'));
-    act(() => result.current.cancelEdit());
-    await act(async () => {
-      await result.current.commitEdit();
-    });
-    expect(mockUpdateDocument).not.toHaveBeenCalled();
-
-    // ...then commit a fresh rename normally.
-    act(() => result.current.startEdit());
-    act(() => result.current.setDraft('开营筹备清单 V2'));
-    await act(async () => {
-      await result.current.commitEdit();
-    });
-
-    expect(mockUpdateDocument).toHaveBeenCalledWith({
-      id: 'document-1',
-      title: '开营筹备清单 V2',
-    });
-  });
-
-  it('clears a dangling cancel when a new edit session starts', async () => {
-    const { result } = renderHook(() => usePortalDocumentTitle());
-
-    // Cancel without the follow-up blur commit (e.g. input unmounted first).
-    act(() => result.current.startEdit());
-    act(() => result.current.cancelEdit());
-
-    act(() => result.current.startEdit());
-    act(() => result.current.setDraft('开营筹备清单 V2'));
-    await act(async () => {
-      await result.current.commitEdit();
-    });
-
-    expect(mockUpdateDocument).toHaveBeenCalledWith({
-      id: 'document-1',
-      title: '开营筹备清单 V2',
-    });
-  });
-
-  it('locks meta for a managed skill index (rename must not rewrite SKILL.md)', () => {
+  it('locks meta for a managed skill index (rename must not rewrite SKILL.md)', async () => {
     mockDocumentMeta.current = {
       content: '---\nname: my-skill\n---\nbody',
       fileType: 'skills/index',
@@ -311,20 +246,19 @@ describe('usePortalDocumentTitle', () => {
     const { result } = renderHook(() => usePortalDocumentTitle());
 
     expect(result.current.metaLocked).toBe(true);
-    act(() => result.current.startEdit());
-    expect(result.current.editing).toBe(false);
+    await act(async () => {
+      await result.current.saveTitle('renamed');
+    });
     expect(mockUpdateDocument).not.toHaveBeenCalled();
   });
 
-  it('exposes the editor (not loading) for a loaded empty-title document', () => {
+  it('is not loading for a loaded empty-title document', () => {
     mockDocumentMeta.current = { filename: '', title: '' };
 
     const { result } = renderHook(() => usePortalDocumentTitle());
 
     expect(result.current.isLoading).toBe(false);
     expect(result.current.savedTitle).toBe('');
-    act(() => result.current.startEdit());
-    expect(result.current.editing).toBe(true);
   });
 });
 

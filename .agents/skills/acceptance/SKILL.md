@@ -2,7 +2,7 @@
 name: acceptance
 license: Apache-2.0
 metadata:
-  version: "0.6.1"
+  version: "0.7.0"
 description: >
   End-to-end verification and self-evidence for a delivery in any repository,
   with or without a preconfigured verify plan. Discover an existing plan when
@@ -473,6 +473,10 @@ simctl io` over host-window capture. Rounds land under `.acceptances/`, which
 - **Upload as you go.** Evidence keyed to its check mid-run survives a crash near
   the end.
 - **Don't invent evidence.** Capture only the types a check declares.
+- **Chapter every recording.** Log a mark for each step and each claim you
+  verify on a frame, and disclose every anomaly you noticed as a `flag`; the
+  reviewer seeks to them instead of watching the whole clip —
+  [video-chapters.md](references/video-chapters.md).
 
 ## Reference map
 
@@ -494,4 +498,5 @@ For both acceptance-checker handoffs and review output, read
 | Bundled CDP screenshot and macOS capture preflight | [screenshot-helpers.md](references/screenshot-helpers.md) |
 | Authenticated Web session                      | [auth-web.md](references/auth-web.md)                                                                                                                                                   |
 | Native macOS / OS-owned step                   | [computer-use.md](references/computer-use.md)                                                                                                                                           |
+| Video chapters: steps, checks, flags on a clip | [video-chapters.md](references/video-chapters.md)                                                                                                                                                                                  |
 | Temporal evidence: Web/Electron, iOS, native   | [recording-cdp.md](references/recording-cdp.md), [recording-ios-simulator.md](references/recording-ios-simulator.md), [recording-native-macos.md](references/recording-native-macos.md) |

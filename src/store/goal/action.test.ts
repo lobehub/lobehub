@@ -18,7 +18,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useGoalStore.setState({
     goalListByAgentId: {},
-    goalListFilter: 'active',
+    goalListFilter: 'all',
     goalListInitializedAgentIds: [],
     goalListVisibleLimit: 10,
     goalViewMode: 'list',

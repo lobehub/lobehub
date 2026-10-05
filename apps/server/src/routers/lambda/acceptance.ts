@@ -429,6 +429,12 @@ export const acceptanceRouter = router({
   ensure: acceptanceWriteProcedure
     .input(
       z.object({
+        /**
+         * Set by report ingest when the topic came from the ambient
+         * `LOBEHUB_TOPIC_ID`: a Task's run topic then lands on the Task. An
+         * explicitly requested subject is always kept exact.
+         */
+        foldTaskRunTopic: z.boolean().optional(),
         requirement: z.string().max(2000).optional(),
         subjectId: z.string(),
         subjectType: subjectTypeSchema,
@@ -436,11 +442,19 @@ export const acceptanceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const defaults = { requirement: input.requirement, title: input.title };
       try {
-        return await ctx.acceptanceService.ensureForSubject(input.subjectType, input.subjectId, {
-          requirement: input.requirement,
-          title: input.title,
-        });
+        return input.foldTaskRunTopic
+          ? await ctx.acceptanceService.ensureForIngest(
+              input.subjectType,
+              input.subjectId,
+              defaults,
+            )
+          : await ctx.acceptanceService.ensureForSubject(
+              input.subjectType,
+              input.subjectId,
+              defaults,
+            );
       } catch (error) {
         throw new TRPCError({
           code: 'NOT_FOUND',

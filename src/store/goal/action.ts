@@ -1,4 +1,4 @@
-import { type GoalStatus, goalStatuses } from '@lobechat/const/goal';
+import type { GoalStatus } from '@lobechat/const/goal';
 import type { GoalMetricCriterion, GoalTickResult } from '@lobechat/types';
 
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
@@ -7,9 +7,19 @@ import { goalService } from '@/services/goal';
 import { metricService } from '@/services/metric';
 import type { StoreSetter } from '@/store/types';
 
+import { goalStatusesForFilter } from './goalListFilter';
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
 
-const GOAL_STATUSES: GoalStatus[] = [...goalStatuses];
+/** The list page's tabs, in render order. `refreshGoals` revalidates every one. */
+const GOAL_LIST_FILTERS: GoalListFilter[] = ['all', 'review', 'running', 'achieved'];
+
+/**
+ * Cache scope of one tab's list. `all` keeps the scope's own entry — it is the
+ * page-level window the project dashboard and the overview metrics read — while
+ * a narrow tab gets its own entry, so each tab caches its own server answer.
+ */
+const goalListCacheScope = (scopeId: string, filter: GoalListFilter): string =>
+  filter === 'all' ? `${scopeId}:goals-page` : `${scopeId}:goals-page:${filter}`;
 
 /**
  * The home roll-up only ever renders goals that are still open, so it asks for
@@ -298,7 +308,11 @@ export class GoalActionImpl {
   };
 
   refreshGoals = async (scopeId: string): Promise<void> => {
-    await mutate(taskKeys.sidebarGroups(`${scopeId}:goals-page`));
+    await Promise.all(
+      GOAL_LIST_FILTERS.map((filter) =>
+        mutate(taskKeys.sidebarGroups(goalListCacheScope(scopeId, filter))),
+      ),
+    );
   };
 
   refreshHomeGoals = async (scope: string): Promise<void> => {
@@ -314,25 +328,37 @@ export class GoalActionImpl {
   };
 
   /**
-   * The goal list page's read. The sync wrapper matters here: this list is
-   * persisted in the `task:` IndexedDB tier, and a cache hit never fires
-   * `onSuccess` — without `onData` the store would stay uninitialized on a
-   * revisit and the page would flash its empty state over hydrated data.
+   * The goal list page's read, one entry per tab.
+   *
+   * A narrow tab asks the server for its own statuses rather than filtering the
+   * `all` page on the client: the read only loads the newest `limit` goals, so a
+   * client-side filter would let a busy agent's older matching goal fall past
+   * the page and the tab would report itself empty while the goal exists.
+   *
+   * The sync wrapper matters here: this list is persisted in the `task:`
+   * IndexedDB tier, and a cache hit never fires `onSuccess` — without `onData`
+   * the store would stay uninitialized on a revisit and the page would flash its
+   * empty state over hydrated data.
    */
-  useFetchGoals = (agentId?: string, projectId?: string) => {
+  useFetchGoals = (agentId?: string, projectId?: string, filter: GoalListFilter = 'all') => {
     const scopeId = projectId ? `project:${projectId}` : agentId;
 
     return useClientDataSWRWithSync(
-      scopeId ? taskKeys.sidebarGroups(`${scopeId}:goals-page`) : null,
+      scopeId ? taskKeys.sidebarGroups(goalListCacheScope(scopeId, filter)) : null,
       () =>
         goalService.list({
           agentId,
           limit: 100,
           projectId,
-          statuses: GOAL_STATUSES,
+          statuses: goalStatusesForFilter(filter),
         }),
       {
         onData: ({ goals }) => {
+          // Only `all` feeds the shared slice: it is the page-level window the
+          // project dashboard reads, and a filtered list stored under the plain
+          // scope would make that reader render a subset as if it were the list.
+          if (filter !== 'all') return;
+
           this.#set(
             ({ goalListByAgentId, goalListInitializedAgentIds }) => ({
               goalListByAgentId: {

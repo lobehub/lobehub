@@ -183,7 +183,6 @@ export const messagesReducer = (
 
       return produce(state, (draft) => {
         draft[index].plugin = merge(draft[index].plugin, value);
-        if (value.error !== undefined) draft[index].pluginError = value.error;
         draft[index].updatedAt = Date.now();
       });
     }

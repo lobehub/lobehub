@@ -2,7 +2,13 @@ import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { copyToClipboard, type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Text, toast } from '@lobehub/ui/base-ui';
-import { CopyIcon, ExternalLink, MoreHorizontal, PanelRightCloseIcon } from 'lucide-react';
+import {
+  CopyIcon,
+  ExternalLink,
+  MessagesSquareIcon,
+  MoreHorizontal,
+  PanelRightCloseIcon,
+} from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,6 +26,8 @@ interface GoalSupervisionProps {
   agentId: string;
   goalId: string;
   onCollapse: () => void;
+  /** Hand the panel back to the agent's editable side conversation. */
+  onOpenChat?: () => void;
   topicId: string;
 }
 
@@ -41,7 +49,13 @@ const WaitingForFirstRun = memo(() => {
 WaitingForFirstRun.displayName = 'GoalSupervisionWaiting';
 
 /** The manager's ongoing record is inspectable without sending or editing messages. */
-export const GoalSupervision = ({ agentId, goalId, onCollapse, topicId }: GoalSupervisionProps) => {
+export const GoalSupervision = ({
+  agentId,
+  goalId,
+  onCollapse,
+  onOpenChat,
+  topicId,
+}: GoalSupervisionProps) => {
   const { t } = useTranslation('chat');
   const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
   useFetchAgentConfig(true, agentId);
@@ -60,6 +74,19 @@ export const GoalSupervision = ({ agentId, goalId, onCollapse, topicId }: GoalSu
   // referencing it elsewhere (`lh topic view`, a bug report), like a task run's.
   const menuItems = useMemo<DropdownItem[]>(
     () => [
+      // The record is read-only and the avatar is the panel's only entry, so the
+      // way back to an editable conversation has to live here — otherwise a goal
+      // with a record would have no route to asking its agent anything.
+      ...(onOpenChat
+        ? [
+            {
+              icon: MessagesSquareIcon,
+              key: 'openChat',
+              label: t('goalChat.title'),
+              onClick: onOpenChat,
+            },
+          ]
+        : []),
       {
         icon: ExternalLink,
         key: 'openAgentTopic',
@@ -76,7 +103,7 @@ export const GoalSupervision = ({ agentId, goalId, onCollapse, topicId }: GoalSu
         },
       },
     ],
-    [agentId, navigate, t, topicId],
+    [agentId, navigate, onOpenChat, t, topicId],
   );
 
   return (

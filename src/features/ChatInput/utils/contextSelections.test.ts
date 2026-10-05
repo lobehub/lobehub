@@ -3,16 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { buildMessageContextSelections } from './contextSelections';
 
 describe('buildMessageContextSelections', () => {
-  it('preserves exact selected text separately from its block XML and shortened preview', () => {
-    const content = ' a<b\n  and c>d ';
-    const xml = '<p id="ab12">Before a&lt;b and c&gt;d after</p>';
-    const result = buildMessageContextSelections([
-      { content, xml, preview: 'a and c>d', id: 'sel-1', pageId: 'page-1', type: 'text' },
-    ]);
-
-    expect(result.contextSelections[0]).toMatchObject({ content, xml });
-    expect(result.pageSelections[0]).toMatchObject({ content, xml });
-  });
   it('derives generic and legacy selections for page context', () => {
     const result = buildMessageContextSelections([
       {

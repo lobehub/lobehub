@@ -159,7 +159,6 @@ export interface GenerateDraftPlanInput {
   enableAiGeneration?: boolean;
   goal: string;
   maxAiCriteria?: number;
-  modelConfig?: { model: string; provider: string };
   operationId: string;
   verifyCriteriaIds?: string[];
   verifyRubricId?: string | null;
@@ -442,7 +441,6 @@ export class VerifyService {
     context?: string;
     goal: string;
     maxCriteria?: number;
-    modelConfig: { model: string; provider: string };
   }): Promise<VerifyCriterionDraft[]> =>
     lambdaClient.verify.generateCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
 

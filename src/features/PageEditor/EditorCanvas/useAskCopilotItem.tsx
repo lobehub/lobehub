@@ -1,7 +1,6 @@
 'use client';
 
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
-import { getSelectedBlocksLiteXML } from '@lobechat/editor-runtime';
 import { nanoid } from '@lobechat/utils';
 import { type IEditor } from '@lobehub/editor';
 import { HIDE_TOOLBAR_COMMAND } from '@lobehub/editor';
@@ -60,12 +59,9 @@ export const useAskCopilotItem = (
             paddingInline={12}
             variant="borderless"
             onClick={() => {
-              const xml =
-                getSelectedBlocksLiteXML(editor) ||
-                (editor.getSelectionDocument?.('litexml') as string) ||
-                '';
+              const xml = (editor.getSelectionDocument?.('litexml') as string) || '';
               const plainText = (editor.getSelectionDocument?.('text') as string) || '';
-              const content = plainText || xml;
+              const content = xml.trim() || plainText.trim();
 
               if (!content) return;
 
@@ -87,7 +83,6 @@ export const useAskCopilotItem = (
                   preview,
                   title: 'Selection',
                   type: 'text',
-                  xml,
                 },
               });
 

@@ -313,6 +313,17 @@ describe('connect command', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it('stops when another connect process takes over the connection', async () => {
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect']);
+
+    clientEventHandlers['replaced']?.();
+
+    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('took over'));
+    expect(cleanupAllProcesses).toHaveBeenCalled();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
   it('should retry auth_failed with token refresh when new token available', async () => {
     const program = createProgram();
     await program.parseAsync(['node', 'test', 'connect']);

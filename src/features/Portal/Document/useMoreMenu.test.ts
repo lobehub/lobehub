@@ -11,9 +11,10 @@ const mocks = vi.hoisted(() => ({
   documentId: 'doc_1' as string | undefined,
   isLoading: false,
   metaLocked: false,
+  openRenameModal: vi.fn(),
   refresh: vi.fn(),
   removeDocument: vi.fn(),
-  startEdit: vi.fn(),
+  saveTitle: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
   url: 'https://app.lobehub.com/agent/agt_1/docs/doc_1' as string | undefined,
@@ -22,6 +23,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: mocks.confirmModal,
   toast: { error: mocks.toastError, success: mocks.toastSuccess },
+}));
+
+vi.mock('@/components/RenameModal', () => ({
+  openRenameModal: mocks.openRenameModal,
 }));
 
 vi.mock('@/services/agentDocument', () => ({
@@ -37,11 +42,13 @@ vi.mock('./titleContext', () => ({
   usePortalDocumentTitleState: () => ({
     isLoading: mocks.isLoading,
     metaLocked: mocks.metaLocked,
-    startEdit: mocks.startEdit,
+    savedTitle: 'Spring Trail Collection — Launch Brief',
+    saveTitle: mocks.saveTitle,
   }),
 }));
 
 vi.mock('./usePortalDocumentHeader', () => ({
+  TITLE_MAX_LENGTH: 100,
   usePortalDocumentHeaderActions: () => ({
     agentDocumentId: mocks.agentDocumentId,
     agentId: mocks.agentId,
@@ -71,6 +78,22 @@ describe('useDocumentMoreMenu', () => {
     expect(result.current?.rename).toBeTypeOf('function');
     expect(result.current?.refresh).toBeTypeOf('function');
     expect(result.current?.delete).toBeTypeOf('function');
+  });
+
+  it('renames through a dialog seeded with the saved title', async () => {
+    const { result } = renderHook(() => useDocumentMoreMenu());
+    result.current!.rename!();
+
+    expect(mocks.openRenameModal).toHaveBeenCalledOnce();
+    const options = mocks.openRenameModal.mock.calls[0][0];
+    expect(options).toMatchObject({
+      defaultValue: 'Spring Trail Collection — Launch Brief',
+      maxLength: 100,
+    });
+
+    // Saving goes through the shared serialized title write.
+    await options.onSave('Spring Trail Brief');
+    expect(mocks.saveTitle).toHaveBeenCalledWith('Spring Trail Brief');
   });
 
   it('opens a danger confirmation before removing the document', () => {

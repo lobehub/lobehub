@@ -259,7 +259,8 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 horizontal
                 align="center"
                 gap={6}
-                paddingBlock={4}
+                height={24}
+                paddingBlock={3}
                 paddingInline={8}
                 variant={'borderless'}
               >
@@ -285,7 +286,8 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                   horizontal
                   align="center"
                   gap={6}
-                  paddingBlock={4}
+                  height={24}
+                  paddingBlock={3}
                   paddingInline={8}
                   variant={'borderless'}
                 >
@@ -311,7 +313,8 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 horizontal
                 align="center"
                 gap={6}
-                paddingBlock={4}
+                height={24}
+                paddingBlock={3}
                 paddingInline={8}
                 variant={'borderless'}
               >
@@ -329,7 +332,8 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                   horizontal
                   align="center"
                   gap={6}
-                  paddingBlock={4}
+                  height={24}
+                  paddingBlock={3}
                   paddingInline={8}
                   variant={'borderless'}
                 >
@@ -367,7 +371,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 }
                 onChange={setVisibility}
               >
-                <TaskVisibilityChipLabel visibility={visibility} />
+                <TaskVisibilityChipLabel height={24} paddingBlock={3} visibility={visibility} />
               </TaskVisibilityTag>
             )}
 
@@ -380,6 +384,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
             <ActionIcon
               icon={Paperclip}
+              size={'small'}
               title={t('upload.action.tooltip')}
               onClick={handleAttach}
             />

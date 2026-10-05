@@ -73,7 +73,16 @@ export class ProjectDirectoryRepository {
       const existing = await environmentModel.findDeviceInstance(device.id, path);
       let instance = existing;
       let environment;
-      const environmentId = existing?.environmentId ?? input.environmentId;
+      // An environment is the definition; an instance is one materialization of
+      // it. So the same project bound on a second device reuses the definition
+      // the first binding made and adds its own instance, rather than minting a
+      // second environment under the same name — which is both what the
+      // (user, scope, name) unique indexes require and what the two concepts
+      // already meant.
+      const environmentId =
+        existing?.environmentId ??
+        input.environmentId ??
+        (await environmentModel.findEnabledByName(input.name))?.id;
       if (environmentId) {
         environment = await environmentModel.findEnabledById(environmentId);
         if (!environment || (input.environmentId && input.environmentId !== environment.id))

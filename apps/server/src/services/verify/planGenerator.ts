@@ -20,6 +20,7 @@ import type { VerifyCriterionItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
+import { VERIFY_PLAN_MODEL_CONFIG } from './modelConfig';
 import { RawGeneratedCriteriaSchema } from './schema';
 
 const log = debug('lobe-server:verify-plan-generator');
@@ -40,8 +41,6 @@ export interface GeneratePlanParams {
    */
   holisticFallback?: boolean;
   maxAiCriteria?: number;
-  /** Required only when `enableAiGeneration` is true. */
-  modelConfig?: { model: string; provider: string };
   operationId: string;
   /** One-sentence acceptance the holistic check verifies against (falls back to `goal`). */
   requirement?: string;
@@ -172,7 +171,6 @@ export class VerifyPlanGeneratorService {
     context?: string;
     goal: string;
     maxCriteria?: number;
-    modelConfig: { model: string; provider: string };
   }): Promise<CriterionDraft[]> {
     const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_AI_CRITERIA;
     const raw = await new AiGenerationService(this.db, this.userId).generateObject(
@@ -182,7 +180,7 @@ export class VerifyPlanGeneratorService {
           goal: params.goal,
           maxCriteria,
         }),
-        ...params.modelConfig,
+        ...VERIFY_PLAN_MODEL_CONFIG,
         schema: GENERATED_CRITERIA_JSON_SCHEMA,
         thinking: { type: 'disabled' },
       },
@@ -285,14 +283,13 @@ export class VerifyPlanGeneratorService {
     }
 
     // 3. AI-generate complementary criteria (the "auto-create verify" path).
-    if (params.enableAiGeneration && params.modelConfig) {
+    if (params.enableAiGeneration) {
       try {
         const generated = await this.generateCriteriaWithAi({
           context: params.context,
           existingTitles: items.map((i) => i.title),
           goal: params.goal,
           maxCriteria: params.maxAiCriteria ?? DEFAULT_MAX_AI_CRITERIA,
-          modelConfig: params.modelConfig,
           operationId: params.operationId,
         });
         for (const item of generated) {
@@ -324,7 +321,6 @@ export class VerifyPlanGeneratorService {
     existingTitles: string[];
     goal: string;
     maxCriteria: number;
-    modelConfig: { model: string; provider: string };
     operationId: string;
   }): Promise<VerifyCheckItem[]> {
     const chain = chainVerifyPlan({
@@ -338,8 +334,7 @@ export class VerifyPlanGeneratorService {
     const raw = await ai.generateObject(
       {
         ...chain,
-        model: params.modelConfig.model,
-        provider: params.modelConfig.provider,
+        ...VERIFY_PLAN_MODEL_CONFIG,
         schema: GENERATED_CRITERIA_JSON_SCHEMA,
         thinking: { type: 'disabled' },
       },

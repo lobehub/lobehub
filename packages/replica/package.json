@@ -1,0 +1,39 @@
+{
+  "name": "@lobechat/replica",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Local-first replicas: paint the last known state on the first frame, reconcile with the server in the background",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./zustand": {
+      "types": "./src/zustand/index.ts",
+      "default": "./src/zustand/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
+  "dependencies": {
+    "fast-deep-equal": "^3.1.3"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "swr": "^2.5.0",
+    "zustand": "5.0.4"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "zustand": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "zustand": {
+      "optional": true
+    }
+  }
+}

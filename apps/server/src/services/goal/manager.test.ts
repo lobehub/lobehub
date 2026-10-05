@@ -108,6 +108,15 @@ async function start(maxTurns = 4) {
     createdByAgentId: agentId,
     config: { manager: { maxTurns } },
   });
+  // A manager-mode Goal predates the mandatory-supervision invariant, and the
+  // server now writes supervision onto every Goal it creates. Clear it so this
+  // file keeps covering the manager's own recovery path: with supervision on, an
+  // eligible transport failure is handled by the supervisor instead (see the
+  // `failure_decision` ordering in GoalService).
+  await db
+    .update(goals)
+    .set({ config: { manager: { maxTurns } } })
+    .where(eq(goals.id, graph.goal.id));
   expect((await service().tick(graph.goal.id)).outcome).toBe('waiting_external');
   const state = (await model().findById(graph.goal.id))!.config!.managerState!;
   const op = await ops().findByTopicSourceMessage(state.topicId, `msg_goal_manager_${state.token}`);

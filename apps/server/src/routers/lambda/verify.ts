@@ -515,7 +515,6 @@ export const verifyRouter = router({
         enableAiGeneration: z.boolean().optional(),
         goal: z.string(),
         maxAiCriteria: z.number().optional(),
-        modelConfig: modelConfigSchema.optional(),
         operationId: z.string(),
         verifyCriteriaIds: z.array(z.string()).optional(),
         verifyRubricId: z.string().nullish(),
@@ -540,7 +539,6 @@ export const verifyRouter = router({
         context: z.string().optional(),
         goal: z.string().min(1),
         maxCriteria: z.number().int().min(1).max(8).optional(),
-        modelConfig: modelConfigSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {

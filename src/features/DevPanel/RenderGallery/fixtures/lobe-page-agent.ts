@@ -10,10 +10,6 @@ export default defineFixtures({
   },
   apiList: [
     {
-      description: 'Run a shell command against the current page.',
-      name: 'bash',
-    },
-    {
       description: 'Initialize a new document with markdown content.',
       name: 'initPage',
     },
@@ -35,15 +31,6 @@ export default defineFixtures({
     },
   ],
   fixtures: {
-    bash: single({
-      args: { command: "sed -i 's/Draft/Final/' /doc.xml" },
-      content: "/doc.xml: 1 modified, 0 inserted, 0 removed; changes await the user's review.",
-      pluginState: {
-        changed: true,
-        exitCode: 0,
-        success: true,
-      },
-    }),
     initPage: single({
       args: {
         markdown:

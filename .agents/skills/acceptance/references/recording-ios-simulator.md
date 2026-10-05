@@ -14,6 +14,8 @@ UDID when more than one device is booted.
 xcrun simctl io "$UDID" recordVideo --codec=h264 ./proof/ios-flow.mp4 \
   2> ./proof/ios-recording.log
 
+# Log `mark step "Recording started"` at that moment: it is the zero point
+# for the video's chapters (video-chapters.md). Mark each step and check as you go.
 # Drive the scenario with the selected driver (sim-use, AXe, or the repository's
 # native CLI/UI tests) in parallel. Stop the recorder with SIGINT (Ctrl-C), then wait for finalization.
 ```

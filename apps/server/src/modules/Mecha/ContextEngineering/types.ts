@@ -20,7 +20,7 @@ import type {
   UserMemoryData,
   WorkspaceContext,
 } from '@lobechat/context-engine';
-import type { AgentIdentityContext } from '@lobechat/prompts';
+import type { AgentIdentityContext, PageContentContext } from '@lobechat/prompts';
 import type {
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
@@ -166,6 +166,9 @@ export interface ServerMessagesEngineParams {
   /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */
   modelKnowledgeCutoff?: string;
 
+  /** Page content context (optional, for document editing) */
+  pageContentContext?: PageContentContext;
+
   /** Plan document TODO state used when conversation messages contain no TODO state */
   planTodo?: PlanTodoConfig;
 
@@ -208,3 +211,4 @@ export {
   type TopicReferenceItem,
   type UserMemoryData,
 } from '@lobechat/context-engine';
+export type { PageContentContext } from '@lobechat/prompts';

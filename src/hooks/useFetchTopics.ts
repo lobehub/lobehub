@@ -3,6 +3,7 @@ import type { TopicQuerySortBy } from '@lobechat/types';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -24,7 +25,10 @@ export const useFetchTopics = (options?: {
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
 
   // If in group session, use groupId; otherwise use agentId
-  const { isValidating, data } = useFetchTopicsHook(true, {
+  const hasTopicData = useChatStore(
+    (s) => !!s.topicDataMap[topicMapKey({ agentId: activeAgentId, groupId: activeGroupId })],
+  );
+  const { isValidating } = useFetchTopicsHook(true, {
     agentId: activeAgentId,
     ...(options?.excludeStatuses && options.excludeStatuses.length > 0
       ? { excludeStatuses: options.excludeStatuses }
@@ -39,7 +43,7 @@ export const useFetchTopics = (options?: {
   });
 
   return {
-    // isRevalidating: has cached data, updating in background
-    isRevalidating: isValidating && !!data,
+    // isRevalidating: the store already shows topics, updating in background
+    isRevalidating: isValidating && hasTopicData,
   };
 };

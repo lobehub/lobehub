@@ -6,7 +6,6 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AcceptanceService, buildAcceptanceCheckUnion } from './acceptanceService';
-import { resolveVerifyModelConfig } from './modelConfig';
 import { VerifyPlanGeneratorService } from './planGenerator';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
 
@@ -119,15 +118,8 @@ export const instantiateVerifyPlanOnStart = async (
     // Undecomposed acceptance (goal-dispatched Task, one-sentence requirement):
     // spend one generation call splitting the requirement into named criteria,
     // so the checklist reads as distinguishable items instead of one generic
-    // "Task delivery acceptance" row.
-    const modelConfig = holistic
-      ? await resolveVerifyModelConfig(
-          db,
-          userId,
-          { verifierAgentId: verifyConfig.verifierAgentId },
-          workspaceId,
-        )
-      : undefined;
+    // "Task delivery acceptance" row. The split runs on the pinned plan model
+    // (VERIFY_PLAN_MODEL_CONFIG), not the verifier agent's chat model.
     await planGenerator.generateDraftPlan({
       // Ground the generated criteria in the acceptance text, not just the title.
       context: requirement,
@@ -137,7 +129,6 @@ export const instantiateVerifyPlanOnStart = async (
       // Still fall back to the single agent-type holistic check when the
       // generation fails or returns nothing, so verify runs either way.
       holisticFallback: holistic,
-      modelConfig,
       operationId: params.operationId,
       requirement,
       verifyCriteriaIds: verifyConfig.verifyCriteriaIds,

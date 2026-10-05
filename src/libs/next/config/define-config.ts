@@ -364,7 +364,6 @@ export function defineConfig(config: CustomNextConfig) {
     serverExternalPackages: config.serverExternalPackages ?? [
       'pdfkit',
       '@lobehub/editor',
-      'just-bash',
       'discord.js',
       'ffmpeg-static',
       'pdfjs-dist',

@@ -88,3 +88,16 @@ describe('getRowLatestMessageWithoutTools', () => {
     });
   });
 });
+
+describe('isRefreshingAt', () => {
+  it('matches only the resolved refreshing row', () => {
+    const state = { refreshingRowId: 'g2' } as unknown as State;
+
+    expect(dataSelectors.isRefreshingAt('g2')(state)).toBe(true);
+    expect(dataSelectors.isRefreshingAt('a1')(state)).toBe(false);
+  });
+
+  it('matches nothing once the fetch settled', () => {
+    expect(dataSelectors.isRefreshingAt('g2')({} as State)).toBe(false);
+  });
+});

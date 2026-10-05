@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { EyeIcon, PauseIcon, PlayIcon } from 'lucide-react';
+import { PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
@@ -17,7 +17,6 @@ import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import RightPanel from '@/features/RightPanel';
-import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useWorkspaceSidePanel } from '@/features/RightPanel/WorkspaceSidePanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { usePermission } from '@/hooks/usePermission';
@@ -33,6 +32,7 @@ import GoalHeaderMetrics from './GoalHeaderMetrics';
 import { goalManagerConversation } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import { GoalSupervision } from './GoalSupervision';
+import GoalSupervisorToggle from './GoalSupervisorToggle';
 import NorthStarMetrics from './NorthStarMetrics';
 import ProcessControl from './ProcessControl';
 import { useGoalChatPanel } from './useGoalChatPanel';
@@ -145,10 +145,34 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const { goal, nodes } = snapshot;
   const managerConversation = goalManagerConversation(goal);
 
-  // The panel hosts the goal conversation only when the goal has a
-  // responsible agent; without one it is drill-down-only.
-  const panelExpandable = !!chat.agentId;
+  // Who supervises this page: the agent the route names, the agent behind the
+  // supervision record, or the goal's own agent. That last fallback is what keeps
+  // the agent-less `/goal/:goalId` route working — there the route names no agent
+  // and an unmanaged goal has no record, but the goal still knows whose
+  // conversation this is.
+  const supervisingAgentId =
+    chat.agentId ?? managerConversation?.agentId ?? goal.agentId ?? undefined;
+  const panelExpandable = !!supervisingAgentId;
   const chatVisible = chat.open && panelExpandable;
+
+  /**
+   * One entry, one destination. A goal with a supervision conversation opens that
+   * record; one without opens the side conversation, rather than an empty panel.
+   * Re-targeting only when the destination is not already the open one keeps a
+   * reopen from bumping the request and remounting the panel.
+   */
+  const openPanel = () => {
+    if (!supervisingAgentId) return;
+    const target = managerConversation
+      ? { agentId: managerConversation.agentId, topicId: managerConversation.topicId }
+      : { agentId: supervisingAgentId, topicId: undefined };
+    if (chat.topicId !== target.topicId) {
+      clearPortalStack();
+      chat.openConversation(target);
+      return;
+    }
+    chat.setOpen(true);
+  };
 
   const paused = goal.status === 'paused';
   // Pace control exists only while the coordinator loop is actually moving (or
@@ -184,29 +208,19 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
             </Flexbox>
           }
           right={
-            graphFullscreen ? undefined : (
-              <Flexbox horizontal align={'center'} gap={8}>
-                {managerConversation && (
-                  <Button
-                    icon={EyeIcon}
-                    size={'small'}
-                    onClick={() => {
-                      clearPortalStack();
-                      chat.openSupervision(managerConversation);
-                    }}
-                  >
-                    {t('goalProcess.manager.viewTrace')}
-                  </Button>
-                )}
-                {panelExpandable && (
-                  <ToggleRightPanelButton
+            graphFullscreen
+              ? undefined
+              : supervisingAgentId && (
+                  <GoalSupervisorToggle
                     hideWhenExpanded
+                    agentId={supervisingAgentId}
                     expand={showPortal || chatVisible}
-                    onToggle={() => chat.setOpen(true)}
+                    label={
+                      managerConversation ? t('goalProcess.manager.viewTrace') : t('goalChat.title')
+                    }
+                    onToggle={openPanel}
                   />
-                )}
-              </Flexbox>
-            )
+                )
           }
         />
         <Flexbox flex={1} style={{ overflowY: 'auto' }}>
@@ -258,8 +272,8 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
       {/* Same Portal the conversation surface uses — the drill-down chain
           (metric / node → task detail → topic) rides its view stack, and the
           header's back arrow and close come for free. When no drill-down is
-          open, the panel hosts the conversation with the goal's responsible
-          agent so a user can just ask about progress.
+          open, the panel hosts the goal agent's supervision record, or its side
+          conversation when the goal has no record yet.
 
           On the agent-less route the task workspace already mounts the portal
           host, so a drill-down renders there and this panel stays out of the
@@ -281,20 +295,23 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
           hasWorkspaceSidePanel ? null : (
             <PortalContent />
           )
-        ) : chat.agentId && chat.topicId ? (
+        ) : supervisingAgentId && chat.topicId ? (
           <GoalSupervision
-            agentId={chat.agentId}
+            agentId={supervisingAgentId}
             goalId={goalId}
-            key={`${goalId}:${chat.agentId}:${chat.request}`}
+            key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             topicId={chat.topicId}
             onCollapse={() => chat.setOpen(false)}
+            // The record is read-only and the avatar is the panel's only entry, so
+            // this is how a goal with a record gets back to an editable chat.
+            onOpenChat={() => chat.openConversation({ agentId: supervisingAgentId })}
           />
-        ) : chat.agentId ? (
+        ) : supervisingAgentId ? (
           <GoalChat
-            agentId={chat.agentId}
+            agentId={supervisingAgentId}
             goalId={goalId}
             initialTopicId={chat.topicId}
-            key={`${goalId}:${chat.agentId}:${chat.request}`}
+            key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             onCollapse={() => chat.setOpen(false)}
           />
         ) : null}

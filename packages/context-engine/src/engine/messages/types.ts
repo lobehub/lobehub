@@ -1,5 +1,10 @@
 /* eslint-disable perfectionist/sort-interfaces */
-import type { AgentIdentityContext, FileContent, KnowledgeBaseInfo } from '@lobechat/prompts';
+import type {
+  AgentIdentityContext,
+  FileContent,
+  KnowledgeBaseInfo,
+  PageContentContext,
+} from '@lobechat/prompts';
 import type {
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
@@ -349,6 +354,11 @@ export interface MessagesEngineParams {
    * Contains static state like initial page content that doesn't change during execution
    */
   initialContext?: RuntimeInitialContext;
+  /**
+   * Page content context for direct injection (server-side usage)
+   * When provided, takes precedence over initialContext/stepContext
+   */
+  pageContentContext?: PageContentContext;
   /**
    * Step context computed at the beginning of each step (frontend runtime usage)
    * Contains dynamic state like latest XML that changes between steps

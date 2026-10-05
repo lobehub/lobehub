@@ -123,12 +123,6 @@ export const isMessageListKey = (
 
 // ---- topic --------------------------------------------------------------
 export const topicKeys = {
-  agentView: def('topic:agentView', (containerKey: string, opts: Record<string, unknown>) => [
-    'topic:agentView',
-    containerKey,
-    opts,
-  ]),
-  detail: def('topic:detail', (topicId: string) => ['topic:detail', topicId]),
   list: def('topic:list', (containerKey: string, opts: Record<string, unknown>) => [
     'topic:list',
     containerKey,
