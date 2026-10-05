@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
-import { useProjectStore } from '@/store/project';
+import { useCurrentProjectList, useProjectStore } from '@/store/project';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { openCreateProjectModal } from '../CreateProjectModal';
@@ -28,10 +28,12 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
   const { t } = useTranslation('project');
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
-  const topic = useChatStore((s) => s.useFetchTopicDetail)(topicId);
-  const projects = useProjectStore((s) => s.useFetchProjectList)();
+  const topicSync = useChatStore((s) => s.useFetchTopicDetail)(topicId);
+  const topic = useChatStore((s) => s.topicDetailMap?.[topicId]);
+  const projectSync = useProjectStore((s) => s.useFetchProjectList)();
+  const projects = useCurrentProjectList();
   const [selectedProject, setProject] = useState('');
-  const projectId = topic.data?.projectId || selectedProject;
+  const projectId = topic?.projectId || selectedProject;
   const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(
     projectId,
     !!projectId,
@@ -42,9 +44,9 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
   const [error, setError] = useState<unknown>();
   const associate = useProjectDirectoryStore((s) => s.associateTopic);
   const source = getWorkingDirSourcePath(
-    topic.data?.metadata?.workingDirectoryConfig ?? topic.data?.metadata?.workingDirectory,
+    topic?.metadata?.workingDirectoryConfig ?? topic?.metadata?.workingDirectory,
   );
-  const deviceId = topic.data?.metadata?.boundDeviceId;
+  const deviceId = topic?.metadata?.boundDeviceId;
   const options = (directories.data?.data ?? []).filter(
     (d) =>
       !source ||
@@ -52,7 +54,7 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
         (!deviceId || d.deviceId === deviceId)),
   );
   const selectedDirectory =
-    topic.data?.projectWorkingDirectoryId ||
+    topic?.projectWorkingDirectoryId ||
     directoryId ||
     (source && deviceId && options.length === 1 ? options[0].id : undefined);
   const save = async () => {
@@ -63,7 +65,7 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
         topicId,
         projectId,
         directoryId:
-          source || topic.data?.projectWorkingDirectoryId || includeDirectory
+          source || topic?.projectWorkingDirectoryId || includeDirectory
             ? selectedDirectory || undefined
             : undefined,
       });
@@ -79,8 +81,8 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
   };
   return (
     <Flexbox gap={16}>
-      <Text>{topic.data?.title}</Text>
-      {topic.data?.projectId && (
+      <Text>{topic?.title}</Text>
+      {topic?.projectId && (
         <Button
           onClick={() => {
             close();
@@ -97,11 +99,11 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
       )}
       <Select
         aria-label={t('directories.project')}
-        disabled={pending || !!topic.data?.projectId}
+        disabled={pending || !!topic?.projectId}
         placeholder={t('directories.project')}
         value={projectId}
         options={[
-          ...(projects.data?.data ?? []).map((p) => ({
+          ...projects.map((p) => ({
             value: p.id,
             label: (
               <Flexbox horizontal align="center" gap={8}>
@@ -118,7 +120,7 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
             : (setProject(value ?? ''), setDirectory(''))
         }
       />
-      {!source && !topic.data?.projectWorkingDirectoryId && (
+      {!source && !topic?.projectWorkingDirectoryId && (
         <Flexbox horizontal align="center" justify="space-between">
           <label htmlFor="associate-topic-directory">{t('topics.addLocation')}</label>
           <Switch
@@ -129,10 +131,10 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
           />
         </Flexbox>
       )}
-      {(source || topic.data?.projectWorkingDirectoryId || includeDirectory) && (
+      {(source || topic?.projectWorkingDirectoryId || includeDirectory) && (
         <Select
           aria-label={t('topics.executionContext')}
-          disabled={pending || !projectId || !!topic.data?.projectWorkingDirectoryId}
+          disabled={pending || !projectId || !!topic?.projectWorkingDirectoryId}
           placeholder={t('topics.chooseLocation')}
           value={selectedDirectory}
           options={options.map((d) => ({
@@ -165,10 +167,12 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
           type="error"
         />
       ) : null}
-      {topic.error || projects.error || directories.error ? (
+      {topicSync.error || projectSync.error || directories.error ? (
         <AsyncError
-          error={topic.error || projects.error || directories.error}
-          onRetry={() => Promise.all([topic.mutate(), projects.mutate(), directories.mutate()])}
+          error={topicSync.error || projectSync.error || directories.error}
+          onRetry={() =>
+            Promise.all([topicSync.revalidate(), projectSync.revalidate(), directories.mutate()])
+          }
         />
       ) : null}
       <Flexbox horizontal gap={8} justify="flex-end">
@@ -176,11 +180,9 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
           {t('cancel', { ns: 'common' })}
         </Button>
         <Button
+          disabled={!projectId || !topic || ((!!source || includeDirectory) && !selectedDirectory)}
           loading={pending}
           type="primary"
-          disabled={
-            !projectId || !topic.data || ((!!source || includeDirectory) && !selectedDirectory)
-          }
           onClick={save}
         >
           {t('directories.bind')}

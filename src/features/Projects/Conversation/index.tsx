@@ -34,9 +34,10 @@ const ProjectConversation = memo(() => {
     ? (selectedTopic?.agentId ?? undefined)
     : detail?.project.coordinatorAgentId;
   const projectSlug = detail?.project.slug ?? projectId;
-  const topicTitle = useChatStore((s) =>
-    topicId ? topicSelectors.getTopicById(topicId)(s)?.title : undefined,
+  const storedTopic = useChatStore((s) =>
+    topicId ? topicSelectors.getTopicById(topicId)(s) : undefined,
   );
+  const topicTitle = storedTopic?.title;
 
   const agent = useInitAgentConfig(conversationAgentId);
   const topicDetail = useChatStore((s) => s.useFetchTopicDetail)(selectedTopic?.id);
@@ -67,7 +68,7 @@ const ProjectConversation = memo(() => {
   );
 
   if (topicDetail.error)
-    return <AsyncError error={topicDetail.error} variant="page" onRetry={topicDetail.mutate} />;
+    return <AsyncError error={topicDetail.error} variant="page" onRetry={topicDetail.revalidate} />;
   if (agent.error) return <AsyncError error={agent.error} variant="page" onRetry={agent.mutate} />;
   if (topics.error)
     return <AsyncError error={topics.error} variant="page" onRetry={topics.mutate} />;
@@ -90,7 +91,7 @@ const ProjectConversation = memo(() => {
     !detail ||
     !conversationAgentId ||
     agent.isLoading ||
-    topicDetail.isLoading ||
+    (!storedTopic && topicDetail.isValidating) ||
     activeAgentId !== conversationAgentId
   ) {
     return (

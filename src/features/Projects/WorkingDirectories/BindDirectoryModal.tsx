@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useDeviceStore } from '@/store/device';
-import { useProjectStore } from '@/store/project';
+import { useCurrentProjectList, useProjectStore } from '@/store/project';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { openCreateProjectModal } from '../CreateProjectModal';
@@ -41,7 +41,8 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
   const [projectId, setProjectId] = useState(options.projectId ?? '');
   const name = options.path.split(/[\\/]/).findLast(Boolean) ?? '';
   const { pending, error, save: bindDirectory } = useBindDirectory(options, close);
-  const projects = useProjectStore((s) => s.useFetchProjectList)();
+  const projectSync = useProjectStore((s) => s.useFetchProjectList)();
+  const projects = useCurrentProjectList();
   useDeviceStore((s) => s.useFetchDevices)(true);
   const devices = useDeviceStore((s) => s.devices);
   const device = devices.find((d) => d.deviceId === options.deviceId);
@@ -70,8 +71,8 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
           </Flexbox>
         </Flexbox>
         <Text>{t('directories.project')}</Text>
-        {projects.error ? (
-          <AsyncError error={projects.error} onRetry={projects.mutate} />
+        {projectSync.error ? (
+          <AsyncError error={projectSync.error} onRetry={projectSync.revalidate} />
         ) : (
           <Select
             aria-label={t('directories.project')}
@@ -79,7 +80,7 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
             placeholder={t('directories.project')}
             value={projectId}
             options={[
-              ...(projects.data?.data ?? []).map((project) => ({
+              ...projects.map((project) => ({
                 label: (
                   <Flexbox horizontal align="center" gap={8}>
                     <Avatar avatar={project.avatar || '📁'} size={20} />

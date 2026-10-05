@@ -9,7 +9,7 @@ import AsyncError from '@/components/AsyncError';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDeviceStore } from '@/store/device';
-import { useProjectStore } from '@/store/project';
+import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { openAddDirectoryModal } from './AddDirectoryModal';
@@ -21,7 +21,8 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
   const navigate = useWorkspaceAwareNavigate();
   const [params, setParams] = useSearchParams();
   const environmentId = params.get('environment') ?? '';
-  const project = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
+  useProjectStore((s) => s.useFetchProjectDetail)(projectId);
+  const project = useCurrentProjectDetail(projectId);
   const environments = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
   const deviceRequest = useDeviceStore((s) => s.useFetchDevices)(true);
@@ -117,11 +118,9 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
                   </Flexbox>
                 </Flexbox>
                 <Button
+                  disabled={Boolean(directory.instanceId) && !project?.project.coordinatorAgentId}
                   icon={MessageSquarePlusIcon}
                   size="small"
-                  disabled={
-                    Boolean(directory.instanceId) && !project.data?.data.project.coordinatorAgentId
-                  }
                   onClick={() =>
                     !directory.instanceId
                       ? openBindDirectoryModal({
@@ -131,7 +130,7 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
                         })
                       : openProjectTopicModal({
                           projectId,
-                          coordinatorAgentId: project.data!.data.project.coordinatorAgentId,
+                          coordinatorAgentId: project!.project.coordinatorAgentId,
                           directories: directories.data?.data ?? [],
                           initialDirectoryId: directory.id,
                           title: t('directories.start'),

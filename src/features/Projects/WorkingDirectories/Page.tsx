@@ -7,7 +7,7 @@ import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
-import { useProjectStore } from '@/store/project';
+import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
 import { GeneralSettings } from './GeneralSettings';
 import { ProjectWorkingDirectories } from './index';
@@ -18,12 +18,10 @@ export function ProjectDirectoriesPage() {
   const { section = 'general' } = useParams<{ section?: string }>();
   const navigate = useWorkspaceAwareNavigate();
   const { projectId } = useActiveRouteParams<{ projectId: string }>();
-  const { data, error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectDetail)(
-    projectId,
-  );
-  if (isLoading && !data) return <RouteLoading />;
-  if (error && !data) return <AsyncError error={error} variant="page" onRetry={mutate} />;
-  if (!data) return null;
+  const { error, revalidate } = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
+  const detail = useCurrentProjectDetail(projectId);
+  if (error && !detail) return <AsyncError error={error} variant="page" onRetry={revalidate} />;
+  if (!detail) return <RouteLoading />;
   return (
     <Flexbox flex={1} padding={32} style={{ overflow: 'auto' }}>
       <Flexbox gap={28} style={{ width: '100%', maxWidth: 800, marginInline: 'auto' }}>
@@ -41,11 +39,11 @@ export function ProjectDirectoriesPage() {
           onChange={(key) => navigate(`/project/${projectId}/settings/${key}`)}
         />
         {section === 'general' ? (
-          <GeneralSettings key={data.data.project.id} project={data.data.project} />
+          <GeneralSettings key={detail.project.id} project={detail.project} />
         ) : section === 'directories' ? (
-          <WorkingDirectorySettings projectId={data.data.project.id} />
+          <WorkingDirectorySettings projectId={detail.project.id} />
         ) : (
-          <ProjectWorkingDirectories projectId={data.data.project.id} />
+          <ProjectWorkingDirectories projectId={detail.project.id} />
         )}
       </Flexbox>
     </Flexbox>
