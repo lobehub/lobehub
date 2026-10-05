@@ -3,6 +3,8 @@ import type { WidgetRuntime } from '@lobechat/types';
 /** Upper bound any provider accepts for one script execution. */
 export const WIDGET_SANDBOX_MAX_TIMEOUT_MS = 120_000;
 export const WIDGET_SANDBOX_DEFAULT_TIMEOUT_MS = 30_000;
+/** Extra time a sandbox request may take beyond the script timeout (cold start, upload). */
+export const WIDGET_SANDBOX_REQUEST_OVERHEAD_MS = 60_000;
 
 /**
  * What the execution belongs to, for provider-side attribution, quotas and

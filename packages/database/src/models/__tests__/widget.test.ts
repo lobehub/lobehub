@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { eq, inArray } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eq, inArray, sql } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
@@ -798,21 +798,188 @@ describe('WidgetModel', () => {
       expect(found[0].version.id).toBe(found[0].widget.publishedVersionId);
       expect(await WidgetModel.findDue(serverDB, { limit: 1, now })).toHaveLength(1);
 
-      // two ticks racing for the same slot: exactly one wins
-      const claim = { expectedNextRunAt: past, nextRunAt: future, widgetId: due.id };
+      // two ticks racing for the same slot: exactly one wins and reserves the run
+      const claim = {
+        expectedNextRunAt: past,
+        nextRunAt: future,
+        versionId: found[0].version.id,
+        widgetId: due.id,
+      };
       const results = await Promise.all([
-        WidgetModel.claimDue(serverDB, claim),
-        WidgetModel.claimDue(serverDB, claim),
+        WidgetModel.claimDueRun(serverDB, claim),
+        WidgetModel.claimDueRun(serverDB, claim),
       ]);
-      expect(results.filter(Boolean)).toHaveLength(1);
-      expect(await WidgetModel.claimDue(serverDB, claim)).toBe(false);
+      const reserved = results.filter(Boolean);
+      expect(reserved).toHaveLength(1);
+      expect(reserved[0]).toMatchObject({
+        finishedAt: null,
+        status: 'running',
+        trigger: 'schedule',
+        userId,
+        versionId: found[0].version.id,
+        widgetId: due.id,
+      });
+      expect(await WidgetModel.claimDueRun(serverDB, claim)).toBeUndefined();
 
       const remaining = await WidgetModel.findDue(serverDB, { now });
       expect(remaining.map((r) => r.widget.id)).toEqual([otherDue.id]);
 
       const [row] = await serverDB.select().from(widgets).where(eq(widgets.id, due.id));
       expect(row.nextRunAt).toEqual(future);
-      expect(await serverDB.select().from(widgetRuns)).toHaveLength(0);
+      expect(await serverDB.select().from(widgetRuns)).toMatchObject([{ id: reserved[0]!.id }]);
+    });
+
+    describe('reservations', () => {
+      const past = new Date('2030-01-01T00:00:00Z');
+      const future = new Date('2030-01-01T02:00:00Z');
+
+      const dueWidget = async (m = model) => {
+        const w = await m.create({ schedulePattern: '0 * * * *', title: 'scheduled' });
+        const v = await m.createVersion(w.id, script(1));
+        await m.publishVersion(w.id, v!.id);
+        await m.update(w.id, { nextRunAt: past });
+        return { version: v!, widget: w };
+      };
+      const reserve = async ({ version, widget }: Awaited<ReturnType<typeof dueWidget>>) =>
+        (await WidgetModel.claimDueRun(serverDB, {
+          expectedNextRunAt: past,
+          nextRunAt: future,
+          versionId: version.id,
+          widgetId: widget.id,
+        }))!;
+      const backdate = (runId: string, ms: number) =>
+        serverDB
+          .update(widgetRuns)
+          .set({ startedAt: new Date(Date.now() - ms) })
+          .where(eq(widgetRuns.id, runId));
+      const staleOptions = (extra = {}) => ({
+        createdAfter: new Date(Date.now() - 60 * 60_000),
+        limit: 10,
+        startedBefore: new Date(Date.now() - 5 * 60_000),
+        ...extra,
+      });
+
+      it('leaves the slot due and reserves nothing when the reservation fails', async () => {
+        const target = await dueWidget();
+        const transaction = serverDB.transaction.bind(serverDB);
+        vi.spyOn(serverDB, 'transaction').mockImplementationOnce(((
+          fn: Parameters<typeof transaction>[0],
+        ) =>
+          transaction(async (tx) => {
+            vi.spyOn(tx, 'insert').mockImplementation(() => {
+              throw new Error('insert failed');
+            });
+            return fn(tx);
+          })) as typeof serverDB.transaction);
+
+        await expect(
+          WidgetModel.claimDueRun(serverDB, {
+            expectedNextRunAt: past,
+            nextRunAt: future,
+            versionId: target.version.id,
+            widgetId: target.widget.id,
+          }),
+        ).rejects.toThrow('insert failed');
+        vi.restoreAllMocks();
+
+        const [row] = await serverDB.select().from(widgets).where(eq(widgets.id, target.widget.id));
+        expect(row.nextRunAt).toEqual(past);
+        expect(await serverDB.select().from(widgetRuns)).toHaveLength(0);
+        // the slot is still claimable afterwards
+        expect(await reserve(target)).toMatchObject({ status: 'running' });
+      });
+
+      it('finds reservations started before the cut, only for live scheduled widgets', async () => {
+        const a = await dueWidget();
+        const fresh = await dueWidget();
+        const trashed = await dueWidget();
+        const unscheduled = await dueWidget();
+        const runA = await reserve(a);
+        await reserve(fresh);
+        const runTrashed = await reserve(trashed);
+        const runUnscheduled = await reserve(unscheduled);
+        for (const id of [runA.id, runTrashed.id, runUnscheduled.id])
+          await backdate(id, 10 * 60_000);
+        await model.trash(trashed.widget.id);
+        await model.update(unscheduled.widget.id, { schedulePattern: null });
+
+        // a manual run left running is not a reservation
+        const manual = await model.startRun(a.widget.id, { trigger: 'manual' });
+        await backdate(manual!.id, 10 * 60_000);
+
+        const found = await WidgetModel.findStaleScheduledRuns(serverDB, staleOptions());
+        expect(found.map((r) => r.run.id)).toEqual([runA.id]);
+        expect(found[0]).toMatchObject({
+          version: { id: a.version.id },
+          widget: { id: a.widget.id },
+        });
+        expect(
+          await WidgetModel.findStaleScheduledRuns(
+            serverDB,
+            staleOptions({ widgetId: a.widget.id }),
+          ),
+        ).toHaveLength(1);
+        expect(
+          await WidgetModel.findStaleScheduledRuns(serverDB, staleOptions({ runId: MISSING_UUID })),
+        ).toEqual([]);
+        expect(
+          await WidgetModel.findStaleScheduledRuns(serverDB, staleOptions({ runId: 'nope' })),
+        ).toEqual([]);
+        // older than the recovery horizon: no longer resumed
+        expect(
+          await WidgetModel.findStaleScheduledRuns(
+            serverDB,
+            staleOptions({ createdAfter: new Date(Date.now() + 60_000) }),
+          ),
+        ).toEqual([]);
+
+        // once finished it is no longer a candidate
+        await WidgetModel.finishRun(serverDB, runA.id, { status: 'failed' });
+        expect(await WidgetModel.findStaleScheduledRuns(serverDB, staleOptions())).toEqual([]);
+      });
+
+      it('renews a lease once per observed start, only while the run is running', async () => {
+        const run = await reserve(await dueWidget());
+        await backdate(run.id, 10 * 60_000);
+        const [stale] = await WidgetModel.findStaleScheduledRuns(serverDB, staleOptions());
+
+        const renew = () =>
+          WidgetModel.renewRunLease(serverDB, {
+            expectedStartedAt: stale.run.startedAt,
+            runId: run.id,
+          });
+        const [first, second] = await Promise.all([renew(), renew()]);
+        const won = [first, second].filter(Boolean);
+        expect(won).toHaveLength(1);
+        expect(won[0]!.startedAt.getTime()).toBeGreaterThan(Date.now() - 60_000);
+        // the renewed run is within its lease again
+        expect(await WidgetModel.findStaleScheduledRuns(serverDB, staleOptions())).toEqual([]);
+
+        // a run created by `startRun` carries microseconds; the lease still compares
+        await backdate(run.id, 10 * 60_000);
+        await serverDB
+          .update(widgetRuns)
+          .set({ startedAt: sql`now() - interval '10 minutes 0.000123 seconds'` })
+          .where(eq(widgetRuns.id, run.id));
+        const [again] = await WidgetModel.findStaleScheduledRuns(serverDB, staleOptions());
+        expect(
+          await WidgetModel.renewRunLease(serverDB, {
+            expectedStartedAt: again.run.startedAt,
+            runId: run.id,
+          }),
+        ).toMatchObject({ id: run.id, status: 'running' });
+
+        await WidgetModel.finishRun(serverDB, run.id, { status: 'failed' });
+        expect(
+          await WidgetModel.renewRunLease(serverDB, {
+            expectedStartedAt: (await model.findRun(stale.widget.id, run.id))!.startedAt,
+            runId: run.id,
+          }),
+        ).toBeUndefined();
+        expect(
+          await WidgetModel.renewRunLease(serverDB, { expectedStartedAt: new Date(), runId: 'x' }),
+        ).toBeUndefined();
+      });
     });
 
     it('skips due widgets whose project or agent is trashed or private to someone else', async () => {

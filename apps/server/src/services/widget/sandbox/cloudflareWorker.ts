@@ -2,6 +2,7 @@ import debug from 'debug';
 
 import {
   clampSandboxTimeout,
+  WIDGET_SANDBOX_REQUEST_OVERHEAD_MS,
   WidgetSandboxError,
   type WidgetSandboxRunner,
   type WidgetSandboxRunRequest,
@@ -9,9 +10,6 @@ import {
 } from './types';
 
 const log = debug('lobe-server:widget:sandbox');
-
-/** Extra time the HTTP call waits beyond the script timeout (cold start, upload). */
-const REQUEST_OVERHEAD_MS = 60_000;
 
 /**
  * How the request encodes the network allowlist:
@@ -96,7 +94,7 @@ export class CloudflareWorkerSandboxRunner implements WidgetSandboxRunner {
           'content-type': 'application/json',
         },
         method: 'POST',
-        signal: AbortSignal.timeout(timeoutMs + REQUEST_OVERHEAD_MS),
+        signal: AbortSignal.timeout(timeoutMs + WIDGET_SANDBOX_REQUEST_OVERHEAD_MS),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

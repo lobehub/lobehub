@@ -921,7 +921,7 @@ describe('widget + dashboard routers integration', () => {
       expect(await second.json()).toMatchObject({ claimed: 0, due: 0 });
     });
 
-    describe('queue mode', () => {
+    describe('dispatch and recovery', () => {
       const post = async (path: string, body: unknown) =>
         (
           await widgetWorkflowApp.request(path, {
@@ -999,6 +999,127 @@ describe('widget + dashboard routers integration', () => {
         expect(runSandbox).toHaveBeenCalledTimes(1);
         expect(await scheduleRuns(widget.id)).toHaveLength(1);
         expect((await nextRunAt(widget.id))!.getTime()).toBeGreaterThan(Date.now());
+      });
+
+      /** Make a reserved run look abandoned: started well past any lease. */
+      const expireLease = (runId: string) =>
+        db
+          .update(widgetRuns)
+          .set({ startedAt: new Date(Date.now() - 30 * 60_000) })
+          .where(eq(widgetRuns.id, runId));
+
+      /** Deliver the slot to a worker that dies after reserving the run. */
+      const crashAfterReserve = async (message: { slot: string; widgetId: string }) => {
+        vi.spyOn(WidgetModel, 'finishRun').mockRejectedValueOnce(new Error('worker killed'));
+        expect(await post('/run-widget', message)).toEqual({ error: 'worker killed' });
+        const runs = await scheduleRuns(message.widgetId);
+        expect(runs).toMatchObject([{ status: 'running' }]);
+        return runs[0];
+      };
+
+      it('resumes a reserved run once its worker died and the lease expired, exactly once', async () => {
+        const { slot, widget } = await dueWidget();
+        const message = { slot: slot.toISOString(), widgetId: widget.id };
+        const reserved = await crashAfterReserve(message);
+
+        // Redelivered while the original worker may still be busy: left alone.
+        expect(await post('/run-widget', message)).toEqual({
+          skipped: 'already-claimed',
+          success: true,
+        });
+        expect(runSandbox).toHaveBeenCalledTimes(1);
+
+        await expireLease(reserved.id);
+        const [resumed, again] = await Promise.all([
+          post('/run-widget', message),
+          post('/run-widget', message),
+        ]);
+        expect([resumed, again]).toEqual(
+          expect.arrayContaining([
+            { resumed: true, runId: reserved.id, status: 'succeeded', success: true },
+            { skipped: 'already-claimed', success: true },
+          ]),
+        );
+        expect(await post('/run-widget', message)).toEqual({
+          skipped: 'already-claimed',
+          success: true,
+        });
+
+        expect(runSandbox).toHaveBeenCalledTimes(2);
+        expect(await scheduleRuns(widget.id)).toMatchObject([
+          { id: reserved.id, status: 'succeeded' },
+        ]);
+        expect((await db.select().from(widgets).where(eq(widgets.id, widget.id)))[0]).toMatchObject(
+          { lastRunId: reserved.id, latestOutput: { type: 'stat', value: 5 } },
+        );
+      });
+
+      it('sweeps a stale reservation from the tick and resumes it through the worker', async () => {
+        vi.stubEnv('APP_URL', 'https://app.test/');
+        const { slot, widget } = await dueWidget();
+        const reserved = await crashAfterReserve({ slot: slot.toISOString(), widgetId: widget.id });
+
+        queueMode.enabled = true;
+        const publish = vi
+          .spyOn(qstashClient, 'publishJSON')
+          .mockResolvedValue({ messageId: 'm1' } as never);
+
+        // Still within its lease: the tick does not touch it.
+        expect(await post('/tick', {})).toMatchObject({ due: 0, resumed: 0 });
+        expect(publish).not.toHaveBeenCalled();
+
+        await expireLease(reserved.id);
+        const [{ startedAt }] = await scheduleRuns(widget.id);
+        const leaseStartedAt = startedAt.toISOString();
+        expect(await post('/tick', {})).toMatchObject({ due: 0, resumed: 1 });
+        const resumeMessage = { leaseStartedAt, runId: reserved.id, widgetId: widget.id };
+        expect(publish).toHaveBeenCalledWith({
+          body: resumeMessage,
+          deduplicationId: `widget-run:${reserved.id}:${leaseStartedAt}`,
+          url: 'https://app.test/api/workflows/widget/run-widget',
+        });
+
+        expect(await post('/run-widget', resumeMessage)).toEqual({
+          resumed: true,
+          runId: reserved.id,
+          status: 'succeeded',
+          success: true,
+        });
+        // A duplicate resume message finds the lease renewed and the run closed.
+        expect(await post('/run-widget', resumeMessage)).toEqual({
+          skipped: 'not-resumable',
+          success: true,
+        });
+        expect(runSandbox).toHaveBeenCalledTimes(2);
+        expect(await scheduleRuns(widget.id)).toMatchObject([{ status: 'succeeded' }]);
+      });
+
+      it('resumes a stale reservation inline when the tick runs widgets itself', async () => {
+        const { widget } = await dueWidget();
+
+        // The inline tick reserves the slot and dies before closing the run.
+        vi.spyOn(WidgetModel, 'finishRun').mockRejectedValueOnce(new Error('worker killed'));
+        expect(await post('/tick', {})).toMatchObject({
+          claimed: 1,
+          results: [{ error: 'worker killed', widgetId: widget.id }],
+        });
+        const [reserved] = await scheduleRuns(widget.id);
+        expect(reserved).toMatchObject({ status: 'running' });
+
+        expect(await post('/tick', {})).toMatchObject({ claimed: 0, due: 0, resumed: 0 });
+        await expireLease(reserved.id);
+        expect(await post('/tick', {})).toMatchObject({
+          claimed: 0,
+          due: 0,
+          resumed: 1,
+          results: [{ runId: reserved.id, status: 'succeeded', widgetId: widget.id }],
+        });
+        expect(await post('/tick', {})).toMatchObject({ resumed: 0 });
+
+        expect(runSandbox).toHaveBeenCalledTimes(2);
+        expect(await scheduleRuns(widget.id)).toMatchObject([
+          { id: reserved.id, status: 'succeeded' },
+        ]);
       });
 
       it('acks a message without a slot without running or claiming', async () => {

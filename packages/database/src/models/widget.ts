@@ -12,7 +12,7 @@ import type {
   WidgetVisibility,
 } from '@lobechat/types';
 import { WIDGET_RUN_OUTPUT_STATUSES } from '@lobechat/types';
-import { and, asc, desc, eq, inArray, isNotNull, lte, max, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte, max, sql } from 'drizzle-orm';
 
 import { sha256Json } from '../repositories/ftsSearchDocument/fingerprint';
 import { agents } from '../schemas/agent';
@@ -586,20 +586,127 @@ export class WidgetModel {
   }
 
   /**
-   * Claim one due slot by moving `next_run_at` forward, only if it still
-   * holds the value the caller read. Returns false when another tick won.
+   * Claim one due slot and reserve its run in a single transaction: move
+   * `next_run_at` forward only if it still holds the value the caller read
+   * (compare-and-set), and insert the `schedule` run as `running`. Either both
+   * happen or neither, so a claimed slot always leaves a durable run behind
+   * that a later worker can resume (see `findStaleScheduledRuns`). Returns
+   * undefined when another worker won the slot.
    */
-  static async claimDue(
+  static async claimDueRun(
     db: LobeChatDatabase,
-    params: { expectedNextRunAt: Date; nextRunAt: Date | null; widgetId: string },
-  ): Promise<boolean> {
-    const rows = await db
-      .update(widgets)
-      .set({ nextRunAt: params.nextRunAt })
-      .where(and(eq(widgets.id, params.widgetId), eq(widgets.nextRunAt, params.expectedNextRunAt)))
-      .returning({ id: widgets.id });
+    params: {
+      expectedNextRunAt: Date;
+      nextRunAt: Date | null;
+      /** The published version read with the due widget. */
+      versionId: string;
+      widgetId: string;
+    },
+  ): Promise<WidgetRunRow | undefined> {
+    return db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .update(widgets)
+        .set({ nextRunAt: params.nextRunAt })
+        .where(
+          and(eq(widgets.id, params.widgetId), eq(widgets.nextRunAt, params.expectedNextRunAt)),
+        )
+        .returning({ userId: widgets.userId, workspaceId: widgets.workspaceId });
+      if (!claimed) return undefined;
 
-    return rows.length > 0;
+      const [run] = await tx
+        .insert(widgetRuns)
+        .values({
+          // Millisecond precision on purpose: the lease is compared-and-set
+          // against the value a reader got back as a JS Date.
+          startedAt: new Date(),
+          status: 'running',
+          trigger: 'schedule',
+          userId: claimed.userId,
+          versionId: params.versionId,
+          widgetId: params.widgetId,
+          workspaceId: claimed.workspaceId,
+        })
+        .returning();
+
+      return run;
+    });
+  }
+
+  /**
+   * Reserved `schedule` runs still `running` that started before
+   * `startedBefore` — candidates whose worker may have died. The caller
+   * applies each run's own lease (it depends on the version's timeout) before
+   * resuming one through {@link renewRunLease}.
+   *
+   * Driven from live, scheduled widgets (the `widgets_due_idx` predicate) and
+   * their runs created since `createdAfter` (`widget_runs_widget_id_created_at_idx`),
+   * so the sweep never scans the whole run history. Widgets that are trashed,
+   * unscheduled or no longer reachable by their owner are not resumed.
+   */
+  static async findStaleScheduledRuns(
+    db: LobeChatDatabase,
+    options: {
+      createdAfter: Date;
+      limit: number;
+      runId?: string;
+      startedBefore: Date;
+      widgetId?: string;
+    },
+  ) {
+    if (options.runId !== undefined && !isUuid(options.runId)) return [];
+    if (options.widgetId !== undefined && !isUuid(options.widgetId)) return [];
+
+    return db
+      .select({ run: widgetRuns, version: widgetVersions, widget: widgets })
+      .from(widgets)
+      .innerJoin(
+        widgetRuns,
+        and(eq(widgetRuns.widgetId, widgets.id), gte(widgetRuns.createdAt, options.createdAfter)),
+      )
+      .innerJoin(widgetVersions, eq(widgetRuns.versionId, widgetVersions.id))
+      .where(
+        and(
+          isNotNull(widgets.nextRunAt),
+          isNotNull(widgets.schedulePattern),
+          isNotNull(widgets.publishedVersionId),
+          notTrashed(widgets.isDeleted),
+          buildParentAccessibleToOwnerWhere(widgets),
+          eq(widgetRuns.status, 'running'),
+          eq(widgetRuns.trigger, 'schedule'),
+          lt(widgetRuns.startedAt, options.startedBefore),
+          options.widgetId ? eq(widgets.id, options.widgetId) : undefined,
+          options.runId ? eq(widgetRuns.id, options.runId) : undefined,
+        ),
+      )
+      .orderBy(asc(widgetRuns.startedAt))
+      .limit(options.limit);
+  }
+
+  /**
+   * Take over a stale running run by restarting its lease: `started_at` moves
+   * to now only if the run is still `running` and its `started_at` is still
+   * the value the caller judged stale (compare-and-set). Exactly one resumer
+   * wins; the others get undefined.
+   */
+  static async renewRunLease(
+    db: LobeChatDatabase,
+    params: { expectedStartedAt: Date; runId: string },
+  ): Promise<WidgetRunRow | undefined> {
+    if (!isUuid(params.runId)) return undefined;
+
+    const [run] = await db
+      .update(widgetRuns)
+      .set({ startedAt: new Date() })
+      .where(
+        and(
+          eq(widgetRuns.id, params.runId),
+          eq(widgetRuns.status, 'running'),
+          sql`date_trunc('milliseconds', ${widgetRuns.startedAt}) = ${params.expectedStartedAt.toISOString()}::timestamptz`,
+        ),
+      )
+      .returning();
+
+    return run;
   }
 
   /** Insert a `running` run owned by the widget's owner and workspace. */
