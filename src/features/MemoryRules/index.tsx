@@ -4,7 +4,7 @@ import { Block, Empty, Flexbox, Icon, SortableList } from '@lobehub/ui';
 import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import { ArrowDownIcon, ArrowUpIcon, FlaskConicalIcon, PencilIcon, PlusIcon } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -34,6 +34,7 @@ import { buildRuleMenu } from './ruleMenu';
 import RuleRow from './RuleRow';
 import RulesOnboarding, { type RulesOnboardingAgents } from './RulesOnboarding';
 import { styles } from './styles';
+import { useJudgeDirections } from './useJudgeDirections';
 
 const LabOff = () => {
   const { t } = useTranslation('memory');
@@ -126,28 +127,11 @@ const MemoryRules = () => {
         }
       : undefined;
 
-  // Rules that reached the page without a direction (written before it existed, or distilled
-  // from a run) are judged in the background, once per visit, a batch at a time. Until then the
-  // column shows a dash and stays a switch, so nothing waits on it.
-  const hasUnjudged = live.some((rule) => !rule.direction);
-  const judgingRef = useRef(false);
-  useEffect(() => {
-    if (!enabled || !hasUnjudged || judgingRef.current) return;
-    judgingRef.current = true;
-    void (async () => {
-      try {
-        // Bounded: a model that keeps skipping rules must not keep the page asking.
-        for (let attempt = 0; attempt < 10; attempt++) {
-          const { judged, remaining } = await expertiseService.judgeRuleDirections();
-          if (judged > 0) await mutate();
-          if (judged === 0 || remaining === 0) break;
-        }
-      } catch (error) {
-        // Quiet on purpose: the reviewer did not ask for this, and every row stays settable.
-        console.error('[MemoryRules] judging directions failed:', error);
-      }
-    })();
-  }, [enabled, hasUnjudged, mutate]);
+  useJudgeDirections(
+    enabled,
+    live.filter((rule) => !rule.direction).map((rule) => rule.id),
+    mutate,
+  );
 
   // A selection or a merge in progress belongs to the part it started in; switching drops both,
   // so a merge can only ever pick a target within its own part.
