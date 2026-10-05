@@ -111,8 +111,10 @@ const BuildLine = memo<{
   log: string;
   /** Absent for someone who cannot build this instance; the button goes too. */
   onBuild?: () => void;
-  state: 'failed' | 'running' | 'unbuilt';
-}>(({ error, log, onBuild, state }) => {
+  /** Present when the status poll itself failed, rather than the build. */
+  onRetry?: () => void;
+  state: 'failed' | 'running' | 'stalled' | 'unbuilt';
+}>(({ error, log, onBuild, onRetry, state }) => {
   const { t } = useTranslation('setting');
   const [open, setOpen] = useState(false);
 
@@ -120,32 +122,40 @@ const BuildLine = memo<{
   // the runtime drops a finished build's log, so after a reload the row's own
   // record is all there is. An instance never built has no log at all.
   const text = state === 'unbuilt' ? '' : log || error || '';
+  const danger = state === 'failed' || state === 'stalled';
 
   return (
     <Flexbox gap={6}>
       <Flexbox horizontal align={'center'} gap={8}>
         {state === 'running' ? (
           <Icon spin icon={Loader2Icon} size={13} />
-        ) : state === 'failed' ? (
+        ) : danger ? (
           <Icon icon={CircleAlertIcon} size={13} style={{ color: cssVar.colorError }} />
         ) : (
           <Icon icon={CircleDashedIcon} size={13} style={{ color: cssVar.colorTextTertiary }} />
         )}
-        <Text fontSize={12} type={state === 'failed' ? 'danger' : 'secondary'}>
+        <Text fontSize={12} type={danger ? 'danger' : 'secondary'}>
           {t(
             state === 'running'
               ? 'environments.instances.building'
-              : state === 'failed'
-                ? 'environments.instances.buildFailed'
-                : 'environments.instances.notBuilt',
+              : state === 'stalled'
+                ? 'environments.instances.buildStatusUnknown'
+                : state === 'failed'
+                  ? 'environments.instances.buildFailed'
+                  : 'environments.instances.notBuilt',
           )}
         </Text>
+        {state === 'stalled' && onRetry && (
+          <Button size={'small'} type={'text'} onClick={onRetry}>
+            {t('environments.instances.retryStatus')}
+          </Button>
+        )}
         {text && (
           <Button size={'small'} type={'text'} onClick={() => setOpen(!open)}>
             {t(open ? 'environments.instances.hideLog' : 'environments.instances.showLog')}
           </Button>
         )}
-        {state !== 'running' && onBuild && (
+        {state !== 'running' && state !== 'stalled' && onBuild && (
           <Button size={'small'} type={'text'} onClick={onBuild}>
             {t(
               state === 'unbuilt'
@@ -178,7 +188,12 @@ const InstanceRow = memo<InstanceRowProps>(
     // idle one would be a round trip every two seconds for a row nobody is
     // looking at.
     const building = instance.status === 'pending' && Boolean(instance.buildId);
-    const { log, state } = useInstanceBuild(instance.id, building, instance.buildId);
+    const {
+      error: pollError,
+      log,
+      retry,
+      state,
+    } = useInstanceBuild(instance.id, building, instance.buildId);
     // Made before instances built themselves, or its build request never
     // arrived: pending with nothing to follow. Without saying so the row looks
     // settled while the folder behind it is empty.
@@ -385,14 +400,19 @@ const InstanceRow = memo<InstanceRowProps>(
             error={instance.buildError}
             log={log}
             state={
-              starting || (building && state !== 'failed')
-                ? 'running'
-                : unbuilt
-                  ? 'unbuilt'
-                  : 'failed'
+              // A poll that ran out of retries is not a running build. Left as
+              // one the row spins forever with nothing to click.
+              pollError && building && !state
+                ? 'stalled'
+                : starting || (building && state !== 'failed')
+                  ? 'running'
+                  : unbuilt
+                    ? 'unbuilt'
+                    : 'failed'
             }
             // Building a copy is the owner's; everyone else reads the state.
             onBuild={editable ? confirmBuild : undefined}
+            onRetry={retry}
           />
         )}
       </Flexbox>

@@ -143,6 +143,18 @@ export const useWorkspaceUsage = () => {
  */
 const buildLogs = new Map<string, { log: string; offset: number }>();
 
+/**
+ * How much of a build's output is kept in memory. A bootstrap that prints a
+ * progress bar can emit megabytes before it settles, and the panel that shows
+ * this is a tab the user may not even have open — so only the tail is kept.
+ * `offset` is untouched, so the next poll still resumes where the stream left
+ * off rather than replaying from the start.
+ */
+const MAX_BUILD_LOG_CHARS = 200_000;
+
+const tailOf = (log: string) =>
+  log.length > MAX_BUILD_LOG_CHARS ? log.slice(-MAX_BUILD_LOG_CHARS) : log;
+
 export const useInstanceBuild = (instanceId: string, active: boolean, buildId?: string | null) => {
   // An instance being followed always has a build id; the fallback only keeps
   // the key a string for the inactive case, where nothing is stored anyway.
@@ -175,7 +187,7 @@ export const useInstanceBuild = (instanceId: string, active: boolean, buildId?: 
           // The map is the source of truth, and the state mirrors it: appending
           // inside the state updater would double up under StrictMode, which
           // calls updaters twice.
-          const next = (buildLogs.get(cacheKey)?.log ?? '') + data.chunk;
+          const next = tailOf((buildLogs.get(cacheKey)?.log ?? '') + data.chunk);
           buildLogs.set(cacheKey, { log: next, offset: data.logOffset });
           offset.current = data.logOffset;
           setLog(next);
@@ -196,7 +208,15 @@ export const useInstanceBuild = (instanceId: string, active: boolean, buildId?: 
     },
   );
 
-  return { log, state: swr.data?.state };
+  // `error` is surfaced rather than swallowed: a pending instance with no
+  // state reads as `running` in the row, so a poll that has exhausted its
+  // retries would otherwise spin forever with nothing to click.
+  return {
+    error: swr.error as Error | undefined,
+    log,
+    retry: () => void swr.mutate(),
+    state: swr.data?.state,
+  };
 };
 
 const SESSIONS_KEY = 'sandbox-environment-sessions';

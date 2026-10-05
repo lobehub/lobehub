@@ -3932,6 +3932,10 @@ When I am ___, I need ___
     'Over the storage limit. Saving a file is refused until you delete something.',
   'environments.duplicateName': 'You already have an environment with this name',
   'environments.hasInstances': 'Remove its instances first',
+  'environments.loadFailed.title': 'Could not check your plan',
+  'environments.loadFailed.desc':
+    'We could not reach the service that says whether this account has a persistent workspace. Nothing is wrong with your environments.',
+  'environments.loadFailed.retry': 'Try again',
   'environments.unavailable.title': 'Persistent sandbox is not available here',
   'environments.unavailable.desc':
     'Environments describe a persistent cloud workspace, and this deployment does not provide one.',
@@ -4095,6 +4099,8 @@ When I am ___, I need ___
   // nature, which is why it is a state of the row rather than a spinner on a
   // button, and why the log is one click away instead of gone.
   'environments.instances.building': 'Building — cloning and installing',
+  'environments.instances.buildStatusUnknown': 'Lost track of this build',
+  'environments.instances.retryStatus': 'Check again',
   'environments.instances.buildFailed': 'Build failed',
   'environments.instances.rebuild': 'Rebuild',
   'environments.instances.build': 'Build',
