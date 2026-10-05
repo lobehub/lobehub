@@ -83,21 +83,35 @@ export async function streamAgentEvents(
   options: LiveStreamOptions = {},
 ): Promise<AgentRunOutcome | undefined> {
   const { onStall, stallTimeoutMs = STALL_TIMEOUT } = options;
-  const res = await fetch(url, { headers });
+  const jsonEvents: AgentStreamEvent[] = [];
+  // `--json` promises one JSON array on stdout whatever happens next — even
+  // `[]` when the stream fails before any event and the caller falls back to
+  // polling — so every exit path prints through here exactly once.
+  let jsonPrinted = false;
+  const printJsonOnce = () => {
+    if (!options.json || jsonPrinted) return;
+    jsonPrinted = true;
+    console.log(JSON.stringify(jsonEvents, null, 2));
+  };
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Agent stream failed: ${res.status} ${text}`);
-  }
-
-  if (!res.body) {
-    throw new Error('No response body received from agent stream');
+  let res: Response;
+  try {
+    res = await fetch(url, { headers });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Agent stream failed: ${res.status} ${text}`);
+    }
+    if (!res.body) {
+      throw new Error('No response body received from agent stream');
+    }
+  } catch (error) {
+    printJsonOnce();
+    throw error;
   }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  const jsonEvents: AgentStreamEvent[] = [];
   const ctx = createRenderContext();
 
   // Declared outside the read loop so partial SSE frames that span
@@ -145,12 +159,10 @@ export async function streamAgentEvents(
       if (stalled) {
         finished = true;
         if ('error' in stalled) {
-          if (options.json && jsonEvents.length > 0) {
-            console.log(JSON.stringify(jsonEvents, null, 2));
-          }
+          printJsonOnce();
           throw stalled.error;
         }
-        if (options.json) console.log(JSON.stringify(jsonEvents, null, 2));
+        if (options.json) printJsonOnce();
         else renderOutcome(stalled.outcome);
         return stalled.outcome;
       }
@@ -192,7 +204,7 @@ export async function streamAgentEvents(
             if (event.type === 'agent_runtime_end') {
               const outcome = outcomeFromEndEvent(event);
               if (options.json) {
-                console.log(JSON.stringify(jsonEvents, null, 2));
+                printJsonOnce();
               } else {
                 renderEnd(event, outcome);
               }
@@ -200,9 +212,7 @@ export async function streamAgentEvents(
             }
 
             if (event.type === 'error') {
-              if (options.json) {
-                console.log(JSON.stringify(jsonEvents, null, 2));
-              }
+              printJsonOnce();
               const outcome = outcomeFromErrorEvent(event);
               log.error(`Agent error: ${outcome.error}`);
               return outcome;
@@ -218,9 +228,7 @@ export async function streamAgentEvents(
     }
 
     // Stream ended without agent_runtime_end
-    if (options.json && jsonEvents.length > 0) {
-      console.log(JSON.stringify(jsonEvents, null, 2));
-    }
+    printJsonOnce();
     return undefined;
   } finally {
     finished = true;
@@ -316,8 +324,9 @@ export async function streamAgentEventsViaWebSocket(
       }
     };
 
+    // Same `--json` contract as SSE: exactly one array per run, `[]` included.
     const printJsonOnce = () => {
-      if (streamOpts.json && jsonEvents.length > 0 && !jsonPrinted) {
+      if (streamOpts.json && !jsonPrinted) {
         jsonPrinted = true;
         console.log(JSON.stringify(jsonEvents, null, 2));
       }

@@ -1075,3 +1075,91 @@ describe('SSE quiet window (terminal event published before the subscription)', 
     await expect(promise).resolves.toEqual(expect.objectContaining({ kind: 'completed' }));
   });
 });
+
+describe('--json prints exactly one array, even when no event arrived', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  const originalWebSocket = globalThis.WebSocket;
+  const flush = () => new Promise((r) => setTimeout(r, 20));
+  /** Every stdout line written via console.log, parsed — must be exactly `[[]]`. */
+  const jsonOutputs = () => consoleSpy.mock.calls.map((c) => JSON.parse(String(c[0])));
+
+  beforeEach(() => {
+    capturedWs = undefined;
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    (globalThis as any).WebSocket = MockWebSocket;
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+    consoleSpy.mockRestore();
+    globalThis.WebSocket = originalWebSocket;
+  });
+
+  it('SSE that fails to open (HTTP 502) prints [] before rejecting', async () => {
+    fetchSpy.mockResolvedValue(new Response('bad gateway', { status: 502 }));
+    await expect(
+      streamAgentEvents('https://example.com/stream', {}, { json: true }),
+    ).rejects.toThrow('Agent stream failed: 502');
+    expect(jsonOutputs()).toEqual([[]]);
+  });
+
+  it('SSE whose request rejects (network error) prints [] before rejecting', async () => {
+    fetchSpy.mockRejectedValue(new TypeError('fetch failed'));
+    await expect(
+      streamAgentEvents('https://example.com/stream', {}, { json: true }),
+    ).rejects.toThrow('fetch failed');
+    expect(jsonOutputs()).toEqual([[]]);
+  });
+
+  it('SSE that closes with no events prints []', async () => {
+    fetchSpy.mockResolvedValue(new Response(createSSEStream([]), { status: 200 }));
+    await expect(
+      streamAgentEvents('https://example.com/stream', {}, { json: true }),
+    ).resolves.toBeUndefined();
+    expect(jsonOutputs()).toEqual([[]]);
+  });
+
+  it('WebSocket auth failure before any event prints [] once', async () => {
+    (globalThis as any).WebSocket = class extends MockWebSocket {
+      constructor(url: string) {
+        super(url, false);
+      }
+
+      override send(data: string) {
+        this.sent.push(data);
+        if (JSON.parse(data).type === 'auth') {
+          queueMicrotask(() =>
+            this.onmessage?.({ data: JSON.stringify({ reason: 'bad', type: 'auth_failed' }) }),
+          );
+        }
+      }
+    };
+
+    await expect(
+      streamAgentEventsViaWebSocket({
+        gatewayUrl: 'https://gw.test.com',
+        json: true,
+        operationId: 'op-1',
+        token: 't',
+      }),
+    ).rejects.toThrow('Gateway auth failed');
+    await flush(); // the close that follows must not print a second array
+    expect(jsonOutputs()).toEqual([[]]);
+  });
+
+  it('WebSocket session_complete with no events prints []', async () => {
+    const promise = streamAgentEventsViaWebSocket({
+      gatewayUrl: 'https://gw.test.com',
+      json: true,
+      operationId: 'op-1',
+      token: 't',
+    });
+    await flush();
+    capturedWs!.simulateMessage({ id: '1', type: 'session_complete' });
+    await promise;
+    await flush();
+    expect(jsonOutputs()).toEqual([[]]);
+  });
+});
