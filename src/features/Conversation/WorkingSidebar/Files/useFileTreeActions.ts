@@ -143,6 +143,14 @@ export const useFileTreeActions = ({
         if (!isRemote) void ops.openInSystem(node.data);
         return;
       }
+      // An instance picked before the first message has no topic yet, and the
+      // portal reads sandbox files through the topic's session. Opening anyway
+      // would give the web preview no source at all and send desktop looking
+      // for a local path that is not the instance's — so say so instead.
+      if (sandboxInstanceId && !sandboxTopicId) {
+        toast.info(t('workingPanel.files.openNeedsTopic'));
+        return;
+      }
       openLocalFile({
         deviceId,
         filePath: node.data.path,
@@ -150,7 +158,7 @@ export const useFileTreeActions = ({
         workingDirectory: projectRoot,
       });
     },
-    [deviceId, isRemote, openLocalFile, ops, projectRoot, sandboxTopicId],
+    [deviceId, isRemote, openLocalFile, ops, projectRoot, sandboxInstanceId, sandboxTopicId, t],
   );
 
   const handleNodeClick = useCallback(

@@ -3244,6 +3244,8 @@ export default {
   'workingPanel.skills.section.project': 'Project skills',
   'workingPanel.skills.section.user': 'User skills',
   'workingPanel.skills.title': 'Skills',
+  'workingPanel.files.openNeedsTopic':
+    'Send a message first — this environment’s files open once the conversation has a session.',
   'workingPanel.files.copyAbsolutePath': 'Copy Path',
   'workingPanel.files.copyRelativePath': 'Copy Relative Path',
   'workingPanel.files.actions.copy': 'Copy',

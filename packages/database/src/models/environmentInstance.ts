@@ -232,49 +232,94 @@ export class EnvironmentInstanceModel {
 
     if (!environment) return undefined;
 
-    // Across every instance on the same storage, not only the ones this member
-    // can see: a colleague's private instance occupies its directory just the
-    // same. Only whether one overlaps is read, never which.
-    const [overlapping] = await this.db
-      .select({ id: environmentInstances.id })
-      .from(environmentInstances)
+    const bindingScope = binding.deviceId
+      ? eq(environmentInstances.deviceId, binding.deviceId)
+      : and(
+          isNull(environmentInstances.deviceId),
+          eq(environmentInstances.provider, binding.provider ?? ''),
+          eq(environmentInstances.providerScope, binding.providerScope ?? ''),
+          eq(environmentInstances.providerResourceId, binding.providerResourceId ?? ''),
+        );
+
+    // The unique index covers exact duplicates only, so `foo` and `foo/bar`
+    // are rejected by the query below rather than by a constraint — which
+    // makes this a read before a write, and two concurrent creations would
+    // otherwise both pass it and end up sharing a worktree. Serialize the
+    // pair on the storage they are competing for.
+    const lockKey = `environment_instance_dir:${binding.kind}:${
+      binding.deviceId ??
+      `${binding.provider ?? ''}/${binding.providerScope ?? ''}/${binding.providerResourceId ?? ''}`
+    }`;
+
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+
+      // Across every instance on the same storage, not only the ones this
+      // member can see: a colleague's private instance occupies its directory
+      // just the same. Only whether one overlaps is read, never which.
+      const [overlapping] = await tx
+        .select({ id: environmentInstances.id })
+        .from(environmentInstances)
+        .where(
+          and(
+            eq(environmentInstances.kind, binding.kind),
+            bindingScope,
+            or(
+              sql`starts_with(${environmentInstances.workingDirectory}, ${`${workingDirectory}/`})`,
+              sql`starts_with(${workingDirectory}, ${environmentInstances.workingDirectory} || '/')`,
+            ),
+          ),
+        )
+        .limit(1);
+
+      if (overlapping) throw new InstanceDirectoryOverlapError(workingDirectory);
+
+      const [row] = await tx
+        .insert(environmentInstances)
+        .values({
+          ...binding,
+          configuration,
+          // Taken here rather than read through the environment at use time:
+          // this is the definition this instance was actually built from, and
+          // keeping it is what lets a later comparison say "the specification
+          // moved".
+          configurationSnapshot: environment.configuration,
+          environmentId,
+          name,
+          workingDirectory,
+        })
+        .returning();
+
+      return row;
+    });
+  };
+
+  /**
+   * Writes the verdict the execution plane returned for one build.
+   *
+   * Scoped by {@link visible} rather than ownership on purpose: a member
+   * watching a published environment build can be the one whose poll receives
+   * the terminal status, and an ownership-scoped write would silently drop it
+   * and leave the owner's row `pending` against a build the runtime has since
+   * discarded. The verdict is the runtime's, not the caller's, so recording it
+   * is not a user edit — and `buildId` must still match, so a late reply from
+   * a superseded build cannot overwrite a newer one.
+   */
+  recordBuildResult = async (
+    id: string,
+    buildId: string,
+    params: Pick<NewEnvironmentInstance, 'buildError' | 'status'>,
+  ): Promise<void> => {
+    await this.db
+      .update(environmentInstances)
+      .set({ ...params, buildId: null, updatedAt: new Date() })
       .where(
         and(
-          eq(environmentInstances.kind, binding.kind),
-          binding.deviceId
-            ? eq(environmentInstances.deviceId, binding.deviceId)
-            : and(
-                isNull(environmentInstances.deviceId),
-                eq(environmentInstances.provider, binding.provider ?? ''),
-                eq(environmentInstances.providerScope, binding.providerScope ?? ''),
-                eq(environmentInstances.providerResourceId, binding.providerResourceId ?? ''),
-              ),
-          or(
-            sql`starts_with(${environmentInstances.workingDirectory}, ${`${workingDirectory}/`})`,
-            sql`starts_with(${workingDirectory}, ${environmentInstances.workingDirectory} || '/')`,
-          ),
+          eq(environmentInstances.id, id),
+          eq(environmentInstances.buildId, buildId),
+          this.visible(),
         ),
-      )
-      .limit(1);
-
-    if (overlapping) throw new InstanceDirectoryOverlapError(workingDirectory);
-
-    const [row] = await this.db
-      .insert(environmentInstances)
-      .values({
-        ...binding,
-        configuration,
-        // Taken here rather than read through the environment at use time: this
-        // is the definition this instance was actually built from, and keeping
-        // it is what lets a later comparison say "the specification moved".
-        configurationSnapshot: environment.configuration,
-        environmentId,
-        name,
-        workingDirectory,
-      })
-      .returning();
-
-    return row;
+      );
   };
 
   update = async (

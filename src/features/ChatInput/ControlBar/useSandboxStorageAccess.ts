@@ -1,6 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import useSWR from 'swr';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
@@ -57,10 +58,15 @@ const useRunsInSandbox = (agentId: string): boolean => {
 export const useSandboxStorageAccess = (agentId: string): SandboxStorageAccessResult => {
   const labEnabled = useUserStore(labPreferSelectors.enablePersistentSandbox);
   const runsInSandbox = useRunsInSandbox(agentId);
+  const workspaceId = useActiveWorkspaceId();
   const shouldAsk = labEnabled && runsInSandbox;
 
+  // Keyed by workspace, because the server resolves the entitlement from the
+  // active one. A single global key with focus revalidation off would hand the
+  // previous workspace's answer and quota to the next one until a reload —
+  // offering persistence where there is none, or hiding one there is.
   const { data } = useSWR(
-    shouldAsk ? 'sandbox-workspace-entitlement' : null,
+    shouldAsk ? ['sandbox-storage-entitlement', workspaceId ?? ''] : null,
     () => sandboxStorageService.getEntitlement(),
     { revalidateOnFocus: false },
   );

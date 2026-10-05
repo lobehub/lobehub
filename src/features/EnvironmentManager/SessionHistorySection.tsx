@@ -59,8 +59,6 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   `,
   kindIcon: css`
     display: flex;

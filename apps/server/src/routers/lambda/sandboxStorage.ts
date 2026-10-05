@@ -802,11 +802,12 @@ export const sandboxStorageRouter = router({
       if (status.state !== 'running') {
         // The id is cleared with the verdict: the runtime drops a finished
         // build's log on its own schedule, and an id that outlives it has the
-        // UI polling for a log that will never come back.
-        await ctx.instanceModel.update(input.id, {
+        // UI polling for a log that will never come back. Written through the
+        // visibility-scoped recorder, because the poll that happens to receive
+        // the terminal status can be a viewer's rather than the owner's.
+        await ctx.instanceModel.recordBuildResult(input.id, instance.buildId, {
           buildError:
             status.state === 'failed' ? status.chunk.slice(-2000) || 'Build failed' : null,
-          buildId: null,
           status: status.state === 'succeeded' ? 'ready' : 'error',
         });
       }

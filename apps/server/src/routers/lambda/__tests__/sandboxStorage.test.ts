@@ -37,6 +37,7 @@ const mockInstanceFindById = vi.fn();
 const mockInstanceFindOwnedById = vi.fn();
 const mockInstanceQuery = vi.fn();
 const mockInstanceUpdate = vi.fn();
+const mockInstanceRecordBuildResult = vi.fn();
 
 vi.mock('@/database/models/environmentInstance', () => ({
   InstanceDirectoryOverlapError: class InstanceDirectoryOverlapError extends Error {},
@@ -48,6 +49,7 @@ vi.mock('@/database/models/environmentInstance', () => ({
       findOwnedById: mockInstanceFindOwnedById,
       findByWorkingDirectory: vi.fn(),
       query: mockInstanceQuery,
+      recordBuildResult: mockInstanceRecordBuildResult,
       update: mockInstanceUpdate,
     };
   }),
@@ -539,9 +541,8 @@ describe('sandboxStorageRouter', () => {
         .instanceBuildStatus({ id: buildInstanceId, topicId: 'tpc-1' });
 
       expect(result.state).toBe('succeeded');
-      expect(mockInstanceUpdate).toHaveBeenCalledWith(buildInstanceId, {
+      expect(mockInstanceRecordBuildResult).toHaveBeenCalledWith(buildInstanceId, 'b-1', {
         buildError: null,
-        buildId: null,
         status: 'ready',
       });
     });
@@ -558,11 +559,33 @@ describe('sandboxStorageRouter', () => {
         .createCaller(ctx)
         .instanceBuildStatus({ id: buildInstanceId, topicId: 'tpc-1' });
 
-      expect(mockInstanceUpdate).toHaveBeenCalledWith(buildInstanceId, {
+      expect(mockInstanceRecordBuildResult).toHaveBeenCalledWith(buildInstanceId, 'b-1', {
         buildError: 'npm ERR! 404',
-        buildId: null,
         status: 'error',
       });
+    });
+
+    it('records the verdict against the build it polled, not whoever polled it', async () => {
+      // A viewer of a published environment can be the one whose poll receives
+      // the terminal status. The write goes through the visibility-scoped
+      // recorder and names the build, so the owner's row still settles and a
+      // superseded build cannot clobber a newer one.
+      mockInstanceFindById.mockResolvedValue({
+        buildId: 'b-7',
+        id: buildInstanceId,
+        status: 'pending',
+      });
+      mockBuildStatus.mockResolvedValue({ chunk: 'done', logOffset: 4, state: 'succeeded' });
+
+      await sandboxStorageRouter
+        .createCaller(ctx)
+        .instanceBuildStatus({ id: buildInstanceId, topicId: 'tpc-1' });
+
+      expect(mockInstanceRecordBuildResult).toHaveBeenCalledWith(buildInstanceId, 'b-7', {
+        buildError: null,
+        status: 'ready',
+      });
+      expect(mockInstanceUpdate).not.toHaveBeenCalled();
     });
 
     it('asks the execution plane nothing when no build is in flight', async () => {
