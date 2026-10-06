@@ -3,10 +3,10 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { TaskRunClaimRepo } from '../../repositories/taskRunClaim';
 import { agentOperations, tasks, taskTopics, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TaskModel } from '../task';
-import { TaskTopicModel } from '../taskTopic';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -180,12 +180,12 @@ describe('TaskModel.findOrphanedRunningTopics', () => {
   });
 });
 
-describe('TaskTopicModel run claim', () => {
+describe('TaskRunClaimRepo', () => {
   it('flips a run that still names its own operation out of `running`', async () => {
     const { operationId, topicId } = await seed();
-    const model = new TaskTopicModel(serverDB, userId);
+    const model = new TaskRunClaimRepo(serverDB, userId);
 
-    expect(await model.markEndedIfRunning(topicId, operationId, 'failed')).toBe(true);
+    expect(await model.claim(topicId, operationId, 'failed')).toBe(true);
 
     expect((await readRun(topicId)).status).toBe('failed');
     // The run is over, so the topic gets its end stamp too.
@@ -198,7 +198,7 @@ describe('TaskTopicModel run claim', () => {
     // stayed `running` — invisible to the next sweep, which only looks at
     // `running` rows.
     const { operationId, topicId } = await seed();
-    const model = new TaskTopicModel(serverDB, userId);
+    const model = new TaskRunClaimRepo(serverDB, userId);
     await serverDB.execute(sql`
       CREATE OR REPLACE FUNCTION orphaned_runs_test_fail_topic_stamp() RETURNS trigger AS $$
       BEGIN RAISE EXCEPTION 'topic stamp failed'; END;
@@ -210,7 +210,7 @@ describe('TaskTopicModel run claim', () => {
     `);
 
     try {
-      await expect(model.markEndedIfRunning(topicId, operationId, 'failed')).rejects.toThrow();
+      await expect(model.claim(topicId, operationId, 'failed')).rejects.toThrow();
     } finally {
       await serverDB.execute(
         sql`DROP TRIGGER IF EXISTS orphaned_runs_test_fail_topic_stamp ON topics`,
@@ -224,35 +224,35 @@ describe('TaskTopicModel run claim', () => {
 
   it('refuses a run that has already settled', async () => {
     const { operationId, topicId } = await seed({ runStatus: 'failed' });
-    const model = new TaskTopicModel(serverDB, userId);
+    const model = new TaskRunClaimRepo(serverDB, userId);
 
-    expect(await model.markEndedIfRunning(topicId, operationId, 'failed')).toBe(false);
+    expect(await model.claim(topicId, operationId, 'failed')).toBe(false);
   });
 
   it('refuses a run a newer operation has taken over', async () => {
     const { topicId } = await seed();
-    const model = new TaskTopicModel(serverDB, userId);
+    const model = new TaskRunClaimRepo(serverDB, userId);
 
-    expect(await model.markEndedIfRunning(topicId, 'op-someone-else', 'failed')).toBe(false);
+    expect(await model.claim(topicId, 'op-someone-else', 'failed')).toBe(false);
     expect((await readRun(topicId)).status).toBe('running');
   });
 
   it('hands its own run back when the settle it was claimed for failed', async () => {
     const { operationId, topicId } = await seed();
-    const model = new TaskTopicModel(serverDB, userId);
-    await model.markEndedIfRunning(topicId, operationId, 'failed');
+    const model = new TaskRunClaimRepo(serverDB, userId);
+    await model.claim(topicId, operationId, 'failed');
 
-    expect(await model.reopenEndedRun(topicId, operationId, 'failed')).toBe(true);
+    expect(await model.release(topicId, operationId, 'failed')).toBe(true);
     expect((await readRun(topicId)).status).toBe('running');
     expect((await readTopic(topicId)).completedAt).toBeNull();
   });
 
   it('never re-opens a run that is no longer the claimed one', async () => {
     const { operationId, topicId } = await seed();
-    const model = new TaskTopicModel(serverDB, userId);
-    await model.markEndedIfRunning(topicId, operationId, 'failed');
+    const model = new TaskRunClaimRepo(serverDB, userId);
+    await model.claim(topicId, operationId, 'failed');
 
-    expect(await model.reopenEndedRun(topicId, 'op-someone-else', 'failed')).toBe(false);
+    expect(await model.release(topicId, 'op-someone-else', 'failed')).toBe(false);
     expect((await readRun(topicId)).status).toBe('failed');
   });
 });

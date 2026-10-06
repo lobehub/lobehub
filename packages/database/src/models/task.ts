@@ -35,6 +35,7 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { merge } from '@/utils/merge';
 
+import type { AgentOperationError } from '../schemas/agentOperations';
 import { agentOperations } from '../schemas/agentOperations';
 import { documents } from '../schemas/file';
 import type {
@@ -86,8 +87,11 @@ const ORPHANED_RUN_OPERATION_STATUSES: AgentOperationStatus[] = ['abandoned', 'e
 /** One `running` Task run whose operation has already ended — see the finder. */
 export interface OrphanedRunningTopic {
   completionReason: string | null;
-  /** The failure the operation recorded, when it recorded one. */
-  operationError: { message?: string; type?: string } | null;
+  /**
+   * The failure the operation recorded, when it recorded one — the raw
+   * `state.error`, so its message may be nested (`{ errorType, error: { message } }`).
+   */
+  operationError: AgentOperationError | null;
   operationId: string;
   operationStatus: AgentOperationStatus;
   taskId: string;

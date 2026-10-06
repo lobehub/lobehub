@@ -1,9 +1,11 @@
 import { ABANDONED_OPERATION_ERROR_PREFIX, LEASE_EXPIRED_ERROR } from '@lobechat/const/goal';
+import { extractErrorMessage } from '@lobechat/model-runtime/errors';
 import debug from 'debug';
 
 import type { OrphanedRunningTopic } from '@/database/models/task';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TaskRunClaimRepo } from '@/database/repositories/taskRunClaim';
 import type { LobeChatDatabase } from '@/database/type';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 
@@ -113,14 +115,17 @@ const settleOrphanedRun = async (
 ): Promise<boolean> => {
   const errorMessage = resolveOrphanedRunError(row);
   const runStatus = resolveFailedRunStatus(errorMessage);
-  const taskTopicModel = new TaskTopicModel(db, row.userId, row.workspaceId ?? undefined);
+  const claimRepo = new TaskRunClaimRepo(db, row.userId, row.workspaceId ?? undefined);
 
-  if (!(await taskTopicModel.markEndedIfRunning(row.topicId, row.operationId, runStatus))) {
+  if (!(await claimRepo.claim(row.topicId, row.operationId, runStatus))) {
     return false;
   }
 
   try {
     await new TaskLifecycleService(db, row.userId, row.workspaceId ?? undefined).onTopicComplete({
+      // The structured type picks the error brief's remedy (a budget failure
+      // leads with "Upgrade plan"), exactly as the lost hook would have.
+      errorCode: resolveOrphanedRunErrorType(row),
       errorMessage,
       operationId: row.operationId,
       reason: 'error',
@@ -132,7 +137,7 @@ const settleOrphanedRun = async (
       topicId: row.topicId,
     });
   } catch (error) {
-    await handBackClaimedRun(db, row, runStatus, taskTopicModel).catch((rollbackError) =>
+    await handBackClaimedRun(db, row, runStatus, claimRepo).catch((rollbackError) =>
       console.error('[task-reconcile] failed to re-open a claimed run: %O', {
         error: rollbackError,
         operationId: row.operationId,
@@ -158,7 +163,7 @@ const handBackClaimedRun = async (
   db: LobeChatDatabase,
   row: OrphanedRunningTopic,
   runStatus: string,
-  taskTopicModel: TaskTopicModel,
+  claimRepo: TaskRunClaimRepo,
 ): Promise<void> => {
   const task = await new TaskModel(db, row.userId, row.workspaceId ?? undefined).findById(
     row.taskId,
@@ -172,7 +177,7 @@ const handBackClaimedRun = async (
     return;
   }
 
-  await taskTopicModel.reopenEndedRun(row.topicId, row.operationId, runStatus);
+  await claimRepo.release(row.topicId, row.operationId, runStatus);
 };
 
 /**
@@ -190,12 +195,67 @@ const handBackClaimedRun = async (
  * only needs another attempt.
  */
 const resolveOrphanedRunError = (row: OrphanedRunningTopic): string => {
-  const recorded = row.operationError?.message;
-  if (typeof recorded === 'string' && recorded.trim()) return recorded.trim();
+  // `agent_operations.error` holds the raw `state.error`, so the message can sit
+  // nested — a provider failure is `{ errorType, error: { message } }`. Read it
+  // the way the completion hook does, or a real quota / provider failure would
+  // fall through to the lost-run text and be retried as if nothing judged it.
+  const recorded = extractErrorMessage(row.operationError);
+  if (recorded?.trim()) return recorded.trim();
 
   if (row.operationStatus === 'abandoned') {
     return `${ABANDONED_OPERATION_ERROR_PREFIX} ${row.completionReason ?? 'lease_expired'}`;
   }
 
   return LEASE_EXPIRED_ERROR;
+};
+
+/**
+ * The structured error type the operation recorded, if any — the raw payload
+ * carries it as `errorType`, a normalized one as `type`.
+ */
+const resolveOrphanedRunErrorType = (row: OrphanedRunningTopic): string | undefined => {
+  const error = row.operationError;
+  if (!error) return undefined;
+  const type = error.errorType ?? error.type;
+  return typeof type === 'string' && type ? type : undefined;
+};
+
+export interface SettledRunQuery {
+  operationId: string;
+  reason: string;
+  taskId: string;
+  topicId?: string;
+}
+
+/**
+ * Whether a failed run's `onComplete` delivery arrives for a run that was
+ * already settled — by this reconciliation, most often, when the hook was
+ * delayed past the grace window rather than lost.
+ *
+ * The lifecycle is not idempotent: driving it twice emits a second urgent error
+ * brief, counts the failure into an automation's fuse twice, and re-parks a Task
+ * that may have moved on. The sweep's claim fences competing sweeps; this is the
+ * same fence read from the callback side. A run is settled once its own row has
+ * left `running` *and* its Task has moved on: the sweep makes both writes, as
+ * does a callback that already ran to completion. A row that is terminal under a
+ * Task still `running` is a settle that broke midway, and is let through so the
+ * retry can finish it.
+ *
+ * Only failures are fenced — the sweep never settles a successful or interrupted
+ * run, so those deliveries keep their existing behaviour.
+ */
+export const isRunAlreadySettled = async (
+  db: LobeChatDatabase,
+  userId: string,
+  workspaceId: string | undefined,
+  { operationId, reason, taskId, topicId }: SettledRunQuery,
+): Promise<boolean> => {
+  if (reason !== 'error' || !topicId) return false;
+
+  const run = await new TaskTopicModel(db, userId, workspaceId).findByTopicId(topicId);
+  if (!run || run.taskId !== taskId || run.operationId !== operationId) return false;
+  if (run.status === 'running') return false;
+
+  const task = await new TaskModel(db, userId, workspaceId).findById(taskId);
+  return !!task && task.status !== 'running';
 };

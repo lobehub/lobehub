@@ -5,10 +5,10 @@ import { and, count, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { TaskTopicItem } from '../schemas/task';
 import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
-import type { LobeChatDatabase, Transaction } from '../type';
+import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
-const TERMINAL_TOPIC_STATUSES = new Set([
+export const TERMINAL_TOPIC_STATUSES = new Set([
   'canceled',
   'completed',
   DEVICE_OFFLINE_RUN_STATUS,
@@ -52,15 +52,11 @@ export class TaskTopicModel {
    * stamp `topics.completedAt` so duration can be computed at read time, and
    * promote `topics.status` to 'completed' on a clean finish.
    */
-  private async markTopicEnded(
-    topicId: string,
-    status: string,
-    db: LobeChatDatabase | Transaction = this.db,
-  ): Promise<void> {
+  async markTopicEnded(topicId: string, status: string): Promise<void> {
     const setClause: { completedAt: Date; status?: 'completed' } = { completedAt: new Date() };
     if (status === 'completed') setClause.status = 'completed';
 
-    await db
+    await this.db
       .update(topics)
       .set(setClause)
       .where(
@@ -249,47 +245,37 @@ export class TaskTopicModel {
   /**
    * Flip one run out of `running` — but only while it is still that exact run.
    *
-   * The orphaned-run reconciliation claims its settle with this before driving
-   * the task lifecycle, so a row a newer operation has already replaced, or one
-   * another sweep converged a moment ago, is never reported twice. Unlike
-   * {@link updateStatus}, a miss is a real answer rather than a silent no-op.
-   *
-   * The claim and the topic's end stamp commit together. Separately, a failed
-   * stamp would leave the run terminal with the claimer never learning it won,
-   * so nothing would hand it back — and the sweep only looks at `running` rows,
-   * so that run could never be retried.
+   * Unlike {@link updateStatus}, a miss is a real answer rather than a silent
+   * no-op: a row a newer operation has already replaced, or one another writer
+   * settled a moment ago, returns `false`. Only the run row is written; the
+   * topic's end stamp is the caller's to commit alongside it — see
+   * `TaskRunClaimRepo`.
    */
-  async markEndedIfRunning(topicId: string, operationId: string, status: string): Promise<boolean> {
-    return this.db.transaction(async (tx) => {
-      const result = await tx
-        .update(taskTopics)
-        .set({ status })
-        .where(
-          and(
-            eq(taskTopics.topicId, topicId),
-            eq(taskTopics.operationId, operationId),
-            eq(taskTopics.status, 'running'),
-            this.ownership(),
-          ),
-        )
-        .returning({ topicId: taskTopics.topicId });
+  async claimRunIfRunning(topicId: string, operationId: string, status: string): Promise<boolean> {
+    const result = await this.db
+      .update(taskTopics)
+      .set({ status })
+      .where(
+        and(
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.operationId, operationId),
+          eq(taskTopics.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ topicId: taskTopics.topicId });
 
-      if (result.length === 0) return false;
-      if (TERMINAL_TOPIC_STATUSES.has(status)) await this.markTopicEnded(topicId, status, tx);
-      return true;
-    });
+    return result.length > 0;
   }
 
   /**
-   * Hand a run claimed by {@link markEndedIfRunning} back to `running` when the
-   * settle it was claimed for failed.
+   * Put a run claimed by {@link claimRunIfRunning} back to `running`.
    *
    * Keyed on the same operation as the claim, so a newer run that took the row
-   * over in between is never reopened — only the one whose settle was aborted
-   * returns to `running`, and with it the sweep that will retry it. The
-   * `completedAt` the claim stamped is cleared for the same reason.
+   * over in between is never reopened. Only the run row is written; clearing the
+   * topic's end stamp is the caller's — see `TaskRunClaimRepo`.
    */
-  async reopenEndedRun(topicId: string, operationId: string, fromStatus: string): Promise<boolean> {
+  async reopenRun(topicId: string, operationId: string, fromStatus: string): Promise<boolean> {
     const result = await this.db
       .update(taskTopics)
       .set({ status: 'running' })
@@ -303,8 +289,11 @@ export class TaskTopicModel {
       )
       .returning({ topicId: taskTopics.topicId });
 
-    if (result.length === 0) return false;
+    return result.length > 0;
+  }
 
+  /** Undo {@link markTopicEnded}'s end stamp for a run that is live again. */
+  async clearTopicEnded(topicId: string): Promise<void> {
     await this.db
       .update(topics)
       .set({ completedAt: null })
@@ -314,8 +303,6 @@ export class TaskTopicModel {
           buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
         ),
       );
-
-    return true;
   }
 
   async findByTopicId(topicId: string): Promise<TaskTopicItem | null> {
