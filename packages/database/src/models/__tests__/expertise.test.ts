@@ -1023,6 +1023,29 @@ describe('ExpertiseModel', () => {
     });
   });
 
+  it('keeps quotes read from a material out of how reliably a rule is practised', async () => {
+    const { first } = await seedRuleGroup();
+
+    const [created] = await new ExpertiseRuleRepository(serverDB, userId).commitDistilled(
+      { subjectId: null, subjectType: 'standalone', title: 'notes', type: 'text' },
+      [
+        {
+          domainId: 'rules-domain',
+          kind: 'create',
+          quote: 'always rebase',
+          rule: { title: 'Rebase before delivering' },
+        },
+        { intoId: first, kind: 'merge', quote: 'shoot the success path' },
+      ],
+    );
+
+    const model = new ExpertiseModel(serverDB, userId);
+    expect(await model.reliabilitySeries(['rules-domain'])).toEqual([]);
+    const lessons = await model.listLessonsWithRecent(['rules-domain']);
+    expect(lessons.find(({ id }) => id === created.id)?.recent).toEqual([]);
+    expect(lessons.find(({ id }) => id === first)?.recent).toEqual([]);
+  });
+
   it('moves an unencumbered rule in place with a fresh code', async () => {
     const { first } = await seedRuleGroup();
     const model = new ExpertiseModel(serverDB, userId);

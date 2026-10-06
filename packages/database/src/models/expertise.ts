@@ -72,6 +72,13 @@ const carrierColumns = (
     : { boundUserId: owner.userId };
 };
 
+/**
+ * Runs that observed practice: a material the reviewer distilled (`reflectionKey` `material:…`)
+ * records the passages a rule was read from, which are not outcomes of applying it.
+ */
+const notMaterialRun = () =>
+  sql`coalesce(${expertiseRuns.reflectionKey}, '') not like 'material:%'`;
+
 export class ExpertiseModel {
   private db: LobeChatDatabase;
   private userId: string;
@@ -187,6 +194,8 @@ export class ExpertiseModel {
   /**
    * Per-run pass/violation counts — the reliability series behind the "做对率" chart.
    * A run without hits produces no row; callers treat missing runs as "nothing to judge".
+   * A material the reviewer distilled is not practice: its quotes are evidence the rule exists,
+   * not a run that got it right, so they never count as passes.
    */
   reliabilitySeries = async (domainIds: string[]) => {
     if (domainIds.length === 0) return [];
@@ -199,7 +208,7 @@ export class ExpertiseModel {
       })
       .from(expertiseHits)
       .innerJoin(expertiseRuns, eq(expertiseRuns.id, expertiseHits.runId))
-      .where(inArray(expertiseHits.domainId, domainIds))
+      .where(and(inArray(expertiseHits.domainId, domainIds), notMaterialRun()))
       .groupBy(expertiseHits.domainId, expertiseRuns.runIndex)
       .orderBy(asc(expertiseHits.domainId), asc(expertiseRuns.runIndex));
   };
@@ -616,6 +625,7 @@ export class ExpertiseModel {
    * Active lessons for the portrait, each with its most recent hit outcomes (newest last).
    * Recent outcomes are what the client folds into a reliability tier; the topic title of each
    * hit lets the row say *where* it last went wrong without another query.
+   * Material quotes are left out for the same reason as in {@link reliabilitySeries}.
    */
   listLessonsWithRecent = async (domainIds: string[], recentLimit = 6) => {
     if (domainIds.length === 0) return [];
@@ -652,7 +662,7 @@ export class ExpertiseModel {
         })
         .from(expertiseHits)
         .innerJoin(expertiseRuns, eq(expertiseRuns.id, expertiseHits.runId))
-        .where(inArray(expertiseHits.domainId, domainIds)),
+        .where(and(inArray(expertiseHits.domainId, domainIds), notMaterialRun())),
     );
     const recentRows = await this.db
       .with(ranked)
