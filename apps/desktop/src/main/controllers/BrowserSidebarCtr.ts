@@ -304,16 +304,15 @@ export default class BrowserSidebarCtr extends ControllerModule {
     // happens on pages with a hanging request — the tool call then sat until
     // the gateway timeout. Past the cap, report the page as still loading, but
     // only once the requested document has committed: before that, getURL()
-    // and the main frame still belong to the previous page.
+    // and the main frame still belong to the previous page. Only a cross-document
+    // commit counts: `did-navigate-in-page` also fires for hash changes and
+    // pushState on the old page, and a same-document target settles loadURL
+    // right away anyway.
     let committed = false;
     const onNavigate = () => {
       committed = true;
     };
-    const onNavigateInPage = (_event: unknown, _url: string, isMainFrame: boolean) => {
-      if (isMainFrame) committed = true;
-    };
     webContents.on('did-navigate', onNavigate);
-    webContents.on('did-navigate-in-page', onNavigateInPage);
     let settleTimer: ReturnType<typeof setTimeout> | undefined;
     const outcome = await Promise.race([
       webContents.loadURL(url).then(
@@ -329,7 +328,6 @@ export default class BrowserSidebarCtr extends ControllerModule {
     ]).finally(() => {
       clearTimeout(settleTimer);
       webContents.removeListener('did-navigate', onNavigate);
-      webContents.removeListener('did-navigate-in-page', onNavigateInPage);
     });
 
     this.updateSnapshot(params.sessionId);

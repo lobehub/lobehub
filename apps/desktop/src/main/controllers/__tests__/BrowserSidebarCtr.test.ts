@@ -173,6 +173,28 @@ describe('BrowserSidebarCtr retained webview registration', () => {
       vi.useRealTimers();
     });
 
+    it('ignores in-page navigations of the old page while the requested one is pending', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      // The old SPA changes its hash / pushState while the new server is still
+      // silent: that is not the requested document committing.
+      guest.loadURL = vi.fn(() => {
+        guest.emit('did-navigate-in-page', {}, 'http://127.0.0.1:16001/#tab', true);
+        return new Promise(() => {});
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'http://127.0.0.1:18748/',
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(pending).resolves.toMatchObject({ success: false });
+      vi.useRealTimers();
+    });
+
     it('reports a navigation that left the requested page unopened', async () => {
       const guest = createWebContents(7);
       guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
