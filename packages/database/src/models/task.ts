@@ -1450,7 +1450,7 @@ export class TaskModel {
     id: string,
     currentStatus: string,
     status: string,
-    extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
+    extra?: { completedAt?: Date | null; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem | null> {
     const [task] = await this.db
       .update(tasks)

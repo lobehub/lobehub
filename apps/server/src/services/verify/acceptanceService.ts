@@ -21,6 +21,7 @@ import debug from 'debug';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
+import { GoalModel } from '@/database/models/goal';
 import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
@@ -859,6 +860,13 @@ export class AcceptanceService {
     if (status !== acceptance.status) {
       await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
       log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
+
+      // An ingested round (no verify pipeline status) settles when its report is
+      // published, and nothing else drives the task from it. Rounds the server
+      // verifier runs are driven once, after any auto-repair, by
+      // `driveTaskFromVerify` — completing here would race ahead of it.
+      if (status === 'delivered' && !current.status && acceptance.subjectType === 'task')
+        await this.completeDeliveredTaskSubject(acceptance.subjectId);
     }
     return status;
   };
@@ -1001,12 +1009,15 @@ export class AcceptanceService {
    * decision detail through the prompt builder.
    */
   reject = async (acceptanceId: string, comment?: string): Promise<AcceptanceItem> => {
-    await this.requireDecidableAcceptance(acceptanceId);
+    const acceptance = await this.requireDecidableAcceptance(acceptanceId);
 
     const settled = await this.stampDecision(acceptanceId, 'reject', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'rejected');
 
     this.distilSettledRound(acceptanceId, settled);
+
+    if (acceptance.subjectType === 'task')
+      await this.reopenRejectedTaskSubject(acceptance.subjectId);
 
     return (await this.acceptanceModel.findById(acceptanceId))!;
   };
@@ -1185,9 +1196,10 @@ export class AcceptanceService {
   };
 
   /**
-   * Accepting a task subject completes the task when verification didn't
-   * already (e.g. the round failed but the user accepted anyway). Best-effort:
-   * a task error must not undo the recorded acceptance.
+   * Completes a task subject that verification didn't already settle — on
+   * accept (e.g. the round failed but the user accepted anyway) and when an
+   * ingested round delivers. Best-effort: a task error must not undo the
+   * recorded acceptance.
    */
   private completeTaskSubject = async (subjectId: string): Promise<void> => {
     try {
@@ -1204,9 +1216,62 @@ export class AcceptanceService {
         id: task.id,
         status: 'completed',
       });
-      log('acceptance accepted → task %s completed', task.id);
+      log('acceptance → task %s completed', task.id);
     } catch (error) {
       log('completeTaskSubject failed (non-fatal): %O', error);
+    }
+  };
+
+  /**
+   * The task whose status follows its acceptance's lifecycle: delivered →
+   * completed, rejected → reopened. Goal graph tasks are driven by their
+   * coordinator (a paused task is its retry signal) and recurring tasks stay
+   * on their schedule, so neither follows the acceptance.
+   */
+  private resolveLifecycleTask = async (subjectId: string) => {
+    const task = await new TaskModel(this.db, this.userId, this.workspaceId).resolve(subjectId);
+    if (!task || task.automationMode) return null;
+
+    const goal = await new GoalModel(this.db, this.userId, this.workspaceId).findByGraphTask(
+      task.id,
+    );
+    return goal ? null : task;
+  };
+
+  /**
+   * A delivered acceptance completes its task: the delivery is in, and the
+   * user's accept / reject decides from here. Best-effort — the task must not
+   * fail the rollup that settled the round.
+   */
+  private completeDeliveredTaskSubject = async (subjectId: string): Promise<void> => {
+    try {
+      const task = await this.resolveLifecycleTask(subjectId);
+      if (!task) return;
+      await this.completeTaskSubject(task.id);
+    } catch (error) {
+      log('completeDeliveredTaskSubject failed (non-fatal): %O', error);
+    }
+  };
+
+  /**
+   * Rejecting a delivery reopens the task it completed, so the task is not left
+   * reading "done" while its repair is pending. Only a completed task moves —
+   * one the user already paused, canceled or restarted keeps its own state.
+   */
+  private reopenRejectedTaskSubject = async (subjectId: string): Promise<void> => {
+    try {
+      const task = await this.resolveLifecycleTask(subjectId);
+      if (task?.status !== 'completed') return;
+
+      await new TaskModel(this.db, this.userId, this.workspaceId).updateStatusIfCurrent(
+        task.id,
+        'completed',
+        'paused',
+        { completedAt: null },
+      );
+      log('acceptance rejected → task %s reopened as paused', task.id);
+    } catch (error) {
+      log('reopenRejectedTaskSubject failed (non-fatal): %O', error);
     }
   };
 

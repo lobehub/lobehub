@@ -559,6 +559,50 @@ describe('driveTaskFromVerify', () => {
     expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
   });
 
+  it('failed with an Acceptance → completes the task, since the Acceptance is now delivered', async () => {
+    runFindByOperation.mockResolvedValue({
+      acceptanceId: 'acceptance-1',
+      id: 'run-1',
+      metadata: null,
+      status: 'failed',
+    });
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+    // The creator still hears the verdict: the round did not pass.
+    expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
+  });
+
+  it('failed Goal task with an Acceptance → still pauses so the coordinator retries', async () => {
+    runFindByOperation.mockResolvedValue({
+      acceptanceId: 'acceptance-1',
+      id: 'run-1',
+      metadata: null,
+      status: 'failed',
+    });
+    goalFindByTask.mockResolvedValue({ id: 'goal-1' });
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+  });
+
+  it('failed with an Acceptance → pauses when the Goal lookup fails', async () => {
+    runFindByOperation.mockResolvedValue({
+      acceptanceId: 'acceptance-1',
+      id: 'run-1',
+      metadata: null,
+      status: 'failed',
+    });
+    goalFindByTask.mockRejectedValue(new Error('db down'));
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+  });
+
   it('errored → pauses without an inbox brief; never claims the delivery "did not pass"', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
