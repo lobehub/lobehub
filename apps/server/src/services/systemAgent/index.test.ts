@@ -15,8 +15,14 @@ vi.mock('@/database/models/user', () => ({
   },
 }));
 
+const resolveProviderRelay = vi.hoisted(() => vi.fn());
+vi.mock('@/server/modules/AgentRuntime/llmRelay/resolveLlmExecutionSite', () => ({
+  resolveProviderRelay,
+}));
+
 afterEach(() => {
   vi.restoreAllMocks();
+  resolveProviderRelay.mockReset();
 });
 
 describe('SystemAgentService.generateTopicTitle', () => {
@@ -48,5 +54,33 @@ describe('SystemAgentService.generateTopicTitle', () => {
         },
       );
     }
+  });
+});
+
+describe('SystemAgentService with a device-only system agent model', () => {
+  // A bot conversation's topic title runs from a webhook: there is no browser
+  // tab to relay a local model to. It must fail fast (no provider call from the
+  // server) and leave the caller on its default title.
+  it('gives up on the topic title at once when no browser tab is attached', async () => {
+    resolveProviderRelay.mockResolvedValue({ runtimeProvider: 'ollama' });
+    const init = vi.spyOn(ModelRuntimeModule, 'initModelRuntimeFromDB');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const service = new SystemAgentService({} as LobeChatDatabase, 'user-1');
+
+    const title = await service.generateTopicTitle({
+      lastAssistantContent: 'Here is the answer.',
+      topicId: 'topic-a',
+      userPrompt: 'A question',
+    });
+
+    expect(title).toBeNull();
+    expect(init).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
+      'SystemAgentService.generateTopicTitle failed:',
+      expect.objectContaining({
+        error: expect.objectContaining({ reason: 'no_executor' }),
+        errorType: 'ClientLlmExecutorUnavailable',
+      }),
+    );
   });
 });
