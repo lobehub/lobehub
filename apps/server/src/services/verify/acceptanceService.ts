@@ -18,7 +18,12 @@ import type {
 } from '@lobechat/types';
 import debug from 'debug';
 
-import { AcceptanceModel } from '@/database/models/acceptance';
+import {
+  type AcceptanceListProject,
+  type AcceptanceListScope,
+  type AcceptanceListSource,
+  AcceptanceModel,
+} from '@/database/models/acceptance';
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
 import { ProjectModel } from '@/database/models/project';
@@ -450,6 +455,15 @@ export interface AcceptanceSubjectSummary {
 
 /** The list filter as a status set — one definition for the flat and paged reads. */
 export type AcceptanceListFilter = 'active' | 'all' | 'completed';
+
+/** Every narrowing the list panel can apply, shared by the flat and paged reads. */
+export interface AcceptanceListOptions {
+  filter?: AcceptanceListFilter;
+  /** A project id, or `null` for acceptances filed under no project. */
+  projectId?: AcceptanceListProject;
+  scope?: AcceptanceListScope;
+  source?: AcceptanceListSource;
+}
 
 const statusesForFilter = (filter: AcceptanceListFilter): AcceptanceStatus[] | undefined => {
   if (filter === 'active')
@@ -1371,15 +1385,12 @@ export class AcceptanceService {
    * carries the latest round's check count for the panel's at-a-glance line.
    */
   listWithSubjects = async (
-    options: {
-      filter?: 'active' | 'all' | 'completed';
+    options: AcceptanceListOptions & {
       limit?: number;
-      projectId?: string;
       q?: string;
     } = {},
   ) => {
     const { filter = 'all', limit = 50, q } = options;
-    const statuses = statusesForFilter(filter);
     const normalizedQuery = q?.trim().toLocaleLowerCase();
 
     // A title search must span the complete owned set. Subject titles live in
@@ -1387,74 +1398,113 @@ export class AcceptanceService {
     // applying the result cap instead of searching only the latest page.
     const candidates = await this.acceptanceModel.query({
       limit: normalizedQuery ? undefined : limit,
-      statuses,
+      projectId: options.projectId,
+      scope: options.scope,
+      source: options.source,
+      statuses: statusesForFilter(filter),
       unbounded: Boolean(normalizedQuery),
-      ...(options.projectId ? { projectId: options.projectId } : {}),
     });
-    const subjects = await this.resolveSubjects(candidates);
-    const withSubjects = candidates.map((row) => ({
-      row,
-      subject: subjects.get(row.id)!,
-    }));
+    const subjects = await this.resolveSubjectsByOwner(candidates);
     const matched = normalizedQuery
-      ? withSubjects
-          .filter(({ row, subject }) =>
-            (subject.title || row.subjectId).toLocaleLowerCase().includes(normalizedQuery),
+      ? candidates
+          .filter((row) =>
+            (subjects.get(row.id)?.title || row.subjectId)
+              .toLocaleLowerCase()
+              .includes(normalizedQuery),
           )
           .slice(0, limit)
-      : withSubjects;
-    const rows = matched.map(({ row }) => row);
-    const [checkCounts, projects] = await Promise.all([
-      this.latestCheckCounts(rows.map((row) => row.id)),
-      this.resolveProjects(rows),
-    ]);
+      : candidates;
 
-    return matched.map(({ row, subject }) => ({
-      ...row,
-      checkCount: checkCounts.get(row.id) ?? null,
-      project: projects.get(row.id) ?? null,
-      subject,
-    }));
+    return this.decorateListRows(matched, subjects);
   };
 
   /**
    * The paged twin of {@link listWithSubjects} — one scroll page of the list
    * panel, newest first.
    *
-   * Takes the same `filter` vocabulary, applied in the QUERY: a page of
+   * Takes the same filter vocabulary, applied in the QUERY: a page of
    * "in progress" is thirty in-progress rows, not thirty rows of which some
    * happen to be in progress. Search deliberately has no paged form — a title
    * search must span the whole owned set, which is what `listWithSubjects`
    * already does; the panel asks that one when a query is active.
    */
-  listPageWithSubjects = async (options: {
-    cursor?: string;
-    filter?: AcceptanceListFilter;
-    limit?: number;
-    projectId?: string;
-  }) => {
+  listPageWithSubjects = async (
+    options: AcceptanceListOptions & {
+      cursor?: string;
+      limit?: number;
+    },
+  ) => {
     const { items, nextCursor } = await this.acceptanceModel.queryPage({
       cursor: options.cursor,
       limit: options.limit,
+      projectId: options.projectId,
+      scope: options.scope,
+      source: options.source,
       statuses: statusesForFilter(options.filter ?? 'all'),
-      ...(options.projectId ? { projectId: options.projectId } : {}),
     });
 
-    const subjects = await this.resolveSubjects(items);
-    const [checkCounts, projects] = await Promise.all([
-      this.latestCheckCounts(items.map((row) => row.id)),
-      this.resolveProjects(items),
-    ]);
-
     return {
-      items: items.map((row) => ({
-        ...row,
-        checkCount: checkCounts.get(row.id) ?? null,
-        project: projects.get(row.id) ?? null,
-        subject: subjects.get(row.id)!,
-      })),
+      items: await this.decorateListRows(items, await this.resolveSubjectsByOwner(items)),
       nextCursor,
     };
+  };
+
+  /**
+   * Run a per-scope read for each row in the row's OWN scope. A participated
+   * row may belong to another user or workspace, whose task/topic/report is
+   * invisible to the caller's models — the bundle reads it as the owner too,
+   * so the list shows the same title and check count the detail page does.
+   */
+  private readByOwner = async <T>(
+    rows: AcceptanceItem[],
+    read: (service: AcceptanceService, group: AcceptanceItem[]) => Promise<Map<string, T>>,
+  ): Promise<Map<string, T>> => {
+    const groups = new Map<string, AcceptanceItem[]>();
+    for (const row of rows) {
+      const key = this.isInOwnScope(row) ? '' : `${row.userId}|${row.workspaceId ?? ''}`;
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+
+    const resolved = await Promise.all(
+      [...groups].map(([key, group]) =>
+        read(
+          key === ''
+            ? this
+            : new AcceptanceService(this.db, group[0].userId, group[0].workspaceId ?? undefined),
+          group,
+        ),
+      ),
+    );
+    return new Map(resolved.flatMap((map) => [...map]));
+  };
+
+  private isInOwnScope = (row: AcceptanceItem) =>
+    row.workspaceId
+      ? row.workspaceId === this.workspaceId
+      : !this.workspaceId && row.userId === this.userId;
+
+  private resolveSubjectsByOwner = (rows: AcceptanceItem[]) =>
+    this.readByOwner(rows, (service, group) => service.resolveSubjects(group));
+
+  private decorateListRows = async (
+    rows: AcceptanceItem[],
+    subjects: Map<string, AcceptanceSubjectSummary>,
+  ) => {
+    const [checkCounts, projects] = await Promise.all([
+      this.readByOwner(rows, (service, group) =>
+        service.latestCheckCounts(group.map((row) => row.id)),
+      ),
+      // Projects stay in the caller's scope: another owner's project name is
+      // theirs, and a row filed under it simply reads as unfiled here.
+      this.resolveProjects(rows),
+    ]);
+
+    return rows.map((row) => ({
+      ...row,
+      checkCount: checkCounts.get(row.id) ?? null,
+      project: projects.get(row.id) ?? null,
+      subject: subjects.get(row.id)!,
+    }));
   };
 
   /**

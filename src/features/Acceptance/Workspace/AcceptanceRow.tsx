@@ -335,8 +335,10 @@ const AcceptanceRow = memo<{
       // Only where the grouping does not already say it, and only when the row
       // actually has one — stamping "ungrouped" on every other row would cost a
       // line of height to say nothing.
+      // Someone else's acceptance (a participated row) offers no menu: every
+      // entry in it is a write its owner alone may make.
       actions={
-        selectable ? undefined : (
+        selectable || !item.canManage ? undefined : (
           <DropdownMenu
             iconSpaceMode={'group'}
             items={menuItems}
@@ -381,8 +383,8 @@ const AcceptanceRow = memo<{
           : undefined
       }
       onClick={(e) => {
-        if (selectable || e.shiftKey || e.metaKey || e.ctrlKey) {
-          onToggleSelect?.(e.shiftKey);
+        if (onToggleSelect && (selectable || e.shiftKey || e.metaKey || e.ctrlKey)) {
+          onToggleSelect(e.shiftKey);
           return;
         }
         navigate(`/acceptance/${item.id}`);

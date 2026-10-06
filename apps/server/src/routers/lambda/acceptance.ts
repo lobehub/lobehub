@@ -213,6 +213,30 @@ const canReadAcceptance = async (
   return Boolean(member);
 };
 
+/**
+ * The list panel's narrowing, shared by the flat and paged reads. `projectId:
+ * null` asks for acceptances filed under no project.
+ */
+const acceptanceListFiltersSchema = z.object({
+  filter: z.enum(['active', 'all', 'completed']).optional(),
+  projectId: z.string().nullable().optional(),
+  scope: z.enum(['all', 'created', 'participated']).optional(),
+  source: z.enum(['all', 'goal', 'standalone', 'task', 'topic']).optional(),
+});
+
+/**
+ * Tag each list row with whether the caller may rename, refile, re-status or
+ * delete it. "Participated" rows are often someone else's, so the panel must
+ * know which menus to offer instead of letting the write fail as NOT_FOUND.
+ */
+const withManageFlag = async <T extends Pick<AcceptanceItem, 'id' | 'userId' | 'workspaceId'>>(
+  ctx: { serverDB: LobeChatDatabase; userId: string },
+  rows: T[],
+): Promise<Array<T & { canManage: boolean }>> => {
+  const manageable = new Set((await filterManageableAcceptances(ctx, rows)).map((row) => row.id));
+  return rows.map((row) => ({ ...row, canManage: manageable.has(row.id) }));
+};
+
 /** Max rows one multi-select sweep may touch — the list itself is capped at 200. */
 const ACCEPTANCE_BATCH_LIMIT = 200;
 const PURGE_BATCH_CONCURRENCY = 4;
@@ -935,44 +959,38 @@ export const acceptanceRouter = router({
    */
   list: acceptanceProcedure
     .input(
-      z
-        .object({
-          filter: z.enum(['active', 'all', 'completed']).optional(),
+      acceptanceListFiltersSchema
+        .extend({
           limit: z.number().int().min(1).max(200).optional(),
-          projectId: z.string().optional(),
           q: z.string().max(200).optional(),
         })
         .optional(),
     )
-    .query(async ({ ctx, input }) => ctx.acceptanceService.listWithSubjects(input)),
+    .query(async ({ ctx, input }) =>
+      withManageFlag(ctx, await ctx.acceptanceService.listWithSubjects(input)),
+    ),
 
   /**
    * One keyset page of the same feed — what the list panel scrolls.
    *
-   * Speaks the same `filter` vocabulary as `list`, applied in the query, so a
+   * Speaks the same filter vocabulary as `list`, applied in the query, so a
    * page of "in progress" is a full page of in-progress rows. There is no
    * paged search on purpose: a title search must span the whole owned set,
    * which `list` already does — the panel asks that one while a query is live.
    */
   listPage: acceptanceProcedure
     .input(
-      z
-        .object({
+      acceptanceListFiltersSchema
+        .extend({
           cursor: z.string().optional(),
-          filter: z.enum(['active', 'all', 'completed']).optional(),
           limit: z.number().int().min(1).max(100).optional(),
-          projectId: z.string().optional(),
         })
         .optional(),
     )
-    .query(async ({ ctx, input }) =>
-      ctx.acceptanceService.listPageWithSubjects({
-        cursor: input?.cursor,
-        filter: input?.filter,
-        limit: input?.limit,
-        projectId: input?.projectId,
-      }),
-    ),
+    .query(async ({ ctx, input }) => {
+      const page = await ctx.acceptanceService.listPageWithSubjects({ ...input });
+      return { ...page, items: await withManageFlag(ctx, page.items) };
+    }),
 
   /**
    * Fold one acceptance into another: the source's verification rounds (and

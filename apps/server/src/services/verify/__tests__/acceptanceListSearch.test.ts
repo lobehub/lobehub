@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   resolveDocuments: vi.fn(),
   resolveTasks: vi.fn(),
   resolveTopics: vi.fn(),
+  taskScopes: [] as Array<[string, string | undefined]>,
 }));
 
 vi.mock('@/database/models/document', () => ({
@@ -16,6 +17,9 @@ vi.mock('@/database/models/document', () => ({
 }));
 vi.mock('@/database/models/task', () => ({
   TaskModel: class {
+    constructor(_db: unknown, userId: string, workspaceId?: string) {
+      mocks.taskScopes.push([userId, workspaceId]);
+    }
     resolveMany = mocks.resolveTasks;
   },
 }));
@@ -34,6 +38,7 @@ describe('AcceptanceService.listWithSubjects', () => {
         status: 'delivered',
         subjectId: 'recent',
         subjectType: 'task',
+        userId: 'user-1',
       },
       {
         createdAt: new Date(0),
@@ -41,6 +46,7 @@ describe('AcceptanceService.listWithSubjects', () => {
         status: 'delivered',
         subjectId: 'older',
         subjectType: 'topic',
+        userId: 'user-1',
       },
     ];
     const query = vi.fn().mockResolvedValue(rows);
@@ -92,5 +98,60 @@ describe('AcceptanceService.listWithSubjects', () => {
       statuses: undefined,
       unbounded: false,
     });
+  });
+
+  it('passes the scope and source narrowings to the candidate query', async () => {
+    const query = vi.fn().mockResolvedValue([]);
+    const service = new AcceptanceService({} as any, 'user-1') as any;
+    service.acceptanceModel = { query };
+
+    await service.listWithSubjects({ projectId: null, scope: 'participated', source: 'goal' });
+
+    expect(query).toHaveBeenCalledWith({
+      limit: 50,
+      projectId: null,
+      scope: 'participated',
+      source: 'goal',
+      statuses: undefined,
+      unbounded: false,
+    });
+  });
+
+  it("resolves a participated row's subject in its owner's scope", async () => {
+    mocks.resolveTasks.mockReset();
+    mocks.resolveTasks.mockImplementation(async (ids: string[]) =>
+      ids.map((id) => ({ id, identifier: id, name: `Task ${id}` })),
+    );
+    mocks.resolveTopics.mockResolvedValue([]);
+    mocks.resolveDocuments.mockResolvedValue([]);
+    mocks.taskScopes.length = 0;
+    const rows = [
+      { id: 'a', subjectId: 'mine', subjectType: 'task', userId: 'user-1', workspaceId: null },
+      { id: 'b', subjectId: 'theirs', subjectType: 'task', userId: 'user-2', workspaceId: 'ws-2' },
+    ];
+    const service = new AcceptanceService({} as any, 'user-1') as any;
+    service.acceptanceModel = { query: vi.fn().mockResolvedValue(rows) };
+    service.latestCheckCounts = vi.fn().mockResolvedValue(new Map());
+    service.resolveProjects = vi.fn().mockResolvedValue(new Map());
+    // The owner-scoped service is a fresh instance — stub its check counts too.
+    const originalReadByOwner = service.readByOwner;
+    service.readByOwner = (items: unknown[], read: (svc: any, group: unknown[]) => unknown) =>
+      originalReadByOwner(items, (svc: any, group: unknown[]) => {
+        svc.latestCheckCounts = vi.fn().mockResolvedValue(new Map());
+        return read(svc, group);
+      });
+
+    const result = await service.listWithSubjects({ scope: 'participated' });
+
+    expect(mocks.taskScopes).toEqual(
+      expect.arrayContaining([
+        ['user-1', undefined],
+        ['user-2', 'ws-2'],
+      ]),
+    );
+    expect(result.map(({ subject }: { subject: { title: string } }) => subject.title)).toEqual([
+      'Task mine',
+      'Task theirs',
+    ]);
   });
 });

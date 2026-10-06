@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { acceptanceListEmptyVariant, normalizeAcceptanceListFilter } from './acceptanceListFilter';
+import {
+  acceptanceListEmptyVariant,
+  isAcceptanceListFacetsNarrowed,
+  normalizeAcceptanceListFacets,
+  normalizeAcceptanceListFilter,
+} from './acceptanceListFilter';
 
 describe('normalizeAcceptanceListFilter', () => {
   it('falls back to the active filter for malformed persisted values', () => {
@@ -33,5 +38,47 @@ describe('acceptanceListEmptyVariant', () => {
     expect(
       acceptanceListEmptyVariant({ allListEmpty: false, filter: 'all', searching: false }),
     ).toBe('firstRun');
+  });
+});
+
+describe('normalizeAcceptanceListFacets', () => {
+  it('keeps valid persisted facets, including the unfiled project', () => {
+    expect(
+      normalizeAcceptanceListFacets({ projectId: null, scope: 'participated', source: 'goal' }),
+    ).toEqual({ projectId: null, scope: 'participated', source: 'goal' });
+    expect(normalizeAcceptanceListFacets({ projectId: 'proj-1' }).projectId).toBe('proj-1');
+  });
+
+  it('falls back per field for malformed values', () => {
+    expect(normalizeAcceptanceListFacets(null)).toEqual({
+      projectId: undefined,
+      scope: 'all',
+      source: 'all',
+    });
+    expect(
+      normalizeAcceptanceListFacets({ projectId: 3, scope: 'mine', source: 'document' }),
+    ).toEqual({ projectId: undefined, scope: 'all', source: 'all' });
+  });
+});
+
+describe('isAcceptanceListFacetsNarrowed', () => {
+  it('treats any non-default facet as a narrowing', () => {
+    expect(isAcceptanceListFacetsNarrowed({ scope: 'all', source: 'all' })).toBe(false);
+    expect(isAcceptanceListFacetsNarrowed({ scope: 'participated', source: 'all' })).toBe(true);
+    expect(isAcceptanceListFacetsNarrowed({ scope: 'all', source: 'topic' })).toBe(true);
+    expect(isAcceptanceListFacetsNarrowed({ projectId: null, scope: 'all', source: 'all' })).toBe(
+      true,
+    );
+  });
+
+  it('keeps the filtered escape hatch for a facet-only narrowing', () => {
+    expect(
+      acceptanceListEmptyVariant({
+        allListEmpty: false,
+        facetsNarrowed: true,
+        filter: 'all',
+        searching: false,
+      }),
+    ).toBe('filtered');
   });
 });

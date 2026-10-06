@@ -45,6 +45,20 @@ export type AcceptancePurgePreview = Awaited<
 /** The list's status split, shared by the flat and paged reads. */
 export type AcceptanceListFilter = 'active' | 'all' | 'completed';
 
+/** Whose acceptances: the active scope, only mine, or any I commented on. */
+export type AcceptanceListScope = 'all' | 'created' | 'participated';
+
+/** Where the acceptance came from; `standalone` also covers documents. */
+export type AcceptanceListSource = 'all' | 'goal' | 'standalone' | 'task' | 'topic';
+
+/** Every list narrowing beyond search. `projectId: null` = filed under no project. */
+export interface AcceptanceListQuery {
+  filter?: AcceptanceListFilter;
+  projectId?: string | null;
+  scope?: AcceptanceListScope;
+  source?: AcceptanceListSource;
+}
+
 /** The lifecycle states a reviewer may set by hand from the acceptance list. */
 export type AcceptanceStatusOverride = 'accepted' | 'closed' | 'delivered' | 'rejected';
 
@@ -197,14 +211,14 @@ export class VerifyService {
     requirement: string,
   ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
 
-  listAcceptances = (options?: {
-    filter?: 'active' | 'all' | 'completed';
-    /** Widen the recency window (server-capped) — the merge picker asks for more. */
-    limit?: number;
-    projectId?: string;
-    q?: string;
-    quiet?: boolean;
-  }): Promise<AcceptanceListItem[]> =>
+  listAcceptances = (
+    options?: AcceptanceListQuery & {
+      /** Widen the recency window (server-capped) — the merge picker asks for more. */
+      limit?: number;
+      q?: string;
+      quiet?: boolean;
+    },
+  ): Promise<AcceptanceListItem[]> =>
     lambdaClient.acceptance.list.query(
       options
         ? {
@@ -212,18 +226,20 @@ export class VerifyService {
             limit: options.limit,
             projectId: options.projectId,
             q: options.q,
+            scope: options.scope,
+            source: options.source,
           }
         : undefined,
       options?.quiet ? { context: { showNotification: false } } : undefined,
     );
 
   /** One keyset page of the acceptance feed — what the list panel scrolls. */
-  listAcceptancePage = (params: {
-    cursor?: string;
-    filter?: AcceptanceListFilter;
-    limit?: number;
-    projectId?: string;
-  }): Promise<AcceptanceListPage> => lambdaClient.acceptance.listPage.query(params);
+  listAcceptancePage = (
+    params: AcceptanceListQuery & {
+      cursor?: string;
+      limit?: number;
+    },
+  ): Promise<AcceptanceListPage> => lambdaClient.acceptance.listPage.query(params);
 
   /**
    * Acceptance status for a known set of subjects. `listAcceptances` is capped

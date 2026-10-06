@@ -1119,6 +1119,22 @@ export const expertiseKeys = {
   rules: def('expertise:rules', () => ['expertise:rules']),
 };
 
+/** The Acceptance list narrowing as key parts — mirrors `AcceptanceListQuery`. */
+interface AcceptanceListKeyQuery {
+  filter?: string;
+  projectId?: string | null;
+  scope?: string;
+  source?: string;
+}
+
+const acceptanceListKeyParts = ({ filter, projectId, scope, source }: AcceptanceListKeyQuery) => [
+  filter ?? '',
+  // `null` (no project) and `undefined` (any project) are different reads.
+  projectId === null ? '~none' : (projectId ?? ''),
+  scope ?? '',
+  source ?? '',
+];
+
 export const verifyKeys = {
   acceptanceBundle: def('verify:acceptanceBundle', (acceptanceId: string) => [
     'verify:acceptanceBundle',
@@ -1151,23 +1167,21 @@ export const verifyKeys = {
   ]),
   acceptancePage: def(
     'verify:acceptancePage',
-    (workspaceId: string | undefined, filter: string, projectId?: string, cursor?: string) => [
+    (workspaceId: string | undefined, query: AcceptanceListKeyQuery, cursor?: string) => [
       'verify:acceptancePage',
       workspaceId ?? '',
-      filter,
-      projectId ?? '',
+      ...acceptanceListKeyParts(query),
       cursor ?? '',
     ],
   ),
   /** Query inputs are part of the key so server-side list filtering never reuses stale rows. */
   acceptances: def(
     'verify:acceptances',
-    (limit?: number, q?: string, filter?: string, projectId?: string) => [
+    (limit?: number, q?: string, query: AcceptanceListKeyQuery = {}) => [
       'verify:acceptances',
       String(limit ?? ''),
       q ?? '',
-      filter ?? '',
-      projectId ?? '',
+      ...acceptanceListKeyParts(query),
     ],
   ),
   criteria: def('verify:criteria', () => ['verify:criteria']),
