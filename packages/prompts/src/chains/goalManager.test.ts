@@ -157,4 +157,18 @@ describe('buildGoalManagerPrompt', () => {
     expect(prompt).toContain('## 固定规则（每轮相同）');
     expect(prompt).toContain('Use the language of the Goal requirement');
   });
+
+  /**
+   * Regression: Japanese with enough kanji counted as Chinese, so a Japanese
+   * owner read Chinese headings every turn.
+   */
+  it.each([
+    ['日本語', '既存製品の調査報告を作成し、実現可能性を分析する'],
+    ['Korean', '기존 제품의 오피스 구현 방식을 조사하고 보고서를 작성'],
+    ['Spanish', 'Investigar cómo los productos existentes implementan la ofimática'],
+  ])('keeps English labels for %s requirements it has no label set for', (_, requirement) => {
+    const prompt = buildGoalManagerPrompt({ ...base, goalId: 'goal_1', requirement });
+    expect(prompt.split('\n')[0]).toBe('Goal manager v7 · Goal goal_1 · planning turn 1/12');
+    expect(prompt).not.toContain('本轮原因');
+  });
 });

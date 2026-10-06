@@ -94,11 +94,17 @@ const LABELS = {
 
 type Labels = (typeof LABELS)['en'];
 
-/** Chinese when CJK characters outweigh Latin words in the requirement prose. */
+/**
+ * Chinese only when the requirement is unmistakably Chinese: Han characters
+ * outweigh Latin words and there is no kana or Hangul, which would make Han
+ * characters Japanese or Korean. Every other language keeps the English labels
+ * the whole message used before; a wrong guess would be worse than English.
+ */
 const labelsFor = (requirement: string): Labels => {
-  const cjk = requirement.match(/[\u3400-\u9FFF]/g)?.length ?? 0;
+  if (/[\u3040-\u30FF\uAC00-\uD7AF]/.test(requirement)) return LABELS.en;
+  const han = requirement.match(/[\u3400-\u9FFF]/g)?.length ?? 0;
   const latinWords = requirement.match(/[A-Z]+/gi)?.length ?? 0;
-  return cjk > latinWords ? LABELS.zh : LABELS.en;
+  return han > latinWords ? LABELS.zh : LABELS.en;
 };
 const EARLIER_FEEDBACK_LIMIT = 200;
 
