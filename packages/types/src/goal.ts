@@ -271,6 +271,13 @@ export interface GoalManagerState {
    * owner can edit.
    */
   dispatchNeverStarted?: boolean;
+  /**
+   * Consecutive turns that ended in an error without committing a plan. Reset by
+   * a turn that commits a plan or ends without an error. Reaching the limit
+   * pauses the Goal on the last error instead of re-dispatching an Agent that
+   * keeps failing the same way.
+   */
+  failedTurns?: number;
   operationId?: string;
   /**
    * Management conversations this Goal planned in before a handoff moved it to
@@ -292,6 +299,13 @@ export interface GoalManagerState {
   problemTaskId?: string;
   readyForAcceptance?: boolean;
   replanReason?: string;
+  /**
+   * Earliest time the next turn may be dispatched after one failed without a
+   * plan: the provider's quota reset when the error carries one, otherwise an
+   * exponential backoff. Without it a failing Agent was re-dispatched on every
+   * tick and spent the whole turn budget in minutes.
+   */
+  retryAfter?: string;
   reviewSnapshot?: string;
   snapshot: string;
   startedAt: string;

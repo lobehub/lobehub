@@ -29,7 +29,7 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 
 import { GoalService } from './index';
-import { GoalManagerService } from './manager';
+import { failedTurnRetry, GoalManagerService, MAX_FAILED_MANAGER_TURNS } from './manager';
 import * as scheduler from './scheduler';
 import { GoalWaitService } from './wait';
 
@@ -739,7 +739,7 @@ describe('CLI main Agent planning', () => {
       completionReason: 'error',
       error: { message: 'transport error' },
     });
-    expect((await service().tick(id)).outcome).toBe('advanced');
+    expect((await service().tick(id)).outcome).toBe('waiting_external');
     expect((await service().tick(id)).outcome).toBe('no_progress');
     expect((await model().findById(id))!.status).toBe('paused');
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
@@ -750,6 +750,9 @@ describe('CLI main Agent planning', () => {
     await ops().recordCompletion(op.id, { status: 'error' });
     await service().tick(id);
     const stale = await service().graph(id);
+    // Past the backoff the failed turn set, so the next turn may start.
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 2 * 60_000);
     await service().tick(id);
     const second = (await model().findById(id))!.config!.managerState!;
     await ops().recordCompletion(second.operationId!, { status: 'error' });
@@ -759,6 +762,89 @@ describe('CLI main Agent planning', () => {
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
     await service().tick(id);
     expect((await model().findById(id))!.status).toBe('paused');
+  });
+
+  describe('a turn that fails without a plan', () => {
+    const quotaError = (resetsAt: number) => ({
+      message: "You've hit your session limit",
+      category: 'quota',
+      body: {
+        code: 'rate_limit',
+        rateLimitInfo: { status: 'rejected', resetsAt, rateLimitType: 'five_hour' },
+      },
+    });
+
+    it('waits for a quota reset without charging the refused turn', async () => {
+      const { id, op } = await start(3);
+      const now = Date.now();
+      const resetsAt = Math.floor(now / 1000) + 600;
+      await ops().recordCompletion(op.id, { status: 'error', error: quotaError(resetsAt) });
+
+      expect((await service().tick(id)).outcome).toBe('waiting_external');
+      const state = (await model().findById(id))!.config!.managerState!;
+      expect(state.turns).toBe(0);
+      expect(Date.parse(state.retryAfter!)).toBe(resetsAt * 1000 + 60_000);
+      expect(vi.mocked(scheduler.scheduleGoalAdvance)).toHaveBeenLastCalledWith(
+        expect.objectContaining({ goalId: id, delay: expect.any(Number) }),
+      );
+      expect(
+        vi.mocked(scheduler.scheduleGoalAdvance).mock.lastCall![0].delay,
+      ).toBeGreaterThanOrEqual(600);
+
+      // The sweep and Task events keep ticking before the reset; none of them
+      // may dispatch a turn that would be refused the same way.
+      for (let i = 0; i < 10; i++)
+        expect((await service().tick(id)).outcome).toBe('waiting_external');
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
+
+      vi.spyOn(Date, 'now').mockReturnValue(resetsAt * 1000 + 61_000);
+      expect((await service().tick(id)).outcome).toBe('waiting_external');
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+      expect((await model().findById(id))!.config!.managerState!.turns).toBe(1);
+    });
+
+    it('backs off and pauses on the error after consecutive failed turns', async () => {
+      const { id, op } = await start(20);
+      let now = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+      let operationId = op.id;
+      for (let failed = 1; failed <= MAX_FAILED_MANAGER_TURNS; failed++) {
+        await ops().recordCompletion(operationId, {
+          status: 'error',
+          error: { message: 'spawn claude ENOENT' },
+        });
+        const result = await service().tick(id);
+        const state = (await model().findById(id))!.config!.managerState!;
+        expect(state.failedTurns).toBe(failed);
+        if (failed === MAX_FAILED_MANAGER_TURNS) {
+          expect(result.outcome).toBe('no_progress');
+          expect(result.message).toContain('spawn claude ENOENT');
+          break;
+        }
+        expect(result.outcome).toBe('waiting_external');
+        expect(Date.parse(state.retryAfter!) - now).toBe(60_000 * 2 ** (failed - 1));
+        expect((await service().tick(id)).outcome).toBe('waiting_external');
+        expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(failed);
+        now = Date.parse(state.retryAfter!) + 1;
+        await service().tick(id);
+        operationId = (await model().findById(id))!.config!.managerState!.operationId!;
+      }
+      clock.mockRestore();
+      expect((await model().findById(id))!.status).toBe('paused');
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(
+        MAX_FAILED_MANAGER_TURNS,
+      );
+    });
+
+    it('does not hold back the next turn after a committed plan whose run errored', async () => {
+      const { id, state, op } = await start();
+      await manager().submit(id, state.token, op.id, taskPlan);
+      await ops().recordCompletion(op.id, { status: 'error', error: { message: 'late crash' } });
+      expect((await service().tick(id)).outcome).not.toBe('no_progress');
+      const settled = (await model().findById(id))!.config!.managerState!;
+      expect(settled.retryAfter).toBeUndefined();
+      expect(settled.failedTurns).toBeUndefined();
+    });
   });
 
   it.each(['waiting_for_human', 'waiting_for_async_tool'] as const)(
@@ -1937,5 +2023,43 @@ describe('durable manager continuation', () => {
         until: new Date(Date.now() + 60_000).toISOString(),
       }),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+});
+
+describe('failedTurnRetry', () => {
+  const now = Date.parse('2026-10-05T19:49:30Z');
+
+  it('waits for the reported quota reset and does not charge the turn', () => {
+    const resetsAt = Math.floor(now / 1000) + 3600;
+    expect(
+      failedTurnRetry(
+        { category: 'quota', body: { code: 'rate_limit', rateLimitInfo: { resetsAt } } },
+        1,
+        now,
+      ),
+    ).toEqual({ charged: false, retryAfter: new Date(resetsAt * 1000 + 60_000).toISOString() });
+  });
+
+  it('charges and backs off a quota error whose reset is missing or already past', () => {
+    expect(failedTurnRetry({ category: 'quota' }, 1, now)).toEqual({
+      charged: true,
+      retryAfter: new Date(now + 60_000).toISOString(),
+    });
+    const past = Math.floor(now / 1000) - 10;
+    expect(
+      failedTurnRetry({ body: { code: 'rate_limit', rateLimitInfo: { resetsAt: past } } }, 1, now)
+        .charged,
+    ).toBe(true);
+  });
+
+  it('doubles the backoff per consecutive failure up to 30 minutes', () => {
+    const delays = [1, 2, 3, 6, 10].map(
+      (n) => Date.parse(failedTurnRetry({ message: 'boom' }, n, now).retryAfter) - now,
+    );
+    expect(delays).toEqual([60_000, 120_000, 240_000, 1_800_000, 1_800_000]);
+  });
+
+  it('treats a missing error as an ordinary failure', () => {
+    expect(failedTurnRetry(undefined, 1, now).charged).toBe(true);
   });
 });

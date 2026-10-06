@@ -137,7 +137,13 @@ Read `config.managerState` in the Goal graph for the current receipt and Topic.
 
 Wakeups use the existing Goal scheduler (queued mode for restart durability).
 After a confirmed terminal main operation without a plan, another turn can
-reread the durable graph within the turn budget. An unconfirmed running/missing
+reread the durable graph within the turn budget. A turn that ended in an error
+gates the next one through `managerState.retryAfter`. A quota rejection, such as
+an external Agent's session limit, waits for the reset its error reports, and the
+refused turn is not charged to the budget. Any other error backs off
+exponentially from one minute up to 30 minutes, and five consecutive errored
+turns pause the Goal on the last error. Before this, a failing Agent was
+re-dispatched on every tick and spent the whole turn budget in minutes. An unconfirmed running/missing
 operation times out after 20 minutes and pauses without launching a replacement;
 confirm its exit before resuming. Parked human/async-tool operations retain
 ownership; a human wait is surfaced without starting another planning turn.

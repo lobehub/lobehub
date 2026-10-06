@@ -80,6 +80,45 @@ const TIMEOUT_MS = 20 * 60_000;
 const FEEDBACK_NOTE_LIMIT = 20;
 /** Source message id prefix of a dispatched planning turn; the suffix is its token. */
 const MANAGER_SOURCE_MESSAGE_PREFIX = 'msg_goal_manager_';
+/** Consecutive errored turns without a plan before the Goal pauses on the error. */
+export const MAX_FAILED_MANAGER_TURNS = 5;
+const FAILED_TURN_BASE_BACKOFF_MS = 60_000;
+const FAILED_TURN_MAX_BACKOFF_MS = 30 * 60_000;
+/** Dispatched this long after a quota reset, so the window has actually reopened. */
+const QUOTA_RESET_MARGIN_MS = 60_000;
+
+/**
+ * When the next planning turn may start after one ended in an error without a
+ * plan, and whether that turn is charged to the budget.
+ *
+ * A quota rejection (an external Agent's usage window, e.g. a Claude Code session
+ * limit) fails every turn identically until its reset, so the next turn waits for
+ * the reset the error reports and the refused turn is not charged: it did no work.
+ * Any other error backs off exponentially and is charged. Re-dispatching on the
+ * next tick instead is what spent a Goal's whole 100-turn budget in 20 minutes.
+ */
+export const failedTurnRetry = (
+  error: unknown,
+  failedTurns: number,
+  now = Date.now(),
+): { charged: boolean; retryAfter: string } => {
+  const e = (error ?? {}) as {
+    body?: { code?: unknown; rateLimitInfo?: { resetsAt?: unknown } };
+    category?: unknown;
+  };
+  const quota = e.category === 'quota' || e.body?.code === 'rate_limit';
+  const resetsAt = Number(e.body?.rateLimitInfo?.resetsAt) * 1000;
+  if (quota && Number.isFinite(resetsAt) && resetsAt > now)
+    return {
+      charged: false,
+      retryAfter: new Date(resetsAt + QUOTA_RESET_MARGIN_MS).toISOString(),
+    };
+  const backoff = Math.min(
+    FAILED_TURN_MAX_BACKOFF_MS,
+    FAILED_TURN_BASE_BACKOFF_MS * 2 ** Math.max(0, failedTurns - 1),
+  );
+  return { charged: true, retryAfter: new Date(now + backoff).toISOString() };
+};
 
 /**
  * The token a planning turn is keyed by, carrying the Goal it belongs to.
@@ -709,19 +748,57 @@ export class GoalManagerService {
         }
         return this.wait(goal.id, 'Waiting for main Agent CLI planning turn');
       }
-      await this.db.transaction(async (db) => {
+      const failed = await this.db.transaction(async (db) => {
         const fresh = await new GoalModel(db, this.userId, this.workspaceId).lockById(goal.id);
-        if (
-          fresh?.config?.managerState?.token === state.token &&
-          !fresh.config.managerState.consumed
-        ) {
+        const current = fresh?.config?.managerState;
+        if (current?.token !== state.token || current.consumed) return;
+        const settled: GoalManagerState = {
+          ...current,
+          operationId: operation?.id ?? state.operationId,
+          consumed: true,
+        };
+        // A committed plan is progress whatever the run's ending; only an errored
+        // turn that committed nothing gates the next dispatch.
+        if (current.submitted || operation?.status !== 'error') {
           await this.save(db, goal.id, {
-            ...fresh.config.managerState,
-            operationId: operation?.id ?? state.operationId,
-            consumed: true,
+            ...settled,
+            failedTurns: undefined,
+            retryAfter: undefined,
           });
+          return;
         }
+        const failedTurns = (current.failedTurns ?? 0) + 1;
+        const retry = failedTurnRetry(operation.error, failedTurns);
+        await this.save(db, goal.id, {
+          ...settled,
+          failedTurns: retry.charged ? failedTurns : current.failedTurns,
+          retryAfter: retry.retryAfter,
+          turns: retry.charged ? current.turns : Math.max(0, current.turns - 1),
+        });
+        return {
+          failedTurns: retry.charged ? failedTurns : (current.failedTurns ?? 0),
+          message: operation.error?.message,
+          retryAfter: retry.retryAfter,
+        };
       });
+      if (failed) {
+        if (failed.failedTurns >= MAX_FAILED_MANAGER_TURNS)
+          return this.pause(
+            goal.id,
+            `Main Agent failed ${failed.failedTurns} turns in a row without a plan${failed.message ? `: ${failed.message}` : ''}. Fix its runtime, then resume with: lh goal resume ${goal.id}`,
+          );
+        await scheduleGoalAdvance({
+          goalId: goal.id,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+          delay: GoalWaitService.arm(failed.retryAfter).delay,
+        });
+        return {
+          goalId: goal.id,
+          outcome: 'waiting_external',
+          message: `Main Agent turn failed without a plan${failed.message ? ` (${failed.message})` : ''}; the next turn starts after ${failed.retryAfter}`,
+        };
+      }
       return {
         goalId: goal.id,
         outcome: 'advanced',
@@ -802,6 +879,16 @@ export class GoalManagerService {
       if (problem) return null;
       return this.pause(goal.id, 'Goal or main Agent turn budget exhausted');
     }
+    // The previous turn failed without a plan. Its settlement already queued the
+    // wakeup for this time, so a tick arriving earlier (the sweep, a Task event)
+    // only reports the wait instead of queueing another one. An invited turn
+    // waits too: it would fail the same way, and the problem is still there later.
+    if (state?.retryAfter && Date.parse(state.retryAfter) > Date.now())
+      return {
+        goalId: goal.id,
+        outcome: 'waiting_external',
+        message: `Main Agent turn deferred until ${state.retryAfter} after a failed turn`,
+      };
     const claimed = await this.db.transaction(async (db) => {
       const model = new GoalModel(db, this.userId, this.workspaceId);
       const fresh = await model.lockById(goal.id);
@@ -871,6 +958,8 @@ export class GoalManagerService {
           : {}),
         ...(state?.adoptedOperationId && { adoptedOperationId: state.adoptedOperationId }),
         ...(previousTopicIds.length > 0 && { previousTopicIds }),
+        // The failure streak spans turns; settling a turn that did not error resets it.
+        ...(freshState?.failedTurns && { failedTurns: freshState.failedTurns }),
         reviewSnapshot: reviews.hash,
         topicId,
         turns: (state?.turns ?? 0) + 1,
