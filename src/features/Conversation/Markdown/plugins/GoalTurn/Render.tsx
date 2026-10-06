@@ -1,11 +1,11 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Accordion, type AccordionItemType, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import { ChevronRightIcon, TargetIcon } from 'lucide-react';
-import { type ReactNode, useMemo, useState } from 'react';
+import { TargetIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type MarkdownElementProps } from '../type';
@@ -112,42 +112,23 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   toggle: css`
     cursor: pointer;
-    user-select: none;
 
-    display: inline-flex;
-    gap: 2px;
-    align-items: center;
+    margin: 0;
+    padding-block: 0;
+    padding-inline: 12px 0;
+    border: none;
 
+    font: inherit;
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
+
+    background: none;
 
     &:hover {
       color: ${cssVar.colorText};
     }
   `,
-  toggleOpen: css`
-    svg {
-      transform: rotate(90deg);
-    }
-  `,
 }));
-
-/** A labelled section that starts folded; for what repeats every turn or is long. */
-const Fold = ({ children, label }: { children: ReactNode; label: ReactNode }) => {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className={styles.section}>
-      <span
-        className={cx(styles.toggle, open && styles.toggleOpen)}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {label}
-        <Icon icon={ChevronRightIcon} size={12} />
-      </span>
-      {open ? <div className={styles.folded}>{children}</div> : null}
-    </div>
-  );
-};
 
 /** Rough line count past which a body is clamped and gets its own toggle. */
 const isLong = (text: string) => text.length > 120 || text.split('\n').length > 3;
@@ -183,13 +164,14 @@ const FeedbackRow = ({ feedback }: { feedback: GoalTurnFeedback }) => {
         {expanded && feedback.truncated ? '…' : null}
       </div>
       {long ? (
-        <span
+        <button
+          aria-expanded={expanded}
           className={styles.toggle}
-          style={{ paddingInlineStart: 12 }}
+          type="button"
           onClick={() => setExpanded((v) => !v)}
         >
           {expanded ? t('goalTurn.showLess') : t('goalTurn.showAll')}
-        </span>
+        </button>
       ) : null}
     </div>
   );
@@ -213,6 +195,66 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
   const trigger = attrs.trigger ?? 'settled';
   const previous = parsed.previousTurn;
   const reason = parsed.problem ?? parsed.continuation;
+
+  // What repeats every turn or runs long starts folded, behind the shared
+  // disclosure so it is reachable from the keyboard and announced as such.
+  const folds: AccordionItemType[] = [
+    ...(earlier.length > 0 || parsed.omitted.earlier > 0
+      ? [
+          {
+            children: (
+              <>
+                {earlier.map((feedback, index) => (
+                  <FeedbackRow feedback={feedback} key={`${feedback.taskId}-${index}`} />
+                ))}
+                {parsed.omitted.earlier > 0 ? (
+                  <Text className={styles.label} type="secondary">
+                    {t('goalTurn.omitted', { count: parsed.omitted.earlier })}
+                  </Text>
+                ) : null}
+              </>
+            ),
+            key: 'earlier',
+            title: (
+              <Text className={styles.label} type="secondary">
+                {t('goalTurn.earlierFeedback', { count: earlier.length + parsed.omitted.earlier })}
+              </Text>
+            ),
+          },
+        ]
+      : []),
+    ...(parsed.requirement
+      ? [
+          {
+            children: (
+              <div className={styles.folded}>
+                {parsed.requirement}
+                {parsed.ownerInstruction ? `\n\n${parsed.ownerInstruction}` : ''}
+              </div>
+            ),
+            key: 'requirement',
+            title: (
+              <Text className={styles.label} type="secondary">
+                {t('goalTurn.requirement')}
+              </Text>
+            ),
+          },
+        ]
+      : []),
+    ...(parsed.instruction
+      ? [
+          {
+            children: <div className={styles.folded}>{parsed.instruction}</div>,
+            key: 'instruction',
+            title: (
+              <Text className={styles.label} type="secondary">
+                {t('goalTurn.instruction')}
+              </Text>
+            ),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className={styles.root}>
@@ -269,30 +311,16 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
         </div>
       ) : null}
 
-      {earlier.length > 0 || parsed.omitted.earlier > 0 ? (
-        <Fold
-          label={t('goalTurn.earlierFeedback', {
-            count: earlier.length + parsed.omitted.earlier,
-          })}
-        >
-          {earlier.map((feedback, index) => (
-            <FeedbackRow feedback={feedback} key={`${feedback.taskId}-${index}`} />
-          ))}
-          {parsed.omitted.earlier > 0
-            ? t('goalTurn.omitted', { count: parsed.omitted.earlier })
-            : null}
-        </Fold>
-      ) : null}
-
-      {parsed.requirement ? (
-        <Fold label={t('goalTurn.requirement')}>
-          {parsed.requirement}
-          {parsed.ownerInstruction ? `\n\n${parsed.ownerInstruction}` : ''}
-        </Fold>
-      ) : null}
-
-      {parsed.instruction ? (
-        <Fold label={t('goalTurn.instruction')}>{parsed.instruction}</Fold>
+      {folds.length > 0 ? (
+        <Accordion
+          multiple
+          indicatorPlacement={'end'}
+          items={folds}
+          // The borderless header pulls itself 8px left; the inline padding puts the
+          // titles back on the card's text edge, inside its overflow clip.
+          styles={{ trigger: { paddingBlock: 6, paddingInline: 8 } }}
+          variant={'borderless'}
+        />
       ) : null}
     </div>
   );

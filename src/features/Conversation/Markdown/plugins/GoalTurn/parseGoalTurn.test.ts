@@ -97,4 +97,28 @@ describe('goalTurn block', () => {
       omitted: { earlier: 0, new: 0 },
     });
   });
+
+  /**
+   * Regression (CodeQL): the regex parser backtracked exponentially on an open
+   * tag followed by many `]]><![CDATA[` repetitions. The scanner is linear.
+   */
+  it('parses adversarial input in linear time', () => {
+    const inputs = [
+      `<a><![CDATA[${']]><![CDATA['.repeat(50_000)}`,
+      '<a'.repeat(50_000),
+      `<a ${'"'.repeat(50_000)}`,
+    ];
+    for (const input of inputs) {
+      const started = performance.now();
+      expect(parseGoalTurn(input).feedback).toEqual([]);
+      expect(performance.now() - started).toBeLessThan(500);
+    }
+  });
+
+  it('reads an attribute value that contains a closing angle bracket', () => {
+    const parsed = parseGoalTurn(
+      '<feedback author="user" new="true" taskTitle="A > B"><![CDATA[\nok\n]]></feedback>',
+    );
+    expect(parsed.feedback[0]).toMatchObject({ body: 'ok', taskTitle: 'A > B' });
+  });
 });
