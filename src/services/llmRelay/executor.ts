@@ -78,6 +78,17 @@ const toRelayError = (error: unknown, provider: string) => {
   return { error: { message }, errorType: 'ProviderBizError', message, provider };
 };
 
+/**
+ * `promise`, or an abort error once `signal` aborts — for provider calls that
+ * take no signal (`models`) and may never answer.
+ */
+const untilAborted = <T>(promise: Promise<T>, signal: AbortSignal) =>
+  new Promise<T>((resolve, reject) => {
+    if (signal.aborted) return reject(abortError());
+    signal.addEventListener('abort', () => reject(abortError()), { once: true });
+    promise.then(resolve, reject);
+  });
+
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
     if (signal.aborted) return reject(abortError());
@@ -296,7 +307,7 @@ export class LlmRelayExecutor {
 
     const run = method === 'models' ? runtime.models : runtime.generateObject;
     if (!run) throw new Error(`This provider does not support ${method}`);
-    const result = await run.call(runtime, payload, { signal });
+    const result = await untilAborted(run.call(runtime, payload, { signal }), signal);
     if (signal.aborted) throw abortError();
 
     // No parts reads as `undefined` on the server, as the direct runtime returns it.

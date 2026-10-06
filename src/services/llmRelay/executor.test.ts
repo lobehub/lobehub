@@ -350,6 +350,26 @@ describe('LlmRelayExecutor non-chat methods (one-shot relay)', () => {
     expect(server.batches.at(-1)?.final).toEqual({ reason: 'done' });
   });
 
+  // `models()` takes no signal and a local endpoint can accept the connection
+  // and stall: a cancel must still settle the call instead of holding it.
+  it('settles a cancelled model list even when the provider never answers', async () => {
+    const server = createServer();
+    const models = vi.fn(() => new Promise<never>(() => {}));
+    const executor = new LlmRelayExecutor({
+      clientId: () => 'tab-1',
+      createRuntime: async () => ({ chat: vi.fn(), models }),
+      fetch: server.fetch,
+    });
+
+    const done = executor.execute(callData({ method: 'models' }));
+    await waitFor(() => models.mock.calls.length === 1);
+    executor.cancel({ callId: 'op-1:0:1', reason: 'interrupted' });
+    await done;
+
+    expect(server.batches.at(-1)?.final).toEqual({ reason: 'aborted' });
+    expect(executor.isRunning('op-1:0:1')).toBe(false);
+  });
+
   it('splits a large model list across batches under the size cap', async () => {
     const list = Array.from({ length: 3000 }, (_, i) => ({ id: `model-${i}`, displayName: 'x' }));
     const server = await run(callData({ method: 'models' }), {
