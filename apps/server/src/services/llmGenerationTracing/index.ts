@@ -289,29 +289,47 @@ export const resolveDefaultStoreMode = (
   return 'none';
 };
 
-const createDefaultStore = (): ITracingStore | null => {
-  const mode = resolveDefaultStoreMode();
+type TracingStoreLoader = () => ITracingStore;
 
-  if (mode === 's3') {
-    try {
-      // Require at call time so test environments without S3 wiring don't break.
+const loadS3TracingStore: TracingStoreLoader = () => {
+  // Require at call time so test environments without S3 wiring don't break.
+  const { S3TracingStore } = require('@/server/modules/LLMGenerationTracing');
+  return new S3TracingStore();
+};
 
-      const { S3TracingStore } = require('@/server/modules/LLMGenerationTracing');
-      return new S3TracingStore();
-    } catch {
-      // S3 wiring not available — fall through to file store / null.
+/**
+ * Build the default store for a resolved mode. The S3 loader is injectable so
+ * the failure-degradation path is unit-testable.
+ *
+ * Failure policy: when the S3 store cannot be constructed in `'s3'` mode,
+ * tracing stays off (null) instead of silently degrading to the plaintext file
+ * store — in production that would write full prompt/input/output payloads to
+ * local disk, and on read-only/serverless hosts it would report tracing as
+ * enabled while every save fails.
+ */
+export const createDefaultStore = (
+  mode: TracingStoreMode = resolveDefaultStoreMode(),
+  loadS3Store: TracingStoreLoader = loadS3TracingStore,
+): ITracingStore | null => {
+  switch (mode) {
+    case 's3': {
+      try {
+        return loadS3Store();
+      } catch {
+        return null;
+      }
+    }
+    case 'file': {
+      try {
+        return new FileTracingStore();
+      } catch {
+        return null;
+      }
+    }
+    case 'none': {
+      return null;
     }
   }
-
-  if (mode !== 'none') {
-    try {
-      return new FileTracingStore();
-    } catch {
-      // Filesystem unavailable — fall through to null.
-    }
-  }
-
-  return null;
 };
 
 const autoExtractHint = (input: unknown): string | null => {

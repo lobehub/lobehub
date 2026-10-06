@@ -1,5 +1,9 @@
 // @vitest-environment node
-import type { ITracingStore, TracingPayload } from '@lobechat/llm-generation-tracing';
+import {
+  FileTracingStore,
+  type ITracingStore,
+  type TracingPayload,
+} from '@lobechat/llm-generation-tracing';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,7 +11,7 @@ import { getTestDB } from '@/database/core/getTestDB';
 import { llmGenerationTracing, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { LLMGenerationTracingService, resolveDefaultStoreMode } from './index';
+import { createDefaultStore, LLMGenerationTracingService, resolveDefaultStoreMode } from './index';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -277,6 +281,37 @@ describe('LLMGenerationTracingService.recordFeedback', () => {
       kind: 'not_found',
       name: 'LLMGenerationFeedbackError',
     });
+  });
+});
+
+describe('createDefaultStore', () => {
+  const throwingLoader = () => {
+    throw new Error('s3 wiring unavailable');
+  };
+
+  it('stays off instead of falling back to the plaintext file store when S3 wiring fails in s3 mode', () => {
+    // Regression: falling through to FileTracingStore here would silently
+    // write full prompt/input/output payloads as plaintext files on production
+    // hosts, and report tracing as enabled while every save fails on
+    // read-only/serverless hosts.
+    expect(createDefaultStore('s3', throwingLoader)).toBeNull();
+  });
+
+  it('returns the S3 store the loader provides in s3 mode', () => {
+    const s3Store: ITracingStore = {
+      get: async () => null,
+      list: async () => [],
+      save: async () => ({ key: 's3://tracing/x.json.zst' }),
+    };
+    expect(createDefaultStore('s3', () => s3Store)).toBe(s3Store);
+  });
+
+  it('builds the local file store only in file mode', () => {
+    expect(createDefaultStore('file')).toBeInstanceOf(FileTracingStore);
+  });
+
+  it('builds nothing in none mode', () => {
+    expect(createDefaultStore('none')).toBeNull();
   });
 });
 
