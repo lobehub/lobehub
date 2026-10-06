@@ -11,11 +11,12 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import { CredsIdentifier } from '../manifest';
+import { buildRequestCredsInputResult } from '../requestCredsInput';
 import type {
   ConnectComposioServiceParams,
   InitiateOAuthConnectParams,
   InjectCredsToSandboxParams,
-  SaveCredsParams,
+  RequestCredsInputParams,
 } from '../types';
 import { CredsApiName, LOBEHUB_OAUTH_PROVIDER_LIST } from '../types';
 
@@ -385,67 +386,26 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
   };
 
   /**
-   * Save new credentials
+   * Runs after the user approves the secure form, which already wrote the
+   * values to the credential store. Only confirms the key exists.
    */
-  saveCreds = async (
-    params: SaveCredsParams,
+  requestCredsInput = async (
+    params: RequestCredsInputParams,
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
-      // Normalize params: AI may send `displayName` instead of `name`,
-      // or `value` (env-style string) instead of `values` (Record)
-      const raw = params as any;
-      const name: string = params.name || raw.displayName || params.key;
-
-      let values: Record<string, string> = params.values;
-      if (!values && typeof raw.value === 'string') {
-        values = {};
-        for (const line of (raw.value as string).split('\n')) {
-          const idx = line.indexOf('=');
-          if (idx > 0) {
-            values[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-          }
-        }
-      }
-
-      if (!values || Object.keys(values).length === 0) {
-        return {
-          content:
-            'Failed to save credential: values must be a non-empty object of key-value pairs (e.g., { "API_KEY": "sk-xxx" }).',
-          error: {
-            message: 'values is empty or missing. Provide key-value pairs, not a raw string.',
-            type: 'InvalidParams',
-          },
-          success: false,
-        };
-      }
-
-      log('[CredsExecutor] saveCreds - key:', params.key, 'name:', name);
-
-      await lambdaClient.market.creds.createKV.mutate({
-        description: params.description,
-        key: params.key,
-        name,
-        type: params.type as 'kv-env' | 'kv-header',
-        values,
-      });
-
-      return {
-        content: `Credential "${name}" saved successfully with key "${params.key}"`,
-        state: {
-          key: params.key,
-          message: `Credential "${name}" saved successfully`,
-          success: true,
-        },
-        success: true,
-      };
+      const { data } = await lambdaClient.market.creds.listForContext.query();
+      return buildRequestCredsInputResult(
+        params,
+        data.some((cred) => cred.key === params.key),
+      );
     } catch (error) {
-      log('[CredsExecutor] saveCreds - error:', error);
+      log('[CredsExecutor] requestCredsInput - error:', error);
       return {
-        content: `Failed to save credential: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        content: `Failed to check credential "${params.key}": ${error instanceof Error ? error.message : 'Unknown error'}`,
         error: {
-          message: error instanceof Error ? error.message : 'Failed to save credential',
-          type: 'SaveCredentialFailed',
+          message: error instanceof Error ? error.message : 'Failed to check credential',
+          type: 'CheckCredentialFailed',
         },
         success: false,
       };

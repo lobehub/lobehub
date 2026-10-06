@@ -43,6 +43,7 @@ import {
   CloudSandboxRenders,
   CloudSandboxStreamings,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
+import { CredsIdentifier, CredsInterventions } from '@lobechat/builtin-tool-creds/client';
 import {
   GoalInspectors,
   GoalInterventions,
@@ -391,6 +392,7 @@ export const registerBuiltinToolSurfaces = (): void => {
         ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
     },
     [QODER_IDENTIFIER]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
+    [CredsIdentifier]: CredsInterventions as Record<string, BuiltinIntervention>,
     [CloudSandboxManifest.identifier]: CloudSandboxInterventions as Record<
       string,
       BuiltinIntervention

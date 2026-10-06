@@ -12,6 +12,7 @@
     "./inspectors/linear-labels": "./src/Inspector/Linear/labels.ts",
     "./pending-hotkeys": "./src/pendingHotkeys.ts",
     "./renders": "./src/Render/index.ts",
+    "./secret-input": "./src/SecretInput/index.ts",
     "./styles": "./src/styles.ts"
   },
   "dependencies": {

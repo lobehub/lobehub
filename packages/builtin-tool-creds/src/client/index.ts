@@ -1,4 +1,4 @@
-// Client-side components for Creds tool
-// Placeholder for future Render/Streaming components
-
-export {};
+export { CredsIdentifier, CredsManifest } from '../manifest';
+export * from '../types';
+export { CredsInterventions } from './Intervention';
+export { default as RequestCredsInputIntervention } from './Intervention/RequestCredsInput';

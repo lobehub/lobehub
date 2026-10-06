@@ -5,11 +5,12 @@ import {
 } from '@lobechat/const';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
+import { buildRequestCredsInputResult } from '../requestCredsInput';
 import type {
   ConnectComposioServiceParams,
   InitiateOAuthConnectParams,
   InjectCredsToSandboxParams,
-  SaveCredsParams,
+  RequestCredsInputParams,
 } from '../types';
 import { LOBEHUB_OAUTH_PROVIDER_LIST } from '../types';
 
@@ -59,17 +60,6 @@ export interface ICredsService {
   listCreds: () => Promise<{
     data?: Array<{ id: number; key: string }>;
   }>;
-
-  /**
-   * Save KV credential
-   */
-  saveKVCred: (params: {
-    description?: string;
-    key: string;
-    name: string;
-    type: 'kv-env' | 'kv-header';
-    values: Record<string, string>;
-  }) => Promise<{ id: number }>;
 }
 
 /**
@@ -278,46 +268,20 @@ export class CredsExecutionRuntime {
   }
 
   /**
-   * Save new credentials
+   * Runs after the user approves the secure form. The form already wrote the
+   * values to the credential store, so this only confirms the key exists and
+   * reports it — the values never pass through the agent run.
    */
-  async saveCreds(args: SaveCredsParams): Promise<BuiltinServerRuntimeOutput> {
+  async requestCredsInput(args: RequestCredsInputParams): Promise<BuiltinServerRuntimeOutput> {
     try {
-      // Only support kv-env and kv-header types in server runtime
-      // File upload requires frontend interaction
-      if (args.type !== 'kv-env' && args.type !== 'kv-header') {
-        return {
-          content: `Credential type "${args.type}" is not supported in background execution. Only kv-env and kv-header types are supported.`,
-          error: {
-            message: `Unsupported credential type: ${args.type}`,
-            type: 'UnsupportedCredentialType',
-          },
-          success: false,
-        };
-      }
-
-      await this.credsService.saveKVCred({
-        description: args.description,
-        key: args.key,
-        name: args.name,
-        type: args.type,
-        values: args.values,
-      });
-
-      return {
-        content: `Credential "${args.name}" saved successfully with key "${args.key}"`,
-        state: {
-          key: args.key,
-          message: `Credential "${args.name}" saved successfully`,
-          success: true,
-        },
-        success: true,
-      };
+      const { data } = await this.credsService.listCreds();
+      return buildRequestCredsInputResult(args, !!data?.some((cred) => cred.key === args.key));
     } catch (error) {
       return {
-        content: `Failed to save credential: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        content: `Failed to check credential "${args.key}": ${error instanceof Error ? error.message : 'Unknown error'}`,
         error: {
-          message: error instanceof Error ? error.message : 'Failed to save credential',
-          type: 'SaveCredentialFailed',
+          message: error instanceof Error ? error.message : 'Failed to check credential',
+          type: 'CheckCredentialFailed',
         },
         success: false,
       };

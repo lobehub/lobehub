@@ -18,7 +18,7 @@ describe('stepChangedCredentials', () => {
     expect(stepChangedCredentials({ payload: { message: 'hi' }, phase: 'user_input' })).toBe(false);
   });
 
-  it.each(['saveCreds', 'initiateOAuthConnect', 'connectComposioService'])(
+  it.each(['requestCredsInput', 'initiateOAuthConnect', 'connectComposioService'])(
     'is true after %s',
     (apiName) => {
       expect(stepChangedCredentials(singleCall('lobe-creds', apiName))).toBe(true);
@@ -30,7 +30,9 @@ describe('stepChangedCredentials', () => {
   });
 
   it('is false for another tool that happens to share an api name', () => {
-    expect(stepChangedCredentials(singleCall('lobe-web-browsing', 'saveCreds'))).toBe(false);
+    expect(stepChangedCredentials(singleCall('lobe-web-browsing', 'requestCredsInput'))).toBe(
+      false,
+    );
   });
 
   it.each(['lobe-agent', 'lobe-group-management'])(
@@ -45,7 +47,7 @@ describe('stepChangedCredentials', () => {
       stepChangedCredentials(
         batch([
           { apiName: 'injectCredsToSandbox', identifier: 'lobe-creds' },
-          { apiName: 'saveCreds', identifier: 'lobe-creds' },
+          { apiName: 'requestCredsInput', identifier: 'lobe-creds' },
         ]),
       ),
     ).toBe(true);
