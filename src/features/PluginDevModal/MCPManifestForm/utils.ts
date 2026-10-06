@@ -60,8 +60,9 @@ export const parseMcpInput = (value: string): ParseResult => {
 
       if (mcpKeys.length > 0) {
         const identifier = mcpKeys[0];
-        // @ts-expect-error type mismatch
-        const mcpConfig = parsedJson.mcpServers[identifier];
+        // The `typeof === 'object'` guard above establishes this is the
+        // identifier-keyed config map, not the `McpConfig` variant of the union.
+        const mcpConfig = (parsedJson.mcpServers as McpServers)[identifier];
 
         if (mcpConfig && typeof mcpConfig === 'object' && !Array.isArray(mcpConfig)) {
           let resultMcpConfig: McpConfig & { type?: 'stdio' | 'http' };

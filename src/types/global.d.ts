@@ -18,6 +18,16 @@ declare module 'styled-components' {
   export interface DefaultTheme extends AntdToken, LobeCustomToken {}
 }
 
+declare module 'react' {
+  interface InputHTMLAttributes<T> extends HTMLAttributes<T> {
+    /**
+     * Enables directory upload in Chromium/WebKit. React intentionally does not
+     * type this non-standard attribute: https://github.com/facebook/react/issues/10840
+     */
+    webkitdirectory?: string;
+  }
+}
+
 declare global {
   interface Window {
     __DEBUG_PROXY__: boolean | undefined;
