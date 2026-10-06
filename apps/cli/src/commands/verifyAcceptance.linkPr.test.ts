@@ -55,4 +55,10 @@ describe('acceptance link-pr', () => {
     });
     expect(linkPullRequest).not.toHaveBeenCalled();
   });
+
+  it('honors a JSON field selector when unlinking', async () => {
+    await run(['link-pr', acceptanceId, prUrl, '--unlink', '--json', 'url']);
+
+    expect(JSON.parse(String(output.mock.calls.at(-1)?.[0]))).toEqual({ url: prUrl });
+  });
 });

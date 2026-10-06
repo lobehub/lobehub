@@ -489,7 +489,10 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
         if (options.unlink) {
           await client.acceptance.unlinkPullRequest.mutate({ id, url });
           if (options.json !== undefined) {
-            outputJson({ unlinked: true, url });
+            outputJson(
+              { unlinked: true, url },
+              typeof options.json === 'string' ? options.json : undefined,
+            );
             return;
           }
           console.log(`${pc.green('✓')} Unlinked ${url}`);
