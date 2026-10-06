@@ -37,15 +37,24 @@ const styles = createStaticStyles(({ css }) => ({
   /**
    * Spans the whole picture so the button can stick to the top of the viewport
    * while a long screenshot scrolls past, and never leave the picture it
-   * belongs to. Kept clear of the right edge, where comment pins straddle it.
+   * belongs to. It sits in the margin to the right of the picture, so it never
+   * covers what is being commented on, and outside the comment pins that
+   * straddle the right edge. Still a child of the host, so moving the pointer
+   * onto it keeps it revealed.
    */
   rail: css`
     pointer-events: none;
 
     position: absolute;
     z-index: 5;
-    inset-block: 8px;
-    inset-inline-end: 16px;
+    inset-block: 0;
+    inset-inline-end: -40px;
+
+    /* A phone column has no margin to spare: tuck it inside the picture. */
+    @media (width <= 767px) {
+      inset-block: 8px;
+      inset-inline-end: 8px;
+    }
   `,
 }));
 
