@@ -105,14 +105,19 @@ tags:
         ],
         "Resource": [
           "arn:aws:s3:::lobe/llm-generation-tracing/*"
-        ]
+        ],
+        "Condition": {
+          "StringEquals": {
+            "aws:PrincipalType": "Anonymous"
+          }
+        }
       }
     ]
   }
   ```
 
   <Callout type={'warning'}>
-    配置了 S3 的部署默认开启 LLM 生成追踪，系统提示词与生成的输入 / 输出会存储在 `llm-generation-tracing/` 前缀下。上面的第二条语句用于保持该前缀私有，请勿删除。如需完全关闭采集，可设置 `DISABLE_LLM_GENERATION_TRACING_S3=1`。
+    配置了 S3 的部署默认开启 LLM 生成追踪，系统提示词与生成的输入 / 输出会存储在 `llm-generation-tracing/` 前缀下。上面的第二条语句仅阻止该前缀的匿名读取，服务端带凭证的读取不受影响，请勿删除。如需完全关闭采集，可设置 `DISABLE_LLM_GENERATION_TRACING_S3=1`。
   </Callout>
 
   点击保存即可。

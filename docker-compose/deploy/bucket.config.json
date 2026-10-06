@@ -20,7 +20,12 @@
         "AWS": ["*"]
       },
       "Action": ["s3:GetObject"],
-      "Resource": ["arn:aws:s3:::lobe/llm-generation-tracing/*"]
+      "Resource": ["arn:aws:s3:::lobe/llm-generation-tracing/*"],
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalType": "Anonymous"
+        }
+      }
     }
   ],
   "Version": "2012-10-17"
