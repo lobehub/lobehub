@@ -50,6 +50,12 @@ export interface OneShotRelayDeps {
     onEvent: (event: AgentStreamEvent) => void,
   ) => Promise<OneShotChannelSubscription>;
   userId: () => string | undefined;
+  /**
+   * Resolves once the provider runtime state is loaded (bounded); nothing when
+   * it already is. A custom provider is device-only by settings that arrive
+   * after the page starts.
+   */
+  whenProvidersKnown?: () => Promise<void> | undefined;
 }
 
 /** How long a request waits for its channel subscription before going ahead anyway. */
@@ -60,27 +66,29 @@ const randomNonce = (): string =>
     ? crypto.randomUUID()
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 
-/** Resolves once `promise` settles, `ms` pass or `signal` aborts, whichever comes first. */
+type SubscribeOutcome = 'aborted' | 'failed' | 'ready' | 'timeout';
+
+/** Waits for `promise` until `ms` pass or `signal` aborts; says which happened. */
 const withTimeout = (promise: Promise<void>, ms: number, signal?: AbortSignal) =>
-  new Promise<void>((resolve) => {
-    if (signal?.aborted) return resolve();
-    const timer = setTimeout(resolve, ms);
+  new Promise<SubscribeOutcome>((resolve) => {
+    if (signal?.aborted) return resolve('aborted');
+    const timer = setTimeout(() => resolve('timeout'), ms);
     signal?.addEventListener(
       'abort',
       () => {
         clearTimeout(timer);
-        resolve();
+        resolve('aborted');
       },
       { once: true },
     );
     promise.then(
       () => {
         clearTimeout(timer);
-        resolve();
+        resolve('ready');
       },
       () => {
         clearTimeout(timer);
-        resolve();
+        resolve('failed');
       },
     );
   });
@@ -115,6 +123,9 @@ export class OneShotRelay {
     request: (relay?: OneShotRelayHandle) => Promise<T>,
     { signal }: { signal?: AbortSignal } = {},
   ): Promise<T> {
+    const providersLoading =
+      provider && this.deps.isAvailable() ? this.deps.whenProvidersKnown?.() : undefined;
+    if (providersLoading) await providersLoading;
     if (!this.needsRelay(provider)) return request();
 
     const channel = buildLlmRelayChannelId(this.deps.userId()!, randomNonce());
@@ -129,13 +140,13 @@ export class OneShotRelay {
       // (a gateway token request on the v1 path) counts against the same
       // timeout; past it, or if it fails, the request goes ahead and the
       // server reports the relay failure.
-      await withTimeout(
+      const outcome = await withTimeout(
         subscribing.then((subscription) => subscription.ready),
         ONE_SHOT_SUBSCRIBE_TIMEOUT_MS,
         // An aborted caller has nothing to wait for: its request settles at once.
         signal,
       );
-      log('channel %s ready for %s', channel, provider);
+      log('channel %s for %s: subscription %s', channel, provider, outcome);
 
       return await request({
         channel,

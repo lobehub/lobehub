@@ -2,7 +2,7 @@ import { CLIENT_LLM_WAIT_CAPABILITY, LLM_RELAY_CAPABILITY } from '@lobechat/agen
 import type { ExecAgentLlmExecutor } from '@lobechat/types';
 
 import { initializeWithClientStore } from '@/services/chat/mecha/clientModelRuntime';
-import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { aiProviderSelectors, getAiInfraStoreState, useAiInfraStore } from '@/store/aiInfra';
 import { getServerConfigStoreState } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -31,6 +31,33 @@ const getConfigState = () =>
   getServerConfigStoreState();
 
 const isLlmRelayEnabled = () => !!getConfigState()?.featureFlags?.enableLlmRelay;
+
+/** How long a one-shot call waits for the provider runtime state to load. */
+const PROVIDER_STATE_WAIT_MS = 5000;
+
+const isProviderRuntimeStateKnown = () =>
+  aiProviderSelectors.isInitAiProviderRuntimeState(getAiInfraStoreState());
+
+/**
+ * Nothing when the provider runtime state is loaded; else resolves once it is,
+ * or after {@link PROVIDER_STATE_WAIT_MS}: whether a custom provider runs on
+ * the device (private base URL, `fetchOnClient`) is only known from it.
+ */
+const waitForProviderRuntimeState = () => {
+  if (isProviderRuntimeStateKnown()) return;
+
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve();
+    };
+    const timer = setTimeout(done, PROVIDER_STATE_WAIT_MS);
+    const unsubscribe = useAiInfraStore.subscribe(() => {
+      if (isProviderRuntimeStateKnown()) done();
+    });
+  });
+};
 
 /**
  * The page-wide one-shot relay: LLM calls this tab asks the server for (preset
@@ -69,6 +96,7 @@ export const oneShotRelay = new OneShotRelay({
     }));
   },
   userId: () => userProfileSelectors.userId(useUserStore.getState()),
+  whenProvidersKnown: waitForProviderRuntimeState,
 });
 
 /**

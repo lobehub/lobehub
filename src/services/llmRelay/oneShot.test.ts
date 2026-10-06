@@ -50,6 +50,35 @@ describe('OneShotRelay', () => {
   // Callers drop the browser fetcher when `needsRelay` says so; with no user id
   // yet (session still loading) `run` cannot build a channel, so `needsRelay`
   // must say no and leave the legacy path in place.
+  // A custom provider is device-only by its runtime state (a private base URL,
+  // `fetchOnClient`), which a page loads after it starts: decided before that,
+  // the call would go out without a channel and the server would find no tab.
+  it('decides only once the provider runtime state is known', async () => {
+    let known = false;
+    let markKnown!: () => void;
+    const { deps, markReady, relay } = createRelay({
+      isDeviceProvider: () => known,
+      whenProvidersKnown: () =>
+        new Promise<void>((resolve) => {
+          markKnown = () => {
+            known = true;
+            resolve();
+          };
+        }),
+    });
+    const request = vi.fn(async () => 'ok');
+
+    const result = relay.run('my-local-proxy', request);
+    await Promise.resolve();
+    expect(deps.subscribe).not.toHaveBeenCalled();
+
+    markKnown();
+    await vi.waitFor(() => expect(deps.subscribe).toHaveBeenCalled());
+    markReady();
+    expect(await result).toBe('ok');
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ channel: expect.any(String) }));
+  });
+
   it('does not claim the call while the user id is still unknown', async () => {
     const { deps, relay } = createRelay({ userId: () => undefined });
     const request = vi.fn(async () => 'ok');
