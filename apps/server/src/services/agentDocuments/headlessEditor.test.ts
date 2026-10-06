@@ -5,6 +5,7 @@ import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 
 import {
   applyLiteXMLOperations,
+  createAgentMarkdownSnapshot,
   createMarkdownEditorSnapshot,
   exportEditorDataSnapshot,
 } from './headlessEditor';
@@ -188,5 +189,76 @@ describe('agent document headless editor', () => {
         ],
       }),
     ).rejects.toThrow('Operation 1 of 1 (insert) failed: node "missing-node" not found');
+  });
+
+  describe('Markdown read/write round trip', () => {
+    // What an agent does when it edits a document by rewriting it: read the
+    // Markdown back, then send that same Markdown to replaceDocumentContent.
+    const rewriteOwnExport = async (markdown: string) => {
+      const created = await createAgentMarkdownSnapshot(markdown);
+      const rewritten = await createAgentMarkdownSnapshot(created.content);
+      const again = await createAgentMarkdownSnapshot(rewritten.content);
+
+      return [created.content, rewritten.content, again.content];
+    };
+
+    it('keeps a bold literal asterisk bold instead of flattening it to five asterisks', async () => {
+      const [read, reread] = await rewriteOwnExport(
+        '| Code | Line |\n| --- | --- |\n| **\\*** | Operating result |\n| **\\*\\*** | Financial result |\n',
+      );
+
+      expect(read).toContain('**\\***');
+      expect(read).not.toContain('\\*\\*\\*\\*\\*');
+      expect(reread).toBe(read);
+    });
+
+    it('does not add a space after a bold label on every rewrite', async () => {
+      const exports = await rewriteOwnExport('**Mission:**  scan every drive\n**Owner:** Eric');
+
+      expect(new Set(exports).size).toBe(1);
+      expect(exports[0]).toContain('**Mission:**  scan every drive');
+    });
+
+    it('keeps literal backslashes, underscores and tags in text', async () => {
+      const editorData = {
+        root: {
+          children: [
+            {
+              children: [
+                {
+                  detail: 0,
+                  format: 0,
+                  mode: 'normal',
+                  style: '',
+                  text: 'path a\\*b, placeholder：__（影响已消化）"；其余：__（未知）, -m <model>',
+                  type: 'text',
+                  version: 1,
+                },
+              ],
+              direction: 'ltr',
+              format: '',
+              indent: 0,
+              type: 'paragraph',
+              version: 1,
+            },
+          ],
+          direction: 'ltr',
+          format: '',
+          indent: 0,
+          type: 'root',
+          version: 1,
+        },
+      };
+
+      const exported = await exportEditorDataSnapshot({ editorData });
+      const reimported = await createAgentMarkdownSnapshot(exported.content);
+
+      expect(JSON.stringify(reimported.editorData)).toContain(
+        JSON.stringify(
+          'path a\\*b, placeholder：__（影响已消化）"；其余：__（未知）, -m <model>',
+        ).slice(1, -1),
+      );
+      expect(JSON.stringify(reimported.editorData)).not.toContain('"format":1');
+    });
   });
 });
