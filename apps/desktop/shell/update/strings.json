@@ -1,0 +1,22 @@
+{
+  "en-US": {
+    "requiredTitle": "Update required",
+    "requiredDescription": "This version has a security issue. Update to continue.",
+    "checking": "Checking for updates…",
+    "downloading": "Downloading update",
+    "applying": "Restarting LobeHub…",
+    "error": "Couldn’t finish the update",
+    "retry": "Retry",
+    "quit": "Quit"
+  },
+  "zh-CN": {
+    "requiredTitle": "需要更新才能继续",
+    "requiredDescription": "当前版本存在安全问题，请完成更新后继续使用。",
+    "checking": "正在检查更新…",
+    "downloading": "正在下载更新",
+    "applying": "正在重新打开 LobeHub…",
+    "error": "暂时无法完成更新",
+    "retry": "重试",
+    "quit": "退出"
+  }
+}

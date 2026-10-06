@@ -2,9 +2,14 @@ import * as managedProcess from '@lobechat/utils/managedProcess';
 import { app as electronApp, ipcMain } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ShellGlobal } from '@/const/shell';
+
 // Import after mocks are set up
 import LocalDatabaseService from '../../services/LocalDatabaseSrv';
 import { App } from '../App';
+
+const shellState = vi.hoisted(() => ({ shellInfo: undefined as ShellGlobal | undefined }));
+vi.mock('@/const/shell', () => shellState);
 
 const mockPathExistsSync = vi.fn();
 
@@ -67,6 +72,10 @@ vi.mock('@/utils/platform', () => ({
 
 vi.mock('fix-path', () => ({
   default: vi.fn(),
+}));
+
+vi.mock('@/utils/shellPath', () => ({
+  refreshShellPath: vi.fn(async () => {}),
 }));
 
 vi.mock('@/const/env', () => ({
@@ -194,6 +203,8 @@ describe('App', () => {
   });
 
   afterEach(() => {
+    shellState.shellInfo = undefined;
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -208,6 +219,80 @@ describe('App', () => {
   });
 
   describe('service lifecycle', () => {
+    it('shows business windows before starting a pending background security check', async () => {
+      let firstFrame!: () => void;
+      let finishCheck!: (ready: boolean) => void;
+      const frame = new Promise<void>((resolve) => {
+        firstFrame = resolve;
+      });
+      const checkSecurity = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            finishCheck = resolve;
+          }),
+      );
+      shellState.shellInfo = {
+        abi: 'test',
+        builtinDir: '/mock/core',
+        coreDir: '/mock/core',
+        log: [],
+        manifest: null,
+        markHealthy: vi.fn(),
+        publicKey: '',
+        shellVersion: '1.0.0',
+        source: 'builtin',
+        startupUpdate: { checkSecurity, pending: false, run: vi.fn(async () => true) },
+      };
+      appInstance = new App();
+      vi.mocked(appInstance.browserManager.waitForMainWindowFirstFrame).mockReturnValue(frame);
+      // Hold unrelated native setup; this test owns only the startup/security boundary.
+      vi.spyOn(appInstance, 'runControllerHooks').mockImplementation(async (lifecycle) => {
+        if (lifecycle === 'afterFirstFrame') await new Promise(() => {});
+      });
+      await appInstance.bootstrap();
+      expect(appInstance.browserManager.initializeBrowsers).toHaveBeenCalledOnce();
+      expect(checkSecurity).not.toHaveBeenCalled();
+      expect(appInstance.startupUpdatePending).toBe(false);
+      firstFrame();
+      await vi.waitFor(() => expect(checkSecurity).toHaveBeenCalledOnce());
+      expect(appInstance.startupUpdatePending).toBe(false);
+      finishCheck(true);
+    });
+
+    it.each([true, false])(
+      'does not create business windows until startup checks allow entry (first launch: %s)',
+      async (pending) => {
+        let release!: (ready: boolean) => void;
+        const run = vi.fn(
+          () =>
+            new Promise<boolean>((resolve) => {
+              release = resolve;
+            }),
+        );
+        shellState.shellInfo = {
+          abi: 'test',
+          builtinDir: '/mock/core',
+          coreDir: '/mock/core',
+          log: [],
+          manifest: null,
+          markHealthy: vi.fn(),
+          publicKey: '',
+          shellVersion: '1.0.0',
+          source: 'builtin',
+          startupUpdate: { checkSecurity: vi.fn(), pending, run },
+        };
+        appInstance = new App();
+        const boot = appInstance.bootstrap();
+        await vi.waitFor(() => expect(run).toHaveBeenCalledOnce());
+        expect(appInstance.startupUpdatePending).toBe(true);
+        expect(appInstance.browserManager.initializeBrowsers).not.toHaveBeenCalled();
+        release(true);
+        await boot;
+        expect(appInstance.startupUpdatePending).toBe(false);
+        expect(appInstance.browserManager.initializeBrowsers).toHaveBeenCalledOnce();
+      },
+    );
+
     it('enables precise renderer heap metrics before Chromium is ready', async () => {
       appInstance = new App();
 

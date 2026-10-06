@@ -5,7 +5,7 @@ import type { DesktopBootProfilePayload } from '@lobechat/electron-client-ipc';
 import type { ElectronIPCEventHandler } from '@lobechat/electron-server-ipc';
 import { ElectronIPCServer } from '@lobechat/electron-server-ipc';
 import { enableManagedProcesses, shutdownManagedProcesses } from '@lobechat/utils/managedProcess';
-import { app, ipcMain, nativeTheme, protocol } from 'electron';
+import { app, ipcMain, nativeTheme, net, protocol } from 'electron';
 
 import { name } from '@/../../package.json';
 import { binDir, buildDir } from '@/const/dir';
@@ -26,6 +26,7 @@ import {
 } from '@/modules/binaries';
 import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
 import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
+import { BUILD_CHANNEL, UPDATE_SERVER_URL } from '@/modules/updater/configs';
 import type { IServiceModule, ServiceLifecycle, ServiceModule } from '@/services';
 import LocalDatabaseService from '@/services/LocalDatabaseSrv';
 import { createLogger } from '@/utils/logger';
@@ -41,6 +42,7 @@ import { IoCContainer } from './infrastructure/IoCContainer';
 import { LocalFileProtocolManager } from './infrastructure/LocalFileProtocolManager';
 import { ProtocolManager } from './infrastructure/ProtocolManager';
 import { RendererUrlManager } from './infrastructure/RendererUrlManager';
+import { SecurityUpdatePolicy } from './infrastructure/SecurityUpdatePolicy';
 import { StaticFileServerManager } from './infrastructure/StaticFileServerManager';
 import { StoreManager } from './infrastructure/StoreManager';
 import type { UpdaterManager } from './infrastructure/UpdaterManager';
@@ -60,6 +62,7 @@ type Class<T> = new (...args: any[]) => T;
 const importAll = (r: any) => Object.values(r).map((v: any) => v.default);
 
 export class App {
+  startupUpdatePending = !!shellInfo?.startupUpdate;
   browserManager: BrowserManager;
   menuManager: MenuManager;
   i18n: I18nManager;
@@ -279,6 +282,13 @@ export class App {
     // Reach Electron ready state, then create the main BrowserWindow before
     // native menus, local-file services, tray and updater initialization.
     await this.makeAppReady();
+    if (shellInfo?.startupUpdate) {
+      const ready = await shellInfo.startupUpdate.run(
+        this.coreUpdateManager.checkBeforeFirstLaunch,
+      );
+      if (!ready) return;
+    }
+    this.startupUpdatePending = false;
     await this.browserManager.initializeBrowsers();
     this.prewarmLocalDatabaseAfterNavigation();
     await this.runControllerHooks('afterAppReady');
@@ -317,6 +327,28 @@ export class App {
 
   private initializeAfterFirstFrame = async (initializeNativeShell: () => Promise<void>) => {
     await this.browserManager.waitForMainWindowFirstFrame();
+
+    // Security policy IO must never delay the first usable window.
+    if (shellInfo?.startupUpdate) {
+      void shellInfo.startupUpdate
+        .checkSecurity(
+          new SecurityUpdatePolicy({
+            channel: BUILD_CHANNEL,
+            coreVersion: () => this.coreUpdateManager.getStatus().running,
+            feedBaseUrl: (UPDATE_SERVER_URL ?? '')
+              .replace(/\/(stable|nightly|canary|beta)\/?$/, '')
+              .replace(/\/$/, ''),
+            fetchImpl: (url, init) => net.fetch(url, init),
+            platform: process.platform as 'darwin' | 'linux' | 'win32',
+            publicKey: shellInfo.publicKey,
+            shellVersion: shellInfo.shellVersion,
+            userData: app.getPath('userData'),
+          }),
+        )
+        .catch((error) => {
+          logger.error('Background security update check failed:', error);
+        });
+    }
 
     // GUI-launched apps do not inherit the user's login-shell PATH. Resolve it
     // asynchronously after the first frame so shell startup never blocks the

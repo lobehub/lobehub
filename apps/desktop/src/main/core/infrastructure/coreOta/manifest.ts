@@ -1,10 +1,12 @@
-import { createHash, verify as cryptoVerify } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import * as z from 'zod/v4';
 
 import type { ShellGlobal } from '@/const/shell';
+
+export { canonicalJson, verifyManifestSignature } from '~common/signedJson';
 
 const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
 const packPathSchema = z.string().regex(/^packs\/[0-9a-f]{64}\.zip$/);
@@ -157,36 +159,6 @@ export type PackFrame = z.infer<typeof frameSchema>;
 export type CorePatch = z.infer<typeof corePatchSchema>;
 export type RendererArtifact = z.infer<typeof rendererArtifactSchema>;
 export type RendererTreeFile = z.infer<typeof rendererTreeFileSchema>;
-
-export const canonicalJson = (value: unknown): string => {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    const entries = Object.keys(value as Record<string, unknown>)
-      .sort()
-      .map(
-        (key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`,
-      );
-    return `{${entries.join(',')}}`;
-  }
-  return JSON.stringify(value);
-};
-
-export const verifyManifestSignature = (
-  manifest: { signature: string },
-  publicKeyPem: string,
-): boolean => {
-  const { signature, ...unsigned } = manifest;
-  try {
-    return cryptoVerify(
-      null,
-      Buffer.from(canonicalJson(unsigned)),
-      publicKeyPem,
-      Buffer.from(signature, 'base64'),
-    );
-  } catch {
-    return false;
-  }
-};
 
 export const isValidManifestShape = (value: unknown): value is CoreManifest =>
   coreManifestSchema.safeParse(value).success;

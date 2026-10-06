@@ -1,4 +1,5 @@
 name: Release Desktop Core OTA
+run-name: ${{ inputs.security_policy && format('Desktop security policy ({0})', inputs.security_policy_request_id || github.run_id) || 'Release Desktop Core OTA' }}
 
 # ============================================
 # core-only 发布（壳不变，只发 main/preload/renderer/cli）
@@ -37,6 +38,14 @@ on:
         value: ${{ jobs.gate.outputs.version }}
   workflow_dispatch:
     inputs:
+      security_policy:
+        description: 'Optional security policy request JSON; skips Core release when set'
+        required: false
+        type: string
+      security_policy_request_id:
+        description: 'Unique operator request ID for locating the security policy run'
+        required: false
+        type: string
       channel:
         description: 'Update channel'
         required: true
@@ -53,7 +62,7 @@ on:
         default: '1'
 
 concurrency:
-  group: desktop-core-ota-${{ inputs.channel }}
+  group: ${{ inputs.security_policy && 'desktop-security-policy' || format('desktop-core-ota-{0}', inputs.channel) }}
   cancel-in-progress: false
 
 permissions: read-all
@@ -62,8 +71,76 @@ env:
   NODE_VERSION: '24.11.1'
 
 jobs:
+  security-policy:
+    name: Inspect or publish desktop security policy
+    if: github.event_name == 'workflow_dispatch' && inputs.security_policy != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Prepare isolated publisher runtime
+        run: |
+          set -euo pipefail
+          RUNTIME="$RUNNER_TEMP/security-policy-runtime"
+          mkdir -p "$RUNTIME/scripts" "$RUNTIME/src/common"
+          cp apps/desktop/scripts/desktopSecurityPolicy.mjs "$RUNTIME/scripts/"
+          cp apps/desktop/src/common/{securityPolicy,signedJson}.ts "$RUNTIME/src/common/"
+          cp apps/desktop/scripts/security-policy-runtime/package{,-lock}.json "$RUNTIME/"
+          cd "$RUNTIME"
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate security policy request without credentials
+        id: policy-request
+        env:
+          SECURITY_POLICY_REQUEST: ${{ inputs.security_policy }}
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/security-policy-runtime/scripts/desktopSecurityPolicy.mjs" \
+            --validate-request > "$RUNNER_TEMP/security-policy-request.json"
+          jq -r '"apply=\(.apply // false)"' "$RUNNER_TEMP/security-policy-request.json" >> "$GITHUB_OUTPUT"
+      - name: Inspect or preview security policy
+        if: steps.policy-request.outputs.apply != 'true'
+        env:
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          UPDATE_S3_ENDPOINT: ${{ secrets.UPDATE_S3_ENDPOINT }}
+          UPDATE_S3_REGION: ${{ secrets.UPDATE_S3_REGION }}
+          UPDATE_S3_BUCKET: ${{ secrets.UPDATE_S3_BUCKET }}
+          UPDATE_AWS_ACCESS_KEY_ID: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          UPDATE_AWS_SECRET_ACCESS_KEY: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+        run: |
+          node "$RUNNER_TEMP/security-policy-runtime/scripts/desktopSecurityPolicy.mjs" \
+            --request "$RUNNER_TEMP/security-policy-request.json" \
+            --output "$RUNNER_TEMP/security-policy-report.json"
+      - name: Publish security policy
+        if: steps.policy-request.outputs.apply == 'true'
+        env:
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          UPDATE_S3_ENDPOINT: ${{ secrets.UPDATE_S3_ENDPOINT }}
+          UPDATE_S3_REGION: ${{ secrets.UPDATE_S3_REGION }}
+          UPDATE_S3_BUCKET: ${{ secrets.UPDATE_S3_BUCKET }}
+          UPDATE_AWS_ACCESS_KEY_ID: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          UPDATE_AWS_SECRET_ACCESS_KEY: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          RENDERER_OTA_PRIVATE_KEY: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
+        run: |
+          node "$RUNNER_TEMP/security-policy-runtime/scripts/desktopSecurityPolicy.mjs" \
+            --request "$RUNNER_TEMP/security-policy-request.json" \
+            --output "$RUNNER_TEMP/security-policy-report.json"
+      - name: Upload operation report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-security-policy-${{ github.run_id }}
+          path: ${{ runner.temp }}/security-policy-report.json
+          if-no-files-found: warn
+          retention-days: 90
+
   gate:
     name: Shell ABI gate (${{ inputs.channel }})
+    if: inputs.security_policy == ''
     runs-on: ubuntu-latest
     outputs:
       app_version: ${{ steps.base.outputs.app_version }}

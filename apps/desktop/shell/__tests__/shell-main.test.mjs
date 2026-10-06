@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mainPath = fileURLToPath(new URL('../main.js', import.meta.url));
 const loaderPath = fileURLToPath(new URL('../core-loader.js', import.meta.url));
 const rescuePath = fileURLToPath(new URL('../rescue/index.js', import.meta.url));
+const updatePath = fileURLToPath(new URL('../update/index.js', import.meta.url));
 const abiPath = fileURLToPath(new URL('../abi.json', import.meta.url));
 const require = createRequire(mainPath);
 const electronPath = require.resolve('electron');
@@ -23,6 +24,7 @@ const stub = (file, exports) => {
 };
 
 const loadMain = ({ app, electron = {}, resolveCore, runRescue = vi.fn() }) => {
+  delete require.cache[updatePath];
   stub(electronPath, { app, ...electron });
   if (resolveCore) stub(loaderPath, { installShellResolver: vi.fn(), resolveCore });
   stub(rescuePath, { runRescue });
@@ -52,6 +54,7 @@ const fakeCore = (source, body = 'module.exports = 1;') => {
     manifest: null,
     markBroken: vi.fn(),
     markHealthy: vi.fn(),
+    startBoot: vi.fn(),
     source,
   };
 };
@@ -69,6 +72,11 @@ beforeEach(() => {
   coreMain = path.join(tmp, 'core', 'dist', 'main', 'index.js');
   resourcesPath = process.resourcesPath;
   process.resourcesPath = path.join(tmp, 'resources');
+  fs.mkdirSync(path.join(process.resourcesPath, 'core.asar'), { recursive: true });
+  fs.writeFileSync(
+    path.join(process.resourcesPath, 'core.asar/manifest.json'),
+    JSON.stringify({ channel: 'stable' }),
+  );
 });
 
 afterEach(() => {
@@ -108,9 +116,32 @@ describe('shell main', () => {
     const { runRescue } = loadMain({ app: packagedApp(), resolveCore: () => core });
 
     expect(global.__BOOTED__).toBe(true);
-    expect(global.__SHELL__.markHealthy).toBe(core.markHealthy);
+    global.__SHELL__.markHealthy();
+    expect(core.markHealthy).toHaveBeenCalledOnce();
     expect(runRescue).not.toHaveBeenCalled();
     delete global.__BOOTED__;
+  });
+
+  it('starts stable boot validation without waiting for the background security check', async () => {
+    const core = fakeCore('builtin');
+    const resolveCore = vi.fn(() => core);
+    loadMain({ app: packagedApp(), resolveCore });
+    const check = vi.fn();
+    let release;
+    const background = global.__SHELL__.startupUpdate.checkSecurity({
+      check: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+    expect(resolveCore).toHaveBeenCalledWith(expect.objectContaining({ deferBoot: true }));
+    expect(core.startBoot).not.toHaveBeenCalled();
+    expect(await global.__SHELL__.startupUpdate.run(check)).toBe(true);
+    expect(check).not.toHaveBeenCalled();
+    expect(core.startBoot).toHaveBeenCalledOnce();
+    release(false);
+    expect(await background).toBe(true);
+    expect(core.startBoot).toHaveBeenCalledOnce();
   });
 
   it('rescues in-process when the builtin core throws while loading', () => {
