@@ -15,6 +15,7 @@ export interface GoalTurnFeedback {
   body: string;
   isNew: boolean;
   taskId?: string;
+  taskTitle?: string;
   truncated: boolean;
   updatedAt?: string;
 }
@@ -84,6 +85,7 @@ export const parseGoalTurn = (raw: string): ParsedGoalTurn => {
           body: text ?? '',
           isNew: attrs.new === 'true',
           taskId: attrs.taskId,
+          taskTitle: attrs.taskTitle,
           truncated: attrs.truncated === 'true',
           updatedAt: attrs.updatedAt,
         });

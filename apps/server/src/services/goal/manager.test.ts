@@ -1142,6 +1142,8 @@ describe('CLI main Agent planning', () => {
     expect(prompt).toMatch(
       /<feedback author="user" new="true"[^>]*><!\[CDATA\[\nThe recommendation baseline is not a training majority/,
     );
+    // The card names the task by title; the agent keeps the id.
+    expect(prompt).toContain(`taskId="${taskId}" taskTitle="Audit"`);
     expect(prompt).toContain('<previousTurn action="tasks" outcome="submitted">');
     const next = (await model().findById(id))!.config!.managerState!;
     await taskModel.addComment({

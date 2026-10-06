@@ -18,6 +18,8 @@ export interface GoalManagerFeedbackNote {
   author: string;
   content: string;
   taskId: string;
+  /** Shown in place of the id on the card; the agent keeps using `taskId`. */
+  taskTitle?: string;
   updatedAt: string;
 }
 
@@ -127,7 +129,14 @@ const feedback = (note: GoalManagerFeedbackNote, isNew: boolean) => {
   const text = isNew ? note.content.slice(0, limit) : oneLine(note.content, limit);
   return element(
     'feedback',
-    { author: note.author, new: isNew, taskId: note.taskId, truncated, updatedAt: note.updatedAt },
+    {
+      author: note.author,
+      new: isNew,
+      taskId: note.taskId,
+      taskTitle: note.taskTitle,
+      truncated,
+      updatedAt: note.updatedAt,
+    },
     text,
   );
 };

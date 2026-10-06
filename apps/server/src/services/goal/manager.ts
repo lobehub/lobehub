@@ -311,6 +311,10 @@ export class GoalManagerService {
   private reviews = async (graph: GoalGraphSnapshot, db = this.db) => {
     const tasks = new TaskModel(db, this.userId, this.workspaceId);
     const visible = await tasks.findByIds(graph.nodes.flatMap((n) => (n.taskId ? [n.taskId] : [])));
+    // The node title names the task the way the goal page does, for the person
+    // reading the card; kept out of the hash, so a rename does not invalidate a
+    // turn's feedback snapshot.
+    const titles = new Map(graph.nodes.flatMap((n) => (n.taskId ? [[n.taskId, n.title]] : [])));
     const comments = (
       await Promise.all(
         visible.map(async (task) =>
@@ -335,6 +339,7 @@ export class GoalManagerService {
           author: c.authorAgentId ? `agent ${c.authorAgentId}` : 'user',
           content: c.content,
           taskId: c.taskId,
+          taskTitle: titles.get(c.taskId) ?? undefined,
           updatedAt: c.updatedAt,
         })),
     };

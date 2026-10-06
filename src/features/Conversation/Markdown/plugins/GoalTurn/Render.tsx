@@ -4,7 +4,7 @@ import { Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import { ChevronRightIcon, MessageSquareTextIcon, TargetIcon } from 'lucide-react';
+import { ChevronRightIcon, TargetIcon } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,35 +17,16 @@ import {
 } from './parseGoalTurn';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  feedback: css`
-    padding-block: 8px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  /* The chat bubble folds tall messages, so long text here is clamped and the
+  /* The chat bubble folds tall messages, so a long comment is clamped and the
      new feedback stays in the first view. */
-  clamp2: css`
+  clamp3: css`
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
   `,
-  clamp4: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 4;
-  `,
-  feedbackBody: css`
-    padding-inline-start: 24px;
-
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorText};
-    word-break: break-word;
-    white-space: pre-wrap;
+  feedback: css`
+    padding-block: 6px;
   `,
   folded: css`
     padding-block: 6px 2px;
@@ -61,6 +42,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 0;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
+  label: css`
+    font-size: 12px;
+  `,
   mark: css`
     display: flex;
     flex: none;
@@ -75,11 +59,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
-  meta: css`
-    font-size: 12px;
-  `,
   pill: css`
     flex: none;
+    align-self: flex-start;
 
     padding-block: 2px;
     padding-inline: 8px;
@@ -97,6 +79,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorWarning};
     background: ${cssVar.colorWarningBg};
   `,
+  quote: css`
+    margin-block-start: 4px;
+    padding-inline-start: 10px;
+    border-inline-start: 2px solid ${cssVar.colorBorder};
+
+    font-size: 13px;
+    line-height: 1.6;
+    color: ${cssVar.colorText};
+    word-break: break-word;
+    white-space: pre-wrap;
+  `,
   root: css`
     overflow: hidden;
 
@@ -108,10 +101,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     font-size: 13px;
     text-align: start;
-  `,
-  row: css`
-    padding-block: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   section: css`
     padding-block: 8px 2px;
@@ -161,55 +150,57 @@ const Fold = ({ children, label }: { children: ReactNode; label: ReactNode }) =>
 };
 
 /** Rough line count past which a body is clamped and gets its own toggle. */
-const isLong = (text: string) => text.length > 160 || text.split('\n').length > 4;
+const isLong = (text: string) => text.length > 120 || text.split('\n').length > 3;
 
+/**
+ * One comment, named by the task it was left on — the title, never the id the
+ * agent works with — then who wrote it and when, then the comment as a quote.
+ */
 const FeedbackRow = ({ feedback }: { feedback: GoalTurnFeedback }) => {
   const { t } = useTranslation('chat');
   const [expanded, setExpanded] = useState(false);
   const long = isLong(feedback.body);
   const author = feedback.author === 'user' ? t('goalTurn.authorUser') : feedback.author;
-  const meta = [
-    feedback.taskId,
-    feedback.updatedAt ? dayjs(feedback.updatedAt).format('MM-DD HH:mm') : undefined,
-    feedback.truncated ? t('goalTurn.truncated') : undefined,
-  ]
+  const meta = [author, feedback.updatedAt && dayjs(feedback.updatedAt).format('MM-DD HH:mm')]
     .filter(Boolean)
     .join(' · ');
+  const task = feedback.taskTitle || feedback.taskId;
 
   return (
-    <Flexbox className={styles.feedback} gap={4}>
-      <Flexbox horizontal align="center" gap={8}>
-        <Icon icon={MessageSquareTextIcon} size="small" style={{ flex: 'none', opacity: 0.6 }} />
-        <Text style={{ flex: 'none' }} weight={500}>
-          {author}
-        </Text>
-        {meta ? (
-          <Text className={styles.meta} style={{ minWidth: 0 }} type="secondary">
-            {meta}
+    <div className={styles.feedback}>
+      <Flexbox horizontal align="baseline" gap={8}>
+        {task ? (
+          <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
+            {task}
           </Text>
         ) : null}
+        <Text className={styles.label} style={{ flex: 'none' }} type="secondary">
+          {meta}
+        </Text>
       </Flexbox>
-      <div className={cx(styles.feedbackBody, long && !expanded && styles.clamp4)}>
+      <div className={cx(styles.quote, long && !expanded && styles.clamp3)}>
         {feedback.body}
+        {expanded && feedback.truncated ? '…' : null}
       </div>
       {long ? (
         <span
           className={styles.toggle}
-          style={{ paddingInlineStart: 24 }}
+          style={{ paddingInlineStart: 12 }}
           onClick={() => setExpanded((v) => !v)}
         >
           {expanded ? t('goalTurn.showLess') : t('goalTurn.showAll')}
         </span>
       ) : null}
-    </Flexbox>
+    </div>
   );
 };
 
 /**
  * The message the goal manager sends its planning agent each turn, rendered as
- * a card: which turn and why it started, how the previous turn ended, and the
- * review feedback new since then. The requirement, earlier feedback and the
- * agent's standing instructions repeat every turn, so they start folded.
+ * a card: which turn, why it started and how the previous one ended in the
+ * header, then the review feedback new since then. Sections with nothing to say
+ * are not drawn. The requirement, earlier feedback and the agent's standing
+ * instructions repeat every turn, so they start folded.
  */
 const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) => {
   const { t } = useTranslation('chat');
@@ -229,9 +220,20 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
         <span className={styles.mark}>
           <Icon icon={TargetIcon} size={16} />
         </span>
-        <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
-          {t('goalTurn.title', { max: attrs.maxTurns ?? '?', turn: attrs.turn ?? '?' })}
-        </Text>
+        <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
+          <Text ellipsis weight={500}>
+            {t('goalTurn.title', { max: attrs.maxTurns ?? '?', turn: attrs.turn ?? '?' })}
+          </Text>
+          {/* The reason itself is the previous reply, right above this card. */}
+          {previous ? (
+            <Text ellipsis className={styles.label} type="secondary">
+              {t(`goalTurn.outcome.${previous.outcome}` as any, {
+                action: previous.action,
+                defaultValue: previous.outcome,
+              })}
+            </Text>
+          ) : null}
+        </Flexbox>
         <span
           className={cx(
             styles.pill,
@@ -243,46 +245,29 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
       </Flexbox>
 
       {reason ? (
-        <Flexbox className={styles.row} gap={4}>
-          <Text className={styles.meta} type="secondary">
+        <Flexbox className={styles.section} gap={4}>
+          <Text className={styles.label} type="secondary">
             {t(parsed.problem ? 'goalTurn.problem' : 'goalTurn.continuation')}
           </Text>
-          <Text style={{ whiteSpace: 'pre-wrap' }}>{reason}</Text>
+          <div className={styles.quote}>{reason}</div>
         </Flexbox>
       ) : null}
 
-      {previous ? (
-        <Flexbox className={styles.row} gap={2}>
-          <Text className={styles.meta} type="secondary">
-            {t('goalTurn.previousLabel')}
+      {fresh.length > 0 || parsed.omitted.new > 0 ? (
+        <div className={styles.section}>
+          <Text className={styles.label} type="secondary">
+            {t('goalTurn.newFeedback', { count: fresh.length + parsed.omitted.new })}
           </Text>
-          <div className={styles.clamp2} title={previous.reason}>
-            <Text weight={500}>
-              {t(`goalTurn.outcome.${previous.outcome}` as any, {
-                action: previous.action,
-                defaultValue: previous.outcome,
-              })}
+          {fresh.map((feedback, index) => (
+            <FeedbackRow feedback={feedback} key={`${feedback.taskId}-${index}`} />
+          ))}
+          {parsed.omitted.new > 0 ? (
+            <Text className={styles.label} type="secondary">
+              {t('goalTurn.omitted', { count: parsed.omitted.new })}
             </Text>
-            {previous.reason ? <Text type="secondary">{` — ${previous.reason}`}</Text> : null}
-          </div>
-        </Flexbox>
+          ) : null}
+        </div>
       ) : null}
-
-      <div className={styles.row}>
-        <Text className={styles.meta} type="secondary">
-          {fresh.length > 0
-            ? t('goalTurn.newFeedback', { count: fresh.length })
-            : t('goalTurn.noNewFeedback')}
-        </Text>
-        {fresh.map((feedback, index) => (
-          <FeedbackRow feedback={feedback} key={`${feedback.taskId}-${index}`} />
-        ))}
-        {parsed.omitted.new > 0 ? (
-          <Text className={styles.meta} type="secondary">
-            {t('goalTurn.omitted', { count: parsed.omitted.new })}
-          </Text>
-        ) : null}
-      </div>
 
       {earlier.length > 0 || parsed.omitted.earlier > 0 ? (
         <Fold
