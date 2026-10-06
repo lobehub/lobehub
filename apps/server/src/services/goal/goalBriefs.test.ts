@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { randomUUID } from 'node:crypto';
+
 import { GOAL_BRIEF_TRIGGER } from '@lobechat/const/goal';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -209,11 +211,11 @@ describe('goal progress', () => {
 });
 
 const acceptanceRow = async (
-  values: { status?: 'accepted' | 'pending'; workspaceId?: string } = {},
+  values: { status?: 'accepted' | 'pending' | 'rejected'; workspaceId?: string } = {},
 ) => {
   const [row] = await serverDB
     .insert(acceptances)
-    .values({ subjectId: 'goal-acceptance-task', subjectType: 'standalone', userId, ...values })
+    .values({ subjectId: randomUUID(), subjectType: 'standalone', userId, ...values })
     .returning();
   return row.id;
 };
@@ -243,13 +245,14 @@ describe('goal sign-off briefs', () => {
     expect(brief.resolvedAction).toBe('signOff');
   });
 
-  it('asks nothing for an acceptance the owner has already signed', async () => {
+  it('asks nothing for an acceptance the owner has already decided', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Signed early' });
     const goal = (await serverDB.query.goals.findFirst({ where: eq(goals.id, graph.goal.id) }))!;
     const goalBriefService = new GoalBriefService(serverDB, userId);
 
     await goalBriefService.openSignOff(goal, await acceptanceRow({ status: 'accepted' }));
+    await goalBriefService.openSignOff(goal, await acceptanceRow({ status: 'rejected' }));
 
     expect(await goalBriefs()).toHaveLength(0);
   });

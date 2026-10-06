@@ -1855,6 +1855,30 @@ describe('escalations that ask a real question', () => {
     expect(comments.at(-1)!.content).toContain('Guidance: Order follows merge time');
   });
 
+  // Gates are labelled by option id, so an authored "retry" that retires the
+  // Task would read "Retry task" on the card.
+  it('refuses answers that reuse the coordinator option ids', async () => {
+    const { goalId, state, turn } = await stuckGoal();
+    await expect(
+      operationCaller(turn.id).submitOperationPlan({
+        id: goalId,
+        operationId: turn.id,
+        plan: {
+          action: 'escalate',
+          reason: 'Needs a call',
+          ask: {
+            question: 'Keep this result?',
+            options: [
+              { id: 'retry', label: 'Keep this result', effect: 'retire' },
+              { id: 'redo', label: 'Redo it', effect: 'retry' },
+            ],
+          },
+        },
+        token: state.token,
+      }),
+    ).rejects.toThrow('reserved');
+  });
+
   it('refuses a takeover question whose answers leave the blocked Task undecided', async () => {
     const { goalId, state, turn } = await stuckGoal();
     await expect(

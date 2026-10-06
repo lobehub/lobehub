@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import {
   GOAL_ACCEPTANCE_TASK_TITLE,
+  GOAL_CLARIFICATION_OPTION,
   GOAL_COORDINATOR_ACTOR_ID,
   GOAL_MANAGER_QUESTION_TITLE,
 } from '@lobechat/const/goal';
@@ -53,6 +54,18 @@ const reason = z.string().trim().min(1).max(8000);
  * waive a criterion, restore a closed PR — was buried in its text with no
  * button to answer it.
  */
+/**
+ * Option ids the coordinator and the planner own. Their gates are labelled by
+ * id on the goal page and in the inbox, so an authored answer reusing one would
+ * show the coordinator's label ("Retry task") over a different consequence.
+ */
+const RESERVED_ASK_OPTION_IDS = new Set<string>([
+  'fail',
+  'retire',
+  'retry',
+  ...Object.values(GOAL_CLARIFICATION_OPTION),
+]);
+
 const goalAskSchema = z
   .object({
     question: z.string().trim().min(1).max(2000),
@@ -77,6 +90,9 @@ const goalAskSchema = z
   .strict()
   .refine((ask) => new Set(ask.options.map((option) => option.id)).size === ask.options.length, {
     message: 'Option ids must be unique',
+  })
+  .refine((ask) => ask.options.every((option) => !RESERVED_ASK_OPTION_IDS.has(option.id)), {
+    message: `Option ids ${[...RESERVED_ASK_OPTION_IDS].join(', ')} are reserved; name the answer itself (e.g. "waive")`,
   })
   .refine(
     (ask) =>

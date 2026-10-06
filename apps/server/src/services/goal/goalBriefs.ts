@@ -22,6 +22,8 @@ const MACHINE_GATE_TAIL = /Fix it, then retry or retire this task node\?$/;
 
 const SUMMARY_LIMIT = 600;
 
+const DECIDED_ACCEPTANCE_STATUSES = new Set<string>(['accepted', 'closed', 'rejected']);
+
 const signOffFor = (acceptanceId: string) =>
   sql`${briefs.metadata} -> 'goal' ->> 'signOffAcceptanceId' = ${acceptanceId}`;
 
@@ -155,9 +157,9 @@ export class GoalBriefService {
   /**
    * The goal-level acceptance passed: the owner signs the result off or sends it back.
    *
-   * The acceptance row is locked while the brief is written, so a sign-off that
+   * The acceptance row is locked while the brief is written, so a decision that
    * lands meanwhile either is seen here (and nothing is asked) or waits for this
-   * brief to exist and then settles it — never an open ask for a signed result.
+   * brief to exist and then settles it — never an open ask for a decided result.
    */
   openSignOff = async (goal: GoalItem, acceptanceId: string) =>
     this.safely('openSignOff', async () => {
@@ -168,7 +170,9 @@ export class GoalBriefService {
           .from(acceptances)
           .where(and(eq(acceptances.id, acceptanceId), eq(acceptances.userId, this.userId)))
           .for('update');
-        if (!acceptance || acceptance.status === 'accepted') return;
+        // Already decided — accepted, sent back or closed — nothing is left
+        // to sign, and the card could never be answered.
+        if (!acceptance || DECIDED_ACCEPTANCE_STATUSES.has(acceptance.status)) return;
 
         const briefModel = new BriefModel(tx, this.userId, this.workspaceId);
         const existing = await tx
