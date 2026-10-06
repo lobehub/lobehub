@@ -9,7 +9,11 @@ import { isAgentOperationInFlight } from '@lobechat/types';
 import type { AgentOperationItem } from '@/database/schemas/agentOperations';
 import { HETERO_DISPATCH_ERROR_HEADLINES } from '@/server/services/aiAgent/helpers/heteroErrors';
 
-import { countChargedTaskAttempts, resolveTaskAttemptBudget } from '../recoveryPolicy';
+import {
+  classifyRunFailure,
+  countChargedTaskAttempts,
+  resolveTaskAttemptBudget,
+} from '../recoveryPolicy';
 
 export const SUPERVISOR_DIAGNOSIS_TIMEOUT_MS = 10 * 60 * 1000;
 export const MAX_SUPERVISION_INCIDENTS = 100;
@@ -126,11 +130,13 @@ export const recoveryEligibility = (
     return { eligible: false, reason: 'Task attempt budget exhausted' };
   }
   const error = `${operation?.error?.type ?? ''} ${operation?.error?.message ?? ''} ${task.error ?? ''}`;
-  if (
-    /auth|credential|api.?key|permission|approv|forbidden|unauthor|usage.?limit|quota|billing|budget|cancel|用户|授权|凭据|额度/i.test(
-      error,
-    )
-  ) {
+  const failure = classifyRunFailure(operation?.error, task.error ?? '');
+  // A usage window that reports its reset is not a person's call: the coordinator
+  // holds the Task until the reset (`waitForQuotaReset`) and only then lets it here.
+  if (failure.kind === 'quota_reset') {
+    return { eligible: true, reason: 'Usage window has reset; retry within existing authority' };
+  }
+  if (failure.kind === 'needs_user') {
     return {
       eligible: false,
       reason: 'Credentials, permission, cancellation or spending requires user action',
@@ -141,12 +147,7 @@ export const recoveryEligibility = (
   // an actor can author — a Task marked failed through the API, a settled run someone
   // reopened — arrives looking exactly like a dropped dispatch. Recognising the
   // failures instead keeps an authored decision with the person who made it.
-  if (
-    !isRetryableDispatchFailure(error) &&
-    !/ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|fetch failed|network error|socket hang up|service unavailable|bad gateway|gateway timeout|\b50[234]\b/i.test(
-      error,
-    )
-  ) {
+  if (!isRetryableDispatchFailure(error) && failure.kind !== 'transient') {
     return {
       eligible: false,
       reason: 'Failure is outside the recognised transport recovery policy',

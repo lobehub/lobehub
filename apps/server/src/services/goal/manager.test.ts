@@ -28,8 +28,9 @@ import { goalRouter } from '@/server/routers/lambda/goal';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 
+import { deviceGateway } from '../deviceGateway';
 import { GoalService } from './index';
-import { failedTurnRetry, GoalManagerService, MAX_FAILED_MANAGER_TURNS } from './manager';
+import { decideFailedTurn, GoalManagerService, MAX_FAILED_MANAGER_TURNS } from './manager';
 import * as scheduler from './scheduler';
 import { GoalWaitService } from './wait';
 
@@ -815,12 +816,14 @@ describe('CLI main Agent planning', () => {
         });
         const result = await service().tick(id);
         const state = (await model().findById(id))!.config!.managerState!;
-        expect(state.failedTurns).toBe(failed);
         if (failed === MAX_FAILED_MANAGER_TURNS) {
           expect(result.outcome).toBe('no_progress');
           expect(result.message).toContain('spawn claude ENOENT');
+          // Whoever resumes the Goal starts from a fresh schedule.
+          expect(state.failedTurns).toBeUndefined();
           break;
         }
+        expect(state.failedTurns).toBe(failed);
         expect(result.outcome).toBe('waiting_external');
         expect(Date.parse(state.retryAfter!) - now).toBe(60_000 * 2 ** (failed - 1));
         expect((await service().tick(id)).outcome).toBe('waiting_external');
@@ -834,6 +837,51 @@ describe('CLI main Agent planning', () => {
       expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(
         MAX_FAILED_MANAGER_TURNS,
       );
+    });
+
+    it('waits for an offline device on the Task schedule without charging the turn', async () => {
+      vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
+      const list = vi.spyOn(deviceGateway, 'queryDeviceList').mockResolvedValue([]);
+      const { id, op } = await start(3);
+      const now = Date.now();
+      await ops().recordCompletion(op.id, {
+        status: 'error',
+        error: {
+          deviceRoute: { deviceId: 'device-laptop', userId },
+          message: 'DEVICE_OFFLINE (HTTP 503)',
+        },
+      });
+
+      expect((await service().tick(id)).outcome).toBe('waiting_external');
+      const state = (await model().findById(id))!.config!.managerState!;
+      expect(state.turns).toBe(0);
+      expect(state.offlineTurns).toBe(1);
+      expect(state.failedTurns).toBeUndefined();
+      expect(Date.parse(state.retryAfter!) - now).toBeGreaterThanOrEqual(30 * 60_000 - 1000);
+
+      // Still offline: no turn.
+      expect((await service().tick(id)).outcome).toBe('waiting_external');
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
+      expect(list).toHaveBeenCalledWith(userId, undefined);
+
+      // Back online before the scheduled retry: plan right away.
+      list.mockResolvedValue([{ deviceId: 'device-laptop' } as never]);
+      await service().tick(id);
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+    });
+
+    it('pauses at once on an error only a person can fix', async () => {
+      const { id, op } = await start(10);
+      await ops().recordCompletion(op.id, {
+        status: 'error',
+        error: { category: 'quota', message: 'Insufficient balance' },
+      });
+
+      const result = await service().tick(id);
+      expect(result.outcome).toBe('no_progress');
+      expect(result.message).toContain('Insufficient balance');
+      expect((await model().findById(id))!.status).toBe('paused');
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
     });
 
     it('does not hold back the next turn after a committed plan whose run errored', async () => {
@@ -2026,40 +2074,63 @@ describe('durable manager continuation', () => {
   });
 });
 
-describe('failedTurnRetry', () => {
+describe('decideFailedTurn', () => {
   const now = Date.parse('2026-10-05T19:49:30Z');
 
   it('waits for the reported quota reset and does not charge the turn', () => {
     const resetsAt = Math.floor(now / 1000) + 3600;
     expect(
-      failedTurnRetry(
+      decideFailedTurn(
         { category: 'quota', body: { code: 'rate_limit', rateLimitInfo: { resetsAt } } },
-        1,
+        { failedTurns: 2 },
         now,
       ),
-    ).toEqual({ charged: false, retryAfter: new Date(resetsAt * 1000 + 60_000).toISOString() });
-  });
-
-  it('charges and backs off a quota error whose reset is missing or already past', () => {
-    expect(failedTurnRetry({ category: 'quota' }, 1, now)).toEqual({
-      charged: true,
-      retryAfter: new Date(now + 60_000).toISOString(),
+    ).toMatchObject({
+      action: 'retry',
+      charged: false,
+      failedTurns: 2,
+      retryAfter: new Date(resetsAt * 1000 + 60_000).toISOString(),
     });
-    const past = Math.floor(now / 1000) - 10;
+  });
+
+  it('follows the Task offline schedule for an unreachable device, then pauses', () => {
+    const offline = { message: 'DEVICE_OFFLINE' };
+    const delays = [0, 1, 2, 3, 4, 5].map((offlineTurns) => {
+      const decision = decideFailedTurn(offline, { offlineTurns }, now);
+      expect(decision).toMatchObject({ action: 'retry', charged: false });
+      return decision.action === 'retry' ? Date.parse(decision.retryAfter) - now : 0;
+    });
+    const HOUR = 60 * 60_000;
+    expect(delays).toEqual([HOUR / 2, HOUR, 2 * HOUR, 4 * HOUR, 8 * HOUR, 8 * HOUR]);
+    expect(decideFailedTurn(offline, { offlineTurns: 6 }, now).action).toBe('pause');
+  });
+
+  it('pauses at once when a person has to act', () => {
+    for (const error of [
+      { category: 'auth', message: 'Invalid API key' },
+      { category: 'quota', message: 'Insufficient balance' },
+      // A session limit without a reset time cannot be waited out.
+      { body: { code: 'rate_limit' }, category: 'quota', message: 'session limit' },
+    ])
+      expect(decideFailedTurn(error, {}, now).action).toBe('pause');
+  });
+
+  it('backs off transient and unknown errors, then pauses on the fifth in a row', () => {
+    const delays = [0, 1, 2, 3].map((failedTurns) => {
+      const decision = decideFailedTurn({ message: 'boom' }, { failedTurns }, now);
+      expect(decision).toMatchObject({ action: 'retry', charged: true });
+      return decision.action === 'retry' ? Date.parse(decision.retryAfter) - now : 0;
+    });
+    expect(delays).toEqual([60_000, 120_000, 240_000, 480_000]);
     expect(
-      failedTurnRetry({ body: { code: 'rate_limit', rateLimitInfo: { resetsAt: past } } }, 1, now)
-        .charged,
-    ).toBe(true);
+      decideFailedTurn({ category: 'capacity', message: '429' }, { failedTurns: 4 }, now),
+    ).toMatchObject({ action: 'pause', reason: expect.stringContaining('5 turns') });
   });
 
-  it('doubles the backoff per consecutive failure up to 30 minutes', () => {
-    const delays = [1, 2, 3, 6, 10].map(
-      (n) => Date.parse(failedTurnRetry({ message: 'boom' }, n, now).retryAfter) - now,
-    );
-    expect(delays).toEqual([60_000, 120_000, 240_000, 1_800_000, 1_800_000]);
-  });
-
-  it('treats a missing error as an ordinary failure', () => {
-    expect(failedTurnRetry(undefined, 1, now).charged).toBe(true);
+  it('charges a quota error whose reset has already passed like any other failure', () => {
+    const past = Math.floor(now / 1000) - 600;
+    expect(
+      decideFailedTurn({ category: 'quota', body: { rateLimitInfo: { resetsAt: past } } }, {}, now),
+    ).toMatchObject({ action: 'retry', charged: true });
   });
 });

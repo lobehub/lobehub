@@ -49,6 +49,7 @@ import {
 import { GoalExplorationPlanner } from './explorationPlanner';
 import { GoalService } from './index';
 import { DEVICE_OFFLINE_GATE_REASON, VERIFY_SETTLE_GRACE_MS } from './recoveryPolicy';
+import * as scheduler from './scheduler';
 import { TaskRecoveryCoordinator } from './taskRecoveryCoordinator';
 import type { GoalTickObservation } from './traceObservation';
 
@@ -3859,6 +3860,84 @@ describe('GoalService', () => {
       expect(listSpy).not.toHaveBeenCalled();
       expect(runSpy).not.toHaveBeenCalled();
       expect(waiting).toMatchObject({ outcome: 'waiting_external', taskId: created.taskId });
+    });
+  });
+
+  describe('a Task its usage window refused', () => {
+    const SESSION_LIMIT = "You've hit your session limit · resets 4:30am";
+
+    const setup = async (title: string, resetsAtMs: number) => {
+      const service = new GoalService(serverDB, userId);
+      const taskModel = new TaskModel(serverDB, userId);
+      const graph = await service.create({
+        config: { recovery: { maxAttemptsPerTask: 3 } },
+        title,
+        tasks: ['Run on the external Agent'],
+      });
+      const created = await service.tick(graph.goal.id);
+      await taskModel.update(created.taskId!, { totalTopics: 1 });
+
+      const operationModel = new AgentOperationModel(serverDB, userId);
+      await operationModel.recordStart({ operationId: 'op-quota', taskId: created.taskId });
+      await operationModel.recordCompletion('op-quota', {
+        completedAt: new Date(),
+        completionReason: 'error',
+        error: {
+          body: {
+            code: 'rate_limit',
+            rateLimitInfo: { resetsAt: Math.floor(resetsAtMs / 1000), status: 'rejected' },
+          },
+          category: 'quota',
+          message: SESSION_LIMIT,
+        },
+        status: 'error',
+      });
+      vi.spyOn(TaskTopicModel.prototype, 'findWithHandoff').mockResolvedValue([
+        { operationId: 'op-quota' } as never,
+      ]);
+      await taskModel.updateStatus(created.taskId!, 'paused', { error: SESSION_LIMIT });
+      return { created, graph, service };
+    };
+
+    it('waits for the reset instead of asking a person', async () => {
+      const schedule = vi.spyOn(scheduler, 'scheduleGoalAdvance').mockResolvedValue();
+      const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask');
+      const resetsAt = Date.now() + 2 * 60 * 60 * 1000;
+      const { created, graph, service } = await setup('Session limit', resetsAt);
+
+      const waiting = await service.tick(graph.goal.id);
+
+      expect(waiting).toMatchObject({
+        message: expect.stringContaining('usage window to reset'),
+        outcome: 'waiting_external',
+        taskId: created.taskId,
+      });
+      expect(schedule).toHaveBeenLastCalledWith(
+        expect.objectContaining({ goalId: graph.goal.id, trigger: 'wake' }),
+      );
+      expect(schedule.mock.lastCall![0].delay).toBeGreaterThanOrEqual(2 * 60 * 60);
+      expect(runSpy).not.toHaveBeenCalled();
+      const after = await service.graph(graph.goal.id);
+      expect(after.decisions).toHaveLength(0);
+      expect(after.goal.config?.supervisorState?.incidents ?? []).toHaveLength(0);
+    });
+
+    it('retries through ordinary recovery once the window has reset', async () => {
+      const runSpy = vi
+        .spyOn(TaskRunnerService.prototype, 'runTask')
+        .mockResolvedValue({ operationId: 'op-after-reset', success: true } as never);
+      const { created, graph, service } = await setup(
+        'Session limit over',
+        Date.now() - 2 * 60 * 1000,
+      );
+
+      const retried = await service.tick(graph.goal.id);
+
+      expect(runSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ taskId: created.taskId, trigger: 'goal' }),
+      );
+      expect(retried).toMatchObject({ outcome: 'waiting_external', taskId: created.taskId });
+      expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
     });
   });
 

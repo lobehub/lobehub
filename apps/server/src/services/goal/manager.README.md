@@ -138,12 +138,23 @@ Read `config.managerState` in the Goal graph for the current receipt and Topic.
 Wakeups use the existing Goal scheduler (queued mode for restart durability).
 After a confirmed terminal main operation without a plan, another turn can
 reread the durable graph within the turn budget. A turn that ended in an error
-gates the next one through `managerState.retryAfter`. A quota rejection, such as
-an external Agent's session limit, waits for the reset its error reports, and the
-refused turn is not charged to the budget. Any other error backs off
-exponentially from one minute up to 30 minutes, and five consecutive errored
-turns pause the Goal on the last error. Before this, a failing Agent was
-re-dispatched on every tick and spent the whole turn budget in minutes. An unconfirmed running/missing
+gates the next one through `managerState.retryAfter`. The error is classified by
+`classifyRunFailure` (`recoveryPolicy.ts`), the same classifier Task recovery
+uses:
+
+- A quota rejection that reports its reset, such as an external Agent's session
+  limit, waits for that reset. The refused turn is not charged to the budget.
+- A device that cannot be reached follows the Task offline schedule: 30 minutes,
+  doubling to 8 hours, over six retries. These turns are not charged, and seeing
+  the device online again ends the wait early. When the schedule runs out, the
+  Goal pauses.
+- Credentials, spend, permission or configuration errors pause the Goal at once.
+- Anything else backs off exponentially from one minute up to 30 minutes and is
+  charged. Five such turns in a row pause the Goal on the last error.
+
+A pause clears these streaks, so resuming starts a fresh schedule. Before this, a
+failing Agent was re-dispatched on every tick and spent the whole turn budget in
+minutes. An unconfirmed running/missing
 operation times out after 20 minutes and pauses without launching a replacement;
 confirm its exit before resuming. Parked human/async-tool operations retain
 ownership; a human wait is surfaced without starting another planning turn.

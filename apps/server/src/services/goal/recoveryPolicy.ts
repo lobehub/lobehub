@@ -163,6 +163,70 @@ export const isDeviceUnavailableFailure = (error?: string | null): boolean =>
 export const resolveFailedRunStatus = (error?: string | null): string =>
   isDeviceUnavailableFailure(error) ? DEVICE_OFFLINE_RUN_STATUS : 'failed';
 
+/**
+ * What a failed run's error says about retrying it.
+ *
+ * - `quota_reset`: a usage window rejected the run and reports when it reopens
+ *   (`resetsAt`, epoch ms). Retrying earlier fails the same way.
+ * - `device_unavailable`: the run never reached its device; a reconnect fixes it.
+ * - `needs_user`: credentials, permission, spend or a cancellation. Retrying
+ *   cannot help until a person acts.
+ * - `transient`: network, gateway 5xx or provider capacity. A later retry can work.
+ * - `unknown`: nothing above matched.
+ *
+ * One classification for Task runs and main Agent turns, so the two lanes stop
+ * disagreeing about the same error. Earlier, a Task waited a day for an offline
+ * device while a planning turn on that device was re-dispatched every few seconds.
+ */
+export type RunFailureKind =
+  'device_unavailable' | 'needs_user' | 'quota_reset' | 'transient' | 'unknown';
+
+/** A retry after a quota reset waits this much longer, so the window has actually reopened. */
+export const QUOTA_RESET_MARGIN_MS = 60_000;
+
+export interface RunFailure {
+  kind: RunFailureKind;
+  /** Only on `quota_reset`: when the usage window reopens, epoch ms. */
+  resetsAt?: number;
+}
+
+const NEEDS_USER_PATTERN =
+  /auth|credential|api.?key|permission|approv|forbidden|unauthor|usage.?limit|session limit|quota|billing|budget|insufficient|balance|cancel|用户|授权|凭据|额度|余额/i;
+const TRANSIENT_PATTERN =
+  /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|fetch failed|network error|socket hang up|service unavailable|bad gateway|gateway timeout|\b50[234]\b|\b429\b|too many requests|overloaded|upstream.?busy|concurrency.?limit|DEVICE_GATEWAY_ERROR|DEVICE_GATEWAY_UNREACHABLE|DEVICE_GATEWAY_RATE_LIMITED/i;
+/** `ErrorCategory` values from the model-runtime taxonomy. */
+const NEEDS_USER_CATEGORIES = new Set(['auth', 'config', 'quota']);
+const TRANSIENT_CATEGORIES = new Set(['capacity', 'network']);
+
+/**
+ * Classify a failed run from its operation error and any stored error text.
+ * The structured fields win over text; text is all a Task run that failed at
+ * dispatch leaves behind.
+ */
+export const classifyRunFailure = (error: unknown, text = ''): RunFailure => {
+  const e = (error ?? {}) as {
+    body?: { code?: unknown; rateLimitInfo?: { resetsAt?: unknown } };
+    category?: unknown;
+    message?: unknown;
+    type?: unknown;
+  };
+  const category = typeof e.category === 'string' ? e.category : undefined;
+  const resetsAt = Number(e.body?.rateLimitInfo?.resetsAt) * 1000;
+  if (
+    (category === 'quota' || e.body?.code === 'rate_limit') &&
+    Number.isFinite(resetsAt) &&
+    resetsAt > 0
+  )
+    return { kind: 'quota_reset', resetsAt };
+  const message = `${typeof e.type === 'string' ? e.type : ''} ${typeof e.message === 'string' ? e.message : ''} ${text}`;
+  if (isDeviceUnavailableFailure(message)) return { kind: 'device_unavailable' };
+  if ((category && NEEDS_USER_CATEGORIES.has(category)) || NEEDS_USER_PATTERN.test(message))
+    return { kind: 'needs_user' };
+  if ((category && TRANSIENT_CATEGORIES.has(category)) || TRANSIENT_PATTERN.test(message))
+    return { kind: 'transient' };
+  return { kind: 'unknown' };
+};
+
 /** Whether a goal's main Agent has used every turn its policy allows. */
 export const managerTurnsSpent = (config: GoalItem['config']): boolean =>
   !!config?.manager &&

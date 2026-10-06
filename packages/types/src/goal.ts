@@ -278,6 +278,16 @@ export interface GoalManagerState {
    * keeps failing the same way.
    */
   failedTurns?: number;
+  /**
+   * The device the last turn could not reach, when it failed as unavailable.
+   * Seeing it online again ends the `retryAfter` wait early.
+   */
+  offlineDevice?: { deviceId: string; userId: string; workspaceId?: string };
+  /**
+   * Consecutive turns that never reached their device. They are not charged to
+   * the turn budget and follow the Task offline retry schedule instead.
+   */
+  offlineTurns?: number;
   operationId?: string;
   /**
    * Management conversations this Goal planned in before a handoff moved it to

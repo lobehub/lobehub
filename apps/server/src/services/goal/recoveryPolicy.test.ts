@@ -2,6 +2,7 @@ import type { GoalItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
+  classifyRunFailure,
   countChargedTaskAttempts,
   countConsecutiveDeviceOfflineRuns,
   DEFAULT_MANAGER_MAX_TURNS,
@@ -76,5 +77,38 @@ describe('offline run accounting', () => {
   it('marks a failed run offline only for device-unavailable errors', () => {
     expect(resolveFailedRunStatus('DEVICE_OFFLINE (HTTP 503)')).toBe('device_offline');
     expect(resolveFailedRunStatus('Delivery did not pass verification.')).toBe('failed');
+  });
+});
+
+describe('classifyRunFailure', () => {
+  it('reads a usage window reset from the structured error', () => {
+    expect(
+      classifyRunFailure({
+        body: { code: 'rate_limit', rateLimitInfo: { resetsAt: 1_791_232_200 } },
+        category: 'quota',
+        message: "You've hit your session limit",
+      }),
+    ).toEqual({ kind: 'quota_reset', resetsAt: 1_791_232_200_000 });
+  });
+
+  it.each([
+    [{ message: 'DEVICE_OFFLINE (HTTP 503)' }, '', 'device_unavailable'],
+    [undefined, 'DEVICE_NOT_FOUND', 'device_unavailable'],
+    [{ category: 'quota', message: 'Insufficient balance' }, '', 'needs_user'],
+    [{ category: 'auth', message: 'Invalid API key' }, '', 'needs_user'],
+    [
+      { body: { code: 'rate_limit' }, category: 'quota', message: 'session limit' },
+      '',
+      'needs_user',
+    ],
+    [{ message: 'approval required' }, '', 'needs_user'],
+    [{ category: 'capacity', message: 'upstream busy' }, '', 'transient'],
+    [{ message: 'fetch failed: ECONNRESET' }, '', 'transient'],
+    [{ message: 'Too Many Requests (429)' }, '', 'transient'],
+    [{ message: 'DEVICE_GATEWAY_ERROR (HTTP 500)' }, '', 'transient'],
+    [{ message: 'spawn claude ENOENT' }, '', 'unknown'],
+    [undefined, '', 'unknown'],
+  ])('classifies %j / %s as %s', (error, text, kind) => {
+    expect(classifyRunFailure(error, text).kind).toBe(kind);
   });
 });

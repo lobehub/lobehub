@@ -9,7 +9,11 @@ independent Topic, incidents, operation links and metrics with
 their original behavior.
 
 The first version covers confirmed transport failures of a failed Task's latest
-error operation. It does not automatically resolve an existing human Gate,
+error operation. That includes provider capacity errors such as 429 or an
+upstream overload. It also covers a usage window that has reset: the
+coordinator holds a Task refused by a session limit until the reset its error
+reports (`waitForQuotaReset`), and only then retries it. Before this, the Task
+went straight to a human Gate. It does not automatically resolve an existing human Gate,
 recover credentials, increase budgets, replace providers, change acceptance,
 repair/deploy the platform or diagnose arbitrary failures. This is a subset of
 the proposed general Goal supervisor, not a claim of unattended long-horizon

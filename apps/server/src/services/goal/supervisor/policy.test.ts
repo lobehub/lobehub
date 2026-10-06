@@ -37,6 +37,28 @@ describe('supervisor recovery authority', () => {
     expect(recoveryEligibility(graph, { ...task, error }, operation).eligible).toBe(false);
   });
 
+  it('lets a Task retry once its usage window has reset', () => {
+    expect(
+      recoveryEligibility(graph, task, {
+        ...operation,
+        error: {
+          body: { code: 'rate_limit', rateLimitInfo: { resetsAt: 1_791_232_200 } },
+          category: 'quota',
+          message: "You've hit your session limit",
+        },
+      }).eligible,
+    ).toBe(true);
+  });
+
+  it('treats provider capacity as a transient failure', () => {
+    expect(
+      recoveryEligibility(graph, task, {
+        ...operation,
+        error: { category: 'capacity', message: 'upstream busy' },
+      }).eligible,
+    ).toBe(true);
+  });
+
   it.each(['paused', 'canceled', 'achieved', 'review'])('respects Goal %s', (status) => {
     expect(
       recoveryEligibility(
