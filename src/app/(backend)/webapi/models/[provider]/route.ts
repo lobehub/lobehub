@@ -51,6 +51,10 @@ const createModelListErrorResponse = (provider: string, e: unknown) => {
   });
 };
 
+// A device-only provider is relayed through the requesting tab, which can take
+// the whole one-shot relay window (240 s).
+export const maxDuration = 300;
+
 export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
   const provider = (await params)!.provider!;
 

@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { auth } from '@/auth';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
-import { GET } from './route';
+import { maxDuration as pullMaxDuration } from './pull/route';
+import { GET, maxDuration } from './route';
 
 vi.mock('@/app/(backend)/middleware/auth/utils', () => ({
   checkAuthMethod: vi.fn(),
@@ -284,5 +285,14 @@ describe('GET handler', () => {
       expect(response.status).toBe(200);
       expect(responseBody).toEqual(mockModelList);
     });
+  });
+});
+
+// Relayed through the requesting tab, these requests stay open for the whole
+// one-shot relay window (240 s): the platform default would cut them short.
+describe('route duration', () => {
+  it('covers the one-shot relay window for the model list and the download', () => {
+    expect(maxDuration).toBeGreaterThanOrEqual(240);
+    expect(pullMaxDuration).toBeGreaterThanOrEqual(240);
   });
 });

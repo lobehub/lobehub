@@ -8,6 +8,10 @@ import { createErrorResponse } from '@/utils/errorResponse';
 
 import { resolveValidWorkspaceIdFromRequest } from '../../../_utils/workspace';
 
+// A device-only provider is relayed through the requesting tab, which can take
+// the whole one-shot relay window (240 s).
+export const maxDuration = 300;
+
 export const POST = checkAuth(async (req, { params, userId, serverDB }) => {
   const provider = (await params)!.provider!;
 
