@@ -205,15 +205,21 @@ const TRANSIENT_CATEGORIES = new Set(['capacity', 'network']);
  */
 export const classifyRunFailure = (error: unknown, text = ''): RunFailure => {
   const e = (error ?? {}) as {
-    body?: { code?: unknown; rateLimitInfo?: { resetsAt?: unknown } };
+    body?: { code?: unknown; rateLimitInfo?: { resetsAt?: unknown; status?: unknown } };
     category?: unknown;
     message?: unknown;
     type?: unknown;
   };
   const category = typeof e.category === 'string' ? e.category : undefined;
-  const resetsAt = Number(e.body?.rateLimitInfo?.resetsAt) * 1000;
+  const info = e.body?.rateLimitInfo;
+  const resetsAt = Number(info?.resetsAt) * 1000;
+  // Anthropic stamps rolling-window metadata on calls it allowed too, and a later
+  // unrelated failure can carry it (see `isUserQuotaRateLimit` in the Claude Code
+  // adapter). Only a rejected window, or a legacy record without a status, says
+  // the run was refused until that reset.
   if (
     (category === 'quota' || e.body?.code === 'rate_limit') &&
+    (info?.status === undefined || info.status === 'rejected') &&
     Number.isFinite(resetsAt) &&
     resetsAt > 0
   )

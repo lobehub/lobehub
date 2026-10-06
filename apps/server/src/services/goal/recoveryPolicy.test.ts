@@ -91,6 +91,18 @@ describe('classifyRunFailure', () => {
     ).toEqual({ kind: 'quota_reset', resetsAt: 1_791_232_200_000 });
   });
 
+  it('ignores a window the provider allowed, which a later unrelated failure can carry', () => {
+    expect(
+      classifyRunFailure({
+        body: {
+          code: 'rate_limit',
+          rateLimitInfo: { resetsAt: 1_791_232_200, status: 'allowed' },
+        },
+        message: 'fetch failed: ECONNRESET',
+      }).kind,
+    ).toBe('transient');
+  });
+
   it.each([
     [{ message: 'DEVICE_OFFLINE (HTTP 503)' }, '', 'device_unavailable'],
     [undefined, 'DEVICE_NOT_FOUND', 'device_unavailable'],
