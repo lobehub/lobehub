@@ -793,7 +793,7 @@ describe('widget + dashboard routers integration', () => {
       runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 7 }));
       const dryRun = await board.runAgentTool({
         apiName: 'dryRunWidget',
-        args: { widgetId: widget.id },
+        args: { versionId: created.state.versionId, widgetId: widget.id },
         context: { operationId: 'op_1' },
       });
       expect(dryRun).toMatchObject({ state: { status: 'succeeded' }, success: true });
