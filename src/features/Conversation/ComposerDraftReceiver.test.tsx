@@ -11,8 +11,7 @@ import ComposerDraftReceiver from './ComposerDraftReceiver';
 const mocks = vi.hoisted(() => ({
   editor: null as null | {
     focus: ReturnType<typeof vi.fn>;
-    getDocument?: ReturnType<typeof vi.fn>;
-    getLexicalEditor?: () => unknown;
+    getMarkdownContent?: () => string;
     setDocument: ReturnType<typeof vi.fn>;
   },
   context: { agentId: 'agt_inbox', topicId: undefined as string | undefined },
@@ -66,8 +65,7 @@ describe('ComposerDraftReceiver', () => {
   });
 
   it('appends after what the user already typed when asked to', () => {
-    // No serializable editor here, so the receiver falls back to `inputMessage`.
-    mocks.editor = { focus: vi.fn(), getLexicalEditor: () => null, setDocument: vi.fn() };
+    mocks.editor = { focus: vi.fn(), setDocument: vi.fn() };
     mocks.inputMessage = 'what is wrong here?';
     render(<ComposerDraftReceiver />);
 
@@ -82,8 +80,7 @@ describe('ComposerDraftReceiver', () => {
 
   // Regression: appending trimmed the typed text, losing a trailing Markdown break.
   it('keeps the whitespace of what the user typed when appending', () => {
-    // No serializable editor here, so the receiver falls back to `inputMessage`.
-    mocks.editor = { focus: vi.fn(), getLexicalEditor: () => null, setDocument: vi.fn() };
+    mocks.editor = { focus: vi.fn(), setDocument: vi.fn() };
     mocks.inputMessage = '  indented line  ';
     render(<ComposerDraftReceiver />);
 
@@ -100,10 +97,10 @@ describe('ComposerDraftReceiver', () => {
   // Regression: `inputMessage` trails the editor behind a debounce; appending
   // to it overwrote the characters typed just before Add to chat.
   it('appends to the live editor content, not its delayed mirror', () => {
+    // The conversation store holds the ChatInputEditor wrapper.
     const editor = {
       focus: vi.fn(),
-      getDocument: vi.fn(() => 'typed just now'),
-      getLexicalEditor: () => ({}),
+      getMarkdownContent: () => 'typed just now',
       setDocument: vi.fn(),
     };
     mocks.editor = editor;
