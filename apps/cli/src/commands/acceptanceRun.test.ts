@@ -13,11 +13,17 @@ import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
 import { attachAcceptanceRunCommands } from './acceptanceRun';
+import type * as VerifyHelpers from './verifyHelpers';
+import { pullRequestFromBranch } from './verifyHelpers';
 
 vi.mock('../api/client', () => ({ getTrpcClient: vi.fn() }));
 vi.mock('../api/workspace', () => ({ resolveWorkspaceId: vi.fn() }));
 vi.mock('../settings', () => ({ resolveServerUrl: vi.fn() }));
 vi.mock('../utils/uploadLocalFile', () => ({ uploadLocalFile: vi.fn() }));
+vi.mock('./verifyHelpers', async (importOriginal) => ({
+  ...(await importOriginal<typeof VerifyHelpers>()),
+  pullRequestFromBranch: vi.fn(),
+}));
 
 describe('acceptance publication with missing evidence', () => {
   const client = {
@@ -161,6 +167,29 @@ describe('acceptance publication with missing evidence', () => {
     });
     expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('not linked'));
     expect(result()).toMatchObject({ publicationStatus: 'complete', pullRequest });
+  });
+
+  it('keeps a branch-inferred PR as round provenance without linking it to the acceptance', async () => {
+    const inferred = { number: 7, url: 'https://github.com/lobehub/lobehub/pull/7' };
+    vi.mocked(pullRequestFromBranch).mockReturnValue(inferred);
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        branch: 'canary',
+        cases: [
+          { evidence: ['output.txt'], id: 'screen', name: '用户能看到处理结果', status: 'passed' },
+        ],
+        plan: [{ id: 'screen', requiredEvidence: ['text'], title: '用户能看到处理结果' }],
+        summary: { passed: 1, total: 1, verdict: 'passed' },
+        title: '处理结果展示',
+      }),
+    );
+
+    await run('ingest', dir, '--json');
+
+    expect(pullRequestFromBranch).toHaveBeenCalledWith('canary');
+    expect(result()).toMatchObject({ pullRequest: inferred });
+    expect(client.acceptance.linkPullRequest.mutate).not.toHaveBeenCalled();
   });
 
   it('does not downgrade a pass when only an optional medium failed', async () => {

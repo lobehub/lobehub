@@ -64,13 +64,13 @@ A feature or fix needs a published acceptance round before the PR is opened (AGE
 
 ### 7. Link the PR to its acceptance
 
-An acceptance round published before the PR existed carries no PR, and reusing that round is correct, so nothing else ever tells the acceptance about the PR. Right after `gh pr create`, record the link with the same publish environment step 1 used for the lookup:
+An acceptance round published before the PR existed carries no PR, and reusing that round is correct, so nothing else ever tells the acceptance about the PR. Right after `gh pr create`, record the link through the production publish environment. If step 1 reused a known acceptance and skipped the lookup, `publish_lh` is not defined yet: run [Publish auth preflight](../../acceptance/PROCESS.md#publish-auth-preflight) now to define and verify it.
 
 ```bash
 publish_lh acceptance link-pr <acceptanceId> "$(gh pr view --json url --jq .url)"
 ```
 
-Do this for each PR in a stack; they share one acceptance. Skip it when the PR states that no acceptance is needed. A round ingested after the PR exists links itself. If the installed CLI lacks `link-pr`, or the server rejects it as unknown, mention that in the reply instead of retrying.
+Do this for each PR in a stack; they share one acceptance. Skip it when the PR states that no acceptance is needed. A later round links itself only when its `result.json` names the PR (`pullRequest`); a PR inferred from the branch is recorded on the round but never linked. If the installed CLI lacks `link-pr`, or the server rejects it as unknown, mention that in the reply instead of retrying.
 
 ### 8. Open in browser
 
