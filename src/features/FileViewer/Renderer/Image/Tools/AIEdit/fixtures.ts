@@ -80,6 +80,8 @@ export const createMockDeps = (overrides: Partial<AIEditDeps> = {}) => {
     addToKnowledgeBase: async () => undefined,
     createImage: async () => realCreateImageResult,
     createTopic: async () => 'gt_6p9nBZERtyWe',
+    // The real keying needs a canvas; tests opt in per case.
+    cutOutBackground: async () => undefined,
     deleteTopic: async () => undefined,
     getFile: async (id: string) =>
       id === 'file_KWGzzbWzaunM'

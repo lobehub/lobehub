@@ -54,6 +54,11 @@ export interface AIEditDeps {
   addToKnowledgeBase: (knowledgeBaseId: string, fileIds: string[]) => Promise<unknown>;
   createImage: (payload: ReturnType<typeof buildAIEditRequest>) => Promise<CreateImageResult>;
   createTopic: (title: string, visibility?: 'private' | 'public') => Promise<string>;
+  /**
+   * Key out the flat backdrop of a remove-background result. Resolves to the
+   * transparent PNG, or undefined when the backdrop was not flat enough to trust.
+   */
+  cutOutBackground: (url: string, name: string) => Promise<File | undefined>;
   deleteTopic: (id: string) => Promise<unknown>;
   /** Read a file's location and metadata; never used to write. */
   getFile: (id: string) => Promise<
@@ -362,7 +367,26 @@ export const runAIImageEdit = async ({
     // Older servers omit `fileId`, but a `/f/:id` asset URL still names the file.
     let fileId = generation.fileId ?? fileIdFromProxyUrl(assetUrl);
     let url = assetUrl;
-    if (fileId) {
+    // Image models cannot return an alpha channel, so the model paints a flat
+    // backdrop and it is keyed out here. The transparent PNG becomes the saved
+    // file; the generation's own output stays in its topic.
+    const cutOut =
+      operation === 'removeBackground'
+        ? await save(deps.cutOutBackground(assetUrl, name))
+        : undefined;
+    if (cutOut) {
+      const uploaded = await save(
+        deps.uploadFile({
+          file: cutOut,
+          metadata: lineage,
+          parentId,
+          visibility: location?.visibility ?? undefined,
+        }),
+      );
+      if (!uploaded) throw new AIImageEditError('failed', 'Failed to save the edited image');
+      fileId = uploaded.id;
+      url = uploaded.url;
+    } else if (fileId) {
       // The generation already saved its output as a file; keep its storage
       // metadata and add the lineage, then file it beside the original.
       const metadata = (await save(deps.getFile(fileId)))?.metadata ?? {};

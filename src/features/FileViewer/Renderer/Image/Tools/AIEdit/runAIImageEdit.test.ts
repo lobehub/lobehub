@@ -104,6 +104,36 @@ describe('runAIImageEdit', () => {
     expectSourceUntouched(deps);
   });
 
+  // Regression: remove background saved the model's opaque output as is.
+  it('saves the keyed-out transparent PNG for remove background', async () => {
+    const transparent = new File(['png'], 'scene-no-bg.png', { type: 'image/png' });
+    const deps = spyDeps({
+      cutOutBackground: async () => transparent,
+      uploadFile: async () => ({ id: 'file_cutout', url: 'https://app.lobehub.com/f/file_cutout' }),
+    });
+
+    const result = await run(deps);
+
+    expect(deps.cutOutBackground).toHaveBeenCalledWith(
+      'https://app.lobehub.com/f/file_KWGzzbWzaunM',
+      'scene-no-bg.png',
+    );
+    const upload = deps.uploadFile.mock.calls[0][0];
+    expect(upload.file).toBe(transparent);
+    expect(upload.metadata).toEqual({
+      derivedFrom: { fileId: SOURCE.fileId, operation: 'removeBackground' },
+    });
+    expect(upload.parentId).toBe('docs_folder');
+    expect(result.fileId).toBe('file_cutout');
+    // The generation's own file stays in its topic.
+    expect(deps.updateFile).not.toHaveBeenCalled();
+    expectSourceUntouched(deps);
+  });
+
+  it('asks the model for a flat backdrop it can key out', () => {
+    expect(AI_EDIT_PROMPTS.removeBackground).toContain('#00FF00');
+  });
+
   it('files the result in the original folder even when the viewer does not know it', async () => {
     const deps = spyDeps();
     await run(deps, { source: { ...SOURCE, parentId: undefined } });

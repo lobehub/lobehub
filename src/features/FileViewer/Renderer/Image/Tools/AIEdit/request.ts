@@ -13,7 +13,7 @@ export const AI_EDIT_PROMPTS: Record<AIEditOperation, string> = {
   erase:
     'The areas painted in solid magenta (#FF00FF) mark content to erase. Remove everything under the magenta paint and fill those areas so they blend seamlessly with the surrounding image, as if the erased content was never there. Keep every other part of the image exactly as it is, keep the same framing and aspect ratio, and make sure no magenta remains in the result.',
   removeBackground:
-    'Remove the background of this image. Keep the main subject exactly as it is — same position, size, colors and details — and place it on a plain pure white background. Keep the same framing and aspect ratio and do not add anything else.',
+    'Remove the background of this image. Keep the main subject exactly as it is — same position, size, colors and details — and place it on a single flat, uniform chroma-key green (#00FF00) backdrop with no gradient, shadow, texture or reflection. Keep the same framing and aspect ratio and do not add anything else.',
 };
 
 export interface AIEditModel {

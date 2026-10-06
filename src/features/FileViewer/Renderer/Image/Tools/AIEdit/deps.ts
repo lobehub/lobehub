@@ -1,4 +1,5 @@
 import { lambdaClient } from '@/libs/trpc/client';
+import { cutOutFlatBackground } from '@/services/artworkGeneration/cutOutFlatBackground';
 import { fileService } from '@/services/file';
 import { generationService } from '@/services/generation';
 import { generationTopicService } from '@/services/generationTopic';
@@ -16,6 +17,21 @@ export const aiEditDeps: AIEditDeps = {
   createImage: (payload) => imageService.createImage(payload),
   createTopic: (title, visibility) =>
     generationTopicService.createTopic('image', visibility, title),
+  cutOutBackground: async (url, name) => {
+    const img = await loadStageImage(url);
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(img, 0, 0);
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // Same framing as the original, so no crop to the subject here.
+    if (!cutOutFlatBackground(pixels).applied) return;
+    ctx.putImageData(pixels, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    return blob ? new File([blob], name, { type: 'image/png' }) : undefined;
+  },
   deleteTopic: (id) => generationTopicService.deleteTopic(id),
   getFile: async (id) => {
     const file = await lambdaClient.file.findById.query({ id });
