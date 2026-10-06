@@ -19,6 +19,9 @@ const createGuest = (capturePage: ReturnType<typeof vi.fn>) => ({
   capturePage,
   executeJavaScript: vi.fn().mockResolvedValue(undefined),
   isDestroyed: () => false,
+  // Scripts run against the main frame, not the WebContents — the latter
+  // defers until loading stops, which on a never-settling page is never.
+  mainFrame: { executeJavaScript: vi.fn().mockResolvedValue(undefined) },
 });
 
 describe('BrowserControlCtr.screenshot', () => {
