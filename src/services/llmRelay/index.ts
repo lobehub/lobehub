@@ -2,14 +2,19 @@ import { CLIENT_LLM_WAIT_CAPABILITY, LLM_RELAY_CAPABILITY } from '@lobechat/agen
 import type { ExecAgentLlmExecutor } from '@lobechat/types';
 
 import { initializeWithClientStore } from '@/services/chat/mecha/clientModelRuntime';
-import { getAiInfraStoreState } from '@/store/aiInfra';
+import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getServerConfigStoreState } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
+import { subscribeLlmRelayChannel } from './channelSubscription';
 import { getLlmRelayClientId } from './clientId';
 import { LlmRelayExecutor } from './executor';
+import { OneShotRelay } from './oneShot';
 
 export { getLlmRelayClientId } from './clientId';
 export type { ExecuteRelayCallOptions } from './executor';
+export type { OneShotRelayHandle } from './oneShot';
 
 /**
  * The page-wide relay executor. Runs on this client's own provider
@@ -21,12 +26,42 @@ export const llmRelayExecutor = new LlmRelayExecutor({
     initializeWithClientStore({ payload, provider, runtimeProvider }),
 });
 
-const isLlmRelayEnabled = () => {
-  const state =
-    (typeof window !== 'undefined' ? window.global_serverConfigStore?.getState() : undefined) ??
-    getServerConfigStoreState();
-  return !!state?.featureFlags?.enableLlmRelay;
-};
+const getConfigState = () =>
+  (typeof window !== 'undefined' ? window.global_serverConfigStore?.getState() : undefined) ??
+  getServerConfigStoreState();
+
+const isLlmRelayEnabled = () => !!getConfigState()?.featureFlags?.enableLlmRelay;
+
+/**
+ * The page-wide one-shot relay: LLM calls this tab asks the server for (preset
+ * tasks, structured output, model lists) whose provider only this device can
+ * reach are relayed back here instead of being called from the browser.
+ * Active only within the `agent_llm_relay` rollout on a deployment with an
+ * Agent Gateway; elsewhere `oneShotRelay.run` just makes the request.
+ */
+export const oneShotRelay = new OneShotRelay({
+  isAvailable: () => isLlmRelayEnabled() && !!getConfigState()?.serverConfig?.agentGatewayUrl,
+  isDeviceProvider: (provider) =>
+    aiProviderSelectors.isProviderFetchOnClient(provider)(getAiInfraStoreState()),
+  onCancel: (data) => llmRelayExecutor.cancel(data),
+  onExecute: (data) => void llmRelayExecutor.execute(data),
+  subscribe: (channel, onEvent) => {
+    const subscription = subscribeLlmRelayChannel(
+      getConfigState()!.serverConfig!.agentGatewayUrl!,
+      channel,
+      onEvent,
+    );
+    return subscription.then((sub) => ({
+      ...sub,
+      close: () => {
+        // The request is over: whatever it left running on this tab is moot.
+        llmRelayExecutor.cancelOperation(channel);
+        sub.close();
+      },
+    }));
+  },
+  userId: () => userProfileSelectors.userId(useUserStore.getState()),
+});
 
 /**
  * `execAgent`'s `llmExecutor`: this client can run relayed LLM attempts for

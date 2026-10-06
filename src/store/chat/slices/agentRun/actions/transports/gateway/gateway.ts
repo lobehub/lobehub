@@ -6,6 +6,7 @@ import {
   type ConnectionStatus,
   createOperationClient,
   type GatewayMuxClient,
+  isLlmRelayChannelId,
   isSessionTerminalEvent,
   type MuxOpLifecycleMessage,
   type OperationClient,
@@ -439,6 +440,9 @@ export class GatewayActionImpl {
     if (this.#feedAttachedMuxes.has(mux)) return;
     this.#feedAttachedMuxes.add(mux);
     mux.on('lifecycle', (lifecycle: MuxOpLifecycleMessage) => {
+      // A one-shot relay channel (a single LLM call outside any run) is not a
+      // run of this user's: nothing in the feed is about it.
+      if (isLlmRelayChannelId(lifecycle.operationId)) return;
       this.#set(
         (state) => ({
           gatewayFeed: {

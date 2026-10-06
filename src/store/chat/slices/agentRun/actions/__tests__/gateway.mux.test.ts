@@ -382,6 +382,26 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       });
     });
 
+    it('keeps one-shot relay channels out of gatewayFeed', () => {
+      const { action, mux, state } = createTestAction();
+
+      action.connectToGateway({
+        gatewayUrl: GATEWAY_URL,
+        operationId: 'op-1',
+        token: 'tok',
+        topicId: 'topic-1',
+      });
+      mux.emit('lifecycle', {
+        at: 1_700_000_000_000,
+        meta: { scope: 'llm_call' },
+        operationId: 'llmcall:user-1:0b7c1d2e-aaaa',
+        status: 'running',
+        type: 'op_lifecycle',
+      });
+
+      expect(state.gatewayFeed).toEqual({});
+    });
+
     it('survives without an auth_expired round trip (token is minted per dial)', () => {
       const { action, muxClient, state } = createTestAction();
 

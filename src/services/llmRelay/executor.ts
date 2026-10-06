@@ -22,7 +22,13 @@ const SETTLED_CALL_MEMORY = 200;
 
 export interface RelayRuntime {
   chat: (payload: any, options: { signal?: AbortSignal }) => Promise<Response>;
+  generateObject?: (payload: any, options: { signal?: AbortSignal }) => Promise<unknown>;
+  models?: () => Promise<unknown>;
+  pullModel?: (params: any, options: { signal?: AbortSignal }) => Promise<Response | undefined>;
 }
+
+/** A return value goes up as JSON text in parts of this size, well under the batch cap. */
+const RESULT_PART_CHARS = 32 * 1024;
 
 export interface LlmRelayExecutorDeps {
   clientId?: () => string;
@@ -229,6 +235,9 @@ export class LlmRelayExecutor {
         provider: data.provider,
         runtimeProvider: data.runtimeProvider,
       });
+      const method = data.method ?? 'chat';
+      if (method !== 'chat')
+        return await this.runMethod(method, runtime, payload, uploader, signal);
       response = await runtime.chat(payload, { signal });
     } catch (error) {
       if (signal.aborted) throw error;
@@ -254,6 +263,46 @@ export class LlmRelayExecutor {
     }
 
     if (signal.aborted) throw abortError();
+    return { reason: 'done' };
+  }
+
+  /**
+   * A non-chat call (one-shot relay): `generateObject` / `models` upload their
+   * return value as JSON parts, `pullModel` the provider's progress text.
+   */
+  private async runMethod(
+    method: Exclude<NonNullable<LlmExecuteData['method']>, 'chat'>,
+    runtime: RelayRuntime,
+    payload: Record<string, unknown>,
+    uploader: RelayBatchUploader,
+    signal: AbortSignal,
+  ): Promise<NonNullable<LlmRelayBatch['final']>> {
+    if (method === 'pullModel') {
+      const response = await runtime.pullModel?.(payload, { signal });
+      if (!response) throw new Error('This provider cannot download models');
+      if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
+      if (response.body) {
+        const decoder = new TextDecoder();
+        const reader = response.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          uploader.push({ data: decoder.decode(value, { stream: true }), type: 'progress' });
+        }
+      }
+      if (signal.aborted) throw abortError();
+      return { reason: 'done' };
+    }
+
+    const run = method === 'models' ? runtime.models : runtime.generateObject;
+    if (!run) throw new Error(`This provider does not support ${method}`);
+    const result = await run.call(runtime, payload, { signal });
+    if (signal.aborted) throw abortError();
+
+    const json = JSON.stringify(result ?? null);
+    for (let i = 0; i < json.length; i += RESULT_PART_CHARS) {
+      uploader.push({ data: json.slice(i, i + RESULT_PART_CHARS), type: 'result_part' });
+    }
     return { reason: 'done' };
   }
 
