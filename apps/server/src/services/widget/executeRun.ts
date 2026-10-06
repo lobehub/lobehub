@@ -209,7 +209,8 @@ export const executeWidgetRun = async (
         runId: run.id,
       });
       if (primaryMetricId && primaryMetricId !== widget.metricId) {
-        await WidgetModel.linkMetric(db, widget.id, primaryMetricId);
+        // A newer run may have taken the snapshot while this one recorded metrics.
+        await WidgetModel.linkMetric(db, widget.id, primaryMetricId, run.id);
       }
     } catch (error) {
       // The run itself succeeded; a trend write failure must not flip it.

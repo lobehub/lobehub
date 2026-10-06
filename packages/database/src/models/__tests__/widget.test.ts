@@ -773,7 +773,21 @@ describe('WidgetModel', () => {
         .insert(metrics)
         .values({ key: 'value', subjectId: widget.id, subjectType: 'widget', userId })
         .returning();
-      await WidgetModel.linkMetric(serverDB, widget.id, metric.id);
+      const [runA, runB] = [
+        await WidgetModel.startRun(serverDB, widget, { trigger: 'manual', versionId: v1!.id }),
+        await WidgetModel.startRun(serverDB, widget, { trigger: 'manual', versionId: v1!.id }),
+      ];
+      await serverDB.update(widgets).set({ lastRunId: runA.id }).where(eq(widgets.id, widget.id));
+      await WidgetModel.linkMetric(serverDB, widget.id, metric.id, runA.id);
+      expect((await model.findById(widget.id))!.metricId).toBe(metric.id);
+
+      // run B took the snapshot; a late link from run A must not move the metric
+      const [other] = await serverDB
+        .insert(metrics)
+        .values({ key: 'series:a', subjectId: widget.id, subjectType: 'widget', userId })
+        .returning();
+      await serverDB.update(widgets).set({ lastRunId: runB.id }).where(eq(widgets.id, widget.id));
+      await WidgetModel.linkMetric(serverDB, widget.id, other.id, runA.id);
       expect((await model.findById(widget.id))!.metricId).toBe(metric.id);
 
       await model.trash(widget.id);

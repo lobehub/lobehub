@@ -629,8 +629,17 @@ export class WidgetModel {
   }
 
   /** Point the widget at its trend series once the first point is written. */
-  static async linkMetric(db: LobeChatDatabase, widgetId: string, metricId: string) {
-    await db.update(widgets).set({ metricId }).where(eq(widgets.id, widgetId));
+  static async linkMetric(
+    db: LobeChatDatabase,
+    widgetId: string,
+    metricId: string,
+    /** Only link while this run still owns the snapshot (`last_run_id`). */
+    runId: string,
+  ) {
+    await db
+      .update(widgets)
+      .set({ metricId })
+      .where(and(eq(widgets.id, widgetId), eq(widgets.lastRunId, runId)));
   }
 
   /**
