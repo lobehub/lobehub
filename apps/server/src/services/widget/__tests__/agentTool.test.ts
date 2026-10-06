@@ -18,6 +18,15 @@ import { dashboardRuntime } from '@/server/services/toolExecution/serverRuntimes
 
 import { createDashboardToolService, resolveClientTopic } from '../agentTool';
 
+const dashboardFlag = vi.hoisted(() => ({ value: true }));
+vi.mock('@/server/featureFlags', async () => {
+  const { mapFeatureFlagsEnvToState } = await import('@/config/featureFlags');
+  return {
+    getServerFeatureFlagsStateFromRuntimeConfig: async (userId?: string) =>
+      mapFeatureFlagsEnvToState({ dashboard: dashboardFlag.value }, userId),
+  };
+});
+
 const runSandbox = vi.fn();
 vi.mock('@/server/services/widget/sandbox', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -267,6 +276,17 @@ describe('dashboardRuntime', () => {
     expect(result.success).toBe(true);
     const [widget] = await db.select().from(widgets).where(eq(widgets.id, result.state.widgetId));
     expect(widget).toMatchObject({ agentId, projectId });
+  });
+
+  it('refuses to run the tool in-process while the `dashboard` flag is off', async () => {
+    dashboardFlag.value = false;
+    try {
+      await expect(
+        dashboardRuntime.factory({ serverDB: db, toolManifestMap: {}, userId }),
+      ).rejects.toThrow('Dashboards are not enabled');
+    } finally {
+      dashboardFlag.value = true;
+    }
   });
 });
 

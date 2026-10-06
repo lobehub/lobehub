@@ -42,6 +42,17 @@ vi.mock('@/database/core/db-adaptor', () => ({
   }),
 }));
 
+// Runtime flag `dashboard` (off by default): the suite runs with it on and
+// narrows it per test to exercise the gate through the real flag mapping.
+const dashboardFlag = vi.hoisted(() => ({ value: true as boolean | string[] }));
+vi.mock('@/server/featureFlags', async () => {
+  const { mapFeatureFlagsEnvToState } = await import('@/config/featureFlags');
+  return {
+    getServerFeatureFlagsStateFromRuntimeConfig: async (userId?: string) =>
+      mapFeatureFlagsEnvToState({ dashboard: dashboardFlag.value }, userId),
+  };
+});
+
 const queueMode = vi.hoisted(() => ({ enabled: false }));
 vi.mock('@/envs/app', async (importOriginal) => {
   const mod = await importOriginal<{ appEnv: object }>();
@@ -105,6 +116,7 @@ describe('widget + dashboard routers integration', () => {
 
   afterEach(async () => {
     queueMode.enabled = false;
+    dashboardFlag.value = true;
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
@@ -121,6 +133,31 @@ describe('widget + dashboard routers integration', () => {
     caller: WidgetCaller,
     input: Parameters<WidgetCaller['create']>[0] = { title: 'Open PRs' },
   ) => (await caller.create(input))!.data;
+
+  describe('feature flag', () => {
+    it('refuses every widget and dashboard call, agent tool included, while `dashboard` is off for the caller', async () => {
+      dashboardFlag.value = [ownerId];
+      const owner = callers(ownerId);
+      const member = callers(memberId);
+
+      expect((await owner.board.list())!.success).toBe(true);
+      expect((await owner.widget.list())!.success).toBe(true);
+
+      await expect(member.board.list()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(member.widget.list()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        member.board.runAgentTool({ apiName: 'listDashboards', args: {} }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      dashboardFlag.value = false;
+      await expect(owner.board.create({ title: 'Ops' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      await expect(owner.widget.create({ title: 'Open PRs' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+    });
+  });
 
   describe('version flow', () => {
     it('requires a successful dry run of the exact content before publishing', async () => {

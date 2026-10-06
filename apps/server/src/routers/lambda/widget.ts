@@ -14,10 +14,13 @@ import { DashboardService } from '@/server/services/dashboard';
 import { WidgetService } from '@/server/services/widget';
 import { widgetVersionContentSchema } from '@/server/services/widget/versionSchema';
 
+import { assertDashboardEnabled } from './_helpers/dashboardFeatureGate';
 import { mapWidgetError, notFound } from './_helpers/widgetError';
 
 const widgetProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  // Off by default (runtime flag `dashboard`); covers `runAgentTool` too.
+  await assertDashboardEnabled(ctx.userId);
   const workspaceId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {

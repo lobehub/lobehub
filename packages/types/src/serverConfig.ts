@@ -27,6 +27,12 @@ export type IFeatureFlagsState = {
   enableAgentShare: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
+  /**
+   * Dashboards and the `lobe-dashboard` agent tool (`dashboard`). Off by
+   * default: the pages, Portal view, in-chat previews and the tool are hidden
+   * and the widget / dashboard APIs answer FORBIDDEN.
+   */
+  enableDashboard: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
    * Rollout gate for the multiplexed gateway socket. Necessary but not

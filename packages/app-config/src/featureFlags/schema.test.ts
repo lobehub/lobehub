@@ -182,6 +182,18 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
+  it('should keep dashboards off by default and enable them per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.dashboard).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableDashboard).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ dashboard: true }).enableDashboard).toBe(true);
+
+    const config = { dashboard: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableDashboard).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableDashboard).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableDashboard).toBe(false);
+  });
+
   it('should correctly map boolean feature flags to state', () => {
     const config = {
       provider_settings: true,

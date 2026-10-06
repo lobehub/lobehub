@@ -13,10 +13,13 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DashboardService } from '@/server/services/dashboard';
 import { createDashboardToolService, resolveClientTopic } from '@/server/services/widget/agentTool';
 
+import { assertDashboardEnabled } from './_helpers/dashboardFeatureGate';
 import { mapWidgetError, notFound } from './_helpers/widgetError';
 
 const dashboardProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  // Off by default (runtime flag `dashboard`); covers `runAgentTool` too.
+  await assertDashboardEnabled(ctx.userId);
   const workspaceId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {
