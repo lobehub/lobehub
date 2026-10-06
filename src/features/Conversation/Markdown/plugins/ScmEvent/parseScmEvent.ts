@@ -57,6 +57,25 @@ export const safeScmUrl = (value: string | undefined): string | undefined => {
 /** `key="value"` pairs of an open tag, values unescaped. */
 export const parseAttributes = parseXmlAttributes;
 
+/**
+ * The attributes of the first `<scmEvent>` block in a message, or undefined
+ * when there is none. The user message uses them to show the pull request
+ * as the message's sender instead of a header inside the card.
+ */
+export const getScmEventSource = (
+  content: string | null | undefined,
+): ScmEventAttributes | undefined => {
+  if (!content) return undefined;
+  const open = /<scmEvent\b([^>]*)>/.exec(content);
+  if (!open) return undefined;
+  const attrs = parseAttributes(open[1] ?? '');
+  return { ...attrs, kind: attrs.kind ?? '', provider: attrs.provider ?? '' };
+};
+
+/** `owner/repo #number`, falling back to the url when the repo is unknown. */
+export const scmEventTitle = (attrs: Pick<ScmEventAttributes, 'number' | 'repo' | 'url'>) =>
+  attrs.repo ? `${attrs.repo}${attrs.number ? ` #${attrs.number}` : ''}` : (attrs.url ?? '');
+
 /** The text of every CDATA section in `raw`, joined; plain text when there is none. */
 const cdataText = (raw: string) => {
   const sections = [...raw.matchAll(/<!\[CDATA\[([\S\s]*?)\]\]>/g)].map((m) => m[1]);

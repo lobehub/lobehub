@@ -1,6 +1,5 @@
 'use client';
 
-import { Github } from '@lobehub/icons';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
@@ -18,7 +17,6 @@ import { type MarkdownElementProps } from '../type';
 import {
   type ParsedScmEvent,
   parseScmEvent,
-  safeScmUrl,
   type ScmEventAttributes,
   type ScmEventCheck,
   type ScmEventReview,
@@ -41,11 +39,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   checkPassed: css`
     color: ${cssVar.colorSuccess};
-  `,
-  header: css`
-    padding-block: 4px 10px;
-    padding-inline: 0;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   instruction: css`
     padding-block: 8px 2px;
@@ -109,20 +102,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     svg {
       transform: rotate(90deg);
     }
-  `,
-  mark: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    inline-size: 28px;
-    block-size: 28px;
-    border-radius: 6px;
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
   `,
   mono: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -276,7 +255,8 @@ ReviewRow.displayName = 'ScmEventReviewRow';
 
 /**
  * A GitHub-styled card for the wake-up message the SCM integration injects
- * into a conversation: the pull request in the header, then one status
+ * into a conversation. The pull request is the message's sender (see the
+ * user message header), so the card opens with one status
  * line that carries the event (as a pill) together with what it is about —
  * the failing check with its details link and log toggle, or the reviewers
  * — and the instruction the agent was given as a footer.
@@ -287,48 +267,19 @@ const Render = memo<MarkdownElementProps<ScmEventAttributes>>(({ children, node 
   const text = typeof children === 'string' ? children : String(children ?? '');
   const parsed = useMemo<ParsedScmEvent>(() => parseScmEvent(text), [text]);
 
-  const title = attrs.repo
-    ? `${attrs.repo}${attrs.number ? ` #${attrs.number}` : ''}`
-    : (attrs.url ?? '');
   const kindLabel = t(`scmEvent.kind.${attrs.kind}` as any, { defaultValue: attrs.kind });
-  const subtitle = [attrs.branch, attrs.sha].filter(Boolean).join(' @ ');
   const pill = (
     <span className={cx(styles.pill, PILL_STYLE[attrs.kind] ?? styles.pillNeutral)}>
       {kindLabel}
     </span>
   );
 
-  // The header link is a tag attribute, so it skips the parser's guard.
-  const headerUrl = safeScmUrl(attrs.url);
   const single = parsed.checks.length === 1 ? parsed.checks[0] : null;
   const many = parsed.checks.length > 1 ? parsed.checks : null;
   const reviewers = [...new Set(parsed.reviews.map((review) => `@${review.author}`))];
 
   return (
     <div className={styles.root}>
-      <Flexbox horizontal align="center" className={styles.header} gap={10}>
-        <span className={styles.mark}>
-          <Github size={16} />
-        </span>
-        <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
-          <Text ellipsis weight={500}>
-            {headerUrl ? (
-              <a className={styles.link} href={headerUrl} rel="noreferrer" target="_blank">
-                {title}
-                <Icon icon={ExternalLinkIcon} size={12} />
-              </a>
-            ) : (
-              title
-            )}
-          </Text>
-          {subtitle ? (
-            <Text ellipsis className={styles.mono} type="secondary">
-              {subtitle}
-            </Text>
-          ) : null}
-        </Flexbox>
-      </Flexbox>
-
       <div className={styles.body}>
         {single ? <CheckRow check={single} leading={pill} /> : null}
         {many ? (
