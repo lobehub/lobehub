@@ -63,6 +63,7 @@ const randomNonce = (): string =>
 /** Resolves once `promise` settles, `ms` pass or `signal` aborts, whichever comes first. */
 const withTimeout = (promise: Promise<void>, ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve) => {
+    if (signal?.aborted) return resolve();
     const timer = setTimeout(resolve, ms);
     signal?.addEventListener(
       'abort',
