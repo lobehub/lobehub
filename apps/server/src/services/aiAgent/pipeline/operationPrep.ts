@@ -41,6 +41,7 @@ import type {
   ResolvedWorkspaceInit,
 } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
+import { tracePrepStage } from './sendTracing';
 import type { ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
 
@@ -513,7 +514,141 @@ export const prepareOperation = async (
     }
   };
 
-  const deviceSystemInfo = await fetchDeviceSystemInfoForTemplate(activeDeviceId);
+  // Every read this stage needs, started together. They hit Postgres rows,
+  // the device gateway (the workspace scan) and the run's fact reader; none
+  // of them feeds another until the assembly below, and prep used to run
+  // them one after the other — a dozen round trips the user waited on in
+  // series. Each keeps the behavior it had in sequence: the reads that never
+  // threw still resolve to their fallback, and the ones whose failure was
+  // handled by a surrounding try/catch (the skill rows) still reject when
+  // awaited inside it. `started` pre-registers a handler so a rejection that
+  // lands before its await does not trip `unhandledRejection`.
+  const started = <T>(task: Promise<T>): Promise<T> => {
+    task.catch(() => undefined);
+    return task;
+  };
+
+  // Pinned skills need their SKILL.md body injected into context directly,
+  // not lazily via the `activateSkill` tool. Gate on the agent's genuinely
+  // pinned entries (`getActivePluginIds(agentConfig.plugins)`), NOT the
+  // fully-expanded `agentPlugins`: the latter also carries turn-scoped tool
+  // ids (mentions, selected tools, `lobe-topic-reference`, …), which would
+  // eager-activate an auto-mode skill whose identifier merely collides with
+  // one of them.
+  const pinnedSkillIds = new Set(getActivePluginIds(agentConfig.plugins));
+
+  // 10. User persona for memory injection (reuses globalMemoryEnabled from step 8).
+  const readPersona = async (): Promise<ServerUserMemoryConfig | undefined> => {
+    if (!globalMemoryEnabled) return undefined;
+    try {
+      const personaModel = new UserPersonaModel(deps.db, deps.userId);
+      const persona = await tracePrepStage('persona', () =>
+        personaModel.getLatestPersonaDocument(),
+      );
+      if (!persona?.persona) return undefined;
+      log('execAgent: fetched user persona (version: %d)', persona.version);
+      return {
+        fetchedAt: Date.now(),
+        memories: {
+          contexts: [],
+          experiences: [],
+          persona: {
+            narrative: persona.persona,
+            tagline: persona.tagline,
+          },
+          preferences: [],
+        },
+      };
+    } catch (error) {
+      log('execAgent: failed to fetch user persona: %O', error);
+      return undefined;
+    }
+  };
+
+  // The user's DB skills, plus the bodies of the pinned subset. `findAll` uses
+  // `skillListColumns` (no `content`), so fetch bodies only for the pinned
+  // subset to keep the op-param payload bounded. Non-pinned skills stay
+  // content-less here and remain lazily activatable. Content lives in the DB
+  // `content` column already (SKILL.md body), so no zip unpack is needed;
+  // mirror `activateSkill` by appending the resource tree so pinned
+  // ZIP/GitHub skills keep their `readReference` paths.
+  const readDbSkills = async () => {
+    const skillModel = new AgentSkillModel(deps.db, deps.userId, deps.workspaceId);
+    const { data: dbSkills } = await tracePrepStage('db_skills', () => skillModel.findAll());
+    const pinnedDbSkillIds = dbSkills
+      .filter((s) => pinnedSkillIds.has(s.identifier))
+      .map((s) => s.id);
+    const pinnedDbContent = new Map(
+      (await skillModel.findByIds(pinnedDbSkillIds)).map((s) => {
+        const hasResources = !!(s.resources && Object.keys(s.resources).length > 0);
+        const content =
+          hasResources && s.resources
+            ? `${s.content ?? ''}\n\n${resourcesTreePrompt(s.name, s.resources)}`
+            : (s.content ?? undefined);
+        return [s.identifier, content] as const;
+      }),
+    );
+    return { dbSkills, pinnedDbContent };
+  };
+
+  // Resolve learned expertise once so every step in this operation uses the
+  // exact same snapshot. ContextEngine owns the Lab-controlled injection
+  // decision via enableExpertise.
+  const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
+  const readExpertise = async () => {
+    try {
+      const expertiseModel = new ExpertiseModel(deps.db, deps.userId, deps.workspaceId);
+      return await tracePrepStage('expertise', () =>
+        buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId),
+      );
+    } catch (error) {
+      console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
+      return undefined;
+    }
+  };
+
+  const activeDocumentId = appContext?.scope !== 'page' ? appContext?.documentId : undefined;
+  const viewedGoalId = appContext?.viewedGoal?.goalId;
+
+  const reads = {
+    activeDocument: started(
+      activeDocumentId
+        ? tracePrepStage('active_document', () =>
+            deps.agentDocumentsService.findRowByDocumentId(resolvedAgentId, activeDocumentId),
+          )
+        : Promise.resolve(undefined),
+    ),
+    agentSkills: started(
+      tracePrepStage('agent_skills', () =>
+        deps.agentDocumentsService.getAgentSkills(resolvedAgentId),
+      ),
+    ),
+    dbSkills: started(readDbSkills()),
+    deviceSystemInfo: started(
+      tracePrepStage('device_system_info', () => fetchDeviceSystemInfoForTemplate(activeDeviceId)),
+    ),
+    expertise: started(readExpertise()),
+    goalOverview: started(
+      viewedGoalId
+        ? tracePrepStage('goal_graph', () =>
+            new GoalGraphModel(deps.db, deps.userId, deps.workspaceId).getGraph(viewedGoalId),
+          )
+        : Promise.resolve(undefined),
+    ),
+    history: started(tracePrepStage('history_messages', () => loadHistoryMessages())),
+    persona: started(readPersona()),
+    workspaceInit: started(
+      tracePrepStage('workspace_init', () =>
+        resolveWorkspaceInit(deps, {
+          activeDeviceId,
+          agencyConfig: agentConfig.agencyConfig ?? undefined,
+          topicId,
+        }),
+      ),
+    ),
+  };
+
+  const deviceSystemInfo = await reads.deviceSystemInfo;
 
   // 9.5. The agent-management context (available agents / providers / plugins)
   // is gathered per step by the shared context rules (`@lobechat/mecha`),
@@ -521,36 +656,10 @@ export const prepareOperation = async (
 
   await throwIfExecutionAborted('tool preparation');
 
-  // 10. Fetch user persona for memory injection (reuses globalMemoryEnabled from step 8)
-  let userMemory: ServerUserMemoryConfig | undefined;
-
-  if (globalMemoryEnabled) {
-    try {
-      const personaModel = new UserPersonaModel(deps.db, deps.userId);
-      const persona = await personaModel.getLatestPersonaDocument();
-
-      if (persona?.persona) {
-        userMemory = {
-          fetchedAt: Date.now(),
-          memories: {
-            contexts: [],
-            experiences: [],
-            persona: {
-              narrative: persona.persona,
-              tagline: persona.tagline,
-            },
-            preferences: [],
-          },
-        };
-        log('execAgent: fetched user persona (version: %d)', persona.version);
-      }
-    } catch (error) {
-      log('execAgent: failed to fetch user persona: %O', error);
-    }
-  }
+  const userMemory = await reads.persona;
 
   // 11. Get existing messages if provided.
-  const historyMessages = await loadHistoryMessages();
+  const historyMessages = await reads.history;
 
   await throwIfExecutionAborted('message history loading');
 
@@ -660,10 +769,7 @@ export const prepareOperation = async (
     // provided (covers docs opened outside the active topic, e.g. skills
     // and web docs).
     try {
-      const row = await deps.agentDocumentsService.findRowByDocumentId(
-        resolvedAgentId,
-        appContext.documentId,
-      );
+      const row = await reads.activeDocument;
 
       initialContext = {
         ...initialContext,
@@ -706,9 +812,7 @@ export const prepareOperation = async (
   // server-run agents also answer progress questions from the live graph.
   if (appContext?.viewedGoal?.goalId) {
     try {
-      const snapshot = await new GoalGraphModel(deps.db, deps.userId, deps.workspaceId).getGraph(
-        appContext.viewedGoal.goalId,
-      );
+      const snapshot = await reads.goalOverview;
       if (snapshot) {
         initialContext = {
           ...initialContext,
@@ -745,11 +849,7 @@ export const prepareOperation = async (
   // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
   // path) flows through; the directory tree is enumerated lazily, keeping the
   // op-param payload small.
-  const workspaceInit = await resolveWorkspaceInit(deps, {
-    activeDeviceId,
-    agencyConfig: agentConfig.agencyConfig ?? undefined,
-    topicId,
-  });
+  const workspaceInit = await reads.workspaceInit;
 
   // Feed the bound directory (resolved from the persisted device row) into
   // the local-system tool's {{workingDirectory}} placeholder — the channel
@@ -786,35 +886,8 @@ export const prepareOperation = async (
       identifier: s.identifier,
       name: s.name,
     }));
-    const skillModel = new AgentSkillModel(deps.db, deps.userId, deps.workspaceId);
-    const { data: dbSkills } = await skillModel.findAll();
+    const { dbSkills, pinnedDbContent } = await reads.dbSkills;
 
-    // Pinned skills need their SKILL.md body injected into context directly,
-    // not lazily via the `activateSkill` tool. Gate on the agent's genuinely
-    // pinned entries (`getActivePluginIds(agentConfig.plugins)`), NOT the
-    // fully-expanded `agentPlugins`: the latter also carries turn-scoped tool
-    // ids (mentions, selected tools, `lobe-topic-reference`, …), which would
-    // eager-activate an auto-mode skill whose identifier merely collides with
-    // one of them. `findAll` uses `skillListColumns` (no `content`), so fetch
-    // bodies only for the pinned subset to keep the op-param payload bounded.
-    // Non-pinned skills stay content-less here and remain lazily activatable.
-    // Content lives in the DB `content` column already (SKILL.md body), so no
-    // zip unpack is needed; mirror `activateSkill` by appending the resource
-    // tree so pinned ZIP/GitHub skills keep their `readReference` paths.
-    const pinnedSkillIds = new Set(getActivePluginIds(agentConfig.plugins));
-    const pinnedDbSkillIds = dbSkills
-      .filter((s) => pinnedSkillIds.has(s.identifier))
-      .map((s) => s.id);
-    const pinnedDbContent = new Map(
-      (await skillModel.findByIds(pinnedDbSkillIds)).map((s) => {
-        const hasResources = !!(s.resources && Object.keys(s.resources).length > 0);
-        const content =
-          hasResources && s.resources
-            ? `${s.content ?? ''}\n\n${resourcesTreePrompt(s.name, s.resources)}`
-            : (s.content ?? undefined);
-        return [s.identifier, content] as const;
-      }),
-    );
     const dbMetas = dbSkills.map((s) => ({
       content: pinnedDbContent.get(s.identifier),
       description: s.description ?? '',
@@ -829,7 +902,7 @@ export const prepareOperation = async (
     // / DB skill names, and we re-use it as `name` so the prompt's
     // `<skill name="...">` line and the model's `activateSkill(name)` call
     // carry the same value.
-    const agentSkills = await deps.agentDocumentsService.getAgentSkills(resolvedAgentId);
+    const agentSkills = await reads.agentSkills;
     const agentSkillMetas = agentSkills.map((skill) => ({
       // `getAgentSkills` already resolves the bundle body, so pinned
       // agent-document skills inject directly without an extra fetch; only
@@ -928,16 +1001,7 @@ export const prepareOperation = async (
     log('execAgent: failed to build operationSkillSet: %O', error);
   }
 
-  // Resolve learned expertise once so every step in this operation uses the exact same snapshot.
-  // ContextEngine owns the Lab-controlled injection decision via enableExpertise.
-  const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
-  let expertise;
-  try {
-    const expertiseModel = new ExpertiseModel(deps.db, deps.userId, deps.workspaceId);
-    expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
-  } catch (error) {
-    console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
-  }
+  const expertise = await reads.expertise;
 
   return {
     activatableToolIds,

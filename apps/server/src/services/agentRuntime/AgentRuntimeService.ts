@@ -1501,27 +1501,33 @@ export class AgentRuntimeService {
       // not one per member (single-connection multiplexing).
       const mirrorToOperationId =
         appContext?.orchestrationRole === 'member' ? (parentOperationId ?? undefined) : undefined;
-      await traceStartStage('runtime_meta', () =>
-        this.coordinator.createAgentOperation(operationId, {
-          acceptsMemberRuntimeEnd,
-          agentConfig,
-          // Persisted so a queue worker that never ran this op's init still
-          // applies the owner-configured visitor redaction policy instead of the
-          // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
-          visitorRedaction: agentShareVisitor
-            ? {
-                showErrorDetails: agentShareVisitor.showErrorDetails,
-                showModelInfo: agentShareVisitor.showModelInfo,
-              }
-            : undefined,
-          mirrorToOperationId,
-          modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
-          // Share-visitor runs execute as the creator (`userId`) but stream only
-          // to the visitor — the gateway registers the WS channel under this id.
-          streamOwnerUserId: agentShareVisitor?.visitorUserId,
-          userId,
-          workspaceId: this.workspaceId,
-        }),
+      // The gateway init round trip is deferred: it overlaps the state and
+      // hook writes below and is awaited before the first step is scheduled.
+      const runtimeMeta = await traceStartStage('runtime_meta', () =>
+        this.coordinator.createAgentOperation(
+          operationId,
+          {
+            acceptsMemberRuntimeEnd,
+            agentConfig,
+            // Persisted so a queue worker that never ran this op's init still
+            // applies the owner-configured visitor redaction policy instead of the
+            // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
+            visitorRedaction: agentShareVisitor
+              ? {
+                  showErrorDetails: agentShareVisitor.showErrorDetails,
+                  showModelInfo: agentShareVisitor.showModelInfo,
+                }
+              : undefined,
+            mirrorToOperationId,
+            modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
+            // Share-visitor runs execute as the creator (`userId`) but stream only
+            // to the visitor — the gateway registers the WS channel under this id.
+            streamOwnerUserId: agentShareVisitor?.visitorUserId,
+            userId,
+            workspaceId: this.workspaceId,
+          },
+          { deferInit: true },
+        ),
       );
       operationCreated = true;
 
@@ -1580,6 +1586,11 @@ export class AgentRuntimeService {
         }
         onInterventionPrepared?.();
       }
+
+      // The gateway must know the operation before anything can push to it:
+      // the first step's events, and whatever `onOperationCreated` wires up.
+      // A coordinator double that returns nothing counts as already published.
+      await traceStartStage('gateway_init', () => runtimeMeta?.initPublished ?? Promise.resolve());
 
       await params.onOperationCreated?.(operationId);
 
