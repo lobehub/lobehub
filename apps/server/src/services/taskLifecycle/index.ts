@@ -401,13 +401,11 @@ export class TaskLifecycleService {
       // reroutes or opens a decision gate, and that gate is the brief the
       // person gets. An urgent error card per failed run asked them to act on
       // something the goal was already handling — the same reason Goal rounds
-      // never synthesize result briefs above.
-      const isGoalTask =
-        !!currentTask &&
-        !!(await new GoalModel(this.db, this.userId, this.workspaceId).findByGraphTask(
-          currentTask.id,
-        ));
-      if (!isGoalTask)
+      // never synthesize result briefs above. Only runs the coordinator
+      // dispatched count: a manual rerun of a Task kept under a paused or
+      // finished goal has nobody recovering it, so its failure still surfaces.
+      const coordinatedByGoal = params.runTrigger === 'goal';
+      if (!coordinatedByGoal)
         await this.briefModel.create({
           actions: errorActions,
           agentId: currentTask?.assigneeAgentId || undefined,

@@ -687,7 +687,6 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     it('leaves a Goal Task failure to the coordinator instead of an error brief', async () => {
       const task = baseTask({ automationMode: null });
       findById.mockResolvedValue(task);
-      goalFindByGraphTask.mockResolvedValueOnce({ id: 'goal-1' });
 
       await service.onTopicComplete({
         errorMessage: 'boom',
@@ -700,6 +699,27 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       });
 
       expect(createBrief).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
+    });
+
+    // Only the coordinator's own runs are recovered by it: a manual rerun of a
+    // Task kept under a paused or finished goal has nobody watching it.
+    it('still sends the error brief for a manual rerun of a Goal Task', async () => {
+      const task = baseTask({ automationMode: null });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(createBrief).toHaveBeenCalledWith(
+        expect.objectContaining({ priority: 'urgent', type: 'error' }),
+      );
     });
 
     it('error brief keeps internal ids out of the user-facing copy', async () => {
