@@ -24,7 +24,7 @@ describe('buildGoalManagerPrompt', () => {
         requirement,
       });
       expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v7');
-      expect(prompt).toContain(`## Requirement\n${requirement}`);
+      expect(prompt).toContain(`\n${requirement}\n`);
       expect(prompt).toContain('Use the language of the Goal requirement');
       expect(prompt).toContain(
         'progress updates, summaries, plan reasons, Task titles and descriptions',
@@ -140,5 +140,21 @@ describe('buildGoalManagerPrompt', () => {
     expect(prompt).toContain('## Previous turn\nexited without submitting a plan');
     expect(prompt).toContain('## New review feedback since the previous turn\nNone.');
     expect(prompt).not.toContain('## Earlier feedback');
+  });
+
+  it('writes the turn summary in the requirement language and keeps the contract English', () => {
+    const prompt = buildGoalManagerPrompt({
+      ...base,
+      goalId: 'goal_1',
+      previousTurn: true,
+      requirement:
+        '对市面上现有产品的 office 实现思路做完整调研并产出报告，结合 lobe-editor 设计路线图',
+      turn: 2,
+    });
+    expect(prompt.split('\n')[0]).toBe('Goal manager v7 · Goal goal_1 · 第 2/12 轮规划');
+    expect(prompt).toContain('## 上一轮\n没有提交计划就退出了');
+    expect(prompt).toContain('## 自上一轮以来的新反馈\n无。');
+    expect(prompt).toContain('## 固定规则（每轮相同）');
+    expect(prompt).toContain('Use the language of the Goal requirement');
   });
 });
