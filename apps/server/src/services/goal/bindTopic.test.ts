@@ -398,6 +398,25 @@ describe('GoalService.bindTopic', () => {
     expect((await new TaskModel(db, userId).findById(taskId))!.assigneeAgentId).toBe(agentId);
   });
 
+  it('leaves nothing half-bound when moving a task fails, so a retry still moves it', async () => {
+    const { id, taskId } = await standaloneGoalMidRun(otherAgentId);
+    const update = vi
+      .spyOn(TaskModel.prototype, 'update')
+      .mockRejectedValueOnce(new Error('connection lost'));
+
+    await expect(service().bindTopic(id, runOpId)).rejects.toThrow('connection lost');
+    const untouched = (await model().findById(id))!;
+    expect(untouched.agentId).toBe(otherAgentId);
+    expect(untouched.subjectId).toBeNull();
+
+    update.mockRestore();
+    const result = await service().bindTopic(id, runOpId);
+
+    expect(result.reassignedTaskIds).toEqual([taskId]);
+    expect((await model().findById(id))!.agentId).toBe(agentId);
+    expect((await new TaskModel(db, userId).findById(taskId))!.assigneeAgentId).toBe(agentId);
+  });
+
   it('keeps unfinished tasks with their agent when goalOnly is set', async () => {
     const { id, taskId } = await standaloneGoalMidRun(otherAgentId);
 

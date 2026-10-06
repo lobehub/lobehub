@@ -362,16 +362,25 @@ export class GoalService {
       workspaceId: this.workspaceId,
     });
 
-    const bound = await new GoalManagerService(this.db, this.userId, this.workspaceId).bindTopic(
-      goalId,
-      { agentId, operationId, topicId },
-      { force: options?.force },
-    );
-
-    const reassignedTaskIds =
-      bound.previousAgentId === agentId
-        ? []
-        : await this.followGoalAgent(bound.goal, agentId, options?.goalOnly);
+    // One transaction: the agent change and the Task moves it implies commit
+    // together. Committed apart, a failed move left the goal already on the new
+    // agent, and the retry — seeing no agent change — never moved the Tasks.
+    const { bound, reassignedTaskIds } = await this.db.transaction(async (tx) => {
+      const bound = await new GoalManagerService(tx, this.userId, this.workspaceId).bindTopic(
+        goalId,
+        { agentId, operationId, topicId },
+        { force: options?.force },
+      );
+      const reassignedTaskIds =
+        bound.previousAgentId === agentId
+          ? []
+          : await new GoalService(tx, this.userId, this.workspaceId).followGoalAgent(
+              bound.goal,
+              agentId,
+              options?.goalOnly,
+            );
+      return { bound, reassignedTaskIds };
+    });
     return {
       graph: await this.requireGraph(goalId),
       previousSubject: bound.previousSubject,
