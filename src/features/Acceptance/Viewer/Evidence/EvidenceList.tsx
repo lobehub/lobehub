@@ -4,7 +4,7 @@ import { readEvidenceChapters } from '@lobechat/const/verify';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import { Flexbox, Image } from '@lobehub/ui';
 import { useResponsive } from 'antd-style';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 
 import AudioPlayer from '@/features/AudioPlayer';
 
@@ -29,7 +29,7 @@ import { styles } from './styles';
 import { VideoEvidencePlayer } from './Video/VideoEvidencePlayer';
 
 /** Flat media for a comparison side — the card frames it, so no own border/radius. */
-const comparisonContent = (item: AcceptanceEvidence) => {
+const comparisonContent = (item: AcceptanceEvidence, action?: ReactNode) => {
   if (item.type === 'video')
     return <video controls src={item.fileUrl!} style={{ display: 'block', width: '100%' }} />;
   if (item.type === 'audio')
@@ -45,13 +45,14 @@ const comparisonContent = (item: AcceptanceEvidence) => {
     return (
       <ScreenshotTiles
         flat
+        action={action}
         alt={item.description ?? item.fileName ?? item.type}
         fileHeight={item.fileHeight}
         fileWidth={item.fileWidth}
         src={item.fileUrl}
       />
     );
-  return (
+  const image = (
     <Image
       preview
       alt={item.description ?? item.fileName ?? item.type}
@@ -60,6 +61,13 @@ const comparisonContent = (item: AcceptanceEvidence) => {
       style={{ aspectRatio: imageRatio(item), borderRadius: 0, width: '100%' }}
       variant={'borderless'}
     />
+  );
+  if (!action) return image;
+  return (
+    <div style={{ position: 'relative' }} {...{ [FLOATING_ACTION_HOST]: '' }}>
+      {image}
+      {action}
+    </div>
   );
 };
 
@@ -114,7 +122,7 @@ export const EvidenceList = memo<{
       readEvidenceComparison(item.metadata)?.label ??
       meaningfulEvidenceCaption(item.description) ??
       undefined,
-    content: comparisonContent(item),
+    content: comparisonContent(item, commentAction(item)),
   });
 
   const consumedScreenshotIds = new Set<string>();
