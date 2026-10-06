@@ -15,6 +15,7 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { DocumentService } from '@/server/services/document';
+import { assertContentsNotInRestrictedKnowledgeBase } from '@/server/services/knowledgeBaseAccess';
 
 import { resolveExpertiseModelConfig } from './modelConfig';
 
@@ -129,6 +130,17 @@ export class ExpertiseRuleDistillService {
     this.workspaceId = workspaceId;
   }
 
+  /**
+   * A full read of a library item is a content dump, so it honours the same "No access" restriction
+   * as the document and file content endpoints: a restricted knowledge base stays retrievable by
+   * agents but its text is never handed to a member through distillation.
+   */
+  private assertReadable = (id: string) =>
+    assertContentsNotInRestrictedKnowledgeBase(
+      { serverDB: this.db, userId: this.userId, workspaceId: this.workspaceId },
+      [id],
+    );
+
   /** The material's text and how its origin is recorded, read within the caller's scope. */
   resolveMaterial = async (
     source: DistillSource,
@@ -145,6 +157,7 @@ export class ExpertiseRuleDistillService {
         };
       }
       case 'document': {
+        await this.assertReadable(source.id);
         const doc = await new DocumentModel(this.db, this.userId, this.workspaceId).findById(
           source.id,
         );
@@ -160,6 +173,7 @@ export class ExpertiseRuleDistillService {
         };
       }
       case 'file': {
+        await this.assertReadable(source.id);
         // Parsing is idempotent: a file already read for chat or the library is not read again.
         const doc = await new DocumentService(this.db, this.userId, this.workspaceId).parseFile(
           source.id,

@@ -3,15 +3,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DistillRulesInputSchema, ExpertiseRuleDistillService } from './distill';
 
-const { resolveExpertiseModelConfig, findDocument, findTopic, transcript, parseFile } = vi.hoisted(
-  () => ({
-    findDocument: vi.fn(),
-    findTopic: vi.fn(),
-    parseFile: vi.fn(),
-    resolveExpertiseModelConfig: vi.fn(),
-    transcript: vi.fn(),
-  }),
-);
+const {
+  assertContentsNotInRestrictedKnowledgeBase,
+  resolveExpertiseModelConfig,
+  findDocument,
+  findTopic,
+  transcript,
+  parseFile,
+} = vi.hoisted(() => ({
+  assertContentsNotInRestrictedKnowledgeBase: vi.fn(),
+  findDocument: vi.fn(),
+  findTopic: vi.fn(),
+  parseFile: vi.fn(),
+  resolveExpertiseModelConfig: vi.fn(),
+  transcript: vi.fn(),
+}));
 const generateObject = vi.fn();
 
 vi.mock('@/server/services/aiGeneration', () => ({
@@ -34,6 +40,9 @@ vi.mock('@/database/models/message', () => ({
   MessageModel: class {
     queryTopicTranscript = transcript;
   },
+}));
+vi.mock('@/server/services/knowledgeBaseAccess', () => ({
+  assertContentsNotInRestrictedKnowledgeBase,
 }));
 vi.mock('@/server/services/document', () => ({
   DocumentService: class {
@@ -64,6 +73,7 @@ describe('ExpertiseRuleDistillService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resolveExpertiseModelConfig.mockResolvedValue({ model: 'm', provider: 'p' });
+    assertContentsNotInRestrictedKnowledgeBase.mockResolvedValue(undefined);
   });
 
   it('proposes every rule a pasted guideline states, keeping only ids the reviewer has', async () => {
@@ -227,4 +237,31 @@ describe('ExpertiseRuleDistillService', () => {
     ).rejects.toThrow('no readable text');
     expect(generateObject).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['document', 'docs_restricted'],
+    ['file', 'file_restricted'],
+  ] as const)(
+    'refuses a %s in a knowledge base the member has no access to, before reading it',
+    async (type, id) => {
+      assertContentsNotInRestrictedKnowledgeBase.mockRejectedValue(
+        new Error('Only knowledge base managers can view this file'),
+      );
+
+      await expect(
+        new ExpertiseRuleDistillService({} as never, 'user_1', 'ws_1').distillRules({
+          groups,
+          rules,
+          source: { id, type },
+        }),
+      ).rejects.toThrow('Only knowledge base managers');
+      expect(assertContentsNotInRestrictedKnowledgeBase).toHaveBeenCalledWith(
+        { serverDB: {}, userId: 'user_1', workspaceId: 'ws_1' },
+        [id],
+      );
+      expect(findDocument).not.toHaveBeenCalled();
+      expect(parseFile).not.toHaveBeenCalled();
+      expect(generateObject).not.toHaveBeenCalled();
+    },
+  );
 });
