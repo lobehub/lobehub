@@ -128,10 +128,11 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
         ) : undefined
       }
       headerAddon={
-        scmSource ? (
-          <ScmEventSenderTitle source={scmSource} />
-        ) : metadata?.steer ? (
-          <Tag>{t('steer.tag')}</Tag>
+        scmSource || metadata?.steer ? (
+          <>
+            {scmSource && <ScmEventSenderTitle source={scmSource} />}
+            {metadata?.steer && <Tag>{t('steer.tag')}</Tag>}
+          </>
         ) : undefined
       }
       onDoubleClick={onDoubleClick}

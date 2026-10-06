@@ -144,6 +144,12 @@ ${reviewInner}
     expect(getScmEventSource(undefined)).toBeUndefined();
   });
 
+  it('ignores a tag quoted inside an ordinary message', () => {
+    expect(
+      getScmEventSource('Why does this render?\n```\n<scmEvent repo="o/r" number="7">\n```'),
+    ).toBeUndefined();
+  });
+
   it('titles a repo-less event by its url', () => {
     expect(scmEventTitle({ url: 'https://github.com/o/r/pull/7' })).toBe(
       'https://github.com/o/r/pull/7',

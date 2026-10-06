@@ -58,15 +58,17 @@ export const safeScmUrl = (value: string | undefined): string | undefined => {
 export const parseAttributes = parseXmlAttributes;
 
 /**
- * The attributes of the first `<scmEvent>` block in a message, or undefined
- * when there is none. The user message uses them to show the pull request
- * as the message's sender instead of a header inside the card.
+ * The attributes of a wake-up message's `<scmEvent>` block, or undefined for
+ * any other message. The user message uses them to show the pull request as
+ * the message's sender instead of a header inside the card. The server sends
+ * the block as the whole message, so only a message that opens with it
+ * counts — a user quoting the tag mid-message keeps their own identity.
  */
 export const getScmEventSource = (
   content: string | null | undefined,
 ): ScmEventAttributes | undefined => {
   if (!content) return undefined;
-  const open = /<scmEvent\b([^>]*)>/.exec(content);
+  const open = /^\s*<scmEvent\b([^>]*)>/.exec(content);
   if (!open) return undefined;
   const attrs = parseAttributes(open[1] ?? '');
   return { ...attrs, kind: attrs.kind ?? '', provider: attrs.provider ?? '' };
