@@ -94,7 +94,9 @@ export const useSendMarkupToChat = () => {
         const staged = useFileStore
           .getState()
           .chatUploadFileList.find((item) => !before.has(item.id) && item.file?.name === file.name);
-        if (!staged || staged.status === 'error') {
+        // Only a finished upload counts: a failed upload can also leave the
+        // chip pending without throwing.
+        if (!staged || staged.status !== 'success') {
           // Keep the marks for another try instead of a broken chip in the input.
           if (staged)
             useFileStore

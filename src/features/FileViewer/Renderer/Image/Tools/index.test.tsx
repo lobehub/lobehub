@@ -508,6 +508,28 @@ describe('ImageEditTools', () => {
       expect(toast.error).not.toHaveBeenCalled();
     });
 
+    // Regression: an upload that failed without throwing left a pending chip
+    // that was taken for success.
+    it('treats an attachment left pending as a failed handoff', async () => {
+      fileStore.uploadChatFiles.mockImplementation(async ([file]: File[]) => {
+        fileStore.chatUploadFileList = [{ file, id: 'sunset-annotated.png', status: 'pending' }];
+      });
+      const { overlay } = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.annotate'));
+      drawBox(overlay);
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('image-markup-send'));
+      });
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('imageViewer.markup.failed'));
+      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith({
+        id: 'sunset-annotated.png',
+        type: 'removeFile',
+      });
+      expect(useComposerDraftBus.getState().draft).toBeNull();
+    });
+
     it('judges this upload, not an earlier attachment with the same name', async () => {
       const earlier = new File(['old'], 'sunset-annotated.png', { type: 'image/png' });
       fileStore.chatUploadFileList = [{ file: earlier, id: 'file_earlier', status: 'success' }];
