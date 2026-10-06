@@ -3,15 +3,16 @@
 import { nanoid } from '@lobechat/utils';
 import { ActionIcon, Button, Text, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ListIcon, Trash2Icon } from 'lucide-react';
+import { CheckIcon, ListIcon, Trash2Icon } from 'lucide-react';
 import type { PointerEvent } from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useImageStage } from '../../context';
 import { imagePointToScreenFraction, type Point } from '../../geometry';
 import { rectFromPoints } from '../Annotate/shapes';
+import BarButton from '../BarButton';
 import {
   anchorOrigin,
   describeAnchor,
@@ -93,7 +94,7 @@ interface CommentModeProps {
  */
 const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => {
   const { t } = useTranslation('file');
-  const { overlayElement, rotation, toImagePoint } = useImageStage();
+  const { compact, overlayElement, rotation, setReserve, toImagePoint } = useImageStage();
   const { comments } = markup;
 
   const dragStart = useRef<Point | null>(null);
@@ -101,11 +102,28 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
   const [draftAnchor, setDraftAnchor] = useState<MarkupAnchor | null>(null);
   const [draftText, setDraftText] = useState('');
   const [activeId, setActiveId] = useState<string>();
-  // In a narrow host (the resource detail dock) the list would cover the
-  // image, so it starts collapsed there and opens from the bottom bar.
-  const [listOpen, setListOpen] = useState(
-    () => (overlayElement?.closest('[data-testid="image-viewer"]')?.clientWidth ?? 1024) >= 640,
-  );
+  // In a narrow host (the chat preview, the resource detail dock) the list
+  // starts collapsed and opens from the bottom bar.
+  const [listOpen, setListOpen] = useState(!compact);
+  const panelRef = useRef<HTMLElement>(null);
+
+  // The list never covers the image: it takes a column on the right (wide) or
+  // a sheet above the bar (narrow), and the viewer shrinks the stage by it.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!listOpen || !panel) {
+      setReserve({});
+      return;
+    }
+    const sync = () =>
+      setReserve(compact ? { bottom: panel.offsetHeight + 8 } : { right: panel.offsetWidth + 16 });
+    sync();
+    if (!('ResizeObserver' in window)) return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [compact, listOpen, setReserve]);
+  useEffect(() => () => setReserve({}), [setReserve]);
 
   const cancelDraft = () => {
     setDraftAnchor(null);
@@ -285,8 +303,10 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
       {listOpen && (
         <aside
           aria-label={t('imageViewer.comment.title')}
-          className={toolStyles.panel}
+          className={compact ? toolStyles.sheet : toolStyles.panel}
+          data-placement={compact ? 'bottom' : 'side'}
           data-testid={'image-comment-panel'}
+          ref={panelRef}
         >
           <div
             style={{
@@ -344,7 +364,7 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
 
       <div className={toolStyles.dock}>
         <div aria-label={t('imageViewer.tool.comment')} className={toolStyles.bar} role={'toolbar'}>
-          <span className={toolStyles.hint}>{t('imageViewer.comment.hint')}</span>
+          {!compact && <span className={toolStyles.hint}>{t('imageViewer.comment.hint')}</span>}
           <ActionIcon
             active={listOpen}
             aria-expanded={listOpen}
@@ -355,16 +375,14 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
             onClick={() => setListOpen((value) => !value)}
           />
           <span className={toolStyles.divider} />
-          <Button
-            shape={'round'}
-            size={'small'}
+          <BarButton
+            icon={CheckIcon}
+            label={t('imageViewer.done')}
             onClick={() => {
               commitDraft();
               onExit();
             }}
-          >
-            {t('imageViewer.done')}
-          </Button>
+          />
           <SendToChatButton markup={sendableMarkup} onBeforeSend={commitDraft} onSent={onSent} />
         </div>
       </div>

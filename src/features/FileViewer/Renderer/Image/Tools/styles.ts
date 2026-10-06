@@ -6,7 +6,7 @@ export const toolStyles = createStaticStyles(({ css }) => ({
     pointer-events: auto;
 
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 4px;
     align-items: center;
     justify-content: center;
@@ -40,9 +40,15 @@ export const toolStyles = createStaticStyles(({ css }) => ({
     justify-content: center;
   `,
   hint: css`
+    overflow: hidden;
+    flex-shrink: 1;
+
+    min-width: 0;
     padding-inline: 8px;
+
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
     white-space: nowrap;
   `,
   overlayFill: css`
@@ -60,6 +66,24 @@ export const toolStyles = createStaticStyles(({ css }) => ({
     flex-direction: column;
 
     width: min(280px, calc(100% - 16px));
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowSecondary};
+  `,
+  /** The panel on a narrow viewer: a sheet above the bar, as wide as the viewer. */
+  sheet: css`
+    position: absolute;
+    z-index: 3;
+    inset-block-end: 60px;
+    inset-inline: 8px;
+
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+
+    max-height: 40%;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 

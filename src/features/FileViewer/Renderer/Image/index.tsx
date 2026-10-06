@@ -10,7 +10,12 @@ import { useTranslation } from 'react-i18next';
 import { getFileDownloadUrl } from '@/features/EditorCanvas/fileDownload';
 import { downloadFile } from '@/utils/client/downloadFile';
 
-import { ImageStageContext, type ImageStageValue, type ImageVersion } from './context';
+import {
+  ImageStageContext,
+  type ImageStageValue,
+  type ImageVersion,
+  type StageReserve,
+} from './context';
 import {
   clampZoom,
   clientToImagePoint,
@@ -28,6 +33,9 @@ import VersionSwitcher from './VersionSwitcher';
 
 /** Room kept around the fitted image so the floating bars do not cover it. */
 const STAGE_PADDING = { block: 56, inline: 16 };
+
+/** Below this viewer width the tool bars switch to icons so they never wrap. */
+const COMPACT_WIDTH = 640;
 
 const styles = createStaticStyles(({ css }) => ({
   frame: css`
@@ -106,6 +114,10 @@ const ImageViewer = ({
   const [attempt, setAttempt] = useState(0);
   const [naturalSize, setNaturalSize] = useState<Size>();
   const [container, setContainer] = useState<Size>({ height: 0, width: 0 });
+  const [rootWidth, setRootWidth] = useState(0);
+  // Room a tool panel (the comment list) takes beside or below the image; the
+  // stage shrinks by it so the panel never covers the picture.
+  const [reserve, setReserve] = useState<StageReserve>({});
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState<Rotation>(0);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
@@ -163,11 +175,15 @@ const ImageViewer = ({
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
-    const measure = () => setContainer({ height: stage.clientHeight, width: stage.clientWidth });
+    const measure = () => {
+      setContainer({ height: stage.clientHeight, width: stage.clientWidth });
+      setRootWidth(rootRef.current?.clientWidth ?? stage.clientWidth);
+    };
     measure();
     if (!('ResizeObserver' in window)) return;
     const observer = new ResizeObserver(measure);
     observer.observe(stage);
+    if (rootRef.current) observer.observe(rootRef.current);
     return () => observer.disconnect();
   }, []);
 
@@ -268,11 +284,14 @@ const ImageViewer = ({
     [overlayElement, rotation],
   );
 
+  const compact = rootWidth > 0 && rootWidth < COMPACT_WIDTH;
+
   const stageValue = useMemo<ImageStageValue | null>(
     () =>
       url
         ? {
             addVersion,
+            compact,
             fileId,
             fitToScreen,
             markup,
@@ -282,6 +301,7 @@ const ImageViewer = ({
             rotation,
             setBusy,
             setMarkup,
+            setReserve,
             toImagePoint,
             url,
             zoom,
@@ -289,6 +309,7 @@ const ImageViewer = ({
         : null,
     [
       addVersion,
+      compact,
       fileId,
       fitToScreen,
       markup,
@@ -362,7 +383,11 @@ const ImageViewer = ({
         <div
           className={styles.stage}
           ref={stageRef}
-          style={{ cursor: zoom > 1 ? 'grab' : undefined }}
+          style={{
+            cursor: zoom > 1 ? 'grab' : undefined,
+            insetBlockEnd: reserve.bottom ?? 0,
+            insetInlineEnd: reserve.right ?? 0,
+          }}
           onPointerCancel={endPan}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}

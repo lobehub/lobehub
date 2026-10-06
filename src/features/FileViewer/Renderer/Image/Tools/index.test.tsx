@@ -82,6 +82,7 @@ const renderTools = (stage: Partial<ImageStageValue> = {}) => {
   const value: ImageStageValue = {
     addVersion,
     fileId: 'file_src',
+    compact: false,
     fitToScreen,
     markup: EMPTY_MARKUP,
     name: 'sunset.jpg',
@@ -90,6 +91,7 @@ const renderTools = (stage: Partial<ImageStageValue> = {}) => {
     rotation: 0,
     setBusy: () => {},
     setMarkup: () => {},
+    setReserve: () => {},
     toImagePoint: (client) => clientToImagePoint(client, RECT, 0),
     url: 'https://s3/sunset.jpg',
     zoom: 1,
@@ -259,17 +261,10 @@ describe('ImageEditTools', () => {
       expect(within(panel).getByText('imageViewer.comment.empty')).toBeInTheDocument();
     });
 
-    it('starts with the list collapsed in a narrow host and toggles it from the bar', async () => {
-      const host = document.createElement('div');
-      host.dataset.testid = 'image-viewer';
-      Object.defineProperty(host, 'clientWidth', { value: 480 });
-      const overlay = document.createElement('div');
-      overlay.getBoundingClientRect = () => RECT as DOMRect;
-      host.append(overlay);
-      document.body.append(host);
-      renderTools({ overlayElement: overlay });
+    it('starts with the list collapsed in a narrow viewer and toggles it from the bar', async () => {
+      renderTools({ compact: true });
 
-      fireEvent.click(screen.getByText('imageViewer.tool.comment'));
+      fireEvent.click(screen.getByRole('button', { name: 'imageViewer.tool.comment' }));
       expect(screen.queryByTestId('image-comment-panel')).not.toBeInTheDocument();
 
       const toggle = screen.getByRole('button', { name: 'imageViewer.comment.title' });
@@ -564,6 +559,43 @@ describe('ImageEditTools', () => {
       expect(button).toBeDisabled();
       expect(button).toHaveAttribute('title', 'No permission to create content');
     }
+  });
+
+  describe('narrow viewer', () => {
+    // Regression: in the chat preview the bar wrapped onto a second line.
+    it('shows icon-only buttons with their names as labels', () => {
+      renderTools({ compact: true });
+
+      const toolbar = screen.getByRole('toolbar', { name: 'imageViewer.editTools' });
+      expect(
+        within(toolbar).getByRole('button', { name: 'imageViewer.tool.resize' }),
+      ).toBeInTheDocument();
+      expect(within(toolbar).queryByText('imageViewer.tool.resize')).toBeNull();
+      expect(within(toolbar).getAllByRole('button')).toHaveLength(5);
+    });
+
+    // Regression: the comment list covered the image in the chat preview.
+    it('opens the comment list as a sheet that reserves room below the image', () => {
+      const setReserve = vi.fn();
+      renderTools({ compact: true, setReserve });
+      fireEvent.click(screen.getByRole('button', { name: 'imageViewer.tool.comment' }));
+      fireEvent.click(screen.getByRole('button', { name: 'imageViewer.comment.title' }));
+
+      expect(screen.getByTestId('image-comment-panel')).toHaveAttribute('data-placement', 'bottom');
+      expect(setReserve).toHaveBeenLastCalledWith({ bottom: expect.any(Number) });
+    });
+  });
+
+  it('opens the comment list beside a wide image and reserves that room', () => {
+    const setReserve = vi.fn();
+    renderTools({ setReserve });
+    fireEvent.click(screen.getByText('imageViewer.tool.comment'));
+
+    expect(screen.getByTestId('image-comment-panel')).toHaveAttribute('data-placement', 'side');
+    expect(setReserve).toHaveBeenLastCalledWith({ right: expect.any(Number) });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(setReserve).toHaveBeenLastCalledWith({});
   });
 
   describe('shortcuts', () => {

@@ -269,6 +269,19 @@ describe('ImageViewer', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('shrinks the stage by the room a tool panel reserves', () => {
+    const ReserveProbe = () => {
+      const { setReserve } = useImageStage();
+      return <button onClick={() => setReserve({ right: 300 })}>reserve</button>;
+    };
+    render(<ImageViewer fileId={'file_1'} tools={<ReserveProbe />} url={'https://s3/a.png'} />);
+    loadImage();
+    fireEvent.click(screen.getByText('reserve'));
+
+    const stage = document.querySelector('img')!.closest('[style*="inset"]') as HTMLElement;
+    expect(stage.style.insetInlineEnd).toBe('300px');
+  });
+
   it('drops saved versions when another file opens', () => {
     const { rerender } = render(
       <ImageViewer fileId={'file_1'} tools={<AddVersionProbe />} url={'https://s3/a.png'} />,

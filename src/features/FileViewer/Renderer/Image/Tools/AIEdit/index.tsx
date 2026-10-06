@@ -1,8 +1,17 @@
 'use client';
 
-import { ActionIcon, Button } from '@lobehub/ui/base-ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, keyframes } from 'antd-style';
-import { CircleAlertIcon, LoaderCircleIcon, Trash2Icon, Undo2Icon } from 'lucide-react';
+import {
+  CircleAlertIcon,
+  EraserIcon,
+  LoaderCircleIcon,
+  RotateCcwIcon,
+  Trash2Icon,
+  Undo2Icon,
+  WandSparklesIcon,
+  XIcon,
+} from 'lucide-react';
 import type { PointerEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -15,6 +24,7 @@ import {
   drawShapes,
   isMeaningfulShape,
 } from '../Annotate/shapes';
+import BarButton from '../BarButton';
 import { renderImageToBlob } from '../exportImage';
 import { toolStyles } from '../styles';
 import { useToolKeys } from '../useToolKeys';
@@ -26,6 +36,21 @@ import { useAIImageEdit } from './useAIImageEdit';
 /** Brush widths as a fraction of the image's shorter side; erase strokes are broad. */
 export const ERASE_BRUSH_SIZES = { large: 0.07, medium: 0.04, small: 0.02 } as const;
 type BrushSizeKey = keyof typeof ERASE_BRUSH_SIZES;
+/** Smallest first, so the dots grow left to right. */
+const BRUSH_KEYS: BrushSizeKey[] = ['small', 'medium', 'large'];
+
+/** A dot whose size shows the brush size. */
+const BrushDot = ({ index }: { index: number }) => (
+  <span
+    style={{
+      background: 'currentColor',
+      borderRadius: '50%',
+      display: 'block',
+      height: 6 + index * 4,
+      width: 6 + index * 4,
+    }}
+  />
+);
 
 const sweep = keyframes`
   from { transform: translateX(-100%); }
@@ -37,15 +62,19 @@ const spin = keyframes`
 
 const styles = createStaticStyles(({ css }) => ({
   error: css`
+    overflow: hidden;
     display: flex;
+    flex-shrink: 1;
     gap: 6px;
     align-items: center;
 
+    min-width: 0;
     max-width: 420px;
     padding-inline: 8px;
 
     font-size: 12px;
     color: ${cssVar.colorError};
+    white-space: nowrap;
   `,
   mask: css`
     opacity: 0.5;
@@ -76,10 +105,13 @@ const styles = createStaticStyles(({ css }) => ({
     animation: ${spin} 1s linear infinite;
   `,
   status: css`
+    overflow: hidden;
     display: flex;
+    flex-shrink: 1;
     gap: 6px;
     align-items: center;
 
+    min-width: 0;
     padding-inline: 8px;
 
     font-size: 12px;
@@ -103,7 +135,7 @@ interface AIEditModeProps {
  */
 const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
   const { t } = useTranslation('file');
-  const { overlayElement, toImagePoint, url } = useImageStage();
+  const { compact, overlayElement, toImagePoint, url } = useImageStage();
   const { cancel, reset, run, state } = useAIImageEdit(operation, deps);
   const running = state.status === 'running';
   const isErase = operation === 'erase';
@@ -273,33 +305,35 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
         <div aria-label={label} className={toolStyles.bar} role={'toolbar'}>
           {isErase && !running && (
             <>
-              <div
-                aria-label={t('imageViewer.ai.brushSize')}
-                role={'group'}
-                style={{ display: 'flex' }}
-              >
-                {(Object.keys(ERASE_BRUSH_SIZES) as BrushSizeKey[]).map((key, index) => (
-                  <ActionIcon
-                    active={sizeKey === key}
-                    aria-label={`${t('imageViewer.ai.brushSize')} ${index + 1}`}
-                    aria-pressed={sizeKey === key}
-                    key={key}
-                    size={'small'}
-                    icon={
-                      <span
-                        style={{
-                          background: 'currentColor',
-                          borderRadius: '50%',
-                          display: 'block',
-                          height: 6 + index * 4,
-                          width: 6 + index * 4,
-                        }}
-                      />
-                    }
-                    onClick={() => setSizeKey(key)}
-                  />
-                ))}
-              </div>
+              {compact ? (
+                <ActionIcon
+                  aria-label={t('imageViewer.ai.brushSize')}
+                  icon={<BrushDot index={BRUSH_KEYS.indexOf(sizeKey)} />}
+                  size={'small'}
+                  title={t('imageViewer.ai.brushSize')}
+                  onClick={() =>
+                    setSizeKey(BRUSH_KEYS[(BRUSH_KEYS.indexOf(sizeKey) + 1) % BRUSH_KEYS.length])
+                  }
+                />
+              ) : (
+                <div
+                  aria-label={t('imageViewer.ai.brushSize')}
+                  role={'group'}
+                  style={{ display: 'flex' }}
+                >
+                  {BRUSH_KEYS.map((key, index) => (
+                    <ActionIcon
+                      active={sizeKey === key}
+                      aria-label={`${t('imageViewer.ai.brushSize')} ${index + 1}`}
+                      aria-pressed={sizeKey === key}
+                      icon={<BrushDot index={index} />}
+                      key={key}
+                      size={'small'}
+                      onClick={() => setSizeKey(key)}
+                    />
+                  ))}
+                </div>
+              )}
               <ActionIcon
                 aria-label={t('imageViewer.annotate.undo')}
                 disabled={strokes.length === 0}
@@ -322,34 +356,40 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
           {renderStatus()}
           <span className={toolStyles.divider} />
           {running ? (
-            <Button shape={'round'} size={'small'} onClick={cancel}>
-              {t('imageViewer.cancel')}
-            </Button>
+            <BarButton icon={XIcon} label={t('imageViewer.cancel')} onClick={cancel} />
           ) : (
             <>
-              <Button shape={'round'} size={'small'} onClick={onExit}>
-                {state.status === 'error' ? t('imageViewer.close') : t('imageViewer.cancel')}
-              </Button>
+              <BarButton
+                icon={XIcon}
+                label={state.status === 'error' ? t('imageViewer.close') : t('imageViewer.cancel')}
+                onClick={onExit}
+              />
               {/* A job that may still be running must not be submitted twice. */}
               {!(state.status === 'error' && state.taskRunning) && (
-                <Button
+                <BarButton
                   disabled={!canSubmit}
-                  shape={'round'}
-                  size={'small'}
                   type={'primary'}
+                  icon={
+                    state.status === 'error'
+                      ? RotateCcwIcon
+                      : isErase
+                        ? EraserIcon
+                        : WandSparklesIcon
+                  }
+                  label={
+                    state.status === 'error'
+                      ? t('imageViewer.retry')
+                      : t(
+                          isErase
+                            ? 'imageViewer.ai.erase.start'
+                            : 'imageViewer.ai.removeBackground.start',
+                        )
+                  }
                   title={
                     isErase && strokes.length === 0 ? t('imageViewer.ai.erase.empty') : undefined
                   }
                   onClick={() => void submit()}
-                >
-                  {state.status === 'error'
-                    ? t('imageViewer.retry')
-                    : t(
-                        isErase
-                          ? 'imageViewer.ai.erase.start'
-                          : 'imageViewer.ai.removeBackground.start',
-                      )}
-                </Button>
+                />
               )}
             </>
           )}

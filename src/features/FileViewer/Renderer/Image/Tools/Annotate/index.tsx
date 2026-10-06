@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Button } from '@lobehub/ui/base-ui';
-import { BrushIcon, SquareIcon, Trash2Icon, Undo2Icon } from 'lucide-react';
+import { ActionIcon } from '@lobehub/ui/base-ui';
+import { BrushIcon, CheckIcon, SquareIcon, Trash2Icon, Undo2Icon } from 'lucide-react';
 import type { PointerEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useImageStage } from '../../context';
 import type { Point } from '../../geometry';
+import BarButton from '../BarButton';
 import type { ImageMarkup } from '../markup';
 import MarkupPreview from '../MarkupPreview';
 import SendToChatButton from '../SendToChatButton';
@@ -27,6 +28,26 @@ import {
 } from './shapes';
 
 type SizeKey = keyof typeof ANNOTATION_SIZES;
+type AnnotationColor = (typeof ANNOTATION_COLORS)[number];
+
+/** Thinnest first, so the dots grow left to right. */
+const SIZE_KEYS: SizeKey[] = ['small', 'medium', 'large'];
+
+const nextOf = <T,>(list: readonly T[], current: T) =>
+  list[(list.indexOf(current) + 1) % list.length];
+
+/** A dot whose size shows the stroke width. */
+const SizeDot = ({ index }: { index: number }) => (
+  <span
+    style={{
+      background: 'currentColor',
+      borderRadius: '50%',
+      display: 'block',
+      height: 4 + index * 3,
+      width: 4 + index * 3,
+    }}
+  />
+);
 
 interface AnnotateModeProps {
   markup: ImageMarkup;
@@ -41,7 +62,7 @@ interface AnnotateModeProps {
  */
 const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) => {
   const { t } = useTranslation('file');
-  const { overlayElement, toImagePoint } = useImageStage();
+  const { compact, overlayElement, toImagePoint } = useImageStage();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragStart = useRef<Point | null>(null);
 
@@ -166,51 +187,63 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
             onClick={() => setTool('rect')}
           />
           <span className={styles.divider} />
-          <div
-            aria-label={t('imageViewer.annotate.color')}
-            role={'group'}
-            style={{ display: 'flex', gap: 6 }}
-          >
-            {ANNOTATION_COLORS.map((value) => (
-              <button
-                aria-label={t(`imageViewer.annotate.colorName.${ANNOTATION_COLOR_NAMES[value]}`)}
-                aria-pressed={color === value}
-                className={styles.swatch}
-                key={value}
-                style={{ background: value }}
-                type={'button'}
-                onClick={() => setColor(value)}
-              />
-            ))}
-          </div>
+          {compact ? (
+            // One swatch that steps through the colors keeps a narrow bar on one line.
+            <button
+              aria-label={`${t('imageViewer.annotate.color')}: ${t(`imageViewer.annotate.colorName.${ANNOTATION_COLOR_NAMES[color as AnnotationColor]}`)}`}
+              className={styles.swatch}
+              style={{ background: color }}
+              title={t('imageViewer.annotate.color')}
+              type={'button'}
+              onClick={() => setColor(nextOf(ANNOTATION_COLORS, color as AnnotationColor))}
+            />
+          ) : (
+            <div
+              aria-label={t('imageViewer.annotate.color')}
+              role={'group'}
+              style={{ display: 'flex', gap: 6 }}
+            >
+              {ANNOTATION_COLORS.map((value) => (
+                <button
+                  aria-label={t(`imageViewer.annotate.colorName.${ANNOTATION_COLOR_NAMES[value]}`)}
+                  aria-pressed={color === value}
+                  className={styles.swatch}
+                  key={value}
+                  style={{ background: value }}
+                  type={'button'}
+                  onClick={() => setColor(value)}
+                />
+              ))}
+            </div>
+          )}
           <span className={styles.divider} />
-          <div
-            aria-label={t('imageViewer.annotate.size')}
-            role={'group'}
-            style={{ display: 'flex' }}
-          >
-            {(Object.keys(ANNOTATION_SIZES) as SizeKey[]).map((key, index) => (
-              <ActionIcon
-                active={sizeKey === key}
-                aria-label={`${t('imageViewer.annotate.size')} ${index + 1}`}
-                aria-pressed={sizeKey === key}
-                key={key}
-                size={'small'}
-                icon={
-                  <span
-                    style={{
-                      background: 'currentColor',
-                      borderRadius: '50%',
-                      display: 'block',
-                      height: 4 + index * 3,
-                      width: 4 + index * 3,
-                    }}
-                  />
-                }
-                onClick={() => setSizeKey(key)}
-              />
-            ))}
-          </div>
+          {compact ? (
+            <ActionIcon
+              aria-label={t('imageViewer.annotate.size')}
+              icon={<SizeDot index={SIZE_KEYS.indexOf(sizeKey)} />}
+              size={'small'}
+              title={t('imageViewer.annotate.size')}
+              onClick={() => setSizeKey(nextOf(SIZE_KEYS, sizeKey))}
+            />
+          ) : (
+            <div
+              aria-label={t('imageViewer.annotate.size')}
+              role={'group'}
+              style={{ display: 'flex' }}
+            >
+              {SIZE_KEYS.map((key, index) => (
+                <ActionIcon
+                  active={sizeKey === key}
+                  aria-label={`${t('imageViewer.annotate.size')} ${index + 1}`}
+                  aria-pressed={sizeKey === key}
+                  icon={<SizeDot index={index} />}
+                  key={key}
+                  size={'small'}
+                  onClick={() => setSizeKey(key)}
+                />
+              ))}
+            </div>
+          )}
           <span className={styles.divider} />
           <ActionIcon
             aria-label={t('imageViewer.annotate.undo')}
@@ -229,9 +262,7 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
             onClick={() => setShapes(() => [])}
           />
           <span className={styles.divider} />
-          <Button shape={'round'} size={'small'} onClick={onExit}>
-            {t('imageViewer.done')}
-          </Button>
+          <BarButton icon={CheckIcon} label={t('imageViewer.done')} onClick={onExit} />
           <SendToChatButton markup={markup} onSent={onSent} />
         </div>
       </div>

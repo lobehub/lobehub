@@ -3,6 +3,12 @@ import { createContext, use } from 'react';
 import type { DerivedImageOperation, Point, Rotation, Size } from './geometry';
 import type { ImageMarkup } from './Tools/markup';
 
+/** Room a tool panel takes on the right or at the bottom, in pixels. */
+export interface StageReserve {
+  bottom?: number;
+  right?: number;
+}
+
 /** An edit saved from this viewer, shown next to the original for comparison. */
 export interface ImageVersion {
   fileId: string;
@@ -19,6 +25,8 @@ export interface ImageVersion {
 export interface ImageStageValue {
   /** Register a saved edit and show it on stage; the original stays one click away. */
   addVersion: (version: ImageVersion) => void;
+  /** The viewer is narrow: tool bars show icons only so they stay on one line. */
+  compact: boolean;
   fileId: string;
   /** Lets a tool ask the viewer to fit the image back on screen. */
   fitToScreen: () => void;
@@ -37,6 +45,8 @@ export interface ImageStageValue {
   /** A tool marks a save it cannot abort, so the viewer keeps Close disabled meanwhile. */
   setBusy: (busy: boolean) => void;
   setMarkup: (markup: ImageMarkup | ((current: ImageMarkup) => ImageMarkup)) => void;
+  /** Reserve room for a panel so the image shrinks instead of being covered. */
+  setReserve: (reserve: StageReserve) => void;
   /** Map a pointer position to a normalized point on the image. */
   toImagePoint: (client: Point) => Point | undefined;
   url: string;

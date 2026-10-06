@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Badge, Button } from '@lobehub/ui/base-ui';
+import { ActionIcon, Badge } from '@lobehub/ui/base-ui';
 import {
   CropIcon,
   EraserIcon,
@@ -16,6 +16,7 @@ import { usePermission } from '@/hooks/usePermission';
 
 import { useImageStage } from '../context';
 import AnnotateMode from './Annotate';
+import BarButton from './BarButton';
 import CommentMode from './Comment';
 import { EMPTY_MARKUP, type ImageMarkup, isMarkupEmpty } from './markup';
 import MarkupPreview from './MarkupPreview';
@@ -81,69 +82,56 @@ const ImageEditTools = () => {
         data-testid={'image-edit-toolbar'}
         role={'toolbar'}
       >
-        <Button
+        <BarButton
           disabled={!canCreate}
           icon={PencilLineIcon}
-          shape={'round'}
-          size={'small'}
+          label={t('imageViewer.tool.annotate')}
           title={reason}
           type={'text'}
           onClick={() => enter('annotate')}
-        >
-          {t('imageViewer.tool.annotate')}
-        </Button>
-        <Button
+        />
+        <BarButton
           disabled={!canCreate}
           icon={MessageSquarePlusIcon}
-          shape={'round'}
-          size={'small'}
+          label={t('imageViewer.tool.comment')}
           title={reason}
           type={'text'}
+          extra={
+            comments.length > 0 && (
+              <Badge
+                aria-label={t('imageViewer.comment.count', { count: comments.length })}
+                count={comments.length}
+                size={'small'}
+                style={{ marginInlineStart: 4 }}
+              />
+            )
+          }
           onClick={() => enter('comment')}
-        >
-          {t('imageViewer.tool.comment')}
-          {comments.length > 0 && (
-            <Badge
-              aria-label={t('imageViewer.comment.count', { count: comments.length })}
-              count={comments.length}
-              size={'small'}
-              style={{ marginInlineStart: 4 }}
-            />
-          )}
-        </Button>
-        <Button
+        />
+        <BarButton
           disabled={!canCreate}
           icon={WandSparklesIcon}
-          shape={'round'}
-          size={'small'}
+          label={t('imageViewer.tool.removeBackground')}
           title={reason}
           type={'text'}
           onClick={() => enter('removeBackground')}
-        >
-          {t('imageViewer.tool.removeBackground')}
-        </Button>
-        <Button
+        />
+        <BarButton
           disabled={!canCreate}
           icon={EraserIcon}
-          shape={'round'}
-          size={'small'}
+          label={t('imageViewer.tool.erase')}
           title={reason}
           type={'text'}
           onClick={() => enter('erase')}
-        >
-          {t('imageViewer.tool.erase')}
-        </Button>
-        <Button
+        />
+        <BarButton
           disabled={!canCreate}
           icon={CropIcon}
-          shape={'round'}
-          size={'small'}
+          label={t('imageViewer.tool.resize')}
           title={reason}
           type={'text'}
           onClick={() => enter('resize')}
-        >
-          {t('imageViewer.tool.resize')}
-        </Button>
+        />
         {hasMarkup && (
           <>
             <span className={styles.divider} />

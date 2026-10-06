@@ -67,6 +67,7 @@ const renderMode = (operation: 'erase' | 'removeBackground', deps = createMockDe
   const value: ImageStageValue = {
     addVersion,
     fileId: 'file_src',
+    compact: false,
     fitToScreen: vi.fn(),
     markup: { comments: [], shapes: [] },
     name: 'scene.png',
@@ -75,6 +76,7 @@ const renderMode = (operation: 'erase' | 'removeBackground', deps = createMockDe
     rotation: 0,
     setBusy: vi.fn(),
     setMarkup: vi.fn(),
+    setReserve: vi.fn(),
     toImagePoint: (client) => clientToImagePoint(client, RECT, 0),
     url: 'https://app.lobehub.com/f/file_src',
     zoom: 1,

@@ -1,8 +1,8 @@
 'use client';
 
-import { ActionIcon, Button, Input, Select } from '@lobehub/ui/base-ui';
+import { ActionIcon, Input, Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { LinkIcon, UnlinkIcon } from 'lucide-react';
+import { LinkIcon, SaveIcon, UnlinkIcon, XIcon } from 'lucide-react';
 import type { PointerEvent } from 'react';
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useImageStage } from '../../context';
 import type { NormalizedRect, Point, Size } from '../../geometry';
+import BarButton from '../BarButton';
 import { renderImageToBlob } from '../exportImage';
 import { toolStyles } from '../styles';
 import { useSaveDerivedImage } from '../useSaveDerivedImage';
@@ -70,7 +71,12 @@ const styles = createStaticStyles(({ css }) => ({
     background: #fff;
   `,
   sizeInput: css`
+    flex-shrink: 0;
     width: 84px;
+
+    &[data-compact='true'] {
+      width: 72px;
+    }
   `,
 }));
 
@@ -93,7 +99,7 @@ interface ResizeModeProps {
  */
 const ResizeMode = ({ onExit }: ResizeModeProps) => {
   const { t } = useTranslation('file');
-  const { naturalSize, overlayElement, toImagePoint } = useImageStage();
+  const { compact, naturalSize, overlayElement, toImagePoint } = useImageStage();
   const natural: Size = naturalSize ?? { height: 1, width: 1 };
 
   const [preset, setPreset] = useState<AspectPreset>('free');
@@ -209,9 +215,10 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
       <div className={toolStyles.dock}>
         <div aria-label={t('imageViewer.tool.resize')} className={toolStyles.bar} role={'toolbar'}>
           <Select
-            prefix={t('imageViewer.resize.aspectLabel')}
+            aria-label={t('imageViewer.resize.aspectLabel')}
+            prefix={compact ? undefined : t('imageViewer.resize.aspectLabel')}
             size={'small'}
-            style={{ width: 150 }}
+            style={{ flexShrink: 0, width: compact ? 88 : 150 }}
             value={preset}
             options={ASPECT_PRESETS.map((value) => ({
               label:
@@ -230,6 +237,7 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
           <Input
             aria-label={t('imageViewer.resize.width')}
             className={styles.sizeInput}
+            data-compact={compact}
             inputMode={'numeric'}
             max={MAX_OUTPUT_EDGE}
             min={1}
@@ -257,6 +265,7 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
           <Input
             aria-label={t('imageViewer.resize.height')}
             className={styles.sizeInput}
+            data-compact={compact}
             inputMode={'numeric'}
             max={MAX_OUTPUT_EDGE}
             min={1}
@@ -268,18 +277,19 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
             onChange={(event) => updateOutput('height', event.target.value)}
           />
           <span className={toolStyles.divider} />
-          <Button disabled={saving} shape={'round'} size={'small'} onClick={onExit}>
-            {t('imageViewer.cancel')}
-          </Button>
-          <Button
+          <BarButton
+            disabled={saving}
+            icon={XIcon}
+            label={t('imageViewer.cancel')}
+            onClick={onExit}
+          />
+          <BarButton
+            icon={SaveIcon}
+            label={saving ? t('imageViewer.saving') : t('imageViewer.saveAsNew')}
             loading={saving}
-            shape={'round'}
-            size={'small'}
             type={'primary'}
             onClick={() => void handleSave()}
-          >
-            {saving ? t('imageViewer.saving') : t('imageViewer.saveAsNew')}
-          </Button>
+          />
         </div>
       </div>
     </>

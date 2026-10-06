@@ -1,9 +1,9 @@
 'use client';
 
-import { Button } from '@lobehub/ui/base-ui';
 import { MessageSquareShareIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import BarButton from './BarButton';
 import { type ImageMarkup, isMarkupEmpty } from './markup';
 import { useSendMarkupToChat } from './useSendMarkupToChat';
 
@@ -26,22 +26,19 @@ const SendToChatButton = ({ markup, onBeforeSend, onSent }: SendToChatButtonProp
   const empty = isMarkupEmpty(markup);
 
   return (
-    <Button
+    <BarButton
       data-testid={'image-markup-send'}
       disabled={empty}
       icon={MessageSquareShareIcon}
+      label={t(hasComposer ? 'imageViewer.markup.addToChat' : 'imageViewer.markup.askInNewChat')}
       loading={sending}
-      shape={'round'}
-      size={'small'}
       title={empty ? t('imageViewer.markup.empty') : undefined}
       type={'primary'}
       onClick={async () => {
         const toSend = onBeforeSend?.() ?? markup;
         if (await send(toSend)) onSent(toSend);
       }}
-    >
-      {t(hasComposer ? 'imageViewer.markup.addToChat' : 'imageViewer.markup.askInNewChat')}
-    </Button>
+    />
   );
 };
 
