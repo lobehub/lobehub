@@ -163,6 +163,19 @@ Business builds enable Gateway Mode automatically. Self-hosted deployments can s
 - Default: -
 - Example: `https://device-gateway.example.com` or `http://your_server_ip:8788`
 
+### `DISABLE_LLM_GENERATION_TRACING_S3`
+
+- Type: Optional
+- Description: LobeHub records LLM generation traces — the system prompt and the generation input/output — to the `llm_generation_tracing` database table and the S3 blob store whenever S3 is configured. Tracing is **on by default**; set this to `1` to disable collection, for example when the deployment must not retain generation content.
+- Default: `0`
+- Example: `1` or `0`
+
+<Callout type="warning">
+  **Privacy Notice**: Trace blobs contain full system prompts and generation inputs/outputs. They are
+  always uploaded with private object ACLs, but if your deployment must not retain generation content,
+  set this variable to `1` before upgrading.
+</Callout>
+
 ### `PROXY_URL`
 
 - Type: Optional
