@@ -857,7 +857,7 @@ describe('CLI main Agent planning', () => {
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
     // The replacement's message must not claim the refused turn ran and exited.
     const prompt = vi.mocked(AiAgentService.prototype.execAgent).mock.calls.at(-1)![0].prompt;
-    expect(prompt).toContain('## Previous turn\nnever started');
+    expect(prompt).toContain('<previousTurn outcome="never_started" />');
   });
 
   it('keeps pausing when the planning message is deleted after a dispatch that had started', async () => {
@@ -1139,10 +1139,10 @@ describe('CLI main Agent planning', () => {
     const prompt = vi.mocked(AiAgentService.prototype.execAgent).mock.calls.at(-1)![0].prompt;
     expect(prompt).toContain('The recommendation baseline is not a training majority');
     // Written after the previous turn started, so this turn shows it as new.
-    expect(
-      prompt.slice(prompt.indexOf('## New review feedback'), prompt.indexOf('## Requirement')),
-    ).toContain('> The recommendation baseline is not a training majority');
-    expect(prompt).toContain('## Previous turn\nsubmitted `tasks`');
+    expect(prompt).toMatch(
+      /<feedback author="user" new="true"[^>]*><!\[CDATA\[\nThe recommendation baseline is not a training majority/,
+    );
+    expect(prompt).toContain('<previousTurn action="tasks" outcome="submitted">');
     const next = (await model().findById(id))!.config!.managerState!;
     await taskModel.addComment({
       taskId,
@@ -1204,9 +1204,9 @@ describe('CLI main Agent planning', () => {
     await service().tick(id);
     await service().tick(id);
     const prompt = vi.mocked(AiAgentService.prototype.execAgent).mock.calls.at(-1)![0].prompt;
-    expect(
-      prompt.slice(prompt.indexOf('## New review feedback'), prompt.indexOf('## Requirement')),
-    ).toContain(`> ${late}`);
+    expect(prompt).toMatch(
+      new RegExp(String.raw`<feedback author="user" new="true"[^>]*><!\[CDATA\[\n${late}`),
+    );
   });
 
   it('accepts a main Agent alongside the system planner', async () => {

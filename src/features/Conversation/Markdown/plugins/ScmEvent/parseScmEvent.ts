@@ -1,3 +1,5 @@
+import { parseXmlAttributes } from '../remarkPlugins/createRemarkXmlBlockPlugin';
+
 export type ScmEventKind = 'ci_failed' | 'review_changes_requested' | 'review_commented';
 
 export interface ScmEventCheck {
@@ -52,21 +54,8 @@ export const safeScmUrl = (value: string | undefined): string | undefined => {
   }
 };
 
-const unescapeAttribute = (value: string) =>
-  value
-    .replaceAll('&quot;', '"')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&amp;', '&');
-
 /** `key="value"` pairs of an open tag, values unescaped. */
-export const parseAttributes = (raw: string): Record<string, string> => {
-  const result: Record<string, string> = {};
-  for (const match of raw.matchAll(/([\w:-]+)="([^"]*)"/g)) {
-    result[match[1]] = unescapeAttribute(match[2]);
-  }
-  return result;
-};
+export const parseAttributes = parseXmlAttributes;
 
 /** The text of every CDATA section in `raw`, joined; plain text when there is none. */
 const cdataText = (raw: string) => {
