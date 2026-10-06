@@ -74,6 +74,8 @@ const activeStatuses = new Set(['planning', 'running']);
 const terminalOperations = new Set(['done', 'error', 'interrupted']);
 const terminalNodes = new Set(['resolved', 'retired', 'rejected']);
 const TIMEOUT_MS = 20 * 60_000;
+/** Task comments listed in one planning turn's message; older ones are counted, not shown. */
+const FEEDBACK_NOTE_LIMIT = 20;
 /** Source message id prefix of a dispatched planning turn; the suffix is its token. */
 const MANAGER_SOURCE_MESSAGE_PREFIX = 'msg_goal_manager_';
 
@@ -329,7 +331,6 @@ export class GoalManagerService {
       hash: createHash('sha256').update(JSON.stringify(comments)).digest('hex'),
       notes: [...comments]
         .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())
-        .slice(-20)
         .map((c) => ({
           author: c.authorAgentId ? `agent ${c.authorAgentId}` : 'user',
           content: c.content,
@@ -716,21 +717,29 @@ export class GoalManagerService {
       if (fresh.status === 'planning') await model.updateStatus(goal.id, 'running');
       // Split at the previous turn's start, so the message names what is new to
       // this turn instead of resending the same comments every turn.
+      // Only the latest FEEDBACK_NOTE_LIMIT are listed; the rest are counted so
+      // the agent knows to read them in full rather than treating the list as all.
       const since = freshState?.startedAt ? Date.parse(freshState.startedAt) : undefined;
+      const isNew = (n: (typeof reviews.notes)[number]) =>
+        since === undefined || n.updatedAt.getTime() > since;
+      const listed = reviews.notes.slice(-FEEDBACK_NOTE_LIMIT);
+      const omitted = reviews.notes.slice(0, -FEEDBACK_NOTE_LIMIT);
       const note = ({ updatedAt, ...rest }: (typeof reviews.notes)[number]) => ({
         ...rest,
         updatedAt: updatedAt.toISOString(),
       });
       return {
         ...next,
-        earlierFeedback: reviews.notes
-          .filter((n) => since !== undefined && n.updatedAt.getTime() <= since)
-          .map(note),
-        newFeedback: reviews.notes
-          .filter((n) => since === undefined || n.updatedAt.getTime() > since)
-          .map(note),
-        previousPlan: freshState?.submitted,
-        previousTurn: !!freshState,
+        earlierFeedback: listed.filter((n) => !isNew(n)).map(note),
+        newFeedback: listed.filter(isNew).map(note),
+        omittedFeedback: {
+          earlier: omitted.filter((n) => !isNew(n)).length,
+          new: omitted.filter(isNew).length,
+        },
+        previousTurn: freshState && {
+          neverStarted: freshState.dispatchNeverStarted,
+          plan: freshState.submitted,
+        },
       };
     });
     if (!claimed) return this.wait(goal.id, 'Another advance owns the planning turn');
@@ -752,8 +761,8 @@ export class GoalManagerService {
           turn: claimed.turns,
           maxTurns: policy.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS,
           previousTurn: claimed.previousTurn,
-          previousPlan: claimed.previousPlan,
           newFeedback: claimed.newFeedback,
+          omittedFeedback: claimed.omittedFeedback,
           earlierFeedback: claimed.earlierFeedback,
           problem: problem?.reason,
           continuation:

@@ -855,6 +855,9 @@ describe('CLI main Agent planning', () => {
     expect(next.token).not.toBe(state.token);
     expect(next.turns).toBe(state.turns + 1);
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+    // The replacement's message must not claim the refused turn ran and exited.
+    const prompt = vi.mocked(AiAgentService.prototype.execAgent).mock.calls.at(-1)![0].prompt;
+    expect(prompt).toContain('## Previous turn\nnever started');
   });
 
   it('keeps pausing when the planning message is deleted after a dispatch that had started', async () => {

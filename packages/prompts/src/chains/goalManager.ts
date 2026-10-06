@@ -28,10 +28,14 @@ interface GoalManagerPromptInput {
   maxTurns: number;
   /** Feedback written or edited since the previous turn started (all of it on the first turn). */
   newFeedback: GoalManagerFeedbackNote[];
-  /** What the previous planning turn submitted; undefined when it exited without a plan. */
-  previousPlan?: { action: string; reason: string };
-  /** Whether an earlier planning turn exists at all. */
-  previousTurn: boolean;
+  /** Comments dropped by the per-turn cap, counted so the agent knows the list is incomplete. */
+  omittedFeedback: { earlier: number; new: number };
+  /**
+   * How the previous planning turn ended; undefined on the first turn. `plan` is
+   * what it submitted, absent when it exited without one. `neverStarted` marks a
+   * dispatch refused before any run existed, so it cannot have exited at all.
+   */
+  previousTurn?: { neverStarted?: boolean; plan?: { action: string; reason: string } };
   /**
    * Set on a takeover turn: the coordinator ran out of moves and this is the
    * reason it would otherwise have opened a human gate with.
@@ -58,14 +62,18 @@ const LABELS = {
     first: 'First planning turn for this Goal.',
     instruction: 'Owner instruction',
     newFeedback: 'New review feedback since the previous turn',
+    neverStarted: 'never started: its dispatch was refused before any run existed',
     noPlan: 'exited without submitting a plan',
     none: 'None.',
+    omitted: (n: number) =>
+      `${n} more comment(s) not shown because of the per-turn cap; read them with lh task view <taskId>.`,
     noPrevious: 'none',
     previous: 'Previous turn',
     requirement: 'Requirement',
     settled: 'The work planned so far has settled. Read the outcome and plan what comes next.',
     standing: 'Standing instructions (same every turn)',
     submitted: 'submitted',
+    truncated: '[truncated; read the full comment with lh task view]',
     takeover: (text: string) =>
       `Takeover. The coordinator could not route this problem on its own: ${text}`,
     turn: (turn: number, max: number) => `planning turn ${turn}/${max}`,
@@ -78,14 +86,17 @@ const LABELS = {
     first: '这是该目标的第一轮规划。',
     instruction: '负责人补充说明',
     newFeedback: '自上一轮以来的新反馈',
+    neverStarted: '没有启动：派发被拒绝，没有产生任何运行',
     noPlan: '没有提交计划就退出了',
     none: '无。',
+    omitted: (n: number) => `另有 ${n} 条评论因每轮上限未列出，用 lh task view <taskId> 查看。`,
     noPrevious: '无',
     previous: '上一轮',
     requirement: '目标需求',
     settled: '之前规划的工作已经结束，请查看结果并规划下一步。',
     standing: '固定规则（每轮相同）',
     submitted: '提交了',
+    truncated: '[已截断，全文用 lh task view 查看]',
     takeover: (text: string) => `接手问题：协调器无法自行处理：${text}`,
     turn: (turn: number, max: number) => `第 ${turn}/${max} 轮规划`,
     why: '本轮原因',
@@ -113,12 +124,13 @@ const oneLine = (text: string, limit: number) => {
   return flat.length > limit ? `${flat.slice(0, limit)}…` : flat;
 };
 
-const quote = (text: string) =>
-  text
-    .slice(0, NEW_FEEDBACK_LIMIT)
+const quote = (text: string, t: Labels) =>
+  `${text.slice(0, NEW_FEEDBACK_LIMIT)}${text.length > NEW_FEEDBACK_LIMIT ? ` … ${t.truncated}` : ''}`
     .split('\n')
     .map((line) => `  > ${line}`)
     .join('\n');
+
+const omittedLine = (n: number, t: Labels) => (n > 0 ? `\n${t.omitted(n)}` : '');
 
 const trigger = (input: GoalManagerPromptInput, t: Labels) => {
   if (input.problem) return t.takeover(input.problem);
@@ -126,25 +138,27 @@ const trigger = (input: GoalManagerPromptInput, t: Labels) => {
   return input.previousTurn ? t.settled : t.first;
 };
 
-const previousOutcome = (input: GoalManagerPromptInput, t: Labels) => {
-  if (!input.previousTurn) return t.noPrevious;
-  if (!input.previousPlan) return t.noPlan;
-  return `${t.submitted} \`${input.previousPlan.action}\` — ${oneLine(input.previousPlan.reason, 300)}`;
+const previousOutcome = ({ previousTurn }: GoalManagerPromptInput, t: Labels) => {
+  if (!previousTurn) return t.noPrevious;
+  if (previousTurn.neverStarted) return t.neverStarted;
+  if (!previousTurn.plan) return t.noPlan;
+  return `${t.submitted} \`${previousTurn.plan.action}\` — ${oneLine(previousTurn.plan.reason, 300)}`;
 };
 
-const newFeedbackSection = (notes: GoalManagerFeedbackNote[], t: Labels) =>
-  notes.length === 0
-    ? t.none
-    : notes
-        .map((n) => `- ${n.taskId} · ${n.author} · ${n.updatedAt}\n${quote(n.content)}`)
-        .join('\n');
+const newFeedbackSection = (notes: GoalManagerFeedbackNote[], omitted: number, t: Labels) => {
+  const listed = notes
+    .map((n) => `- ${n.taskId} · ${n.author} · ${n.updatedAt}\n${quote(n.content, t)}`)
+    .join('\n');
+  if (!listed && omitted === 0) return t.none;
+  return `${listed}${omittedLine(omitted, t)}`.trim();
+};
 
-const earlierFeedbackSection = (notes: GoalManagerFeedbackNote[], t: Labels) =>
-  notes.length === 0
+const earlierFeedbackSection = (notes: GoalManagerFeedbackNote[], omitted: number, t: Labels) =>
+  notes.length === 0 && omitted === 0
     ? ''
-    : `\n\n## ${t.earlier}\n${notes
+    : `\n\n## ${t.earlier}\n${`${notes
         .map((n) => `- ${n.taskId} · ${n.author}: ${oneLine(n.content, EARLIER_FEEDBACK_LIMIT)}`)
-        .join('\n')}`;
+        .join('\n')}${omittedLine(omitted, t)}`.trim()}`;
 
 const takeoverRules = (input: GoalManagerPromptInput) =>
   input.problem
@@ -162,7 +176,7 @@ ${trigger(input, t)}
 ${previousOutcome(input, t)}
 
 ## ${t.newFeedback}
-${newFeedbackSection(input.newFeedback, t)}${earlierFeedbackSection(input.earlierFeedback, t)}
+${newFeedbackSection(input.newFeedback, input.omittedFeedback.new, t)}${earlierFeedbackSection(input.earlierFeedback, input.omittedFeedback.earlier, t)}
 
 ## ${t.requirement}
 ${input.requirement}${input.instruction ? `\n\n${t.instruction}: ${input.instruction}` : ''}

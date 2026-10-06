@@ -6,7 +6,7 @@ const base = {
   earlierFeedback: [],
   maxTurns: 12,
   newFeedback: [],
-  previousTurn: false,
+  omittedFeedback: { earlier: 0, new: 0 },
   token: 't',
   turn: 1,
 };
@@ -103,8 +103,7 @@ describe('buildGoalManagerPrompt', () => {
           updatedAt: '2026-10-02T00:00:00.000Z',
         },
       ],
-      previousPlan: { action: 'tasks', reason: 'Collect the remaining evidence' },
-      previousTurn: true,
+      previousTurn: { plan: { action: 'tasks', reason: 'Collect the remaining evidence' } },
       requirement: 'Find the training scheme closest to my rejections',
       turn: 3,
     });
@@ -133,7 +132,7 @@ describe('buildGoalManagerPrompt', () => {
     const prompt = buildGoalManagerPrompt({
       ...base,
       goalId: 'goal_1',
-      previousTurn: true,
+      previousTurn: {},
       requirement: 'r',
       turn: 2,
     });
@@ -146,7 +145,7 @@ describe('buildGoalManagerPrompt', () => {
     const prompt = buildGoalManagerPrompt({
       ...base,
       goalId: 'goal_1',
-      previousTurn: true,
+      previousTurn: {},
       requirement:
         '对市面上现有产品的 office 实现思路做完整调研并产出报告，结合 lobe-editor 设计路线图',
       turn: 2,
@@ -170,5 +169,45 @@ describe('buildGoalManagerPrompt', () => {
     const prompt = buildGoalManagerPrompt({ ...base, goalId: 'goal_1', requirement });
     expect(prompt.split('\n')[0]).toBe('Goal manager v7 · Goal goal_1 · planning turn 1/12');
     expect(prompt).not.toContain('本轮原因');
+  });
+
+  /**
+   * Regression: the per-turn cap and the per-comment cut were silent, so the
+   * list read as every comment since the previous turn and a correction past
+   * the cap could be planned around unnoticed.
+   */
+  it('says when feedback was cut off or left out by the per-turn cap', () => {
+    const prompt = buildGoalManagerPrompt({
+      ...base,
+      goalId: 'goal_1',
+      newFeedback: [
+        { author: 'user', content: 'x'.repeat(2500), taskId: 'task_1', updatedAt: '2026-10-02' },
+      ],
+      omittedFeedback: { earlier: 2, new: 3 },
+      previousTurn: {},
+      requirement: 'r',
+    });
+    const fresh = prompt.slice(
+      prompt.indexOf('## New review feedback'),
+      prompt.indexOf('## Earlier'),
+    );
+    expect(fresh).toContain('[truncated; read the full comment with lh task view]');
+    expect(fresh).toContain('3 more comment(s) not shown because of the per-turn cap');
+    expect(prompt.slice(prompt.indexOf('## Earlier'))).toContain('2 more comment(s) not shown');
+  });
+
+  /**
+   * Regression: a dispatch refused before any run existed was reported as a turn
+   * that "exited without submitting a plan".
+   */
+  it('reports a refused dispatch as never started, not as an exit without a plan', () => {
+    const prompt = buildGoalManagerPrompt({
+      ...base,
+      goalId: 'goal_1',
+      previousTurn: { neverStarted: true },
+      requirement: 'r',
+    });
+    expect(prompt).toContain('## Previous turn\nnever started');
+    expect(prompt).not.toContain('exited without submitting a plan');
   });
 });
