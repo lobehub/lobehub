@@ -849,11 +849,20 @@ describe('widget + dashboard routers integration', () => {
         .where(eq(widgets.id, foreign.state.widgetId));
       expect(foreignWidget).toMatchObject({ agentId, projectId: null });
 
+      // A run without the widget's agent/project cannot reach it.
+      const unscoped = await board.runAgentTool({
+        apiName: 'dryRunWidget',
+        args: { versionId: created.state.versionId, widgetId: widget.id },
+        context: { operationId: 'op_1' },
+      });
+      expect(unscoped).toMatchObject({ success: false });
+      expect(runSandbox).not.toHaveBeenCalled();
+
       runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 7 }));
       const dryRun = await board.runAgentTool({
         apiName: 'dryRunWidget',
         args: { versionId: created.state.versionId, widgetId: widget.id },
-        context: { operationId: 'op_1' },
+        context: { agentId, operationId: 'op_1', topicId: `tpc_own_${ownerId}` },
       });
       expect(dryRun).toMatchObject({ state: { status: 'succeeded' }, success: true });
       expect(dryRun.content).toContain('"value": 7');

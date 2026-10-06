@@ -212,6 +212,51 @@ describe('createDashboardToolService', () => {
     expect((await service.listWidgets()).map((widget) => widget.title)).toEqual(['Mine']);
   });
 
+  it('refuses widgets of another agent or project, even the same user’s', async () => {
+    runSandbox.mockResolvedValue(printed({ type: 'stat', value: 7 }));
+    const service = createDashboardToolService(db, scope);
+    const runtime = new DashboardExecutionRuntime(service);
+    const board = await service.createDashboardWithWidget(
+      'Ops',
+      (await service.createWidgetDraft({ content: statDraft, description: '', title: 'Mine' }))
+        .widgetId,
+    );
+
+    const otherAgent = await createDashboardToolService(db, {
+      ...scope,
+      agentId: `${projectId}-coordinator`,
+    }).createWidgetDraft({ content: statDraft, description: '', title: 'Other agent' });
+    // Same agent, but authored in a project topic.
+    const otherProject = await createDashboardToolService(db, {
+      ...scope,
+      projectId,
+      topicId: projectTopicId,
+    }).createWidgetDraft({ content: statDraft, description: '', title: 'Project one' });
+
+    for (const { version, widgetId } of [otherAgent, otherProject]) {
+      const results = await Promise.all([
+        runtime.updateWidgetDraft({ script: 'console.log(1)', widgetId }),
+        runtime.updateWidgetDraft({ title: 'Renamed', widgetId }),
+        runtime.dryRunWidget({ versionId: version.id, widgetId }),
+        runtime.requestPublish({ versionId: version.id, widgetId }),
+        runtime.addWidgetToDashboard({ dashboardId: board.id, widgetId }),
+        runtime.getWidgetRuns({ widgetId }),
+      ]);
+      for (const result of results) {
+        expect(result.success).toBe(false);
+        expect(result.content).toMatch(/not found/i);
+      }
+      await expect(service.saveDraft(widgetId, statDraft)).rejects.toThrow(/not found/i);
+      expect(await service.getWidget(widgetId)).toBeUndefined();
+
+      const [row] = await db.select().from(widgets).where(eq(widgets.id, widgetId));
+      expect(row).toMatchObject({ draftVersionId: version.id, publishedVersionId: null });
+      expect(row.title).not.toBe('Renamed');
+    }
+    expect(runSandbox).not.toHaveBeenCalled();
+    expect((await service.listDashboards())[0].widgets.map(({ title }) => title)).toEqual(['Mine']);
+  });
+
   it('creates no board when the widget cannot be placed on it', async () => {
     const service = createDashboardToolService(db, scope);
     const runtime = new DashboardExecutionRuntime(service);

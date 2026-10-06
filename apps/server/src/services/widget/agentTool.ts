@@ -15,7 +15,7 @@ import { WidgetModel } from '@/database/models/widget';
 import type { WidgetRunRow, WidgetVersionRow } from '@/database/schemas';
 import { topics } from '@/database/schemas';
 
-import { WidgetService } from './index';
+import { WidgetFlowError, WidgetService } from './index';
 import { widgetVersionContentSchema } from './versionSchema';
 
 /** Where the conversation that authors the widget lives; stamped on what it creates. */
@@ -80,6 +80,31 @@ export const createDashboardToolService = (
   const widgets = new WidgetModel(db, userId, workspaceId);
   const flow = new WidgetService(db, userId, workspaceId);
 
+  /**
+   * A widget this conversation may work on: readable, and living on the exact
+   * level new widgets are created on (same agent and project). A stale or
+   * model-supplied id of another agent's or project's widget is out of reach,
+   * even when the same user owns it.
+   */
+  const findScopedWidget = async (widgetId: string) => {
+    const widget = await widgets.findById(widgetId);
+    if (!widget) return undefined;
+    const inScope =
+      widget.agentId === (agentId ?? null) && widget.projectId === (projectId ?? null);
+    return inScope ? widget : undefined;
+  };
+
+  const requireScopedWidget = async (widgetId: string) => {
+    const widget = await findScopedWidget(widgetId);
+    if (!widget) {
+      throw new WidgetFlowError(
+        'NOT_FOUND',
+        'Widget not found in this conversation’s agent and project',
+      );
+    }
+    return widget;
+  };
+
   const source = {
     sourceAgentId: agentId ?? null,
     sourceMessageId: scope.messageId ?? null,
@@ -90,6 +115,7 @@ export const createDashboardToolService = (
 
   return {
     addToDashboard: async (dashboardId, widgetId) => {
+      await requireScopedWidget(widgetId);
       const board = await dashboards.findById(dashboardId);
       const item = board ? await dashboards.addItem(dashboardId, widgetId) : undefined;
       if (!board || !item) throw new Error('Dashboard or widget not found');
@@ -126,18 +152,20 @@ export const createDashboardToolService = (
     },
 
     dryRun: async (widgetId, versionId) => {
+      await requireScopedWidget(widgetId);
       const run = await flow.dryRun(widgetId, { operationId: scope.operationId, versionId });
       if (!run) throw new Error('Widget not found');
       return toRunRecord(run);
     },
 
     getRun: async (widgetId, runId) => {
+      await requireScopedWidget(widgetId);
       const run = await widgets.findRun(widgetId, runId);
       return run ? toRunRecord(run) : undefined;
     },
 
     getWidget: async (widgetId) => {
-      const widget = await widgets.findById(widgetId);
+      const widget = await findScopedWidget(widgetId);
       if (!widget) return undefined;
       const [publishedVersion, draftVersion] = await Promise.all([
         widget.publishedVersionId ? widgets.findVersion(widgetId, widget.publishedVersionId) : null,
@@ -175,7 +203,7 @@ export const createDashboardToolService = (
     },
 
     listRuns: async (widgetId, limit) => {
-      if (!(await widgets.findById(widgetId))) throw new Error('Widget not found');
+      await requireScopedWidget(widgetId);
       return (await widgets.listRuns(widgetId, { limit })).map(toRunRecord);
     },
 
@@ -192,6 +220,7 @@ export const createDashboardToolService = (
     },
 
     publish: async (widgetId, versionId) => {
+      await requireScopedWidget(widgetId);
       const { version, widget } = await flow.publish(widgetId, versionId);
       // Fill the live card right away instead of waiting for the first tick.
       const firstRun = await flow.runNow(widgetId).catch((error) => {
@@ -208,6 +237,7 @@ export const createDashboardToolService = (
     saveDraft: async (widgetId, input) => {
       const { parentVersionId, ...content } = input;
       const version = parseContent(content);
+      await requireScopedWidget(widgetId);
       const draft = await flow.saveDraft(widgetId, {
         ...version,
         ...source,
@@ -217,6 +247,7 @@ export const createDashboardToolService = (
     },
 
     updateWidget: async (widgetId, patch) => {
+      await requireScopedWidget(widgetId);
       const updated = await widgets.update(widgetId, {
         ...(patch.description !== undefined && { description: patch.description }),
         ...(patch.title !== undefined && { title: patch.title }),
