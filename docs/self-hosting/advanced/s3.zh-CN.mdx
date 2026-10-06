@@ -46,6 +46,10 @@ LobeHub 在 [很早以前](https://x.com/lobehub/status/1724289575672291782) 就
 
   是否在上传文件时设置 ACL 为 `public-read`。该选项默认关闭，仅当 `S3_SET_ACL` 显式设置为 `1` 时才会生效。如果服务商不支持为文件设置单独的 ACL（即所有文件继承存储桶的 ACL），启用此选项可能会导致请求错误。
 
+  <Callout type={'warning'}>
+    配置了 S3 的部署默认开启 LLM 生成追踪，系统提示词与生成的输入 / 输出会以 `llm-generation-tracing/` 前缀存储在该存储桶中。如果存储桶允许匿名读取（例如对象继承存储桶公共 ACL 的服务商），这些追踪内容同样会公开，且无法通过对象级 ACL 修复。请在服务商支持的前提下将该前缀排除在匿名访问之外，或设置 `DISABLE_LLM_GENERATION_TRACING_S3=1` 关闭采集。
+  </Callout>
+
   ### `S3_ENABLE_PATH_STYLE`
 
   是否启用 S3 的 `path-style` 访问模式。此选项默认禁用。如果您的 S3 服务提供商使用 `path-style`，请将 `S3_ENABLE_PATH_STYLE` 设置为 `1` 以启用它。
