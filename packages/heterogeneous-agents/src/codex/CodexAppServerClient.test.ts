@@ -138,6 +138,74 @@ afterEach(() => {
 });
 
 describe('CodexAppServerClient', () => {
+  it('claims a native thread for one session at a time', () => {
+    const client = createClient();
+    const releaseFirst = client.acquireThread('thread-shared');
+
+    expect(() => client.acquireThread('thread-shared')).toThrow('already has an active session');
+    releaseFirst();
+    const releaseSecond = client.acquireThread('thread-shared');
+    // A stale release from the first owner must not free the second owner's claim.
+    releaseFirst();
+    expect(() => client.acquireThread('thread-shared')).toThrow('already has an active session');
+
+    releaseSecond();
+    client.close();
+  });
+
+  it('spawns the shared process without run provenance but keeps credentials', async () => {
+    const proc = createProcess();
+    spawnMock.mockReturnValue(proc.child);
+    const env = Object.freeze({
+      ...process.env,
+      LOBEHUB_AGENT_ID: 'agent-a',
+      LOBEHUB_JWT: 'test-token',
+      LOBEHUB_OPERATION_ID: 'op-a',
+      LOBEHUB_TOPIC_ID: 'topic-a',
+    });
+    const client = new CodexAppServerClient({
+      clientVersion: 'test',
+      commandPath: 'codex',
+      cwd: '/workspace',
+      env,
+    });
+
+    try {
+      await client.connect();
+      const spawnedEnv = spawnMock.mock.calls[0][2].env;
+      expect(spawnedEnv).toMatchObject({ LOBEHUB_JWT: 'test-token' });
+      expect(spawnedEnv).not.toHaveProperty('LOBEHUB_AGENT_ID');
+      expect(spawnedEnv).not.toHaveProperty('LOBEHUB_OPERATION_ID');
+      expect(spawnedEnv).not.toHaveProperty('LOBEHUB_TOPIC_ID');
+    } finally {
+      client.close();
+    }
+  });
+
+  it('reuses a process across runs whose environments differ only in provenance', () => {
+    const baseEnv = { ...process.env, CODEX_HOME: '/codex', LOBEHUB_JWT: 'token-a' };
+    const options = { clientVersion: '1.0.0', commandPath: 'codex', cwd: '/workspace' };
+    const client = new CodexAppServerClient({
+      ...options,
+      env: { ...baseEnv, LOBEHUB_AGENT_ID: 'a', LOBEHUB_OPERATION_ID: 'o', LOBEHUB_TOPIC_ID: 't' },
+    });
+    const reuse = (env: NodeJS.ProcessEnv) => client.canReuseFor({ ...options, env });
+
+    expect(
+      reuse({
+        ...baseEnv,
+        LOBEHUB_AGENT_ID: 'b',
+        LOBEHUB_OPERATION_ID: 'p',
+        LOBEHUB_TOPIC_ID: 'u',
+      }),
+    ).toBe(true);
+    expect(reuse({ ...baseEnv, LOBEHUB_OPERATION_ID: undefined })).toBe(true);
+    expect(reuse({ ...baseEnv, LOBEHUB_JWT: 'token-b' })).toBe(false);
+    expect(reuse({ ...baseEnv, CODEX_HOME: undefined })).toBe(false);
+    expect(reuse({ ...baseEnv, LOBEHUB_OPERATION_ID_EXTRA: 'setting' })).toBe(false);
+    client.close();
+  });
+
   it('only reuses a process for the same binary, global arguments, and environment', () => {
     const client = new CodexAppServerClient({
       args: ['--config', 'model_provider="openai"'],

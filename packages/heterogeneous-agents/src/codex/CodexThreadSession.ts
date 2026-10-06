@@ -7,11 +7,15 @@ import { toStreamEvent } from '../spawn/streamEvent';
 import type { UsageData } from '../types';
 import type { CodexAppServerClient } from './CodexAppServerClient';
 import { CodexAppServerConnectionError } from './CodexAppServerClient';
+import type { CodexRunProvenance } from './environment';
+import { isSameCodexRunProvenance, withCodexThreadEnv } from './environment';
 import type {
   ThreadResumeParams,
   ThreadResumeResponse,
   ThreadStartParams,
   ThreadStartResponse,
+  ThreadUnsubscribeParams,
+  ThreadUnsubscribeResponse,
   TurnCompletedNotification,
   TurnInterruptParams,
   TurnStartParams,
@@ -20,6 +24,9 @@ import type {
 } from './protocol';
 
 const CODEX_APP_SERVER_TRANSPORT = 'codex-app-server' as const;
+/** An interrupted turn settled within 250 ms in probes; this bounds slow tool teardown. */
+const RESUME_SETTLE_DELAY_MS = 200;
+const RESUME_SETTLE_TIMEOUT_MS = 10_000;
 
 const toThreadResumeParams = (threadId: string, params: ThreadStartParams): ThreadResumeParams => {
   const resumeParams = { ...params };
@@ -53,6 +60,8 @@ export interface CodexThreadTurnOptions {
   input: UserInput[];
   onRawMessage: (line: string) => Promise<void> | void;
   operationId: string;
+  /** IDs exposed to this run's shell tools; omitted keeps the caller's thread config. */
+  provenance?: CodexRunProvenance;
 }
 
 export interface CodexThreadSessionOptions {
@@ -74,6 +83,9 @@ export interface CodexThreadSessionOptions {
 export class CodexThreadSession {
   private activeTurn?: ActiveTurn;
   private attached = false;
+  private provenance?: CodexRunProvenance;
+  private releaseThread?: () => void;
+  private threadParams: ThreadStartParams;
   private canFallback: boolean;
   private closedByHost = false;
   private cumulativeUsage?: UsageData;
@@ -90,6 +102,7 @@ export class CodexThreadSession {
     this.cumulativeUsage = options.initialCumulativeUsage;
     this.model = options.initialModel;
     this.threadId = options.initialThreadId;
+    this.threadParams = options.threadParams;
     this.sessionUnsubscribers.push(
       options.client.acquireConsumer(),
       options.client.onDisconnect(() => this.handleDisconnect()),
@@ -111,6 +124,15 @@ export class CodexThreadSession {
     const traceUnsubscribers: Array<() => void> = [];
 
     try {
+      if (options.provenance) {
+        if (!this.provenance || !isSameCodexRunProvenance(this.provenance, options.provenance)) {
+          // Re-resume with the new IDs; this also drops reconnect params queued with the old ones.
+          this.unsubscribeAll(this.threadUnsubscribers);
+          this.attached = false;
+        }
+        this.provenance = options.provenance;
+        this.threadParams = withCodexThreadEnv(this.options.threadParams, options.provenance);
+      }
       await this.ensureThread();
       if (this.closedByHost) return;
       const threadId = this.threadId;
@@ -218,6 +240,8 @@ export class CodexThreadSession {
     }
     this.unsubscribeAll(this.threadUnsubscribers);
     this.unsubscribeAll(this.sessionUnsubscribers);
+    this.releaseThread?.();
+    this.releaseThread = undefined;
     if (this.lastOperationId) this.emitStatus('closed', this.lastOperationId);
   }
 
@@ -228,19 +252,22 @@ export class CodexThreadSession {
     if (this.threadId) {
       // Once initialize succeeds, an existing native thread must never be replayed via exec.
       this.canFallback = false;
-      const params = toThreadResumeParams(this.threadId, this.options.threadParams);
-      const response = await this.options.client.request<ThreadResumeResponse>(
-        'thread/resume',
-        params,
-      );
-      if (this.closedByHost) return;
+      // Claimed before unsubscribing, which would otherwise cut off another local owner.
+      this.releaseThread ??= this.options.client.acquireThread(this.threadId);
+      const response = this.provenance
+        ? await this.resumeWithShellEnv(this.threadId)
+        : await this.options.client.request<ThreadResumeResponse>(
+            'thread/resume',
+            toThreadResumeParams(this.threadId, this.threadParams),
+          );
+      if (!response || this.closedByHost) return;
       await this.attachThread(response.thread.id, response.model);
       return;
     }
 
     const response = await this.options.client.request<ThreadStartResponse>(
       'thread/start',
-      this.options.threadParams,
+      this.threadParams,
     );
     if (this.closedByHost) return;
     const threadId = response?.thread?.id;
@@ -258,6 +285,39 @@ export class CodexThreadSession {
     }
   }
 
+  /**
+   * Resumes a thread so the next turn's shell sees this run's provenance.
+   *
+   * NOTICE:
+   * Codex has no per-turn shell environment, and `thread/resume` ignores config overrides for a
+   * thread that still has subscribers or a running turn. Unsubscribing lets an idle thread reload
+   * with the new config; a turn interrupted by a closed session can stay `active` for a moment,
+   * so retry until it settles. Verified against `codex-cli 0.160.1`; source:
+   * `https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/app-server/src/request_processors/thread_processor.rs#L4336-L4386`.
+   * Remove when `turn/start` can set the shell environment.
+   */
+  private async resumeWithShellEnv(threadId: string): Promise<ThreadResumeResponse | undefined> {
+    const deadline = Date.now() + RESUME_SETTLE_TIMEOUT_MS;
+    while (true) {
+      await this.options.client.request<ThreadUnsubscribeResponse>('thread/unsubscribe', {
+        threadId,
+      } satisfies ThreadUnsubscribeParams);
+      if (this.closedByHost) return;
+      const response = await this.options.client.request<ThreadResumeResponse>(
+        'thread/resume',
+        toThreadResumeParams(threadId, this.threadParams),
+      );
+      if (this.closedByHost || response.thread.status?.type !== 'active') return response;
+      if (Date.now() >= deadline) {
+        throw new Error(
+          'Codex is still finishing the previous turn in this conversation. Try again once it stops.',
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, RESUME_SETTLE_DELAY_MS));
+      if (this.closedByHost) return;
+    }
+  }
+
   private async setThreadName(threadId: string): Promise<void> {
     const name = this.options.threadName?.trim();
     if (!name) return;
@@ -271,6 +331,7 @@ export class CodexThreadSession {
   }
 
   private async attachThread(threadId: string, model?: string): Promise<void> {
+    this.releaseThread ??= this.options.client.acquireThread(threadId);
     this.threadId = threadId;
     this.attached = true;
     this.canFallback = false;
@@ -292,7 +353,7 @@ export class CodexThreadSession {
       }),
       this.options.client.registerThread(
         threadId,
-        toThreadResumeParams(threadId, this.options.threadParams),
+        toThreadResumeParams(threadId, this.threadParams),
         {
           onResume: (response) => this.handleReconnect(response),
           onResumeError: () => {
