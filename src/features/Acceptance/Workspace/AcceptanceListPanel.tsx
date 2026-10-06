@@ -51,6 +51,7 @@ import {
   acceptanceListEmptyVariant,
   type AcceptanceListFacets,
   type AcceptanceListFilter,
+  acceptanceProjectScopeKey,
   DEFAULT_ACCEPTANCE_LIST_FACETS,
   DEFAULT_ACCEPTANCE_LIST_FILTER,
   effectiveAcceptanceListFacets,
