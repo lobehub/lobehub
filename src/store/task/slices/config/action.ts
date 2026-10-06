@@ -136,6 +136,10 @@ export class TaskConfigSliceActionImpl {
       // failure — never leave the write looking idle.
       this.#get().internal_setTaskSaveStatus(id, 'failed');
       if (write.rethrow) throw error;
+    } finally {
+      // The engine patches `taskDetailMap` directly; settle what is shown
+      // (saved value, or the rollback) into the persisted detail.
+      this.#get().internal_persistTaskDetail(id);
     }
   };
 
@@ -409,6 +413,8 @@ export class TaskConfigSliceActionImpl {
     } catch (error) {
       // engine already rolled the optimistic patches back; just log.
       console.error('[TaskStore] Failed to update automation mode:', error);
+    } finally {
+      this.#get().internal_persistTaskDetail(id);
     }
   };
 
@@ -498,6 +504,8 @@ export class TaskConfigSliceActionImpl {
     } catch (error) {
       // engine already rolled the optimistic patches back; just log.
       console.error('[TaskStore] Failed to update schedule:', error);
+    } finally {
+      this.#get().internal_persistTaskDetail(id);
     }
   };
 }

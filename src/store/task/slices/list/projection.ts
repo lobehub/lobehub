@@ -55,6 +55,8 @@ export interface TaskGroupListQuery {
 }
 
 export interface TaskGroupListValue {
+  /** The board's hidden statuses, so a status change can drop a card it no longer shows. */
+  excludeStatuses?: TaskStatus[];
   groupBy: TaskKanbanGroupBy;
   groups: TaskGroupItem[];
 }
@@ -127,8 +129,11 @@ export const taskGroupListEntity: ReplicaEntityAdapter<TaskGroupListValue, TaskG
       .flatMap((group) => group.tasks)
       .find((task) => task.identifier === id);
     if (!current) return data;
-    const next = fn(current);
+    let next = fn(current);
     if (next === current) return data;
+    // A card whose new status the board hides (`hideCompleted`) leaves it, even
+    // though the server still returns the hidden status's empty column.
+    if (next && data.excludeStatuses?.includes(next.status as TaskStatus)) next = undefined;
 
     const status = next?.status as TaskStatus | undefined;
     const moves = data.groupBy === 'status' && next !== undefined && status !== current.status;

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cacheScope } from '@/libs/replica';
 import { taskService } from '@/services/task';
 import { useUserStore } from '@/store/user';
 
 import { useTaskStore } from '../../store';
+import { taskDetailResource } from '../detail/projection';
 import { taskDetailRefreshes } from '../detail/testUtils';
 
 vi.mock('@/services/task', () => ({
@@ -45,6 +47,42 @@ beforeEach(() => {
 });
 
 describe('TaskConfigSliceAction', () => {
+  describe('persisting config-only saves', () => {
+    const persisted = async (scope: string) =>
+      (await taskDetailResource.storage!.get({ queryKey: 'T-1', scope }))?.data;
+
+    const useScope = () => {
+      const scope = `task-config-${crypto.randomUUID()}:personal`;
+      vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+      return scope;
+    };
+
+    it('persists a saved model change so a reload paints it', async () => {
+      const scope = useScope();
+      vi.mocked(taskService.updateConfig).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().updateTaskModelConfig('T-1', { model: 'gpt-x' });
+
+      await vi.waitFor(async () =>
+        expect((await persisted(scope))?.config).toMatchObject({ model: 'gpt-x' }),
+      );
+      vi.restoreAllMocks();
+    });
+
+    it('persists the automation mode once the toggle is saved', async () => {
+      const scope = useScope();
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().setAutomationMode('T-1', 'heartbeat');
+
+      await vi.waitFor(async () =>
+        expect((await persisted(scope))?.automationMode).toBe('heartbeat'),
+      );
+      vi.restoreAllMocks();
+    });
+  });
+
   describe('updateCheckpoint', () => {
     it('should optimistically update and call service', async () => {
       vi.mocked(taskService.updateCheckpoint).mockResolvedValue({ success: true } as any);

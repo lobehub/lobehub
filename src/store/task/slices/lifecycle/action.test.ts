@@ -303,6 +303,33 @@ describe('TaskLifecycleSliceAction', () => {
       vi.mocked(mutate).mockReset();
     });
 
+    it('drops a card that moves into a status the board hides, even if refresh fails', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        taskGroupListMap: {
+          board: {
+            excludeStatuses: ['canceled', 'completed'],
+            groupBy: 'status',
+            groups: [
+              { key: 'running', tasks: [{ identifier: 'T-1', status: 'running' }], total: 1 },
+              // The server still returns the hidden status's empty column.
+              { key: 'done', tasks: [], total: 0 },
+            ] as any,
+          },
+        },
+      });
+      vi.mocked(taskService.updateStatus).mockResolvedValue({ success: true } as any);
+      vi.mocked(mutate).mockRejectedValue(new Error('refresh failed'));
+
+      await useTaskStore.getState().updateTaskStatus('T-1', 'completed');
+
+      expect(useTaskStore.getState().taskGroupListMap.board.groups).toMatchObject([
+        { key: 'running', tasks: [], total: 0 },
+        { key: 'done', tasks: [], total: 0 },
+      ]);
+      vi.mocked(mutate).mockReset();
+    });
+
     it('should not let an older failed request roll back a newer status', async () => {
       let rejectFirstRequest: (reason: Error) => void = () => {};
       seedCollections(

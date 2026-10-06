@@ -110,7 +110,11 @@ export class TaskListSliceActionImpl {
       entity: taskGroupListEntity,
       fetcher: (query) => this.#fetchGroups(query),
       get,
-      merge: (incoming, _confirmed, query) => ({ groupBy: query.groupBy, groups: incoming.data }),
+      merge: (incoming, _confirmed, query) => ({
+        ...(query.excludeStatuses && { excludeStatuses: query.excludeStatuses }),
+        groupBy: query.groupBy,
+        groups: incoming.data,
+      }),
       set,
       stateKey: 'taskGroupListReplica',
       view: recordLens<TaskStore, TaskGroupListValue>('taskGroupListMap'),

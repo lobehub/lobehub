@@ -569,8 +569,8 @@ export class TaskDetailSliceActionImpl {
 
     // Saved: the edited detail is now the server's value, so a reload must
     // paint it rather than the pre-edit snapshot.
-    for (const target of patchedParentId ? [id, patchedParentId] : [id])
-      this.#detail.update(target, (detail) => detail && { ...detail });
+    this.internal_persistTaskDetail(id);
+    if (patchedParentId) this.internal_persistTaskDetail(patchedParentId);
 
     if (
       assigneeAgentId !== undefined ||
@@ -676,6 +676,14 @@ export class TaskDetailSliceActionImpl {
         `internal_dispatchTaskDetail/${payload.type}`,
       );
     }
+  };
+
+  /**
+   * Persist a task's detail as it is shown now — called once a save settles
+   * (committed, or rolled back), since edits stay in memory while in flight.
+   */
+  internal_persistTaskDetail = (id: string): void => {
+    this.#detail.update(id, (detail) => detail && { ...detail });
   };
 
   internal_refreshTaskDetail = async (id: string): Promise<void> => {
