@@ -42,6 +42,7 @@ const ProjectSidebarContent = memo(() => {
   const projectGoalsPath = getProjectGoalsPath(projectId!);
   const projectAcceptancePath = getProjectAcceptancePath(projectId!);
   const projectDashboardPath = getProjectDashboardPath(projectId!);
+  const { enabled: dashboardEnabled } = useDashboardFeature();
 
   const header = <ProjectHeader project={detail?.project} />;
 

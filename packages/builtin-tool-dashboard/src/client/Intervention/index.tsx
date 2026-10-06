@@ -3,6 +3,7 @@
 import type { BuiltinIntervention, BuiltinInterventionProps } from '@lobechat/types';
 import { memo, useCallback } from 'react';
 
+import { DashboardFeatureGate } from '@/features/Dashboard/FeatureGate';
 import WidgetDryRunReview from '@/features/Dashboard/WidgetPreview/DryRunReview';
 import WidgetPublishReview from '@/features/Dashboard/WidgetPreview/PublishReview';
 
@@ -25,12 +26,14 @@ const RequestPublishIntervention = memo<BuiltinInterventionProps<RequestPublishP
 
     if (!args?.widgetId) return null;
     return (
-      <WidgetPublishReview
-        summary={args.summary}
-        versionId={args.versionId}
-        widgetId={args.widgetId}
-        onPinVersion={pinVersion}
-      />
+      <DashboardFeatureGate>
+        <WidgetPublishReview
+          summary={args.summary}
+          versionId={args.versionId}
+          widgetId={args.widgetId}
+          onPinVersion={pinVersion}
+        />
+      </DashboardFeatureGate>
     );
   },
 );
@@ -50,11 +53,13 @@ const DryRunWidgetIntervention = memo<BuiltinInterventionProps<DryRunWidgetParam
 
     if (!args?.widgetId) return null;
     return (
-      <WidgetDryRunReview
-        versionId={args.versionId}
-        widgetId={args.widgetId}
-        onPinVersion={pinVersion}
-      />
+      <DashboardFeatureGate>
+        <WidgetDryRunReview
+          versionId={args.versionId}
+          widgetId={args.widgetId}
+          onPinVersion={pinVersion}
+        />
+      </DashboardFeatureGate>
     );
   },
 );

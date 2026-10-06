@@ -27,6 +27,20 @@ describe('featureFlagsSelectors', () => {
 });
 
 describe('serverConfigSelectors', () => {
+  describe('enableDashboard', () => {
+    it('is off by default and on only when the flag resolves to true', () => {
+      expect(serverConfigSelectors.enableDashboard(initServerConfigStore({}).getState())).toBe(
+        false,
+      );
+      const on = initServerConfigStore({
+        featureFlags: {
+          ...mapFeatureFlagsEnvToState({ ...DEFAULT_FEATURE_FLAGS, dashboard: true }),
+        },
+      });
+      expect(serverConfigSelectors.enableDashboard(on.getState())).toBe(true);
+    });
+  });
+
   describe('enableGatewayMode', () => {
     it('should return true when gateway mode is enabled', () => {
       const store = initServerConfigStore({
