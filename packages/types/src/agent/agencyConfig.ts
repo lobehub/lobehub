@@ -1,5 +1,11 @@
 import type { WorkingDirConfigValue } from '../device';
 import type { LobeAgentChatConfig } from './chatConfig';
+import type { CodexPermissionMode } from './codexPermission';
+import {
+  codexPermissionModeRequiresAppServer,
+  getCodexPermissionModeArgs,
+  stripCodexPermissionArgs,
+} from './codexPermission';
 import type { AgentGraph } from './graph';
 import { hasAnyCliFlag, hasCliConfigKey, hasCliFlag } from './heteroCliArgs';
 import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
@@ -248,6 +254,11 @@ export interface HeterogeneousProviderConfig {
    * so the CLI can keep its own settings, env vars, and account defaults.
    */
   model?: string;
+  /**
+   * Codex sandbox and approval preset. Omitted on legacy agents so their
+   * existing CLI arguments and full-access fallback behavior remain intact.
+   */
+  permissionMode?: CodexPermissionMode;
   /**
    * Platform-side agent identifier used by remote device runtimes.
    * - openclaw: selects the named agent (defaults to `'main'`)
@@ -580,7 +591,10 @@ export const buildHeteroSpawnArgs = (
     return provider.args;
   }
 
-  const baseArgs = provider.args ?? [];
+  const baseArgs =
+    provider.type === 'codex' && provider.permissionMode
+      ? (stripCodexPermissionArgs(provider.args) ?? [])
+      : (provider.args ?? []);
   const extraArgs: string[] = [];
 
   if (provider.type === 'amp') {
@@ -596,6 +610,8 @@ export const buildHeteroSpawnArgs = (
   }
 
   if (provider.type === 'codex') {
+    if (provider.permissionMode)
+      extraArgs.push(...getCodexPermissionModeArgs(provider.permissionMode));
     const model = getExplicitCodexModel(provider);
     if (
       model &&
@@ -710,6 +726,9 @@ export const buildHeteroExecArgs = (
   provider: HeterogeneousProviderConfig | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
+  if (provider.type === 'codex' && codexPermissionModeRequiresAppServer(provider.permissionMode)) {
+    throw new Error('Configured Codex permission modes require the app-server transport');
+  }
   if (
     provider.type !== 'amp' &&
     provider.type !== 'claude-code' &&
@@ -728,7 +747,14 @@ export const buildHeteroExecArgs = (
     return provider.args;
   }
 
-  const baseArgs = provider.args ?? [];
+  // Full access has an exact exec representation; interactive presets still require app-server.
+  const baseArgs =
+    provider.type === 'codex' && provider.permissionMode === 'full-access'
+      ? [
+          ...(stripCodexPermissionArgs(provider.args) ?? []),
+          ...getCodexPermissionModeArgs('full-access'),
+        ]
+      : (provider.args ?? []);
   const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
   const selectorArgs: string[] = [];
 

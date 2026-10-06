@@ -18,6 +18,13 @@ import {
   unwrapServerDefaultHeterogeneousModel,
 } from './agencyConfig';
 import {
+  codexPermissionModeRequiresAppServer,
+  getCodexPermissionModeArgs,
+  parseCodexPermissionArgs,
+  resolveCodexPermissionMode,
+  stripCodexPermissionArgs,
+} from './codexPermission';
+import {
   AMP_AGENT_MODES,
   codexModelSupportsFastSpeed,
   getCodexReasoningEffortLevels,
@@ -108,6 +115,128 @@ describe('normalizeHeterogeneousProviderConfig', () => {
     const legacyConfig = { command: 'custom-agent' } as unknown as HeterogeneousProviderConfig;
 
     expect(normalizeHeterogeneousProviderConfig(legacyConfig).type).toBe('claude-code');
+  });
+});
+
+describe('Codex permission modes', () => {
+  it.each([
+    ['full-access', ['--dangerously-bypass-approvals-and-sandbox']],
+    [
+      'ask',
+      [
+        '--sandbox',
+        'workspace-write',
+        '--ask-for-approval',
+        'on-request',
+        '-c',
+        'approvals_reviewer="user"',
+      ],
+    ],
+    [
+      'auto-review',
+      [
+        '--sandbox',
+        'workspace-write',
+        '--ask-for-approval',
+        'on-request',
+        '-c',
+        'approvals_reviewer="auto_review"',
+      ],
+    ],
+    [
+      'read-only',
+      [
+        '--sandbox',
+        'read-only',
+        '--ask-for-approval',
+        'on-request',
+        '-c',
+        'approvals_reviewer="user"',
+      ],
+    ],
+  ] as const)('maps %s to exact CLI arguments', (mode, args) => {
+    expect(getCodexPermissionModeArgs(mode)).toEqual(args);
+    expect(parseCodexPermissionArgs([...args]).mode).toBe(mode);
+  });
+
+  it('resolves the Agent setting before legacy arguments', () => {
+    expect(
+      resolveCodexPermissionMode({
+        args: ['--dangerously-bypass-approvals-and-sandbox'],
+        permissionMode: 'ask',
+      }),
+    ).toEqual({ mode: 'ask', source: 'agent' });
+    expect(
+      resolveCodexPermissionMode({ args: ['--dangerously-bypass-approvals-and-sandbox'] }),
+    ).toEqual({ mode: 'full-access', source: 'legacy' });
+  });
+
+  it('keeps conflicting, partial, and unknown legacy permission arguments custom', () => {
+    expect(
+      parseCodexPermissionArgs([
+        '--dangerously-bypass-approvals-and-sandbox',
+        '--sandbox',
+        'read-only',
+      ]).mode,
+    ).toBe('custom');
+    expect(parseCodexPermissionArgs(['--sandbox', 'workspace-write']).mode).toBe('custom');
+    expect(parseCodexPermissionArgs(['-c', 'approvals_reviewer="other"']).mode).toBe('custom');
+    expect(
+      parseCodexPermissionArgs(['--sandbox', 'read-only', '--ask-for-approval', 'never']).mode,
+    ).toBe('custom');
+  });
+
+  it('removes every legacy permission override before applying a typed mode', () => {
+    expect(
+      stripCodexPermissionArgs([
+        '--model',
+        'gpt-5.5',
+        '--full-auto',
+        '--sandbox=read-only',
+        '-a',
+        'never',
+        '-c',
+        'approval_policy="never"',
+        '--config=approvals_reviewer="user"',
+        '-c',
+        'service_tier="fast"',
+      ]),
+    ).toEqual(['--model', 'gpt-5.5', '-c', 'service_tier="fast"']);
+  });
+
+  it('requires app-server only for a saved approval preset', () => {
+    expect(codexPermissionModeRequiresAppServer(undefined)).toBe(false);
+    expect(codexPermissionModeRequiresAppServer('full-access')).toBe(false);
+    expect(codexPermissionModeRequiresAppServer('ask')).toBe(true);
+  });
+
+  // ROOT CAUSE:
+  // Every typed preset was rejected by the wrapper, so choosing a local preset
+  // permanently prevented remote runs. Full access has an exact CLI equivalent.
+  /** @example Confirmed Full access replaces stale safe args on either remote target. */
+  it('encodes the remote-compatible Full access profile without stale policy overrides', () => {
+    /** @example Wrapper args contain the exact selected policy, while model selection survives. */
+    expect(
+      buildHeteroExecArgs({
+        type: 'codex',
+        permissionMode: 'full-access',
+        args: [
+          '--sandbox',
+          'read-only',
+          '-a',
+          'on-failure',
+          '-c',
+          'approvals_reviewer="guardian_subagent"',
+        ],
+        model: 'gpt-5.5',
+      }),
+    ).toEqual(['--agent-arg=--dangerously-bypass-approvals-and-sandbox', '--model', 'gpt-5.5']);
+  });
+
+  it('refuses to encode a configured mode for the exec transport', () => {
+    expect(() => buildHeteroExecArgs({ permissionMode: 'ask', type: 'codex' })).toThrow(
+      'Configured Codex permission modes require the app-server transport',
+    );
   });
 });
 

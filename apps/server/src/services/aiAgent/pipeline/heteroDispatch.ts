@@ -19,6 +19,7 @@ import {
   applyTopicModelToHeterogeneousProvider,
   buildHeteroExecArgs,
   ChatErrorType,
+  codexPermissionModeRequiresAppServer,
   getWorkingDirEffectivePath,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -532,16 +533,6 @@ export const dispatchHeteroAgent = async (
     runAttachments.imageList && runAttachments.imageList.length > 0
       ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
       : undefined;
-  const heteroExecArgs = isLocalHeterogeneousType(heteroType)
-    ? buildHeteroExecArgs(
-        heterogeneousProvider?.type === heteroType
-          ? applyTopicModelToHeterogeneousProvider(
-              heterogeneousProvider,
-              pinnedHeterogeneousTopicModel,
-            )
-          : { type: heteroType },
-      )
-    : undefined;
 
   const heteroParams = {
     agentType: heteroType,
@@ -966,6 +957,51 @@ export const dispatchHeteroAgent = async (
     } catch (err) {
       log('execAgent: failed to init stream for local hetero: %O', err);
     }
+
+    // Only an explicitly saved approval preset needs the local approval bridge;
+    // legacy raw CLI arguments keep dispatching to remote exec unchanged.
+    if (
+      heteroType === 'codex' &&
+      codexPermissionModeRequiresAppServer(
+        agentConfig.agencyConfig?.heterogeneousProvider?.permissionMode,
+      )
+    ) {
+      const detail =
+        'This Codex permission mode requires the local desktop app and cannot run through a connected device or cloud sandbox.';
+      const terminalReported = await finalizeHeteroDispatchError(deps, {
+        agentId: resolvedAgentId,
+        assistantMessageId,
+        detail,
+        message: 'Codex permission mode is unavailable on this execution target',
+        operationId,
+        topicId,
+      });
+      return {
+        agentId: resolvedAgentId,
+        assistantMessageId,
+        autoStarted: false,
+        createdAt: new Date().toISOString(),
+        error: detail,
+        message: detail,
+        operationId,
+        status: 'error',
+        success: false,
+        terminalReported,
+        timestamp: new Date().toISOString(),
+        topicId,
+        userMessageId: userMessageId ?? parentMessageId ?? '',
+      };
+    }
+    const heteroExecArgs = isLocalHeterogeneousType(heteroType)
+      ? buildHeteroExecArgs(
+          heterogeneousProvider?.type === heteroType
+            ? applyTopicModelToHeterogeneousProvider(
+                heterogeneousProvider,
+                pinnedHeterogeneousTopicModel,
+              )
+            : { type: heteroType },
+        )
+      : undefined;
 
     const heteroPlan = deviceHeteroPlan!;
 

@@ -5,9 +5,17 @@ import { CodexAppServerAdapter } from '../adapters/codexAppServer';
 import type { HeterogeneousAgentRuntimeStatus } from '../spawn/claudeAgentSdkSession';
 import { toStreamEvent } from '../spawn/streamEvent';
 import type { UsageData } from '../types';
+import type { CodexApprovalDecision } from './CodexApprovalBridge';
+import { CodexApprovalBridge } from './CodexApprovalBridge';
 import type { CodexAppServerClient } from './CodexAppServerClient';
 import { CodexAppServerConnectionError } from './CodexAppServerClient';
 import type {
+  ApprovalsReviewer,
+  CommandExecutionRequestApprovalParams,
+  CommandExecutionRequestApprovalResponse,
+  FileChangeRequestApprovalParams,
+  FileChangeRequestApprovalResponse,
+  SandboxMode,
   ThreadResumeParams,
   ThreadResumeResponse,
   ThreadStartParams,
@@ -21,6 +29,18 @@ import type {
 
 const CODEX_APP_SERVER_TRANSPORT = 'codex-app-server' as const;
 
+/**
+ * Normalizes approval-reviewer aliases for comparison without rewriting outgoing RPC params.
+ *
+ * Before:
+ * - "guardian_subagent", "auto_review", "user"
+ *
+ * After:
+ * - "auto_review", "auto_review", "user"
+ */
+const normalizeApprovalsReviewer = (reviewer: ApprovalsReviewer | null | undefined) =>
+  reviewer === 'guardian_subagent' ? 'auto_review' : reviewer;
+
 const toThreadResumeParams = (threadId: string, params: ThreadStartParams): ThreadResumeParams => {
   const resumeParams = { ...params };
   delete resumeParams.ephemeral;
@@ -32,6 +52,7 @@ const toThreadResumeParams = (threadId: string, params: ThreadStartParams): Thre
 
 interface ActiveTurn {
   adapter: CodexAppServerAdapter;
+  approvalBridge: CodexApprovalBridge;
   completion: Promise<void>;
   interruptRequest?: Promise<void>;
   interruptRequested: boolean;
@@ -56,6 +77,8 @@ export interface CodexThreadTurnOptions {
 }
 
 export interface CodexThreadSessionOptions {
+  /** Legacy full-access sessions may fall back to `codex exec` before a native thread exists. */
+  allowExecFallback?: boolean;
   client: CodexAppServerClient;
   initialCumulativeUsage?: UsageData;
   initialModel?: string;
@@ -86,7 +109,7 @@ export class CodexThreadSession {
   private readonly threadUnsubscribers: Array<() => void> = [];
 
   constructor(private readonly options: CodexThreadSessionOptions) {
-    this.canFallback = !options.initialThreadId;
+    this.canFallback = options.allowExecFallback !== false && !options.initialThreadId;
     this.cumulativeUsage = options.initialCumulativeUsage;
     this.model = options.initialModel;
     this.threadId = options.initialThreadId;
@@ -127,6 +150,10 @@ export class CodexThreadSession {
       });
       const activeTurn: ActiveTurn = {
         adapter,
+        approvalBridge: new CodexApprovalBridge({
+          emit: (event) => this.options.onEvents([event]),
+          operationId: options.operationId,
+        }),
         completion,
         interruptRequested: this.interruptRequested,
         notificationQueue: Promise.resolve(),
@@ -174,6 +201,7 @@ export class CodexThreadSession {
       this.emitStatus('error', options.operationId);
       throw error;
     } finally {
+      this.activeTurn?.approvalBridge.cancelAll();
       for (const unsubscribe of traceUnsubscribers) unsubscribe();
       this.activeTurn = undefined;
       this.interruptRequested = false;
@@ -188,6 +216,7 @@ export class CodexThreadSession {
     if (!activeTurn) return;
 
     activeTurn.interruptRequested = true;
+    activeTurn.approvalBridge.cancelAll();
     if (!activeTurn.turnId) return;
     try {
       await this.requestInterrupt(activeTurn);
@@ -209,6 +238,7 @@ export class CodexThreadSession {
     this.interruptRequested = true;
     if (this.activeTurn) {
       this.activeTurn.interruptRequested = true;
+      this.activeTurn.approvalBridge.cancelAll();
       if (this.activeTurn.turnId) {
         void this.requestInterrupt(this.activeTurn).catch((error) => {
           console.error('Failed to interrupt Codex turn while closing the session:', error);
@@ -234,6 +264,7 @@ export class CodexThreadSession {
         params,
       );
       if (this.closedByHost) return;
+      this.assertPermissionProfile(response);
       await this.attachThread(response.thread.id, response.model);
       return;
     }
@@ -250,6 +281,7 @@ export class CodexThreadSession {
         { phase: 'thread-start' },
       );
     }
+    this.assertPermissionProfile(response);
 
     await this.attachThread(threadId, response.model);
     if (!this.options.threadParams.ephemeral) {
@@ -281,15 +313,9 @@ export class CodexThreadSession {
       this.options.client.subscribe(threadId, (method, params) =>
         this.enqueueNotification(method, params),
       ),
-      this.options.client.subscribeServerRequests(threadId, (method) => {
-        if (
-          method === 'item/commandExecution/requestApproval' ||
-          method === 'item/fileChange/requestApproval'
-        ) {
-          return { decision: 'cancel' };
-        }
-        throw new Error(`Unsupported Codex app-server request: ${method}`);
-      }),
+      this.options.client.subscribeServerRequests(threadId, (method, params) =>
+        this.handleServerRequest(method, params),
+      ),
       this.options.client.registerThread(
         threadId,
         toThreadResumeParams(threadId, this.options.threadParams),
@@ -305,6 +331,14 @@ export class CodexThreadSession {
 
   private async handleReconnect(response: ThreadResumeResponse): Promise<void> {
     if (this.closedByHost) return;
+    try {
+      this.assertPermissionProfile(response);
+    } catch (error) {
+      // The client settles reconnect handlers silently; keep the thread detached
+      // and leave a visible reason instead of an unexplained failed resume.
+      console.error('Codex app-server reconnected with a different permission profile:', error);
+      throw error;
+    }
     this.attached = true;
     if (response.model) this.updateModel(response.model);
   }
@@ -312,8 +346,94 @@ export class CodexThreadSession {
   private handleDisconnect(): void {
     if (this.closedByHost) return;
     this.attached = false;
+    this.activeTurn?.approvalBridge.cancelAll();
     if (this.activeTurn && !this.activeTurn.terminalNotificationReceived) {
       this.interruptActiveTurn();
+    }
+  }
+
+  resolveApproval(
+    operationId: string,
+    interventionId: string,
+    decision: CodexApprovalDecision,
+  ): boolean {
+    const activeTurn = this.activeTurn;
+    if (!activeTurn || activeTurn.operationId !== operationId) return false;
+    return activeTurn.approvalBridge.resolve(interventionId, decision);
+  }
+
+  private async handleServerRequest(
+    method: string,
+    params: unknown,
+  ): Promise<CommandExecutionRequestApprovalResponse | FileChangeRequestApprovalResponse> {
+    const activeTurn = this.activeTurn;
+    if (!activeTurn) return { decision: 'cancel' };
+    await activeTurn.notificationQueue;
+    if (
+      this.closedByHost ||
+      activeTurn !== this.activeTurn ||
+      !isRecord(params) ||
+      params.threadId !== this.threadId ||
+      (activeTurn.turnId && params.turnId !== activeTurn.turnId)
+    )
+      return { decision: 'cancel' };
+
+    if (method === 'item/commandExecution/requestApproval') {
+      const request = params as CommandExecutionRequestApprovalParams;
+      const decision = await activeTurn.approvalBridge.request({
+        apiName: 'command_execution',
+        arguments: request,
+        interventionId: request.approvalId ?? request.itemId,
+        toolCallId: request.itemId,
+      });
+      return { decision };
+    }
+    if (method === 'item/fileChange/requestApproval') {
+      const request = params as FileChangeRequestApprovalParams;
+      const decision = await activeTurn.approvalBridge.request({
+        apiName: 'file_change',
+        arguments: request,
+        interventionId: request.itemId,
+        toolCallId: request.itemId,
+      });
+      return { decision };
+    }
+    throw new Error(`Unsupported Codex app-server request: ${method}`);
+  }
+
+  private assertPermissionProfile(response: ThreadResumeResponse | ThreadStartResponse): void {
+    const expected = this.options.threadParams;
+    const sandboxTypes: Record<SandboxMode, string> = {
+      'danger-full-access': 'dangerFullAccess',
+      'read-only': 'readOnly',
+      'workspace-write': 'workspaceWrite',
+    };
+    const expectedSandboxType = expected.sandbox ? sandboxTypes[expected.sandbox] : undefined;
+    const constrainedPreset = expected.config?.['sandbox_workspace_write.network_access'] === false;
+    const expandedScope =
+      constrainedPreset &&
+      ((response.sandbox.type === 'readOnly' && response.sandbox.networkAccess) ||
+        (response.sandbox.type === 'workspaceWrite' &&
+          (response.sandbox.networkAccess ||
+            !response.sandbox.excludeTmpdirEnvVar ||
+            !response.sandbox.excludeSlashTmp ||
+            response.sandbox.writableRoots.some((root) => root !== response.cwd))));
+    if (
+      expandedScope ||
+      response.approvalPolicy !== expected.approvalPolicy ||
+      // NOTICE:
+      // A supported native binary can echo the canonical name for a legacy reviewer alias.
+      // Codex maps guardian_subagent to the same AutoReview enum as auto_review.
+      // Source: `https://github.com/openai/codex/blob/main/codex-rs/protocol/src/config_types.rs#L175`.
+      // Remove alias comparison when supported Codex versions no longer accept the legacy spelling.
+      normalizeApprovalsReviewer(response.approvalsReviewer) !==
+        normalizeApprovalsReviewer(expected.approvalsReviewer) ||
+      (expectedSandboxType && response.sandbox?.type !== expectedSandboxType)
+    ) {
+      throw new CodexAppServerConnectionError(
+        'Codex app-server did not apply the requested permission profile',
+        { phase: 'thread-start' },
+      );
     }
   }
 

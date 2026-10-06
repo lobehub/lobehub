@@ -1,3 +1,4 @@
+import { getCodexPermissionProfile } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -41,6 +42,7 @@ describe('Codex app-server payload builders', () => {
       ),
     ).toEqual({
       approvalPolicy: 'never',
+      approvalsReviewer: 'user',
       config: {
         model_provider: 'openai',
         model_reasoning_effort: 'high',
@@ -54,7 +56,7 @@ describe('Codex app-server payload builders', () => {
       serviceTier: 'fast',
     });
     expect(buildCodexAppServerThreadParams(['--full-auto'], '/workspace')).toMatchObject({
-      approvalPolicy: 'never',
+      approvalPolicy: 'on-request',
       sandbox: 'workspace-write',
     });
     expect(
@@ -62,14 +64,14 @@ describe('Codex app-server payload builders', () => {
     ).toMatchObject({ approvalPolicy: 'never', sandbox: 'danger-full-access' });
   });
 
-  it('keeps unsupported and interactive CLI arguments on the exec transport', () => {
+  it('rejects unsupported arguments while supporting native approval policies', () => {
     expect(getCodexAppServerUnsupportedArgs(['--profile', 'work'])).toEqual(['--profile']);
     expect(getCodexAppServerUnsupportedArgs(['--ignore-user-config'])).toEqual([
       '--ignore-user-config',
     ]);
-    expect(getCodexAppServerUnsupportedArgs(['--full-auto'])).toEqual(['--full-auto']);
-    expect(getCodexAppServerUnsupportedArgs(['-a', 'on-request'])).toEqual(['-a']);
-    expect(getCodexAppServerUnsupportedArgs(['-c', 'approval_policy="untrusted"'])).toEqual(['-c']);
+    expect(getCodexAppServerUnsupportedArgs(['--full-auto'])).toEqual([]);
+    expect(getCodexAppServerUnsupportedArgs(['-a', 'on-request'])).toEqual([]);
+    expect(getCodexAppServerUnsupportedArgs(['-c', 'approval_policy="untrusted"'])).toEqual([]);
     expect(getCodexAppServerUnsupportedArgs(['--search'])).toEqual(['--search']);
     expect(getCodexAppServerUnsupportedArgs(['--model', '--ephemeral'])).toEqual(['--model']);
     expect(getCodexAppServerUnsupportedArgs(['--sandbox', 'invalid'])).toEqual(['--sandbox']);
@@ -94,6 +96,51 @@ describe('Codex app-server payload builders', () => {
         '--cd=src',
         '--ephemeral',
       ]),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      'full-access',
+      { approvalPolicy: 'never', approvalsReviewer: 'user', sandbox: 'danger-full-access' },
+    ],
+    [
+      'ask',
+      { approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'workspace-write' },
+    ],
+    [
+      'auto-review',
+      {
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'auto_review',
+        sandbox: 'workspace-write',
+      },
+    ],
+    [
+      'read-only',
+      { approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'read-only' },
+    ],
+  ] as const)('maps %s to an exact app-server profile', (mode, expected) => {
+    expect(getCodexPermissionProfile(mode)).toEqual(expected);
+    expect(
+      buildCodexAppServerThreadParams(
+        [
+          '--dangerously-bypass-approvals-and-sandbox',
+          '--ask-for-approval',
+          'never',
+          '--sandbox',
+          'danger-full-access',
+        ],
+        '/workspace',
+        undefined,
+        mode,
+      ),
+    ).toMatchObject(expected);
+    expect(
+      getCodexAppServerUnsupportedArgs(
+        ['--ask-for-approval', 'never', '--sandbox', 'danger-full-access'],
+        { permissionMode: mode },
+      ),
     ).toEqual([]);
   });
 
