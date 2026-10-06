@@ -32,11 +32,33 @@ export const normalizeAcceptanceListFacets = (value: unknown): AcceptanceListFac
   return { projectId, scope, source };
 };
 
-export const isAcceptanceListFacetsNarrowed = ({
-  projectId,
-  scope,
-  source,
-}: AcceptanceListFacets): boolean => scope !== 'all' || source !== 'all' || projectId !== undefined;
+/**
+ * The facets a list actually applies. A project page hosts its own list: the
+ * page's project replaces the persisted project facet, which belongs to the
+ * standalone list and is not even offered in the hosted menu.
+ */
+export const effectiveAcceptanceListFacets = (
+  facets: AcceptanceListFacets,
+  hostProjectId?: string,
+): AcceptanceListFacets => (hostProjectId ? { ...facets, projectId: hostProjectId } : facets);
+
+/**
+ * What "show all" resets the persisted facets to. On a hosted list it must not
+ * wipe the standalone list's project choice — the user never saw it here.
+ */
+export const resetAcceptanceListFacets = (
+  facets: AcceptanceListFacets,
+  hostProjectId?: string,
+): AcceptanceListFacets =>
+  hostProjectId
+    ? { ...DEFAULT_ACCEPTANCE_LIST_FACETS, projectId: facets.projectId }
+    : DEFAULT_ACCEPTANCE_LIST_FACETS;
+
+/** Whether the facets narrow the list beyond what its host already fixes. */
+export const isAcceptanceListFacetsNarrowed = (
+  { projectId, scope, source }: AcceptanceListFacets,
+  hostProjectId?: string,
+): boolean => scope !== 'all' || source !== 'all' || (!hostProjectId && projectId !== undefined);
 
 /**
  * Which empty state a zero-result list should render.

@@ -52,9 +52,11 @@ import {
   type AcceptanceListFilter,
   DEFAULT_ACCEPTANCE_LIST_FACETS,
   DEFAULT_ACCEPTANCE_LIST_FILTER,
+  effectiveAcceptanceListFacets,
   isAcceptanceListFacetsNarrowed,
   normalizeAcceptanceListFacets,
   normalizeAcceptanceListFilter,
+  resetAcceptanceListFacets,
 } from './acceptanceListFilter';
 import AcceptanceRow from './AcceptanceRow';
 import {
@@ -317,14 +319,13 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     );
     const filter = normalizeAcceptanceListFilter(storedFilter);
     const facets = normalizeAcceptanceListFacets(storedFacets);
-    const facetsNarrowed = isAcceptanceListFacetsNarrowed(facets);
-    // A project page hosts its own list: the page's project wins over the
-    // persisted project facet, which belongs to the standalone list.
-    const listQuery = {
-      projectId: projectId ?? facets.projectId,
-      scope: facets.scope,
-      source: facets.source,
-    };
+    const facetsNarrowed = isAcceptanceListFacetsNarrowed(facets, projectId);
+    const {
+      projectId: listProjectId,
+      scope,
+      source,
+    } = effectiveAcceptanceListFacets(facets, projectId);
+    const listQuery = { projectId: listProjectId, scope, source };
     const groupMode = normalizeAcceptanceGroupMode(storedGroupMode);
     const debouncedQuery = useDebounce(query.trim(), { wait: 300 });
     const trimmedQuery = query.trim();
@@ -802,7 +803,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                   onClick={() => {
                     setQuery('');
                     setStoredFilter('all');
-                    setStoredFacets(DEFAULT_ACCEPTANCE_LIST_FACETS);
+                    setStoredFacets(resetAcceptanceListFacets(facets, projectId));
                   }}
                 >
                   {t('acceptance.workspace.filters.showAll')}

@@ -41,6 +41,7 @@ import type {
   VerifyRunItem,
 } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import { ExpertiseRejectionWorkflow } from '@/server/workflows/expertiseRejection';
 
 import { type AcceptanceMergeSummary, mergeAcceptanceRounds } from './acceptanceMerge';
@@ -1369,7 +1370,18 @@ export class AcceptanceService {
       if (!cur || round > cur.round) latest.set(run.acceptanceId, { id: run.id, round });
     }
 
-    const reports = await this.reportModel.findByRuns([...latest.values()].map((v) => v.id));
+    // Unscoped on purpose, like the run read above: the run ids derive from
+    // acceptance ids the caller's list query already authorized, and a
+    // participated row's report belongs to its owner — an owner-scoped read
+    // would need one query per owner.
+    const runIds = [...latest.values()].map((v) => v.id);
+    const reports =
+      runIds.length > 0
+        ? await this.db.query.verifyReports.findMany({
+            columns: { totalChecks: true, verifyRunId: true },
+            where: (report, { inArray }) => inArray(report.verifyRunId, runIds),
+          })
+        : [];
     const totalByRun = new Map(reports.map((report) => [report.verifyRunId, report.totalChecks]));
     for (const [acceptanceId, { id: runId }] of latest) {
       const total = totalByRun.get(runId);
@@ -1404,7 +1416,7 @@ export class AcceptanceService {
       statuses: statusesForFilter(filter),
       unbounded: Boolean(normalizedQuery),
     });
-    const subjects = await this.resolveSubjectsByOwner(candidates);
+    const subjects = await this.resolveSubjectsForList(candidates);
     const matched = normalizedQuery
       ? candidates
           .filter((row) =>
@@ -1444,38 +1456,9 @@ export class AcceptanceService {
     });
 
     return {
-      items: await this.decorateListRows(items, await this.resolveSubjectsByOwner(items)),
+      items: await this.decorateListRows(items, await this.resolveSubjectsForList(items)),
       nextCursor,
     };
-  };
-
-  /**
-   * Run a per-scope read for each row in the row's OWN scope. A participated
-   * row may belong to another user or workspace, whose task/topic/report is
-   * invisible to the caller's models — the bundle reads it as the owner too,
-   * so the list shows the same title and check count the detail page does.
-   */
-  private readByOwner = async <T>(
-    rows: AcceptanceItem[],
-    read: (service: AcceptanceService, group: AcceptanceItem[]) => Promise<Map<string, T>>,
-  ): Promise<Map<string, T>> => {
-    const groups = new Map<string, AcceptanceItem[]>();
-    for (const row of rows) {
-      const key = this.isInOwnScope(row) ? '' : `${row.userId}|${row.workspaceId ?? ''}`;
-      groups.set(key, [...(groups.get(key) ?? []), row]);
-    }
-
-    const resolved = await Promise.all(
-      [...groups].map(([key, group]) =>
-        read(
-          key === ''
-            ? this
-            : new AcceptanceService(this.db, group[0].userId, group[0].workspaceId ?? undefined),
-          group,
-        ),
-      ),
-    );
-    return new Map(resolved.flatMap((map) => [...map]));
   };
 
   private isInOwnScope = (row: AcceptanceItem) =>
@@ -1483,17 +1466,88 @@ export class AcceptanceService {
       ? row.workspaceId === this.workspaceId
       : !this.workspaceId && row.userId === this.userId;
 
-  private resolveSubjectsByOwner = (rows: AcceptanceItem[]) =>
-    this.readByOwner(rows, (service, group) => service.resolveSubjects(group));
+  /**
+   * Subject headers for a mixed list. Rows in the caller's own scope go through
+   * the scoped models as before. A participated row may belong to any number of
+   * other owners, whose task/topic/document the caller's models cannot see —
+   * those resolve in ONE unscoped read per subject type, so the cost stays
+   * fixed however many owners a page spans. Safe because the list query has
+   * already applied the read rule to these rows, and the bundle shows the same
+   * title to anyone who can open them.
+   */
+  private resolveSubjectsForList = async (
+    rows: AcceptanceItem[],
+  ): Promise<Map<string, AcceptanceSubjectSummary>> => {
+    const own = rows.filter(this.isInOwnScope);
+    const foreign = rows.filter((row) => !this.isInOwnScope(row));
+    const [ownSubjects, foreignSubjects] = await Promise.all([
+      own.length > 0 ? this.resolveSubjects(own) : new Map<string, AcceptanceSubjectSummary>(),
+      this.resolveForeignSubjects(foreign),
+    ]);
+    return new Map([...ownSubjects, ...foreignSubjects]);
+  };
+
+  private resolveForeignSubjects = async (
+    rows: AcceptanceItem[],
+  ): Promise<Map<string, AcceptanceSubjectSummary>> => {
+    const result = new Map<string, AcceptanceSubjectSummary>();
+    if (rows.length === 0) return result;
+
+    const idsOf = (type: AcceptanceSubjectType) =>
+      rows.filter((row) => row.subjectType === type).map((row) => row.subjectId);
+    const titles = new Map<string, string | null>();
+    try {
+      const [taskIds, topicIds, documentIds] = [idsOf('task'), idsOf('topic'), idsOf('document')];
+      const [taskRows, topicRows, documentRows] = await Promise.all([
+        taskIds.length > 0
+          ? this.db.query.tasks.findMany({
+              columns: { id: true, identifier: true, name: true },
+              where: (task, { and, inArray }) =>
+                and(inArray(task.id, taskIds), notTrashed(task.isDeleted)),
+            })
+          : [],
+        topicIds.length > 0
+          ? this.db.query.topics.findMany({
+              columns: { id: true, title: true },
+              where: (topic, { and, inArray }) =>
+                and(inArray(topic.id, topicIds), notTrashed(topic.isDeleted)),
+            })
+          : [],
+        documentIds.length > 0
+          ? this.db.query.documents.findMany({
+              columns: { id: true, title: true },
+              where: (document, { and, inArray }) =>
+                and(inArray(document.id, documentIds), notTrashed(document.isDeleted)),
+            })
+          : [],
+      ]);
+      for (const task of taskRows) titles.set(`task:${task.id}`, task.name ?? task.identifier);
+      for (const topic of topicRows) titles.set(`topic:${topic.id}`, topic.title ?? null);
+      for (const document of documentRows)
+        titles.set(`document:${document.id}`, document.title ?? null);
+    } catch (error) {
+      log('resolveForeignSubjects failed (non-fatal): %O', error);
+    }
+
+    for (const row of rows) {
+      const override = row.metadata?.title;
+      const overrideTitle =
+        typeof override === 'string' && override.trim() ? override.trim() : null;
+      result.set(row.id, {
+        id: row.subjectId,
+        title: overrideTitle ?? titles.get(`${row.subjectType}:${row.subjectId}`) ?? null,
+        type: row.subjectType as AcceptanceSubjectType,
+      });
+    }
+    return result;
+  };
 
   private decorateListRows = async (
     rows: AcceptanceItem[],
     subjects: Map<string, AcceptanceSubjectSummary>,
   ) => {
     const [checkCounts, projects] = await Promise.all([
-      this.readByOwner(rows, (service, group) =>
-        service.latestCheckCounts(group.map((row) => row.id)),
-      ),
+      this.latestCheckCounts(rows.map((row) => row.id)),
       // Projects stay in the caller's scope: another owner's project name is
       // theirs, and a row filed under it simply reads as unfiled here.
       this.resolveProjects(rows),

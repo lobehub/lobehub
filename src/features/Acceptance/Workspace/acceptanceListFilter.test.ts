@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   acceptanceListEmptyVariant,
+  effectiveAcceptanceListFacets,
   isAcceptanceListFacetsNarrowed,
   normalizeAcceptanceListFacets,
   normalizeAcceptanceListFilter,
+  resetAcceptanceListFacets,
 } from './acceptanceListFilter';
 
 describe('normalizeAcceptanceListFilter', () => {
@@ -80,5 +82,29 @@ describe('isAcceptanceListFacetsNarrowed', () => {
         searching: false,
       }),
     ).toBe('filtered');
+  });
+});
+
+describe('hosted project lists', () => {
+  const stored = { projectId: 'standalone-pick', scope: 'all', source: 'all' } as const;
+
+  it('applies the host project instead of the persisted standalone pick', () => {
+    expect(effectiveAcceptanceListFacets(stored, 'host-project').projectId).toBe('host-project');
+    expect(effectiveAcceptanceListFacets(stored).projectId).toBe('standalone-pick');
+  });
+
+  it('does not count the hidden persisted project as an active narrowing', () => {
+    expect(isAcceptanceListFacetsNarrowed(stored, 'host-project')).toBe(false);
+    expect(isAcceptanceListFacetsNarrowed({ ...stored, source: 'goal' }, 'host-project')).toBe(
+      true,
+    );
+    expect(isAcceptanceListFacetsNarrowed(stored)).toBe(true);
+  });
+
+  it('keeps the standalone project pick when "show all" resets a hosted list', () => {
+    expect(resetAcceptanceListFacets({ ...stored, scope: 'participated' }, 'host-project')).toEqual(
+      { projectId: 'standalone-pick', scope: 'all', source: 'all' },
+    );
+    expect(resetAcceptanceListFacets(stored)).toEqual({ scope: 'all', source: 'all' });
   });
 });
