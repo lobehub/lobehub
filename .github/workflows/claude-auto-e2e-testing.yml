@@ -76,7 +76,7 @@ jobs:
       - name: Copy prompts
         run: |
           mkdir -p /tmp/claude-prompts
-          cp .claude/prompts/auto-e2e-testing.md /tmp/claude-prompts/
+          cp .claude/prompts/e2e-coverage.md /tmp/claude-prompts/auto-e2e-testing.md
           cp .claude/prompts/security-rules.md /tmp/claude-prompts/
           cp e2e/CLAUDE.md /tmp/claude-prompts/e2e-guide.md
 
