@@ -371,6 +371,47 @@ describe('DashboardModel', () => {
       ).toHaveLength(1);
     });
 
+    it('lists items of many readable boards at once, with the same rules as listItems', async () => {
+      const model = new DashboardModel(serverDB, userId);
+      const widgetModel = new WidgetModel(serverDB, userId);
+      const first = await model.create({ title: 'First' });
+      const second = await model.create({ title: 'Second' });
+      const trashedBoard = await model.create({ title: 'Trashed' });
+      const theirs = await new DashboardModel(serverDB, otherUserId).create({ title: 'Theirs' });
+      const a = await widgetModel.create({ title: 'a' });
+      const b = await widgetModel.create({ title: 'b' });
+      const gone = await widgetModel.create({ title: 'gone' });
+      await model.addItem(first.id, b.id);
+      await model.addItem(first.id, a.id);
+      await model.addItem(first.id, gone.id);
+      await model.addItem(second.id, a.id);
+      await model.addItem(trashedBoard.id, a.id);
+      await widgetModel.trash(gone.id);
+      await model.trash(trashedBoard.id);
+
+      const rows = await model.listItemsForDashboards([
+        first.id,
+        second.id,
+        trashedBoard.id,
+        theirs.id,
+        'not-a-uuid',
+      ]);
+      const byBoard = (id: string) =>
+        rows.filter((r) => r.item.dashboardId === id).map((r) => r.widget.title);
+      for (const board of [first, second]) {
+        expect(byBoard(board.id)).toEqual(
+          (await model.listItems(board.id)).map((r) => r.widget.title),
+        );
+      }
+      expect(byBoard(first.id)).toEqual(['b', 'a']);
+      expect(byBoard(second.id)).toEqual(['a']);
+      expect(rows).toHaveLength(3);
+      expect(await model.listItemsForDashboards([])).toEqual([]);
+      expect(
+        await new DashboardModel(serverDB, otherUserId).listItemsForDashboards([first.id]),
+      ).toEqual([]);
+    });
+
     it('lists the readable, live boards a widget is placed on', async () => {
       const model = new DashboardModel(serverDB, userId);
       const widget = await new WidgetModel(serverDB, userId).create({ title: 'w' });

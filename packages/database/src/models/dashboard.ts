@@ -319,6 +319,24 @@ export class DashboardModel {
       .orderBy(asc(dashboardItems.sortOrder), asc(dashboardItems.createdAt));
   }
 
+  /**
+   * {@link listItems} for many boards in one query: items of the readable
+   * boards among `dashboardIds` (unreadable, trashed or unknown ids yield
+   * nothing), each with its readable widget, in display order per board.
+   */
+  async listItemsForDashboards(dashboardIds: string[]) {
+    const ids = [...new Set(dashboardIds.filter(isUuid))];
+    if (ids.length === 0) return [];
+
+    return this.db
+      .select({ item: dashboardItems, widget: widgets })
+      .from(dashboardItems)
+      .innerJoin(dashboards, eq(dashboardItems.dashboardId, dashboards.id))
+      .innerJoin(widgets, eq(dashboardItems.widgetId, widgets.id))
+      .where(and(inArray(dashboardItems.dashboardId, ids), this.readable(), this.readableWidget()))
+      .orderBy(asc(dashboardItems.sortOrder), asc(dashboardItems.createdAt));
+  }
+
   /** Readable boards a widget is placed on, in board order. */
   async listByWidget(widgetId: string) {
     if (!isUuid(widgetId)) return [];

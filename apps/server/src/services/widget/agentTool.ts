@@ -6,7 +6,6 @@ import type {
 import type { DashboardToolService } from '@lobechat/builtin-tool-dashboard/executionRuntime';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { eq } from 'drizzle-orm';
-import pMap from 'p-map';
 import { z } from 'zod';
 
 import { DashboardModel } from '@/database/models/dashboard';
@@ -187,19 +186,20 @@ export const createDashboardToolService = (
         projectId ? dashboards.listByProject(projectId) : [],
         dashboards.list({}),
       ]);
-      return pMap(
-        [...projectBoards, ...homeBoards],
-        async (board) => ({
-          id: board.id,
-          projectId: board.projectId,
-          title: board.title,
-          widgets: (await dashboards.listItems(board.id)).map(({ widget }) => ({
-            id: widget.id,
-            title: widget.title,
-          })),
-        }),
-        { concurrency: 5 },
-      );
+      const boards = [...projectBoards, ...homeBoards];
+      const items = await dashboards.listItemsForDashboards(boards.map(({ id }) => id));
+      const widgetsByBoard = new Map<string, { id: string; title: string }[]>();
+      for (const { item, widget } of items) {
+        const list = widgetsByBoard.get(item.dashboardId) ?? [];
+        list.push({ id: widget.id, title: widget.title });
+        widgetsByBoard.set(item.dashboardId, list);
+      }
+      return boards.map((board) => ({
+        id: board.id,
+        projectId: board.projectId,
+        title: board.title,
+        widgets: widgetsByBoard.get(board.id) ?? [],
+      }));
     },
 
     listRuns: async (widgetId, limit) => {

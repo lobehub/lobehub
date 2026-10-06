@@ -82,6 +82,7 @@ beforeEach(async () => {
 const teammateId = 'dashboard-tool-teammate';
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await db.delete(users).where(inArray(users.id, [userId, teammateId]));
 });
 
@@ -255,6 +256,55 @@ describe('createDashboardToolService', () => {
     }
     expect(runSandbox).not.toHaveBeenCalled();
     expect((await service.listDashboards())[0].widgets.map(({ title }) => title)).toEqual(['Mine']);
+  });
+
+  it('loads the widgets of every listed board in one batch', async () => {
+    const service = createDashboardToolService(db, {
+      ...scope,
+      projectId,
+      topicId: projectTopicId,
+    });
+    const create = (title: string) =>
+      service.createWidgetDraft({ content: statDraft, description: '', title });
+    const [a, b, c] = [await create('A'), await create('B'), await create('C')];
+    const projectBoard = await service.createDashboardWithWidget('Project', a.widgetId);
+    await service.addToDashboard(projectBoard.id, b.widgetId);
+    const home = await new DashboardModel(db, userId).create({ title: 'Home' });
+    const empty = await new DashboardModel(db, userId).create({ title: 'Empty' });
+    const homeWidget = await createDashboardToolService(db, scope).createWidgetDraft({
+      content: statDraft,
+      description: '',
+      title: 'Home widget',
+    });
+    await new DashboardModel(db, userId).addItem(home.id, homeWidget.widgetId);
+    await new DashboardModel(db, userId).addItem(home.id, c.widgetId);
+
+    const perBoard = vi.spyOn(DashboardModel.prototype, 'listItems');
+    const batch = vi.spyOn(DashboardModel.prototype, 'listItemsForDashboards');
+
+    expect(await service.listDashboards()).toEqual([
+      {
+        id: projectBoard.id,
+        projectId,
+        title: 'Project',
+        widgets: [
+          { id: a.widgetId, title: 'A' },
+          { id: b.widgetId, title: 'B' },
+        ],
+      },
+      {
+        id: home.id,
+        projectId: null,
+        title: 'Home',
+        widgets: [
+          { id: homeWidget.widgetId, title: 'Home widget' },
+          { id: c.widgetId, title: 'C' },
+        ],
+      },
+      { id: empty.id, projectId: null, title: 'Empty', widgets: [] },
+    ]);
+    expect(perBoard).not.toHaveBeenCalled();
+    expect(batch).toHaveBeenCalledTimes(1);
   });
 
   it('creates no board when the widget cannot be placed on it', async () => {
