@@ -140,10 +140,10 @@ export class ExpertiseRuleRepository {
     const commitId = crypto.randomUUID();
     const reflectionKey = `material:${material.type}:${commitId}`;
     return this.inTransaction(async (model) => {
-      const runs = new Map<string, string>();
+      const runs = new Map<string, string | null>();
+      // Null for a domain outside the caller's scope: nothing is numbered or filed there.
       const runFor = async (domainId: string) => {
-        const existing = runs.get(domainId);
-        if (existing) return existing;
+        if (runs.has(domainId)) return runs.get(domainId)!;
         const runId = await model.insertMaterialRun({
           domainId,
           reflectionKey,
@@ -162,6 +162,7 @@ export class ExpertiseRuleRepository {
           const target = await model.lockLesson(item.intoId);
           if (!target || target.status !== 'active') continue;
           const runId = await runFor(target.domainId);
+          if (!runId) continue;
           await model.insertMaterialHit({
             domainId: target.domainId,
             lessonId: target.id,
@@ -185,6 +186,7 @@ export class ExpertiseRuleRepository {
         if (!domainId) continue;
 
         const runId = await runFor(domainId);
+        if (!runId) continue;
         const created = await model.createRule({ ...item.rule, domainId, originRunId: runId });
         if (!created) continue;
         const hitId = await model.insertMaterialHit({

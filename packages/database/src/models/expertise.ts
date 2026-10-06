@@ -1195,7 +1195,8 @@ export class ExpertiseModel {
   /**
    * One reading of a material the reviewer brought, as a run on one domain. `reflectionKey`
    * starts with `material:` so counts and sources can tell it apart from rejections and
-   * conversations the system observed on its own.
+   * conversations the system observed on its own. Returns null, writing nothing, when the domain
+   * is not one the caller may file into.
    */
   insertMaterialRun = async (params: {
     domainId: string;
@@ -1206,11 +1207,13 @@ export class ExpertiseModel {
     // The domain row lock queues this behind any other writer numbering runs in the same domain
     // (another distillation, background ingestion); otherwise both read the same maximum and the
     // unique `(domain_id, run_index)` index aborts one whole save. Held until the caller commits.
-    await this.db
+    // Read in the caller's scope, so a foreign domain id is neither locked nor numbered.
+    const [domain] = await this.db
       .select({ id: expertiseDomains.id })
       .from(expertiseDomains)
-      .where(eq(expertiseDomains.id, params.domainId))
+      .where(and(eq(expertiseDomains.id, params.domainId), this.scopeWhere()))
       .for('update');
+    if (!domain) return null;
     const [prior] = await this.db
       .select({ value: sql<number | null>`max(${expertiseRuns.runIndex})` })
       .from(expertiseRuns)

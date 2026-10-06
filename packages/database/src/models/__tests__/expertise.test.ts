@@ -940,6 +940,37 @@ describe('ExpertiseModel', () => {
     expect(new Set(runs.map(({ runIndex }) => runIndex)).size).toBe(runs.length);
   });
 
+  it("refuses to number a run or file a rule into another user's domain", async () => {
+    await seedRuleGroup();
+
+    const results = await new ExpertiseRuleRepository(serverDB, userId).commitDistilled(
+      { subjectId: null, subjectType: 'standalone', title: 'notes', type: 'text' },
+      [
+        {
+          domainId: 'rules-foreign-domain',
+          kind: 'create',
+          quote: 'always rebase',
+          rule: { title: 'Rebase before delivering' },
+        },
+      ],
+    );
+
+    expect(results).toEqual([]);
+    const runs = await serverDB
+      .select({ id: expertiseRuns.id })
+      .from(expertiseRuns)
+      .where(eq(expertiseRuns.domainId, 'rules-foreign-domain'));
+    expect(runs).toEqual([]);
+    expect(
+      await new ExpertiseModel(serverDB, userId).insertMaterialRun({
+        domainId: 'rules-foreign-domain',
+        reflectionKey: 'material:text:x',
+        subjectId: 'x',
+        subjectType: 'standalone',
+      }),
+    ).toBeNull();
+  });
+
   it('files rules distilled from a document and records a restatement on the rule it repeats', async () => {
     const { first } = await seedRuleGroup();
     await serverDB.insert(documents).values({
