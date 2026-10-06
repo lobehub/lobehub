@@ -1,4 +1,4 @@
-import { buildGoalManagerPrompt } from '@lobechat/prompts';
+import { buildGoalManagerPrompt, GOAL_MANAGER_PROMPT_VERSION } from '@lobechat/prompts';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
 import { describe, expect, it } from 'vitest';
@@ -56,7 +56,7 @@ describe('goalTurn block', () => {
       maxTurns: '12',
       trigger: 'settled',
       turn: '3',
-      version: 'v7',
+      version: GOAL_MANAGER_PROMPT_VERSION,
     });
 
     const parsed = parseGoalTurn(found[0].data.hChildren[0].value);

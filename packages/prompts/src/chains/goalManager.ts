@@ -10,6 +10,8 @@ import { GOAL_TURN_TAG } from '@lobechat/const';
  * turn ended, and only the review feedback new since then, with the repeating
  * contract in `<instruction>` — so the client renders it as a card instead of a
  * wall of identical text every turn.
+ * v8 lets an escalation carry an `ask` — the owner's question with concrete
+ * answers (and, on a takeover, what each answer does to the blocked Task).
  */
 export const GOAL_MANAGER_PROMPT_VERSION = 'v8';
 
