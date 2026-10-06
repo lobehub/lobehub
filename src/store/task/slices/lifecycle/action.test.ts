@@ -1,11 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createReplicaState } from '@/libs/replica';
+import { cacheScope, createReplicaState, REPLICA_INDEX_KEY } from '@/libs/replica';
 import { taskService } from '@/services/task';
 import { useUserStore } from '@/store/user';
 
 import { useTaskStore } from '../../store';
 import { taskDetailRefreshes } from '../detail/testUtils';
+import {
+  taskGroupListQueryKey,
+  taskGroupListResource,
+  taskListQueryKey,
+  taskListResource,
+} from '../list/projection';
 
 vi.mock('@/services/task', () => ({
   taskService: {
@@ -328,6 +334,47 @@ describe('TaskLifecycleSliceAction', () => {
         { key: 'done', tasks: [], total: 0 },
       ]);
       vi.mocked(mutate).mockReset();
+    });
+
+    it('carries a committed status into persisted lists and boards that are not loaded', async () => {
+      const scope = `task-status-${crypto.randomUUID()}:personal`;
+      vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+      const listKey = taskListQueryKey({ visibility: 'all' });
+      const boardKey = taskGroupListQueryKey({ groupBy: 'status', visibility: 'all' });
+      const seed = async (resource: any, queryKey: string, data: unknown) => {
+        await resource.storage.set({ queryKey, scope }, { data, updatedAt: 1 });
+        await resource.storage.set(
+          { queryKey: REPLICA_INDEX_KEY, scope },
+          { data: [queryKey], updatedAt: 1 },
+        );
+      };
+      await seed(taskListResource, listKey, {
+        items: [{ identifier: 'T-1', status: 'backlog' }],
+        total: 1,
+      });
+      await seed(taskGroupListResource, boardKey, {
+        groupBy: 'status',
+        groups: [
+          { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
+          { key: 'done', tasks: [], total: 0 },
+        ],
+      });
+      vi.mocked(taskService.updateStatus).mockResolvedValue({ success: true } as any);
+
+      // Changed from the detail page: neither collection is in memory.
+      await useTaskStore.getState().updateTaskStatus('T-1', 'completed');
+
+      await vi.waitFor(async () => {
+        const list = await taskListResource.storage!.get({ queryKey: listKey, scope });
+        expect(list?.data.items[0].status).toBe('completed');
+        const board = await taskGroupListResource.storage!.get({ queryKey: boardKey, scope });
+        expect(board?.data.groups).toMatchObject([
+          { key: 'backlog', tasks: [], total: 0 },
+          { key: 'done', tasks: [{ identifier: 'T-1', status: 'completed' }], total: 1 },
+        ]);
+      });
+      vi.restoreAllMocks();
     });
 
     it('should not let an older failed request roll back a newer status', async () => {

@@ -175,8 +175,10 @@ export class TaskListSliceActionImpl {
 
   /**
    * Optimistic patch of a task in every loaded list and board (a status board
-   * moves the card). `commit` keeps it as confirmed until the refresh lands;
-   * `rollback` restores every collection exactly, card order included.
+   * moves the card). `commit` keeps it as confirmed until the refresh lands and
+   * applies the change to persisted lists and boards that are not loaded, so
+   * reopening one later does not paint the old status; `rollback` restores
+   * every loaded collection exactly, card order included.
    */
   internal_beginCollectionTaskOptimistic = (
     identifier: string,
@@ -187,7 +189,11 @@ export class TaskListSliceActionImpl {
       ...this.#taskGroupList.beginEntityOptimistic<CollectionTask>(identifier, fn),
     ];
     return {
-      commit: () => tokens.forEach((token) => token.commit()),
+      commit: () => {
+        tokens.forEach((token) => token.commit());
+        void this.#taskList.patchStoredEntity<CollectionTask>(identifier, fn);
+        void this.#taskGroupList.patchStoredEntity<CollectionTask>(identifier, fn);
+      },
       rollback: () => tokens.forEach((token) => token.rollback()),
     };
   };
