@@ -201,6 +201,33 @@ describe('metricRouter', () => {
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
       expect(mockModel.findBySubject).not.toHaveBeenCalled();
     });
+
+    it('refuses every write to a widget series, even for a caller who can see it', async () => {
+      mockWidgetFindById.mockResolvedValue({ id: 'widget-1' });
+      mockModel.findById.mockResolvedValue({
+        id: 'mtr_w',
+        subjectId: 'widget-1',
+        subjectType: 'widget',
+        userId: 'user-1',
+      });
+
+      await expect(
+        caller.upsertSeries({ key: 'value', subjectId: 'widget-1', subjectType: 'widget' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(caller.addPoint({ id: 'mtr_w', value: 1 })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      await expect(caller.updateSeries({ id: 'mtr_w', title: 'x' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      await expect(caller.deleteSeries({ id: 'mtr_w' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(mockModel.ensure).not.toHaveBeenCalled();
+      expect(mockModel.addPoint).not.toHaveBeenCalled();
+      expect(mockModel.update).not.toHaveBeenCalled();
+      expect(mockModel.delete).not.toHaveBeenCalled();
+    });
   });
 
   describe('listSeriesWithPoints', () => {
