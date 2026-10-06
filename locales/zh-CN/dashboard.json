@@ -104,6 +104,8 @@
   "publish.scriptChanges": "相对已上线 v{{version}} 的变更",
   "publish.scriptNew": "脚本",
   "rename.title": "重命名看板",
+  "review.loadFailed": "无法加载审阅内容，暂不能批准",
+  "review.versionMissing": "这个版本已不可用，无法审阅。请拒绝该请求，并让智能体重新尝试。",
   "run.empty": "这个组件还没有运行过。",
   "run.error": "错误",
   "run.logEmpty": "（空）",

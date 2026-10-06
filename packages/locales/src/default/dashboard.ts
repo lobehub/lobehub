@@ -115,6 +115,9 @@ export default {
   'publish.scriptChanges': 'Changes from live v{{version}}',
   'publish.scriptNew': 'Script',
   'rename.title': 'Rename dashboard',
+  'review.loadFailed': "Couldn't load the review, so approval is on hold",
+  'review.versionMissing':
+    "This version is no longer available, so it can't be reviewed. Reject the request and ask the agent to try again.",
   'run.empty': 'This widget has not run yet.',
   'run.error': 'Error',
   'run.logEmpty': '(empty)',

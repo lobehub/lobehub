@@ -2,17 +2,18 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { Alert, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 
 import WidgetCard from '../WidgetCard';
 import { ScriptDiff } from '../WidgetDetail/VersionDiff';
 import { findSucceededPreviewRun, toPreviewWidget } from './previewWidget';
-import { AccessFacts, Fact, reviewStyles } from './ReviewFacts';
+import { AccessFacts, Fact, reviewStyles, ReviewUnavailable } from './ReviewFacts';
+import { useWidgetReview } from './useWidgetReview';
 
 interface PublishReviewProps {
+  /** Holds the host's approve action until the version that goes live is on screen. */
+  onApprovalBlockedChange?: (blocked: boolean) => void;
   /**
    * Called once with the version shown when the request named none, so the
    * caller can persist it into the request: approval then publishes exactly
@@ -31,90 +32,85 @@ interface PublishReviewProps {
  * its dry run, what it means, what it may touch (network, credentials), how
  * often it runs, and exactly how its code differs from what is live now.
  */
-const PublishReview = memo<PublishReviewProps>(({ widgetId, versionId, summary, onPinVersion }) => {
-  const { t } = useTranslation('dashboard');
-  const useFetchWidgetDetail = useDashboardStore((s) => s.useFetchWidgetDetail);
-  const useFetchWidgetRuns = useDashboardStore((s) => s.useFetchWidgetRuns);
-  const useFetchWidgetVersions = useDashboardStore((s) => s.useFetchWidgetVersions);
-  useFetchWidgetDetail(widgetId);
-  useFetchWidgetRuns(widgetId);
-  useFetchWidgetVersions(widgetId);
-  const widget = useDashboardStore(dashboardSelectors.widgetDetail(widgetId));
-  const runs = useDashboardStore(dashboardSelectors.widgetRuns(widgetId));
-  const versions = useDashboardStore(dashboardSelectors.widgetVersions(widgetId));
-
-  const targetId = versionId ?? widget?.draftVersionId ?? undefined;
-  const target = versions.find((version) => version.id === targetId);
-  const live = versions.find((version) => version.status === 'published');
-
-  const unpinnedTargetId = versionId ? undefined : target?.id;
-  useEffect(() => {
-    if (unpinnedTargetId) onPinVersion?.(unpinnedTargetId);
-  }, [unpinnedTargetId, onPinVersion]);
-
-  if (!widget || !target) {
-    return (
-      <Flexbox gap={10}>
-        <Skeleton height={140} width={'100%'} />
-        <Skeleton.Text rows={3} />
-      </Flexbox>
+const PublishReview = memo<PublishReviewProps>(
+  ({ widgetId, versionId, summary, onApprovalBlockedChange, onPinVersion }) => {
+    const { t } = useTranslation('dashboard');
+    const { error, retry, runs, status, target, versions, widget } = useWidgetReview(
+      widgetId,
+      versionId,
+      { onApprovalBlockedChange, onPinVersion, withRuns: true },
     );
-  }
+    const live = versions.find((version) => version.status === 'published');
 
-  const run = findSucceededPreviewRun(runs, target.id);
-  const manifest = target.manifest;
-  const schedule = manifest?.schedule?.pattern ?? widget.schedulePattern;
+    if (status === 'error' || status === 'missing') {
+      return <ReviewUnavailable error={error} missing={status === 'missing'} onRetry={retry} />;
+    }
 
-  return (
-    <Flexbox data-widget-publish-review={widgetId} gap={12}>
-      <Flexbox gap={4}>
-        <Text weight={600}>{`${widget.title} · v${target.version}`}</Text>
-        {summary && <Text fontSize={13}>{summary}</Text>}
-        <Text fontSize={12} type={'secondary'}>
-          {t('publish.intro')}
-        </Text>
-      </Flexbox>
+    // Runs are part of the review too: never show "no successful run" before they load.
+    if (!widget || !target || status === 'loading') {
+      return (
+        <Flexbox gap={10}>
+          <Skeleton height={140} width={'100%'} />
+          <Skeleton.Text rows={3} />
+        </Flexbox>
+      );
+    }
 
-      {run ? (
+    const run = findSucceededPreviewRun(runs, target.id);
+    const manifest = target.manifest;
+    const schedule = manifest?.schedule?.pattern ?? widget.schedulePattern;
+
+    return (
+      <Flexbox data-widget-publish-review={widgetId} gap={12}>
+        <Flexbox gap={4}>
+          <Text weight={600}>{`${widget.title} · v${target.version}`}</Text>
+          {summary && <Text fontSize={13}>{summary}</Text>}
+          <Text fontSize={12} type={'secondary'}>
+            {t('publish.intro')}
+          </Text>
+        </Flexbox>
+
+        {run ? (
+          <Flexbox gap={6}>
+            <Text fontSize={12} type={'secondary'} weight={500}>
+              {t('publish.previewTitle')}
+            </Text>
+            <div style={{ height: run.output?.type === 'stat' ? 150 : 240 }}>
+              <WidgetCard view={target.view} widget={toPreviewWidget(widget, run)} />
+            </div>
+          </Flexbox>
+        ) : (
+          <Alert showIcon title={t('publish.noSuccessfulRun')} type={'warning'} />
+        )}
+
+        <Flexbox className={reviewStyles.section} gap={6}>
+          <Fact label={t('chat.definition')}>
+            <Text fontSize={12}>{widget.description || t('chat.noDefinition')}</Text>
+          </Fact>
+          <Fact label={t('publish.schedule')}>
+            <Text fontSize={12}>
+              {schedule
+                ? [schedule, manifest?.schedule?.timezone ?? widget.scheduleTimezone]
+                    .filter(Boolean)
+                    .join(' · ')
+                : t('publish.scheduleNone')}
+            </Text>
+          </Fact>
+          <AccessFacts manifest={manifest} />
+        </Flexbox>
+
         <Flexbox gap={6}>
           <Text fontSize={12} type={'secondary'} weight={500}>
-            {t('publish.previewTitle')}
+            {live && live.id !== target.id
+              ? t('publish.scriptChanges', { version: live.version })
+              : t('publish.scriptNew')}
           </Text>
-          <div style={{ height: run.output?.type === 'stat' ? 150 : 240 }}>
-            <WidgetCard view={target.view} widget={toPreviewWidget(widget, run)} />
-          </div>
+          <ScriptDiff base={live && live.id !== target.id ? live : undefined} target={target} />
         </Flexbox>
-      ) : (
-        <Alert showIcon title={t('publish.noSuccessfulRun')} type={'warning'} />
-      )}
-
-      <Flexbox className={reviewStyles.section} gap={6}>
-        <Fact label={t('chat.definition')}>
-          <Text fontSize={12}>{widget.description || t('chat.noDefinition')}</Text>
-        </Fact>
-        <Fact label={t('publish.schedule')}>
-          <Text fontSize={12}>
-            {schedule
-              ? [schedule, manifest?.schedule?.timezone ?? widget.scheduleTimezone]
-                  .filter(Boolean)
-                  .join(' · ')
-              : t('publish.scheduleNone')}
-          </Text>
-        </Fact>
-        <AccessFacts manifest={manifest} />
       </Flexbox>
-
-      <Flexbox gap={6}>
-        <Text fontSize={12} type={'secondary'} weight={500}>
-          {live && live.id !== target.id
-            ? t('publish.scriptChanges', { version: live.version })
-            : t('publish.scriptNew')}
-        </Text>
-        <ScriptDiff base={live && live.id !== target.id ? live : undefined} target={target} />
-      </Flexbox>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 PublishReview.displayName = 'DashboardPublishReview';
 

@@ -7,6 +7,8 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
+
 export const reviewStyles = createStaticStyles(({ css }) => ({
   label: css`
     flex: none;
@@ -68,3 +70,26 @@ export const AccessFacts = memo<{ manifest?: WidgetManifest | null }>(({ manifes
 });
 
 AccessFacts.displayName = 'DashboardReviewAccessFacts';
+
+/**
+ * The review could not be shown — a request failed, or the version under
+ * review is gone. Approval stays held, so say so and offer a retry.
+ */
+export const ReviewUnavailable = memo<{
+  error?: unknown;
+  missing?: boolean;
+  onRetry: () => void;
+}>(({ error, missing, onRetry }) => {
+  const { t } = useTranslation('dashboard');
+  return (
+    <AsyncError
+      description={missing ? t('review.versionMissing') : undefined}
+      error={error}
+      title={t('review.loadFailed')}
+      variant={'block'}
+      onRetry={onRetry}
+    />
+  );
+});
+
+ReviewUnavailable.displayName = 'DashboardReviewUnavailable';
