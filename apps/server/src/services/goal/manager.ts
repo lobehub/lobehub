@@ -327,12 +327,15 @@ export class GoalManagerService {
       .sort((a, b) => a.id.localeCompare(b.id));
     return {
       hash: createHash('sha256').update(JSON.stringify(comments)).digest('hex'),
-      notes: JSON.stringify(
-        [...comments]
-          .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())
-          .slice(-20)
-          .map((c) => ({ ...c, content: c.content.slice(0, 2000) })),
-      ),
+      notes: [...comments]
+        .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())
+        .slice(-20)
+        .map((c) => ({
+          author: c.authorAgentId ? `agent ${c.authorAgentId}` : 'user',
+          content: c.content,
+          taskId: c.taskId,
+          updatedAt: c.updatedAt,
+        })),
     };
   };
 
@@ -711,7 +714,24 @@ export class GoalManagerService {
       };
       await this.save(db, goal.id, next);
       if (fresh.status === 'planning') await model.updateStatus(goal.id, 'running');
-      return { ...next, reviewNotes: reviews.notes };
+      // Split at the previous turn's start, so the message names what is new to
+      // this turn instead of resending the same comments every turn.
+      const since = freshState?.startedAt ? Date.parse(freshState.startedAt) : undefined;
+      const note = ({ updatedAt, ...rest }: (typeof reviews.notes)[number]) => ({
+        ...rest,
+        updatedAt: updatedAt.toISOString(),
+      });
+      return {
+        ...next,
+        earlierFeedback: reviews.notes
+          .filter((n) => since !== undefined && n.updatedAt.getTime() <= since)
+          .map(note),
+        newFeedback: reviews.notes
+          .filter((n) => since === undefined || n.updatedAt.getTime() > since)
+          .map(note),
+        previousPlan: freshState?.submitted,
+        previousTurn: !!freshState,
+      };
     });
     if (!claimed) return this.wait(goal.id, 'Another advance owns the planning turn');
     try {
@@ -729,7 +749,12 @@ export class GoalManagerService {
           requirement: goal.requirement ?? goal.title,
           instruction: policy.instruction,
           token: claimed.token,
-          feedback: claimed.reviewNotes,
+          turn: claimed.turns,
+          maxTurns: policy.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS,
+          previousTurn: claimed.previousTurn,
+          previousPlan: claimed.previousPlan,
+          newFeedback: claimed.newFeedback,
+          earlierFeedback: claimed.earlierFeedback,
           problem: problem?.reason,
           continuation:
             continuation ??
