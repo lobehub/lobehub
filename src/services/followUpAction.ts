@@ -13,8 +13,11 @@ class FollowUpActionService {
   ): Promise<FollowUpExtractResult | null> {
     try {
       // A device-only model is relayed back to this tab (one-shot relay).
-      const result = await oneShotRelay.run(input.modelConfig?.provider, (relay) =>
-        lambdaClient.followUpAction.extract.mutate(input, { signal, ...withLlmRelay(relay) }),
+      const result = await oneShotRelay.run(
+        input.modelConfig?.provider,
+        (relay) =>
+          lambdaClient.followUpAction.extract.mutate(input, { signal, ...withLlmRelay(relay) }),
+        { signal },
       );
       return result;
     } catch (err) {

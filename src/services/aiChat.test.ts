@@ -33,9 +33,13 @@ describe('structured-output services and the one-shot relay', () => {
   it('sends outputJSON for the model provider with the relay headers', async () => {
     const params = { messages: [], model: 'qwen3:1.7b', provider: 'ollama', schema: {} } as any;
 
-    await aiChatService.generateJSON(params, new AbortController());
+    const controller = new AbortController();
+    await aiChatService.generateJSON(params, controller);
 
-    expect(oneShotRelay.run).toHaveBeenCalledWith('ollama', expect.any(Function));
+    // The abort signal also ends the wait for the relay channel (input completion).
+    expect(oneShotRelay.run).toHaveBeenCalledWith('ollama', expect.any(Function), {
+      signal: controller.signal,
+    });
     expect(lambdaClient.aiChat.outputJSON.mutate).toHaveBeenCalledWith(params, {
       context: { llmRelayHeaders: RELAY.headers, showNotification: false },
       signal: expect.any(AbortSignal),
@@ -45,12 +49,15 @@ describe('structured-output services and the one-shot relay', () => {
   it('sends the follow-up extraction for its model provider with the relay headers', async () => {
     const input = { modelConfig: { model: 'qwen3:1.7b', provider: 'lmstudio' }, topicId: 't' };
 
-    await followUpActionService.extract(input as any);
+    const controller = new AbortController();
+    await followUpActionService.extract(input as any, controller.signal);
 
-    expect(oneShotRelay.run).toHaveBeenCalledWith('lmstudio', expect.any(Function));
+    expect(oneShotRelay.run).toHaveBeenCalledWith('lmstudio', expect.any(Function), {
+      signal: controller.signal,
+    });
     expect(lambdaClient.followUpAction.extract.mutate).toHaveBeenCalledWith(input, {
       context: { llmRelayHeaders: RELAY.headers },
-      signal: undefined,
+      signal: controller.signal,
     });
   });
 });

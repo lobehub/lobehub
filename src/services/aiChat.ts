@@ -29,11 +29,14 @@ class AiChatService {
    * relayed back to this tab by the server (one-shot relay).
    */
   generateJSON = async (params: StructureOutputParams, abortController: AbortController) =>
-    oneShotRelay.run(params.provider, (relay) =>
-      lambdaClient.aiChat.outputJSON.mutate(params, {
-        context: { showNotification: false, ...withLlmRelay(relay)?.context },
-        signal: abortController?.signal,
-      }),
+    oneShotRelay.run(
+      params.provider,
+      (relay) =>
+        lambdaClient.aiChat.outputJSON.mutate(params, {
+          context: { showNotification: false, ...withLlmRelay(relay)?.context },
+          signal: abortController?.signal,
+        }),
+      { signal: abortController?.signal },
     );
 
   recordTracingFeedback = async (params: RecordTracingFeedbackParams) => {
