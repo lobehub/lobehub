@@ -129,7 +129,9 @@ export const decideFailedTurn = (
 ): FailedTurnDecision => {
   const failure = classifyRunFailure(error);
   const failedTurns = streak.failedTurns ?? 0;
-  const offlineTurns = streak.offlineTurns ?? 0;
+  // `offlineTurns` counts turns that never reached their device back to back. Any
+  // other ending reached it, so only a device failure carries the streak forward.
+  const offlineTurns = failure.kind === 'device_unavailable' ? (streak.offlineTurns ?? 0) : 0;
   const message = (error as { message?: unknown } | undefined)?.message;
   const detail = typeof message === 'string' && message ? `: ${message}` : '';
 

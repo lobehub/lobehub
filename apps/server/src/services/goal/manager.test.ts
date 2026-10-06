@@ -2105,6 +2105,13 @@ describe('decideFailedTurn', () => {
     expect(decideFailedTurn(offline, { offlineTurns: 6 }, now).action).toBe('pause');
   });
 
+  it('restarts the offline schedule after a failure that reached the device', () => {
+    const between = decideFailedTurn({ message: 'boom' }, { offlineTurns: 3 }, now);
+    expect(between).toMatchObject({ action: 'retry', offlineTurns: 0 });
+    const next = decideFailedTurn({ message: 'DEVICE_OFFLINE' }, { offlineTurns: 0 }, now);
+    expect(next.action === 'retry' && Date.parse(next.retryAfter) - now).toBe(30 * 60_000);
+  });
+
   it('pauses at once when a person has to act', () => {
     for (const error of [
       { category: 'auth', message: 'Invalid API key' },

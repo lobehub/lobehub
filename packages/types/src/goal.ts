@@ -382,6 +382,11 @@ export interface GoalConfig {
   planningCheckpoint?: { expiresAt: string; token: string };
   /** Retained after release to distinguish lease-aware retries from legacy planners. */
   planningProtocol?: 'lease-v1';
+  /**
+   * Coordinator-owned: when the queued wake for a Task waiting on a usage-window
+   * reset fires. One wake per Goal, so ticks before the reset do not queue more.
+   */
+  quotaRetryWakeAt?: string;
   recovery?: GoalRecoveryPolicy;
   /** Coordinator-owned receipt of the latest wrap-up report dispatch. */
   report?: GoalReportDispatch;

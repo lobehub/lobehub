@@ -3916,6 +3916,11 @@ describe('GoalService', () => {
         expect.objectContaining({ goalId: graph.goal.id, trigger: 'wake' }),
       );
       expect(schedule.mock.lastCall![0].delay).toBeGreaterThanOrEqual(2 * 60 * 60);
+
+      // More ticks before the reset (the sweep, Task events) queue no more wakes.
+      await service.tick(graph.goal.id);
+      await service.tick(graph.goal.id);
+      expect(schedule.mock.calls.filter(([params]) => params.trigger === 'wake')).toHaveLength(1);
       expect(runSpy).not.toHaveBeenCalled();
       const after = await service.graph(graph.goal.id);
       expect(after.decisions).toHaveLength(0);
@@ -3938,6 +3943,24 @@ describe('GoalService', () => {
       );
       expect(retried).toMatchObject({ outcome: 'waiting_external', taskId: created.taskId });
       expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
+    });
+
+    it('does not start the retry once the Goal deadline has passed', async () => {
+      const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask');
+      const { graph, service } = await setup(
+        'Reset after the deadline',
+        Date.now() - 2 * 60 * 1000,
+      );
+      await serverDB
+        .update(goals)
+        .set({
+          config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{schedule}', ${JSON.stringify({ deadline: new Date(Date.now() - 60_000).toISOString() })}::jsonb)`,
+        })
+        .where(eq(goals.id, graph.goal.id));
+
+      await service.tick(graph.goal.id);
+
+      expect(runSpy).not.toHaveBeenCalled();
     });
   });
 

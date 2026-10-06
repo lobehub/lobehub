@@ -3117,14 +3117,29 @@ export class GoalService {
     const failure = classifyRunFailure(operation?.error, task.error ?? '');
     if (failure.kind !== 'quota_reset') return;
     const retryAt = failure.resetsAt! + QUOTA_RESET_MARGIN_MS;
-    if (retryAt <= Date.now())
+    if (retryAt <= Date.now()) {
+      // The retry is a paid run, and recovery only checks the Task's own attempts
+      // and cost. Past the Goal's deadline, rounds or spend it is not this path's
+      // to start: ordinary failure handling takes it, and that gates it.
+      const budget = await this.evaluateBudget(graph.goal, graph);
+      if (budget.costLimitReached || budget.roundLimitReached || budget.deadlinePassed) return;
       return this.resumeAbandonedTaskRecovery(graph, nodeId, task, effects);
+    }
     // The sweep would get here too, but only on its own cadence; the reset is a
-    // known time, so ask for that tick directly.
-    await new GoalWaitService(this.db, this.userId, this.workspaceId).schedule(
-      graph.goal.id,
-      GoalWaitService.arm(new Date(retryAt).toISOString()).delay,
-    );
+    // known time, so ask for that tick directly. One wake per Goal: the claim
+    // fails while an earlier-or-equal wake is still pending. A reset further out
+    // than the queue's longest delay is re-armed when the capped wake fires.
+    const armed = GoalWaitService.arm(new Date(retryAt).toISOString());
+    if (
+      await new GoalModel(this.db, this.userId, this.workspaceId).armQuotaRetryWake(
+        graph.goal.id,
+        armed.armedUntil,
+      )
+    )
+      await new GoalWaitService(this.db, this.userId, this.workspaceId).schedule(
+        graph.goal.id,
+        armed.delay,
+      );
     return {
       goalId: graph.goal.id,
       message: `Task ${task.identifier} is waiting for its usage window to reset at ${new Date(retryAt).toISOString()}`,
