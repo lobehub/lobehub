@@ -77,7 +77,7 @@ const AcceptanceIdentity = ({ focusSlot, statusSlot, topicSlot }: AcceptanceIden
   const { data } = useAcceptanceBundle(acceptanceId);
   if (!data) return null;
 
-  const { acceptance, author, changeRequests, origin, rounds, subject } = data;
+  const { acceptance, author, origin, pullRequests, rounds, subject } = data;
   const authorName = author?.fullName || author?.username;
   const originAgent = embedded ? null : origin?.agent;
   const agentName = originAgent?.title ?? t('acceptance.origin.agentFallback');
@@ -122,8 +122,8 @@ const AcceptanceIdentity = ({ focusSlot, statusSlot, topicSlot }: AcceptanceIden
         )}
         {topicSlot}
         <PullRequestLinks
-          changeRequests={changeRequests}
           fallback={acceptanceCodingScope(rounds)?.pullRequest}
+          pullRequests={pullRequests}
         />
       </Flexbox>
     </Flexbox>

@@ -24,7 +24,6 @@ import { ScmChangeRequestModel } from '@/database/models/scm';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
-import type { ScmChangeRequestItem } from '@/database/schemas';
 import { users } from '@/database/schemas';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import { acceptances } from '@/database/schemas/verify';
@@ -48,6 +47,11 @@ import {
   shouldSurfaceProposal,
   VerifyReviewPredictorService,
 } from '@/server/services/verify';
+import {
+  addPullRequestLink,
+  listAcceptancePullRequests,
+  removePullRequestLink,
+} from '@/server/services/verify/acceptancePullRequests';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import {
@@ -191,25 +195,6 @@ const resolveAcceptanceForWrite = async (
     ),
   };
 };
-
-/**
- * A linked pull request as the acceptance page shows it. Provider facts only:
- * the links to topics, tasks and installations are the owner's plumbing, and
- * a public acceptance is readable by anyone holding its URL.
- */
-const toBundleChangeRequest = (row: ScmChangeRequestItem) => ({
-  ciStatus: row.ciStatus,
-  id: row.id,
-  isDraft: row.isDraft,
-  mergedAt: row.mergedAt,
-  number: row.number,
-  provider: row.provider,
-  repoFullName: row.repoFullName,
-  reviewDecision: row.reviewDecision,
-  state: row.state,
-  title: row.title,
-  url: row.url,
-});
 
 const canReadAcceptance = async (
   ctx: { serverDB: LobeChatDatabase; userId?: string | null },
@@ -451,8 +436,13 @@ export const acceptanceRouter = router({
    * Record that a pull request delivers this acceptance. The link lives on the
    * acceptance, not on a round: the pull request usually opens after the
    * rounds that verified it, and stacked pull requests share one acceptance.
+   *
+   * Stored on the acceptance rather than on the shared `scm_change_requests`
+   * row: that row is keyed globally and owned by whichever tenant the
+   * provider routes the PR to, so a pasted URL must not claim it. A hand
+   * link is display-only and never drives merge → accepted.
    */
-  linkChangeRequest: acceptanceWriteProcedure
+  linkPullRequest: acceptanceWriteProcedure
     .input(
       z.object({
         id: z.string(),
@@ -461,7 +451,7 @@ export const acceptanceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
       const parsed = parseChangeRequestUrl(input.url);
       if (!parsed) {
         throw new TRPCError({
@@ -471,34 +461,30 @@ export const acceptanceRouter = router({
         });
       }
 
-      const result = await ScmChangeRequestModel.linkAcceptance(ctx.serverDB, {
-        ...parsed,
-        acceptanceId: acceptance.id,
-        actorUserId: ctx.userId,
-        title: input.title,
-        userId: acceptance.userId,
-        workspaceId: acceptance.workspaceId,
+      await service.acceptanceModel.update(acceptance.id, {
+        metadata: {
+          ...acceptance.metadata,
+          pullRequests: addPullRequestLink(acceptance.metadata?.pullRequests, parsed, input.title),
+        },
       });
-      if (result.status === 'foreign') {
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message: `${parsed.repoFullName}#${parsed.number} is already tracked by another account or workspace`,
-        });
-      }
-      return toBundleChangeRequest(result.row);
+      return parsed;
     }),
 
-  unlinkChangeRequest: acceptanceWriteProcedure
-    .input(z.object({ changeRequestId: z.string(), id: z.string() }))
+  unlinkPullRequest: acceptanceWriteProcedure
+    .input(z.object({ id: z.string(), url: z.string().max(2000) }))
     .mutation(async ({ ctx, input }) => {
-      const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
-      const removed = await ScmChangeRequestModel.unlinkAcceptance(ctx.serverDB, {
-        acceptanceId: acceptance.id,
-        id: input.changeRequestId,
-      });
-      if (!removed) {
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+      const parsed = parseChangeRequestUrl(input.url);
+      const pullRequests = parsed
+        ? removePullRequestLink(acceptance.metadata?.pullRequests, parsed)
+        : null;
+      if (!pullRequests) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Linked pull request not found' });
       }
+
+      await service.acceptanceModel.update(acceptance.id, {
+        metadata: { ...acceptance.metadata, pullRequests },
+      });
       return { success: true };
     }),
 
@@ -692,8 +678,8 @@ export const acceptanceRouter = router({
             })
             .from(users)
             .where(eq(users.id, acceptance.userId)),
-          // The pull requests that deliver it. Owned by the acceptance, not by a
-          // round, so one opened after the last round still shows.
+          // Provider-verified PRs that deliver it. Owned by the acceptance, not
+          // by a round, so one opened after the last round still shows.
           ScmChangeRequestModel.listByAcceptance(ctx.serverDB, acceptance.id),
         ]);
       const author = authorRows[0] ?? null;
@@ -874,7 +860,7 @@ export const acceptanceRouter = router({
 
       return {
         author,
-        changeRequests: changeRequests.map(toBundleChangeRequest),
+        pullRequests: listAcceptancePullRequests(changeRequests, acceptance.metadata?.pullRequests),
         flows: flowData.map((flow) => ({
           ...flow,
           versions: flow.versions.map((version) => ({

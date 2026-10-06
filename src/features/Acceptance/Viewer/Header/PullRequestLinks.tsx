@@ -26,20 +26,22 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type ChangeRequest = AcceptanceBundle['changeRequests'][number];
+type PullRequest = AcceptanceBundle['pullRequests'][number];
 
-const stateIcon = (changeRequest: ChangeRequest): { color?: string; icon: LucideIcon } => {
-  if (changeRequest.state === 'merged') return { color: cssVar.purple, icon: GitMerge };
-  if (changeRequest.state === 'closed')
+const stateIcon = (pullRequest: PullRequest): { color?: string; icon: LucideIcon } => {
+  if (pullRequest.state === 'merged') return { color: cssVar.purple, icon: GitMerge };
+  if (pullRequest.state === 'closed')
     return { color: cssVar.colorError, icon: GitPullRequestClosed };
-  if (changeRequest.isDraft) return { icon: GitPullRequestDraft };
+  if (pullRequest.isDraft) return { icon: GitPullRequestDraft };
+  // A hand link nobody has reported a lifecycle for: no colour to claim.
+  if (!pullRequest.state) return { icon: GitPullRequest };
   return { color: cssVar.colorSuccess, icon: GitPullRequest };
 };
 
 interface PullRequestLinksProps {
-  changeRequests: AcceptanceBundle['changeRequests'];
   /** What a round recorded at ingest; only shown for acceptances with no linked pull request. */
   fallback?: VerifyCodingPullRequest;
+  pullRequests: AcceptanceBundle['pullRequests'];
 }
 
 /**
@@ -48,27 +50,27 @@ interface PullRequestLinksProps {
  * the way GitHub draws it, because "is it merged yet" is the question a
  * reader brings to this row.
  */
-const PullRequestLinks = memo<PullRequestLinksProps>(({ changeRequests, fallback }) => {
-  if (changeRequests.length > 0)
+const PullRequestLinks = memo<PullRequestLinksProps>(({ pullRequests, fallback }) => {
+  if (pullRequests.length > 0)
     return (
       <>
-        {changeRequests.map((changeRequest) => {
-          const { color, icon } = stateIcon(changeRequest);
+        {pullRequests.map((pullRequest) => {
+          const { color, icon } = stateIcon(pullRequest);
           return (
             <a
               className={styles.link}
-              href={changeRequest.url}
-              key={changeRequest.id}
+              href={pullRequest.url}
+              key={pullRequest.url}
               rel={'noreferrer'}
               target={'_blank'}
               title={
-                changeRequest.title
-                  ? `${changeRequest.repoFullName}#${changeRequest.number} ${changeRequest.title}`
-                  : `${changeRequest.repoFullName}#${changeRequest.number}`
+                pullRequest.title
+                  ? `${pullRequest.repoFullName}#${pullRequest.number} ${pullRequest.title}`
+                  : `${pullRequest.repoFullName}#${pullRequest.number}`
               }
             >
               <Flexbox horizontal align={'center'} gap={4}>
-                <Icon color={color} icon={icon} size={13} /> #{changeRequest.number}
+                <Icon color={color} icon={icon} size={13} /> #{pullRequest.number}
               </Flexbox>
             </a>
           );

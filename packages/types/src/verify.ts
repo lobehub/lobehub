@@ -169,8 +169,27 @@ export interface AcceptanceMetadata {
   [key: string]: unknown;
   /** Current checklist organization; frozen plans, results and reviews keep their original IDs. */
   checkGrouping?: { groups: AcceptanceCheckGroup[]; version: number };
+  /**
+   * Pull requests linked by hand (`lh acceptance link-pr`, or ingest finding
+   * one). Display-only claims: nothing is verified against the provider, so
+   * they never drive merge → accepted. That stays with provider-verified
+   * `scm_change_requests` rows, which take precedence when both name a PR.
+   */
+  pullRequests?: AcceptancePullRequestLink[];
   /** User-set display-title override for the acceptance (sidebar rename). */
   title?: string;
+}
+
+/** A hand-linked pull request on an acceptance. */
+export interface AcceptancePullRequestLink {
+  /** When it was linked (ISO 8601). */
+  linkedAt: string;
+  number: number;
+  provider: 'github';
+  /** `owner/name` as pasted; compare case-insensitively. */
+  repoFullName: string;
+  title?: string;
+  url: string;
 }
 
 /**

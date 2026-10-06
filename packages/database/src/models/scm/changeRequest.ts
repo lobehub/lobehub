@@ -5,8 +5,6 @@ import type {
   ScmChangeRequestLinks,
   ScmCheck,
   ScmCiStatus,
-  ScmLinkAcceptanceParams,
-  ScmLinkAcceptanceResult as ScmLinkAcceptanceResultOf,
   ScmProvider,
   ScmReviewDecision,
   ScmUpsertChangeRequestParams,
@@ -102,29 +100,6 @@ export const mergeChecks = (current: ScmCheck[] | null | undefined, incoming: Sc
   return [...byIdentity.values()];
 };
 
-type ScmLinkAcceptanceResult = ScmLinkAcceptanceResultOf<ScmChangeRequestItem>;
-
-/**
- * Whether the person linking may re-point an existing row: it is their own
- * pull request, or it lives in the acceptance's workspace (which they can
- * manage, or they could not have resolved the acceptance). Judged against the
- * actor, not the acceptance's creator: a workspace admin managing a member's
- * acceptance has no say over that member's personal rows.
- */
-const mayRelink = (
-  row: Pick<ScmChangeRequestItem, 'userId' | 'workspaceId'>,
-  params: Pick<ScmLinkAcceptanceParams, 'actorUserId' | 'workspaceId'>,
-) =>
-  row.userId === params.actorUserId ||
-  (!!params.workspaceId && row.workspaceId === params.workspaceId);
-
-/**
- * GitHub owner and repository names are case-insensitive, so a pasted URL may
- * spell the repository differently from the provider's `full_name`.
- */
-const sameRepo = (repoFullName: string) =>
-  sql`lower(${scmChangeRequests.repoFullName}) = lower(${repoFullName})`;
-
 /**
  * CRUD for `scm_change_requests`, the hub row an inbound provider event
  * resolves to. Writers are server-side ingest paths, so the model is static
@@ -208,106 +183,6 @@ export class ScmChangeRequestModel {
       .from(scmChangeRequests)
       .where(eq(scmChangeRequests.acceptanceId, acceptanceId))
       .orderBy(desc(scmChangeRequests.updatedAt));
-
-  /**
-   * Point a change request at an acceptance by hand, without waiting for a
-   * provider event. The pull request often opens after its acceptance was
-   * verified, and an instance with no SCM installation never hears from the
-   * provider at all.
-   *
-   * The identity key is global, so the row may already belong to another
-   * tenant (another user's agent, another workspace's installation). Moving
-   * its acceptance link from here would rewrite someone else's record, so a
-   * foreign row is refused instead. A new row is an unverified placeholder
-   * (`routedBy: 'manual'`, state `open`): the first provider event re-routes
-   * it like a new row and replaces the guessed state, so a pasted URL never
-   * claims the pull request against its real tenant.
-   */
-  static linkAcceptance = async (
-    db: LobeChatDatabase,
-    params: ScmLinkAcceptanceParams,
-  ): Promise<ScmLinkAcceptanceResult> => {
-    const attempt = () =>
-      db.transaction(async (tx): Promise<ScmLinkAcceptanceResult | null> => {
-        const [existing] = await tx
-          .select()
-          .from(scmChangeRequests)
-          .where(
-            and(
-              eq(scmChangeRequests.provider, params.provider),
-              eq(scmChangeRequests.number, params.number),
-              sameRepo(params.repoFullName),
-            ),
-          )
-          .limit(1)
-          .for('update');
-
-        if (existing) {
-          if (!mayRelink(existing, params)) return { status: 'foreign' };
-          const [row] = await tx
-            .update(scmChangeRequests)
-            .set({
-              acceptanceId: params.acceptanceId,
-              title: existing.title ?? params.title ?? null,
-              updatedAt: new Date(),
-            })
-            .where(eq(scmChangeRequests.id, existing.id))
-            .returning();
-          return { row, status: 'linked' };
-        }
-
-        const [row] = await tx
-          .insert(scmChangeRequests)
-          .values({
-            acceptanceId: params.acceptanceId,
-            metadata: { routedBy: 'manual' },
-            number: params.number,
-            provider: params.provider,
-            repoFullName: params.repoFullName,
-            state: 'open',
-            title: params.title ?? null,
-            url: params.url,
-            userId: params.userId,
-            workspaceId: params.workspaceId ?? null,
-          })
-          .onConflictDoNothing({
-            target: [
-              scmChangeRequests.provider,
-              scmChangeRequests.repoFullName,
-              scmChangeRequests.number,
-            ],
-          })
-          .returning();
-        return row ? { row, status: 'linked' } : null;
-      });
-
-    // Lost the insert race: the winner has committed, so the retry locks it.
-    const result = (await attempt()) ?? (await attempt());
-    if (!result) throw new Error('scm change request vanished between insert and retry');
-    return result;
-  };
-
-  /**
-   * Drop a change request's link to this acceptance; its other links stay.
-   * Gated on the link alone: the caller already manages the acceptance, and
-   * clearing a pointer at it changes nothing outside it.
-   */
-  static unlinkAcceptance = async (
-    db: LobeChatDatabase,
-    params: { acceptanceId: string; id: string },
-  ): Promise<boolean> => {
-    const [row] = await db
-      .update(scmChangeRequests)
-      .set({ acceptanceId: null, updatedAt: new Date() })
-      .where(
-        and(
-          eq(scmChangeRequests.id, params.id),
-          eq(scmChangeRequests.acceptanceId, params.acceptanceId),
-        ),
-      )
-      .returning({ id: scmChangeRequests.id });
-    return Boolean(row);
-  };
 
   /** Change requests visible to a scope, newest activity first. */
   /**
@@ -395,7 +270,7 @@ export class ScmChangeRequestModel {
       // insert a second one — splitting the checks, the review state and
       // the acceptance links off the copy still on screen. The provider's
       // own id for the pull request survives both, so it leads.
-      const [identified] = await tx
+      const [existing] = await tx
         .select()
         .from(scmChangeRequests)
         .where(
@@ -423,36 +298,6 @@ export class ScmChangeRequestModel {
         )
         .limit(1)
         .for('update');
-
-      // A hand-linked placeholder may spell the repository differently from
-      // the provider (names are case-insensitive) and never has a provider
-      // id, so a delivery that found nothing looks for one before inserting
-      // a second row beside it.
-      const existing =
-        identified ??
-        (
-          await tx
-            .select()
-            .from(scmChangeRequests)
-            .where(
-              and(
-                eq(scmChangeRequests.provider, params.provider),
-                eq(scmChangeRequests.number, params.number),
-                isNull(scmChangeRequests.externalId),
-                sql`${scmChangeRequests.repoFullName} <> ${params.repoFullName}`,
-                sql`lower(${scmChangeRequests.repoFullName}) = lower(${params.repoFullName})`,
-                sql`${scmChangeRequests.metadata} ->> 'routedBy' = 'manual'`,
-              ),
-            )
-            .limit(1)
-            .for('update')
-        )[0];
-
-      // Nobody vouched for a placeholder's owner but the person who pasted
-      // its URL, so the first provider event routes it as if it were new:
-      // keeping that owner would let a pasted link hold the pull request,
-      // and its merge, against the tenant the provider says it belongs to.
-      const keepOwner = params.keepOwner && existing?.metadata?.routedBy !== 'manual';
 
       // Deliveries are not ordered: GitHub retries, and a redelivery of an old
       // `opened` after a `merged` would otherwise reopen the row, rewind the
@@ -505,7 +350,9 @@ export class ScmChangeRequestModel {
         metadata: {
           ...existing?.metadata,
           ...params.metadata,
-          ...((keepOwner || stale) && existing ? { routedBy: existing.metadata?.routedBy } : {}),
+          ...((params.keepOwner || stale) && existing
+            ? { routedBy: existing.metadata?.routedBy }
+            : {}),
           ...(params.eventAt ? { lastProviderEventAt: params.eventAt.toISOString() } : {}),
           // Once adopted (or superseded by a newer head) the bucket is spent.
           ...(headChanged ? { pendingChecks: undefined } : {}),
@@ -523,7 +370,7 @@ export class ScmChangeRequestModel {
       // row lacks; it cannot move the row or replace a link a newer event set.
       const scopeMoved =
         !!existing &&
-        !keepOwner &&
+        !params.keepOwner &&
         !stale &&
         (existing.userId !== params.userId ||
           (existing.workspaceId ?? null) !== (params.workspaceId ?? null));
