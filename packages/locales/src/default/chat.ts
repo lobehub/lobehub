@@ -619,7 +619,6 @@ export default {
   'heteroAgent.cliModel.defaultDesc': 'Use the default model configured in {{name}}',
   'heteroAgent.cliModel.empty': '{{name}} did not report any models.',
   'heteroAgent.cliModel.error': 'Could not load models from the CLI.',
-  'heteroAgent.cliModel.fallback': 'Showing built-in models until the model list is available.',
   'heteroAgent.cliModel.unsupportedConfiguration':
     'Model discovery is unavailable for this CLI configuration. You can still use the current model.',
   'heteroAgent.cliModel.loading': 'Loading {{name}} models…',

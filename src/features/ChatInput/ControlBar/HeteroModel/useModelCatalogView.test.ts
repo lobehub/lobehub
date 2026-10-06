@@ -13,36 +13,28 @@ const loaded: HeterogeneousAgentModelCatalogSuccess = {
 };
 const defaults = {
   currentModel: 'default',
-  hasError: false,
   savedLabel: 'Saved',
   search: '',
-  targetReady: true,
-  type: 'codex',
 };
 
-describe('Codex model picker state', () => {
+describe('Model catalog view', () => {
   it('uses new CLI models without mixing in built-in choices', () => {
     const { result } = renderHook(() => useModelCatalogView({ ...defaults, data: loaded }));
     expect(result.current.rows).toEqual(loaded.models);
-    expect(result.current.useFallback).toBe(false);
   });
 
-  it('offers built-in choices and the saved custom model when discovery fails', () => {
+  it('keeps only the saved model when no catalog is available', () => {
     const { result } = renderHook(() =>
-      useModelCatalogView({ ...defaults, currentModel: 'custom-model', hasError: true }),
+      useModelCatalogView({ ...defaults, currentModel: 'custom-model' }),
     );
-    expect(result.current.rows.map((model) => model.id)).toContain('gpt-6-astra');
+    expect(result.current.rows.map((model) => model.id)).toEqual(['custom-model']);
     expect(result.current.groups.Saved[0].id).toBe('custom-model');
-    expect(result.current.useFallback).toBe(true);
     expect(result.current.selectedIsStale).toBe(false);
   });
 
-  it('retains the last successful catalog on refresh failure', () => {
-    const { result } = renderHook(() =>
-      useModelCatalogView({ ...defaults, data: loaded, hasError: true }),
-    );
+  it('renders the last successful catalog supplied by the shared cache', () => {
+    const { result } = renderHook(() => useModelCatalogView({ ...defaults, data: loaded }));
     expect(result.current.rows).toEqual(loaded.models);
-    expect(result.current.useFallback).toBe(false);
   });
 
   it('keeps off-catalog saved models pickable and marks them as stale only after discovery', () => {
@@ -64,7 +56,6 @@ describe('Codex model picker state', () => {
       useModelCatalogView({ ...defaults, data: { ...loaded, models: [] } }),
     );
     expect(result.current.rows).toEqual([]);
-    expect(result.current.useFallback).toBe(false);
   });
 
   it('searches dynamic model names and saved values', () => {
@@ -79,14 +70,9 @@ describe('Codex model picker state', () => {
     expect(result.current.rows).toEqual(loaded.models);
   });
 
-  it('falls back while the target is unavailable but not during the first load', () => {
-    const { result, rerender } = renderHook(
-      ({ targetReady }) => useModelCatalogView({ ...defaults, targetReady }),
-      { initialProps: { targetReady: false } },
-    );
-    expect(result.current.useFallback).toBe(true);
-    rerender({ targetReady: true });
-    expect(result.current.useFallback).toBe(false);
+  it('does not invent model choices before a catalog is available', () => {
+    const { result } = renderHook(() => useModelCatalogView(defaults));
     expect(result.current.rows).toEqual([]);
+    expect(result.current.groups).toEqual({});
   });
 });

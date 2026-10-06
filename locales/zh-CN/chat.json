@@ -1117,7 +1117,6 @@
   "heteroAgent.cliModel.defaultDesc": "使用 {{name}} 中配置的默认模型",
   "heteroAgent.cliModel.empty": "{{name}} 未返回任何模型。",
   "heteroAgent.cliModel.error": "无法从 CLI 加载模型。",
-  "heteroAgent.cliModel.fallback": "暂时显示内置模型，待模型列表加载成功后更新。",
   "heteroAgent.cliModel.loading": "正在加载 {{name}} 模型…",
   "heteroAgent.cliModel.noMatch": "没有匹配搜索条件的模型。",
   "heteroAgent.cliModel.reload": "重新加载模型",

@@ -5,40 +5,22 @@ import type {
 import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION } from '@lobechat/types';
 import { useMemo } from 'react';
 
-import { getFallbackModelOptions } from './modelOptions';
-
 interface ModelCatalogViewParams {
   currentModel: string;
   data?: HeterogeneousAgentModelCatalogSuccess;
-  hasError: boolean;
   savedLabel: string;
   search: string;
-  targetReady: boolean;
-  type: string;
 }
 
 /** Keep saved selections and successful catalogs usable through loading and discovery failures. */
 export const useModelCatalogView = ({
   currentModel,
   data,
-  hasError,
   savedLabel,
   search,
-  targetReady,
-  type,
 }: ModelCatalogViewParams) =>
   useMemo(() => {
-    const useFallback = !data && (hasError || !targetReady) && type === 'codex';
-    const catalogModels =
-      data?.models ??
-      (useFallback
-        ? getFallbackModelOptions(type).map(({ label, value }) => ({
-            id: value,
-            label,
-            modelId: value,
-            providerId: 'codex',
-          }))
-        : []);
+    const catalogModels = data?.models ?? [];
     const selectedIsMissing =
       currentModel !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
       !catalogModels.some((item) => item.id === currentModel);
@@ -66,5 +48,5 @@ export const useModelCatalogView = ({
       (result[item.providerId] ||= []).push(item);
       return result;
     }, {});
-    return { groups, rows, selectedIsStale: selectedIsMissing && !!data, useFallback };
-  }, [currentModel, data, hasError, savedLabel, search, targetReady, type]);
+    return { groups, rows, selectedIsStale: selectedIsMissing && !!data };
+  }, [currentModel, data, savedLabel, search]);

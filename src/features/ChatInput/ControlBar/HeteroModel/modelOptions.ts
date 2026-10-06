@@ -11,18 +11,6 @@ const CLAUDE_CODE_MODEL_OPTIONS: StaticModelOption[] = [
   { label: 'Haiku', value: 'haiku' },
 ];
 
-// Compatibility fallback only: the normal Codex picker reads model/list from the CLI.
-const CODEX_FALLBACK_MODEL_OPTIONS: StaticModelOption[] = [
-  { label: 'GPT-6 Astra', value: 'gpt-6-astra' },
-  { label: 'GPT-5.6 Sol', value: 'gpt-5.6-sol' },
-  { label: 'GPT-5.6 Terra', value: 'gpt-5.6-terra' },
-  { label: 'GPT-5.6 Luna', value: 'gpt-5.6-luna' },
-  { label: 'GPT-5.5', value: 'gpt-5.5' },
-  { label: 'GPT-5.4', value: 'gpt-5.4' },
-  { label: 'GPT-5.4 Mini', value: 'gpt-5.4-mini' },
-  { label: 'GPT-5.3 Codex Spark', value: 'gpt-5.3-codex-spark' },
-];
-
 /**
  * Display names for the aliases `static` providers accept. These track CLI
  * releases rather than the provider contract, so they stay out of
@@ -35,14 +23,20 @@ const STATIC_MODEL_OPTIONS: Record<string, StaticModelOption[]> = {
 export const getStaticModelOptions = (type: string | undefined): StaticModelOption[] =>
   (type && STATIC_MODEL_OPTIONS[type]) || [];
 
-export const getFallbackModelOptions = (type: string): StaticModelOption[] =>
-  type === 'codex' ? CODEX_FALLBACK_MODEL_OPTIONS : [];
-
+// Display aliases only; catalog providers never use these as selectable options.
 export const MODEL_LABELS: Record<string, string> = {
+  'gpt-5.3-codex-spark': 'GPT-5.3 Codex Spark',
+  'gpt-5.4': 'GPT-5.4',
+  'gpt-5.4-mini': 'GPT-5.4 Mini',
+  'gpt-5.5': 'GPT-5.5',
   'gpt-5.6': 'GPT-5.6',
+  'gpt-5.6-luna': 'GPT-5.6 Luna',
+  'gpt-5.6-sol': 'GPT-5.6 Sol',
+  'gpt-5.6-terra': 'GPT-5.6 Terra',
+  'gpt-6-astra': 'GPT-6 Astra',
   ...Object.fromEntries(
-    [...Object.values(STATIC_MODEL_OPTIONS).flat(), ...CODEX_FALLBACK_MODEL_OPTIONS].map(
-      (option) => [option.value, option.label],
-    ),
+    Object.values(STATIC_MODEL_OPTIONS)
+      .flat()
+      .map((option) => [option.value, option.label]),
   ),
 };

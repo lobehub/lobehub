@@ -217,14 +217,11 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
       type,
     });
 
-    const { groups, rows, selectedIsStale, useFallback } = useModelCatalogView({
+    const { groups, rows, selectedIsStale } = useModelCatalogView({
       currentModel,
       data,
-      hasError: !!error,
       savedLabel: t('heteroAgent.cliModel.saved'),
       search,
-      targetReady,
-      type,
     });
 
     const handleOpenChangeComplete = useCallback(
@@ -328,7 +325,6 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
               </Button>
             </div>
           )}
-          {useFallback && <div className={styles.empty}>{t('heteroAgent.cliModel.fallback')}</div>}
           {data && !error && rows.length === 0 && (
             <div className={styles.empty}>
               {search.trim()
