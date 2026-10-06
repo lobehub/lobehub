@@ -95,7 +95,7 @@ const ERROR_HINTS: Record<string, string> = {
   INVALID_OUTPUT:
     'The JSON does not match the output contract for this outputType; compare field names and types with the contract.',
   MISSING_ENV:
-    'A required variable has no source. Tell the user which connector to connect for this agent or workspace — never ask for the secret in chat.',
+    "A required variable has no source. If the message lists a connector's headers, set manifest.env[].field to the right one with updateWidgetDraft; otherwise tell the user which connector to connect for this agent or workspace — never ask for the secret in chat.",
   NON_ZERO_EXIT: 'The script failed; read stderr, fix the script and dry-run again.',
   OUTPUT_TOO_LARGE: 'Trim the output: fewer rows / items / points (use view.limit for display).',
   OUTPUT_TYPE_MISMATCH: 'The printed "type" differs from the widget outputType; align them.',

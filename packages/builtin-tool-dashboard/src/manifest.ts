@@ -52,6 +52,11 @@ const manifestSchema = {
             type: 'string',
           },
           description: { type: 'string' },
+          field: {
+            description:
+              'For a connector holding several headers: which header to inject, e.g. "X-Api-Key" (case-insensitive). Required then; ignored for single-secret connectors.',
+            type: 'string',
+          },
           name: { description: 'Variable name, e.g. GITHUB_TOKEN.', type: 'string' },
           required: { type: 'boolean' },
         },

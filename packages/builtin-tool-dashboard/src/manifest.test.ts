@@ -44,6 +44,16 @@ describe('DashboardManifest', () => {
     expect(publish?.parameters.required).toEqual(expect.arrayContaining(['versionId']));
   });
 
+  it('lets the model pick the header of a multi-header connector', () => {
+    for (const name of [DashboardApiName.createWidgetDraft, DashboardApiName.updateWidgetDraft]) {
+      const api = DashboardManifest.api.find((item) => item.name === name);
+      const envItem = api?.parameters.properties.manifest.properties.env.items;
+      expect(envItem.additionalProperties).toBe(false);
+      expect(envItem.properties).toHaveProperty('field.type', 'string');
+    }
+    expect(DashboardManifest.systemRole).toContain('"field"');
+  });
+
   it('teaches the output contract and the secret rules', () => {
     for (const type of ['stat', 'list', 'series', 'table']) {
       expect(DashboardManifest.systemRole).toContain(`"type":"${type}"`);
