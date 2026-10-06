@@ -48,6 +48,13 @@ Supported values:
 - Default: -
 - Example: `your-market-trusted-client-secret`
 
+### `HETERO_SANDBOX_RUN_TTL_SEC`
+
+- Type: Optional
+- Description: How long a coding agent's sandbox run may last, in seconds — the lifetime of the token the run authenticates with. When it expires the run can no longer report back and is stopped. With Onlyboxes, set `ONLYBOXES_LEASE_TTL_SEC` at least as high, or the box is destroyed under the run. On Onlyboxes the run is started detached, so it is not bound by the ten-minute limit on a single sandbox command; its output stays in the box at `/tmp/lobe-hetero-<operationId>.log`.
+- Default: `14400` (four hours)
+- Example: `43200`
+
 ### `ONLYBOXES_BASE_URL`
 
 - Type: Required when `SANDBOX_PROVIDER=onlyboxes`
