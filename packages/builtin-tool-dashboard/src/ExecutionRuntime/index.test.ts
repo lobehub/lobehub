@@ -175,6 +175,34 @@ describe('updateWidgetDraft', () => {
     expect(result.content).toContain('identical');
   });
 
+  it('leaves the title and description untouched when the draft is refused', async () => {
+    service.saveDraft.mockRejectedValue(new Error('Invalid widget draft: manifest.env'));
+
+    const result = await runtime.updateWidgetDraft({
+      description: 'New definition',
+      script: 'console.log(1)',
+      title: 'Renamed',
+      widgetId: 'w1',
+    });
+
+    expect(result.success).toBe(false);
+    expect(service.updateWidget).not.toHaveBeenCalled();
+  });
+
+  it('saves the draft before renaming when both change', async () => {
+    await runtime.updateWidgetDraft({ script: 'console.log(2)', title: 'Renamed', widgetId: 'w1' });
+    expect(service.saveDraft.mock.invocationCallOrder[0]).toBeLessThan(
+      service.updateWidget.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('renames nothing when there is no version to keep', async () => {
+    service.getWidget.mockResolvedValue({ id: 'w1', title: 'Stars' });
+    const result = await runtime.updateWidgetDraft({ title: 'Renamed', widgetId: 'w1' });
+    expect(result.success).toBe(false);
+    expect(service.updateWidget).not.toHaveBeenCalled();
+  });
+
   it('fails for an unknown widget', async () => {
     service.getWidget.mockResolvedValue(undefined);
     const result = await runtime.updateWidgetDraft({ script: 'x', widgetId: 'nope' });

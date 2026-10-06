@@ -237,14 +237,20 @@ export class DashboardExecutionRuntime {
       const widget = await this.service.getWidget(widgetId);
       if (!widget) return fail(new Error('Widget not found'), 'update widget draft');
 
-      if (title !== undefined || description !== undefined) {
-        await this.service.updateWidget(widgetId, { description, title });
-      }
+      // Title / description are written only after everything else in the
+      // call succeeded, so a refused draft leaves the widget untouched and a
+      // retry starts from the same state.
+      const hasMetaPatch = title !== undefined || description !== undefined;
+      const writeMeta = () =>
+        hasMetaPatch
+          ? this.service.updateWidget(widgetId, { description, title })
+          : Promise.resolve();
 
       const base = widget.draftVersion ?? widget.publishedVersion;
       const hasContentPatch = Object.values(patch).some((value) => value !== undefined);
       if (!hasContentPatch) {
         if (!base) return fail(new Error('Widget has no version to keep'), 'update widget draft');
+        await writeMeta();
         const state: WidgetDraftState = { version: base.version, versionId: base.id, widgetId };
         return {
           content: `Updated widget ${widgetId}'s title/description. Script unchanged (current ${versionLabel(base)}).`,
@@ -269,6 +275,16 @@ export class DashboardExecutionRuntime {
         changeNote: changeNote ?? null,
         parentVersionId: base?.id ?? null,
       });
+      try {
+        await writeMeta();
+      } catch (error) {
+        return fail(
+          new Error(
+            `Saved draft ${versionLabel(version)} (version id ${version.id}), but the title/description were not updated: ${errorMessage(error)}`,
+          ),
+          'update widget title/description',
+        );
+      }
       const state: WidgetDraftState = { version: version.version, versionId: version.id, widgetId };
       const reused = base && version.id === base.id;
 
