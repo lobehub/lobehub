@@ -317,9 +317,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
   const loadFailed = (retry: () => void) => (
     <Flexbox horizontal align={'center'} gap={8}>
       <Text type={'secondary'}>{t('rules.distill.loadFailed')}</Text>
-      <Button size={'small'} onClick={retry}>
-        {t('retry', { ns: 'common' })}
-      </Button>
+      <Button onClick={retry}>{t('retry', { ns: 'common' })}</Button>
     </Flexbox>
   );
 
