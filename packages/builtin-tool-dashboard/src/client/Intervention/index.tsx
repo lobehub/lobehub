@@ -3,9 +3,10 @@
 import type { BuiltinIntervention, BuiltinInterventionProps } from '@lobechat/types';
 import { memo, useCallback } from 'react';
 
+import WidgetDryRunReview from '@/features/Dashboard/WidgetPreview/DryRunReview';
 import WidgetPublishReview from '@/features/Dashboard/WidgetPreview/PublishReview';
 
-import type { RequestPublishParams } from '../../types';
+import type { DryRunWidgetParams, RequestPublishParams } from '../../types';
 import { DashboardApiName } from '../../types';
 
 /**
@@ -36,6 +37,31 @@ const RequestPublishIntervention = memo<BuiltinInterventionProps<RequestPublishP
 
 RequestPublishIntervention.displayName = 'DashboardRequestPublishIntervention';
 
+/**
+ * Shown only for drafts that declare connector credentials or network hosts:
+ * the user approves running exactly this script with that access.
+ */
+const DryRunWidgetIntervention = memo<BuiltinInterventionProps<DryRunWidgetParams>>(
+  ({ args, onArgsChange }) => {
+    const pinVersion = useCallback(
+      (versionId: string) => onArgsChange?.({ ...args, versionId }),
+      [args, onArgsChange],
+    );
+
+    if (!args?.widgetId) return null;
+    return (
+      <WidgetDryRunReview
+        versionId={args.versionId}
+        widgetId={args.widgetId}
+        onPinVersion={pinVersion}
+      />
+    );
+  },
+);
+
+DryRunWidgetIntervention.displayName = 'DashboardDryRunWidgetIntervention';
+
 export const DashboardInterventions: Record<string, BuiltinIntervention> = {
+  [DashboardApiName.dryRunWidget]: DryRunWidgetIntervention as BuiltinIntervention,
   [DashboardApiName.requestPublish]: RequestPublishIntervention as BuiltinIntervention,
 };

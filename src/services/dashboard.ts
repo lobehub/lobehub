@@ -117,6 +117,11 @@ class DashboardService {
     return data;
   };
 
+  getVersion = async (widgetId: string, versionId: string) => {
+    const { data } = await lambdaClient.widget.getVersion.query({ versionId, widgetId });
+    return data;
+  };
+
   listVersions = async (widgetId: string) => {
     const { data } = await lambdaClient.widget.listVersions.query({ widgetId });
     return data;

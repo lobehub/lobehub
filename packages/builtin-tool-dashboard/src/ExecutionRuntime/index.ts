@@ -39,7 +39,7 @@ export interface DashboardToolService {
     description: string;
     title: string;
   }) => Promise<{ version: WidgetVersionRecord; widgetId: string }>;
-  dryRun: (widgetId: string, versionId?: string) => Promise<WidgetRunRecord>;
+  dryRun: (widgetId: string, versionId: string) => Promise<WidgetRunRecord>;
   getRun: (widgetId: string, runId: string) => Promise<WidgetRunRecord | undefined>;
   getWidget: (widgetId: string) => Promise<DashboardWidgetRecord | undefined>;
   /** The project's boards first (in a project topic), then the home boards. */
@@ -278,6 +278,16 @@ export class DashboardExecutionRuntime {
   }
 
   async dryRunWidget(params: DryRunWidgetParams): Promise<BuiltinServerRuntimeOutput> {
+    // Run exactly the version named in the call — the one an approval card
+    // showed — never whatever the current draft is by now.
+    if (!params.versionId) {
+      return fail(
+        new Error(
+          'versionId is required: pass the id returned by createWidgetDraft / updateWidgetDraft',
+        ),
+        'dry-run widget',
+      );
+    }
     try {
       const run = await this.service.dryRun(params.widgetId, params.versionId);
       const state: DryRunWidgetState = {

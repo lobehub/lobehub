@@ -120,8 +120,11 @@ export interface UpdateWidgetDraftParams extends Partial<WidgetVersionContent> {
 // ==================== dryRunWidget ====================
 
 export interface DryRunWidgetParams {
-  /** Defaults to the widget's current draft. */
-  versionId?: string;
+  /**
+   * The exact version to run — and, for a credentialed / networked draft, the
+   * one the user approves. Never resolved from "the current draft".
+   */
+  versionId: string;
   widgetId: string;
 }
 

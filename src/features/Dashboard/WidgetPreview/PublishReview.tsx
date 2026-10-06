@@ -1,9 +1,8 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Alert, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { memo, type ReactNode, useEffect } from 'react';
+import { Alert, Skeleton, Text } from '@lobehub/ui/base-ui';
+import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
@@ -11,30 +10,7 @@ import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import WidgetCard from '../WidgetCard';
 import { ScriptDiff } from '../WidgetDetail/VersionDiff';
 import { findSucceededPreviewRun, toPreviewWidget } from './previewWidget';
-
-const styles = createStaticStyles(({ css }) => ({
-  label: css`
-    flex: none;
-    width: 88px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  section: css`
-    padding: 10px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
-
-const Fact = ({ label, children }: { children: ReactNode; label: string }) => (
-  <Flexbox horizontal align={'baseline'} gap={8}>
-    <Text className={styles.label} fontSize={12}>
-      {label}
-    </Text>
-    <Flexbox horizontal flex={1} gap={4} style={{ minWidth: 0 }} wrap={'wrap'}>
-      {children}
-    </Flexbox>
-  </Flexbox>
-);
+import { AccessFacts, Fact, reviewStyles } from './ReviewFacts';
 
 interface PublishReviewProps {
   /**
@@ -88,8 +64,6 @@ const PublishReview = memo<PublishReviewProps>(({ widgetId, versionId, summary, 
   const run = findSucceededPreviewRun(runs, target.id);
   const manifest = target.manifest;
   const schedule = manifest?.schedule?.pattern ?? widget.schedulePattern;
-  const hosts = manifest?.network?.allow ?? [];
-  const env = manifest?.env ?? [];
 
   return (
     <Flexbox data-widget-publish-review={widgetId} gap={12}>
@@ -114,7 +88,7 @@ const PublishReview = memo<PublishReviewProps>(({ widgetId, versionId, summary, 
         <Alert showIcon title={t('publish.noSuccessfulRun')} type={'warning'} />
       )}
 
-      <Flexbox className={styles.section} gap={6}>
+      <Flexbox className={reviewStyles.section} gap={6}>
         <Fact label={t('chat.definition')}>
           <Text fontSize={12}>{widget.description || t('chat.noDefinition')}</Text>
         </Fact>
@@ -127,28 +101,7 @@ const PublishReview = memo<PublishReviewProps>(({ widgetId, versionId, summary, 
               : t('publish.scheduleNone')}
           </Text>
         </Fact>
-        <Fact label={t('publish.network')}>
-          {hosts.length > 0 ? (
-            hosts.map((host) => (
-              <Tag key={host} size={'small'}>
-                {host}
-              </Tag>
-            ))
-          ) : (
-            <Text fontSize={12}>{t('publish.networkNone')}</Text>
-          )}
-        </Fact>
-        <Fact label={t('publish.env')}>
-          {env.length > 0 ? (
-            env.map((item) => (
-              <Tag key={item.name} size={'small'}>
-                {item.connector ? `${item.name} ← ${item.connector}` : item.name}
-              </Tag>
-            ))
-          ) : (
-            <Text fontSize={12}>{t('publish.envNone')}</Text>
-          )}
-        </Fact>
+        <AccessFacts manifest={manifest} />
       </Flexbox>
 
       <Flexbox gap={6}>

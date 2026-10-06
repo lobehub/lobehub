@@ -1,6 +1,7 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 import { WIDGET_OUTPUT_TYPES, WIDGET_RUNTIMES } from '@lobechat/types';
 
+import { DASHBOARD_DRY_RUN_AUDIT } from './interventionAudit';
 import { systemPrompt } from './systemRole';
 import { DashboardApiName, DashboardIdentifier } from './types';
 
@@ -177,12 +178,18 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Execute a draft once in the sandbox and return its real output, stdout/stderr and error. Never affects the live widget. Fix the script with updateWidgetDraft and dry-run again until it succeeds.',
+        'Execute one exact draft version once in the sandbox and return its real output, stdout/stderr and error. Never affects the live widget. A draft that declares connector credentials (manifest.env) or network hosts (manifest.network.allow) runs only after the user approves it. Fix the script with updateWidgetDraft and dry-run the new version again until it succeeds.',
+      // Credentialed or networked code can act on the user's behalf the moment
+      // it runs, so those drafts need approval (`always`: auto-run cannot
+      // bypass it); a draft with neither runs in a closed sandbox unattended.
+      humanIntervention: {
+        dynamic: { default: 'never', policy: 'always', type: DASHBOARD_DRY_RUN_AUDIT },
+      },
       name: DashboardApiName.dryRunWidget,
       parameters: {
         additionalProperties: false,
         properties: { versionId: versionIdSchema, widgetId: widgetIdSchema },
-        required: ['widgetId'],
+        required: ['widgetId', 'versionId'],
         type: 'object',
       },
       renderDisplayControl: 'expand',

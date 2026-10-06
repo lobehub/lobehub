@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { RequestPublishParams, WidgetRunRecord, WidgetVersionRecord } from '../types';
+import type {
+  DryRunWidgetParams,
+  RequestPublishParams,
+  WidgetRunRecord,
+  WidgetVersionRecord,
+} from '../types';
 import { DashboardExecutionRuntime, type DashboardToolService, tailExcerpt } from './index';
 
 const version = (patch: Partial<WidgetVersionRecord> = {}): WidgetVersionRecord => ({
@@ -179,7 +184,7 @@ describe('updateWidgetDraft', () => {
 
 describe('dryRunWidget', () => {
   it('returns the real output of a successful run and points at publishing', async () => {
-    const result = await runtime.dryRunWidget({ widgetId: 'w1' });
+    const result = await runtime.dryRunWidget({ versionId: 'v1', widgetId: 'w1' });
 
     expect(result.success).toBe(true);
     expect(result.content).toContain('Dry run succeeded');
@@ -191,7 +196,7 @@ describe('dryRunWidget', () => {
   it('treats a partial run as working but asks to report what is missing', async () => {
     service.dryRun.mockResolvedValue(run({ status: 'partial' }));
 
-    const result = await runtime.dryRunWidget({ widgetId: 'w1' });
+    const result = await runtime.dryRunWidget({ versionId: 'v1', widgetId: 'w1' });
 
     expect(result.success).toBe(true);
     expect(result.content).toContain('Dry run partial');
@@ -211,7 +216,7 @@ describe('dryRunWidget', () => {
       }),
     );
 
-    const result = await runtime.dryRunWidget({ widgetId: 'w1' });
+    const result = await runtime.dryRunWidget({ versionId: 'v1', widgetId: 'w1' });
 
     // The model repairs the script from this, so the call itself succeeds.
     expect(result.success).toBe(true);
@@ -223,9 +228,20 @@ describe('dryRunWidget', () => {
     expect(result.state).toMatchObject({ error: { code: 'INVALID_JSON' }, status: 'failed' });
   });
 
+  it('runs exactly the named version and never falls back to the current draft', async () => {
+    const result = await runtime.dryRunWidget({ widgetId: 'w1' } as DryRunWidgetParams);
+
+    expect(service.dryRun).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('versionId is required');
+
+    await runtime.dryRunWidget({ versionId: 'v4', widgetId: 'w1' });
+    expect(service.dryRun).toHaveBeenCalledWith('w1', 'v4');
+  });
+
   it('fails when the widget cannot be dry-run at all', async () => {
     service.dryRun.mockRejectedValue(new Error('Only the widget creator can change it'));
-    const result = await runtime.dryRunWidget({ widgetId: 'w1' });
+    const result = await runtime.dryRunWidget({ versionId: 'v1', widgetId: 'w1' });
     expect(result).toMatchObject({ success: false });
   });
 });
