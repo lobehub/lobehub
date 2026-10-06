@@ -14,9 +14,9 @@ import { WidgetModel } from '@/database/models/widget';
 import { HomeRepository } from '@/database/repositories/home';
 import {
   agents,
+  dashboards,
   messages,
   sessions,
-  dashboards,
   topics,
   trashItems,
   users,

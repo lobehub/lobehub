@@ -1,8 +1,8 @@
 import type { TrashResourceType } from '@lobechat/types';
 
 import { agentHandler } from './agent';
-import { messageHandler } from './message';
 import { dashboardHandler } from './dashboard';
+import { messageHandler } from './message';
 import { topicHandler } from './topic';
 import type { TrashHandler } from './types';
 import { widgetHandler } from './widget';
