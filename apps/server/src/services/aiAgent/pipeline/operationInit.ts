@@ -22,6 +22,7 @@ import {
   type OperationPrepResult,
   prepareOperation,
 } from './operationPrep';
+import { traceSendStage } from './sendTracing';
 import { discoverTools, type ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
 
@@ -142,75 +143,79 @@ export const runOperationInit = async (
   request: OperationInitRequest,
 ): Promise<OperationInitResult> => {
   // Stage 5 (5a–5f) — tool discovery (see `pipeline/toolDiscovery`).
-  const discovery = await discoverTools(
-    {
-      agentDocumentsService: deps.agentDocumentsService,
-      composioService: deps.composioService,
-      connectorModel: deps.connectorModel,
-      connectorToolModel: deps.connectorToolModel,
-      db: deps.db,
-      getMarketService: deps.getMarketService,
-      messageModel: deps.messageModel,
-      pluginModel: deps.pluginModel,
-      userId: deps.userId,
-      workspaceId: deps.workspaceId,
-    },
-    ctx,
-    {
-      additionalPluginIds: request.additionalPluginIds,
-      agentSlug: request.agentSlug,
-      attachedFileIds: request.attachedFileIds,
-      botContext: request.botContext,
-      disableLocalSystem: request.disableLocalSystem,
-      disableSelfFeedbackIntentTool: request.disableSelfFeedbackIntentTool,
-      disableTools: request.disableTools,
-      disabledPluginIds: request.disabledPluginIds,
-      discordContext: request.discordContext,
-      exclusivePluginIds: request.exclusivePluginIds,
-      externalFileTypes: request.externalFileTypes,
-      functionTools: request.functionTools,
-      globalMemoryEnabled: request.globalMemoryEnabled,
-      hasMentionedAgents: request.hasMentionedAgents,
-      isFixedDeviceTarget: request.isFixedDeviceTarget,
-      loadHistoryMessages: deps.loadHistoryMessages,
-      localDeviceId: request.localDeviceId,
-      requestTrigger: request.requestTrigger,
-      requestedDeviceId: request.requestedDeviceId,
-      selectedToolIds: request.selectedToolIds,
-      throwIfExecutionAborted: deps.throwIfExecutionAborted,
-      topicBoundDeviceId: request.topicBoundDeviceId,
-    },
+  const discovery = await traceSendStage('tool_discovery', () =>
+    discoverTools(
+      {
+        agentDocumentsService: deps.agentDocumentsService,
+        composioService: deps.composioService,
+        connectorModel: deps.connectorModel,
+        connectorToolModel: deps.connectorToolModel,
+        db: deps.db,
+        getMarketService: deps.getMarketService,
+        messageModel: deps.messageModel,
+        pluginModel: deps.pluginModel,
+        userId: deps.userId,
+        workspaceId: deps.workspaceId,
+      },
+      ctx,
+      {
+        additionalPluginIds: request.additionalPluginIds,
+        agentSlug: request.agentSlug,
+        attachedFileIds: request.attachedFileIds,
+        botContext: request.botContext,
+        disableLocalSystem: request.disableLocalSystem,
+        disableSelfFeedbackIntentTool: request.disableSelfFeedbackIntentTool,
+        disableTools: request.disableTools,
+        disabledPluginIds: request.disabledPluginIds,
+        discordContext: request.discordContext,
+        exclusivePluginIds: request.exclusivePluginIds,
+        externalFileTypes: request.externalFileTypes,
+        functionTools: request.functionTools,
+        globalMemoryEnabled: request.globalMemoryEnabled,
+        hasMentionedAgents: request.hasMentionedAgents,
+        isFixedDeviceTarget: request.isFixedDeviceTarget,
+        loadHistoryMessages: deps.loadHistoryMessages,
+        localDeviceId: request.localDeviceId,
+        requestTrigger: request.requestTrigger,
+        requestedDeviceId: request.requestedDeviceId,
+        selectedToolIds: request.selectedToolIds,
+        throwIfExecutionAborted: deps.throwIfExecutionAborted,
+        topicBoundDeviceId: request.topicBoundDeviceId,
+      },
+    ),
   );
 
   // Stages 9.4–18 — device system info, agent-management context, persona
   // memory, history + message assembly, the base initial runtime context,
   // workspace init, the OperationSkillSet, and the expertise snapshot
   // (see `pipeline/operationPrep`).
-  const prep = await prepareOperation(
-    {
-      agentDocumentsService: deps.agentDocumentsService,
-      agentModel: deps.agentModel,
-      bindTopicWorkingDirectory: deps.bindTopicWorkingDirectory,
-      db: deps.db,
-      topicModel: deps.topicModel,
-      userId: deps.userId,
-      workspaceId: deps.workspaceId,
-    },
-    ctx,
-    {
-      botPlatformContext: request.botPlatformContext,
-      disabledPluginIds: request.disabledPluginIds,
-      discovery,
-      ephemeralUserMessage: request.ephemeralUserMessage,
-      globalMemoryEnabled: request.globalMemoryEnabled,
-      hasMentionedAgents: request.hasMentionedAgents,
-      loadHistoryMessages: deps.loadHistoryMessages,
-      mentionedAgents: request.mentionedAgents,
-      operationId: request.operationId,
-      runAttachments: request.runAttachments,
-      runFromHistory: request.resumeFromHistory,
-      throwIfExecutionAborted: deps.throwIfExecutionAborted,
-    },
+  const prep = await traceSendStage('operation_prep', () =>
+    prepareOperation(
+      {
+        agentDocumentsService: deps.agentDocumentsService,
+        agentModel: deps.agentModel,
+        bindTopicWorkingDirectory: deps.bindTopicWorkingDirectory,
+        db: deps.db,
+        topicModel: deps.topicModel,
+        userId: deps.userId,
+        workspaceId: deps.workspaceId,
+      },
+      ctx,
+      {
+        botPlatformContext: request.botPlatformContext,
+        disabledPluginIds: request.disabledPluginIds,
+        discovery,
+        ephemeralUserMessage: request.ephemeralUserMessage,
+        globalMemoryEnabled: request.globalMemoryEnabled,
+        hasMentionedAgents: request.hasMentionedAgents,
+        loadHistoryMessages: deps.loadHistoryMessages,
+        mentionedAgents: request.mentionedAgents,
+        operationId: request.operationId,
+        runAttachments: request.runAttachments,
+        runFromHistory: request.resumeFromHistory,
+        throwIfExecutionAborted: deps.throwIfExecutionAborted,
+      },
+    ),
   );
 
   // 16b/16c — override the initial context with the human decision

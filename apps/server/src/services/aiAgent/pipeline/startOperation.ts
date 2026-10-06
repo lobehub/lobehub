@@ -10,6 +10,7 @@ import { isAbortError } from '@/server/services/agentRuntime/abort';
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import type { ApprovalClaimState } from './approvalResume';
 import type { OperationPrepResult } from './operationPrep';
+import { traceStartStage } from './sendTracing';
 import type { ToolDiscoveryResult } from './toolDiscovery';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -395,7 +396,9 @@ export const startOperation = async (
     let gatewayToken: string | undefined;
     if (!deps.withholdGatewayToken) {
       try {
-        gatewayToken = await signUserJWT(shareGate?.visitorUserId ?? deps.userId);
+        gatewayToken = await traceStartStage('sign_gateway_token', () =>
+          signUserJWT(shareGate?.visitorUserId ?? deps.userId),
+        );
       } catch {
         log('execAgent: failed to sign gateway JWT, gateway auth will be unavailable');
       }

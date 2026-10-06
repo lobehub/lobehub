@@ -38,8 +38,12 @@ import { ingestAttachment } from '../ingestAttachment';
 import type { AgentShareGate } from '../shareGate';
 import { reserveShareVisitorTopic, reserveShareVisitorTurn } from '../shareVisitorAbuseGuards';
 import type { InternalExecAgentParams } from '../types';
+import { createStageTracer, openStageSpan } from './sendTracing';
 
 const log = debug('lobe-server:ai-agent-service');
+
+const traceTurnStage = createStageTracer('turn_setup');
+const openTurnStage = openStageSpan('turn_setup');
 
 export interface TurnSetupDeps {
   db: LobeChatDatabase;
@@ -480,6 +484,10 @@ export const setupTurn = async (
     });
   }
 
+  // Topic resolution is a block with early returns and outer assignments, so
+  // it carries a timing mark rather than a wrapping span; `end()` sits right
+  // after the block, and the throws inside propagate to `setupTurn`'s caller.
+  const topicStage = openTurnStage('topic');
   if (!topicId) {
     if (resume) {
       throw new Error('Resume mode requires the parent message to belong to a topic');
@@ -678,6 +686,8 @@ export const setupTurn = async (
     }
   }
 
+  topicStage.end();
+
   await throwIfExecutionAborted('topic setup');
 
   // Resolve device-tool access ONCE per turn, BEFORE the hetero early exit —
@@ -725,11 +735,18 @@ export const setupTurn = async (
 
   // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded
   // `attachedFileIds` → signed URLs + classification.
-  const runAttachments = await resolveRunAttachments(deps, {
-    attachedFileIds,
-    fileAccessScope: shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
-    files,
-    throwIfAborted: throwIfExecutionAborted,
+  // Raw bot/IM uploads are parsed here, on the send path — a PDF can hold
+  // this stage for seconds, which is why it gets its own span.
+  const runAttachments = await traceTurnStage('attachments', async (span) => {
+    const resolved = await resolveRunAttachments(deps, {
+      attachedFileIds,
+      fileAccessScope: shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
+      files,
+      throwIfAborted: throwIfExecutionAborted,
+    });
+    span.setAttribute('lobehub.turn_setup.raw_file_count', files?.length ?? 0);
+    span.setAttribute('lobehub.turn_setup.attached_file_count', attachedFileIds?.length ?? 0);
+    return resolved;
   });
 
   await throwIfExecutionAborted('message creation');
@@ -737,6 +754,7 @@ export const setupTurn = async (
   // Persist the user turn. `selfMessageIds` lets the normal-path history loader
   // exclude this freshly-created turn — history must be the PRIOR turns only,
   // otherwise the new prompt is double-counted in the LLM context.
+  const messagesStage = openTurnStage('messages');
   const selfMessageIds = new Set<string>();
   // Anchor the new user turn on the conversation tail. Never leave it
   // undefined for a topic that already has messages: `parentId: undefined`
@@ -884,6 +902,7 @@ export const setupTurn = async (
     ));
   selfMessageIds.add(assistantMessageRecord.id);
   log('execAgent: created assistant message %s', assistantMessageRecord.id);
+  messagesStage.end();
 
   // Agent Signal is a governance side-channel (feedback / self-iteration). It
   // only applies to the server-side LLM pipeline, so it is intentionally NOT

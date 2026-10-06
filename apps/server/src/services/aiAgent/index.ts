@@ -77,6 +77,7 @@ import { dispatchHeteroAgent } from './pipeline/heteroDispatch';
 import { buildOperationInitRequest, runOperationInit } from './pipeline/operationInit';
 import { createHistoryMessagesLoader } from './pipeline/operationPrep';
 import { resolveRunAgentConfig } from './pipeline/resolveRunAgentConfig';
+import { openStageSpan, traceSendStage } from './pipeline/sendTracing';
 import { startOperation } from './pipeline/startOperation';
 import { resolveNewTopicSnapshot, setupTurn } from './pipeline/turnSetup';
 import { createRunFacts, type RunFacts } from './runFacts';
@@ -91,6 +92,9 @@ import type {
 } from './types';
 
 const log = debug('lobe-server:ai-agent-service');
+
+/** Timing marks over the straight-line stages of `execAgent` (see `pipeline/sendTracing`). */
+const openSendStage = openStageSpan('execAgent');
 
 /**
  * AI Agent Service
@@ -1055,6 +1059,7 @@ export class AiAgentService {
 
     // Stages 1–2.5 — resolve the effective agent config for this run
     // (see `pipeline/resolveRunAgentConfig`).
+    const agentConfigStage = openSendStage('agent_config');
     const {
       agentConfig,
       agentSlug,
@@ -1085,6 +1090,8 @@ export class AiAgentService {
         toolModeOverride,
       },
     );
+
+    agentConfigStage.end();
 
     // Share-visitor runs must never see the creator's files/knowledge bases.
     // Applied to the resolved config before anything downstream (knowledge
@@ -1152,6 +1159,7 @@ export class AiAgentService {
 
     // Stages 2.6–2.7 — claim the human decision(s) before anything below reads
     // message history (see `pipeline/approvalResume`).
+    const approvalStage = openSendStage('approval_claim');
     const {
       approvalOwnerAssistantId,
       approvalSourceOperationId,
@@ -1177,6 +1185,8 @@ export class AiAgentService {
     // Deterministic continuation identity for a generic (v2) approval claim.
     // Also consumed by the turn setup below: a crash-safe re-entry must find
     // the SAME assistant placeholder instead of minting a second turn.
+    approvalStage.end();
+
     const continuationIdentity = providedApprovalResolutionRequestId
       ? {
           resolutionRequestId: providedApprovalResolutionRequestId,
@@ -1217,6 +1227,7 @@ export class AiAgentService {
     // Stage 3 + shared turn setup — topic creation/reuse (with the pinned
     // model), device-access policy, hetero detection, attachment ingestion, and
     // the persisted user/assistant rows (see `pipeline/turnSetup`).
+    const turnStage = openSendStage('turn_setup');
     const turn = await setupTurn(
       {
         db: this.db,
@@ -1269,6 +1280,7 @@ export class AiAgentService {
       selfMessageIds,
       topicId,
     } = turn;
+    turnStage.end();
 
     // Shared context for the extracted execAgent pipeline stages
     // (`pipeline/*`). Built after the turn rows exist so every stage sees the
@@ -1348,6 +1360,7 @@ export class AiAgentService {
     let globalMemoryEnabled = agentMemoryEnabled ?? false;
     let enableExpertise = false;
     let userTimezone: string | undefined;
+    const settingsStage = openSendStage('run_settings');
     try {
       const settings = await runFacts.userSettings();
       const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
@@ -1385,6 +1398,7 @@ export class AiAgentService {
       globalMemoryEnabled = false;
       enableExpertise = false;
     }
+    settingsStage.end();
     log(
       'execAgent: globalMemoryEnabled=%s, timezone=%s',
       globalMemoryEnabled,
@@ -1463,26 +1477,28 @@ export class AiAgentService {
       topicBoundDeviceId: turn.topicBoundDeviceId,
     });
 
-    const { discovery, initialContext, prep } = await runOperationInit(
-      {
-        agentDocumentsService: this.agentDocumentsService,
-        agentModel: this.agentModel,
-        bindTopicWorkingDirectory: (p) => this.bindTopicWorkingDirectory(p),
-        composioService: this.composioService,
-        connectorModel: this.connectorModel,
-        connectorToolModel: this.connectorToolModel,
-        db: this.db,
-        getMarketService: () => this.getMarketService(runFacts),
-        loadHistoryMessages,
-        messageModel: this.messageModel,
-        pluginModel: this.pluginModel,
-        throwIfExecutionAborted,
-        topicModel: this.topicModel,
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      },
-      runContext,
-      initRequest,
+    const { discovery, initialContext, prep } = await traceSendStage('operation_init', () =>
+      runOperationInit(
+        {
+          agentDocumentsService: this.agentDocumentsService,
+          agentModel: this.agentModel,
+          bindTopicWorkingDirectory: (p) => this.bindTopicWorkingDirectory(p),
+          composioService: this.composioService,
+          connectorModel: this.connectorModel,
+          connectorToolModel: this.connectorToolModel,
+          db: this.db,
+          getMarketService: () => this.getMarketService(runFacts),
+          loadHistoryMessages,
+          messageModel: this.messageModel,
+          pluginModel: this.pluginModel,
+          throwIfExecutionAborted,
+          topicModel: this.topicModel,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        },
+        runContext,
+        initRequest,
+      ),
     );
 
     // 17. Log final operation parameters summary
@@ -1537,55 +1553,57 @@ export class AiAgentService {
 
     // 19. Create the operation via AgentRuntimeService, persist the reconnect
     // marker, and mint the gateway token (see `pipeline/startOperation`).
-    return startOperation(
-      {
-        agentRuntimeService: this.agentRuntimeService,
-        messageModel: this.messageModel,
-        retirePendingApprovalOperation: (opId) => this.retirePendingApprovalOperation(opId),
-        topicModel: this.topicModel,
-        userId: this.userId,
-        withholdGatewayToken: this.withholdGatewayToken,
-        workspaceId: this.workspaceId,
-      },
-      runContext,
-      {
-        acceptsMemberRuntimeEnd: params.acceptsMemberRuntimeEnd,
-        approvalClaim,
-        approvalSourceOperationId,
-        approvalSourceToolMessageIds,
-        autoStart,
-        onOperationCreated: params.onOperationCreated,
-        botContext,
-        botPlatformContext,
-        clientIp,
-        disabledPluginIds,
-        discordContext,
-        discovery,
-        enableExpertise,
-        evalContext,
-        evalRuntime,
-        hooks,
-        initialContext,
-        initialStepCount,
-        maxSteps,
-        operationId,
-        operationTaskId,
-        parentOperationId,
-        prep,
-        providedApprovalResolutionRequestId,
-        queueRetries,
-        queueRetryDelay,
-        signal,
-        stream,
-        clientProtocol: params.clientProtocol,
-        includeFinalState: params.includeFinalState,
-        llmExecutor: params.llmExecutor,
-        topicStartOwnerOperationId: params.topicStartOwnerOperationId,
-        updateAbortedAssistantMessage,
-        userAgent,
-        userInterventionConfig,
-        userTimezone,
-      },
+    return traceSendStage('start_operation', () =>
+      startOperation(
+        {
+          agentRuntimeService: this.agentRuntimeService,
+          messageModel: this.messageModel,
+          retirePendingApprovalOperation: (opId) => this.retirePendingApprovalOperation(opId),
+          topicModel: this.topicModel,
+          userId: this.userId,
+          withholdGatewayToken: this.withholdGatewayToken,
+          workspaceId: this.workspaceId,
+        },
+        runContext,
+        {
+          acceptsMemberRuntimeEnd: params.acceptsMemberRuntimeEnd,
+          approvalClaim,
+          approvalSourceOperationId,
+          approvalSourceToolMessageIds,
+          autoStart,
+          onOperationCreated: params.onOperationCreated,
+          botContext,
+          botPlatformContext,
+          clientIp,
+          disabledPluginIds,
+          discordContext,
+          discovery,
+          enableExpertise,
+          evalContext,
+          evalRuntime,
+          hooks,
+          initialContext,
+          initialStepCount,
+          maxSteps,
+          operationId,
+          operationTaskId,
+          parentOperationId,
+          prep,
+          providedApprovalResolutionRequestId,
+          queueRetries,
+          queueRetryDelay,
+          signal,
+          stream,
+          clientProtocol: params.clientProtocol,
+          includeFinalState: params.includeFinalState,
+          llmExecutor: params.llmExecutor,
+          topicStartOwnerOperationId: params.topicStartOwnerOperationId,
+          updateAbortedAssistantMessage,
+          userAgent,
+          userInterventionConfig,
+          userTimezone,
+        },
+      ),
     );
   }
 

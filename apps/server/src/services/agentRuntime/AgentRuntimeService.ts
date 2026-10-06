@@ -87,6 +87,7 @@ import {
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
+import { traceStartStage } from '@/server/services/aiAgent/pipeline/sendTracing';
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { MessageService } from '@/server/services/message';
@@ -1207,43 +1208,45 @@ export class AgentRuntimeService {
     // stop can still reach the member's supervisor (`loadGroupMemberBridge`).
     const groupMemberBridge = hooks?.find((hook) => hook.id === 'group-member-bridge')?.webhook
       ?.body as Omit<GroupActionMemberBridgeParams, 'operationId' | 'reason'> | undefined;
-    const operationStartPersisted = await this.completionLifecycle.recordStart({
-      agentId: appContext?.agentId ?? null,
-      appContext: {
-        defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
-        documentId: appContext?.documentId,
-        editingAgentId: appContext?.editingAgentId,
-        groupId: appContext?.groupId,
-        scope: appContext?.scope,
-        sessionId: appContext?.sessionId,
-        sourceMessageId: appContext?.sourceMessageId,
-      },
-      chatGroupId: appContext?.groupId ?? null,
-      maxSteps,
-      // Persist the Agent Signal run marker on the operation row so server-side
-      // self-iteration tools can read it back (operation.metadata.agentSignal) at tool-call
-      // time — the trimmed appContext above intentionally drops it.
-      ...(appContext?.agentSignal || interventionResolution || groupMemberBridge
-        ? {
-            metadata: {
-              ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
-              ...(interventionResolution
-                ? { agentInterventionContinuation: interventionResolution }
-                : {}),
-              ...(groupMemberBridge ? { groupMemberBridge } : {}),
-            },
-          }
-        : {}),
-      model: modelRuntimeConfig?.model,
-      modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
-      operationId,
-      parentOperationId: parentOperationId ?? null,
-      provider: modelRuntimeConfig?.provider,
-      taskId: appContext?.taskId ?? null,
-      threadId: appContext?.threadId ?? null,
-      topicId: appContext?.topicId ?? null,
-      trigger: appContext?.trigger,
-    });
+    const operationStartPersisted = await traceStartStage('record_start', () =>
+      this.completionLifecycle.recordStart({
+        agentId: appContext?.agentId ?? null,
+        appContext: {
+          defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
+          documentId: appContext?.documentId,
+          editingAgentId: appContext?.editingAgentId,
+          groupId: appContext?.groupId,
+          scope: appContext?.scope,
+          sessionId: appContext?.sessionId,
+          sourceMessageId: appContext?.sourceMessageId,
+        },
+        chatGroupId: appContext?.groupId ?? null,
+        maxSteps,
+        // Persist the Agent Signal run marker on the operation row so server-side
+        // self-iteration tools can read it back (operation.metadata.agentSignal) at tool-call
+        // time — the trimmed appContext above intentionally drops it.
+        ...(appContext?.agentSignal || interventionResolution || groupMemberBridge
+          ? {
+              metadata: {
+                ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
+                ...(interventionResolution
+                  ? { agentInterventionContinuation: interventionResolution }
+                  : {}),
+                ...(groupMemberBridge ? { groupMemberBridge } : {}),
+              },
+            }
+          : {}),
+        model: modelRuntimeConfig?.model,
+        modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
+        operationId,
+        parentOperationId: parentOperationId ?? null,
+        provider: modelRuntimeConfig?.provider,
+        taskId: appContext?.taskId ?? null,
+        threadId: appContext?.threadId ?? null,
+        topicId: appContext?.topicId ?? null,
+        trigger: appContext?.trigger,
+      }),
+    );
     if (interventionResolution && !operationStartPersisted) {
       throw new Error(
         `Failed to durably persist intervention continuation ${operationId} before dispatch`,
@@ -1438,30 +1441,34 @@ export class AgentRuntimeService {
       // not one per member (single-connection multiplexing).
       const mirrorToOperationId =
         appContext?.orchestrationRole === 'member' ? (parentOperationId ?? undefined) : undefined;
-      await this.coordinator.createAgentOperation(operationId, {
-        acceptsMemberRuntimeEnd,
-        agentConfig,
-        // Persisted so a queue worker that never ran this op's init still
-        // applies the owner-configured visitor redaction policy instead of the
-        // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
-        visitorRedaction: agentShareVisitor
-          ? {
-              showErrorDetails: agentShareVisitor.showErrorDetails,
-              showModelInfo: agentShareVisitor.showModelInfo,
-            }
-          : undefined,
-        mirrorToOperationId,
-        modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
-        // Share-visitor runs execute as the creator (`userId`) but stream only
-        // to the visitor — the gateway registers the WS channel under this id.
-        streamOwnerUserId: agentShareVisitor?.visitorUserId,
-        userId,
-        workspaceId: this.workspaceId,
-      });
+      await traceStartStage('runtime_meta', () =>
+        this.coordinator.createAgentOperation(operationId, {
+          acceptsMemberRuntimeEnd,
+          agentConfig,
+          // Persisted so a queue worker that never ran this op's init still
+          // applies the owner-configured visitor redaction policy instead of the
+          // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
+          visitorRedaction: agentShareVisitor
+            ? {
+                showErrorDetails: agentShareVisitor.showErrorDetails,
+                showModelInfo: agentShareVisitor.showModelInfo,
+              }
+            : undefined,
+          mirrorToOperationId,
+          modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
+          // Share-visitor runs execute as the creator (`userId`) but stream only
+          // to the visitor — the gateway registers the WS channel under this id.
+          streamOwnerUserId: agentShareVisitor?.visitorUserId,
+          userId,
+          workspaceId: this.workspaceId,
+        }),
+      );
       operationCreated = true;
 
       // Save initial state
-      await this.coordinator.saveAgentState(operationId, initialState as any);
+      await traceStartStage('save_state', () =>
+        this.coordinator.saveAgentState(operationId, initialState as any),
+      );
 
       // Register external hooks
       hookDispatcher.register(operationId, hooks ?? []);
@@ -1528,17 +1535,20 @@ export class AgentRuntimeService {
         // Both local and queue modes use scheduleMessage
         // LocalQueueServiceImpl uses setTimeout + callback mechanism
         // QStashQueueServiceImpl schedules HTTP requests
-        messageId = await this.queueService.scheduleMessage({
-          context: initialContext,
-          deduplicationId,
-          delay: 50, // Short delay for startup
-          endpoint: `${this.baseURL}/run`,
-          operationId,
-          priority: 'high',
-          retryDelay: queueRetryDelay,
-          retries: queueRetries,
-          stepIndex: initialStepCount,
-        });
+        const queueService = this.queueService;
+        messageId = await traceStartStage('schedule_step', () =>
+          queueService.scheduleMessage({
+            context: initialContext,
+            deduplicationId,
+            delay: 50, // Short delay for startup
+            endpoint: `${this.baseURL}/run`,
+            operationId,
+            priority: 'high',
+            retryDelay: queueRetryDelay,
+            retries: queueRetries,
+            stepIndex: initialStepCount,
+          }),
+        );
         if (interventionResolution && deduplicationId) {
           await this.persistInterventionDispatchAck({
             deduplicationId,
