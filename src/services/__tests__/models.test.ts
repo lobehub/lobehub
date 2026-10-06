@@ -157,6 +157,10 @@ describe('ModelsService', () => {
         expect.objectContaining({ headers: RELAY.headers, method: 'POST' }),
       );
       expect(onProgress).toHaveBeenCalledWith({ completed: 1, status: 'pulling', total: 2 });
+      // abortPull() must also end a wait for the relay channel.
+      expect(oneShotRelay.run).toHaveBeenCalledWith('ollama', expect.any(Function), {
+        signal: expect.any(AbortSignal),
+      });
       expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
       restore();
     });
