@@ -68,11 +68,14 @@ const randomNonce = (): string =>
 
 type SubscribeOutcome = 'aborted' | 'failed' | 'ready' | 'timeout';
 
-/** Waits for `promise` until `ms` pass or `signal` aborts; says which happened. */
-const withTimeout = (promise: Promise<void>, ms: number, signal?: AbortSignal) =>
+/**
+ * Waits for `promise` until `ms` pass (no limit when omitted) or `signal`
+ * aborts; says which happened.
+ */
+const withTimeout = (promise: Promise<void>, ms: number | undefined, signal?: AbortSignal) =>
   new Promise<SubscribeOutcome>((resolve) => {
     if (signal?.aborted) return resolve('aborted');
-    const timer = setTimeout(() => resolve('timeout'), ms);
+    const timer = ms === undefined ? undefined : setTimeout(() => resolve('timeout'), ms);
     signal?.addEventListener(
       'abort',
       () => {
@@ -125,7 +128,12 @@ export class OneShotRelay {
   ): Promise<T> {
     const providersLoading =
       provider && this.deps.isAvailable() ? this.deps.whenProvidersKnown?.() : undefined;
-    if (providersLoading) await providersLoading;
+    if (providersLoading) {
+      // Bounded by the dependency; an aborted caller stops waiting at once and
+      // its request settles without a channel.
+      await withTimeout(providersLoading, undefined, signal);
+      if (signal?.aborted) return request();
+    }
     if (!this.needsRelay(provider)) return request();
 
     const channel = buildLlmRelayChannelId(this.deps.userId()!, randomNonce());

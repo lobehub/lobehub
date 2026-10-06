@@ -390,6 +390,25 @@ describe('LlmRelayExecutor non-chat methods (one-shot relay)', () => {
     expect(executor.isRunning('op-1:0:1')).toBe(false);
   });
 
+  it('never starts a model download when cancelled while the runtime is created', async () => {
+    const server = createServer();
+    const pullModel = vi.fn(async () => new Response(''));
+    let resolveRuntime!: (runtime: RelayRuntime) => void;
+    const executor = new LlmRelayExecutor({
+      clientId: () => 'tab-1',
+      createRuntime: () => new Promise((resolve) => (resolveRuntime = resolve)),
+      fetch: server.fetch,
+    });
+
+    const done = executor.execute(callData({ method: 'pullModel' }));
+    await waitFor(() => !!resolveRuntime);
+    executor.cancel({ callId: 'op-1:0:1', reason: 'interrupted' });
+    resolveRuntime({ chat: vi.fn(), pullModel });
+    await done;
+
+    expect(pullModel).not.toHaveBeenCalled();
+  });
+
   it('splits a large model list across batches under the size cap', async () => {
     const list = Array.from({ length: 3000 }, (_, i) => ({ id: `model-${i}`, displayName: 'x' }));
     const server = await run(callData({ method: 'models' }), {

@@ -79,6 +79,19 @@ describe('OneShotRelay', () => {
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ channel: expect.any(String) }));
   });
 
+  it('stops waiting for the provider runtime state once the caller aborts', async () => {
+    const { deps, relay } = createRelay({ whenProvidersKnown: () => new Promise(() => {}) });
+    const controller = new AbortController();
+    const request = vi.fn(async () => 'ok');
+
+    const result = relay.run('ollama', request, { signal: controller.signal });
+    controller.abort();
+
+    expect(await result).toBe('ok');
+    expect(request).toHaveBeenCalledWith();
+    expect(deps.subscribe).not.toHaveBeenCalled();
+  });
+
   it('does not claim the call while the user id is still unknown', async () => {
     const { deps, relay } = createRelay({ userId: () => undefined });
     const request = vi.fn(async () => 'ok');

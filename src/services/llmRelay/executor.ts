@@ -288,6 +288,10 @@ export class LlmRelayExecutor {
     uploader: RelayBatchUploader,
     signal: AbortSignal,
   ): Promise<NonNullable<LlmRelayBatch['final']>> {
+    // Cancelled while the runtime was created: never start a call that may not
+    // see the abort (a download's listener misses an already-fired event).
+    if (signal.aborted) throw abortError();
+
     if (method === 'pullModel') {
       const response = await runtime.pullModel?.(payload, { signal });
       if (!response) throw new Error('This provider cannot download models');
@@ -307,8 +311,6 @@ export class LlmRelayExecutor {
 
     const run = method === 'models' ? runtime.models : runtime.generateObject;
     if (!run) throw new Error(`This provider does not support ${method}`);
-    // Cancelled while the runtime was created: never start a call nothing can stop.
-    if (signal.aborted) throw abortError();
     const result = await untilAborted(run.call(runtime, payload, { signal }), signal);
     if (signal.aborted) throw abortError();
 
