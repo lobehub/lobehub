@@ -190,6 +190,49 @@ describe('ImageEditTools', () => {
       expect(within(overlay).queryByTestId('image-comment-draft')).not.toBeInTheDocument();
     });
 
+    // Regression: text typed in the comment card was dropped by Done / Add to chat.
+    it('keeps a typed but not yet added comment on Done', () => {
+      const { overlay } = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.comment'));
+      const layer = within(overlay).getByTestId('image-comment-layer');
+      fireEvent.pointerDown(layer, { button: 0, clientX: 50, clientY: 50, pointerId: 1 });
+      fireEvent.pointerUp(layer, { clientX: 50, clientY: 50, pointerId: 1 });
+      fireEvent.change(within(overlay).getByRole('textbox', { name: 'imageViewer.comment.add' }), {
+        target: { value: 'not added yet' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'imageViewer.done' }));
+
+      // Back on the main toolbar with the comment pending.
+      const toolbar = screen.getByRole('toolbar', { name: 'imageViewer.editTools' });
+      expect(within(toolbar).getByTestId('image-markup-send')).toBeEnabled();
+    });
+
+    it('sends a typed but not yet added comment with Add to chat', async () => {
+      const { overlay } = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.comment'));
+      const layer = within(overlay).getByTestId('image-comment-layer');
+      fireEvent.pointerDown(layer, { button: 0, clientX: 50, clientY: 50, pointerId: 1 });
+      fireEvent.pointerUp(layer, { clientX: 50, clientY: 50, pointerId: 1 });
+      fireEvent.change(within(overlay).getByRole('textbox', { name: 'imageViewer.comment.add' }), {
+        target: { value: 'not added yet' },
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('image-markup-send'));
+      });
+
+      await waitFor(() => expect(exporter.renderImageToBlob).toHaveBeenCalled());
+      expect(
+        exporter.renderImageToBlob.mock.calls[0][1].comments.map((c: { text: string }) => c.text),
+      ).toEqual(['not added yet']);
+      // Sent, so nothing is left pending.
+      expect(
+        await screen.findByRole('toolbar', { name: 'imageViewer.editTools' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('image-markup-send')).not.toBeInTheDocument();
+    });
+
     it('cancels a draft with Escape without leaving the mode', () => {
       const { overlay } = renderTools();
       fireEvent.click(screen.getByText('imageViewer.tool.comment'));
@@ -436,6 +479,38 @@ describe('ImageEditTools', () => {
       // Back on the main toolbar with the unsent box still pending.
       const toolbar = await screen.findByRole('toolbar', { name: 'imageViewer.editTools' });
       expect(within(toolbar).getByTestId('image-markup-send')).toBeEnabled();
+    });
+
+    // Regression: closing the viewer mid-upload still delivered the handoff.
+    it('drops the handoff when the viewer closes during the upload', async () => {
+      let finishUpload!: () => void;
+      fileStore.uploadChatFiles.mockImplementation(
+        ([file]: File[]) =>
+          new Promise<void>((resolve) => {
+            finishUpload = () => {
+              fileStore.chatUploadFileList = [{ file, id: 'file_chat', status: 'success' }];
+              resolve();
+            };
+          }),
+      );
+      const { overlay, unmount } = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.annotate'));
+      drawBox(overlay);
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('image-markup-send'));
+      });
+      await waitFor(() => expect(fileStore.uploadChatFiles).toHaveBeenCalled());
+
+      unmount();
+      await act(async () => finishUpload());
+
+      expect(useComposerDraftBus.getState().draft).toBeNull();
+      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith({
+        id: 'file_chat',
+        type: 'removeFile',
+      });
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('judges this upload, not an earlier attachment with the same name', async () => {

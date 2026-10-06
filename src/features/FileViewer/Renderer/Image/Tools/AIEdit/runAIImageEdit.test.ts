@@ -487,6 +487,29 @@ describe('runAIImageEdit', () => {
     await expect(pending).rejects.toMatchObject({ kind: 'cancelled', taskRunning: false });
   });
 
+  // Regression: a guide upload that finished after Cancel was never removed.
+  it('removes an erase guide whose upload lands after Cancel', async () => {
+    const controller = new AbortController();
+    let finishUpload!: (value: { id: string; url: string }) => void;
+    const deps = spyDeps({
+      uploadFile: () =>
+        new Promise<{ id: string; url: string }>((resolve) => (finishUpload = resolve)),
+    });
+
+    const pending = run(deps, {
+      guide: new Blob(['png'], { type: 'image/png' }),
+      operation: 'erase',
+      signal: controller.signal,
+    });
+    await vi.waitFor(() => expect(deps.uploadFile).toHaveBeenCalled());
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ kind: 'cancelled', taskRunning: false });
+
+    finishUpload({ id: 'file_late_guide', url: 'https://app.lobehub.com/f/file_late_guide' });
+    await vi.waitFor(() => expect(deps.removeFile).toHaveBeenCalledWith('file_late_guide'));
+    expect(deps.createImage).not.toHaveBeenCalled();
+  });
+
   it('times out while a status request hangs', async () => {
     const deps = spyDeps({ getStatus: () => new Promise<never>(() => {}) });
 

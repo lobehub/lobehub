@@ -1,6 +1,6 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
 import { toast } from '@lobehub/ui/base-ui';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -31,11 +31,19 @@ import { buildMarkupMessage, type ImageMarkup, isMarkupEmpty } from './markup';
  */
 export const useSendMarkupToChat = () => {
   const { t } = useTranslation('file');
-  const { name, url } = useImageStage();
+  const { name, setBusy, url } = useImageStage();
   const navigate = useWorkspaceAwareNavigate();
   const hasComposer = useComposerDraftBus((s) => s.attached);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const [sending, setSending] = useState(false);
+  // The handoff must not land after the viewer that started it is gone.
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   const send = useCallback(
     async (markup: ImageMarkup): Promise<boolean> => {
@@ -49,6 +57,8 @@ export const useSendMarkupToChat = () => {
       }
 
       setSending(true);
+      // Keeps the viewer's Close disabled while the image is on its way.
+      setBusy(true);
       try {
         const img = await loadStageImage(url);
         const blob = await renderImageToBlob(img, {
@@ -70,6 +80,7 @@ export const useSendMarkupToChat = () => {
         const isStillTarget = () => {
           const chat = useChatStore.getState();
           return (
+            aliveRef.current &&
             useComposerDraftBus.getState().attached === attached &&
             (!attached ||
               (chat.activeAgentId === activeAgentId && chat.activeTopicId === activeTopicId))
@@ -106,6 +117,8 @@ export const useSendMarkupToChat = () => {
         }
         return true;
       } catch (error) {
+        // Closed meanwhile: the user discarded this handoff, nothing to report.
+        if (!aliveRef.current) return false;
         console.error('[ImageViewer] send markup to chat failed', error);
         toast.error(
           error instanceof ImagePixelsUnavailableError
@@ -114,10 +127,11 @@ export const useSendMarkupToChat = () => {
         );
         return false;
       } finally {
-        setSending(false);
+        setBusy(false);
+        if (aliveRef.current) setSending(false);
       }
     },
-    [inboxAgentId, name, navigate, t, url],
+    [inboxAgentId, name, navigate, setBusy, t, url],
   );
 
   return { hasComposer, send, sending };

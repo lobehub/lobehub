@@ -114,14 +114,28 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
 
   useToolKeys({ onEscape: () => (draftAnchor ? cancelDraft() : onExit()) });
 
-  const submitDraft = () => {
+  /** Add the comment being typed, if any, and return the marks including it. */
+  const commitDraft = (): ImageMarkup => {
     const text = draftText.trim();
-    if (!draftAnchor || !text) return;
-    const id = nanoid();
-    onChange({ ...markup, comments: [...comments, { anchor: draftAnchor, id, text }] });
-    setActiveId(id);
+    if (!draftAnchor || !text) return markup;
+    const comment = { anchor: draftAnchor, id: nanoid(), text };
+    const next = { ...markup, comments: [...comments, comment] };
+    onChange(next);
+    setActiveId(comment.id);
     cancelDraft();
+    return next;
   };
+
+  const submitDraft = () => void commitDraft();
+
+  // A typed but not yet added comment counts: Done and Add to chat keep it.
+  const pendingText = draftAnchor ? draftText.trim() : '';
+  const sendableMarkup = pendingText
+    ? {
+        ...markup,
+        comments: [...comments, { anchor: draftAnchor!, id: 'pending', text: pendingText }],
+      }
+    : markup;
 
   const removeComment = (id: string) =>
     onChange({ ...markup, comments: comments.filter((comment) => comment.id !== id) });
@@ -341,10 +355,17 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
             onClick={() => setListOpen((value) => !value)}
           />
           <span className={toolStyles.divider} />
-          <Button shape={'round'} size={'small'} onClick={onExit}>
+          <Button
+            shape={'round'}
+            size={'small'}
+            onClick={() => {
+              commitDraft();
+              onExit();
+            }}
+          >
             {t('imageViewer.done')}
           </Button>
-          <SendToChatButton markup={markup} onSent={onSent} />
+          <SendToChatButton markup={sendableMarkup} onBeforeSend={commitDraft} onSent={onSent} />
         </div>
       </div>
     </>

@@ -264,13 +264,20 @@ export const runAIImageEdit = async ({
     if (operation === 'erase') {
       if (!guide) throw new AIImageEditError('failed', 'Missing erase guide image');
       onPhase?.('uploading');
-      const uploaded = await step(
-        deps.uploadFile({
-          file: new File([guide], buildDerivedFileName(source.name, 'erase-guide'), {
-            type: 'image/png',
-          }),
+      const guideUpload = deps.uploadFile({
+        file: new File([guide], buildDerivedFileName(source.name, 'erase-guide'), {
+          type: 'image/png',
         }),
-      );
+      });
+      let uploaded: Awaited<typeof guideUpload>;
+      try {
+        uploaded = await step(guideUpload);
+      } catch (error) {
+        // Cancelled or timed out mid-upload: nothing was submitted, so remove
+        // the guide if the upload still lands.
+        void guideUpload.then((late) => late && deps.removeFile(late.id)).catch(() => undefined);
+        throw error;
+      }
       if (!uploaded) throw new AIImageEditError('failed', 'Failed to upload the erase guide');
       guideFileId = uploaded.id;
       imageUrl = uploaded.url;

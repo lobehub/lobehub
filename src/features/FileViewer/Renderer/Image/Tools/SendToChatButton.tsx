@@ -9,6 +9,8 @@ import { useSendMarkupToChat } from './useSendMarkupToChat';
 
 interface SendToChatButtonProps {
   markup: ImageMarkup;
+  /** Commit anything still being edited and return the marks to send. */
+  onBeforeSend?: () => ImageMarkup;
   /** Called with the marks that went into the chat input, so only those are cleared. */
   onSent: (sent: ImageMarkup) => void;
 }
@@ -18,7 +20,7 @@ interface SendToChatButtonProps {
  * numbered comments into the chat input. Without a conversation next to the
  * viewer, it starts one with the inbox agent instead.
  */
-const SendToChatButton = ({ markup, onSent }: SendToChatButtonProps) => {
+const SendToChatButton = ({ markup, onBeforeSend, onSent }: SendToChatButtonProps) => {
   const { t } = useTranslation('file');
   const { hasComposer, send, sending } = useSendMarkupToChat();
   const empty = isMarkupEmpty(markup);
@@ -34,7 +36,8 @@ const SendToChatButton = ({ markup, onSent }: SendToChatButtonProps) => {
       title={empty ? t('imageViewer.markup.empty') : undefined}
       type={'primary'}
       onClick={async () => {
-        if (await send(markup)) onSent(markup);
+        const toSend = onBeforeSend?.() ?? markup;
+        if (await send(toSend)) onSent(toSend);
       }}
     >
       {t(hasComposer ? 'imageViewer.markup.addToChat' : 'imageViewer.markup.askInNewChat')}
