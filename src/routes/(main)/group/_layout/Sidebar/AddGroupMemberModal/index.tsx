@@ -49,7 +49,7 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
     const selectedAgentIds = useAgentSelectionStore((s) => s.selectedAgentIds);
     const clearSelection = useAgentSelectionStore((s) => s.clearSelection);
 
-    // Fetch agents from the new API (non-virtual agents plus the inbox)
+    // Fetch non-virtual agents; the inbox is excluded unless a caller opts in
     const { data: allAgents = [], isLoading: isLoadingAgents } = useSWR(
       open ? groupKeys.queryAgents() : null,
       () => agentService.queryAgents(),

@@ -1,5 +1,9 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
+import {
+  DEFAULT_INBOX_TITLE,
+  INBOX_SESSION_ID,
+  isHeterogeneousAgentModelId,
+} from '@lobechat/const';
 import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
@@ -618,16 +622,28 @@ export class AgentModel {
     // `name` is the user-facing display name (see `agents.name`); resolving the
     // label the UI shows is the primary way users and tools find an agent, so
     // the keyword must match it alongside `title`/`description`.
-    return keyword
-      ? and(
-          baseConditions,
-          or(
-            ilike(agents.title, `%${keyword}%`),
-            ilike(agents.name, `%${keyword}%`),
-            ilike(agents.description, `%${keyword}%`),
-          ),
-        )
-      : baseConditions;
+    if (!keyword) return baseConditions;
+
+    // An inbox with a blank title is shown as `DEFAULT_INBOX_TITLE` only after
+    // the query (see `normalizeInboxAgentMeta`), so the raw `title` column can't
+    // match it — match that default label here instead.
+    const matchesDefaultInboxTitle =
+      includeInbox && DEFAULT_INBOX_TITLE.toLowerCase().includes(keyword.toLowerCase());
+
+    return and(
+      baseConditions,
+      or(
+        ilike(agents.title, `%${keyword}%`),
+        ilike(agents.name, `%${keyword}%`),
+        ilike(agents.description, `%${keyword}%`),
+        matchesDefaultInboxTitle
+          ? and(
+              eq(agents.slug, INBOX_SESSION_ID),
+              or(isNull(agents.title), sql`trim(${agents.title}) = ''`),
+            )
+          : undefined,
+      ),
+    );
   };
 
   /**
@@ -1055,7 +1071,9 @@ export class AgentModel {
       // carry `virtual` exactly like a group's own members. Deleting one takes
       // its linked session and every conversation with it, and nothing can
       // recreate them — refuse here, the same way `addAgentsToGroup` refuses to
-      // seat one, so no CRUD surface can reach a reserved row by accident.
+      // seat one. This only guards callers of `AgentModel.delete`; paths that
+      // delete `agents` rows directly (e.g. the OpenAPI `migrateSessionTo`
+      // delete) bypass it.
       if (locked?.slug && RESERVED_AGENT_SLUGS.has(locked.slug)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',

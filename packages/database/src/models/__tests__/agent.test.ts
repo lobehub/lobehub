@@ -445,6 +445,23 @@ describe('AgentModel', () => {
       expect(result.map((agent) => agent.id)).toEqual(['sienna-agent']);
     });
 
+    it('matches a blank-title inbox by its default display title when the caller opts in', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'blank-inbox', slug: INBOX_SESSION_ID, title: null, userId, virtual: true },
+        { id: 'normal-agent', title: 'Writer', userId },
+      ]);
+
+      const withInbox = await agentModel.queryAgents({ includeInbox: true, keyword: 'lobe' });
+      expect(withInbox.map((agent) => agent.id)).toEqual(['blank-inbox']);
+      expect(withInbox[0]?.title).toBe(DEFAULT_INBOX_TITLE);
+      await expect(agentModel.countAgents({ includeInbox: true, keyword: 'lobe' })).resolves.toBe(
+        1,
+      );
+
+      // Without the opt-in the inbox stays out even when the keyword matches.
+      await expect(agentModel.queryAgents({ keyword: 'lobe' })).resolves.toEqual([]);
+    });
+
     it('counts the inbox in the shared total when the caller opts in, so pagination stays honest', async () => {
       await serverDB.insert(agents).values([
         { id: 'inbox-agent', slug: INBOX_SESSION_ID, userId, virtual: true },
