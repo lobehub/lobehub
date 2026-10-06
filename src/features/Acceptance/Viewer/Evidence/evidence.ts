@@ -49,3 +49,23 @@ export const evidenceCounts = (evidence: AcceptanceEvidence[]) => {
 
 export const imageRatio = (item: AcceptanceEvidence): string | undefined =>
   item.fileWidth && item.fileHeight ? `${item.fileWidth} / ${item.fileHeight}` : undefined;
+
+/**
+ * What the shortcut floating on each picture opens. A reader comments on a
+ * region; the author, who gives region feedback through the reject, marks one.
+ * Where tapping the picture already opens that marking (a reviewer's phone),
+ * a second control for the same thing is left out.
+ */
+export const evidenceShortcut = ({
+  canComment,
+  canMark,
+  tapMarks,
+}: {
+  canComment: boolean;
+  canMark: boolean;
+  tapMarks: boolean;
+}): 'annotate' | 'comment' | undefined => {
+  if (canComment) return 'comment';
+  if (canMark && !tapMarks) return 'annotate';
+  return undefined;
+};

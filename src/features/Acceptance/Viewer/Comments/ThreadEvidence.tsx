@@ -4,7 +4,7 @@ import type { AcceptanceCommentItem } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AcceptanceEvidence } from '../Checks/types';
@@ -65,17 +65,21 @@ interface ThreadEvidenceProps {
 const ThreadEvidence = memo<ThreadEvidenceProps>(({ comment, evidence, roundIndex, stale }) => {
   const { t } = useTranslation('verify');
   const authorColor = useAcceptanceAuthorColor();
+  // Imported or older evidence may carry no stored size; the picture itself
+  // knows it once loaded, and until then the crop stays at the top.
+  const [loaded, setLoaded] = useState<{ height: number; width: number }>();
   if (!evidence.fileUrl || !comment.rect) return null;
+  const size =
+    evidence.fileWidth && evidence.fileHeight
+      ? { height: evidence.fileHeight, width: evidence.fileWidth }
+      : loaded;
 
   return (
     <Flexbox className={styles.wrapper} gap={4}>
       <div className={styles.crop}>
         <div
           style={{
-            marginBlockStart: -thumbnailCropOffset(
-              { height: evidence.fileHeight, width: evidence.fileWidth },
-              comment.rect,
-            ),
+            marginBlockStart: -thumbnailCropOffset(size ?? {}, comment.rect),
           }}
         >
           <AnnotatedImage
@@ -83,6 +87,11 @@ const ThreadEvidence = memo<ThreadEvidenceProps>(({ comment, evidence, roundInde
             imageStyle={{ width: THUMBNAIL_WIDTH }}
             showComments={false}
             src={evidence.fileUrl}
+            onLoad={(event) => {
+              const { naturalHeight, naturalWidth } = event.currentTarget;
+              if (naturalWidth && naturalHeight)
+                setLoaded({ height: naturalHeight, width: naturalWidth });
+            }}
           />
         </div>
       </div>

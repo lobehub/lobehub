@@ -176,36 +176,45 @@ export const EvidenceList = memo<{
             </Flexbox>
           );
         if (!md && onReviewEvidence && item.fileUrl && IMAGE_EVIDENCE.has(item.type)) {
+          const action = commentAction(item);
+          // The tap reviews; the comment shortcut sits beside the button rather
+          // than inside it, since a button cannot hold another one.
           return (
-            <button
+            <div
               key={item.id}
-              type={'button'}
-              style={{
-                padding: 0,
-                width: '100%',
-                border: 0,
-                background: 'none',
-                textAlign: 'start',
-                cursor: 'pointer',
-              }}
-              onClick={() => onReviewEvidence(item.id)}
+              style={{ position: 'relative', width: '100%' }}
+              {...(action ? { [FLOATING_ACTION_HOST]: '' } : {})}
             >
-              <img
-                alt={item.description ?? item.fileName ?? item.type}
-                loading={'lazy'}
-                src={item.fileUrl}
+              <button
+                type={'button'}
                 style={{
-                  display: 'block',
-                  maxWidth: '100%',
+                  padding: 0,
                   width: '100%',
-                  height: 180,
-                  objectFit: 'cover',
-                  objectPosition: 'top',
-                  borderRadius: 8,
+                  border: 0,
+                  background: 'none',
+                  textAlign: 'start',
+                  cursor: 'pointer',
                 }}
-              />
-              {caption}
-            </button>
+                onClick={() => onReviewEvidence(item.id)}
+              >
+                <img
+                  alt={item.description ?? item.fileName ?? item.type}
+                  loading={'lazy'}
+                  src={item.fileUrl}
+                  style={{
+                    display: 'block',
+                    maxWidth: '100%',
+                    width: '100%',
+                    height: 180,
+                    objectFit: 'cover',
+                    objectPosition: 'top',
+                    borderRadius: 8,
+                  }}
+                />
+                {caption}
+              </button>
+              {action}
+            </div>
           );
         }
         const overlay = overlays?.get(item.id);

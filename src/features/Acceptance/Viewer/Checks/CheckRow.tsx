@@ -42,6 +42,7 @@ import { threadsForCheck } from '../Comments/threads';
 import {
   canMarkEvidence,
   evidenceCounts,
+  evidenceShortcut,
   hasAnnotatableEvidence,
   isRejectable,
 } from '../Evidence/evidence';
@@ -253,14 +254,21 @@ export const AcceptanceCheckRow = memo<{
     // The picture's own shortcut opens whatever the bottom of the row offers:
     // a region comment for a reader, marking a send-back for the author, who
     // gives region feedback through the reject instead.
-    const floatingComment = canCommentEvidence
-      ? { label: t('acceptance.comments.commentThisEvidence'), open: openEvidenceComment }
-      : reviewable && !activeReview && canMarkEvidence(check, desktop)
-        ? {
-            label: t('acceptance.review.annotate'),
-            open: (id: string) => openReject(undefined, id),
-          }
-        : undefined;
+    const shortcut = evidenceShortcut({
+      canComment: canCommentEvidence,
+      canMark: reviewable && !activeReview && canMarkEvidence(check, desktop),
+      // EvidenceList turns a phone reviewer's tap into the same marking.
+      tapMarks: !desktop && canReview,
+    });
+    const floatingComment =
+      shortcut === 'comment'
+        ? { label: t('acceptance.comments.commentThisEvidence'), open: openEvidenceComment }
+        : shortcut === 'annotate'
+          ? {
+              label: t('acceptance.review.annotate'),
+              open: (id: string) => openReject(undefined, id),
+            }
+          : undefined;
 
     /**
      * @param fromProposal - when set, the modal opens prefilled with the
