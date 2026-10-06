@@ -51,6 +51,7 @@ import {
   addPullRequestLink,
   listAcceptancePullRequests,
   removePullRequestLink,
+  updateAcceptancePullRequests,
 } from '@/server/services/verify/acceptancePullRequests';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
@@ -451,7 +452,7 @@ export const acceptanceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+      const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
       const parsed = parseChangeRequestUrl(input.url);
       if (!parsed) {
         throw new TRPCError({
@@ -461,30 +462,26 @@ export const acceptanceRouter = router({
         });
       }
 
-      await service.acceptanceModel.update(acceptance.id, {
-        metadata: {
-          ...acceptance.metadata,
-          pullRequests: addPullRequestLink(acceptance.metadata?.pullRequests, parsed, input.title),
-        },
-      });
+      await updateAcceptancePullRequests(ctx.serverDB, acceptance.id, (links) =>
+        addPullRequestLink(links, parsed, input.title),
+      );
       return parsed;
     }),
 
   unlinkPullRequest: acceptanceWriteProcedure
     .input(z.object({ id: z.string(), url: z.string().max(2000) }))
     .mutation(async ({ ctx, input }) => {
-      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+      const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
       const parsed = parseChangeRequestUrl(input.url);
       const pullRequests = parsed
-        ? removePullRequestLink(acceptance.metadata?.pullRequests, parsed)
+        ? await updateAcceptancePullRequests(ctx.serverDB, acceptance.id, (links) =>
+            removePullRequestLink(links, parsed),
+          )
         : null;
       if (!pullRequests) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Linked pull request not found' });
       }
 
-      await service.acceptanceModel.update(acceptance.id, {
-        metadata: { ...acceptance.metadata, pullRequests },
-      });
       return { success: true };
     }),
 

@@ -4,8 +4,11 @@ import type {
   ScmCiStatus,
   ScmReviewDecision,
 } from '@lobechat/types';
+import { eq, sql } from 'drizzle-orm';
 
 import type { ScmChangeRequestItem } from '@/database/schemas';
+import { acceptances } from '@/database/schemas/verify';
+import type { LobeChatDatabase } from '@/database/type';
 
 import type { ParsedChangeRequestUrl } from '../scm/changeRequestUrl';
 
@@ -42,6 +45,37 @@ export const removePullRequestLink = (
   if (!links?.some((link) => identity(link) === key)) return null;
   return links.filter((link) => identity(link) !== key);
 };
+
+/**
+ * Read, change and write an acceptance's hand links under a row lock, touching
+ * only the `pullRequests` key. Stacked PRs are often linked by concurrent
+ * ingests, and a merge of a stale `metadata` snapshot would drop one of them
+ * (or a concurrent rename). Returns `null` when `update` declines.
+ */
+export const updateAcceptancePullRequests = async (
+  db: LobeChatDatabase,
+  acceptanceId: string,
+  update: (links: AcceptancePullRequestLink[] | undefined) => AcceptancePullRequestLink[] | null,
+): Promise<AcceptancePullRequestLink[] | null> =>
+  db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ metadata: acceptances.metadata })
+      .from(acceptances)
+      .where(eq(acceptances.id, acceptanceId))
+      .for('update');
+    if (!row) return null;
+
+    const next = update(row.metadata?.pullRequests);
+    if (!next) return null;
+    await tx
+      .update(acceptances)
+      .set({
+        metadata: sql`jsonb_set(COALESCE(${acceptances.metadata}, '{}'::jsonb), '{pullRequests}', ${JSON.stringify(next)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(acceptances.id, acceptanceId));
+    return next;
+  });
 
 export interface AcceptancePullRequest {
   ciStatus: ScmCiStatus | null;
