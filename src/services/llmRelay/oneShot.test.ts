@@ -47,6 +47,19 @@ describe('OneShotRelay', () => {
     expect(deps.subscribe).not.toHaveBeenCalled();
   });
 
+  // Callers drop the browser fetcher when `needsRelay` says so; with no user id
+  // yet (session still loading) `run` cannot build a channel, so `needsRelay`
+  // must say no and leave the legacy path in place.
+  it('does not claim the call while the user id is still unknown', async () => {
+    const { deps, relay } = createRelay({ userId: () => undefined });
+    const request = vi.fn(async () => 'ok');
+
+    expect(relay.needsRelay('ollama')).toBe(false);
+    expect(await relay.run('ollama', request)).toBe('ok');
+    expect(request).toHaveBeenCalledWith();
+    expect(deps.subscribe).not.toHaveBeenCalled();
+  });
+
   it('subscribes its own channel first, sends it in the headers, executes what it delivers, then releases it', async () => {
     const { close, deps, emit, markReady, relay } = createRelay();
     const request = vi.fn(async (handle?: { channel: string; headers: Record<string, string> }) => {
@@ -99,5 +112,50 @@ describe('OneShotRelay', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // The v1 path fetches a gateway token before it subscribes: a stalled token
+  // request must not hold the caller's request up past the same timeout, and
+  // a subscription that lands late is still released.
+  it('bounds the subscription setup itself by the timeout and releases a late subscription', async () => {
+    vi.useFakeTimers();
+    try {
+      const close = vi.fn();
+      let finishSetup!: () => void;
+      const { relay } = createRelay({
+        subscribe: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              finishSetup = () => resolve({ close, ready: Promise.resolve() });
+            }),
+        ),
+      });
+      const request = vi.fn(async () => 'ok');
+      const result = relay.run('ollama', request);
+
+      await vi.advanceTimersByTimeAsync(ONE_SHOT_SUBSCRIBE_TIMEOUT_MS);
+      expect(await result).toBe('ok');
+      expect(request).toHaveBeenCalledWith(
+        expect.objectContaining({ channel: expect.any(String) }),
+      );
+
+      finishSetup();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still makes the request when the subscription setup fails', async () => {
+    const { relay } = createRelay({
+      subscribe: vi.fn(async () => {
+        throw new Error('token request failed');
+      }),
+    });
+    const request = vi.fn(async () => 'ok');
+
+    expect(await relay.run('ollama', request)).toBe('ok');
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ channel: expect.any(String) }));
   });
 });

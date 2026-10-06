@@ -80,10 +80,17 @@ export class OneShotRelay {
 
   /**
    * Whether a call to `provider` is relayed back to this tab: the deployment
-   * relays, and the provider only runs from the device.
+   * relays, the provider only runs from the device, and the user is known (a
+   * channel is named after them). Callers drop their browser fetcher on this,
+   * so it must match what `run` actually does.
    */
   needsRelay(provider: string | undefined): provider is string {
-    return !!provider && this.deps.isAvailable() && this.deps.isDeviceProvider(provider);
+    return (
+      !!provider &&
+      this.deps.isAvailable() &&
+      this.deps.isDeviceProvider(provider) &&
+      !!this.deps.userId()
+    );
   }
 
   /**
@@ -98,19 +105,22 @@ export class OneShotRelay {
   ): Promise<T> {
     if (!this.needsRelay(provider)) return request();
 
-    const userId = this.deps.userId();
-    if (!userId) return request();
-
-    const channel = buildLlmRelayChannelId(userId, randomNonce());
-    const subscription = await this.deps.subscribe(channel, (event) => {
+    const channel = buildLlmRelayChannelId(this.deps.userId()!, randomNonce());
+    const subscribing = this.deps.subscribe(channel, (event) => {
       if (event.type === 'llm_execute') this.deps.onExecute(event.data as LlmExecuteData);
       else if (event.type === 'llm_cancel') this.deps.onCancel(event.data as LlmCancelData);
     });
 
     try {
       // The server dispatches as soon as the request lands: be subscribed
-      // first, or the gateway finds nobody to deliver the call to.
-      await withTimeout(subscription.ready, ONE_SHOT_SUBSCRIBE_TIMEOUT_MS);
+      // first, or the gateway finds nobody to deliver the call to. The setup
+      // (a gateway token request on the v1 path) counts against the same
+      // timeout; past it, or if it fails, the request goes ahead and the
+      // server reports the relay failure.
+      await withTimeout(
+        subscribing.then((subscription) => subscription.ready),
+        ONE_SHOT_SUBSCRIBE_TIMEOUT_MS,
+      );
       log('channel %s ready for %s', channel, provider);
 
       return await request({
@@ -121,7 +131,11 @@ export class OneShotRelay {
         },
       });
     } finally {
-      subscription.close();
+      // A subscription that lands after the request settled is released too.
+      subscribing.then(
+        (subscription) => subscription.close(),
+        (error) => log('channel %s subscription failed: %O', channel, error),
+      );
     }
   }
 }

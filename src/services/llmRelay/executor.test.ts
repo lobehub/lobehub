@@ -335,6 +335,21 @@ describe('LlmRelayExecutor non-chat methods (one-shot relay)', () => {
     expect(server.batches.at(-1)?.final).toEqual({ reason: 'done' });
   });
 
+  // The server reads "no result parts" as `undefined` — what a provider returns
+  // for absent structured output — and must not get `null` instead.
+  it('uploads no result for an undefined value', async () => {
+    const server = await run(callData({ method: 'generateObject' }), {
+      chat: vi.fn(),
+      generateObject: vi.fn(async () => undefined),
+    });
+
+    const parts = server.batches
+      .flatMap((batch) => batch.chunks)
+      .filter((chunk) => chunk.type === 'result_part');
+    expect(parts).toEqual([]);
+    expect(server.batches.at(-1)?.final).toEqual({ reason: 'done' });
+  });
+
   it('splits a large model list across batches under the size cap', async () => {
     const list = Array.from({ length: 3000 }, (_, i) => ({ id: `model-${i}`, displayName: 'x' }));
     const server = await run(callData({ method: 'models' }), {

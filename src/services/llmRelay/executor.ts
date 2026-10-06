@@ -299,7 +299,8 @@ export class LlmRelayExecutor {
     const result = await run.call(runtime, payload, { signal });
     if (signal.aborted) throw abortError();
 
-    const json = JSON.stringify(result ?? null);
+    // No parts reads as `undefined` on the server, as the direct runtime returns it.
+    const json = result === undefined ? '' : JSON.stringify(result);
     for (let i = 0; i < json.length; i += RESULT_PART_CHARS) {
       uploader.push({ data: json.slice(i, i + RESULT_PART_CHARS), type: 'result_part' });
     }
