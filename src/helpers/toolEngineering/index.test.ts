@@ -1,4 +1,5 @@
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
+import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
 import type * as ConstModule from '@lobechat/const';
 import { type ToolManifest } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -22,6 +23,11 @@ vi.mock('@/store/tool', () => ({
     connectors: [],
     builtinTools: [
       { identifier: AuvManifest.identifier, manifest: AuvManifest, type: 'builtin' as const },
+      {
+        identifier: DashboardManifest.identifier,
+        manifest: DashboardManifest,
+        type: 'builtin' as const,
+      },
       {
         identifier: 'search',
         manifest: {
@@ -178,9 +184,13 @@ vi.mock('@/store/tool/selectors', () => ({
 }));
 
 let mockServerConfig: { toolNameMaxLength?: number } = {};
+let mockFeatureFlags: { enableDashboard?: boolean } = {};
 
 vi.mock('@/store/serverConfig', () => ({
-  getServerConfigStoreState: () => ({ serverConfig: mockServerConfig }),
+  getServerConfigStoreState: () => ({
+    featureFlags: mockFeatureFlags,
+    serverConfig: mockServerConfig,
+  }),
 }));
 
 let mockIsCanUseFC = true;
@@ -253,6 +263,28 @@ describe('toolEngineering', () => {
     mockCurrentChatConfig = {};
     mockImageOutputSupport = false;
     mockServerConfig = {};
+    mockFeatureFlags = {};
+  });
+
+  describe('feature-flagged tools', () => {
+    const generate = () =>
+      createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' }).generateToolsDetailed({
+        toolIds: [DashboardManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+    it('never offers lobe-dashboard while the dashboard flag is off, even when pinned', () => {
+      mockCurrentAgentPlugins = [DashboardManifest.identifier];
+      mockFeatureFlags = { enableDashboard: false };
+      expect(generate().enabledToolIds).not.toContain(DashboardManifest.identifier);
+    });
+
+    it('offers a pinned lobe-dashboard once the flag is on', () => {
+      mockCurrentAgentPlugins = [DashboardManifest.identifier];
+      mockFeatureFlags = { enableDashboard: true };
+      expect(generate().enabledToolIds).toContain(DashboardManifest.identifier);
+    });
   });
 
   // `TOOL_NAME_MAX_LENGTH` is a server env, but this path generates tool names in
