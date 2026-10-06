@@ -16,6 +16,7 @@ import type {
   GoalGraphNode,
   GoalGraphSnapshot,
   GoalItem,
+  GoalManagerAsk,
   GoalMetricCriterion,
   GoalNodeAcceptance,
   GoalNodeKind,
@@ -69,6 +70,7 @@ import {
 } from './decideNextMove';
 import { experimentResults, exploreGraph } from './exploreGraph';
 import { classifyGoalFailure, isMachineFailureClass } from './failureClass';
+import { GoalBriefService } from './goalBriefs';
 import { lastAnsweredGateAt, planMachineRecovery } from './machineRecovery';
 import { answeredProblem, GoalManagerService, problemKey } from './manager';
 import {
@@ -200,9 +202,53 @@ export interface CreateGoalNodeInput {
  */
 const DELIVERABLE_EVENTS_PER_RUN = 200;
 
+/**
+ * What answering a gate does to the Task it was opened for. The coordinator's
+ * own options say it through their fixed ids; an option the main Agent wrote
+ * for its own question names its effect, and one that names none only records
+ * the answer — the Agent reads it on its next turn.
+ */
+const decisionOptionEffect = (
+  option: GoalDecisionOption | undefined,
+  sourceTitle?: string,
+): 'fail' | 'retire' | 'retry' | undefined => {
+  if (!option) return undefined;
+  if (option.effect) return option.effect;
+  if (option.id === 'retry' || option.id === 'retire') return option.id;
+  if (option.id === 'fail' && sourceTitle === GOAL_ACCEPTANCE_TASK_TITLE) return 'fail';
+  return undefined;
+};
+
+/**
+ * The comment a retried Task carries into its next attempt. A bare "retry"
+ * adds nothing the run does not already know; a chosen direction or a note is
+ * exactly what the owner wants the next attempt to act on.
+ */
+const decisionGuidance = (
+  question: string,
+  option: GoalDecisionOption | undefined,
+  note?: string,
+): string | undefined => {
+  const custom = option && option.id !== 'retry' ? option : undefined;
+  const trimmed = note?.trim();
+  if (!custom && !trimmed) return undefined;
+  return [
+    'Owner decision on the recovery gate for this Task.',
+    `Question: ${question}`,
+    custom
+      ? `Chosen: ${custom.label}${custom.description ? ` — ${custom.description}` : ''}`
+      : undefined,
+    trimmed ? `Guidance: ${trimmed}` : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n');
+};
+
 export class GoalService {
   private readonly acceptanceService: AcceptanceService;
   private readonly agentModel: AgentModel;
+  /** What the goal tells the person through the inbox: gates, sign-off, findings. */
+  private readonly briefs: GoalBriefService;
   private readonly goalModel: GoalModel;
   /**
    * Graph writes attributed to the person who asked for them: seeding a goal,
@@ -228,6 +274,7 @@ export class GoalService {
   ) {
     this.acceptanceService = new AcceptanceService(db, userId, workspaceId);
     this.agentModel = new AgentModel(db, userId, workspaceId);
+    this.briefs = new GoalBriefService(db, userId, workspaceId);
     this.goalModel = new GoalModel(db, userId, workspaceId);
     this.graphModel = new GoalGraphModel(db, userId, workspaceId);
     this.coordinatorGraph = new GoalGraphModel(db, userId, workspaceId, {
@@ -860,6 +907,23 @@ export class GoalService {
       if (nodeId && task.assigneeAgentId) result[nodeId] = task.assigneeAgentId;
     }
     return Object.keys(result).length > 0 ? result : undefined;
+  };
+
+  /**
+   * The coordinator calls a goal achieved once its own acceptance passes, but
+   * the person who asked for it has not said so yet. Ask them — wherever they
+   * are — through the inbox, tied to the Goal-level acceptance they sign.
+   */
+  private requestSignOff = async (graph: GoalGraphSnapshot) => {
+    const terminal = graph.nodes.find(
+      (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE && !!node.taskId,
+    );
+    if (!terminal) return;
+    const acceptance = (await this.collectAcceptances(graph).catch(() => undefined))?.[terminal.id];
+    // Signed already (the owner accepted it while it was still settling) —
+    // nothing left to ask.
+    if (!acceptance || acceptance.status === 'accepted') return;
+    await this.briefs.openSignOff(graph.goal, acceptance.id);
   };
 
   /**
@@ -1936,6 +2000,7 @@ export class GoalService {
     if (optionId === GOAL_CLARIFICATION_OPTION.answer && !resolution?.trim()) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'This answer needs a note' });
     }
+    const chosen = decision.options?.find((option) => option.id === optionId);
     const resolved = await this.graphModel.resolveDecision(
       goalId,
       decisionId,
@@ -1956,23 +2021,33 @@ export class GoalService {
           source.taskId,
           true,
         );
-      if (optionId === 'retry' && source.taskId) {
+      const effect = decisionOptionEffect(chosen, source.title);
+      if (effect === 'retry' && source.taskId) {
         await this.taskModel.updateStatus(source.taskId, 'backlog', { error: null });
         await this.graphModel.updateNodeStatus(goalId, source.id, 'active', resolution);
-      } else if (
-        optionId === 'retire' ||
-        (optionId === 'fail' && source.title === GOAL_ACCEPTANCE_TASK_TITLE)
-      ) {
+        // The note is guidance for the next attempt, so it goes where that
+        // attempt reads: the Task's comments are part of every run prompt.
+        // On the node status alone it was recorded and never read again.
+        const guidance = decisionGuidance(decision.question, chosen, resolution);
+        if (guidance)
+          await this.taskModel.addComment({
+            authorUserId: this.userId,
+            content: guidance,
+            taskId: source.taskId,
+            userId: this.userId,
+          });
+      } else if (effect === 'retire') {
         await this.graphModel.updateNodeStatus(goalId, source.id, 'retired', resolution);
       }
     }
     // Ending the terminal acceptance ends the Goal: `fail` is a verdict that
     // the Goal failed, `retire` abandons it without one.
     const terminalAcceptance = source?.title === GOAL_ACCEPTANCE_TASK_TITLE;
+    const terminalEffect = decisionOptionEffect(chosen, source?.title);
     const nextStatus =
-      terminalAcceptance && optionId === 'fail'
+      terminalAcceptance && terminalEffect === 'fail'
         ? 'failed'
-        : terminalAcceptance && optionId === 'retire'
+        : terminalAcceptance && terminalEffect === 'retire'
           ? 'canceled'
           : 'running';
     // Serialized with `close`, which commits under this row lock: a goal that
@@ -2077,6 +2152,22 @@ export class GoalService {
     for (const answer of toResolve) {
       await this.decide(goalId, answer.decisionId, answer.optionId, answer.resolution);
     }
+  };
+
+  /**
+   * Everything the approval island asks outside a goal's page: the gates
+   * waiting on the person (clarification rounds have their own form) and the
+   * finished goals waiting for their sign-off.
+   */
+  pendingForIsland = async () => {
+    const [decisions, signOffs] = await Promise.all([
+      this.goalModel.listPendingDecisions(),
+      this.briefs.listOpenSignOffs(),
+    ]);
+    return {
+      decisions: decisions.map((row) => ({ ...row, options: row.options ?? [] })),
+      signOffs,
+    };
   };
 
   /** Pending clarifications grouped by goal, for surfaces outside the goal page. */
@@ -2438,6 +2529,7 @@ export class GoalService {
       }
       await this.transitionStatus(graph.goal, 'achieved', 'Goal-level acceptance passed');
       effects.push({ type: 'goal_status', detail: 'achieved' });
+      await this.requestSignOff(graph);
       return { goalId, message: move.message, outcome: 'achieved' };
     }
 
@@ -3418,6 +3510,7 @@ export class GoalService {
         },
       ];
 
+      const askedDecisions: { id: string; question: string }[] = [];
       // Only the current lease owner may commit. The model call above does not
       // hold a database lock; all graph changes below share one short transaction.
       const committed = await this.db.transaction(async (tx) => {
@@ -3481,12 +3574,13 @@ export class GoalService {
             });
             if (!node) throw new Error('Failed to open a clarification decision');
             await writer.createEdge(goalId, currentProblem.id, node.id, 'leads_to');
-            await writer.createDecision(goalId, node.id, {
+            const decision = await writer.createDecision(goalId, node.id, {
               authority: 'user',
               options: clarificationOptions(question),
               question: question.question,
               requestedUserId: this.userId,
             });
+            if (decision) askedDecisions.push({ id: decision.id, question: question.question });
             committedEffects.push({
               detail: question.question,
               nodeId: currentProblem.id,
@@ -3555,6 +3649,11 @@ export class GoalService {
 
       const asked = committed.filter((effect) => effect.type === 'opened_decision').length;
       if (asked > 0) {
+        await this.briefs.openClarification(
+          graph.goal,
+          askedDecisions.map((decision) => decision.id),
+          askedDecisions.map((decision) => decision.question),
+        );
         return {
           goalId,
           message: `Asked ${asked} clarification question${asked > 1 ? 's' : ''} before planning`,
@@ -3771,16 +3870,21 @@ export class GoalService {
     );
     if (!existingFinding) {
       const handoff = latest?.handoff as TaskTopicHandoff | null;
+      const title =
+        handoff?.title ??
+        handoff?.summary ??
+        `Completed: ${graph.nodes.find((node) => node.id === nodeId)?.title}`;
+      // The finding is written by whoever did the work. Recorded as the owner,
+      // it read as something the person had said themselves.
+      const author = (await this.taskModel.findById(taskId))?.assigneeAgentId ?? graph.goal.agentId;
       const finding = await this.coordinatorGraph.createNode(graph.goal.id, {
         confidence: 1,
+        createdByAgentId: author ?? undefined,
         description: handoff?.content ?? handoff?.summary ?? undefined,
         kind: 'finding',
         scopeId: experimentOwner(graph, nodeId),
         status: 'resolved',
-        title:
-          handoff?.title ??
-          handoff?.summary ??
-          `Completed: ${graph.nodes.find((node) => node.id === nodeId)?.title}`,
+        title,
       });
       if (finding) {
         effects.push({ detail: 'finding', nodeId, targetId: finding.id, type: 'created_node' });
@@ -3836,8 +3940,15 @@ export class GoalService {
     // said: the person answering should see the Agent's reasoning, not just the
     // coordinator's own reason for stopping.
     const answered = answeredProblem(graph.goal.config?.managerState);
-    const diagnosis =
-      answered?.key === problemKey({ reason, taskId }) ? answered.reason.slice(0, 600) : undefined;
+    const own = answered?.key === problemKey({ reason, taskId }) ? answered : undefined;
+    // An Agent that asked a real question gets it asked as written, with its
+    // own answers as the buttons; its diagnosis is what the gate stands on.
+    if (own?.ask)
+      return this.openFailureDecision(graph, nodeId, taskId, reason, effects, {
+        ...gate,
+        ask: { ...own.ask, diagnosis: own.reason },
+      });
+    const diagnosis = own ? own.reason.slice(0, 600) : undefined;
     return this.openFailureDecision(
       graph,
       nodeId,
@@ -3905,8 +4016,11 @@ export class GoalService {
       // The terminal acceptance gate keeps its own three-way shape: ending the
       // Goal is a verdict even when a machine problem is what stopped it.
       const machine = !!gate.machine && !terminalAcceptance;
+      const { ask } = gate;
       const node = await this.coordinatorGraph.createNode(graph.goal.id, {
-        description: reason,
+        // What the gate stands on: the main Agent's diagnosis when it asked,
+        // else the coordinator's own reason for stopping.
+        description: ask ? `${reason}\n\n${ask.diagnosis}` : reason,
         kind: 'decision',
         status: 'waiting',
         title: machine ? GOAL_MACHINE_GATE_TITLE : 'Choose how to recover failed task',
@@ -3915,33 +4029,52 @@ export class GoalService {
       if (node) {
         effects.push({ detail: reason, nodeId, targetId: node.id, type: 'opened_decision' });
         await this.coordinatorGraph.createEdge(graph.goal.id, nodeId, node.id, 'leads_to');
-        await this.coordinatorGraph.createDecision(graph.goal.id, node.id, {
-          authority: 'user',
-          options: machine
-            ? [
-                { id: 'retry', label: 'I fixed it — retry' },
-                { id: 'retire', label: 'Retire task' },
-              ]
-            : terminalAcceptance
-              ? [
-                  { id: 'retry', label: 'Retry goal acceptance' },
-                  // Drop the acceptance Task and end the Goal without a verdict —
-                  // unlike `fail`, which records that the Goal was judged failed.
-                  { id: 'retire', label: 'Abandon goal acceptance' },
-                  { id: 'fail', label: 'Fail goal' },
-                ]
-              : [
-                  { id: 'retry', label: 'Retry task' },
-                  { id: 'retire', label: 'Retire task' },
-                ],
-          question: machine
-            ? `${reason}. Fix it, then retry or retire this task node?`
-            : terminalAcceptance
-              ? `${reason}. Retry Goal acceptance, abandon it, or fail this Goal?`
-              : `${reason}. Retry or retire this task node?`,
-          recommendedOptionId: 'retry',
-          requestedUserId: this.userId,
-        });
+        const decision = await this.coordinatorGraph.createDecision(
+          graph.goal.id,
+          node.id,
+          ask
+            ? {
+                authority: 'user',
+                options: ask.options,
+                question: ask.question,
+                recommendedOptionId: ask.recommendedOptionId,
+                requestedUserId: this.userId,
+              }
+            : {
+                authority: 'user',
+                options: machine
+                  ? [
+                      { id: 'retry', label: 'I fixed it — retry' },
+                      { id: 'retire', label: 'Retire task' },
+                    ]
+                  : terminalAcceptance
+                    ? [
+                        { id: 'retry', label: 'Retry goal acceptance' },
+                        // Drop the acceptance Task and end the Goal without a verdict —
+                        // unlike `fail`, which records that the Goal was judged failed.
+                        { id: 'retire', label: 'Abandon goal acceptance' },
+                        { id: 'fail', label: 'Fail goal' },
+                      ]
+                    : [
+                        { id: 'retry', label: 'Retry task' },
+                        { id: 'retire', label: 'Retire task' },
+                      ],
+                question: machine
+                  ? `${reason}. Fix it, then retry or retire this task node?`
+                  : terminalAcceptance
+                    ? `${reason}. Retry Goal acceptance, abandon it, or fail this Goal?`
+                    : `${reason}. Retry or retire this task node?`,
+                recommendedOptionId: 'retry',
+                requestedUserId: this.userId,
+              },
+        );
+        if (decision)
+          await this.briefs.openDecision(graph.goal, {
+            decisionId: decision.id,
+            options: decision.options,
+            question: decision.question,
+            recommendedOptionId: decision.recommendedOptionId,
+          });
       }
     }
     await this.coordinatorGraph.updateNodeStatus(graph.goal.id, nodeId, 'waiting', reason);
@@ -3957,6 +4090,8 @@ export class GoalService {
 }
 
 interface FailureGateOptions {
+  /** The main Agent's own question for this gate, asked as written with its diagnosis. */
+  ask?: GoalManagerAsk & { diagnosis: string };
   /**
    * The gate is about a machine problem (broken setup, spent retry schedule), not
    * the work: it opens as a machine gate that asks for a fix, not a judgment.

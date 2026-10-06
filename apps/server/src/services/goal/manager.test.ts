@@ -1,5 +1,9 @@
 // @vitest-environment node
-import { GOAL_ACCEPTANCE_TASK_TITLE, GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
+import {
+  GOAL_ACCEPTANCE_TASK_TITLE,
+  GOAL_COORDINATOR_ACTOR_ID,
+  GOAL_MANAGER_QUESTION_TITLE,
+} from '@lobechat/const/goal';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -1620,37 +1624,38 @@ describe('takeover ordering', () => {
   });
 });
 
+/** A takeover-mode Goal whose only Task just spent its attempt budget. */
+const stuckGoal = async (title = 'Explored research') => {
+  const graph = await service().create({
+    config: {
+      exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
+      manager: { maxTurns: 4 },
+      recovery: { maxAttemptsPerTask: 1 },
+    },
+    createdByAgentId: agentId,
+    tasks: ['Measure ranking ability on the frozen holdout'],
+    title,
+  });
+  const created = await service().tick(graph.goal.id);
+  const taskModel = new TaskModel(db, userId);
+  await taskModel.update(created.taskId!, { totalTopics: 1 });
+  await taskModel.updateStatus(created.taskId!, 'paused', {
+    error: 'Delivery did not pass verification.',
+  });
+  await service().tick(graph.goal.id);
+  const state = (await model().findById(graph.goal.id))!.config!.managerState!;
+  const turn = await ops().findByTopicSourceMessage(
+    state.topicId,
+    `msg_goal_manager_${state.token}`,
+  );
+  return { goalId: graph.goal.id, state, taskId: created.taskId!, turn: turn! };
+};
+
 /**
  * Codex review round 2 on #19477. Both findings were about the takeover contract
  * promising more than the code would accept.
  */
 describe('takeover submissions', () => {
-  const stuckGoal = async (title = 'Explored research') => {
-    const graph = await service().create({
-      config: {
-        exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
-        manager: { maxTurns: 4 },
-        recovery: { maxAttemptsPerTask: 1 },
-      },
-      createdByAgentId: agentId,
-      tasks: ['Measure ranking ability on the frozen holdout'],
-      title,
-    });
-    const created = await service().tick(graph.goal.id);
-    const taskModel = new TaskModel(db, userId);
-    await taskModel.update(created.taskId!, { totalTopics: 1 });
-    await taskModel.updateStatus(created.taskId!, 'paused', {
-      error: 'Delivery did not pass verification.',
-    });
-    await service().tick(graph.goal.id);
-    const state = (await model().findById(graph.goal.id))!.config!.managerState!;
-    const turn = await ops().findByTopicSourceMessage(
-      state.topicId,
-      `msg_goal_manager_${state.token}`,
-    );
-    return { goalId: graph.goal.id, state, taskId: created.taskId!, turn: turn! };
-  };
-
   /**
    * The prompt advertises a corrective task, verification, a retry and escalation.
    * `submit` refused `tasks` and `verify` whenever any task node was unfinished —
@@ -1745,6 +1750,131 @@ describe('takeover submissions', () => {
     const gated = await service().graph(goalId);
     expect(gated.decisions).toHaveLength(1);
     expect(gated.decisions[0].question).toContain('Needs a human judge');
+  });
+});
+
+/**
+ * Escalations used to carry only a reason, so the owner's gate offered retry /
+ * retire while the actual decision — waive a criterion, restore a closed PR —
+ * sat in the text with no button to answer it.
+ */
+describe('escalations that ask a real question', () => {
+  const waiveAsk = {
+    question: 'Waive the "in order" criterion for this delivery?',
+    options: [
+      {
+        id: 'waive',
+        label: 'Waive it',
+        description: 'Accept the PRs in the order they merged',
+        effect: 'retry' as const,
+      },
+      { id: 'keep', label: 'Keep it', effect: 'retire' as const },
+    ],
+    recommendedOptionId: 'waive',
+  };
+
+  it('opens a question gate instead of pausing an ordinary planning turn', async () => {
+    const { id, state, op } = await start();
+    await operationCaller(op.id).submitOperationPlan({
+      id,
+      operationId: op.id,
+      token: state.token,
+      plan: {
+        action: 'escalate',
+        reason: 'Both readings of the requirement are defensible',
+        ask: {
+          question: 'Should the report cover desktop only?',
+          options: [
+            { id: 'desktop', label: 'Desktop only' },
+            { id: 'all', label: 'Desktop and mobile' },
+          ],
+        },
+      },
+    });
+
+    const goal = (await model().findById(id))!;
+    expect(goal.status).toBe('review');
+    const graph = await service().graph(id);
+    const node = graph.nodes.find((n) => n.title === GOAL_MANAGER_QUESTION_TITLE)!;
+    expect(node).toMatchObject({
+      description: 'Both readings of the requirement are defensible',
+      kind: 'decision',
+    });
+    expect(graph.decisions).toEqual([
+      expect.objectContaining({
+        nodeId: node.id,
+        options: [
+          { id: 'desktop', label: 'Desktop only' },
+          { id: 'all', label: 'Desktop and mobile' },
+        ],
+        question: 'Should the report cover desktop only?',
+        status: 'pending',
+      }),
+    ]);
+
+    // The answer is what the next turn plans from.
+    await service().decide(id, graph.decisions[0].id, 'all', 'Mobile matters for this launch');
+    expect((await model().findById(id))!.status).toBe('running');
+    const answered = (await service().graph(id)).decisions[0];
+    expect(answered).toMatchObject({
+      resolution: 'Mobile matters for this launch',
+      resolvedOptionId: 'all',
+      status: 'resolved',
+    });
+  });
+
+  it('asks a takeover question as written and carries the chosen answer into the retry', async () => {
+    const { goalId, state, taskId, turn } = await stuckGoal();
+    await operationCaller(turn.id).submitOperationPlan({
+      id: goalId,
+      operationId: turn.id,
+      plan: { action: 'escalate', reason: 'The PRs merged out of order', ask: waiveAsk },
+      token: state.token,
+    });
+    await db.update(agentOperations).set({ status: 'done' }).where(eq(agentOperations.id, turn.id));
+    await service().tick(goalId);
+
+    expect(await service().tick(goalId)).toMatchObject({ outcome: 'waiting_human' });
+    const gated = await service().graph(goalId);
+    expect(gated.decisions).toHaveLength(1);
+    const [gate] = gated.decisions;
+    expect(gate).toMatchObject({
+      options: waiveAsk.options,
+      question: waiveAsk.question,
+      recommendedOptionId: 'waive',
+    });
+    expect(gated.nodes.find((n) => n.id === gate.nodeId)!.description).toContain(
+      'The PRs merged out of order',
+    );
+
+    await service().decide(goalId, gate.id, 'waive', 'Order follows merge time');
+    const task = await new TaskModel(db, userId).findById(taskId);
+    expect(task!.status).toBe('backlog');
+    const comments = await new TaskModel(db, userId).getComments(taskId);
+    expect(comments.at(-1)!.content).toContain('Chosen: Waive it');
+    expect(comments.at(-1)!.content).toContain('Guidance: Order follows merge time');
+  });
+
+  it('refuses a takeover question whose answers leave the blocked Task undecided', async () => {
+    const { goalId, state, turn } = await stuckGoal();
+    await expect(
+      operationCaller(turn.id).submitOperationPlan({
+        id: goalId,
+        operationId: turn.id,
+        plan: {
+          action: 'escalate',
+          reason: 'Needs a judge',
+          ask: {
+            question: 'Which judge?',
+            options: [
+              { id: 'a', label: 'A' },
+              { id: 'b', label: 'B' },
+            ],
+          },
+        },
+        token: state.token,
+      }),
+    ).rejects.toThrow('needs an effect');
   });
 });
 

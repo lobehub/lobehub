@@ -28,7 +28,7 @@ describe('buildGoalManagerPrompt', () => {
     'keeps supervision language tied to the goal rather than the English control prompt: %s',
     (requirement) => {
       const prompt = buildGoalManagerPrompt({ ...base, requirement });
-      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v7');
+      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v8');
       expect(cdataOf(prompt, 'requirement')).toBe(requirement);
       expect(prompt).toContain('Use the language of the Goal requirement');
       expect(prompt).toContain(
@@ -57,6 +57,20 @@ describe('buildGoalManagerPrompt', () => {
     expect(cdataOf(prompt, 'problem')).toBe('Task attempt budget was exhausted');
     expect(prompt).toContain('this Goal stops on a person');
     expect(prompt).toContain('escalate with the specific question');
+  });
+
+  /**
+   * Regression: escalations only carried a reason, so the owner's gate offered
+   * retry / retire while the real decision (waive a criterion, restore a PR)
+   * sat in the text with no way to answer it.
+   */
+  it('asks escalations to carry the decision with concrete answers', () => {
+    const prompt = buildGoalManagerPrompt({
+      ...base,
+      problem: 'Goal-level acceptance did not pass',
+    });
+    expect(prompt).toContain('"ask":{"question"');
+    expect(prompt).toContain('every option needs an effect');
   });
 
   /**
@@ -106,7 +120,7 @@ describe('buildGoalManagerPrompt', () => {
     });
 
     expect(prompt.split('\n')[0]).toBe(
-      '<goalTurn goal="goal_1" maxTurns="12" trigger="settled" turn="3" version="v7">',
+      '<goalTurn goal="goal_1" maxTurns="12" trigger="settled" turn="3" version="v8">',
     );
     expect(prompt.endsWith('</goalTurn>')).toBe(true);
     // CommonMark ends an HTML block at a blank line; the client needs one block.

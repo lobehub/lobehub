@@ -3,6 +3,8 @@
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { Button } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
+import type { LucideIcon } from 'lucide-react';
 import type { MouseEvent, ReactNode } from 'react';
 import { memo, useCallback } from 'react';
 
@@ -18,10 +20,17 @@ interface BriefActionLinkProps {
   agentId?: string | null;
   children: ReactNode;
   className?: string;
+  /** Leading glyph, for the quiet navigation variant. */
+  icon?: LucideIcon;
   /** Renders the filled primary variant used for a card's leading action. */
   primary?: boolean;
   taskId?: string | null;
   url?: string;
+  /**
+   * `quiet`: a small secondary text button, the same as the card's "View run"
+   * shortcut — for a link that navigates beside the answers rather than being one.
+   */
+  variant?: 'quiet';
 }
 
 /**
@@ -40,7 +49,7 @@ interface BriefActionLinkProps {
  * click is already claimed.
  */
 export const BriefActionLink = memo<BriefActionLinkProps>(
-  ({ agentId, children, className, primary, taskId, url }) => {
+  ({ agentId, children, className, icon, primary, taskId, url, variant }) => {
     const navigate = useWorkspaceAwareNavigate();
     const workspaces = useWorkspaces();
     const openAcceptance = useChatStore((s) => s.openAcceptance);
@@ -96,6 +105,22 @@ export const BriefActionLink = memo<BriefActionLinkProps>(
         toggleTaskAgentPanel,
       ],
     );
+
+    if (variant === 'quiet')
+      return (
+        <Button
+          {...(isRendererHandled ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
+          className={className}
+          href={url}
+          icon={icon}
+          size={'small'}
+          style={{ color: cssVar.colorTextSecondary }}
+          type={'text'}
+          onClick={handleClick}
+        >
+          {children}
+        </Button>
+      );
 
     return (
       <Button

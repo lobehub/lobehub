@@ -10,10 +10,12 @@ import { isDesktop } from '@/const/version';
 
 import ApprovalCard from './ApprovalCard';
 import GoalClarificationCard from './GoalClarificationCard';
+import GoalDecisionCard from './GoalDecisionCard';
 import { styles } from './styles';
 import { useApprovalIslandCollapse } from './useApprovalIslandCollapse';
 import { useGlobalPendingApprovals } from './useGlobalPendingApprovals';
 import { usePendingGoalClarifications } from './usePendingGoalClarifications';
+import { usePendingGoalDecisions } from './usePendingGoalDecisions';
 
 const SPRING = { damping: 30, stiffness: 320, type: 'spring' } as const;
 
@@ -34,7 +36,10 @@ const GlobalApprovalNotification = memo(() => {
   // A goal waiting on its clarification round asks through the same island.
   // Run approvals go first: a run is blocked mid-turn, a goal has not started.
   const goalGroups = usePendingGoalClarifications();
-  const total = groups.length + goalGroups.length;
+  // Then the gates a running goal stopped on, then finished goals awaiting
+  // sign-off — each blocks less than the one before it.
+  const goalItems = usePendingGoalDecisions();
+  const total = groups.length + goalGroups.length + goalItems.length;
   const [collapsed, setCollapsed] = useApprovalIslandCollapse(total);
 
   const hasApprovals = total > 0;
@@ -44,6 +49,7 @@ const GlobalApprovalNotification = memo(() => {
   // approvals queue behind a count and surface as each one resolves.
   const top = groups[0];
   const topGoal = top ? undefined : goalGroups[0];
+  const topGoalItem = top || topGoal ? undefined : goalItems[0];
   const extraCount = total - 1;
 
   return (
@@ -99,6 +105,19 @@ const GlobalApprovalNotification = memo(() => {
                     transition={SPRING}
                   >
                     <GoalClarificationCard group={topGoal} onCollapse={() => setCollapsed(true)} />
+                  </m.div>
+                )}
+                {topGoalItem && (
+                  <m.div
+                    layout
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: -16 }}
+                    initial={{ opacity: 0, scale: 0.96, y: -16 }}
+                    key={topGoalItem.key}
+                    style={{ pointerEvents: 'auto', width: '100%' }}
+                    transition={SPRING}
+                  >
+                    <GoalDecisionCard item={topGoalItem} onCollapse={() => setCollapsed(true)} />
                   </m.div>
                 )}
               </AnimatePresence>

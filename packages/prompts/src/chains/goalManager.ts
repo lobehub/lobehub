@@ -11,7 +11,7 @@ import { GOAL_TURN_TAG } from '@lobechat/const';
  * contract in `<instruction>` — so the client renders it as a card instead of a
  * wall of identical text every turn.
  */
-export const GOAL_MANAGER_PROMPT_VERSION = 'v7';
+export const GOAL_MANAGER_PROMPT_VERSION = 'v8';
 
 export interface GoalManagerFeedbackNote {
   /** `user`, or `agent <id>` for an agent-written comment. */
@@ -162,7 +162,8 @@ const contract = (input: GoalManagerPromptInput) =>
     '{"action":"wait","reason":"why evidence must arrive later","until":"future UTC ISO instant","event":{"type":"external.result","key":"correlated job ID"}}',
     '{"action":"verify","reason":"why the existing evidence warrants independent Goal verification"}',
     '{"action":"retry","taskId":"failed Task ID","failedOperationId":"latest confirmed failure ID","reason":"diagnosis and checkpoint-aware recovery instruction"}',
-    '{"action":"escalate","reason":"concrete blocker requiring human input"}',
+    '{"action":"escalate","reason":"what you found and why only the owner can unblock it","ask":{"question":"the one decision the owner has to make, in the Goal language","options":[{"id":"waive","label":"short answer","description":"what happens if they choose it","effect":"retry"},{"id":"keep","label":"short answer","description":"what happens if they choose it","effect":"retire"}],"recommendedOptionId":"waive"}}',
+    'When you escalate, ask the actual decision with 2-4 concrete answers in "ask" instead of burying it in reason: the owner sees the question with your answers as buttons, your reason as the evidence, and your recommendation marked. When you are taking over a blocked Task, every option needs an effect: "retry" sends the Task back with the chosen answer as guidance, "retire" drops it. On an ordinary planning turn options need no effect; the owner\'s answer appears as a resolved decision in lh goal show on your next turn, and you plan from it.',
   ].join('\n');
 
 export const buildGoalManagerPrompt = (input: GoalManagerPromptInput) => {

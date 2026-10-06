@@ -260,7 +260,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         event.preventDefault();
         handleSubmit();
       } else if (event.key === 'Escape') {
-        if (submitting) return;
+        if (submitting || !labels.skip) return;
         event.preventDefault();
         handleSkip();
       }
@@ -299,10 +299,14 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         </Text>
       )}
       <Flexbox horizontal gap={8}>
-        <Button disabled={submitting} icon={<Icon icon={X} />} onClick={handleSkip}>
-          {labels.skip}
-          <Hotkey compact keys={KeyMapEnum.Esc} variant="borderless" />
-        </Button>
+        {/* A host whose question has no "not now" answer (a decision gate)
+            passes no skip label, and the form offers no way around it. */}
+        {labels.skip && (
+          <Button disabled={submitting} icon={<Icon icon={X} />} onClick={handleSkip}>
+            {labels.skip}
+            <Hotkey compact keys={KeyMapEnum.Esc} variant="borderless" />
+          </Button>
+        )}
         <Button
           disabled={isSubmitDisabled}
           icon={<Icon icon={Send} />}

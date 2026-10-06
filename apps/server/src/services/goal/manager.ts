@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { GOAL_ACCEPTANCE_TASK_TITLE, GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
+import {
+  GOAL_ACCEPTANCE_TASK_TITLE,
+  GOAL_COORDINATOR_ACTOR_ID,
+  GOAL_MANAGER_QUESTION_TITLE,
+} from '@lobechat/const/goal';
 import { buildGoalManagerPrompt } from '@lobechat/prompts';
 import type {
   GoalGraphSnapshot,
@@ -28,6 +32,7 @@ import { readDeviceDispatchRoute } from '@/server/services/aiAgent/helpers/heter
 import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
+import { GoalBriefService } from './goalBriefs';
 import { TERMINAL_GOAL_STATUSES as finishedGoalStatuses } from './goalTraceRecorder';
 import {
   classifyRunFailure,
@@ -42,6 +47,43 @@ import { recoveryEligibility } from './supervisor/policy';
 import { goalWaitSchema, GoalWaitService } from './wait';
 
 const reason = z.string().trim().min(1).max(8000);
+/**
+ * The question an escalation puts to the owner. A bare reason left the gate
+ * asking "retry or retire?" while the decision that actually blocked the goal —
+ * waive a criterion, restore a closed PR — was buried in its text with no
+ * button to answer it.
+ */
+const goalAskSchema = z
+  .object({
+    question: z.string().trim().min(1).max(2000),
+    options: z
+      .array(
+        z
+          .object({
+            id: z
+              .string()
+              .trim()
+              .regex(/^[\w-]{1,40}$/),
+            label: z.string().trim().min(1).max(120),
+            description: z.string().trim().max(600).optional(),
+            effect: z.enum(['retry', 'retire']).optional(),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(4),
+    recommendedOptionId: z.string().trim().optional(),
+  })
+  .strict()
+  .refine((ask) => new Set(ask.options.map((option) => option.id)).size === ask.options.length, {
+    message: 'Option ids must be unique',
+  })
+  .refine(
+    (ask) =>
+      !ask.recommendedOptionId ||
+      ask.options.some((option) => option.id === ask.recommendedOptionId),
+    { message: 'recommendedOptionId must name one of the options' },
+  );
 export const goalPlanSchema = z.discriminatedUnion('action', [
   z
     .object({
@@ -78,7 +120,7 @@ export const goalPlanSchema = z.discriminatedUnion('action', [
       failedOperationId: z.string().min(1),
     })
     .strict(),
-  z.object({ action: z.literal('escalate'), reason }).strict(),
+  z.object({ action: z.literal('escalate'), reason, ask: goalAskSchema.optional() }).strict(),
 ]);
 type GoalPlan = z.infer<typeof goalPlanSchema>;
 const activeStatuses = new Set(['planning', 'running']);
@@ -238,7 +280,7 @@ export const problemKey = (problem: { reason: string; taskId?: string }) =>
  */
 export const answeredProblem = (state?: GoalManagerState) =>
   state?.consumed && state.problem && state.submitted
-    ? { key: state.problem, reason: state.submitted.reason }
+    ? { ask: state.submitted.ask, key: state.problem, reason: state.submitted.reason }
     : undefined;
 
 export class GoalManagerService {
@@ -1388,6 +1430,44 @@ export class GoalManagerService {
           ))
         )
           throw new TRPCError({ code: 'CONFLICT', message: 'Task changed before retry' });
+      } else if (plan.action === 'escalate' && state.problem && plan.ask) {
+        // A takeover question is answered on the failed Task's gate, so every
+        // answer has to say what happens to that Task — an answer that leaves it
+        // failed would only reopen the same gate on the next tick.
+        if (plan.ask.options.some((option) => !option.effect))
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'Every option of a takeover question needs an effect (retry or retire) for the blocked Task',
+          });
+      } else if (plan.action === 'escalate' && !state.problem && plan.ask) {
+        // A question with answers is asked, not parked: it opens a gate the
+        // owner can answer from anywhere, and the answer wakes the next turn.
+        const node = await authored.createNode(goalId, {
+          description: plan.reason,
+          kind: 'decision',
+          status: 'waiting',
+          title: GOAL_MANAGER_QUESTION_TITLE,
+        });
+        if (!node) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        const problemNode = graph.nodes.find((n) => n.kind === 'problem');
+        if (problemNode) await authored.createEdge(goalId, problemNode.id, node.id, 'leads_to');
+        const decision = await authored.createDecision(goalId, node.id, {
+          authority: 'user',
+          options: plan.ask.options,
+          question: plan.ask.question,
+          recommendedOptionId: plan.ask.recommendedOptionId,
+          requestedUserId: this.userId,
+        });
+        await model.updateStatus(goalId, 'review');
+        await authored.recordGoalStatus(goalId, goal.status, 'review', plan.reason);
+        if (decision)
+          await new GoalBriefService(db, this.userId, this.workspaceId).openDecision(goal, {
+            decisionId: decision.id,
+            options: decision.options,
+            question: decision.question,
+            recommendedOptionId: decision.recommendedOptionId,
+          });
       } else if (plan.action === 'escalate' && !state.problem) {
         // Only an ORDINARY planning turn pauses the Goal here. A takeover turn has
         // a gate waiting behind it for this exact problem, and the coordinator
@@ -1403,6 +1483,7 @@ export class GoalManagerService {
           action: plan.action,
           reason: plan.reason,
           ...(plan.action === 'retry' ? { taskId: plan.taskId } : {}),
+          ...(plan.action === 'escalate' && plan.ask ? { ask: plan.ask } : {}),
         },
         readyForAcceptance: plan.action === 'verify',
         replanReason: undefined,

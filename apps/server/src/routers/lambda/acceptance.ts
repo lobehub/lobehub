@@ -32,6 +32,7 @@ import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { GoalBriefService } from '@/server/services/goal/goalBriefs';
 import { parseChangeRequestUrl } from '@/server/services/scm/changeRequestUrl';
 import {
   AcceptanceService,
@@ -172,7 +173,7 @@ const acceptanceWriteProcedure = acceptanceProcedure.use(requireWorkspaceRoleWhe
  * `decidedBy` and an audit trail that credits a teammate's verdict to the
  * author is worse than one nobody can sign.
  */
-const resolveAcceptanceForWrite = async (
+export const resolveAcceptanceForWrite = async (
   ctx: { serverDB: LobeChatDatabase; userId: string },
   id: string,
 ): Promise<{ acceptance: AcceptanceItem; service: AcceptanceService }> => {
@@ -396,7 +397,14 @@ export const acceptanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      return service.accept(acceptance.id, input.comment);
+      const accepted = await service.accept(acceptance.id, input.comment);
+      // Signed where it lives — the inbox stops asking for the same sign-off.
+      await new GoalBriefService(
+        ctx.serverDB,
+        acceptance.userId,
+        acceptance.workspaceId ?? undefined,
+      ).settleSignOff(acceptance.id, 'signOff', input.comment);
+      return accepted;
     }),
 
   /**
@@ -1327,6 +1335,11 @@ export const acceptanceRouter = router({
         const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
         const rejected = await service.reject(acceptance.id, input.comment || undefined);
+        await new GoalBriefService(
+          ctx.serverDB,
+          acceptance.userId,
+          acceptance.workspaceId ?? undefined,
+        ).settleSignOff(acceptance.id, 'requestChanges', input.comment || undefined);
         if (input.dispatch === false) {
           return { ...rejected, repairDispatch: { dispatched: false, reason: 'skipped' } };
         }

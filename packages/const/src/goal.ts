@@ -67,6 +67,19 @@ export const GOAL_CLARIFICATION_TITLE = 'Clarify the goal';
  */
 export const GOAL_MACHINE_GATE_TITLE = 'Fix the setup, then retry';
 
+/**
+ * Fixed title of the decision node the main Agent opens when an ordinary
+ * planning turn escalates a question with its own answers. Matched by clients
+ * for localized copy, like the clarification title.
+ */
+export const GOAL_MANAGER_QUESTION_TITLE = 'Answer the main Agent';
+
+/**
+ * `briefs.trigger` of every brief a goal raises — its decision gates, its
+ * sign-off and its progress reports. `metadata.goal` says which one it is.
+ */
+export const GOAL_BRIEF_TRIGGER = 'goal';
+
 /** Option ids every clarification decision carries besides the planner's own choices. */
 export const GOAL_CLARIFICATION_OPTION = {
   /** Answer in the free-text note; the note is the answer. */

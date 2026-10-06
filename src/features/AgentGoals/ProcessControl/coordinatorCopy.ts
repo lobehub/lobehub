@@ -2,8 +2,14 @@ import {
   GOAL_ACCEPTANCE_TASK_TITLE,
   GOAL_CLARIFICATION_OPTION,
   GOAL_MACHINE_GATE_TITLE,
+  GOAL_MANAGER_QUESTION_TITLE,
 } from '@lobechat/const/goal';
 import type { GoalDecisionOption, GoalGraphDecision } from '@lobechat/types';
+import {
+  coordinatorGateReason,
+  coordinatorReasonCopy,
+  type LocalizedCopyRef,
+} from '@lobechat/utils/goalCopy';
 
 import type { GoalNodeView } from './goalGraphViewModel';
 
@@ -15,12 +21,8 @@ import type { GoalNodeView } from './goalGraphViewModel';
  * not recognize renders verbatim.
  */
 
-export type CoordinatorGateKind = 'clarifyGoal' | 'fixSetup' | 'goalAcceptance' | 'recoverTask';
-
-export interface LocalizedCopyRef {
-  key: string;
-  params?: Record<string, string>;
-}
+export type CoordinatorGateKind =
+  'agentQuestion' | 'clarifyGoal' | 'fixSetup' | 'goalAcceptance' | 'recoverTask';
 
 const idsOf = (decision?: GoalGraphDecision | null): Set<string> =>
   new Set((decision?.options ?? []).map((option) => option.id));
@@ -85,6 +87,8 @@ export const isGoalAcceptanceTask = (view: GoalNodeView): boolean =>
 export const coordinatorNodeTitleKey = (view: GoalNodeView): string | undefined => {
   const { node } = view;
   if (isGoalAcceptanceTask(view)) return 'goalProcess.node.terminalAcceptance';
+  if (node.kind === 'decision' && node.title === GOAL_MANAGER_QUESTION_TITLE)
+    return gateTitleKey('agentQuestion');
   if (node.kind === 'decision') {
     const kind = viewGateKind(view);
     if (kind) return gateTitleKey(kind);
@@ -92,77 +96,4 @@ export const coordinatorNodeTitleKey = (view: GoalNodeView): string | undefined 
   return undefined;
 };
 
-/** Strip the coordinator question template down to its dynamic reason half. */
-const QUESTION_TAILS = [
-  /\.?\s*Retry or retire this task node\?$/,
-  /\.?\s*Fix it, then retry or retire this task node\?$/,
-  /\.?\s*Retry Goal acceptance or fail this Goal\?$/,
-  /\.?\s*Retry Goal acceptance, abandon it, or fail this Goal\?$/,
-];
-
-export const coordinatorGateReason = (question?: string | null): string | undefined => {
-  if (!question) return undefined;
-  for (const tail of QUESTION_TAILS) {
-    if (tail.test(question)) {
-      const reason = question.replace(tail, '').trim();
-      return reason || undefined;
-    }
-  }
-  return question;
-};
-
-/** Known coordinator reason templates → chat-ns locale refs. */
-const REASON_PATTERNS: Array<{
-  key: string;
-  param?: string;
-  pattern: RegExp;
-}> = [
-  {
-    key: 'goalProcess.gate.reason.verifyInternalError',
-    pattern: /^Verification could not run \(internal error\); the delivery was not evaluated\.?$/,
-  },
-  {
-    key: 'goalProcess.gate.reason.verifyFailed',
-    param: 'id',
-    pattern: /^Task (\S+) did not pass verification$/,
-  },
-  {
-    key: 'goalProcess.gate.reason.goalAcceptanceFailed',
-    pattern: /^Goal-level acceptance did not pass$/,
-  },
-  {
-    key: 'goalProcess.gate.reason.attemptBudgetExhausted',
-    pattern: /^Task attempt budget was exhausted( after an operation was abandoned)?$/,
-  },
-  {
-    key: 'goalProcess.gate.reason.costBudgetExhausted',
-    pattern: /^Goal cost budget was exhausted( after an operation was abandoned)?$/,
-  },
-  {
-    key: 'goalProcess.gate.reason.deviceStayedOffline',
-    pattern: /^Task device stayed offline$/,
-  },
-  {
-    key: 'goalProcess.gate.reason.recoveryFailed',
-    pattern:
-      /^Automatic recovery could not (start the next attempt|restart an abandoned operation)$/,
-  },
-  {
-    // A run that failed outright leaves its runtime error type as the reason
-    // (e.g. `InvalidProviderAPIKey`). The code stays visible for support; the
-    // sentence around it is the user's language.
-    key: 'goalProcess.gate.reason.runError',
-    param: 'code',
-    pattern: /^([A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*)$/,
-  },
-];
-
-export const coordinatorReasonCopy = (reason?: string | null): LocalizedCopyRef | undefined => {
-  if (!reason) return undefined;
-  const trimmed = reason.trim();
-  for (const { key, param, pattern } of REASON_PATTERNS) {
-    const match = pattern.exec(trimmed);
-    if (match) return { key, ...(param && match[1] ? { params: { [param]: match[1] } } : {}) };
-  }
-  return undefined;
-};
+export { coordinatorGateReason, coordinatorReasonCopy, type LocalizedCopyRef };

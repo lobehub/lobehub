@@ -1,18 +1,16 @@
 'use client';
 
 import type { GoalGraphDecision } from '@lobechat/types';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Button, Spin, Text, TextArea, toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Spin, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useGoalStore } from '@/store/goal';
 import { shinyTextStyles } from '@/styles';
 
-import { coordinatorGateReason, coordinatorReasonCopy } from './coordinatorCopy';
-import { useGateOptionLabel } from './Frontier';
+import GoalDecisionCase from '../GoalDecision';
 import type { GoalGraphView } from './goalGraphViewModel';
 import {
   deriveGoalResultStatus,
@@ -40,6 +38,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface DecisionStripProps {
+  agentId?: string | null;
   decision: GoalGraphDecision;
   goalId: string;
   onDecided: () => Promise<unknown>;
@@ -48,68 +47,35 @@ interface DecisionStripProps {
 /**
  * The Goal-level acceptance ended unmet and the coordinator opened a gate on
  * it. The owner decides here, beside the criteria that failed, instead of
- * hunting for the gate on the 执行过程 tab — same options, same endpoint.
+ * hunting for the gate on the 执行过程 tab — the same case the goal page and
+ * the island ask, on the same endpoint.
  */
-const DecisionStrip = ({ decision, goalId, onDecided }: DecisionStripProps) => {
+const DecisionStrip = ({ agentId, decision, goalId, onDecided }: DecisionStripProps) => {
   const { t } = useTranslation('chat');
   const decideGoal = useGoalStore((s) => s.decideGoal);
   const { allowed: canEdit } = usePermission('create_content');
-  const optionLabel = useGateOptionLabel();
-  const [note, setNote] = useState('');
-  const [deciding, setDeciding] = useState<string>();
 
-  const rawReason = coordinatorGateReason(decision.question);
-  const reasonCopy = coordinatorReasonCopy(rawReason);
-  const reason = reasonCopy ? t(reasonCopy.key as any, reasonCopy.params) : rawReason;
-
-  const decide = async (optionId: string) => {
-    setDeciding(optionId);
+  const decide = async (optionId: string, resolution?: string) => {
     try {
-      await decideGoal(goalId, {
-        decisionId: decision.id,
-        optionId,
-        resolution: note.trim() || undefined,
-      });
+      await decideGoal(goalId, { decisionId: decision.id, optionId, resolution });
       await onDecided();
     } catch (error) {
       console.error('[goal:result-decision]', error);
       toast.error(t('goalProcess.result.gate.error'));
-    } finally {
-      setDeciding(undefined);
+      // Rethrow so the form keeps the draft and can be sent again.
+      throw error;
     }
   };
 
   return (
-    <Flexbox className={styles.strip} data-goal-result-gate={decision.id} gap={12}>
-      <Flexbox gap={4}>
-        {reason && <Text weight={500}>{reason}</Text>}
-        <Text type={'secondary'}>{t('goalProcess.result.gate.prompt')}</Text>
-      </Flexbox>
-      {canEdit && (
-        <>
-          <TextArea
-            autoSize={{ maxRows: 3, minRows: 1 }}
-            placeholder={t('goalProcess.gate.notePlaceholder')}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-          />
-          <Flexbox horizontal gap={8} wrap={'wrap'}>
-            {decision.options?.map((option) => (
-              <Tooltip key={option.id} title={option.description}>
-                <Button
-                  danger={option.id === 'fail'}
-                  disabled={!!deciding && deciding !== option.id}
-                  loading={deciding === option.id}
-                  type={option.id === decision.recommendedOptionId ? 'primary' : 'default'}
-                  onClick={() => decide(option.id)}
-                >
-                  {optionLabel(option)}
-                </Button>
-              </Tooltip>
-            ))}
-          </Flexbox>
-        </>
-      )}
+    <Flexbox className={styles.strip} data-goal-result-gate={decision.id}>
+      <GoalDecisionCase
+        agentId={agentId}
+        canAnswer={canEdit}
+        category={'goalAcceptance'}
+        decision={decision}
+        onDecide={decide}
+      />
     </Flexbox>
   );
 };
@@ -163,6 +129,7 @@ const GoalResultHeader = ({ data, graph }: GoalResultHeaderProps) => {
       )}
       {status === 'awaitingDecision' && gate?.kind === 'pending' && (
         <DecisionStrip
+          agentId={goal.agentId}
           decision={gate.decision}
           goalId={goal.id}
           onDecided={data.mutateAcceptance}

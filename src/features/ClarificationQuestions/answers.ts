@@ -17,8 +17,11 @@ export interface ClarificationQuestion {
   header: string;
   /** Host-owned identity, echoed back on the answer. */
   id: string;
-  /** Option ids are submitted as-is, so a host never maps labels back. */
-  options: { description?: string; id: string; label: string }[];
+  /**
+   * Option ids are submitted as-is, so a host never maps labels back. A host
+   * that advises one answer marks it, and the form badges it.
+   */
+  options: { description?: string; id: string; label: string; recommended?: boolean }[];
   question: string;
 }
 

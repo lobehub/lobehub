@@ -681,6 +681,27 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       );
     });
 
+    // A Goal Task's failed run is the coordinator's to recover, and the gate it
+    // opens is the brief the person gets. An urgent error card per failed run
+    // asked them to act on something the goal was already handling.
+    it('leaves a Goal Task failure to the coordinator instead of an error brief', async () => {
+      const task = baseTask({ automationMode: null });
+      findById.mockResolvedValue(task);
+      goalFindByGraphTask.mockResolvedValueOnce({ id: 'goal-1' });
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'goal',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(createBrief).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
+    });
+
     it('error brief keeps internal ids out of the user-facing copy', async () => {
       const task = baseTask({ automationMode: 'schedule' });
       findById.mockResolvedValue(task);

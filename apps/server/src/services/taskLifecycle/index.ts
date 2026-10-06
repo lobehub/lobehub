@@ -397,19 +397,30 @@ export class TaskLifecycleService {
       // user regardless of what happens to the scheduling state below. The topic
       // id rides the structured `topicId` field (it also powers the card's
       // "View run" shortcut), never the headline.
-      await this.briefModel.create({
-        actions: errorActions,
-        agentId: currentTask?.assigneeAgentId || undefined,
-        // Persist the structured cause for observability / future remedy mapping.
-        metadata: errorCode ? { error: { code: errorCode } } : undefined,
-        priority: 'urgent',
-        summary,
-        taskId,
-        title: tHome('inbox.error.title'),
-        topicId,
-        trigger: 'task',
-        type: 'error',
-      });
+      // A Goal Task's failed run is the coordinator's to recover: it retries,
+      // reroutes or opens a decision gate, and that gate is the brief the
+      // person gets. An urgent error card per failed run asked them to act on
+      // something the goal was already handling — the same reason Goal rounds
+      // never synthesize result briefs above.
+      const isGoalTask =
+        !!currentTask &&
+        !!(await new GoalModel(this.db, this.userId, this.workspaceId).findByGraphTask(
+          currentTask.id,
+        ));
+      if (!isGoalTask)
+        await this.briefModel.create({
+          actions: errorActions,
+          agentId: currentTask?.assigneeAgentId || undefined,
+          // Persist the structured cause for observability / future remedy mapping.
+          metadata: errorCode ? { error: { code: errorCode } } : undefined,
+          priority: 'urgent',
+          summary,
+          taskId,
+          title: tHome('inbox.error.title'),
+          topicId,
+          trigger: 'task',
+          type: 'error',
+        });
 
       const runTrigger = params.runTrigger ?? 'manual';
       const isAutomationTick = runTrigger === 'schedule' || runTrigger === 'heartbeat';

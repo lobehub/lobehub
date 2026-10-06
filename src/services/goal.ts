@@ -105,6 +105,12 @@ class GoalService {
     return data ?? [];
   };
 
+  /** Gates and sign-offs waiting on the user across their goals, for the approval island. */
+  pendingForIsland = async () => {
+    const { data } = await lambdaClient.goal.pendingForIsland.query();
+    return data ?? { decisions: [], signOffs: [] };
+  };
+
   /** End the goal by hand and interrupt its live runs. Reopen with `resume`. */
   close = async (id: string, status: 'achieved' | 'canceled') =>
     lambdaClient.goal.close.mutate({ id, status });

@@ -781,6 +781,14 @@ export const goalRouter = router({
   }),
 
   /** Clarifications still waiting on the user, grouped by goal. */
+  pendingForIsland: goalProcedure.query(async ({ ctx }) => {
+    try {
+      return { data: await ctx.goalService.pendingForIsland(), success: true };
+    } catch (error) {
+      mapGoalError(error, 'list pending decisions for');
+    }
+  }),
+
   pendingClarifications: goalProcedure.query(async ({ ctx }) => {
     try {
       return { data: await ctx.goalService.pendingClarifications(), success: true };

@@ -54,7 +54,7 @@ export const useFrontierActions = (goalId: string): FrontierActions => {
         await refreshGoalGraph(goalId);
       },
       decide: (decisionId, optionId, resolution) =>
-        void decideGoal(goalId, { decisionId, optionId, resolution }),
+        decideGoal(goalId, { decisionId, optionId, resolution }),
     }),
     [decideGoal, goalId, refreshGoalGraph],
   );

@@ -2,7 +2,7 @@ import { type BriefAction, DEFAULT_BRIEF_ACTIONS, type TaskStatus } from '@lobec
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Button, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Check, SquarePen, Workflow } from 'lucide-react';
+import { Check, SquarePen, Target, Workflow } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
@@ -26,10 +26,18 @@ export interface BriefCardActionsProps {
   agentId?: string | null;
   briefId: string;
   briefType: string;
+  /**
+   * The brief's labels are already written in the reader's language for this
+   * brief (a goal gate's own answers), so they are shown as given instead of
+   * the generic copy for the same action key.
+   */
+  labelsLocalized?: boolean;
   /** Hook invoked after a comment is successfully posted. */
   onAfterAddComment?: () => void | Promise<void>;
   /** Hook invoked after the brief is successfully resolved. */
   onAfterResolve?: () => void | Promise<void>;
+  /** The advised answer, drawn filled among the brief's text buttons. */
+  recommendedActionKey?: string;
   resolvedAction?: string | null;
   taskId?: string | null;
   /** Parent task's runtime status — `scheduled` flips the result action to a plain "Confirm" since approving must NOT terminate a task parked between automated runs. */
@@ -55,7 +63,9 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     agentId,
     briefId,
     briefType,
+    labelsLocalized,
     onAfterAddComment,
+    recommendedActionKey,
     onAfterResolve,
     resolvedAction,
     taskId,
@@ -133,12 +143,30 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     const getActionLabel = useCallback(
       (action: BriefAction) => {
         if (isResult && action.key === 'approve') return t(resultLabelKey);
+        if (labelsLocalized && action.label) return action.label;
         const i18nKey = `brief.action.${action.key}`;
         const translated = t(i18nKey, { defaultValue: '' });
         return !translated || translated === i18nKey ? action.label : translated;
       },
-      [isResult, resultLabelKey, t],
+      [isResult, labelsLocalized, resultLabelKey, t],
     );
+
+    /**
+     * A goal brief's answers are quiet text buttons, the advised one a filled
+     * button — marked without a primary's weight; other briefs keep their
+     * round outlined buttons.
+     */
+    const answerButtonProps = (key: string) =>
+      labelsLocalized
+        ? key === recommendedActionKey
+          ? { className: undefined, shape: 'round' as const, type: 'fill' as const }
+          : {
+              className: undefined,
+              shape: undefined,
+              style: { color: cssVar.colorTextSecondary },
+              type: 'text' as const,
+            }
+        : { shape: 'round' as const, type: 'default' as const };
 
     /**
      * Run a brief mutation and report a rejection to the user, returning whether
@@ -250,12 +278,21 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     }
 
     const commentActions = actions.find((a) => a.type === 'comment');
-    const primaryActions = actions.find((a) => a.type !== 'comment');
+    const primaryActions = actions.find(
+      (a) => a.type !== 'comment' && !(labelsLocalized && a.type === 'link'),
+    );
+    // A brief that writes its own answers keeps its navigation link apart from
+    // them, at the leading edge in the same quiet form as "View run", so "open
+    // the goal" sits in one place across every goal brief instead of wherever
+    // it fell among the answers.
+    const leadingLinks = labelsLocalized ? actions.filter((a) => a.type === 'link') : [];
     const otherActions = actions
-      .filter((a) => a.type !== 'comment')
+      .filter((a) => a.type !== 'comment' && !leadingLinks.includes(a))
       .slice(1)
       .reverse();
-    const showEditButton = !!taskId && (isResult || !!commentActions);
+    // A comment action off a task (a goal's "request changes") still needs its
+    // input box; on a task the same button doubles as free-form feedback.
+    const showEditButton = !!commentActions || (!!taskId && isResult);
     const editTooltip = isResult
       ? t('brief.editResult')
       : commentActions
@@ -264,20 +301,55 @@ const BriefCardActions = memo<BriefCardActionsProps>(
 
     return (
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
-        {viewRunButton ?? <span />}
+        {viewRunButton ??
+          (leadingLinks.length > 0 ? (
+            <Flexbox horizontal align={'center'} gap={4}>
+              {leadingLinks.map((action) => (
+                <BriefActionLink
+                  agentId={agentId}
+                  icon={Target}
+                  key={action.key}
+                  taskId={taskId}
+                  url={action.url}
+                  variant={'quiet'}
+                >
+                  {getActionLabel(action)}
+                </BriefActionLink>
+              ))}
+            </Flexbox>
+          ) : (
+            <span />
+          ))}
         <Flexbox horizontal align={'center'} gap={8}>
-          {showEditButton && (
-            <Tooltip title={editTooltip}>
-              <Button
-                className={'brief-comment-btn'}
-                icon={SquarePen}
-                shape={'round'}
-                style={{
-                  color: cssVar.colorTextSecondary,
-                }}
-                onClick={() => setCommentMode({ type: 'feedback' })}
-              />
-            </Tooltip>
+          {labelsLocalized && commentActions ? (
+            // A brief that names its own answers ("Request changes") says so
+            // in words: an icon alone hid the only way to send a goal back.
+            <Button
+              {...answerButtonProps(commentActions.key)}
+              onClick={() => setCommentMode({ key: commentActions.key, type: 'comment' })}
+            >
+              {getActionLabel(commentActions)}
+            </Button>
+          ) : (
+            showEditButton && (
+              <Tooltip title={editTooltip}>
+                <Button
+                  className={'brief-comment-btn'}
+                  icon={SquarePen}
+                  shape={'round'}
+                  style={{
+                    color: cssVar.colorTextSecondary,
+                  }}
+                  onClick={() =>
+                    setCommentMode(
+                      !taskId && commentActions
+                        ? { key: commentActions.key, type: 'comment' }
+                        : { type: 'feedback' },
+                    )
+                  }
+                />
+              </Tooltip>
+            )
           )}
           {otherActions.map((action) => {
             if (action.type === 'link') {
@@ -299,7 +371,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
                 className={styles.actionBtn}
                 disabled={loadingKey === action.key}
                 key={action.key}
-                shape={'round'}
+                {...answerButtonProps(action.key)}
                 onClick={() => handleResolve(action.key)}
               >
                 {getActionLabel(action)}
@@ -334,7 +406,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
               <Button
                 className={styles.actionBtnPrimary}
                 disabled={loadingKey === primaryActions.key}
-                shape={'round'}
+                {...answerButtonProps(primaryActions.key)}
                 onClick={() => handleResolve(primaryActions.key)}
               >
                 {getActionLabel(primaryActions)}

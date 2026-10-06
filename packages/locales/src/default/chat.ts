@@ -2002,7 +2002,7 @@ export default {
     'Each round is one full agent run; its output, time and cost all hang off this goal.',
   'goalEmpty.step2.title': 'The agent runs a round on its own',
   'goalEmpty.step3.desc':
-    'Every check is judged one by one. All passed means achieved; anything needing your call stops at pending acceptance.',
+    'Every check is judged one by one. All passed means achieved; anything needing your call stops and asks you.',
   'goalEmpty.step3.title': 'Acceptance runs every round',
   'goalEmpty.title': 'Chase goals without limits',
   'goalList.acceptanceProgress': '{{passed}}/{{total}} passed',
@@ -2022,7 +2022,7 @@ export default {
   'goalList.status.error': 'Needs attention',
   'goalList.status.paused': 'Paused',
   'goalList.status.planning': 'Planning',
-  'goalList.status.review': 'Pending acceptance',
+  'goalList.status.review': 'Needs your decision',
   'goalList.status.running': 'Pursuing',
   'goalList.status.verifying': 'Verifying',
   'goalList.status.waiting': 'Waiting',
@@ -2036,7 +2036,7 @@ export default {
   'goalTask.status.paused': 'Paused',
   'goalTask.status.planning': 'Planning',
   'goalTask.status.repairing': 'Repairing',
-  'goalTask.status.review': 'Pending acceptance',
+  'goalTask.status.review': 'Needs your decision',
   'goalTask.status.running': 'Executing',
   'goalTask.status.verifying': 'Verifying',
   'goalTask.status.waiting': 'Waiting',
@@ -2222,6 +2222,22 @@ export default {
   'goalProcess.gate.reason.recoveryFailed': 'Automatic recovery could not start the next attempt',
   'goalProcess.gate.reason.deviceStayedOffline':
     'The device this task runs on stayed offline through every automatic retry',
+  'goalProcess.gate.reason.setupWorkingDirectory':
+    'The working directory {{path}} does not exist on the device the agent runs on. Create it there, or point the agent at a directory that exists.',
+  'goalProcess.gate.reason.setupCli':
+    'The run could not start ({{error}}). Install the CLI on the device the agent runs on and make sure it is on PATH.',
+  'goalProcess.gate.reason.setupCredentials':
+    'The provider refused the run ({{error}}). Update the credentials, plan or model in the agent settings.',
+  'goalProcess.gate.reason.setupDevice':
+    'The device is unavailable ({{error}}). Reconnect it, or bind the agent to another online device.',
+  'goalProcess.gate.reason.setupGateway':
+    'The device gateway is not set up ({{error}}). Configure it on the server, or switch the agent to a connected local device.',
+  'goalProcess.gate.reason.quotaFarReset':
+    'The usage limit ({{error}}) does not reset until {{at}}, more than a day away. Switch the agent to another account or provider, or retry after the reset.',
+  'goalProcess.gate.reason.quotaRetriesSpent':
+    'Still over the usage limit ({{error}}) after {{count}} automatic retries over {{duration}}. Check the plan, or switch the agent to another account or provider.',
+  'goalProcess.gate.reason.transientRetriesSpent':
+    'The run failed the same way {{count}} times over {{duration}} ({{error}}). Check the device, its network and the agent gateway.',
   'goalProcess.gate.reason.runError': 'The run stopped with an error ({{code}})',
   'goalProcess.gate.recommended': 'recommended',
   'goalProcess.gate.noteLabel': 'Extra guidance',
@@ -2231,6 +2247,47 @@ export default {
   'goalProcess.gate.option.retire': 'Retire work',
   'goalProcess.gate.option.fail': 'Fail goal',
   'goalProcess.gate.option.assume': 'Go with the assumption',
+  'goalProcess.decision.effect.fixedRetry': 'Run the task again once the setup is fixed.',
+  'goalProcess.decision.asks.judgment': 'needs your review on a stuck task',
+  'goalProcess.decision.asks.goalAcceptance': 'needs your review on the goal acceptance',
+  'goalProcess.decision.asks.agentQuestion': 'needs your review',
+  'goalProcess.decision.asks.machine': 'needs you to sort it out',
+  'goalProcess.decision.system': 'Run environment',
+  'goalProcess.decision.summary.judgment':
+    'It used up its automatic retries without passing acceptance. Decide whether it gets another attempt or is dropped.',
+  'goalProcess.decision.summary.machine':
+    'It could not run because of the run environment, not the work itself. Fix the environment, then retry.',
+  'goalProcess.decision.summary.goalAcceptance':
+    'The goal-level acceptance did not pass. Decide whether to run it again, abandon it, or record the goal as failed.',
+  'goalProcess.decision.summary.agentQuestion':
+    'While working on the goal, the main Agent hit a call only you can make. It lays out the options and its recommendation below.',
+  'goalProcess.decision.summary.thisTask': 'this task',
+  'goalProcess.decision.context.task': 'Task',
+  'goalProcess.decision.context.decision': 'Your call',
+  'goalProcess.decision.submit': 'Decide',
+  'goalProcess.decision.viewRun': 'Open task',
+  'goalProcess.decision.attempts_one': '{{count}} attempt',
+  'goalProcess.decision.attempts_other': '{{count}} attempts',
+  'goalProcess.decision.effect.retry':
+    'Send the task back for another attempt. Your note is written into its instructions.',
+  'goalProcess.decision.effect.retire': 'Drop this task. The goal moves on without it.',
+  'goalProcess.decision.effect.fail': 'End the goal and record it as failed.',
+  'goalProcess.decision.effect.retryAcceptance': 'Run the goal-level acceptance again.',
+  'goalProcess.decision.effect.abandonAcceptance':
+    'Stop acceptance and end the goal without a verdict.',
+  'goalProcess.signOff.islandSubtitle': 'is done and waiting for your sign-off',
+  'goalProcess.signOff.question': 'Do you accept what this goal delivered?',
+  'goalProcess.signOff.description': 'Goal-level acceptance passed. Your sign-off closes the goal.',
+  'goalProcess.signOff.accept': 'Sign off',
+  'goalProcess.signOff.acceptEffect': 'Close the goal as delivered.',
+  'goalProcess.signOff.requestChanges': 'Request changes',
+  'goalProcess.signOff.requestChangesEffect':
+    'Send it back to the Agent. Say what to change in the notes.',
+  'goalProcess.signOff.notePlaceholder':
+    'What should change? The Agent reworks the delivery with this.',
+  'goalProcess.signOff.accepted': 'Signed off',
+  'goalProcess.signOff.sentBack': 'Sent back for changes',
+  'goalProcess.gate.title.agentQuestion': "Answer the main Agent's question",
   'goalProcess.attempts.title': 'Previous attempts',
   'goalProcess.attempts.nth': 'Attempt {{index}}',
   'goalProcess.attempts.passed': 'Passed',
@@ -2515,13 +2572,13 @@ export default {
   'goalPage.filteredEmptyTitle': 'No goals in this view',
   'goalPage.filter.achieved': 'Completed',
   'goalPage.filter.all': 'All',
-  'goalPage.filter.review': 'Needs review',
+  'goalPage.filter.review': 'Needs you',
   'goalPage.filter.running': 'In progress',
   'goalPage.loadingProgress': 'Loading acceptance progress…',
   'goalPage.listTitle': 'Goal list',
   'goalPage.loadMore': 'Load more',
-  'goalPage.metrics.delivered': 'Delivered',
-  'goalPage.metrics.pursuing': 'Open',
+  'goalPage.metrics.delivered': 'Needs you',
+  'goalPage.metrics.pursuing': 'Others',
   'goalPage.metrics.total': 'Total goals',
   'goalPage.title': 'Overview',
   'goalPage.view.card': 'Cards',

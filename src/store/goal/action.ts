@@ -160,7 +160,15 @@ export class GoalActionImpl {
     params: { decisionId: string; optionId: string; resolution?: string },
   ): Promise<void> => {
     await goalService.decide({ id: goalId, ...params });
-    await this.refreshGoalGraph(goalId);
+    // The same gate is asked by the island, the inbox brief and the home goal
+    // rail; answered in one place, every other one stops asking.
+    await Promise.all([
+      this.refreshGoalGraph(goalId),
+      mutate(goalKeys.pendingForIsland()),
+      mutate(
+        (key) => Array.isArray(key) && (key[0] === 'brief:list' || key[0] === 'task:homeGoals'),
+      ),
+    ]);
   };
 
   /** Answer a goal's clarification round in one call, then refresh every view of it. */
@@ -235,6 +243,17 @@ export class GoalActionImpl {
     useClientDataSWR(
       enabled ? goalKeys.pendingClarifications() : null,
       () => goalService.pendingClarifications(),
+      { refreshInterval: PENDING_CLARIFICATIONS_POLL_INTERVAL, revalidateOnFocus: true },
+    );
+
+  /**
+   * Gates and sign-offs waiting on the user across their goals — what the
+   * island asks outside the goal page. Same cadence as the clarifications.
+   */
+  useFetchPendingForIsland = (enabled: boolean) =>
+    useClientDataSWR(
+      enabled ? goalKeys.pendingForIsland() : null,
+      () => goalService.pendingForIsland(),
       { refreshInterval: PENDING_CLARIFICATIONS_POLL_INTERVAL, revalidateOnFocus: true },
     );
 

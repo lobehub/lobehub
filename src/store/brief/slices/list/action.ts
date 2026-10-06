@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
-import { briefKeys } from '@/libs/swr/keys';
+import { briefKeys, goalKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
@@ -102,11 +102,22 @@ export class BriefListActionImpl {
   };
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {
+    const goal = this.#get().briefs.find((brief) => brief.id === id)?.metadata?.goal;
     await briefService.resolve(id, { action, comment });
     this.internal_updateBrief(id, {
       resolvedAction: action,
       resolvedAt: new Date().toISOString(),
     });
+    // A goal brief answered the goal itself: the island and the goal views
+    // asking the same question have to drop it too.
+    if (goal)
+      void mutate(
+        (key) =>
+          Array.isArray(key) &&
+          (key[0] === goalKeys.pendingForIsland()[0] ||
+            key[0] === 'task:homeGoals' ||
+            (key[0] === 'goal:graph' && key[1] === goal.goalId)),
+      );
   };
 
   // Free-form feedback from the brief card: resolve the brief with the

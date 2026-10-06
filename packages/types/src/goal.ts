@@ -247,6 +247,13 @@ export interface GoalManagerWait {
   };
 }
 
+/** A question the main Agent escalates to the owner, with the answers it proposes. */
+export interface GoalManagerAsk {
+  options: GoalDecisionOption[];
+  question: string;
+  recommendedOptionId?: string;
+}
+
 /** Server-owned dispatch receipt, retained across backend restarts. */
 export interface GoalManagerState {
   /**
@@ -321,6 +328,12 @@ export interface GoalManagerState {
   startedAt: string;
   submitted?: {
     action: 'tasks' | 'verify' | 'retry' | 'escalate' | 'wait';
+    /**
+     * The question an `escalate` puts to the owner, with the answers it offers.
+     * Without it the gate could only ask "retry or retire?" while the real
+     * question sat unanswerable in the reason text.
+     */
+    ask?: GoalManagerAsk;
     reason: string;
     taskId?: string;
   };
@@ -476,8 +489,18 @@ export type GoalDecisionAuthority = 'agent' | 'user' | 'project_role';
 
 export type GoalDecisionStatus = 'pending' | 'resolved' | 'canceled';
 
+/**
+ * What answering with an option does to the Task the gate was opened for.
+ * Coordinator options carry it implicitly through their fixed ids
+ * (`retry` / `retire` / `fail`); options the main Agent writes for its own
+ * question name it, so its wording never has to match a reserved id.
+ */
+export type GoalDecisionOptionEffect = 'retry' | 'retire';
+
 export interface GoalDecisionOption {
+  /** The consequence of choosing this option, in the words the person reads. */
   description?: string;
+  effect?: GoalDecisionOptionEffect;
   id: string;
   label: string;
 }

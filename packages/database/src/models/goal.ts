@@ -7,11 +7,12 @@ import type {
   GoalSupervisionState,
   GoalUnderstanding,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
 import type { GoalItem, NewGoal } from '../schemas/goal';
 import { goals } from '../schemas/goal';
-import { goalNodeDecisions, goalNodes } from '../schemas/goalGraph';
+import { goalEdges, goalNodeDecisions, goalNodes } from '../schemas/goalGraph';
 import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
@@ -359,6 +360,50 @@ export class GoalModel {
       // their order stable across reads so "question 1" stays question 1.
       .orderBy(goalNodeDecisions.createdAt, goalNodeDecisions.id);
 
+  /**
+   * Every gate waiting on the person across their goals, except clarification
+   * rounds (asked as one form through `listPendingClarifications`) — what the
+   * approval island asks wherever the person is. Each row names the Task the
+   * gate was opened for, so the question can say what it is about.
+   */
+  listPendingDecisions = async (): Promise<PendingGoalDecisionRow[]> => {
+    const source = alias(goalNodes, 'gate_source');
+    return this.db
+      .select({
+        agentId: goals.agentId,
+        createdAt: goalNodeDecisions.createdAt,
+        decisionId: goalNodeDecisions.id,
+        description: goalNodes.description,
+        goalId: goals.id,
+        goalTitle: goals.title,
+        nodeId: goalNodes.id,
+        nodeTitle: goalNodes.title,
+        options: goalNodeDecisions.options,
+        question: goalNodeDecisions.question,
+        recommendedOptionId: goalNodeDecisions.recommendedOptionId,
+        sourceTaskId: source.taskId,
+        sourceTitle: source.title,
+      })
+      .from(goalNodeDecisions)
+      .innerJoin(goalNodes, eq(goalNodeDecisions.nodeId, goalNodes.id))
+      .innerJoin(goals, eq(goalNodes.goalId, goals.id))
+      .leftJoin(
+        goalEdges,
+        and(eq(goalEdges.targetNodeId, goalNodes.id), eq(goalEdges.kind, 'leads_to')),
+      )
+      .leftJoin(source, and(eq(source.id, goalEdges.sourceNodeId), eq(source.kind, 'task')))
+      .where(
+        and(
+          this.ownership(),
+          notInArray(goals.status, ['paused', 'achieved', 'failed', 'canceled']),
+          eq(goalNodeDecisions.status, 'pending'),
+          eq(goalNodeDecisions.authority, 'user'),
+          ne(goalNodes.title, GOAL_CLARIFICATION_TITLE),
+        ),
+      )
+      .orderBy(goalNodeDecisions.createdAt, goalNodeDecisions.id);
+  };
+
   delete = async (id: string) => {
     return this.db.delete(goals).where(and(eq(goals.id, id), this.ownership()));
   };
@@ -583,6 +628,24 @@ export interface GoalListItem {
   taskTotal: number;
   totalRunCost: number;
   totalRunDuration: number;
+}
+
+export interface PendingGoalDecisionRow {
+  agentId: string | null;
+  createdAt: Date;
+  decisionId: string;
+  /** What the gate stands on: the coordinator's reason, the main Agent's diagnosis. */
+  description: string | null;
+  goalId: string;
+  goalTitle: string;
+  nodeId: string;
+  nodeTitle: string;
+  options: GoalDecisionOption[] | null;
+  question: string;
+  recommendedOptionId: string | null;
+  /** The Task the gate was opened for; null for a goal-level question. */
+  sourceTaskId: string | null;
+  sourceTitle: string | null;
 }
 
 export interface PendingGoalClarificationRow {
