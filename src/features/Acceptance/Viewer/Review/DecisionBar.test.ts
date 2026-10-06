@@ -13,6 +13,8 @@ vi.mock('i18next', async (importOriginal) => ({
   ...(await importOriginal<typeof I18next>()),
   t: (key: string) => key,
 }));
+// The live feedback preview reads SWR and the user store; its own test covers it.
+vi.mock('./RejectFeedbackPreview', () => ({ default: () => null }));
 afterEach(cleanup);
 
 describe('DecisionBar copy', () => {
@@ -82,7 +84,8 @@ it.each(['', '   ', '  Please add dark mode evidence  '])(
         ...props,
         feedbackCount: 0,
         needsFixCount: 0,
-        onRejectComment: () => openRejectModal({ dispatchAvailable: true, onConfirm }),
+        onRejectComment: () =>
+          openRejectModal({ acceptanceId: 'acc-1', dispatchAvailable: true, onConfirm }),
       }),
     );
 
@@ -107,7 +110,8 @@ it('without an authoring agent, the reject dialog copies the prompt instead of p
       ...props,
       feedbackCount: 0,
       needsFixCount: 0,
-      onRejectComment: () => openRejectModal({ dispatchAvailable: false, onConfirm }),
+      onRejectComment: () =>
+        openRejectModal({ acceptanceId: 'acc-1', dispatchAvailable: false, onConfirm }),
     }),
   );
 

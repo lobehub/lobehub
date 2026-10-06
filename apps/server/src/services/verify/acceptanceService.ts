@@ -340,6 +340,8 @@ export interface AcceptanceCheckReviewEvent {
   comment?: string;
   /** When the decision was made (ISO 8601; falls back to the row's timestamps). */
   createdAt: string;
+  /** Who decided (user id). Absent on legacy rows, which only the owner could write. */
+  decidedBy?: string;
   /** Uploaded/pasted screenshots backing the reject (FKs to files). */
   fileIds?: string[];
   /** The result row the decision is stamped on. */
@@ -379,6 +381,7 @@ export const buildCheckReviewOverlay = (
       annotations: detail?.annotations,
       comment: detail?.comment,
       createdAt: detail?.decidedAt ?? (result.completedAt ?? result.createdAt)?.toISOString() ?? '',
+      decidedBy: detail?.decidedBy,
       fileIds: detail?.fileIds,
       id: result.id,
       // A carried-forward check is judged at the CURRENT round even though its
