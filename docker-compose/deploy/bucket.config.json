@@ -12,6 +12,15 @@
       "Resource": ["arn:aws:s3:::lobe/*"],
       "NotResource": [],
       "Condition": {}
+    },
+    {
+      "Sid": "KeepLLMGenerationTracingPrivate",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": ["*"]
+      },
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::lobe/llm-generation-tracing/*"]
     }
   ],
   "Version": "2012-10-17"
