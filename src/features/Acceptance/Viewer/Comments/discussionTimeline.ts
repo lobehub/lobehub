@@ -3,14 +3,25 @@ import type { AcceptanceCommentItem, AcceptanceCommentThread } from '@lobechat/t
 /**
  * The discussion is a conversation, not a filing cabinet: it carries messages
  * about the delivery as a whole, strung together with the events that happened
- * between them (a round landing, a reviewer approving).
+ * between them (a round landing, a reviewer approving, a check sent back).
  *
- * Comments circled on a screenshot are deliberately NOT here — a region note
- * only means anything next to the pixels it points at, so it lives on the check
- * that owns that evidence.
+ * A note circled on a screenshot is still a turn in that conversation — the way
+ * a review comment on a diff line shows up in a pull request's Conversation
+ * tab. It keeps its own shape (`region`) so it renders with the picture and the
+ * check it points at, and stays one thread instead of being flattened.
  */
 export type DiscussionEntry =
   | { at: Date; comment: AcceptanceCommentItem; kind: 'message' }
+  | { at: Date; kind: 'region'; thread: AcceptanceCommentThread }
+  | {
+      annotationCount: number;
+      at: Date;
+      checkItemId: string;
+      comment?: string;
+      kind: 'checkReject';
+      roundIndex: number;
+    }
+  | { at: Date; comment?: string; kind: 'roundReject'; roundIndex: number }
   | {
       at: Date;
       kind: 'round';
@@ -31,15 +42,34 @@ export const messageThreads = (threads: AcceptanceCommentThread[]) =>
     (thread) => thread.root.anchorType === 'acceptance' && thread.root.kind !== 'proposal',
   );
 
-/** Threads circled on evidence, which belong on the check rows instead. */
+/** Threads circled on evidence: shown on their check, and as a region entry here. */
 export const regionThreads = (threads: AcceptanceCommentThread[]) =>
   threads.filter((thread) => thread.root.anchorType === 'evidence');
 
+interface ReviewInput {
+  action: 'accept' | 'ignore' | 'reject';
+  annotations?: unknown[];
+  comment?: string;
+  createdAt: string;
+  roundIndex: number;
+}
+
+interface RoundInput {
+  createdAt: Date | string | null;
+  /** The round's own verdict — only its `comment` is read. */
+  decisionDetail?: { comment?: string; decidedAt?: string } | null;
+  id?: string;
+  roundIndex: number | null;
+  userDecision?: string | null;
+}
+
 interface BuildInput {
   approvals: AcceptanceCommentItem[];
+  /** Union checks — their reject trail is the reviewer's side of the story. */
+  checks?: { id: string; reviews: ReviewInput[] }[];
   /** Every comment of the acceptance — proposals are read straight off it. */
   items?: AcceptanceCommentItem[];
-  rounds: { createdAt: Date | string | null; id?: string; roundIndex: number | null }[];
+  rounds: RoundInput[];
   threads: AcceptanceCommentThread[];
 }
 
@@ -50,6 +80,7 @@ interface BuildInput {
  */
 export const buildDiscussionTimeline = ({
   approvals,
+  checks = [],
   items = [],
   rounds,
   threads,
@@ -71,8 +102,39 @@ export const buildDiscussionTimeline = ({
     for (const comment of [thread.root, ...thread.replies])
       entries.push({ at: new Date(comment.createdAt), comment, kind: 'message' });
 
+  // A region note leads with its root: that is when it was said, and its
+  // replies stay under it because they are about the same spot.
+  // A withdrawn note with nobody answering it has nothing left to show.
+  for (const thread of regionThreads(threads)) {
+    if (thread.root.deletedAt && thread.replies.every((reply) => reply.deletedAt)) continue;
+    entries.push({ at: new Date(thread.root.createdAt), kind: 'region', thread });
+  }
+
+  // Sending a check back is the reviewer's loudest turn, and it lives on the
+  // check's result row rather than in the comment table — without it the
+  // discussion of a rejected delivery reads as if nobody had said anything.
+  for (const check of checks)
+    for (const review of check.reviews) {
+      if (review.action !== 'reject' || !review.createdAt) continue;
+      entries.push({
+        annotationCount: review.annotations?.length ?? 0,
+        at: new Date(review.createdAt),
+        checkItemId: check.id,
+        comment: review.comment?.trim() || undefined,
+        kind: 'checkReject',
+        roundIndex: review.roundIndex,
+      });
+    }
+
   for (const round of rounds) {
     if (round.roundIndex === null || !round.createdAt) continue;
+    if (round.userDecision === 'reject')
+      entries.push({
+        at: new Date(round.decisionDetail?.decidedAt ?? round.createdAt),
+        comment: round.decisionDetail?.comment?.trim() || undefined,
+        kind: 'roundReject',
+        roundIndex: round.roundIndex,
+      });
     entries.push({
       at: new Date(round.createdAt),
       kind: 'round',
@@ -90,9 +152,32 @@ export const buildDiscussionTimeline = ({
   return entries.sort((a, b) => a.at.getTime() - b.at.getTime());
 };
 
-/** The discussion badge counts contributions, including the round's own note. */
+/**
+ * The discussion badge counts contributions: every surviving remark (a region
+ * note and each of its replies included), the round's own note, and each
+ * send-back that says why.
+ */
 export const countDiscussionMessages = (input: BuildInput): number =>
-  buildDiscussionTimeline(input).filter((entry) => {
-    if (entry.kind === 'message') return !entry.comment.deletedAt;
-    return entry.kind === 'round' && Boolean(entry.proposal?.content.trim());
-  }).length;
+  buildDiscussionTimeline(input).reduce((total, entry) => {
+    switch (entry.kind) {
+      case 'message': {
+        return total + (entry.comment.deletedAt ? 0 : 1);
+      }
+      case 'region': {
+        const { replies, root } = entry.thread;
+        return total + [root, ...replies].filter((comment) => !comment.deletedAt).length;
+      }
+      case 'round': {
+        return total + (entry.proposal?.content.trim() ? 1 : 0);
+      }
+      case 'checkReject': {
+        return total + (entry.comment || entry.annotationCount > 0 ? 1 : 0);
+      }
+      case 'roundReject': {
+        return total + (entry.comment ? 1 : 0);
+      }
+      default: {
+        return total;
+      }
+    }
+  }, 0);

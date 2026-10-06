@@ -128,6 +128,18 @@ const ReadDiscussion = () => {
             />
           );
         }
+        // A circled note reads as its thread; the picture it points at stays on
+        // the check section of this report.
+        if (entry.kind === 'region')
+          return (
+            <Flexbox gap={8} key={entry.thread.root.id}>
+              {[entry.thread.root, ...entry.thread.replies].map((comment) => (
+                <ReadComment comment={comment} key={comment.id} />
+              ))}
+            </Flexbox>
+          );
+        // Send-backs are only built from the checks, which this report does not pass.
+        if (entry.kind !== 'message') return null;
         return <ReadComment comment={entry.comment} key={entry.comment.id} threaded={false} />;
       })}
     </Flexbox>

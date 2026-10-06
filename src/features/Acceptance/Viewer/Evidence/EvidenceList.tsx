@@ -22,7 +22,8 @@ import {
 import type { AcceptanceEvidence } from '../Checks/types';
 import { AnnotatedImage } from '../Evidence/Annotation';
 import { ScreenshotTiles } from '../Evidence/ScreenshotTiles';
-import { IMAGE_EVIDENCE, imageRatio, isVisual } from './evidence';
+import { IMAGE_EVIDENCE, imageRatio, isAnnotatable, isVisual } from './evidence';
+import FloatingCommentAction, { FLOATING_ACTION_HOST } from './FloatingCommentAction';
 import type { EvidenceOverlayMap } from './overlay';
 import { styles } from './styles';
 import { VideoEvidencePlayer } from './Video/VideoEvidencePlayer';
@@ -64,6 +65,11 @@ const comparisonContent = (item: AcceptanceEvidence) => {
 
 export const EvidenceList = memo<{
   evidence: AcceptanceEvidence[];
+  /**
+   * Comment on (or mark) one picture straight from it — floats over each
+   * annotatable image, labelled for what it opens.
+   */
+  onComment?: { label: string; open: (id: string) => void };
   onReviewEvidence?: (id: string) => void;
   /**
    * Regions to draw over an evidence image, keyed by evidence id. Used by the
@@ -76,8 +82,12 @@ export const EvidenceList = memo<{
   onRefreshEvidenceUrl?: (evidenceId: string) => Promise<string | undefined>;
   /** The standing reject's notes — video ones are pinned to the player's timeline. */
   reviewNotes?: AcceptanceReviewAnnotation[];
-}>(({ evidence, overlays, onRefreshEvidenceUrl, onReviewEvidence, reviewNotes }) => {
+}>(({ evidence, overlays, onComment, onRefreshEvidenceUrl, onReviewEvidence, reviewNotes }) => {
   const { md = true } = useResponsive();
+  const commentAction = (item: AcceptanceEvidence) =>
+    onComment && isAnnotatable(item) ? (
+      <FloatingCommentAction title={onComment.label} onClick={() => onComment.open(item.id)} />
+    ) : undefined;
   const sorted = [...evidence].sort((a, b) => (isVisual(b) ? 1 : 0) - (isVisual(a) ? 1 : 0));
   if (sorted.length === 0) return null;
 
@@ -213,6 +223,7 @@ export const EvidenceList = memo<{
                 const shotCaption = meaningfulEvidenceCaption(shot.description);
                 return (
                   <ScreenshotTiles
+                    action={commentAction(shot)}
                     alt={shot.description ?? shot.fileName ?? shot.type}
                     annotations={overlays?.get(shot.id)}
                     fileHeight={shot.fileHeight}
@@ -231,8 +242,15 @@ export const EvidenceList = memo<{
           );
         }
         if (item.fileUrl && IMAGE_EVIDENCE.has(item.type)) {
+          const action = commentAction(item);
           return (
-            <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
+            <Flexbox
+              gap={4}
+              key={item.id}
+              style={{ maxWidth: '100%', position: 'relative', width: 'fit-content' }}
+              {...(action ? { [FLOATING_ACTION_HOST]: '' } : {})}
+            >
+              {action}
               {overlay?.length ? (
                 <AnnotatedImage
                   annotations={overlay}
