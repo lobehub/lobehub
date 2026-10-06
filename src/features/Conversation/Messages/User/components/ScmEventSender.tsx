@@ -1,8 +1,7 @@
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { ExternalLinkIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import {
@@ -53,7 +52,7 @@ ScmEventAvatar.displayName = 'ScmEventAvatar';
 
 /**
  * The pull request as the sender name of a wake-up message: `owner/repo #n`
- * linking out, with the branch and commit it is about on a second line —
+ * linking to it, with the branch and commit it is about on a second line —
  * sized to sit beside the two-line-tall GitHub mark.
  */
 export const ScmEventSenderTitle = memo<{ source: ScmEventAttributes }>(({ source }) => {
@@ -68,7 +67,6 @@ export const ScmEventSenderTitle = memo<{ source: ScmEventAttributes }>(({ sourc
         {url ? (
           <a className={styles.link} href={url} rel="noreferrer" target="_blank">
             {title}
-            <Icon icon={ExternalLinkIcon} size={12} />
           </a>
         ) : (
           title
