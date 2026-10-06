@@ -247,6 +247,12 @@ export class AgentAccountService {
     message: AgentAccountOutboundMessage,
   ): Promise<{ providerMessageId: string }> => {
     const account = await this.requireActiveAccount(accountId);
+    // The persisted capability is the account's contract (a phone line warming
+    // up is receive-only), so it gates the irreversible provider call — not
+    // the provider's declaration, which only seeds it at creation.
+    if (!account.capabilities.send) {
+      throw new Error(`Agent account ${accountId} is not allowed to send`);
+    }
     const provider = this.options.registry.get(account.provider);
     const credential = await this.model.getCredential(accountId);
 
@@ -287,6 +293,11 @@ export class AgentAccountService {
     // Authentic but already handled: acknowledge so the provider stops
     // retrying, and produce nothing a second time.
     if (event.duplicate) return { accountId: resolved.view.id, outcome: 'ignored' };
+    // Same contract on the way in: a send-only account acknowledges the
+    // delivery but must not turn it into agent work.
+    if (!resolved.view.capabilities.receive) {
+      return { accountId: resolved.view.id, outcome: 'ignored' };
+    }
 
     const message = await provider.normalizeInbound(event, ref);
     if (!message) return { accountId: resolved.view.id, outcome: 'ignored' };

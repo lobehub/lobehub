@@ -98,11 +98,11 @@ const buildService = (fetchImpl: typeof fetch) => {
   return new AgentAccountService(serverDB, userId, { gateKeeper, registry });
 };
 
-const inboundBody = (address = 'agent-7@lobe.id') =>
+const inboundBody = (address = 'agent-7@lobe.id', eventId = 'evt_1') =>
   JSON.stringify({
     createdAt: '2026-10-02T00:00:00.000Z',
     data: { inbox: { address, clientId: 'cli_1', id: 'inb_1' }, message: { id: 'msg_in_1' } },
-    id: 'evt_1',
+    id: eventId,
     type: 'message.received',
   });
 
@@ -302,6 +302,24 @@ describe('AgentAccountService — actions', () => {
     );
   });
 
+  it('refuses to send from an account whose persisted capabilities exclude sending', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    const created = await service.provision({ agentId, provider: 'agent-mail' });
+
+    await serverDB
+      .update(agentAccounts)
+      .set({ capabilities: { receive: true, send: false } })
+      .where(eq(agentAccounts.id, created.id));
+
+    await expect(service.send(created.id, { text: 'hi', to: 'human@example.com' })).rejects.toThrow(
+      /not allowed to send/,
+    );
+    expect(calls.some((call) => call.method === 'POST' && call.path.includes('/messages'))).toBe(
+      false,
+    );
+  });
+
   it('releases on the provider and purges the credential when revoking', async () => {
     const { calls, fetchImpl } = createMailFetch();
     const service = buildService(fetchImpl);
@@ -380,6 +398,35 @@ describe('AgentAccountService — inbound routing', () => {
     });
 
     expect(outcome.outcome).toBe('unknown-account');
+  });
+
+  it('acknowledges but does not deliver to an account that cannot receive', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    const created = await service.provision({ agentId, provider: 'agent-mail' });
+
+    await serverDB
+      .update(agentAccounts)
+      .set({ capabilities: { receive: false, send: true } })
+      .where(eq(agentAccounts.id, created.id));
+
+    // A fresh event id: the default replay store outlives a single test.
+    const body = inboundBody(undefined, 'evt_receive_disabled');
+    const outcome = await service.handleInbound('agent-mail', {
+      body,
+      headers: {
+        'x-agentmail-signature': computeAgentMailSignature(
+          WEBHOOK_SECRET,
+          body,
+          Math.floor(Date.now() / 1000),
+        ),
+      },
+    });
+
+    expect(outcome).toEqual({ accountId: created.id, outcome: 'ignored' });
+    expect(
+      calls.some((call) => call.method === 'GET' && call.path.startsWith('/v1/messages')),
+    ).toBe(false);
   });
 
   it('reports an unmapped address as an unknown account', async () => {
