@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   goalFindByGraphTask: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
+  taskFindById: vi.fn(),
   taskResolve: vi.fn(),
   taskServiceUpdateStatus: vi.fn(),
   taskUpdateStatusIfCurrent: vi.fn(),
@@ -48,6 +49,7 @@ vi.mock('@/database/models/verifyReport', () => ({
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(function () {
     return {
+      findById: mocks.taskFindById,
       resolve: mocks.taskResolve,
       updateStatusIfCurrent: mocks.taskUpdateStatusIfCurrent,
     };
@@ -84,6 +86,8 @@ describe('AcceptanceService task lifecycle', () => {
     mocks.findPolicyById.mockImplementation((...args: unknown[]) => mocks.findById(...args));
     mocks.goalFindByGraphTask.mockResolvedValue(undefined);
     mocks.taskResolve.mockResolvedValue({ automationMode: null, id: 'task_1', status: 'running' });
+    // The row read back after the completion write.
+    mocks.taskFindById.mockResolvedValue({ id: 'task_1', status: 'completed' });
   });
 
   describe('delivered → task completed', () => {
@@ -208,6 +212,14 @@ describe('AcceptanceService task lifecycle', () => {
         'paused',
         { completedAt: null },
       );
+    });
+
+    it('reports the completion as skipped when the task could not be completed', async () => {
+      // completeTaskSubject swallows the failure; the row still reads running.
+      mocks.taskServiceUpdateStatus.mockRejectedValueOnce(new Error('interrupt failed'));
+      mocks.taskFindById.mockResolvedValueOnce({ id: 'task_1', status: 'running' });
+
+      await expect(service().completeTaskForDelivery('acc-1', 'task_1')).resolves.toBe('skipped');
     });
 
     it('completes the task when no reject intervenes', async () => {

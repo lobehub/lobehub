@@ -580,6 +580,20 @@ describe('driveTaskFromVerify', () => {
     expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
   });
 
+  it('failed with an Acceptance → pauses when the task could not be completed', async () => {
+    runFindByOperation.mockResolvedValue({
+      acceptanceId: 'acceptance-1',
+      id: 'run-1',
+      metadata: null,
+      status: 'failed',
+    });
+    completeTaskForDelivery.mockResolvedValue('skipped');
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+  });
+
   it('failed with a rejected Acceptance → keeps the task open (paused)', async () => {
     runFindByOperation.mockResolvedValue({
       acceptanceId: 'acceptance-1',

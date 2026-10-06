@@ -1252,8 +1252,9 @@ export class AcceptanceService {
    * rejected in between → the reject saw an unfinished task and did not reopen
    * it, so it is reopened here. Best-effort — never fails the caller.
    *
-   * @returns `completed` when the task now follows the delivery, `rejected` when
-   * a reject won, `skipped` when the task does not follow the acceptance.
+   * @returns `completed` when the task now reads completed, `rejected` when a
+   * reject won, `skipped` when the task does not follow the acceptance or could
+   * not be completed.
    */
   completeTaskForDelivery = async (
     acceptanceId: string,
@@ -1268,6 +1269,11 @@ export class AcceptanceService {
       if (before?.status !== 'delivered') return 'skipped';
 
       await this.completeTaskSubject(task.id);
+      // `completeTaskSubject` is best-effort and swallows its own failures (e.g. a
+      // running operation that could not be interrupted). Only a task that really
+      // reads completed counts — anything else lets the caller fall back.
+      const written = await new TaskModel(this.db, this.userId, this.workspaceId).findById(task.id);
+      if (written?.status !== 'completed') return 'skipped';
 
       const after = await this.acceptanceModel.findPolicyById(acceptanceId);
       if (after?.status === 'rejected') {
