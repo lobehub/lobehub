@@ -178,6 +178,14 @@ describe('createDashboard', () => {
     expect(mutate).toHaveBeenCalledWith(['dashboard:list', 'project:p1']);
     expect(mutate).toHaveBeenCalledWith(['dashboard:projectList', 'p1']);
   });
+
+  it('places a widget in the same create call and refreshes that widget', async () => {
+    vi.mocked(dashboardService.create).mockResolvedValue({ id: 'd11' } as any);
+    await useDashboardStore.getState().createDashboard({ title: 'Ops', widgetId: 'w1' });
+    expect(dashboardService.create).toHaveBeenCalledWith({ title: 'Ops', widgetId: 'w1' });
+    expect(dashboardService.addItem).not.toHaveBeenCalled();
+    expect(mutate).toHaveBeenCalledWith(['dashboard:widget', 'w1']);
+  });
 });
 
 describe('project-wide reads', () => {

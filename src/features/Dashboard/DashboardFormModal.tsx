@@ -98,13 +98,19 @@ const DashboardForm = memo<DashboardFormProps>(
 
 DashboardForm.displayName = 'DashboardForm';
 
-/** Create a board at `level` (personal when empty) and hand the new row to `onCreated`. */
+/**
+ * Create a board at `level` (personal when empty) and hand the new row to
+ * `onCreated`. With `widgetId`, the widget is placed on the board in the same
+ * server write: a failed placement creates no board and keeps the modal open.
+ */
 export const openCreateDashboardModal = ({
   level = {},
   onCreated,
+  widgetId,
 }: {
   level?: WidgetLevelFilter;
   onCreated?: (dashboard: { id: string; title: string }) => void;
+  widgetId?: string;
 } = {}) =>
   createModal({
     content: (
@@ -114,7 +120,7 @@ export const openCreateDashboardModal = ({
         onSubmit={async ({ description, title }) => {
           const dashboard = await useDashboardStore
             .getState()
-            .createDashboard({ ...level, description, title });
+            .createDashboard({ ...level, description, title, widgetId });
           if (dashboard) onCreated?.(dashboard);
         }}
       />

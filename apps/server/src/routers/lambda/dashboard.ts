@@ -8,6 +8,7 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { DashboardModel } from '@/database/models/dashboard';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DashboardService } from '@/server/services/dashboard';
@@ -98,11 +99,32 @@ export const dashboardRouter = router({
         sortOrder: z.number().int().optional(),
         title: z.string().min(1).max(200),
         visibility: visibility.optional(),
+        /**
+         * Place this widget on the new board in the same transaction: a widget
+         * that cannot be placed rolls the board back, so no empty board is left.
+         */
+        widgetId: uuid.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const data = await ctx.dashboardModel.create(input);
+        const { widgetId, ...boardInput } = input;
+        if (!widgetId) {
+          const data = await ctx.dashboardModel.create(boardInput);
+          return { data, message: 'Dashboard created', success: true };
+        }
+
+        const workspaceId = ctx.workspaceId ?? undefined;
+        const data = await ctx.serverDB.transaction(async (tx) => {
+          const txDB = tx as LobeChatDatabase;
+          const board = await new DashboardModel(txDB, ctx.userId, workspaceId).create(boardInput);
+          const item = await new DashboardService(txDB, ctx.userId, workspaceId).placeWidget(
+            board.id,
+            widgetId,
+          );
+          if (!item) throw notFound('Widget');
+          return board;
+        });
         return { data, message: 'Dashboard created', success: true };
       } catch (error) {
         fail(error, 'create dashboard');

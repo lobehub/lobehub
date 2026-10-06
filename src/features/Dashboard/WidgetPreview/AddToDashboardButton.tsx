@@ -52,8 +52,11 @@ const AddToDashboardButton = memo<AddToDashboardButtonProps>(({ placedIds, widge
       key: 'new',
       label: t('chat.newDashboard'),
       onClick: () =>
+        // Created and placed in one write; a failure keeps the modal open
+        // with its error and leaves no empty board behind.
         openCreateDashboardModal({
-          onCreated: (dashboard) => void add(dashboard),
+          onCreated: (dashboard) => toast.success(t('chat.added', { title: dashboard.title })),
+          widgetId,
         }),
     },
   ];

@@ -27,6 +27,11 @@ export interface DashboardLayoutPatch {
 export interface CreateDashboardParams extends WidgetLevelFilter {
   description?: string | null;
   title: string;
+  /**
+   * Place this widget on the new board in the same server transaction: when
+   * it cannot be placed, no board is created.
+   */
+  widgetId?: string;
 }
 
 /** Trend points of one metric series, already parsed into numbers and dates. */

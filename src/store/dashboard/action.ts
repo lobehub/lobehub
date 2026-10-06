@@ -226,7 +226,10 @@ export class DashboardActionImpl {
     this.#set({ dashboardCreating: true }, false, 'createDashboard/start');
     try {
       const dashboard = await dashboardService.create(params);
-      await this.refreshDashboards(params);
+      await Promise.all([
+        this.refreshDashboards(params),
+        params.widgetId ? this.refreshWidgetDetail(params.widgetId) : undefined,
+      ]);
       return dashboard;
     } finally {
       this.#set({ dashboardCreating: false }, false, 'createDashboard/end');

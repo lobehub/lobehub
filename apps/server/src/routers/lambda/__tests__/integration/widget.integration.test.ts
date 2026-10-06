@@ -2,6 +2,7 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import {
   agents,
+  dashboards,
   metricPoints,
   metrics,
   projects,
@@ -1050,6 +1051,35 @@ describe('widget + dashboard routers integration', () => {
 
       const placed = await createWidget(owner, { dashboardId: board.id, title: 'Placed' });
       expect(placed.item).toMatchObject({ dashboardId: board.id, widgetId: placed.id });
+    });
+
+    it('creates a board with a widget on it in one step, keeping no board when placement fails', async () => {
+      const { board: ownerBoard, widget: owner } = callers(ownerId, workspaceId);
+      const widget = await createWidget(owner);
+      const boardsOf = (userId: string) =>
+        db
+          .select()
+          .from(dashboards)
+          .where(and(eq(dashboards.userId, userId), eq(dashboards.workspaceId, workspaceId)));
+
+      // A widget the caller cannot read (or that does not exist) is not placed.
+      await expect(
+        ownerBoard.create({ title: 'Ghost', widgetId: '00000000-0000-4000-8000-000000000000' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      // The placement insert itself fails.
+      vi.spyOn(DashboardModel.prototype, 'addItem').mockRejectedValueOnce(
+        new Error('FK violation'),
+      );
+      await expect(
+        ownerBoard.create({ title: 'Failed placement', widgetId: widget.id }),
+      ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+      expect(await boardsOf(ownerId)).toEqual([]);
+
+      const board = (await ownerBoard.create({ title: 'Ops', widgetId: widget.id }))!.data;
+      expect((await ownerBoard.detail({ id: board.id }))!.data.items).toMatchObject([
+        { widget: { id: widget.id } },
+      ]);
+      expect((await boardsOf(ownerId)).map(({ title }) => title)).toEqual(['Ops']);
     });
 
     it('rejects malformed ids before they reach the database', async () => {
