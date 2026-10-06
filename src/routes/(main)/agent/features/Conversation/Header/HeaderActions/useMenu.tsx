@@ -126,7 +126,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
               `header-actions-history-${docId}`,
             );
 
-            editor.setDocument('json', JSON.stringify(result.editorData));
+            editor.setDocument('json', JSON.stringify(result.editorData), { keepId: true });
             markDirty(docId);
             await performSave(docId, undefined, {
               restoreFromHistoryId: item.id,
