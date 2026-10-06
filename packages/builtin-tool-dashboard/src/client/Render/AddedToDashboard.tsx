@@ -7,6 +7,7 @@ import { ArrowUpRightIcon, LayoutDashboardIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getDashboardPath } from '@/features/Dashboard/utils/path';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import type { AddWidgetToDashboardState } from '../../types';
@@ -28,13 +29,7 @@ const AddedToDashboard = memo<AddWidgetToDashboardState>(
             data-open-dashboard={dashboardId}
             icon={ArrowUpRightIcon}
             size={'small'}
-            onClick={() =>
-              navigate(
-                projectId
-                  ? `/project/${projectId}/dashboard/${dashboardId}`
-                  : `/dashboard/${dashboardId}`,
-              )
-            }
+            onClick={() => navigate(getDashboardPath({ id: dashboardId, projectId }))}
           >
             {t('chat.openDashboard')}
           </Button>

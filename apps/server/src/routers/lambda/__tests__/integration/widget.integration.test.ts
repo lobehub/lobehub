@@ -175,15 +175,37 @@ describe('widget + dashboard routers integration', () => {
       const widget = await createWidget(owner, { dashboardId: board.id, title: 'Open PRs' });
       const draft = (await owner.saveDraft({ widgetId: widget.id, ...statScript }))!.data;
 
+      const coordinatorId = await createTestAgent(db, ownerId);
+      const [project] = await db
+        .insert(projects)
+        .values({
+          coordinatorAgentId: coordinatorId,
+          identifier: 'OPS',
+          name: 'Ops project',
+          userId: ownerId,
+        })
+        .returning();
+      const projectBoard = (await ownerBoard.create({ projectId: project.id, title: 'Launch' }))!
+        .data;
+      await ownerBoard.addItem({ dashboardId: projectBoard.id, widgetId: widget.id });
+
       const detail = (await owner.detail({ id: widget.id }))!.data;
       expect(detail).toMatchObject({
-        dashboards: [{ id: board.id, title: 'Ops' }],
         draftVersion: { id: draft.id },
         publishedVersion: null,
       });
+      // Each board carries its project so links open it inside the project.
+      expect(detail.dashboards).toEqual(
+        expect.arrayContaining([
+          { id: board.id, projectId: null, title: 'Ops' },
+          { id: projectBoard.id, projectId: project.id, title: 'Launch' },
+        ]),
+      );
 
       await ownerBoard.trash({ id: board.id });
-      expect((await owner.detail({ id: widget.id }))!.data.dashboards).toEqual([]);
+      expect((await owner.detail({ id: widget.id }))!.data.dashboards).toEqual([
+        { id: projectBoard.id, projectId: project.id, title: 'Launch' },
+      ]);
     });
 
     it('publishes v2 over v1 and rolls back to the archived v1', async () => {

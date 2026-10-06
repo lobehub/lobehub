@@ -13,6 +13,7 @@ import { useChatStore } from '@/store/chat';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 
 import { formatDuration } from '../utils/format';
+import { getDashboardPath } from '../utils/path';
 import WidgetCard from '../WidgetCard';
 import AddToDashboardButton from './AddToDashboardButton';
 import { findSucceededPreviewRun, getPreviewPublishState, toPreviewWidget } from './previewWidget';
@@ -153,7 +154,7 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
             key={dashboard.id}
             size={'small'}
             type={'text'}
-            onClick={() => navigate(`/dashboard/${dashboard.id}`)}
+            onClick={() => navigate(getDashboardPath(dashboard))}
           >
             {t('chat.onDashboard', { title: dashboard.title })}
           </Button>

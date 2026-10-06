@@ -324,7 +324,7 @@ export class DashboardModel {
     if (!isUuid(widgetId)) return [];
 
     return this.db
-      .select({ id: dashboards.id, title: dashboards.title })
+      .select({ id: dashboards.id, projectId: dashboards.projectId, title: dashboards.title })
       .from(dashboardItems)
       .innerJoin(dashboards, eq(dashboardItems.dashboardId, dashboards.id))
       .where(and(eq(dashboardItems.widgetId, widgetId), this.readable()))

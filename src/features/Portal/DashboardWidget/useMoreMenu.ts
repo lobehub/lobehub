@@ -17,7 +17,7 @@ export const useDashboardWidgetMoreMenu = (): PortalMoreMenuConfig | undefined =
   return {
     copyId: widgetId,
     // The widget's own page is the board it sits on; without one, the board list.
-    openInPage: () => openDashboard(widget?.dashboards[0]?.id),
+    openInPage: () => openDashboard(widget?.dashboards[0]),
     refresh: () => refreshWidget(widgetId),
   };
 };

@@ -140,7 +140,7 @@ const Body = memo(() => {
                 icon={ArrowUpRightIcon}
                 key={dashboard.id}
                 size={'small'}
-                onClick={() => openDashboard(dashboard.id)}
+                onClick={() => openDashboard(dashboard)}
               >
                 {dashboard.title}
               </Button>

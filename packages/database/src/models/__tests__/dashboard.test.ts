@@ -382,8 +382,8 @@ describe('DashboardModel', () => {
       await model.trash(trashed.id);
 
       expect(await model.listByWidget(widget.id)).toEqual([
-        { id: first.id, title: 'First' },
-        { id: second.id, title: 'Second' },
+        { id: first.id, projectId: null, title: 'First' },
+        { id: second.id, projectId: null, title: 'Second' },
       ]);
       // another user sees none of this user's boards
       expect(await new DashboardModel(serverDB, otherUserId).listByWidget(widget.id)).toEqual([]);
