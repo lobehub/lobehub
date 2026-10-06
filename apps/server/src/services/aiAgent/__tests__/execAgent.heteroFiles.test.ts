@@ -765,6 +765,68 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     );
   });
 
+  it("snapshots the Agent's Codex speed on a server-created topic", async () => {
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      model: 'gpt-5.5',
+      speed: 'fast',
+      type: 'codex',
+    } as any;
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Start a Fast topic' });
+
+    expect(topicMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ heteroSpeed: 'fast' }) }),
+      undefined,
+    );
+  });
+
+  it("applies an existing topic's Standard speed over the Agent's Fast default", async () => {
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      model: 'gpt-5.5',
+      speed: 'fast',
+      type: 'codex',
+    } as any;
+    topicMock.findById.mockResolvedValue({
+      agentId: 'agent-1',
+      id: 'topic-standard',
+      metadata: { heteroSpeed: 'default' },
+      model: 'gpt-5.5',
+      provider: 'codex',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-standard' },
+      prompt: 'Continue at Standard speed',
+    } as any);
+
+    expect(mockSpawnHeteroSandbox.mock.calls[0][0].args).not.toContain('--speed');
+  });
+
+  it("does not run a callAgent callee at the caller topic's speed", async () => {
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      model: 'gpt-5.5',
+      type: 'codex',
+    } as any;
+    topicMock.findById.mockResolvedValue({
+      agentId: 'caller-agent',
+      id: 'caller-topic',
+      metadata: { heteroEffort: 'high', heteroSpeed: 'fast' },
+      model: 'gpt-5.5',
+      provider: 'codex',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { isolationThread: true, threadId: 'thread-1', topicId: 'caller-topic' },
+      prompt: 'Run as the callee',
+    } as any);
+
+    const { args } = mockSpawnHeteroSandbox.mock.calls[0][0];
+    expect(args).not.toContain('--speed');
+    expect(args).not.toContain('--effort');
+  });
+
   it('reserves cloud conversation history for a retry without native resume', async () => {
     mockGetHeterogeneousResumeSessionId.mockResolvedValue('cloud-session-existing');
     mockMessageQuery.mockResolvedValue([

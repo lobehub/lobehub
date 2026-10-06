@@ -1,5 +1,8 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
-import { resolveHeterogeneousProviderTopicModel } from '@lobechat/types';
+import {
+  resolveHeterogeneousProviderTopicModel,
+  resolveHeterogeneousTopicRuntimeSnapshot,
+} from '@lobechat/types';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -42,14 +45,18 @@ export const snapshotAgentModel = (
   };
 };
 
-export type TopicReasoningSnapshot = Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+export type TopicReasoningSnapshot = Pick<
+  ChatTopicMetadata,
+  'heteroEffort' | 'heteroSpeed' | 'reasoningConfig'
+>;
 
 /**
  * Snapshot the reasoning effort that goes with {@link snapshotAgentModel} so a
  * new topic also remembers the effort it was started with (persisted to
  * `topics.metadata.reasoningConfig` / `heteroEffort`, see `ChatTopicMetadata`).
  *
- * - Heterogeneous agents pin the agent's `heterogeneousProvider.effort`.
+ * - Heterogeneous agents pin the agent's `heterogeneousProvider.effort` and
+ *   resolved speed.
  * - API models pin the user's model-instance reasoning config for the
  *   snapshotted model — an empty object when nothing is saved, which pins the
  *   topic to the model's own defaults. Wait for the saved config before
@@ -68,8 +75,8 @@ export const snapshotAgentReasoning = async (
   const heterogeneousProvider =
     agentByIdSelectors.getAgencyConfigById(agentId)(getAgentStoreState())?.heterogeneousProvider;
   if (heterogeneousProvider) {
-    const effort = heterogeneousProvider.effort;
-    return effort === undefined ? undefined : { heteroEffort: effort };
+    const snapshot = resolveHeterogeneousTopicRuntimeSnapshot(heterogeneousProvider);
+    return Object.keys(snapshot).length === 0 ? undefined : snapshot;
   }
 
   const { model, provider } = modelSnapshot;

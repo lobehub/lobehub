@@ -201,7 +201,7 @@ const getTopicReasoningConfigForModel =
 
 /**
  * Everything a topic pins for a heterogeneous run — the model/provider columns
- * plus `metadata.heteroEffort`. Undefined when nothing is pinned, so callers
+ * plus `metadata.heteroEffort` / `heteroSpeed`. Undefined when nothing is pinned, so callers
  * can pass it straight to `applyTopicModelToHeterogeneousProvider`.
  */
 export const resolveTopicHeteroPin = (
@@ -209,11 +209,13 @@ export const resolveTopicHeteroPin = (
 ): HeterogeneousTopicPin | undefined => {
   if (!topic) return undefined;
   const effort = topic.metadata?.heteroEffort;
-  if (!topic.model && effort === undefined) return undefined;
+  const speed = topic.metadata?.heteroSpeed;
+  if (!topic.model && effort === undefined && speed === undefined) return undefined;
 
   return {
     ...(topic.model ? { model: topic.model, provider: topic.provider || '' } : {}),
     ...(effort === undefined ? {} : { effort }),
+    ...(speed === undefined ? {} : { speed }),
   };
 };
 

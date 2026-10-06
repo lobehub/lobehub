@@ -148,6 +148,20 @@ describe('snapshotAgentReasoning', () => {
     expect(await snapshotAgentReasoning(without, {})).toBeUndefined();
   });
 
+  it("pins a Codex agent's resolved speed, including Standard", async () => {
+    const fast = seedAgent('codex-fast', {
+      agencyConfig: {
+        heterogeneousProvider: { args: ['-c', 'service_tier="fast"'], type: 'codex' },
+      },
+    });
+    const standard = seedAgent('codex-standard', {
+      agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+    });
+
+    expect(await snapshotAgentReasoning(fast, {})).toEqual({ heteroSpeed: 'fast' });
+    expect(await snapshotAgentReasoning(standard, {})).toEqual({ heteroSpeed: 'default' });
+  });
+
   it('skips models without reasoning extend params', async () => {
     const id = seedAgent('plain', { model: 'gpt-4o', provider: 'openai' });
 

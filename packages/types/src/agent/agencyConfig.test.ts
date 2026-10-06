@@ -1278,3 +1278,33 @@ describe('applyTopicModelToHeterogeneousProvider - effort pin', () => {
     expect(applyTopicModelToHeterogeneousProvider(config, { effort: 'high' })).toBe(config);
   });
 });
+
+describe('applyTopicModelToHeterogeneousProvider - speed pin', () => {
+  it("drops the agent's Fast flag, including legacy CLI args, for a Standard topic", () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { args: ['-c', 'service_tier="fast"'], model: 'gpt-5.6-sol', type: 'codex' },
+      { speed: 'default' },
+    );
+
+    expect(resolveCodexSpeedMode(effective)).toBe('default');
+    expect(buildHeteroExecArgs(effective)?.join(' ') ?? '').not.toContain('fast');
+  });
+
+  it('applies a Fast topic pin and keeps the agent speed when the topic pins none', () => {
+    const config = { model: 'gpt-5.6-sol', type: 'codex' } as const;
+
+    expect(
+      buildHeteroExecArgs(applyTopicModelToHeterogeneousProvider(config, { speed: 'fast' })),
+    ).toEqual(['--model', 'gpt-5.6-sol', '--speed', 'fast']);
+    expect(applyTopicModelToHeterogeneousProvider(config, { effort: undefined })).toBe(config);
+  });
+
+  it('drops a Fast pin the effective model cannot run', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { model: 'gpt-5.6-sol', type: 'codex' },
+      { model: 'gpt-5.3-codex', provider: 'codex', speed: 'fast' },
+    );
+
+    expect(effective.speed).toBe('default');
+  });
+});

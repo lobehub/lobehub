@@ -280,14 +280,31 @@ export interface HeterogeneousTopicModel {
 
 /**
  * Everything a topic pins for a heterogeneous run: the model/provider pair from
- * the top-level `topics.model`/`provider` columns plus the reasoning effort
- * from `topics.metadata.heteroEffort`. Each part is optional — a topic may pin
- * an effort without a model (runtimes without a model selector) or the other
- * way round.
+ * the top-level `topics.model`/`provider` columns plus the reasoning effort and
+ * speed from `topics.metadata.heteroEffort` / `heteroSpeed`. Each part is
+ * optional — a topic may pin an effort or speed without a model (runtimes
+ * without a model selector) or the other way round.
  */
 export interface HeterogeneousTopicPin extends Partial<HeterogeneousTopicModel> {
   effort?: HeterogeneousReasoningEffort;
+  speed?: HeterogeneousSpeedMode;
 }
+
+/**
+ * The effort and speed a newly created topic snapshots from the agent, so later
+ * agent edits do not change a running conversation. Speed is resolved through
+ * the selector capability, which also reads legacy `service_tier` CLI args.
+ */
+export const resolveHeterogeneousTopicRuntimeSnapshot = (
+  config: HeterogeneousProviderConfig | undefined,
+): { heteroEffort?: HeterogeneousReasoningEffort; heteroSpeed?: HeterogeneousSpeedMode } => {
+  if (!config) return {};
+  const speed = getHeteroSelectorCapability(config.type)?.speed?.resolve(config);
+  return {
+    ...(config.effort === undefined ? {} : { heteroEffort: config.effort }),
+    ...(speed === undefined ? {} : { heteroSpeed: speed }),
+  };
+};
 
 /**
  * Resolve the topic-level model snapshot for a heterogeneous provider.
@@ -341,34 +358,46 @@ const applyTopicModelPin = (
 };
 
 /**
- * Overlay a topic's pins (model/provider + reasoning effort) on the agent's
- * heterogeneous provider config. The model pin follows the auth-mode rules of
- * {@link applyTopicModelPin}; the effort pin is a plain CLI-level override, so
- * it applies when supported by the effective model — independent of whether
- * a model was pinned. `'default'` is a real pin (it means "drop the
- * agent's effort flag for this topic"), only `undefined` keeps the agent value.
+ * Overlay a topic's pins (model/provider, reasoning effort and speed) on the
+ * agent's heterogeneous provider config. The model pin follows the auth-mode
+ * rules of {@link applyTopicModelPin}; effort and speed are plain CLI-level
+ * overrides, so they apply when supported by the effective model — independent
+ * of whether a model was pinned. `'default'` is a real pin (it drops the
+ * agent's effort or Fast flag for this topic), only `undefined` keeps the agent
+ * value.
  */
 export const applyTopicModelToHeterogeneousProvider = (
   config: HeterogeneousProviderConfig,
   topicModel: HeterogeneousTopicPin | undefined,
 ): HeterogeneousProviderConfig => {
   const withModel = applyTopicModelPin(config, topicModel);
-  let effort = topicModel?.effort;
-  if (effort === undefined) return withModel;
   const capability = getHeteroSelectorCapability(withModel.type);
-  if (!capability?.effort) return withModel;
+  if (!capability) return withModel;
   const model =
-    withModel.authMode === 'api'
+    (withModel.authMode === 'api'
       ? withModel.apiConfig?.model
-      : capability.model?.resolve(withModel);
-  /** Auth-mode changes can reject the topic model while leaving its old effort behind. */
-  if (effort !== 'default' && !capability.effort.levels(model ?? 'default').includes(effort)) {
-    effort = 'default';
+      : capability.model?.resolve(withModel)) ?? HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+
+  // Only overridden dimensions may enter the selection: a present key also
+  // clears that dimension's inherited CLI args.
+  const selection: { effort?: HeterogeneousReasoningEffort; speed?: HeterogeneousSpeedMode } = {};
+  const { effort, speed } = topicModel ?? {};
+  /** Auth-mode changes can reject the topic model while leaving its old pins behind. */
+  if (effort !== undefined && capability.effort) {
+    selection.effort =
+      effort === HETEROGENEOUS_AGENT_DEFAULT_SELECTION ||
+      capability.effort.levels(model).includes(effort)
+        ? effort
+        : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
   }
-  return {
-    ...withModel,
-    ...applyHeteroSelection(withModel, { effort }),
-  };
+  if (speed !== undefined && capability.speed) {
+    selection.speed = capability.speed.supported(model)
+      ? speed
+      : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+  }
+  if (Object.keys(selection).length === 0) return withModel;
+
+  return { ...withModel, ...applyHeteroSelection(withModel, selection) };
 };
 
 const HETEROGENEOUS_AGENT_TYPES = new Set<string>([

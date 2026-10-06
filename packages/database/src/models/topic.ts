@@ -2328,7 +2328,7 @@ export class TopicModel {
    * statement, so neither a concurrent switch nor an in-flight run can observe
    * the new model paired with the previous model's pin. `reasoningConfig` is
    * model-keyed and therefore always replaced (dropped when not provided);
-   * `heteroEffort` is only touched when given.
+   * `heteroEffort` and `heteroSpeed` are only touched when given.
    */
   updateModelPin = async (
     id: string,
@@ -2337,7 +2337,7 @@ export class TopicModel {
       model,
       provider,
     }: {
-      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'heteroSpeed' | 'reasoningConfig'>;
       model: string;
       provider: string;
     },
@@ -2355,6 +2355,7 @@ export class TopicModel {
       const mergedMetadata: ChatTopicMetadata = {
         ...rest,
         ...(metadata?.heteroEffort !== undefined && { heteroEffort: metadata.heteroEffort }),
+        ...(metadata?.heteroSpeed !== undefined && { heteroSpeed: metadata.heteroSpeed }),
         ...(metadata?.reasoningConfig !== undefined && {
           reasoningConfig: metadata.reasoningConfig,
         }),

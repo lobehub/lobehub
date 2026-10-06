@@ -64,7 +64,7 @@ describe('useHeteroProviderPatch', () => {
     expect(state.agent.updateAgentConfigById).not.toHaveBeenCalled();
   });
 
-  it('keeps the remaining dimensions global when selecting a topic effort', async () => {
+  it('writes a speed selection to the active topic without changing the Agent default', async () => {
     const { result } = renderHook(() =>
       useHeteroProviderPatch({
         agentId: 'agent-a',
@@ -79,11 +79,25 @@ describe('useHeteroProviderPatch', () => {
       effort: 'medium',
       model: undefined,
       provider: 'codex',
+      speed: 'fast',
     });
+    expect(state.agent.updateAgentConfigById).not.toHaveBeenCalled();
+  });
+
+  it('keeps the mode selection on the Agent default', async () => {
+    const { result } = renderHook(() =>
+      useHeteroProviderPatch({
+        agentId: 'agent-a',
+        enabled: true,
+        provider: { type: 'amp' },
+      }),
+    );
+
+    await act(() => result.current({ mode: 'high' }));
+
+    expect(state.chat.updateTopicHeteroPin).not.toHaveBeenCalled();
     expect(state.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-a', {
-      agencyConfig: {
-        heterogeneousProvider: { args: undefined, speed: 'fast' },
-      },
+      agencyConfig: { heterogeneousProvider: expect.objectContaining({ mode: 'high' }) },
     });
   });
 
