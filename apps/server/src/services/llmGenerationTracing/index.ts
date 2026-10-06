@@ -16,6 +16,7 @@ import {
 } from '@/database/models/llmGenerationTracing';
 import { llmGenerationTracing } from '@/database/schemas/llmGenerationTracing';
 import { getServerDB } from '@/database/server';
+import { fileEnv } from '@/envs/file';
 
 const log = debug('lobe-server:llm-generation-tracing:service');
 
@@ -258,8 +259,40 @@ export class LLMGenerationFeedbackError extends Error {
   }
 }
 
+export type TracingStoreMode = 's3' | 'file' | 'none';
+
+/**
+ * Decide which store the default `LLMGenerationTracingService` instance gets.
+ *
+ * Collection is on by default wherever it can persist: the S3 store when S3 is
+ * configured (the common production shape), a local file store in development.
+ * Set `DISABLE_LLM_GENERATION_TRACING_S3=1` to opt out explicitly.
+ *
+ * The previous opt-in gate (`ENABLE_LLM_GENERATION_TRACING_S3=1`) is gone —
+ * deployments that already set it keep working, since configured S3 now
+ * implies collection.
+ */
+export const resolveDefaultStoreMode = (
+  env: NodeJS.ProcessEnv = process.env,
+  s3: Pick<
+    typeof fileEnv,
+    'S3_ACCESS_KEY_ID' | 'S3_BUCKET' | 'S3_ENDPOINT' | 'S3_SECRET_ACCESS_KEY'
+  > = fileEnv,
+): TracingStoreMode => {
+  if (env.DISABLE_LLM_GENERATION_TRACING_S3 === '1') return 'none';
+
+  const s3Configured =
+    !!s3.S3_ACCESS_KEY_ID && !!s3.S3_SECRET_ACCESS_KEY && !!s3.S3_ENDPOINT && !!s3.S3_BUCKET;
+
+  if (s3Configured) return 's3';
+  if (env.NODE_ENV === 'development') return 'file';
+  return 'none';
+};
+
 const createDefaultStore = (): ITracingStore | null => {
-  if (process.env.ENABLE_LLM_GENERATION_TRACING_S3 === '1') {
+  const mode = resolveDefaultStoreMode();
+
+  if (mode === 's3') {
     try {
       // Require at call time so test environments without S3 wiring don't break.
 
@@ -270,7 +303,7 @@ const createDefaultStore = (): ITracingStore | null => {
     }
   }
 
-  if (process.env.NODE_ENV === 'development') {
+  if (mode !== 'none') {
     try {
       return new FileTracingStore();
     } catch {

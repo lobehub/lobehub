@@ -7,7 +7,7 @@ import { getTestDB } from '@/database/core/getTestDB';
 import { llmGenerationTracing, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { LLMGenerationTracingService } from './index';
+import { LLMGenerationTracingService, resolveDefaultStoreMode } from './index';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -277,5 +277,62 @@ describe('LLMGenerationTracingService.recordFeedback', () => {
       kind: 'not_found',
       name: 'LLMGenerationFeedbackError',
     });
+  });
+});
+
+describe('resolveDefaultStoreMode', () => {
+  const fullS3 = {
+    S3_ACCESS_KEY_ID: 'ak',
+    S3_BUCKET: 'bucket',
+    S3_ENDPOINT: 'https://s3.example.com',
+    S3_SECRET_ACCESS_KEY: 'sk',
+  };
+  const emptyS3 = {
+    S3_ACCESS_KEY_ID: undefined,
+    S3_BUCKET: undefined,
+    S3_ENDPOINT: undefined,
+    S3_SECRET_ACCESS_KEY: undefined,
+  };
+
+  it('collects by default once S3 is configured (no flag required)', () => {
+    expect(resolveDefaultStoreMode({}, fullS3)).toBe('s3');
+  });
+
+  it('opts out when DISABLE_LLM_GENERATION_TRACING_S3=1, even with S3 configured', () => {
+    expect(resolveDefaultStoreMode({ DISABLE_LLM_GENERATION_TRACING_S3: '1' }, fullS3)).toBe(
+      'none',
+    );
+  });
+
+  it('opts out in development too — the disable flag always wins', () => {
+    expect(
+      resolveDefaultStoreMode(
+        { DISABLE_LLM_GENERATION_TRACING_S3: '1', NODE_ENV: 'development' },
+        emptyS3,
+      ),
+    ).toBe('none');
+  });
+
+  it('falls back to the local file store in development without S3 config', () => {
+    expect(resolveDefaultStoreMode({ NODE_ENV: 'development' }, emptyS3)).toBe('file');
+  });
+
+  it('stays off in production without S3 config', () => {
+    expect(resolveDefaultStoreMode({ NODE_ENV: 'production' }, emptyS3)).toBe('none');
+  });
+
+  it('stays off when the S3 config is incomplete (missing bucket)', () => {
+    expect(
+      resolveDefaultStoreMode({ NODE_ENV: 'production' }, { ...fullS3, S3_BUCKET: undefined }),
+    ).toBe('none');
+  });
+
+  it('no longer honors the legacy ENABLE_LLM_GENERATION_TRACING_S3 opt-in', () => {
+    expect(
+      resolveDefaultStoreMode(
+        { ENABLE_LLM_GENERATION_TRACING_S3: '1', NODE_ENV: 'production' },
+        emptyS3,
+      ),
+    ).toBe('none');
   });
 });
