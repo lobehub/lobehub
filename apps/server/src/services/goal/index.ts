@@ -920,9 +920,9 @@ export class GoalService {
     );
     if (!terminal) return;
     const acceptance = (await this.collectAcceptances(graph).catch(() => undefined))?.[terminal.id];
-    // Signed already (the owner accepted it while it was still settling) —
-    // nothing left to ask.
-    if (!acceptance || acceptance.status === 'accepted') return;
+    if (!acceptance) return;
+    // `openSignOff` re-reads the acceptance under a row lock: one the owner
+    // already signed asks nothing.
     await this.briefs.openSignOff(graph.goal, acceptance.id);
   };
 

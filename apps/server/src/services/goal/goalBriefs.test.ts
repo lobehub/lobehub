@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '@/database/core/getTestDB';
 import { TaskModel } from '@/database/models/task';
 import {
+  acceptances,
   agents,
   briefs,
   goalEdges,
@@ -17,6 +18,7 @@ import {
   taskTopics,
   users,
   userSettings,
+  workspaces,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { applyGoalBriefAction } from '@/server/routers/lambda/_helpers/goalBriefAction';
@@ -38,6 +40,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks();
   await serverDB.delete(briefs);
+  await serverDB.delete(acceptances);
   await serverDB.delete(goalNodeDecisions);
   await serverDB.delete(goalEdges);
   await serverDB.delete(goalEvents);
@@ -46,6 +49,7 @@ afterEach(async () => {
   await serverDB.delete(taskTopics);
   await serverDB.delete(tasks);
   await serverDB.delete(agents);
+  await serverDB.delete(workspaces);
   await serverDB.delete(users);
 });
 
@@ -204,21 +208,32 @@ describe('goal progress', () => {
   });
 });
 
+const acceptanceRow = async (
+  values: { status?: 'accepted' | 'pending'; workspaceId?: string } = {},
+) => {
+  const [row] = await serverDB
+    .insert(acceptances)
+    .values({ subjectId: 'goal-acceptance-task', subjectType: 'standalone', userId, ...values })
+    .returning();
+  return row.id;
+};
+
 describe('goal sign-off briefs', () => {
   it('asks once per acceptance and stops once it is signed elsewhere', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Signed goal' });
     const goal = (await serverDB.query.goals.findFirst({ where: eq(goals.id, graph.goal.id) }))!;
     const goalBriefService = new GoalBriefService(serverDB, userId);
+    const acceptanceId = await acceptanceRow();
 
-    await goalBriefService.openSignOff(goal, 'acc-1');
-    await goalBriefService.openSignOff(goal, 'acc-1');
+    await goalBriefService.openSignOff(goal, acceptanceId);
+    await goalBriefService.openSignOff(goal, acceptanceId);
 
     expect(await goalBriefService.listOpenSignOffs()).toEqual([
-      expect.objectContaining({ acceptanceId: 'acc-1', goalId: goal.id, goalTitle: 'Signed goal' }),
+      expect.objectContaining({ acceptanceId, goalId: goal.id, goalTitle: 'Signed goal' }),
     ]);
 
-    await goalBriefService.settleSignOff('acc-1', 'signOff');
+    await goalBriefService.settleSignOff(acceptanceId, 'signOff');
 
     expect(await goalBriefService.listOpenSignOffs()).toEqual([]);
     const [brief] = await serverDB
@@ -226,5 +241,40 @@ describe('goal sign-off briefs', () => {
       .from(briefs)
       .where(and(eq(briefs.trigger, GOAL_BRIEF_TRIGGER), eq(briefs.userId, userId)));
     expect(brief.resolvedAction).toBe('signOff');
+  });
+
+  it('asks nothing for an acceptance the owner has already signed', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Signed early' });
+    const goal = (await serverDB.query.goals.findFirst({ where: eq(goals.id, graph.goal.id) }))!;
+    const goalBriefService = new GoalBriefService(serverDB, userId);
+
+    await goalBriefService.openSignOff(goal, await acceptanceRow({ status: 'accepted' }));
+
+    expect(await goalBriefs()).toHaveLength(0);
+  });
+
+  it('keeps a workspace sign-off in that workspace', async () => {
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'ws', primaryOwnerId: userId, slug: 'goal-brief-ws' })
+      .returning();
+    const service = new GoalService(serverDB, userId, workspace.id);
+    const graph = await service.create({ title: 'Workspace goal' });
+    const goal = (await serverDB.query.goals.findFirst({ where: eq(goals.id, graph.goal.id) }))!;
+    const acceptanceId = await acceptanceRow({ workspaceId: workspace.id });
+    const inWorkspace = new GoalBriefService(serverDB, userId, workspace.id);
+    const personal = new GoalBriefService(serverDB, userId);
+
+    await inWorkspace.openSignOff(goal, acceptanceId);
+
+    expect(await personal.listOpenSignOffs()).toEqual([]);
+    await personal.settleSignOff(acceptanceId, 'signOff');
+    expect(await inWorkspace.listOpenSignOffs()).toEqual([
+      expect.objectContaining({ acceptanceId, goalTitle: 'Workspace goal' }),
+    ]);
+
+    await inWorkspace.settleSignOff(acceptanceId, 'signOff');
+    expect(await inWorkspace.listOpenSignOffs()).toEqual([]);
   });
 });

@@ -4,7 +4,7 @@ import { coordinatorGateReason, coordinatorReasonCopy } from '@lobechat/utils/go
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { BriefModel } from '@/database/models/brief';
-import { briefs } from '@/database/schemas';
+import { acceptances, briefs } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { translation } from '@/libs/i18n/serverTranslation';
 import { SystemAgentService } from '@/server/services/systemAgent';
@@ -21,6 +21,9 @@ const COORDINATOR_OPTION_KEYS: Record<string, string> = {
 const MACHINE_GATE_TAIL = /Fix it, then retry or retire this task node\?$/;
 
 const SUMMARY_LIMIT = 600;
+
+const signOffFor = (acceptanceId: string) =>
+  sql`${briefs.metadata} -> 'goal' ->> 'signOffAcceptanceId' = ${acceptanceId}`;
 
 const clip = (text: string, limit = SUMMARY_LIMIT) =>
   text.length > limit ? `${text.slice(0, limit - 1).trimEnd()}…` : text;
@@ -149,41 +152,61 @@ export class GoalBriefService {
       });
     });
 
-  /** The goal-level acceptance passed: the owner signs the result off or sends it back. */
+  /**
+   * The goal-level acceptance passed: the owner signs the result off or sends it back.
+   *
+   * The acceptance row is locked while the brief is written, so a sign-off that
+   * lands meanwhile either is seen here (and nothing is asked) or waits for this
+   * brief to exist and then settles it — never an open ask for a signed result.
+   */
   openSignOff = async (goal: GoalItem, acceptanceId: string) =>
     this.safely('openSignOff', async () => {
-      const existing = await this.db
-        .select({ id: briefs.id })
-        .from(briefs)
-        .where(
-          and(
-            isNull(briefs.resolvedAt),
-            sql`${briefs.metadata} -> 'goal' ->> 'signOffAcceptanceId' = ${acceptanceId}`,
-          ),
-        )
-        .limit(1);
-      if (existing.length > 0) return;
       const { t: tHome } = await this.homeCopy();
-      await this.create(goal, {
-        actions: [
-          { key: 'signOff', label: tHome('brief.action.signOff'), type: 'resolve' },
-          { key: 'requestChanges', label: tHome('brief.action.requestChanges'), type: 'comment' },
+      await this.db.transaction(async (tx) => {
+        const [acceptance] = await tx
+          .select({ status: acceptances.status })
+          .from(acceptances)
+          .where(and(eq(acceptances.id, acceptanceId), eq(acceptances.userId, this.userId)))
+          .for('update');
+        if (!acceptance || acceptance.status === 'accepted') return;
+
+        const briefModel = new BriefModel(tx, this.userId, this.workspaceId);
+        const existing = await tx
+          .select({ id: briefs.id })
+          .from(briefs)
+          .where(and(briefModel.ownership(), isNull(briefs.resolvedAt), signOffFor(acceptanceId)))
+          .limit(1);
+        if (existing.length > 0) return;
+
+        await this.create(
+          goal,
           {
-            key: 'openGoal',
-            label: tHome('brief.action.openGoal'),
-            type: 'link',
-            url: goalPagePath(goal),
+            actions: [
+              { key: 'signOff', label: tHome('brief.action.signOff'), type: 'resolve' },
+              {
+                key: 'requestChanges',
+                label: tHome('brief.action.requestChanges'),
+                type: 'comment',
+              },
+              {
+                key: 'openGoal',
+                label: tHome('brief.action.openGoal'),
+                type: 'link',
+                url: goalPagePath(goal),
+              },
+            ],
+            metadata: {
+              kind: 'signOff',
+              recommendedAction: 'signOff',
+              signOffAcceptanceId: acceptanceId,
+            },
+            priority: 'normal',
+            summary: tHome('brief.goal.signOff.summary'),
+            title: tHome('brief.goal.signOff.title', { goal: goal.title }),
+            type: 'decision',
           },
-        ],
-        metadata: {
-          kind: 'signOff',
-          recommendedAction: 'signOff',
-          signOffAcceptanceId: acceptanceId,
-        },
-        priority: 'normal',
-        summary: tHome('brief.goal.signOff.summary'),
-        title: tHome('brief.goal.signOff.title', { goal: goal.title }),
-        type: 'decision',
+          briefModel,
+        );
       });
     });
 
@@ -194,11 +217,7 @@ export class GoalBriefService {
         .update(briefs)
         .set({ resolvedAction: action, resolvedAt: new Date(), resolvedComment: comment ?? null })
         .where(
-          and(
-            eq(briefs.userId, this.userId),
-            isNull(briefs.resolvedAt),
-            sql`${briefs.metadata} -> 'goal' ->> 'signOffAcceptanceId' = ${acceptanceId}`,
-          ),
+          and(this.briefModel.ownership(), isNull(briefs.resolvedAt), signOffFor(acceptanceId)),
         );
     });
 
@@ -214,7 +233,7 @@ export class GoalBriefService {
       .from(briefs)
       .where(
         and(
-          eq(briefs.userId, this.userId),
+          this.briefModel.ownership(),
           eq(briefs.trigger, GOAL_BRIEF_TRIGGER),
           isNull(briefs.resolvedAt),
           sql`${briefs.metadata} -> 'goal' ->> 'kind' = 'signOff'`,
@@ -247,8 +266,9 @@ export class GoalBriefService {
       title: string;
       type: 'decision';
     },
+    briefModel = this.briefModel,
   ) =>
-    this.briefModel.create({
+    briefModel.create({
       actions: input.actions,
       agentId: goal.agentId,
       metadata: { goal: { ...input.metadata, goalId: goal.id, goalTitle: goal.title } },
