@@ -33,9 +33,10 @@ export async function canManageAcceptance(
 }
 
 /**
- * Batch twin of {@link canManageAcceptance} for sweep endpoints: same rule,
- * but ONE membership lookup per distinct workspace instead of one per row —
- * a 200-row sweep must not turn authorization into 200 serial queries.
+ * Batch twin of {@link canManageAcceptance} for sweep and list endpoints: same
+ * rule, but the caller's roles in every distinct foreign workspace come back in
+ * ONE read — a 200-row sweep, or a participated page spanning many workspaces,
+ * must not turn authorization into a chain of sequential queries.
  */
 export async function filterManageableAcceptances<
   T extends Pick<AcceptanceItem, 'userId' | 'workspaceId'>,
@@ -50,16 +51,13 @@ export async function filterManageableAcceptances<
         .map((row) => row.workspaceId as string),
     ),
   ];
-  const owned = new Set<string>();
-  for (const workspaceId of foreignWorkspaceIds) {
-    const member = await new WorkspaceMemberModel(ctx.serverDB, userId).getMember(
-      workspaceId,
-      userId,
-    );
-    if (member?.role === 'owner') owned.add(workspaceId);
-  }
+  const roles = await new WorkspaceMemberModel(ctx.serverDB, userId).getRolesInWorkspaces(
+    foreignWorkspaceIds,
+    userId,
+  );
 
   return rows.filter(
-    (row) => row.userId === userId || (row.workspaceId ? owned.has(row.workspaceId) : false),
+    (row) =>
+      row.userId === userId || (row.workspaceId ? roles.get(row.workspaceId) === 'owner' : false),
   );
 }

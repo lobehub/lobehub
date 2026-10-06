@@ -121,6 +121,33 @@ describe('WorkspaceMemberModel', () => {
     });
   });
 
+  describe('getRolesInWorkspaces', () => {
+    it("returns the user's active role per workspace in one read", async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ role: 'viewer', userId: memberId, workspaceId });
+      await model.addMember({ role: 'admin', userId: memberId, workspaceId: otherWorkspaceId });
+      await model.addMember({ userId: otherUserId, workspaceId });
+
+      const roles = await model.getRolesInWorkspaces([workspaceId, otherWorkspaceId], memberId);
+
+      expect(Object.fromEntries(roles)).toEqual({
+        [otherWorkspaceId]: 'admin',
+        [workspaceId]: 'viewer',
+      });
+    });
+
+    it('omits workspaces the user left or never joined', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await model.removeMember(workspaceId, memberId);
+
+      expect(await model.getRolesInWorkspaces([workspaceId, otherWorkspaceId], memberId)).toEqual(
+        new Map(),
+      );
+      expect(await model.getRolesInWorkspaces([], memberId)).toEqual(new Map());
+    });
+  });
+
   describe('listMembers', () => {
     it('lists only active members by default', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);

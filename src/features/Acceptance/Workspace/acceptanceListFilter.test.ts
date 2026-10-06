@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   acceptanceListEmptyVariant,
+  acceptanceProjectScopeKey,
   effectiveAcceptanceListFacets,
   isAcceptanceListFacetsNarrowed,
   normalizeAcceptanceListFacets,
@@ -47,19 +48,40 @@ describe('normalizeAcceptanceListFacets', () => {
   it('keeps valid persisted facets, including the unfiled project', () => {
     expect(
       normalizeAcceptanceListFacets({ projectId: null, scope: 'participated', source: 'goal' }),
-    ).toEqual({ projectId: null, scope: 'participated', source: 'goal' });
+    ).toEqual({ projectId: null, projectScope: 'personal', scope: 'participated', source: 'goal' });
     expect(normalizeAcceptanceListFacets({ projectId: 'proj-1' }).projectId).toBe('proj-1');
   });
 
   it('falls back per field for malformed values', () => {
     expect(normalizeAcceptanceListFacets(null)).toEqual({
       projectId: undefined,
+      projectScope: 'personal',
       scope: 'all',
       source: 'all',
     });
     expect(
       normalizeAcceptanceListFacets({ projectId: 3, scope: 'mine', source: 'document' }),
-    ).toEqual({ projectId: undefined, scope: 'all', source: 'all' });
+    ).toEqual({ projectId: undefined, projectScope: 'personal', scope: 'all', source: 'all' });
+  });
+
+  it('drops a project choice made in another workspace but keeps scope and source', () => {
+    const stored = {
+      projectId: 'proj-a',
+      projectScope: 'ws-a',
+      scope: 'participated',
+      source: 'goal',
+    };
+
+    expect(normalizeAcceptanceListFacets(stored, 'ws-a').projectId).toBe('proj-a');
+    expect(normalizeAcceptanceListFacets(stored, 'ws-b')).toEqual({
+      projectId: undefined,
+      projectScope: 'ws-b',
+      scope: 'participated',
+      source: 'goal',
+    });
+    expect(normalizeAcceptanceListFacets(stored, acceptanceProjectScopeKey(null)).projectId).toBe(
+      undefined,
+    );
   });
 });
 

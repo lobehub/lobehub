@@ -16,20 +16,41 @@ export const ACCEPTANCE_LIST_SOURCES = ['all', 'topic', 'task', 'goal', 'standal
  */
 export interface AcceptanceListFacets {
   projectId?: string | null;
+  /**
+   * The workspace (`personal` for none) the project choice was made in. Project
+   * ids belong to one workspace, so a choice carried into another would send a
+   * foreign id and read as an empty list.
+   */
+  projectScope?: string;
   scope: AcceptanceListScope;
   source: AcceptanceListSource;
 }
 
+/** The key a project choice is scoped to: the active workspace, or `personal`. */
+export const acceptanceProjectScopeKey = (workspaceId?: string | null) => workspaceId ?? 'personal';
+
 export const DEFAULT_ACCEPTANCE_LIST_FACETS: AcceptanceListFacets = { scope: 'all', source: 'all' };
 
-/** Persisted facets are untrusted — a stale or hand-edited value falls back per field. */
-export const normalizeAcceptanceListFacets = (value: unknown): AcceptanceListFacets => {
+/**
+ * Persisted facets are untrusted — a stale or hand-edited value falls back per
+ * field. A project choice made in another workspace is dropped.
+ */
+export const normalizeAcceptanceListFacets = (
+  value: unknown,
+  projectScope: string = acceptanceProjectScopeKey(),
+): AcceptanceListFacets => {
   const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
   const scope = ACCEPTANCE_LIST_SCOPES.find((item) => item === raw.scope) ?? 'all';
   const source = ACCEPTANCE_LIST_SOURCES.find((item) => item === raw.source) ?? 'all';
-  const projectId =
-    raw.projectId === null ? null : typeof raw.projectId === 'string' ? raw.projectId : undefined;
-  return { projectId, scope, source };
+  const sameScope = (raw.projectScope ?? acceptanceProjectScopeKey()) === projectScope;
+  const projectId = !sameScope
+    ? undefined
+    : raw.projectId === null
+      ? null
+      : typeof raw.projectId === 'string'
+        ? raw.projectId
+        : undefined;
+  return { projectId, projectScope, scope, source };
 };
 
 /**
@@ -51,7 +72,11 @@ export const resetAcceptanceListFacets = (
   hostProjectId?: string,
 ): AcceptanceListFacets =>
   hostProjectId
-    ? { ...DEFAULT_ACCEPTANCE_LIST_FACETS, projectId: facets.projectId }
+    ? {
+        ...DEFAULT_ACCEPTANCE_LIST_FACETS,
+        projectId: facets.projectId,
+        projectScope: facets.projectScope,
+      }
     : DEFAULT_ACCEPTANCE_LIST_FACETS;
 
 /** Whether the facets narrow the list beyond what its host already fixes. */

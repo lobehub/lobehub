@@ -32,6 +32,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { SkeletonList } from '@/features/NavPanel/components/SkeletonList';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { mutate as globalMutate } from '@/libs/swr';
@@ -318,7 +319,12 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       DEFAULT_ACCEPTANCE_LIST_FACETS,
     );
     const filter = normalizeAcceptanceListFilter(storedFilter);
-    const facets = normalizeAcceptanceListFacets(storedFacets);
+    // A project choice is only meaningful in the workspace it was made in.
+    const workspaceId = useActiveWorkspaceId();
+    const facets = normalizeAcceptanceListFacets(
+      storedFacets,
+      acceptanceProjectScopeKey(workspaceId),
+    );
     const facetsNarrowed = isAcceptanceListFacetsNarrowed(facets, projectId);
     const {
       projectId: listProjectId,
