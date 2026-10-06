@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { WidgetRunRecord, WidgetVersionRecord } from '../types';
+import type { RequestPublishParams, WidgetRunRecord, WidgetVersionRecord } from '../types';
 import { DashboardExecutionRuntime, type DashboardToolService, tailExcerpt } from './index';
 
 const version = (patch: Partial<WidgetVersionRecord> = {}): WidgetVersionRecord => ({
@@ -73,6 +73,14 @@ describe('listDashboards', () => {
     expect(result.content).toContain('"Ops" (d1): "Stars" (w1)');
     expect(result.content).toContain('"Bugs" (w2): not published, has draft, last run failed');
     expect(result.state.dashboards).toHaveLength(2);
+  });
+
+  it('shows the current draft version id so the model can pin it', async () => {
+    service.listWidgets.mockResolvedValue([
+      { draftVersionId: 'v7', hasDraft: true, id: 'w2', published: true, title: 'Bugs' },
+    ]);
+    const result = await runtime.listDashboards();
+    expect(result.content).toContain('"Bugs" (w2): published, draft version id v7');
   });
 
   it('points at creating a board when there is none', async () => {
@@ -223,8 +231,8 @@ describe('dryRunWidget', () => {
 });
 
 describe('requestPublish', () => {
-  it('publishes the current draft by default and reports the first live run', async () => {
-    const result = await runtime.requestPublish({ widgetId: 'w1' });
+  it('publishes the pinned version and reports the first live run', async () => {
+    const result = await runtime.requestPublish({ versionId: 'v1', widgetId: 'w1' });
 
     expect(service.publish).toHaveBeenCalledWith('w1', 'v1');
     expect(result.success).toBe(true);
@@ -240,11 +248,20 @@ describe('requestPublish', () => {
     expect(result.content).toContain('dry-run it before publishing');
   });
 
-  it('refuses without a draft', async () => {
-    service.getWidget.mockResolvedValue({ id: 'w1', title: 'Stars' });
-    const result = await runtime.requestPublish({ widgetId: 'w1' });
+  it('never re-reads the current draft when no version was pinned', async () => {
+    // A newer draft saved while the approval was pending must not go live.
+    service.getWidget.mockResolvedValue({
+      draftVersion: version({ id: 'v-newer', version: 2 }),
+      id: 'w1',
+      title: 'Stars',
+    });
+
+    const result = await runtime.requestPublish({ widgetId: 'w1' } as RequestPublishParams);
+
+    expect(service.getWidget).not.toHaveBeenCalled();
     expect(service.publish).not.toHaveBeenCalled();
     expect(result.success).toBe(false);
+    expect(result.content).toContain('versionId is required');
   });
 });
 

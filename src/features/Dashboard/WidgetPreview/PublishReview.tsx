@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { Alert, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
@@ -37,9 +37,15 @@ const Fact = ({ label, children }: { children: ReactNode; label: string }) => (
 );
 
 interface PublishReviewProps {
+  /**
+   * Called once with the version shown when the request named none, so the
+   * caller can persist it into the request: approval then publishes exactly
+   * the version reviewed here, never whatever the draft is by then.
+   */
+  onPinVersion?: (versionId: string) => void;
   /** The agent's one-line reason, if it gave one. */
   summary?: string;
-  /** Defaults to the widget's current draft. */
+  /** The version under review; when absent the current draft is shown and pinned. */
   versionId?: string;
   widgetId: string;
 }
@@ -49,7 +55,7 @@ interface PublishReviewProps {
  * its dry run, what it means, what it may touch (network, credentials), how
  * often it runs, and exactly how its code differs from what is live now.
  */
-const PublishReview = memo<PublishReviewProps>(({ widgetId, versionId, summary }) => {
+const PublishReview = memo<PublishReviewProps>(({ widgetId, versionId, summary, onPinVersion }) => {
   const { t } = useTranslation('dashboard');
   const useFetchWidgetDetail = useDashboardStore((s) => s.useFetchWidgetDetail);
   const useFetchWidgetRuns = useDashboardStore((s) => s.useFetchWidgetRuns);
@@ -64,6 +70,11 @@ const PublishReview = memo<PublishReviewProps>(({ widgetId, versionId, summary }
   const targetId = versionId ?? widget?.draftVersionId ?? undefined;
   const target = versions.find((version) => version.id === targetId);
   const live = versions.find((version) => version.status === 'published');
+
+  const unpinnedTargetId = versionId ? undefined : target?.id;
+  useEffect(() => {
+    if (unpinnedTargetId) onPinVersion?.(unpinnedTargetId);
+  }, [unpinnedTargetId, onPinVersion]);
 
   if (!widget || !target) {
     return (

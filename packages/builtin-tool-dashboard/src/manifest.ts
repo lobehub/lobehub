@@ -12,7 +12,8 @@ const widgetIdSchema = {
 };
 
 const versionIdSchema = {
-  description: "Version id (uuid). Omit to use the widget's current draft.",
+  description:
+    'Version id (uuid) of the exact draft, as returned by createWidgetDraft / updateWidgetDraft (listDashboards shows the current draft id of existing widgets). The user reviews and approves exactly this version.',
   type: 'string',
 };
 
@@ -188,7 +189,7 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Ask the user to publish a draft so it runs on its schedule. The user must confirm in the UI; the draft must have succeeded in a dry run with exactly this content.',
+        'Ask the user to publish one exact draft version so it runs on its schedule. The user must confirm in the UI and exactly the versionId you pass goes live; it must have succeeded in a dry run with exactly this content.',
       humanIntervention: 'always',
       name: DashboardApiName.requestPublish,
       parameters: {
@@ -201,7 +202,7 @@ export const DashboardManifest: BuiltinToolManifest = {
           versionId: versionIdSchema,
           widgetId: widgetIdSchema,
         },
-        required: ['widgetId'],
+        required: ['widgetId', 'versionId'],
         type: 'object',
       },
       renderDisplayControl: 'expand',

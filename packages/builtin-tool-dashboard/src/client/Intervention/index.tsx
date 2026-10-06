@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinIntervention, BuiltinInterventionProps } from '@lobechat/types';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 
 import WidgetPublishReview from '@/features/Dashboard/WidgetPreview/PublishReview';
 
@@ -13,13 +13,22 @@ import { DashboardApiName } from '../../types';
  * credentials, network, schedule and code diff here, then approves or rejects.
  */
 const RequestPublishIntervention = memo<BuiltinInterventionProps<RequestPublishParams>>(
-  ({ args }) => {
+  ({ args, onArgsChange }) => {
+    // A request without a version (older messages, a model that skipped it)
+    // gets the version on screen written into its args before approval, so
+    // the runtime publishes exactly what the user reviewed.
+    const pinVersion = useCallback(
+      (versionId: string) => onArgsChange?.({ ...args, versionId }),
+      [args, onArgsChange],
+    );
+
     if (!args?.widgetId) return null;
     return (
       <WidgetPublishReview
         summary={args.summary}
         versionId={args.versionId}
         widgetId={args.widgetId}
+        onPinVersion={pinVersion}
       />
     );
   },

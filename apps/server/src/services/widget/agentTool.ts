@@ -175,6 +175,7 @@ export const createDashboardToolService = (
     listWidgets: async () => {
       const rows = await widgets.list({ agentId, projectId });
       return rows.map((widget) => ({
+        draftVersionId: widget.draftVersionId,
         hasDraft: !!widget.draftVersionId,
         id: widget.id,
         lastRunStatus: widget.lastRunStatus,

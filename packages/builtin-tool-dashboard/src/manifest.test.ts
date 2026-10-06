@@ -21,6 +21,13 @@ describe('DashboardManifest', () => {
     expect(intervened[0].humanIntervention).toBe('always');
   });
 
+  it('makes the model name the exact version the user approves', () => {
+    const publish = DashboardManifest.api.find(
+      (api) => api.name === DashboardApiName.requestPublish,
+    );
+    expect(publish?.parameters.required).toEqual(expect.arrayContaining(['versionId']));
+  });
+
   it('teaches the output contract and the secret rules', () => {
     for (const type of ['stat', 'list', 'series', 'table']) {
       expect(DashboardManifest.systemRole).toContain(`"type":"${type}"`);

@@ -76,6 +76,8 @@ export interface DashboardSummary {
 }
 
 export interface DashboardWidgetSummary {
+  /** The current draft's version id, so the model can pin dry runs and publishes to it. */
+  draftVersionId?: string | null;
   hasDraft: boolean;
   id: string;
   lastRunStatus?: WidgetRunStatus | null;
@@ -137,8 +139,12 @@ export interface DryRunWidgetState {
 export interface RequestPublishParams {
   /** One line on what changes for the user, shown on the confirmation card. */
   summary?: string;
-  /** Defaults to the widget's current draft. */
-  versionId?: string;
+  /**
+   * The exact version the user approves and that goes live. Never resolved
+   * from "the current draft" at execution time: another tab could have saved
+   * a newer draft while the approval was pending.
+   */
+  versionId: string;
   widgetId: string;
 }
 

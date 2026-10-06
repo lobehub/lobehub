@@ -178,7 +178,8 @@ export class DashboardExecutionRuntime {
         ? widgets.map((widget) => {
             const status = [
               widget.published ? 'published' : 'not published',
-              widget.hasDraft && 'has draft',
+              widget.hasDraft &&
+                (widget.draftVersionId ? `draft version id ${widget.draftVersionId}` : 'has draft'),
               widget.lastRunStatus && `last run ${widget.lastRunStatus}`,
             ]
               .filter(Boolean)
@@ -310,9 +311,18 @@ export class DashboardExecutionRuntime {
 
   async requestPublish(params: RequestPublishParams): Promise<BuiltinServerRuntimeOutput> {
     try {
-      const versionId =
-        params.versionId ?? (await this.service.getWidget(params.widgetId))?.draftVersion?.id;
-      if (!versionId) return fail(new Error('Widget has no draft to publish'), 'publish widget');
+      // Publish exactly the version the user reviewed and approved. Never fall
+      // back to re-reading "the current draft": a newer draft saved while the
+      // approval was pending would go live without review.
+      const versionId = params.versionId;
+      if (!versionId) {
+        return fail(
+          new Error(
+            'versionId is required: pass the id of the dry-run draft the user should approve',
+          ),
+          'publish widget',
+        );
+      }
 
       const { firstRunStatus, schedulePattern, version } = await this.service.publish(
         params.widgetId,
