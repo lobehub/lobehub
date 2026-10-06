@@ -52,23 +52,22 @@ describe('resolveSelectorShape', () => {
 
   it('gives a catalog provider with another dimension the full menu', () => {
     expect(resolveSelectorShape({ type: 'codebuddy' }, true).kind).toBe('menu');
+    expect(resolveSelectorShape({ type: 'codex' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'qoder' }, true).kind).toBe('menu');
   });
 
   it('gives static providers the full menu', () => {
     expect(resolveSelectorShape({ type: 'amp' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'claude-code' }, true).kind).toBe('menu');
-    expect(resolveSelectorShape({ type: 'codex' }, true).kind).toBe('menu');
   });
 });
 
 describe('dimensions per provider', () => {
-  it('offers Astra before older Codex models with five reasoning levels through max', () => {
-    const options = viewOf({ type: 'codex' }).dimensions[0].options;
-    expect(options[1]).toEqual({ label: 'GPT-6 Astra', value: 'gpt-6-astra' });
+  it('uses the Codex catalog while preserving reasoning levels through max', () => {
+    expect(viewOf({ type: 'codex' }).isCatalogModel).toBe(true);
 
     const view = viewOf({ effort: 'max', model: 'gpt-6-astra', type: 'codex' });
-    expect(view.dimensions[1].options.map((option) => option.value)).toEqual([
+    expect(view.dimensions[0].options.map((option) => option.value)).toEqual([
       'default',
       'low',
       'medium',
@@ -106,19 +105,12 @@ describe('dimensions per provider', () => {
     ]);
   });
 
-  it('offers model, reasoning and speed for a fast-capable codex model', () => {
-    expect(dimensionKeys({ model: 'gpt-5.6-sol', type: 'codex' })).toEqual([
-      'model',
-      'reasoning',
-      'speed',
-    ]);
+  it('keeps reasoning and speed beside the catalog for a fast-capable codex model', () => {
+    expect(dimensionKeys({ model: 'gpt-5.6-sol', type: 'codex' })).toEqual(['reasoning', 'speed']);
   });
 
   it('hides speed for codex models without a fast tier', () => {
-    expect(dimensionKeys({ model: 'gpt-5.3-codex-spark', type: 'codex' })).toEqual([
-      'model',
-      'reasoning',
-    ]);
+    expect(dimensionKeys({ model: 'gpt-5.3-codex-spark', type: 'codex' })).toEqual(['reasoning']);
   });
 
   it('offers model and reasoning but never speed for claude-code', () => {
@@ -140,8 +132,8 @@ describe('dimensions per provider', () => {
   });
 
   it('narrows codex reasoning levels to what the model serves', () => {
-    const solLevels = viewOf({ model: 'gpt-5.6-sol', type: 'codex' }).dimensions[1].options;
-    const lunaLevels = viewOf({ model: 'gpt-5.6-luna', type: 'codex' }).dimensions[1].options;
+    const solLevels = viewOf({ model: 'gpt-5.6-sol', type: 'codex' }).dimensions[0].options;
+    const lunaLevels = viewOf({ model: 'gpt-5.6-luna', type: 'codex' }).dimensions[0].options;
 
     expect(solLevels.map((option) => option.value)).toContain('ultra');
     expect(lunaLevels.map((option) => option.value)).toContain('max');
@@ -149,9 +141,9 @@ describe('dimensions per provider', () => {
   });
 
   it('keeps an off-catalog model pickable so the menu never drops the current value', () => {
-    const options = viewOf({ model: 'gpt-4o-legacy', type: 'codex' }).dimensions[0].options;
+    const options = viewOf({ model: 'custom-claude', type: 'claude-code' }).dimensions[0].options;
 
-    expect(options[0]).toEqual({ label: 'gpt-4o-legacy', value: 'gpt-4o-legacy' });
+    expect(options[0]).toEqual({ label: 'custom-claude', value: 'custom-claude' });
   });
 });
 
@@ -187,7 +179,7 @@ describe('current value surfaced on each dimension', () => {
   it('renames codex low effort to Light', () => {
     const view = viewOf({ effort: 'low', model: 'gpt-5.4', type: 'codex' });
 
-    expect(view.dimensions[1].valueLabel).toBe('heteroAgent.modelSelector.reasoning.light');
+    expect(view.dimensions[0].valueLabel).toBe('heteroAgent.modelSelector.reasoning.light');
   });
 
   it('keeps the plain Low wording for claude-code', () => {

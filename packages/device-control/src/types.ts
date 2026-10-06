@@ -362,6 +362,7 @@ export interface ListHeterogeneousAgentModelsParams {
   env?: Record<string, string>;
   type:
     | 'codebuddy'
+    | 'codex'
     | 'cursor'
     | 'devin'
     | 'droid'
@@ -388,7 +389,8 @@ export type HeterogeneousAgentModelCatalog =
           | 'command_failed'
           | 'device_unavailable'
           | 'timeout'
-          | 'unsupported_client';
+          | 'unsupported_client'
+          | 'unsupported_configuration';
         message: string;
       };
       status: 'error';

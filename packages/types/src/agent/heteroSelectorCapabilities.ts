@@ -392,7 +392,7 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     model: {
       encodings: [MODEL_FLAGS_ENCODING, { key: 'model', kind: 'config' }],
       resolve: resolveCodexModel,
-      source: 'static',
+      source: 'catalog',
     },
     speed: {
       encodings: [{ key: CODEX_SERVICE_TIER_CONFIG_KEY, kind: 'config' }],

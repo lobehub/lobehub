@@ -674,6 +674,7 @@ export class DeviceGateway {
     timeout?: number;
     type:
       | 'codebuddy'
+      | 'codex'
       | 'cursor'
       | 'devin'
       | 'droid'

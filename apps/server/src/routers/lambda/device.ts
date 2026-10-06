@@ -429,6 +429,7 @@ export const deviceRouter = router({
         env: z.record(z.string(), z.string()).optional(),
         type: z.enum([
           'codebuddy',
+          'codex',
           'cursor',
           'droid',
           'devin',

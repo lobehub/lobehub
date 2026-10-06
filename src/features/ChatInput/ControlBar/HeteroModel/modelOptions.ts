@@ -11,7 +11,8 @@ const CLAUDE_CODE_MODEL_OPTIONS: StaticModelOption[] = [
   { label: 'Haiku', value: 'haiku' },
 ];
 
-const CODEX_MODEL_OPTIONS: StaticModelOption[] = [
+// Compatibility fallback only: the normal Codex picker reads model/list from the CLI.
+const CODEX_FALLBACK_MODEL_OPTIONS: StaticModelOption[] = [
   { label: 'GPT-6 Astra', value: 'gpt-6-astra' },
   { label: 'GPT-5.6 Sol', value: 'gpt-5.6-sol' },
   { label: 'GPT-5.6 Terra', value: 'gpt-5.6-terra' },
@@ -29,17 +30,19 @@ const CODEX_MODEL_OPTIONS: StaticModelOption[] = [
  */
 const STATIC_MODEL_OPTIONS: Record<string, StaticModelOption[]> = {
   'claude-code': CLAUDE_CODE_MODEL_OPTIONS,
-  'codex': CODEX_MODEL_OPTIONS,
 };
 
 export const getStaticModelOptions = (type: string | undefined): StaticModelOption[] =>
   (type && STATIC_MODEL_OPTIONS[type]) || [];
 
+export const getFallbackModelOptions = (type: string): StaticModelOption[] =>
+  type === 'codex' ? CODEX_FALLBACK_MODEL_OPTIONS : [];
+
 export const MODEL_LABELS: Record<string, string> = {
   'gpt-5.6': 'GPT-5.6',
   ...Object.fromEntries(
-    Object.values(STATIC_MODEL_OPTIONS)
-      .flat()
-      .map((option) => [option.value, option.label]),
+    [...Object.values(STATIC_MODEL_OPTIONS).flat(), ...CODEX_FALLBACK_MODEL_OPTIONS].map(
+      (option) => [option.value, option.label],
+    ),
   ),
 };
