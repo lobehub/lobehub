@@ -34,6 +34,13 @@ const resolveProviderRelay = vi.hoisted(() => vi.fn());
 vi.mock('@/server/modules/AgentRuntime/llmRelay/resolveLlmExecutionSite', () => ({
   resolveProviderRelay,
 }));
+// A deployment that can relay (Agent Gateway + Redis); one that cannot keeps
+// calling the provider from the server.
+vi.mock('@/server/modules/AgentRuntime/redis', () => ({ getAgentRuntimeRedisClient: () => ({}) }));
+vi.mock('@/server/modules/AgentRuntime/factory', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  createStreamEventManager: () => ({ openLlmRelayChannel: vi.fn(), sendLlmExecute: vi.fn() }),
+}));
 vi.mock('@lobechat/business-const', async () => {
   const actual = await vi.importActual<typeof BusinessConst>('@lobechat/business-const');
 
