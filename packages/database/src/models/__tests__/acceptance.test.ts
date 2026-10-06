@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { AcceptanceStatus } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -273,6 +274,56 @@ describe('AcceptanceModel', () => {
     // A new round re-opening the loop clears the completion stamp.
     await model.updateStatus(row.id, 'verifying');
     expect((await model.findById(row.id))?.completedAt).toBeNull();
+  });
+
+  it('patches metadata keys without reverting keys another writer committed', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.create({
+      metadata: { title: 'Before' },
+      subjectId: topicId,
+      subjectType: 'topic',
+    });
+    const pullRequests = [
+      {
+        linkedAt: '2026-10-06T00:00:00.000Z',
+        number: 20426,
+        provider: 'github' as const,
+        repoFullName: 'lobehub/lobehub',
+        url: 'https://github.com/lobehub/lobehub/pull/20426',
+      },
+    ];
+
+    // A rename that read `acceptance` before a PR was linked.
+    await serverDB
+      .update(acceptances)
+      .set({ metadata: { ...acceptance.metadata, pullRequests } })
+      .where(eq(acceptances.id, acceptance.id));
+    const renamed = await model.patchMetadata(acceptance.id, { title: 'After' });
+
+    expect(renamed?.metadata).toEqual({ pullRequests, title: 'After' });
+    expect(
+      await new AcceptanceModel(serverDB, otherUserId).patchMetadata(acceptance.id, { title: 'x' }),
+    ).toBeUndefined();
+  });
+
+  it('fills a missing title on ensure without dropping keys written since its read', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.create({ subjectId: topicId, subjectType: 'topic' });
+    const findBySubject = model.findBySubject;
+    // Another writer links a PR between ensure's read and its write.
+    model.findBySubject = async (...args) => {
+      const existing = await findBySubject(...args);
+      await serverDB
+        .update(acceptances)
+        .set({ metadata: { pullRequests: [] } })
+        .where(eq(acceptances.id, acceptance.id));
+      return existing;
+    };
+
+    await model.ensureForSubject('topic', topicId, { metadata: { title: 'Delivery' } });
+
+    const stored = await model.findById(acceptance.id);
+    expect(stored?.metadata).toEqual({ pullRequests: [], title: 'Delivery' });
   });
 
   describe('queryPage', () => {

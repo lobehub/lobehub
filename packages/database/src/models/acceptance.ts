@@ -1,5 +1,6 @@
 import type {
   AcceptanceCheckGroup,
+  AcceptanceMetadata,
   AcceptanceStatus,
   AcceptanceSubjectType,
 } from '@lobechat/types';
@@ -223,7 +224,12 @@ export class AcceptanceModel {
         await this.db
           .update(acceptances)
           .set({
-            metadata,
+            // Only the title key: `existing` was read without a lock.
+            ...(nextTitle
+              ? {
+                  metadata: sql`COALESCE(${acceptances.metadata}, '{}'::jsonb) || ${JSON.stringify({ title: nextTitle })}::jsonb`,
+                }
+              : {}),
             projectId: nextProjectId ?? existing.projectId,
             requirement: nextRequirement ?? existing.requirement,
           })
@@ -344,6 +350,27 @@ export class AcceptanceModel {
     const [row] = await this.db
       .update(acceptances)
       .set(value)
+      .where(and(eq(acceptances.id, id), this.ownership()))
+      .returning();
+    return row;
+  };
+
+  /**
+   * Set some metadata keys atomically, leaving every other key as stored.
+   * Metadata holds independent slots (title, check grouping, linked pull
+   * requests) written by different paths; spreading a previously read
+   * snapshot back would drop or revert whatever another writer committed in
+   * between.
+   */
+  patchMetadata = async (
+    id: string,
+    patch: Partial<AcceptanceMetadata>,
+  ): Promise<AcceptanceItem | undefined> => {
+    const [row] = await this.db
+      .update(acceptances)
+      .set({
+        metadata: sql`COALESCE(${acceptances.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+      })
       .where(and(eq(acceptances.id, id), this.ownership()))
       .returning();
     return row;

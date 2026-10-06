@@ -1355,9 +1355,7 @@ export const acceptanceRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      return service.acceptanceModel.update(acceptance.id, {
-        metadata: { ...acceptance.metadata, title: input.title },
-      });
+      return service.acceptanceModel.patchMetadata(acceptance.id, { title: input.title });
     }),
 
   /**
