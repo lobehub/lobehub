@@ -696,6 +696,10 @@ export class GoalManagerService {
           ...(freshState?.topicId && freshState.topicId !== topicId ? [freshState.topicId] : []),
         ]),
       ];
+      // The cutoff the next turn splits new from earlier feedback at. Taken before
+      // the comments are read, so a comment committed while they load is never
+      // dated before a turn that did not see it; at worst it is shown as new twice.
+      const startedAt = new Date().toISOString();
       const reviews = await this.reviews(current, db);
       const next: GoalManagerState = {
         ...(problem
@@ -711,7 +715,7 @@ export class GoalManagerService {
         turns: (state?.turns ?? 0) + 1,
         token: managerTurnToken(goal.id),
         snapshot: managerSnapshot(current),
-        startedAt: new Date().toISOString(),
+        startedAt,
       };
       await this.save(db, goal.id, next);
       if (fresh.status === 'planning') await model.updateStatus(goal.id, 'running');

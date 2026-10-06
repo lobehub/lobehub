@@ -1156,6 +1156,59 @@ describe('CLI main Agent planning', () => {
     expect((await model().findById(id))!.config!.managerState!.readyForAcceptance).not.toBe(true);
   });
 
+  /**
+   * Regression: the next turn's cutoff was taken after the comments were read,
+   * so a comment committed in between was dated before a turn that never saw it
+   * and the retry showed it only as a 200-character "earlier" excerpt.
+   */
+  it('shows a comment committed while the claim read feedback as new on the next turn', async () => {
+    const { id, state, op } = await start();
+    await manager().submit(id, state.token, op.id, taskPlan);
+    await ops().recordCompletion(op.id, { status: 'done' });
+    await service().tick(id);
+    const taskId = (await service().tick(id)).taskId!;
+    const node = (await service().graph(id)).nodes.find((n) => n.taskId === taskId)!;
+    await db.update(goalNodes).set({ status: 'resolved' }).where(eq(goalNodes.id, node.id));
+
+    const original = TaskModel.prototype.getComments;
+    const late = 'Late review: the baseline must exclude future cases.';
+    const read = vi
+      .spyOn(TaskModel.prototype, 'getComments')
+      .mockImplementationOnce(async function (this: TaskModel, commentTaskId) {
+        const seen = await original.call(this, commentTaskId);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        const now = new Date();
+        await this.addComment({
+          taskId: commentTaskId,
+          userId,
+          authorUserId: userId,
+          content: late,
+          createdAt: now,
+          updatedAt: now,
+        });
+        return seen;
+      });
+    await service().tick(id);
+    read.mockRestore();
+    const missed = vi.mocked(AiAgentService.prototype.execAgent).mock.calls.at(-1)![0].prompt;
+    expect(missed).not.toContain(late);
+
+    const turn = (await model().findById(id))!.config!.managerState!;
+    await manager()
+      .submit(id, turn.token, turn.operationId!, {
+        action: 'escalate',
+        reason: 'stale',
+      })
+      .catch(() => undefined);
+    await ops().recordCompletion(turn.operationId!, { status: 'done' });
+    await service().tick(id);
+    await service().tick(id);
+    const prompt = vi.mocked(AiAgentService.prototype.execAgent).mock.calls.at(-1)![0].prompt;
+    expect(
+      prompt.slice(prompt.indexOf('## New review feedback'), prompt.indexOf('## Requirement')),
+    ).toContain(`> ${late}`);
+  });
+
   it('accepts a main Agent alongside the system planner', async () => {
     // Previously rejected outright. The two are layers now: the system planner
     // leads and the main Agent is handed what it cannot route, so configuring
