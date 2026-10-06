@@ -121,16 +121,20 @@ export const createDashboardToolService = (
       return { projectId: board.projectId, title: board.title };
     },
 
-    createDashboardWithWidget: async (title, widgetId) =>
+    createDashboardWithWidget: async (title, widgetId) => {
+      // Same conversation-scope check as placing on an existing board, before
+      // anything is written: another agent's or project's widget creates no board.
+      await requireScopedWidget(widgetId);
       // One transaction: a widget that cannot be placed (stale, deleted,
       // unreadable, another workspace) rolls the new board back with it.
-      db.transaction(async (tx) => {
+      return db.transaction(async (tx) => {
         const scoped = new DashboardModel(tx as unknown as LobeChatDatabase, userId, workspaceId);
         const board = await scoped.create({ projectId: projectId ?? null, title });
         const item = await scoped.addItem(board.id, widgetId);
         if (!item) throw new Error('Widget not found');
         return { id: board.id, projectId: board.projectId, title: board.title };
-      }),
+      });
+    },
 
     createWidgetDraft: async ({ content, description, title }) => {
       const version = parseContent(content);

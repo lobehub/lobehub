@@ -241,6 +241,7 @@ describe('createDashboardToolService', () => {
         runtime.dryRunWidget({ versionId: version.id, widgetId }),
         runtime.requestPublish({ versionId: version.id, widgetId }),
         runtime.addWidgetToDashboard({ dashboardId: board.id, widgetId }),
+        runtime.addWidgetToDashboard({ newDashboardTitle: 'Leaked board', widgetId }),
         runtime.getWidgetRuns({ widgetId }),
       ]);
       for (const result of results) {
@@ -255,6 +256,10 @@ describe('createDashboardToolService', () => {
       expect(row.title).not.toBe('Renamed');
     }
     expect(runSandbox).not.toHaveBeenCalled();
+    // Refusing a new-board placement creates no board either.
+    expect((await new DashboardModel(db, userId).list({})).map(({ title }) => title)).toEqual([
+      'Ops',
+    ]);
     expect((await service.listDashboards())[0].widgets.map(({ title }) => title)).toEqual(['Mine']);
   });
 
