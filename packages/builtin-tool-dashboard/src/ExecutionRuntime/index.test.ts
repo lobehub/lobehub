@@ -36,7 +36,7 @@ const run = (patch: Partial<WidgetRunRecord> = {}): WidgetRunRecord => ({
 
 const createService = (): { [K in keyof DashboardToolService]: ReturnType<typeof vi.fn> } => ({
   addToDashboard: vi.fn(async () => ({ title: 'Ops' })),
-  createDashboard: vi.fn(async (title: string) => ({ id: 'd-new', title })),
+  createDashboardWithWidget: vi.fn(async (title: string) => ({ id: 'd-new', title })),
   createWidgetDraft: vi.fn(async () => ({ version: version(), widgetId: 'w1' })),
   dryRun: vi.fn(async () => run()),
   getRun: vi.fn(async () => run()),
@@ -284,22 +284,32 @@ describe('requestPublish', () => {
 describe('addWidgetToDashboard', () => {
   it('places the widget on an existing board', async () => {
     const result = await runtime.addWidgetToDashboard({ dashboardId: 'd1', widgetId: 'w1' });
-    expect(service.createDashboard).not.toHaveBeenCalled();
+    expect(service.createDashboardWithWidget).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       state: { createdDashboard: false, dashboardId: 'd1', dashboardTitle: 'Ops' },
       success: true,
     });
   });
 
-  it('creates a board first when asked', async () => {
-    service.addToDashboard.mockResolvedValue({ title: 'Team health' });
+  it('creates the board and the placement in one operation when asked', async () => {
     const result = await runtime.addWidgetToDashboard({
       newDashboardTitle: ' Team health ',
       widgetId: 'w1',
     });
-    expect(service.createDashboard).toHaveBeenCalledWith('Team health');
-    expect(service.addToDashboard).toHaveBeenCalledWith('d-new', 'w1');
-    expect(result.state).toMatchObject({ createdDashboard: true, dashboardId: 'd-new' });
+    expect(service.createDashboardWithWidget).toHaveBeenCalledWith('Team health', 'w1');
+    expect(service.addToDashboard).not.toHaveBeenCalled();
+    expect(result.state).toMatchObject({
+      createdDashboard: true,
+      dashboardId: 'd-new',
+      dashboardTitle: 'Team health',
+    });
+  });
+
+  it('reports a failed create-and-place without a separate board write', async () => {
+    service.createDashboardWithWidget.mockRejectedValue(new Error('Widget not found'));
+    const result = await runtime.addWidgetToDashboard({ newDashboardTitle: 'X', widgetId: 'w9' });
+    expect(result).toMatchObject({ success: false });
+    expect(result.content).toContain('Widget not found');
   });
 
   it('carries the board project so the card links to the project dashboard', async () => {

@@ -31,8 +31,15 @@ export interface DashboardToolService {
     dashboardId: string,
     widgetId: string,
   ) => Promise<{ projectId?: string | null; title: string }>;
-  /** Created on the conversation's project in a project topic, else on the home level. */
-  createDashboard: (title: string) => Promise<{ id: string; title: string }>;
+  /**
+   * Create a board and place the widget on it atomically: when the widget
+   * cannot be placed nothing is created. The board lives on the
+   * conversation's project in a project topic, else on the home level.
+   */
+  createDashboardWithWidget: (
+    title: string,
+    widgetId: string,
+  ) => Promise<{ id: string; projectId?: string | null; title: string }>;
   /** Validate the content, create the widget and record its first draft. */
   createWidgetDraft: (input: {
     content: WidgetVersionContent;
@@ -378,14 +385,19 @@ export class DashboardExecutionRuntime {
       );
     }
     try {
-      let dashboardId = params.dashboardId;
-      let createdDashboard = false;
-      if (!dashboardId) {
-        const created = await this.service.createDashboard(newTitle!);
-        dashboardId = created.id;
-        createdDashboard = true;
-      }
-      const { projectId, title } = await this.service.addToDashboard(dashboardId, params.widgetId);
+      const createdDashboard = !params.dashboardId;
+      // A new board is created together with the placement, so a widget that
+      // cannot be placed never leaves an empty board behind for retries to pile up.
+      const {
+        id: dashboardId,
+        projectId,
+        title,
+      } = params.dashboardId
+        ? {
+            id: params.dashboardId,
+            ...(await this.service.addToDashboard(params.dashboardId, params.widgetId)),
+          }
+        : await this.service.createDashboardWithWidget(newTitle!, params.widgetId);
       const state: AddWidgetToDashboardState = {
         createdDashboard,
         dashboardId,

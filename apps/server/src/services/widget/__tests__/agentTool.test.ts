@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DashboardExecutionRuntime } from '@lobechat/builtin-tool-dashboard/executionRuntime';
 import type { LobeChatDatabase } from '@lobechat/database';
 import {
   agents,
@@ -183,7 +184,8 @@ describe('createDashboardToolService', () => {
       title: 'Project one',
     });
 
-    const board = await service.createDashboard('Ops');
+    const board = await service.createDashboardWithWidget('Ops', widgetId);
+    expect(board).toMatchObject({ projectId: null, title: 'Ops' });
     expect(await service.addToDashboard(board.id, widgetId)).toEqual({
       projectId: null,
       title: 'Ops',
@@ -197,8 +199,21 @@ describe('createDashboardToolService', () => {
     expect((await service.listWidgets()).map((widget) => widget.title)).toEqual(['Mine']);
   });
 
+  it('creates no board when the widget cannot be placed on it', async () => {
+    const service = createDashboardToolService(db, scope);
+    const runtime = new DashboardExecutionRuntime(service);
+
+    const result = await runtime.addWidgetToDashboard({
+      newDashboardTitle: 'Ops',
+      widgetId: '00000000-0000-4000-8000-000000000000',
+    });
+
+    expect(result.success).toBe(false);
+    expect(await new DashboardModel(db, userId).list({})).toEqual([]);
+  });
+
   it('creates boards on the project in a project topic and lists them before home boards', async () => {
-    const home = await createDashboardToolService(db, scope).createDashboard('Home');
+    const home = await new DashboardModel(db, userId).create({ title: 'Home' });
     const service = createDashboardToolService(db, {
       ...scope,
       projectId,
@@ -210,11 +225,8 @@ describe('createDashboardToolService', () => {
       title: 'Project metric',
     });
 
-    const board = await service.createDashboard('Project board');
-    expect(await service.addToDashboard(board.id, widgetId)).toEqual({
-      projectId,
-      title: 'Project board',
-    });
+    const board = await service.createDashboardWithWidget('Project board', widgetId);
+    expect(board).toMatchObject({ projectId, title: 'Project board' });
     // A board another agent of the project owns is still the project's.
     const agentBoard = await new DashboardModel(db, userId).create({
       agentId,
