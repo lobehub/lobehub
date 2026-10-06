@@ -1,4 +1,5 @@
 import type { EnvironmentConfiguration, EnvironmentVisibility } from '@lobechat/types';
+import { DEFAULT_REGENERABLE_PATHS } from '@lobechat/types';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 
 import type { EnvironmentItem, NewEnvironment } from '../schemas';
@@ -338,7 +339,15 @@ export class EnvironmentModel {
             // it. The column stays NOT NULL so a reader never has to tell
             // "declared nothing" apart from "declared, but the row predates the
             // column".
-            configuration: params.configuration ?? {},
+            // Seeded only here, never on update: the list is the author's
+            // promise about what can be rebuilt, so once they have edited it —
+            // including down to nothing — the platform must not put its own
+            // entries back. `?? ` and not a merge, for the same reason: an
+            // explicit empty list is a decision.
+            configuration: {
+              ...params.configuration,
+              excludePaths: params.configuration?.excludePaths ?? [...DEFAULT_REGENERABLE_PATHS],
+            },
             description: params.description ?? null,
             name: params.name,
             // Private unless the caller says otherwise, and a personal

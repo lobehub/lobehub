@@ -75,3 +75,18 @@ export interface EnvironmentInstanceConfiguration {
   image?: string;
   resources?: EnvironmentResourceRequirements;
 }
+
+/**
+ * What a new environment declares regenerable before anyone edits it.
+ *
+ * The sandbox runtime keeps these out of the snapshot layer and therefore out
+ * of the quota: they are rebuilt from the specification, so charging a
+ * multi-gigabyte `node_modules` against an allowance sized for source would
+ * make the allowance unusable for the projects it is sold for.
+ *
+ * A default rather than a built-in rule, because the field is a PROMISE by the
+ * environment's author that the path can be rebuilt — and a promise the
+ * platform makes silently is one the author cannot withdraw. Seeded into the
+ * form at creation, visible, and removable.
+ */
+export const DEFAULT_REGENERABLE_PATHS = ['node_modules', '.venv', 'target'] as const;
